@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"pointy/relay/internal/control"
 )
@@ -786,5 +789,255 @@ func TestProvisionedInstallationOutputRedactsTokenHashes(t *testing.T) {
 	if output["connector_token"] != "ptc1.installation-1.secret" ||
 		output["access_token"] != "ptr1.installation-1.secret" {
 		t.Fatalf("expected one-time tokens to remain in provision output, got %#v", output)
+	}
+}
+
+func TestRunInstallationsDiagnosticsSingleWritesZip(t *testing.T) {
+	restore := newRelayAdminHTTPClient
+	defer func() { newRelayAdminHTTPClient = restore }()
+	var capturedPath, capturedQuery, capturedAuth, capturedAccept string
+	newRelayAdminHTTPClient = func(_ relayAdminHTTPClientOptions) (*http.Client, error) {
+		return &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			capturedPath = r.URL.Path
+			capturedQuery = r.URL.RawQuery
+			capturedAuth = r.Header.Get("Authorization")
+			capturedAccept = r.Header.Get("Accept")
+			body := "PK-zip-bytes"
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header: http.Header{
+					"Content-Type":                   []string{"application/zip"},
+					"X-Pointy-Analytics-Event-Count": []string{"7"},
+					"X-Pointy-App-Version":           []string{"0.1.0"},
+					"X-Pointy-Connector-Version":     []string{"pointy-relay/test"},
+					"X-Pointy-Diag-Online":           []string{"true"},
+				},
+			}, nil
+		})}, nil
+	}
+
+	outPath := filepath.Join(t.TempDir(), "diag.zip")
+	out, err := captureStdout(t, func() error {
+		return runInstallationsDiagnostics([]string{
+			"inst_1",
+			"--control-url", "https://relay.test",
+			"--admin-token", "secret",
+			"--event-type", "error",
+			"--out", outPath,
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if capturedPath != "/v1/installations/inst_1/diagnostics-analytics" {
+		t.Fatalf("unexpected path %q", capturedPath)
+	}
+	if !strings.Contains(capturedQuery, "event_type=error") {
+		t.Fatalf("unexpected query %q", capturedQuery)
+	}
+	if capturedAuth != "Bearer secret" {
+		t.Fatalf("unexpected auth %q", capturedAuth)
+	}
+	if capturedAccept != "application/zip" {
+		t.Fatalf("unexpected accept %q", capturedAccept)
+	}
+	content, readErr := os.ReadFile(outPath)
+	if readErr != nil {
+		t.Fatalf("expected output file: %v", readErr)
+	}
+	if string(content) != "PK-zip-bytes" {
+		t.Fatalf("unexpected file content %q", content)
+	}
+	if !strings.Contains(out, "inst_1") || !strings.Contains(out, "7") {
+		t.Fatalf("summary missing expected content:\n%s", out)
+	}
+}
+
+func TestRunInstallationsDiagnosticsAllPullsEach(t *testing.T) {
+	restore := newRelayAdminHTTPClient
+	defer func() { newRelayAdminHTTPClient = restore }()
+	newRelayAdminHTTPClient = func(_ relayAdminHTTPClientOptions) (*http.Client, error) {
+		return &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.URL.Path == "/v1/installations" {
+				body := `{"count":2,"installations":[{"id":"inst_1","shop_name":"Alpha"},{"id":"inst_2","shop_name":"Beta"}]}`
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(body)),
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+				}, nil
+			}
+			body := "PK-zip-bytes"
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header: http.Header{
+					"Content-Type":                   []string{"application/zip"},
+					"X-Pointy-Analytics-Event-Count": []string{"2"},
+				},
+			}, nil
+		})}, nil
+	}
+
+	dir := t.TempDir()
+	out, err := captureStdout(t, func() error {
+		return runInstallationsDiagnostics([]string{
+			"--all",
+			"--control-url", "https://relay.test",
+			"--admin-token", "secret",
+			"--out-dir", dir,
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"inst_1", "inst_2"} {
+		content, readErr := os.ReadFile(filepath.Join(dir, id+".zip"))
+		if readErr != nil {
+			t.Fatalf("expected %s.zip: %v", id, readErr)
+		}
+		if string(content) != "PK-zip-bytes" {
+			t.Fatalf("unexpected content for %s: %q", id, content)
+		}
+	}
+	if !strings.Contains(out, "2 pulled") {
+		t.Fatalf("summary missing totals:\n%s", out)
+	}
+}
+
+func TestRunInstallationsDiagnosticsRequiresTarget(t *testing.T) {
+	if err := runInstallationsDiagnostics([]string{"--admin-token", "secret"}); err == nil {
+		t.Fatal("expected an error when neither an installation id nor --all is given")
+	}
+	if err := runInstallationsDiagnostics([]string{
+		"inst_1", "--all", "--admin-token", "secret",
+	}); err == nil {
+		t.Fatal("expected an error when both an installation id and --all are given")
+	}
+}
+
+func TestRunSubscriptionSetSendsAuditedPatch(t *testing.T) {
+	restore := newRelayAdminHTTPClient
+	defer func() { newRelayAdminHTTPClient = restore }()
+	t.Setenv("POINTY_RELAY_OPERATOR", "ops-team")
+	var method, path string
+	var sent map[string]any
+	newRelayAdminHTTPClient = func(_ relayAdminHTTPClientOptions) (*http.Client, error) {
+		return &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			method = r.Method
+			path = r.URL.Path
+			_ = json.NewDecoder(r.Body).Decode(&sent)
+			body := `{"installation":{"id":"inst_1","shop_name":"Alpha","relay_enabled":true,"subscription_active":true,"ai_enabled":true},"audit_event":{}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(strings.NewReader(body)),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+			}, nil
+		})}, nil
+	}
+
+	_, err := captureStdout(t, func() error {
+		return runSubscriptionSet([]string{
+			"inst_1",
+			"--control-url", "https://relay.test",
+			"--admin-token", "secret",
+			"--months", "3",
+			"--ai",
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method != http.MethodPatch {
+		t.Fatalf("expected PATCH, got %s", method)
+	}
+	if path != "/v1/installations/inst_1/subscription" {
+		t.Fatalf("unexpected path %q", path)
+	}
+	if sent["relay_enabled"] != true || sent["subscription_active"] != true || sent["ai_enabled"] != true {
+		t.Fatalf("expected relay+subscription+ai enabled, got %#v", sent)
+	}
+	endsRaw, ok := sent["subscription_ends_at"].(string)
+	if !ok || endsRaw == "" {
+		t.Fatalf("expected subscription_ends_at, got %#v", sent["subscription_ends_at"])
+	}
+	endsAt, perr := time.Parse(time.RFC3339, endsRaw)
+	if perr != nil {
+		t.Fatalf("subscription_ends_at not RFC3339: %v", perr)
+	}
+	if !endsAt.After(time.Now().Add(80 * 24 * time.Hour)) {
+		t.Fatalf("expected end ~3 months out, got %s", endsRaw)
+	}
+	if sent["actor"] != "ops-team" {
+		t.Fatalf("expected actor from env, got %#v", sent["actor"])
+	}
+	if reason, ok := sent["reason"].(string); !ok || !strings.Contains(reason, "3-month") {
+		t.Fatalf("expected a descriptive reason, got %#v", sent["reason"])
+	}
+}
+
+func TestRunSubscriptionSetValidates(t *testing.T) {
+	base := []string{"inst_1", "--admin-token", "secret"}
+	cases := map[string][]string{
+		"months and days":      {"--months", "3", "--days", "3"},
+		"ai and no-ai":         {"--ai", "--no-ai"},
+		"remote and no-remote": {"--remote", "--no-remote"},
+		"nothing to set":       {},
+	}
+	for name, extra := range cases {
+		args := append(append([]string{}, base...), extra...)
+		if err := runSubscriptionSet(args); err == nil {
+			t.Fatalf("%s: expected an error, got nil", name)
+		}
+	}
+}
+
+func TestSubscriptionEndFromFlags(t *testing.T) {
+	endsAt, err := subscriptionEndFromFlags(3, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, perr := time.Parse(time.RFC3339, endsAt)
+	if perr != nil || !parsed.After(time.Now()) {
+		t.Fatalf("expected a future RFC3339 end from --months, got %q (%v)", endsAt, perr)
+	}
+	if got, err := subscriptionEndFromFlags(0, 0, ""); err != nil || got != "" {
+		t.Fatalf("expected empty end with no flags, got %q (%v)", got, err)
+	}
+	if got, err := subscriptionEndFromFlags(0, 0, "2027-01-02T03:04:05Z"); err != nil || got != "2027-01-02T03:04:05Z" {
+		t.Fatalf("expected normalized --until, got %q (%v)", got, err)
+	}
+	if _, err := subscriptionEndFromFlags(1, 1, ""); err == nil {
+		t.Fatal("expected error when both --months and --days are set")
+	}
+	if _, err := subscriptionEndFromFlags(0, 0, "not-a-date"); err == nil {
+		t.Fatal("expected error for a non-RFC3339 --until")
+	}
+	if _, err := subscriptionEndFromFlags(-1, 0, ""); err == nil {
+		t.Fatal("expected error for negative --months")
+	}
+}
+
+func TestDiagnosticsHelpers(t *testing.T) {
+	if got := sanitizeFilename("inst/with:bad*chars"); got != "inst_with_bad_chars" {
+		t.Fatalf("sanitizeFilename = %q", got)
+	}
+	if got := sanitizeFilename("   "); got != "installation" {
+		t.Fatalf("sanitizeFilename blank = %q", got)
+	}
+	if got := humanBytes(0); got != "-" {
+		t.Fatalf("humanBytes(0) = %q", got)
+	}
+	if got := humanBytes(512); got != "512B" {
+		t.Fatalf("humanBytes(512) = %q", got)
+	}
+	if got := humanBytes(2048); got != "2.0KB" {
+		t.Fatalf("humanBytes(2048) = %q", got)
+	}
+	if !isConnectorOfflineError(fmt.Errorf(`returned 503: {"error":"connector offline"}`)) {
+		t.Fatal("expected connector-offline detection")
+	}
+	if isConnectorOfflineError(fmt.Errorf("some other error")) {
+		t.Fatal("did not expect connector-offline detection")
 	}
 }

@@ -2,13 +2,19 @@ import secrets
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status, views
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
-from apps.analytics.services import record_domain_event
+from apps.analytics.serializers import AnalyticsEventExportQuerySerializer
+from apps.analytics.services import (
+    build_events_export_zip,
+    filter_events_for_export,
+    record_domain_event,
+)
 
 from .discovery import (
     backend_discovery_payload,
@@ -325,3 +331,69 @@ class RelayConnectorHeartbeatView(views.APIView):
                 "connector_last_seen_at": installation.connector_last_seen_at,
             }
         )
+
+
+class RelayDiagnosticsAnalyticsExportView(views.APIView):
+    """Remote-support export of this installation's tracking/usage/error events.
+
+    Returns the exact same ZIP the Shop Settings "Export Tracking" screen
+    produces (reusing the analytics export pipeline), but authenticated with the
+    on-prem connector token instead of a logged-in manager. The relay operator
+    pulls it over the connector tunnel: the connector injects
+    ``X-Pointy-Connector-Token`` for requests it forwards under
+    ``/api/relay/diagnostics/``. Because the public relay proxy only routes
+    ``/api/`` paths reached via an access ticket, client devices cannot invoke
+    this endpoint through the relay; the connector token is the gate.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        installation = RelayInstallation.load()
+        if installation is None:
+            return Response(
+                {"detail": "relay installation is not configured"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        provided_token = request.headers.get("X-Pointy-Connector-Token", "")
+        if not installation.connector_token or not secrets.compare_digest(
+            provided_token, installation.connector_token
+        ):
+            return Response(
+                {"detail": "connector token rejected"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = AnalyticsEventExportQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        queryset = filter_events_for_export(
+            AnalyticsEvent.objects.select_related("received_by"),
+            serializer.normalized_filters,
+        )
+        export = build_events_export_zip(
+            queryset=queryset,
+            filters=serializer.normalized_filters,
+            exported_by=None,
+        )
+        record_domain_event(
+            name="analytics.export.support_pull",
+            event_type=AnalyticsEvent.EventType.AUDIT,
+            severity=AnalyticsEvent.Severity.INFO,
+            entity_type="relay_installation",
+            entity_id=installation.pk,
+            installation_id=installation.installation_id,
+            attributes={
+                "installation_id": installation.installation_id,
+                "event_count": export.event_count,
+                "format": serializer.normalized_filters.get("format", "csv"),
+            },
+        )
+        response = HttpResponse(export.content, content_type="application/zip")
+        response["Content-Disposition"] = f'attachment; filename="{export.filename}"'
+        response["X-Pointy-Analytics-Event-Count"] = str(export.event_count)
+        response["X-Pointy-App-Version"] = str(
+            settings.SPECTACULAR_SETTINGS.get("VERSION", "")
+        )
+        response["X-Pointy-Connector-Version"] = installation.connector_version or ""
+        return response

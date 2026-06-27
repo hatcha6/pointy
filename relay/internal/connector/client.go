@@ -186,6 +186,23 @@ func (c Client) handleStream(ctx context.Context, stream *protocol.Stream) {
 	}
 	defer request.Body.Close()
 
+	// Relay operator diagnostics pulls arrive under a reserved prefix that no
+	// client device can reach (the public relay proxy only routes /api/ paths
+	// reached via an access ticket). Rewrite them to the real backend path and
+	// attach this connector's token so the on-prem backend can authenticate the
+	// relay operator. The rewrite is restricted to /api/relay/diagnostics/ so the
+	// token can never be injected onto an arbitrary backend endpoint.
+	if strings.HasPrefix(request.URL.Path, supportPathPrefix) {
+		rewritten, ok := rewriteSupportPath(request.URL.Path)
+		if !ok {
+			_ = writeHTTPError(stream, http.StatusNotFound, "relay connector: unsupported diagnostics path")
+			return
+		}
+		request.URL.Path = rewritten
+		request.URL.RawPath = ""
+		request.Header.Set(connectorTokenHeader, c.Token)
+	}
+
 	outbound, cancel := c.backendRequest(ctx, request)
 	defer cancel()
 	response, err := c.httpClient().Do(outbound)
@@ -253,6 +270,30 @@ func (c Client) logger() *slog.Logger {
 		return c.Logger
 	}
 	return slog.Default()
+}
+
+const (
+	// supportPathPrefix marks relay operator diagnostics requests forwarded
+	// through the tunnel. It is stripped before the request reaches the backend.
+	supportPathPrefix = "/__pointy_support__"
+	// supportBackendPathPrefix bounds which backend paths a support pull may
+	// reach, so the injected connector token cannot be attached elsewhere.
+	supportBackendPathPrefix = "/api/relay/diagnostics/"
+	connectorTokenHeader     = "X-Pointy-Connector-Token"
+)
+
+// rewriteSupportPath converts a reserved diagnostics path into its real backend
+// path. It returns ok=false (so the caller rejects the request) when the prefix
+// is absent or the resulting path is outside /api/relay/diagnostics/.
+func rewriteSupportPath(path string) (string, bool) {
+	rewritten := strings.TrimPrefix(path, supportPathPrefix)
+	if rewritten == path {
+		return "", false
+	}
+	if !strings.HasPrefix(rewritten, supportBackendPathPrefix) {
+		return "", false
+	}
+	return rewritten, true
 }
 
 func writeHTTPError(w io.Writer, statusCode int, message string) error {

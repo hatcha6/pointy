@@ -85,6 +85,7 @@ from apps.core.relay_views import (
     DiscoveryServiceView,
     RelayConnectorConfigView,
     RelayConnectorHeartbeatView,
+    RelayDiagnosticsAnalyticsExportView,
     RelayInstallationView,
     RelayPairingView,
 )
@@ -263,6 +264,11 @@ urlpatterns = [
         "api/relay/connector-heartbeat/",
         RelayConnectorHeartbeatView.as_view(),
         name="relay-connector-heartbeat",
+    ),
+    path(
+        "api/relay/diagnostics/analytics-export/",
+        RelayDiagnosticsAnalyticsExportView.as_view(),
+        name="relay-diagnostics-analytics-export",
     ),
     path(
         "api/attendance/connection/",

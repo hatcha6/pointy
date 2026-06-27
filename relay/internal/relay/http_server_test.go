@@ -2327,3 +2327,297 @@ func (s *memoryTicketService) ConsumeRefreshToken(
 	}
 	return refresh, nil
 }
+
+func TestHTTPAdminDiagnosticsAnalyticsProxiesThroughConnector(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	backendURL, err := url.Parse("http://127.0.0.1:8000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var gotPath, gotQuery, gotToken string
+	backendClient := &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			mu.Lock()
+			gotPath = r.URL.Path
+			gotQuery = r.URL.RawQuery
+			gotToken = r.Header.Get("X-Pointy-Connector-Token")
+			mu.Unlock()
+			body := "PK-zip-bytes"
+			return &http.Response{
+				StatusCode:    http.StatusOK,
+				Status:        "200 OK",
+				Proto:         "HTTP/1.1",
+				ProtoMajor:    1,
+				ProtoMinor:    1,
+				Body:          io.NopCloser(strings.NewReader(body)),
+				ContentLength: int64(len(body)),
+				Header: http.Header{
+					"Content-Type":                   []string{"application/zip"},
+					"X-Pointy-Analytics-Event-Count": []string{"3"},
+					"X-Pointy-App-Version":           []string{"0.1.0"},
+					"X-Pointy-Connector-Version":     []string{"pointy-relay/test"},
+				},
+				Request: r,
+			}, nil
+		}),
+	}
+	store, provisioned := provisionRelayInstallation(t)
+	hub := NewHub()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	startInMemoryConnector(t, ctx, hub, provisioned.Installation.ID, connector.Client{
+		BackendURL: backendURL,
+		Token:      "connector-secret",
+		Logger:     logger,
+		HTTPClient: backendClient,
+	})
+	waitUntil(t, time.Second, func() bool {
+		return hub.IsOnline(provisioned.Installation.ID)
+	})
+
+	relayHTTP := HTTPServer{
+		Store:      store,
+		Hub:        hub,
+		Logger:     logger,
+		AdminToken: "admin-token",
+	}
+
+	request, err := http.NewRequest(
+		http.MethodGet,
+		"http://relay.test/v1/installations/"+provisioned.Installation.ID+"/diagnostics-analytics?event_type=error",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer admin-token")
+	recorder := httptest.NewRecorder()
+	relayHTTP.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		content, _ := io.ReadAll(response.Body)
+		t.Fatalf("expected 200, got %d: %s", response.StatusCode, content)
+	}
+	content, _ := io.ReadAll(response.Body)
+	if string(content) != "PK-zip-bytes" {
+		t.Fatalf("expected proxied body, got %q", content)
+	}
+	if got := response.Header.Get("X-Pointy-Analytics-Event-Count"); got != "3" {
+		t.Fatalf("expected event count passthrough, got %q", got)
+	}
+	if got := response.Header.Get("X-Pointy-App-Version"); got != "0.1.0" {
+		t.Fatalf("expected app version passthrough, got %q", got)
+	}
+	if got := response.Header.Get(diagOnlineHeader); got != "true" {
+		t.Fatalf("expected diag online header, got %q", got)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if gotPath != "/api/relay/diagnostics/analytics-export/" {
+		t.Fatalf("backend saw unexpected path %q", gotPath)
+	}
+	if gotQuery != "event_type=error" {
+		t.Fatalf("backend saw unexpected query %q", gotQuery)
+	}
+	if gotToken != "connector-secret" {
+		t.Fatalf("expected connector token injected, got %q", gotToken)
+	}
+}
+
+func TestHTTPAdminDiagnosticsAnalyticsRequiresAdminToken(t *testing.T) {
+	store, provisioned := provisionRelayInstallation(t)
+	relayHTTP := HTTPServer{
+		Store:      store,
+		Hub:        NewHub(),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminToken: "admin-token",
+	}
+	request, err := http.NewRequest(
+		http.MethodGet,
+		"http://relay.test/v1/installations/"+provisioned.Installation.ID+"/diagnostics-analytics",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	relayHTTP.ServeHTTP(recorder, request)
+	if got := recorder.Result().StatusCode; got != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without admin token, got %d", got)
+	}
+}
+
+func TestHTTPAdminDiagnosticsAnalyticsReturns503WhenConnectorOffline(t *testing.T) {
+	store, provisioned := provisionRelayInstallation(t)
+	relayHTTP := HTTPServer{
+		Store:      store,
+		Hub:        NewHub(),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminToken: "admin-token",
+	}
+	request, err := http.NewRequest(
+		http.MethodGet,
+		"http://relay.test/v1/installations/"+provisioned.Installation.ID+"/diagnostics-analytics",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer admin-token")
+	recorder := httptest.NewRecorder()
+	relayHTTP.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 when connector offline, got %d", response.StatusCode)
+	}
+}
+
+func TestHTTPAdminDiagnosticsAnalyticsProxiesToRemoteNode(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	backendURL, err := url.Parse("http://127.0.0.1:8000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var gotPath, gotToken string
+	backendClient := &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			mu.Lock()
+			gotPath = r.URL.Path
+			gotToken = r.Header.Get("X-Pointy-Connector-Token")
+			mu.Unlock()
+			body := "PK-zip-bytes"
+			return &http.Response{
+				StatusCode:    http.StatusOK,
+				Status:        "200 OK",
+				Proto:         "HTTP/1.1",
+				ProtoMajor:    1,
+				ProtoMinor:    1,
+				Body:          io.NopCloser(strings.NewReader(body)),
+				ContentLength: int64(len(body)),
+				Header:        http.Header{"X-Pointy-Analytics-Event-Count": []string{"5"}},
+				Request:       r,
+			}, nil
+		}),
+	}
+	store, provisioned := provisionRelayInstallation(t)
+	nodeBHub := NewHub()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	startInMemoryConnector(t, ctx, nodeBHub, provisioned.Installation.ID, connector.Client{
+		BackendURL: backendURL,
+		Token:      "connector-secret",
+		Logger:     logger,
+		HTTPClient: backendClient,
+	})
+	waitUntil(t, time.Second, func() bool {
+		return nodeBHub.IsOnline(provisioned.Installation.ID)
+	})
+
+	nodeB := HTTPServer{
+		Store:          store,
+		Hub:            nodeBHub,
+		Logger:         logger,
+		NodeID:         "relay-node-b",
+		NodeProxyToken: "node-secret",
+	}
+	nodeA := HTTPServer{
+		Store:          store,
+		Hub:            NewHub(),
+		Logger:         logger,
+		AdminToken:     "admin-token",
+		NodeID:         "relay-node-a",
+		NodeProxyToken: "node-secret",
+		Presence: &staticPresence{
+			record: ConnectorPresenceRecord{
+				InstallationID: provisioned.Installation.ID,
+				NodeID:         "relay-node-b",
+				RelayHTTPURL:   "http://relay-node-b.internal",
+				ConnectedAt:    time.Now().UTC(),
+			},
+			ok: true,
+		},
+		NodeProxyHTTPClient: &http.Client{
+			Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				if got := r.Header.Get(NodeProxyTokenHeader); got != "node-secret" {
+					t.Errorf("expected node token on inter-node hop, got %q", got)
+				}
+				if got := r.Header.Get("Authorization"); got != "" {
+					t.Errorf("admin bearer token must not cross the inter-node hop, got %q", got)
+				}
+				recorder := httptest.NewRecorder()
+				nodeB.ServeHTTP(recorder, r)
+				return recorder.Result(), nil
+			}),
+		},
+		AllowInsecureNodeProxy: true,
+	}
+
+	request, err := http.NewRequest(
+		http.MethodGet,
+		"http://relay-a.test/v1/installations/"+provisioned.Installation.ID+"/diagnostics-analytics?event_type=error",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer admin-token")
+	recorder := httptest.NewRecorder()
+	nodeA.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		content, _ := io.ReadAll(response.Body)
+		t.Fatalf("expected 200 via node proxy, got %d: %s", response.StatusCode, content)
+	}
+	content, _ := io.ReadAll(response.Body)
+	if string(content) != "PK-zip-bytes" {
+		t.Fatalf("expected proxied ZIP body, got %q", content)
+	}
+	if got := response.Header.Get("X-Pointy-Analytics-Event-Count"); got != "5" {
+		t.Fatalf("expected event count passthrough, got %q", got)
+	}
+	if got := response.Header.Get(diagOnlineHeader); got != "true" {
+		t.Fatalf("expected diag online header from owning node, got %q", got)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if gotPath != "/api/relay/diagnostics/analytics-export/" {
+		t.Fatalf("backend saw unexpected path %q", gotPath)
+	}
+	if gotToken != "connector-secret" {
+		t.Fatalf("expected connector token injected on owning node, got %q", gotToken)
+	}
+}
+
+func TestHTTPNodeDiagnosticsEndpointRequiresNodeToken(t *testing.T) {
+	store, provisioned := provisionRelayInstallation(t)
+	server := HTTPServer{
+		Store:          store,
+		Hub:            NewHub(),
+		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		NodeProxyToken: "node-secret",
+	}
+	request, err := http.NewRequest(
+		http.MethodGet,
+		"http://relay.test/v1/node/installations/"+provisioned.Installation.ID+"/diagnostics-analytics",
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	if got := recorder.Result().StatusCode; got != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without node token, got %d", got)
+	}
+}

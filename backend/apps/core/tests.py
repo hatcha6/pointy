@@ -1,4 +1,6 @@
+import json
 import tempfile
+import zipfile
 from datetime import timedelta
 from decimal import Decimal
 from io import BytesIO
@@ -1156,6 +1158,110 @@ class RelayBackendApiTests(TestCase):
         installation.refresh_from_db()
         self.assertIsNotNone(installation.connector_last_seen_at)
         self.assertEqual(installation.connector_version, "pointy-relay/test")
+
+
+class RelayDiagnosticsAnalyticsExportTests(TestCase):
+    def setUp(self):
+        self.installation = RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+            relay_enabled=True,
+            subscription_active=True,
+            connector_version="pointy-relay/test",
+        )
+
+    def _create_event(self, **kwargs):
+        defaults = dict(
+            event_type=AnalyticsEvent.EventType.USAGE,
+            name="app.started",
+            severity=AnalyticsEvent.Severity.INFO,
+            source=AnalyticsEvent.Source.FRONTEND,
+            occurred_at=timezone.now(),
+        )
+        defaults.update(kwargs)
+        return AnalyticsEvent.objects.create(**defaults)
+
+    def test_valid_connector_token_returns_zip_with_headers(self):
+        self._create_event(
+            name="error.boom",
+            event_type=AnalyticsEvent.EventType.ERROR,
+            severity=AnalyticsEvent.Severity.ERROR,
+        )
+
+        response = APIClient().get(
+            reverse("relay-diagnostics-analytics-export"),
+            HTTP_X_POINTY_CONNECTOR_TOKEN="ptc1.installation-1.connector-secret",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/zip")
+        self.assertEqual(response["X-Pointy-Analytics-Event-Count"], "1")
+        self.assertEqual(response["X-Pointy-Connector-Version"], "pointy-relay/test")
+        self.assertIn("X-Pointy-App-Version", response)
+        self.assertIn("attachment;", response["Content-Disposition"])
+        archive = zipfile.ZipFile(BytesIO(response.content))
+        self.assertEqual(
+            sorted(archive.namelist()),
+            ["analytics_events.csv", "manifest.json"],
+        )
+
+    def test_missing_or_wrong_connector_token_is_rejected(self):
+        missing = APIClient().get(reverse("relay-diagnostics-analytics-export"))
+        wrong = APIClient().get(
+            reverse("relay-diagnostics-analytics-export"),
+            HTTP_X_POINTY_CONNECTOR_TOKEN="not-the-token",
+        )
+
+        self.assertEqual(missing.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(wrong.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_returns_404_when_installation_not_configured(self):
+        RelayInstallation.objects.all().delete()
+
+        response = APIClient().get(
+            reverse("relay-diagnostics-analytics-export"),
+            HTTP_X_POINTY_CONNECTOR_TOKEN="ptc1.installation-1.connector-secret",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_filters_are_applied(self):
+        self._create_event(
+            name="error.boom",
+            event_type=AnalyticsEvent.EventType.ERROR,
+            severity=AnalyticsEvent.Severity.ERROR,
+        )
+        self._create_event(name="app.started")
+
+        response = APIClient().get(
+            reverse("relay-diagnostics-analytics-export"),
+            {"event_type": "error", "format": "json"},
+            HTTP_X_POINTY_CONNECTOR_TOKEN="ptc1.installation-1.connector-secret",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        archive = zipfile.ZipFile(BytesIO(response.content))
+        rows = json.loads(archive.read("analytics_events.json").decode())
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], "error.boom")
+
+    def test_records_support_pull_audit_event(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            response = APIClient().get(
+                reverse("relay-diagnostics-analytics-export"),
+                HTTP_X_POINTY_CONNECTOR_TOKEN="ptc1.installation-1.connector-secret",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            AnalyticsEvent.objects.filter(
+                name="analytics.export.support_pull"
+            ).exists()
+        )
 
 
 @override_settings(

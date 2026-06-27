@@ -19,8 +19,10 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -1385,9 +1387,11 @@ func runProvision(args []string) error {
 
 func runSubscription(args []string) error {
 	if len(args) == 0 {
-		return usageError("missing subscription command (update, enable, disable, extend, audit)")
+		return usageError("missing subscription command (set, update, enable, disable, extend, audit)")
 	}
 	switch args[0] {
+	case "set":
+		return runSubscriptionSet(args[1:])
 	case "update":
 		return runSubscriptionUpdate(args[1:])
 	case "enable":
@@ -1468,6 +1472,132 @@ func runSubscriptionToggle(args []string, enable bool) error {
 	return applySubscriptionChange(admin, id, body, *asJSON)
 }
 
+// runSubscriptionSet is the human one-liner: give an installation a subscription
+// of N months (or days, or until a date) and, in the same audited change, turn
+// the AI add-on and remote access on or off.
+func runSubscriptionSet(args []string) error {
+	flags := flag.NewFlagSet("subscription set", flag.ExitOnError)
+	admin := registerAdminControlFlags(flags)
+	actor := flags.String("actor", "", "operator id for the audit trail (default: $POINTY_RELAY_OPERATOR or OS user)")
+	reason := flags.String("reason", "", "audit reason (defaults to a summary of the change)")
+	months := flags.Int("months", 0, "subscription length in months from now (e.g. 1, 3, 65)")
+	days := flags.Int("days", 0, "subscription length in days from now (alternative to --months)")
+	until := flags.String("until", "", "explicit RFC3339 subscription end (alternative to --months/--days)")
+	aiOn := flags.Bool("ai", false, "enable the AI add-on")
+	aiOff := flags.Bool("no-ai", false, "disable the AI add-on")
+	remoteOn := flags.Bool("remote", false, "enable remote access (implied when a length is set)")
+	remoteOff := flags.Bool("no-remote", false, "disable remote access")
+	asJSON := flags.Bool("json", false, "print the raw JSON response")
+	id, err := idAndFlags(args, flags)
+	if err != nil {
+		return err
+	}
+	if *aiOn && *aiOff {
+		return usageError("--ai and --no-ai are mutually exclusive")
+	}
+	if *remoteOn && *remoteOff {
+		return usageError("--remote and --no-remote are mutually exclusive")
+	}
+
+	endsAt, err := subscriptionEndFromFlags(*months, *days, *until)
+	if err != nil {
+		return err
+	}
+
+	options := subscriptionUpdateOptions{
+		InstallationID: id,
+		Actor:          resolveActor(*actor),
+	}
+	if endsAt != "" {
+		options.SubscriptionActive = "true"
+		options.SubscriptionEndsAt = endsAt
+	}
+	switch {
+	case *remoteOn:
+		options.RelayEnabled = "true"
+	case *remoteOff:
+		options.RelayEnabled = "false"
+	case endsAt != "":
+		// A subscription length is only useful with remote access on.
+		options.RelayEnabled = "true"
+	}
+	switch {
+	case *aiOn:
+		options.AIEnabled = "true"
+	case *aiOff:
+		options.AIEnabled = "false"
+	}
+	if endsAt == "" && options.RelayEnabled == "" && options.AIEnabled == "" {
+		return usageError("nothing to set: pass a length (--months/--days/--until) and/or --ai/--no-ai/--remote/--no-remote")
+	}
+	options.Reason = defaultReason(*reason, subscriptionSetReason(*months, *days, *until, options))
+
+	body, err := subscriptionUpdateBody(options)
+	if err != nil {
+		return err
+	}
+	return applySubscriptionChange(admin, id, body, *asJSON)
+}
+
+// subscriptionEndFromFlags turns the chosen length flag into an RFC3339 end time.
+// At most one of months/days/until may be set; none returns "" (leave unchanged).
+func subscriptionEndFromFlags(months, days int, until string) (string, error) {
+	if months < 0 || days < 0 {
+		return "", usageError("--months and --days must be 0 or positive")
+	}
+	count := 0
+	endsAt := ""
+	if months > 0 {
+		count++
+		endsAt = time.Now().UTC().AddDate(0, months, 0).Format(time.RFC3339)
+	}
+	if days > 0 {
+		count++
+		endsAt = time.Now().UTC().AddDate(0, 0, days).Format(time.RFC3339)
+	}
+	if trimmed := strings.TrimSpace(until); trimmed != "" {
+		count++
+		parsed, err := time.Parse(time.RFC3339, trimmed)
+		if err != nil {
+			return "", fmt.Errorf("--until must be RFC3339: %w", err)
+		}
+		endsAt = parsed.UTC().Format(time.RFC3339)
+	}
+	if count > 1 {
+		return "", usageError("use only one of --months, --days, or --until")
+	}
+	return endsAt, nil
+}
+
+// subscriptionSetReason builds a readable default audit reason from the change.
+func subscriptionSetReason(months, days int, until string, options subscriptionUpdateOptions) string {
+	var parts []string
+	switch {
+	case months > 0:
+		parts = append(parts, fmt.Sprintf("%d-month subscription", months))
+	case days > 0:
+		parts = append(parts, fmt.Sprintf("%d-day subscription", days))
+	case strings.TrimSpace(until) != "":
+		parts = append(parts, "subscription end "+strings.TrimSpace(until))
+	}
+	switch options.AIEnabled {
+	case "true":
+		parts = append(parts, "AI on")
+	case "false":
+		parts = append(parts, "AI off")
+	}
+	if options.RelayEnabled == "false" {
+		parts = append(parts, "remote off")
+	} else if options.RelayEnabled == "true" && len(parts) == 0 {
+		parts = append(parts, "remote on")
+	}
+	summary := strings.Join(parts, ", ")
+	if summary == "" {
+		summary = "subscription update"
+	}
+	return "set " + summary + " via operator CLI"
+}
+
 func runSubscriptionExtend(args []string) error {
 	flags := flag.NewFlagSet("subscription extend", flag.ExitOnError)
 	admin := registerAdminControlFlags(flags)
@@ -1516,7 +1646,7 @@ func applySubscriptionChange(admin *adminControlFlags, id string, body map[strin
 
 func runInstallations(args []string) error {
 	if len(args) == 0 {
-		return usageError("missing installations command (list, show, status, audit, provision)")
+		return usageError("missing installations command (list, show, status, diagnostics, audit, provision)")
 	}
 	switch args[0] {
 	case "list":
@@ -1525,6 +1655,8 @@ func runInstallations(args []string) error {
 		return runInstallationsShow(args[1:])
 	case "status":
 		return runInstallationsStatus(args[1:])
+	case "diagnostics":
+		return runInstallationsDiagnostics(args[1:])
 	case "audit":
 		return runInstallationsAudit(args[1:])
 	case "provision":
@@ -1678,6 +1810,397 @@ func runInstallationsProvision(args []string) error {
 	// Always print the full JSON: the one-time connector and access tokens are
 	// only returned here and the operator must capture them.
 	return printRawJSON(raw)
+}
+
+// diagnosticsResult summarizes one installation's diagnostics pull for display.
+type diagnosticsResult struct {
+	InstallationID   string `json:"installation_id"`
+	ShopName         string `json:"shop_name,omitempty"`
+	Status           string `json:"status"` // ok, offline, error
+	OutputPath       string `json:"output_path,omitempty"`
+	Bytes            int64  `json:"bytes"`
+	EventCount       string `json:"event_count,omitempty"`
+	AppVersion       string `json:"app_version,omitempty"`
+	ConnectorVersion string `json:"connector_version,omitempty"`
+	Online           string `json:"online,omitempty"`
+	LastConnectedAt  string `json:"last_connected_at,omitempty"`
+	Error            string `json:"error,omitempty"`
+}
+
+// runInstallationsDiagnostics pulls an installation's tracking/usage/error export
+// (the Shop Settings "Export Tracking" data) for one installation or every
+// installation the relay can reach, for remote support.
+func runInstallationsDiagnostics(args []string) error {
+	flags := flag.NewFlagSet("installations diagnostics", flag.ExitOnError)
+	admin := registerAdminControlFlags(flags)
+	all := flags.Bool("all", false, "pull from every installation the relay can reach")
+	// Export filters (forwarded verbatim to the backend export query).
+	format := flags.String("format", "", "export format: csv or json")
+	from := flags.String("from", "", "only events at or after this time (RFC3339 or YYYY-MM-DD)")
+	to := flags.String("to", "", "only events at or before this time (RFC3339 or YYYY-MM-DD)")
+	eventType := flags.String("event-type", "", "filter by event type (usage, error, performance, security, fraud_signal, audit)")
+	severity := flags.String("severity", "", "filter by severity (debug, info, warning, error, critical)")
+	source := flags.String("source", "", "filter by source (frontend, backend, print_agent, integration)")
+	search := flags.String("search", "", "free-text search over event name, trace id, entity, and request path")
+	platform := flags.String("platform", "", "filter by platform")
+	deviceID := flags.String("device-id", "", "filter by device id")
+	sessionID := flags.String("session-id", "", "filter by register/app session id")
+	// Single-installation output.
+	out := flags.String("out", "", "output file for a single installation (default pointy-diagnostics-<id>-<ts>.zip)")
+	// All-installations output.
+	outDir := flags.String("out-dir", "", "output directory for --all (default pointy-diagnostics-<ts>)")
+	onlineOnly := flags.Bool("online-only", true, "with --all, omit offline installations from the summary")
+	concurrency := flags.Int("concurrency", 4, "with --all, number of installations to pull in parallel")
+	query := flags.String("query", "", "with --all, filter installations by id/business/shop substring")
+	asJSON := flags.Bool("json", false, "print a JSON summary instead of a table")
+
+	// Accept both `diagnostics <id> [flags]` and `diagnostics --all [flags]`.
+	id := ""
+	rest := args
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		id = strings.TrimSpace(args[0])
+		rest = args[1:]
+	}
+	if err := flags.Parse(rest); err != nil {
+		return err
+	}
+	if *all && id != "" {
+		return usageError("pass an installation id or --all, not both")
+	}
+	if !*all && id == "" {
+		return usageError("provide an installation id as the first argument, or --all")
+	}
+
+	params := url.Values{}
+	setParam := func(key, value string) {
+		if v := strings.TrimSpace(value); v != "" {
+			params.Set(key, v)
+		}
+	}
+	setParam("format", *format)
+	setParam("date_from", *from)
+	setParam("date_to", *to)
+	setParam("event_type", *eventType)
+	setParam("severity", *severity)
+	setParam("source", *source)
+	setParam("search", *search)
+	setParam("platform", *platform)
+	setParam("device_id", *deviceID)
+	setParam("session_id", *sessionID)
+
+	if *all {
+		return runDiagnosticsAll(admin, params, *outDir, *query, *onlineOnly, *concurrency, *asJSON)
+	}
+	return runDiagnosticsSingle(admin, id, params, *out, *asJSON)
+}
+
+func runDiagnosticsSingle(admin *adminControlFlags, id string, params url.Values, out string, asJSON bool) error {
+	outPath := strings.TrimSpace(out)
+	if outPath == "" {
+		outPath = fmt.Sprintf(
+			"pointy-diagnostics-%s-%s.zip",
+			sanitizeFilename(id),
+			time.Now().UTC().Format("20060102T150405Z"),
+		)
+	}
+	header, n, err := admin.pullDiagnosticsToFile(id, params, outPath)
+	if err != nil {
+		return err
+	}
+	result := diagnosticsResultFromHeader(id, outPath, n, header)
+	if asJSON {
+		return printJSONValue([]diagnosticsResult{result})
+	}
+	return renderDiagnosticsResult(result)
+}
+
+func runDiagnosticsAll(
+	admin *adminControlFlags,
+	params url.Values,
+	outDir, query string,
+	onlineOnly bool,
+	concurrency int,
+	asJSON bool,
+) error {
+	listParams := url.Values{}
+	if q := strings.TrimSpace(query); q != "" {
+		listParams.Set("query", q)
+	}
+	raw, err := admin.requestJSON(http.MethodGet, "/v1/installations", listParams, nil)
+	if err != nil {
+		return err
+	}
+	var list installationListResponse
+	if err := json.Unmarshal(raw, &list); err != nil {
+		return err
+	}
+	if len(list.Installations) == 0 {
+		fmt.Println("No installations found.")
+		return nil
+	}
+
+	dir := strings.TrimSpace(outDir)
+	if dir == "" {
+		dir = fmt.Sprintf("pointy-diagnostics-%s", time.Now().UTC().Format("20060102T150405Z"))
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	results := make([]diagnosticsResult, len(list.Installations))
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	for i, inst := range list.Installations {
+		wg.Add(1)
+		go func(i int, inst installationView) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			outPath := filepath.Join(dir, sanitizeFilename(inst.ID)+".zip")
+			header, n, perr := admin.pullDiagnosticsToFile(inst.ID, params, outPath)
+			if perr != nil {
+				res := diagnosticsResult{InstallationID: inst.ID, ShopName: inst.ShopName}
+				if isConnectorOfflineError(perr) {
+					res.Status = "offline"
+				} else {
+					res.Status = "error"
+					res.Error = perr.Error()
+				}
+				results[i] = res
+				return
+			}
+			res := diagnosticsResultFromHeader(inst.ID, outPath, n, header)
+			res.ShopName = inst.ShopName
+			results[i] = res
+		}(i, inst)
+	}
+	wg.Wait()
+
+	return renderDiagnosticsResults(results, dir, onlineOnly, asJSON)
+}
+
+// pullDiagnosticsToFile pulls one installation's diagnostics ZIP to outPath via
+// the relay admin API. It writes to a temp file first so a failed pull never
+// leaves a partial or empty file behind.
+func (a *adminControlFlags) pullDiagnosticsToFile(
+	id string,
+	params url.Values,
+	outPath string,
+) (http.Header, int64, error) {
+	path := "/v1/installations/" + url.PathEscape(id) + "/diagnostics-analytics"
+	tmp, err := os.CreateTemp(filepath.Dir(outPath), ".pointy-diagnostics-*.zip.tmp")
+	if err != nil {
+		return nil, 0, err
+	}
+	tmpName := tmp.Name()
+	header, n, reqErr := a.requestBinary(http.MethodGet, path, params, tmp)
+	closeErr := tmp.Close()
+	if reqErr != nil {
+		_ = os.Remove(tmpName)
+		return header, 0, reqErr
+	}
+	if closeErr != nil {
+		_ = os.Remove(tmpName)
+		return header, 0, closeErr
+	}
+	if err := os.Rename(tmpName, outPath); err != nil {
+		_ = os.Remove(tmpName)
+		return header, 0, err
+	}
+	return header, n, nil
+}
+
+// requestBinary performs an authenticated admin API call and streams the
+// response body into dst. Unlike requestJSON it neither caps nor buffers the
+// body, so it suits large export downloads.
+func (a *adminControlFlags) requestBinary(
+	method, path string,
+	query url.Values,
+	dst io.Writer,
+) (http.Header, int64, error) {
+	if strings.TrimSpace(*a.adminToken) == "" {
+		return nil, 0, fmt.Errorf("admin token is required (set --admin-token or POINTY_RELAY_ADMIN_TOKEN)")
+	}
+	endpoint, err := relayAdminEndpoint(*a.controlURL, path)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(query) > 0 {
+		endpoint.RawQuery = query.Encode()
+	}
+	client, err := newRelayAdminHTTPClient(relayAdminHTTPClientOptions{
+		ControlURL:     *a.controlURL,
+		AllowInsecure:  *a.allowInsecure,
+		CAFile:         *a.caFile,
+		ClientCertFile: *a.clientCertFile,
+		ClientKeyFile:  *a.clientKeyFile,
+		TLSServerName:  *a.tlsServerName,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	request, err := http.NewRequest(method, endpoint.String(), nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	request.Header.Set("Accept", "application/zip")
+	request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(*a.adminToken))
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		payload, _ := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+		return response.Header, 0, fmt.Errorf(
+			"relay admin %s %s returned %d: %s",
+			method, path, response.StatusCode, strings.TrimSpace(string(payload)),
+		)
+	}
+	n, err := io.Copy(dst, response.Body)
+	if err != nil {
+		return response.Header, n, err
+	}
+	return response.Header, n, nil
+}
+
+func diagnosticsResultFromHeader(id, outPath string, n int64, header http.Header) diagnosticsResult {
+	res := diagnosticsResult{
+		InstallationID: id,
+		Status:         "ok",
+		OutputPath:     outPath,
+		Bytes:          n,
+	}
+	if header != nil {
+		res.EventCount = header.Get("X-Pointy-Analytics-Event-Count")
+		res.AppVersion = header.Get("X-Pointy-App-Version")
+		res.ConnectorVersion = header.Get("X-Pointy-Connector-Version")
+		res.Online = header.Get(diagnosticsOnlineHeader)
+		res.LastConnectedAt = header.Get(diagnosticsLastConnectedHeader)
+	}
+	return res
+}
+
+const (
+	diagnosticsOnlineHeader        = "X-Pointy-Diag-Online"
+	diagnosticsLastConnectedHeader = "X-Pointy-Diag-Last-Connected-At"
+)
+
+func isConnectorOfflineError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "connector offline")
+}
+
+func sanitizeFilename(value string) string {
+	cleaned := strings.Map(func(r rune) rune {
+		switch r {
+		case '/', '\\', ':', '*', '?', '"', '<', '>', '|', 0:
+			return '_'
+		}
+		return r
+	}, value)
+	if cleaned = strings.TrimSpace(cleaned); cleaned == "" {
+		return "installation"
+	}
+	return cleaned
+}
+
+func printJSONValue(value any) error {
+	encoded, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stdout.Write(encoded); err != nil {
+		return err
+	}
+	fmt.Println()
+	return nil
+}
+
+func renderDiagnosticsResult(result diagnosticsResult) error {
+	writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+	rows := [][2]string{
+		{"id", result.InstallationID},
+		{"output", result.OutputPath},
+		{"events", dashIfEmpty(result.EventCount)},
+		{"size", humanBytes(result.Bytes)},
+		{"app version", dashIfEmpty(result.AppVersion)},
+		{"connector version", dashIfEmpty(result.ConnectorVersion)},
+		{"last connector seen", dashIfEmpty(result.LastConnectedAt)},
+	}
+	for _, row := range rows {
+		fmt.Fprintf(writer, "%s\t%s\n", row[0], row[1])
+	}
+	return writer.Flush()
+}
+
+func renderDiagnosticsResults(results []diagnosticsResult, dir string, onlineOnly, asJSON bool) error {
+	shown := make([]diagnosticsResult, 0, len(results))
+	pulled, offline, failed := 0, 0, 0
+	for _, res := range results {
+		switch res.Status {
+		case "ok":
+			pulled++
+		case "offline":
+			offline++
+		default:
+			failed++
+		}
+		if onlineOnly && res.Status == "offline" {
+			continue
+		}
+		shown = append(shown, res)
+	}
+	if asJSON {
+		if err := printJSONValue(shown); err != nil {
+			return err
+		}
+	} else {
+		writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+		fmt.Fprintln(writer, "ID\tSHOP\tSTATUS\tEVENTS\tSIZE\tDETAIL")
+		for _, res := range shown {
+			detail := res.OutputPath
+			switch res.Status {
+			case "error":
+				detail = res.Error
+			case "offline":
+				detail = "-"
+			}
+			fmt.Fprintf(
+				writer,
+				"%s\t%s\t%s\t%s\t%s\t%s\n",
+				res.InstallationID,
+				dashIfEmpty(res.ShopName),
+				res.Status,
+				dashIfEmpty(res.EventCount),
+				humanBytes(res.Bytes),
+				dashIfEmpty(detail),
+			)
+		}
+		if err := writer.Flush(); err != nil {
+			return err
+		}
+	}
+	fmt.Printf("\n%d pulled, %d offline, %d error(s). Saved to %s\n", pulled, offline, failed, dir)
+	return nil
+}
+
+func humanBytes(n int64) string {
+	if n <= 0 {
+		return "-"
+	}
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%dB", n)
+	}
+	div, exp := int64(unit), 0
+	for x := n / unit; x >= unit; x /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f%cB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
 // adminControlFlags collects the connection settings every API-based operator
@@ -2535,8 +3058,8 @@ func printUsage() {
 	fmt.Fprintln(os.Stderr, `Usage:
   pointy-relay server [flags]
   pointy-relay connector [flags]
-  pointy-relay installations <list|show|status|audit|provision> [args]
-  pointy-relay subscription <update|enable|disable|extend|audit> <id> [flags]
+  pointy-relay installations <list|show|status|diagnostics|audit|provision> [args]
+  pointy-relay subscription <set|update|enable|disable|extend|audit> <id> [flags]
   pointy-relay provision [flags]
   pointy-relay migrate [flags]
   pointy-relay gen-token [flags]
@@ -2548,9 +3071,13 @@ Commands:
                    list [--query q] [--active|--inactive] [--limit n] [--json]
                    show <id> [--json]        full subscription + connector state
                    status <id> [--json]      live connector / certificate health
+                   diagnostics <id> [--out f]    pull tracking/usage/error export
+                   diagnostics --all [--out-dir d]   pull from every reachable shop
                    audit <id> [--json]       recent subscription change history
                    provision [--shop-name .. --relay-enabled ..]   create remotely
   subscription   Fast subscription changes over the admin API (audited):
+                   set <id> --months N [--ai|--no-ai] [--remote|--no-remote]
+                                             give an N-month subscription + add-ons
                    enable <id>               turn relay + subscription on
                    disable <id>              turn relay + subscription off
                    extend <id> --days N      set the end date N days out, active

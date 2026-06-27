@@ -470,6 +470,12 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withNodeProxy(w, r, s.handleNodePublicInvoice)
+	case strings.HasPrefix(r.URL.Path, "/v1/node/installations/"):
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withNodeProxy(w, r, s.handleNodeInstallationDiagnosticsAnalytics)
 	case strings.HasPrefix(r.URL.Path, "/invoices/") && r.Method == http.MethodGet:
 		if !s.RouteMode.allowsPublic() {
 			writeNotFound(w)
@@ -1015,6 +1021,10 @@ func (s HTTPServer) handleInstallation(w http.ResponseWriter, r *http.Request) {
 		s.handleInstallationStatus(w, r, id)
 		return
 	}
+	if len(parts) == 2 && parts[1] == "diagnostics-analytics" && r.Method == http.MethodGet {
+		s.handleInstallationDiagnosticsAnalytics(w, r, id)
+		return
+	}
 	if len(parts) == 2 && parts[1] == "connector-certificate" && r.Method == http.MethodPost {
 		s.handleIssueConnectorCertificate(w, r, id)
 		return
@@ -1047,6 +1057,233 @@ func (s HTTPServer) handleInstallation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+}
+
+const (
+	// diagnosticsAnalyticsBackendPath is the reserved tunnel path the connector
+	// rewrites to the on-prem backend's connector-token-authed export endpoint.
+	// It is unreachable from the public relay proxy: relayTarget only routes
+	// /api/ paths reached via an access ticket, never the /__pointy_support__
+	// prefix.
+	diagnosticsAnalyticsBackendPath = "/__pointy_support__/api/relay/diagnostics/analytics-export/"
+	diagOnlineHeader                = "X-Pointy-Diag-Online"
+	diagLastConnectedHeader         = "X-Pointy-Diag-Last-Connected-At"
+)
+
+// handleInstallationDiagnosticsAnalytics streams an installation's
+// tracking/usage/error export (the same data the Shop Settings "Export Tracking"
+// screen produces) back to the relay operator for remote support. The request is
+// proxied over the connector tunnel to the on-prem backend; the connector
+// injects its token so the backend can authenticate the operator. The incoming
+// admin query string is forwarded verbatim so CLI filters reach the backend.
+// Routing already passes through withAdmin, so this is gated by the admin token.
+func (s HTTPServer) handleInstallationDiagnosticsAnalytics(w http.ResponseWriter, r *http.Request, id string) {
+	s.serveInstallationDiagnosticsAnalytics(w, r, id, true)
+}
+
+// handleNodeInstallationDiagnosticsAnalytics serves a diagnostics pull that
+// another relay node forwarded here because this node holds the connector. It is
+// gated by withNodeProxy (node token) and never proxies onward (avoids loops).
+func (s HTTPServer) handleNodeInstallationDiagnosticsAnalytics(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/node/installations/"), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] != "diagnostics-analytics" || r.Method != http.MethodGet {
+		writeNotFound(w)
+		return
+	}
+	s.serveInstallationDiagnosticsAnalytics(w, r, parts[0], false)
+}
+
+func (s HTTPServer) serveInstallationDiagnosticsAnalytics(
+	w http.ResponseWriter,
+	r *http.Request,
+	id string,
+	allowNodeProxy bool,
+) {
+	installation, err := s.Store.GetInstallation(r.Context(), id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if s.Hub == nil || !s.Hub.IsOnline(installation.ID) {
+		// In a multi-node mesh the connector may be attached to another node;
+		// transparently forward the pull to whichever node holds it.
+		if allowNodeProxy {
+			if proxied, _, _ := s.tryProxyDiagnosticsToRemoteNode(w, r, installation.ID); proxied {
+				return
+			}
+		}
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "connector offline"})
+		return
+	}
+
+	requestCtx, requestCancel := context.WithTimeout(r.Context(), s.relayRequestTimeout())
+	defer requestCancel()
+	openCtx, openCancel := context.WithTimeout(requestCtx, s.streamOpenTimeout())
+	stream, err := s.Hub.OpenStream(openCtx, installation.ID)
+	openCancel()
+	if err != nil {
+		if errors.Is(err, ErrConnectorOffline) {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "connector offline"})
+			return
+		}
+		s.logger().Warn("diagnostics stream open failed", "installation_id", installation.ID, "error", err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "relay stream failed"})
+		return
+	}
+	defer stream.Close()
+	stopDeadlineCloser := closeStreamOnContextDone(requestCtx, stream)
+	defer stopDeadlineCloser()
+
+	// Build a clean request rather than cloning the admin request, so the admin
+	// bearer token never travels down the tunnel.
+	proxyReq, err := http.NewRequestWithContext(
+		requestCtx,
+		http.MethodGet,
+		"http://connector"+diagnosticsAnalyticsBackendPath,
+		nil,
+	)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "diagnostics request build failed"})
+		return
+	}
+	proxyReq.URL.RawQuery = r.URL.RawQuery
+	proxyReq.Close = true
+	proxyReq.Header.Set("Connection", "close")
+	proxyReq.Header.Set("Accept", "application/zip")
+
+	if err := proxyReq.Write(stream); err != nil {
+		s.logger().Warn("diagnostics request write failed", "installation_id", installation.ID, "error", err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "relay request failed"})
+		return
+	}
+
+	response, err := http.ReadResponse(bufio.NewReader(stream), proxyReq)
+	if err != nil {
+		s.logger().Warn("diagnostics response read failed", "installation_id", installation.ID, "error", err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "relay response failed"})
+		return
+	}
+	defer response.Body.Close()
+
+	// Pass through the backend export headers (event count, app/connector
+	// version) and add the relay-known health headers the backend cannot see.
+	copyHeader(w.Header(), response.Header)
+	w.Header().Set(diagOnlineHeader, "true")
+	if installation.LastConnectorConnectedAt != nil {
+		w.Header().Set(diagLastConnectedHeader, installation.LastConnectorConnectedAt.UTC().Format(time.RFC3339))
+	}
+	w.WriteHeader(response.StatusCode)
+	if _, err := io.Copy(w, response.Body); err != nil {
+		s.logger().Warn("diagnostics response copy failed", "installation_id", installation.ID, "error", err)
+	}
+}
+
+// tryProxyDiagnosticsToRemoteNode forwards a diagnostics pull to the relay node
+// that currently holds the installation's connector, mirroring the public relay
+// node proxy. It returns ok=false (caller falls back to 503) when no other node
+// advertises the connector or node proxying is not configured.
+func (s HTTPServer) tryProxyDiagnosticsToRemoteNode(
+	w http.ResponseWriter,
+	r *http.Request,
+	installationID string,
+) (bool, int, string) {
+	if strings.TrimSpace(s.NodeProxyToken) == "" ||
+		s.Presence == nil ||
+		strings.TrimSpace(r.Header.Get(NodeProxyMarkerHeader)) != "" {
+		return false, 0, ""
+	}
+
+	record, ok, err := s.Presence.Get(r.Context(), installationID)
+	if err != nil {
+		s.logger().Warn("diagnostics connector presence lookup failed", "installation_id", installationID, "error", err)
+		return false, 0, ""
+	}
+	if !ok ||
+		strings.TrimSpace(record.NodeID) == "" ||
+		record.NodeID == s.NodeID ||
+		strings.TrimSpace(record.RelayHTTPURL) == "" {
+		return false, 0, ""
+	}
+
+	endpoint, err := nodeDiagnosticsEndpoint(
+		record.RelayHTTPURL,
+		installationID,
+		r.URL.RawQuery,
+		s.AllowInsecureNodeProxy,
+	)
+	if err != nil {
+		s.logger().Warn(
+			"diagnostics remote node URL rejected",
+			"installation_id", installationID,
+			"connector_node_id", record.NodeID,
+			"error", err,
+		)
+		return false, 0, ""
+	}
+
+	request := r.Clone(r.Context())
+	request.URL = endpoint
+	request.RequestURI = ""
+	request.Host = endpoint.Host
+	request.Header = r.Header.Clone()
+	removeHopHeaders(request.Header)
+	// The receiving node authorizes with the node token, so the operator's admin
+	// bearer token must not travel across the internal hop.
+	request.Header.Del("Authorization")
+	request.Header.Set(NodeProxyMarkerHeader, "1")
+	request.Header.Set(NodeProxyTokenHeader, strings.TrimSpace(s.NodeProxyToken))
+
+	response, err := s.nodeProxyHTTPClient().Do(request)
+	if err != nil {
+		s.logger().Warn(
+			"diagnostics remote node proxy failed",
+			"installation_id", installationID,
+			"connector_node_id", record.NodeID,
+			"error", err,
+		)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "connector offline"})
+		return true, http.StatusServiceUnavailable, "node_proxy_failed"
+	}
+	defer response.Body.Close()
+
+	copyHeader(w.Header(), response.Header)
+	w.WriteHeader(response.StatusCode)
+	if _, err := io.Copy(w, response.Body); err != nil {
+		s.logger().Warn(
+			"diagnostics remote node proxy response copy failed",
+			"installation_id", installationID,
+			"connector_node_id", record.NodeID,
+			"error", err,
+		)
+	}
+	return true, response.StatusCode, "node_proxied"
+}
+
+func nodeDiagnosticsEndpoint(
+	rawBaseURL string,
+	installationID string,
+	rawQuery string,
+	allowInsecure bool,
+) (*url.URL, error) {
+	parsed, err := url.Parse(strings.TrimSpace(rawBaseURL))
+	if err != nil {
+		return nil, err
+	}
+	if parsed.Scheme == "" || parsed.Host == "" {
+		return nil, errors.New("node diagnostics URL must include scheme and host")
+	}
+	if parsed.Scheme == "http" && !allowInsecure {
+		return nil, errors.New("node diagnostics URL must use https unless insecure node proxy is enabled")
+	}
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return nil, errors.New("node diagnostics URL must use http or https")
+	}
+	parsed.Path = joinHTTPPath(
+		parsed.Path,
+		"/v1/node/installations/"+url.PathEscape(installationID)+"/diagnostics-analytics",
+	)
+	parsed.RawQuery = rawQuery
+	return parsed, nil
 }
 
 func (s HTTPServer) holidayStore(w http.ResponseWriter) (control.HolidayStore, bool) {

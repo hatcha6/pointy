@@ -293,3 +293,117 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
 	return f(request)
 }
+
+func TestServeSessionInjectsConnectorTokenForDiagnosticsPath(t *testing.T) {
+	backendURL := parseBackendURL(t)
+	var mu sync.Mutex
+	var gotPath, gotQuery, gotToken string
+	backendClient := &http.Client{
+		Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			mu.Lock()
+			gotPath = request.URL.Path
+			gotQuery = request.URL.RawQuery
+			gotToken = request.Header.Get("X-Pointy-Connector-Token")
+			mu.Unlock()
+			return textResponse(request, http.StatusOK, "diag"), nil
+		}),
+	}
+	session := startClientSession(t, Client{
+		BackendURL: backendURL,
+		Token:      "connector-secret",
+		Logger:     testLogger(),
+		HTTPClient: backendClient,
+	})
+
+	stream := openRequestStream(
+		t,
+		session,
+		"/__pointy_support__/api/relay/diagnostics/analytics-export/?event_type=error",
+	)
+	defer stream.Close()
+	response := readStreamResponse(t, stream)
+	body := readResponseBody(t, response)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", response.StatusCode, body)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if gotPath != "/api/relay/diagnostics/analytics-export/" {
+		t.Fatalf("expected rewritten diagnostics path, got %q", gotPath)
+	}
+	if gotQuery != "event_type=error" {
+		t.Fatalf("expected query to pass through, got %q", gotQuery)
+	}
+	if gotToken != "connector-secret" {
+		t.Fatalf("expected connector token to be injected, got %q", gotToken)
+	}
+}
+
+func TestServeSessionRejectsReservedPathOutsideDiagnostics(t *testing.T) {
+	backendURL := parseBackendURL(t)
+	var mu sync.Mutex
+	called := false
+	backendClient := &http.Client{
+		Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			mu.Lock()
+			called = true
+			mu.Unlock()
+			return textResponse(request, http.StatusOK, "ok"), nil
+		}),
+	}
+	session := startClientSession(t, Client{
+		BackendURL: backendURL,
+		Token:      "connector-secret",
+		Logger:     testLogger(),
+		HTTPClient: backendClient,
+	})
+
+	stream := openRequestStream(t, session, "/__pointy_support__/api/products/")
+	defer stream.Close()
+	response := readStreamResponse(t, stream)
+	body := readResponseBody(t, response)
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 for reserved path outside diagnostics, got %d: %s", response.StatusCode, body)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if called {
+		t.Fatal("backend must not be reached for a rejected reserved path")
+	}
+}
+
+func TestServeSessionDoesNotInjectConnectorTokenForNormalPath(t *testing.T) {
+	backendURL := parseBackendURL(t)
+	var mu sync.Mutex
+	var gotToken string
+	backendClient := &http.Client{
+		Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			mu.Lock()
+			gotToken = request.Header.Get("X-Pointy-Connector-Token")
+			mu.Unlock()
+			return textResponse(request, http.StatusOK, "ok"), nil
+		}),
+	}
+	session := startClientSession(t, Client{
+		BackendURL: backendURL,
+		Token:      "connector-secret",
+		Logger:     testLogger(),
+		HTTPClient: backendClient,
+	})
+
+	stream := openRequestStream(t, session, "/api/products/")
+	defer stream.Close()
+	response := readStreamResponse(t, stream)
+	_ = readResponseBody(t, response)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.StatusCode)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if gotToken != "" {
+		t.Fatalf("connector token must not be injected on normal paths, got %q", gotToken)
+	}
+}

@@ -304,15 +304,34 @@ pointy-relay installations status <id>          # live connector + cert health
 pointy-relay installations audit <id>           # recent change history
 ```
 
+Pull a shop's tracking/usage/error telemetry for remote support — the same data
+the Shop Settings "Export Tracking" screen produces, fetched over the connector
+tunnel (one ZIP per installation, gated by the admin token):
+
+```sh
+pointy-relay installations diagnostics <id>                 # -> pointy-diagnostics-<id>-<ts>.zip
+pointy-relay installations diagnostics <id> --out shop.zip  # choose the output file
+pointy-relay installations diagnostics <id> --event-type error --from 2026-06-01  # filter
+pointy-relay installations diagnostics --all --out-dir ./diag   # every reachable shop
+```
+
 Change subscriptions fast — each writes an audited event (actor + reason are
 filled automatically, override with `--actor`/`--reason`):
 
 ```sh
-pointy-relay subscription enable  <id>            # relay + subscription on
-pointy-relay subscription disable <id>            # relay + subscription off
-pointy-relay subscription extend  <id> --days 365 # set end 1 year out, active
-pointy-relay subscription enable  <id> --ai       # also grant the AI entitlement
+pointy-relay subscription set <id> --months 3            # 3-month sub, remote access on
+pointy-relay subscription set <id> --months 12 --ai      # 1-year sub with the AI add-on
+pointy-relay subscription set <id> --months 65 --no-ai   # 65 months, remote access only
+pointy-relay subscription set <id> --no-ai               # just turn the AI add-on off
+pointy-relay subscription enable  <id>                   # relay + subscription on
+pointy-relay subscription disable <id>                   # relay + subscription off
+pointy-relay subscription extend  <id> --days 365        # set end 1 year out, active
 ```
+
+`subscription set` is the human one-liner: `--months N` (or `--days N`, or
+`--until <RFC3339>`) activates the subscription for that span and turns remote
+access on, while `--ai`/`--no-ai` and `--remote`/`--no-remote` flip the add-ons —
+all in a single audited change.
 
 For explicit field-by-field control, `subscription update` takes the id as the
 first argument (or `--installation-id`) plus any of `--relay-enabled`,
