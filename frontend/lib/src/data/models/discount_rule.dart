@@ -1,3 +1,4 @@
+import 'contact.dart';
 import 'query.dart';
 
 enum DiscountChannel {
@@ -538,6 +539,7 @@ class DiscountRule {
     required this.variants,
     required this.productCategories,
     required this.customers,
+    required this.customerRanks,
     required this.suppliers,
     required this.metadata,
     required this.redemptionCount,
@@ -572,6 +574,9 @@ class DiscountRule {
   final List<int> variants;
   final List<int> productCategories;
   final List<int> customers;
+
+  /// RFM ranks this rule targets; empty means it applies to every rank.
+  final List<CustomerRank> customerRanks;
   final List<int> suppliers;
   final Map<String, Object?> metadata;
   final int redemptionCount;
@@ -617,6 +622,7 @@ class DiscountRule {
       variants: _intListFromJson(json['variants'] ?? json['product_variants']),
       productCategories: _intListFromJson(json['product_categories']),
       customers: _intListFromJson(json['customers']),
+      customerRanks: _rankListFromJson(json['customer_ranks']),
       suppliers: _intListFromJson(json['suppliers']),
       metadata: json['metadata'] is Map<String, Object?>
           ? Map<String, Object?>.from(json['metadata']! as Map)
@@ -658,6 +664,7 @@ class DiscountRuleDraft {
     required this.variants,
     required this.productCategories,
     required this.customers,
+    required this.customerRanks,
     required this.suppliers,
     this.metadata = const {},
   });
@@ -687,6 +694,7 @@ class DiscountRuleDraft {
   final List<int> variants;
   final List<int> productCategories;
   final List<int> customers;
+  final List<CustomerRank> customerRanks;
   final List<int> suppliers;
   final Map<String, Object?> metadata;
 
@@ -724,6 +732,7 @@ class DiscountRuleDraft {
       'variants': variants,
       'product_categories': productCategories,
       'customers': customers,
+      'customer_ranks': [for (final rank in customerRanks) rank.apiValue],
       'suppliers': suppliers,
       'metadata': metadata,
     };
@@ -765,6 +774,15 @@ List<int> _intListFromJson(Object? value) {
   return value
       .map(_nullableIntFromJson)
       .whereType<int>()
+      .toList(growable: false);
+}
+
+List<CustomerRank> _rankListFromJson(Object? value) {
+  if (value is! List<Object?>) {
+    return const [];
+  }
+  return value
+      .map((entry) => CustomerRank.fromApi(entry?.toString() ?? ''))
       .toList(growable: false);
 }
 

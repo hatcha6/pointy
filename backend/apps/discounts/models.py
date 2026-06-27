@@ -121,6 +121,11 @@ class DiscountRule(TimeStampedModel):
         blank=True,
         related_name="discount_rules",
     )
+    # RFM ranks this rule targets (e.g. ["champion", "at_risk"]); empty = every
+    # rank. Matched against ``Customer.rfm_segment`` at checkout so a discount
+    # can automatically reward (or win back) a whole segment without listing
+    # customers by hand. ANDs with the ``customers`` whitelist when both are set.
+    customer_ranks = models.JSONField(default=list, blank=True)
     suppliers = models.ManyToManyField(
         "purchasing.Supplier",
         blank=True,
@@ -214,6 +219,34 @@ class DiscountRule(TimeStampedModel):
             )
         if self.starts_at and self.ends_at and self.ends_at <= self.starts_at:
             raise ValidationError({"ends_at": "End date must be after start date."})
+        if self.customer_ranks:
+            # Local import avoids a discounts → customers import cycle.
+            from apps.customers.models import Customer
+
+            if not isinstance(self.customer_ranks, list):
+                raise ValidationError(
+                    {"customer_ranks": "Customer ranks must be a list."}
+                )
+            valid_ranks = set(Customer.Rank.values)
+            unknown = [
+                rank for rank in self.customer_ranks if rank not in valid_ranks
+            ]
+            if unknown:
+                raise ValidationError(
+                    {
+                        "customer_ranks": (
+                            f"Unknown customer ranks: {', '.join(map(str, unknown))}."
+                        )
+                    }
+                )
+            if self.channel == self.Channel.PURCHASING:
+                raise ValidationError(
+                    {
+                        "customer_ranks": (
+                            "Customer rank targeting requires a sales or both channel."
+                        )
+                    }
+                )
 
     def save(self, *args, **kwargs):
         self.coupon_code = normalize_coupon_code(self.coupon_code)

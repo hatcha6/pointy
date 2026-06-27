@@ -10,6 +10,7 @@ import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
+import '../../../shared/customer_rank_presentation.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -247,6 +248,7 @@ class _ContactManagementBody extends StatelessWidget {
           ),
         ),
         _CustomerStatusFilter(viewModel: viewModel, tabController: tabController),
+        _CustomerRankFilter(viewModel: viewModel, tabController: tabController),
         if (viewModel.hasError)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -358,6 +360,84 @@ class _CustomerStatusFilter extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Customers-tab filter: pin the list to a single RFM rank (or all ranks).
+/// Ranks are assigned automatically by the backend's nightly segmentation job.
+class _CustomerRankFilter extends StatelessWidget {
+  const _CustomerRankFilter({
+    required this.viewModel,
+    required this.tabController,
+  });
+
+  final ContactManagementViewModel viewModel;
+  final TabController tabController;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
+
+    return AnimatedBuilder(
+      animation: tabController,
+      builder: (context, _) {
+        if (tabController.index != 0) {
+          return const SizedBox.shrink();
+        }
+        final selected = viewModel.query.rank;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(spacing.lg, 0, spacing.lg, spacing.sm),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final filter in CustomerRankFilter.values) ...[
+                  if (filter != CustomerRankFilter.values.first)
+                    SizedBox(width: spacing.sm),
+                  _RankChoiceChip(
+                    filter: filter,
+                    selected: filter == selected,
+                    onSelected: () => viewModel.updateRank(filter),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RankChoiceChip extends StatelessWidget {
+  const _RankChoiceChip({
+    required this.filter,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final CustomerRankFilter filter;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final rank = filter.rank;
+    if (rank == null) {
+      return ChoiceChip(
+        label: Text(l10n.allRanksFilterLabel),
+        selected: selected,
+        onSelected: (_) => onSelected(),
+      );
+    }
+    final style = customerRankStyle(context, rank);
+    return ChoiceChip(
+      avatar: Icon(style.icon, size: 18, color: style.color),
+      label: Text(style.label),
+      selected: selected,
+      onSelected: (_) => onSelected(),
     );
   }
 }
@@ -513,6 +593,19 @@ class _CustomerList extends StatelessWidget {
             if (!customer.isActive) l10n.inactiveContactLabel,
           ].join(' • '),
           trailing: const Icon(Icons.chevron_left),
+          badges: [
+            if (customer.rank != CustomerRank.inactive)
+              Builder(
+                builder: (context) {
+                  final style = customerRankStyle(context, customer.rank);
+                  return PointyStatusPill(
+                    label: style.label,
+                    icon: style.icon,
+                    color: style.color,
+                  );
+                },
+              ),
+          ],
           selected: customer.id == selectedCustomerId,
           onTap: () => _openCustomer(context, customer),
         );

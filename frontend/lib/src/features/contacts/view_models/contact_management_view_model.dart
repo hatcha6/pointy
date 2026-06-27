@@ -147,6 +147,14 @@ class ContactManagementViewModel extends ChangeNotifier {
     await loadContacts();
   }
 
+  Future<void> updateRank(CustomerRankFilter rank) async {
+    if (rank == _query.rank) {
+      return;
+    }
+    _query = _query.copyWith(rank: rank);
+    await loadContacts();
+  }
+
   Future<bool> createCustomer(CustomerDraft draft) async {
     if (_isSaving) {
       return false;

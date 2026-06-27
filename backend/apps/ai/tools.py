@@ -919,13 +919,18 @@ def inventory_intelligence(*, user, mode="reorder", days=30, limit=20):
 def customer_insights(*, user, mode="top", days=90, limit=10):
     """Customer signals for retention/marketing advice. modes: ``top`` (highest
     recognized spend in the window), ``at_risk`` (previously active, no purchase in
-    ``days``), ``outstanding_credit`` (largest unpaid آجل balances). Scoped through
-    the orders boundary like every other tool."""
-    if mode not in ("top", "at_risk", "outstanding_credit"):
+    ``days``), ``outstanding_credit`` (largest unpaid آجل balances), ``by_rank``
+    (the whole base rolled up by automatic RFM rank — count + total spend per
+    segment, the map for segment-targeted campaigns and discounts). ``top`` and
+    ``at_risk`` rows also carry each customer's ``rfm_rank``. Scoped through the
+    orders boundary like every other tool."""
+    if mode not in ("top", "at_risk", "outstanding_credit", "by_rank"):
         return {
             "ok": False,
             "error": "invalid_arguments",
-            "message": "mode غير مدعوم. المتاح: top / at_risk / outstanding_credit.",
+            "message": (
+                "mode غير مدعوم. المتاح: top / at_risk / outstanding_credit / by_rank."
+            ),
         }
     try:
         days = max(1, min(int(days), 1095))
@@ -947,7 +952,7 @@ def customer_insights(*, user, mode="top", days=90, limit=10):
             rows = (
                 window.committed_sales()
                 .exclude(customer__isnull=True)
-                .values("customer_id", "customer__full_name")
+                .values("customer_id", "customer__full_name", "customer__rfm_segment")
                 .annotate(spend=Sum(_line_revenue()), orders=Count("id", distinct=True))
                 .order_by("-spend")[:limit]
             )
@@ -955,6 +960,7 @@ def customer_insights(*, user, mode="top", days=90, limit=10):
                 {
                     "customer_id": r["customer_id"],
                     "name": r["customer__full_name"],
+                    "rfm_rank": r["customer__rfm_segment"],
                     "spend": _money(r["spend"]),
                     "orders": r["orders"],
                 }
@@ -966,7 +972,9 @@ def customer_insights(*, user, mode="top", days=90, limit=10):
             agg = (
                 orders_qs.committed_sales()
                 .exclude(customer__isnull=True)
-                .values("customer_id", "customer__full_name")
+                .values(
+                    "customer_id", "customer__full_name", "customer__rfm_segment"
+                )
                 .annotate(last_order=Max("created_at"), orders=Count("id", distinct=True))
             )
             at_risk = [r for r in agg if r["last_order"] is not None and r["last_order"].date() < cutoff]
@@ -975,12 +983,41 @@ def customer_insights(*, user, mode="top", days=90, limit=10):
                 {
                     "customer_id": r["customer_id"],
                     "name": r["customer__full_name"],
+                    "rfm_rank": r["customer__rfm_segment"],
                     "last_order": r["last_order"].date(),
                     "lifetime_orders": r["orders"],
                 }
                 for r in at_risk[:limit]
             ]
             data = {"mode": mode, "inactive_days_threshold": days, "customers": customers}
+        elif mode == "by_rank":
+            # Roll the whole real-customer base up by its precomputed RFM rank:
+            # how many customers sit in each segment and how much they have spent.
+            # The segmentation map for "who do I target?" — pair with a
+            # rank-targeted discount to act on it.
+            from apps.customers.models import Customer
+
+            rank_rows = (
+                Customer.objects.filter(is_auto_created=False)
+                .values("rfm_segment")
+                .annotate(
+                    customer_count=Count("id"),
+                    total_spend=Sum("rfm_monetary"),
+                )
+            )
+            by_rank = {row["rfm_segment"]: row for row in rank_rows}
+            segments = [
+                {
+                    "rank": rank,
+                    "customer_count": by_rank.get(rank, {}).get("customer_count", 0),
+                    "total_spend": _money(
+                        by_rank.get(rank, {}).get("total_spend") or Decimal("0")
+                    ),
+                }
+                for rank in Customer.Rank.values
+                if by_rank.get(rank, {}).get("customer_count", 0)
+            ]
+            data = {"mode": mode, "segments": segments}
         else:  # outstanding_credit
             rows = (
                 orders_qs.open_credit()
@@ -3028,13 +3065,24 @@ def tools_definitions(*, supports_ask_user=False, supports_actions=False):
                 "description": (
                     "إشارات العملاء للاحتفاظ والتسويق: mode=top (الأعلى إنفاقًا في النافذة)، "
                     "at_risk (عملاء كانوا نشطين ولم يشتروا منذ days يومًا)، "
-                    "outstanding_credit (أكبر الأرصدة الآجلة غير المسدّدة). days يضبط نافذة "
-                    "top أو عتبة عدم النشاط لـ at_risk."
+                    "outstanding_credit (أكبر الأرصدة الآجلة غير المسدّدة)، "
+                    "by_rank (توزيع كل العملاء على تصنيفات RFM التلقائية: عدد العملاء "
+                    "وإجمالي الإنفاق لكل تصنيف — خريطة الاستهداف للعروض والحملات). "
+                    "صفوف top و at_risk تتضمّن تصنيف RFM لكل عميل (rfm_rank). "
+                    "days يضبط نافذة top أو عتبة عدم النشاط لـ at_risk."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "mode": {"type": "string", "enum": ["top", "at_risk", "outstanding_credit"]},
+                        "mode": {
+                            "type": "string",
+                            "enum": [
+                                "top",
+                                "at_risk",
+                                "outstanding_credit",
+                                "by_rank",
+                            ],
+                        },
                         "days": {"type": "integer", "minimum": 1, "maximum": 1095},
                         "limit": {"type": "integer", "minimum": 1, "maximum": 50},
                     },

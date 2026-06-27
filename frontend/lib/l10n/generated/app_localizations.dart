@@ -12331,6 +12331,84 @@ abstract class AppLocalizations {
   /// **'بطاقة غير مُسمّاة'**
   String get customerAutoCreatedBadge;
 
+  /// Label for the customer RFM rank filter on the contacts list.
+  ///
+  /// In ar, this message translates to:
+  /// **'التصنيف'**
+  String get customerRankFilterTitle;
+
+  /// Filter chip selecting customers of any RFM rank.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل التصنيفات'**
+  String get allRanksFilterLabel;
+
+  /// RFM rank: recent, frequent, high-spending customers.
+  ///
+  /// In ar, this message translates to:
+  /// **'مميّز'**
+  String get customerRankChampion;
+
+  /// RFM rank: loyal customers.
+  ///
+  /// In ar, this message translates to:
+  /// **'وفيّ'**
+  String get customerRankLoyal;
+
+  /// RFM rank: customers who could become loyal.
+  ///
+  /// In ar, this message translates to:
+  /// **'وفيّ محتمل'**
+  String get customerRankPotentialLoyalist;
+
+  /// RFM rank: new customers.
+  ///
+  /// In ar, this message translates to:
+  /// **'جديد'**
+  String get customerRankNew;
+
+  /// RFM rank: promising customers.
+  ///
+  /// In ar, this message translates to:
+  /// **'واعد'**
+  String get customerRankPromising;
+
+  /// RFM rank: customers who need attention.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحتاج اهتمامًا'**
+  String get customerRankNeedsAttention;
+
+  /// RFM rank: customers at risk of churning.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرّض للفقدان'**
+  String get customerRankAtRisk;
+
+  /// RFM rank: high-value customers who have gone quiet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يجب خسارته'**
+  String get customerRankCantLose;
+
+  /// RFM rank: hibernating customers.
+  ///
+  /// In ar, this message translates to:
+  /// **'خامل'**
+  String get customerRankHibernating;
+
+  /// RFM rank: lost customers.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفقود'**
+  String get customerRankLost;
+
+  /// RFM rank: customers with no recognized purchase yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون مشتريات'**
+  String get customerRankInactive;
+
   /// No description provided for @customerSalesSummaryTitle.
   ///
   /// In ar, this message translates to:
@@ -15582,6 +15660,30 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{count} موردين'**
   String discountSupplierConstraintSummary(int count);
+
+  /// Toggle to limit a discount to specific customer RFM ranks.
+  ///
+  /// In ar, this message translates to:
+  /// **'حصره على تصنيفات عملاء معيّنة'**
+  String get discountRankScopeToggle;
+
+  /// Subtitle explaining the customer-rank targeting toggle.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُطبَّق تلقائيًا فقط على العملاء ضمن التصنيفات المختارة.'**
+  String get discountRankScopeHint;
+
+  /// Label above the customer-rank multi-select chips.
+  ///
+  /// In ar, this message translates to:
+  /// **'التصنيفات المستهدفة'**
+  String get discountRankConstraintLabel;
+
+  /// Summary chip for the number of targeted customer ranks.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} تصنيف عميل'**
+  String discountRankConstraintSummary(int count);
 
   /// No description provided for @yesLabel.
   ///

@@ -4100,6 +4100,58 @@
   "unclaimedCardsFilterLabel": "بطاقات غير مُسمّاة",
   "allCustomersFilterLabel": "كل العملاء",
   "customerAutoCreatedBadge": "بطاقة غير مُسمّاة",
+  "customerRankFilterTitle": "التصنيف",
+  "@customerRankFilterTitle": {
+    "description": "Label for the customer RFM rank filter on the contacts list."
+  },
+  "allRanksFilterLabel": "كل التصنيفات",
+  "@allRanksFilterLabel": {
+    "description": "Filter chip selecting customers of any RFM rank."
+  },
+  "customerRankChampion": "مميّز",
+  "@customerRankChampion": {
+    "description": "RFM rank: recent, frequent, high-spending customers."
+  },
+  "customerRankLoyal": "وفيّ",
+  "@customerRankLoyal": {
+    "description": "RFM rank: loyal customers."
+  },
+  "customerRankPotentialLoyalist": "وفيّ محتمل",
+  "@customerRankPotentialLoyalist": {
+    "description": "RFM rank: customers who could become loyal."
+  },
+  "customerRankNew": "جديد",
+  "@customerRankNew": {
+    "description": "RFM rank: new customers."
+  },
+  "customerRankPromising": "واعد",
+  "@customerRankPromising": {
+    "description": "RFM rank: promising customers."
+  },
+  "customerRankNeedsAttention": "يحتاج اهتمامًا",
+  "@customerRankNeedsAttention": {
+    "description": "RFM rank: customers who need attention."
+  },
+  "customerRankAtRisk": "معرّض للفقدان",
+  "@customerRankAtRisk": {
+    "description": "RFM rank: customers at risk of churning."
+  },
+  "customerRankCantLose": "لا يجب خسارته",
+  "@customerRankCantLose": {
+    "description": "RFM rank: high-value customers who have gone quiet."
+  },
+  "customerRankHibernating": "خامل",
+  "@customerRankHibernating": {
+    "description": "RFM rank: hibernating customers."
+  },
+  "customerRankLost": "مفقود",
+  "@customerRankLost": {
+    "description": "RFM rank: lost customers."
+  },
+  "customerRankInactive": "بدون مشتريات",
+  "@customerRankInactive": {
+    "description": "RFM rank: customers with no recognized purchase yet."
+  },
   "customerSalesSummaryTitle": "ملخص تعاملات العميل",
   "customerSalesSummaryLoadError": "تعذر تحميل ملخص تعاملات العميل.",
   "customerInvoiceHistoryTitle": "الفواتير",
@@ -5228,6 +5280,27 @@
   "discountSupplierConstraintSummary": "{count} موردين",
   "@discountSupplierConstraintSummary": {
     "description": "Supplier constraint count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "discountRankScopeToggle": "حصره على تصنيفات عملاء معيّنة",
+  "@discountRankScopeToggle": {
+    "description": "Toggle to limit a discount to specific customer RFM ranks."
+  },
+  "discountRankScopeHint": "يُطبَّق تلقائيًا فقط على العملاء ضمن التصنيفات المختارة.",
+  "@discountRankScopeHint": {
+    "description": "Subtitle explaining the customer-rank targeting toggle."
+  },
+  "discountRankConstraintLabel": "التصنيفات المستهدفة",
+  "@discountRankConstraintLabel": {
+    "description": "Label above the customer-rank multi-select chips."
+  },
+  "discountRankConstraintSummary": "{count} تصنيف عميل",
+  "@discountRankConstraintSummary": {
+    "description": "Summary chip for the number of targeted customer ranks.",
     "placeholders": {
       "count": {
         "type": "int"

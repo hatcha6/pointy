@@ -13,6 +13,25 @@ class Customer(TimeStampedModel):
         NON_BINARY = "non_binary", "Non-binary"
         PREFER_NOT_TO_SAY = "prefer_not_to_say", "Prefer not to say"
 
+    class Rank(models.TextChoices):
+        """RFM segments, ordered best → worst. Assigned automatically by the
+        ``customers.recompute_customer_segments`` Celery task (see
+        ``apps.customers.segmentation``); never set by hand."""
+
+        CHAMPION = "champion", "Champion"
+        LOYAL = "loyal", "Loyal"
+        POTENTIAL_LOYALIST = "potential_loyalist", "Potential loyalist"
+        NEW = "new_customer", "New customer"
+        PROMISING = "promising", "Promising"
+        NEEDS_ATTENTION = "needs_attention", "Needs attention"
+        AT_RISK = "at_risk", "At risk"
+        CANT_LOSE = "cant_lose", "Can't lose them"
+        HIBERNATING = "hibernating", "Hibernating"
+        LOST = "lost", "Lost"
+        # No recognized purchase on record yet (walk-in placeholders, brand-new
+        # contacts). Kept distinct from a scored rank so the UI can hide them.
+        INACTIVE = "inactive", "No purchases"
+
     customer_number = models.CharField(max_length=32, unique=True, blank=True)
     full_name = models.CharField(max_length=255)
     phone = models.CharField(max_length=64, blank=True)
@@ -31,6 +50,30 @@ class Customer(TimeStampedModel):
     # seen. They stay hidden from the contacts list until a human names one
     # (claiming it) or merges it into a real customer.
     is_auto_created = models.BooleanField(default=False)
+
+    # --- RFM segmentation (recomputed nightly, never edited by hand) ----------
+    # The named segment a customer falls into, used for targeting and the
+    # contacts-list rank filter. ``INACTIVE`` until the customer has a
+    # recognized purchase and the task has run at least once.
+    rfm_segment = models.CharField(
+        max_length=32,
+        choices=Rank.choices,
+        default=Rank.INACTIVE,
+        db_index=True,
+    )
+    # Per-axis quintile scores (1 = weakest, 5 = strongest; 0 = unscored).
+    rfm_recency_score = models.PositiveSmallIntegerField(default=0)
+    rfm_frequency_score = models.PositiveSmallIntegerField(default=0)
+    rfm_monetary_score = models.PositiveSmallIntegerField(default=0)
+    # Sum of the three scores (3–15 once scored, 0 while unscored) — a cheap
+    # single-column sort key for "best customers first".
+    rfm_score = models.PositiveSmallIntegerField(default=0)
+    # Raw inputs kept for display and so a rerun can be reasoned about offline.
+    rfm_recency_days = models.PositiveIntegerField(blank=True, null=True)
+    rfm_frequency = models.PositiveIntegerField(default=0)
+    rfm_monetary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    rfm_last_purchase_at = models.DateTimeField(blank=True, null=True)
+    rfm_calculated_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         ordering = ["full_name", "customer_number"]

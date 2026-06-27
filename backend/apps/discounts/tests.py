@@ -465,6 +465,78 @@ class DiscountEngineTests(TestCase):
         )
         self.assertEqual(used_result.discount_total, Decimal("0.00"))
 
+    def test_rank_targeted_rule_applies_only_to_matching_segment(self):
+        champion = Customer.objects.create(
+            full_name="VIP",
+            rfm_segment=Customer.Rank.CHAMPION,
+        )
+        at_risk = Customer.objects.create(
+            full_name="Slipping away",
+            rfm_segment=Customer.Rank.AT_RISK,
+        )
+        rule = DiscountRule.objects.create(
+            name="Loyalty reward",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("5.00"),
+            customer_ranks=[Customer.Rank.CHAMPION, Customer.Rank.LOYAL],
+        )
+        rule.products.add(self.product)
+
+        champion_result = self.engine.calculate(
+            self.context(customer_id=champion.pk)
+        )
+        self.assertEqual(champion_result.discount_total, Decimal("5.00"))
+
+        at_risk_result = self.engine.calculate(self.context(customer_id=at_risk.pk))
+        self.assertEqual(at_risk_result.discount_total, Decimal("0.00"))
+
+        # An anonymous (walk-in) order has no rank, so a rank-targeted rule skips it.
+        anonymous_result = self.engine.calculate(self.context())
+        self.assertEqual(anonymous_result.discount_total, Decimal("0.00"))
+
+    def test_rank_can_be_supplied_on_the_context_without_a_lookup(self):
+        rule = DiscountRule.objects.create(
+            name="Win-back",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("2.00"),
+            customer_ranks=[Customer.Rank.AT_RISK],
+        )
+        rule.products.add(self.product)
+
+        # No customer_id, but the caller passes the rank directly.
+        result = self.engine.calculate(
+            self.context(customer_rank=Customer.Rank.AT_RISK)
+        )
+        self.assertEqual(result.discount_total, Decimal("2.00"))
+
+    def test_rank_and_customer_whitelist_must_both_match(self):
+        listed_loyal = Customer.objects.create(
+            full_name="Listed loyal",
+            rfm_segment=Customer.Rank.LOYAL,
+        )
+        unlisted_loyal = Customer.objects.create(
+            full_name="Unlisted loyal",
+            rfm_segment=Customer.Rank.LOYAL,
+        )
+        rule = DiscountRule.objects.create(
+            name="VIP loyal only",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.FIXED_AMOUNT,
+            value=Decimal("4.00"),
+            customer_ranks=[Customer.Rank.LOYAL],
+        )
+        rule.products.add(self.product)
+        rule.customers.add(listed_loyal)
+
+        listed = self.engine.calculate(self.context(customer_id=listed_loyal.pk))
+        self.assertEqual(listed.discount_total, Decimal("4.00"))
+
+        # Same rank, but not on the whitelist → excluded (constraints AND together).
+        unlisted = self.engine.calculate(self.context(customer_id=unlisted_loyal.pk))
+        self.assertEqual(unlisted.discount_total, Decimal("0.00"))
+
     def test_purchase_supplier_constraint_uses_same_engine(self):
         supplier = Supplier.objects.create(name="Supplier one")
         rule = DiscountRule.objects.create(
@@ -746,6 +818,71 @@ class DiscountRuleApiTests(TestCase):
             )
             redemption.refresh_from_db()
         return order, applied_discount, redemption
+
+    def test_create_rule_targeting_customer_ranks(self):
+        response = self.client.post(
+            "/api/discount-rules/",
+            {
+                "name": "Win-back at-risk",
+                "channel": DiscountRule.Channel.SALES,
+                "application_type": DiscountRule.ApplicationType.AUTOMATIC,
+                "scope": DiscountRule.Scope.DOCUMENT,
+                "value_type": DiscountRule.ValueType.PERCENTAGE,
+                "value": "15.0000",
+                "customer_ranks": [
+                    Customer.Rank.AT_RISK,
+                    Customer.Rank.HIBERNATING,
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(
+            response.data["customer_ranks"],
+            [Customer.Rank.AT_RISK, Customer.Rank.HIBERNATING],
+        )
+        rule = DiscountRule.objects.get(pk=response.data["id"])
+        self.assertEqual(
+            rule.customer_ranks,
+            [Customer.Rank.AT_RISK, Customer.Rank.HIBERNATING],
+        )
+
+    def test_rank_targeting_rejected_for_purchasing_channel(self):
+        response = self.client.post(
+            "/api/discount-rules/",
+            {
+                "name": "Bad purchasing rank rule",
+                "channel": DiscountRule.Channel.PURCHASING,
+                "application_type": DiscountRule.ApplicationType.AUTOMATIC,
+                "scope": DiscountRule.Scope.DOCUMENT,
+                "value_type": DiscountRule.ValueType.PERCENTAGE,
+                "value": "15.0000",
+                "customer_ranks": [Customer.Rank.CHAMPION],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("customer_ranks", response.data)
+
+    def test_unknown_rank_value_rejected(self):
+        response = self.client.post(
+            "/api/discount-rules/",
+            {
+                "name": "Bad rank",
+                "channel": DiscountRule.Channel.SALES,
+                "application_type": DiscountRule.ApplicationType.AUTOMATIC,
+                "scope": DiscountRule.Scope.DOCUMENT,
+                "value_type": DiscountRule.ValueType.PERCENTAGE,
+                "value": "15.0000",
+                "customer_ranks": ["not_a_rank"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("customer_ranks", response.data)
 
     def test_create_update_disable_and_archive_discount_rule(self):
         with self.captureOnCommitCallbacks(execute=True):

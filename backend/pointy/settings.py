@@ -279,6 +279,13 @@ CELERY_BEAT_SCHEDULE = {
         "task": "holidays.sync_holidays",
         "schedule": crontab(minute=30, hour=0),
     },
+    # Re-score every customer's RFM rank overnight, after the day's sales have
+    # settled. Runs once daily; the ranks only shift on a daily granularity
+    # (recency is measured in days) so anything more frequent is wasted work.
+    "customers.recompute-customer-segments": {
+        "task": "customers.recompute_customer_segments",
+        "schedule": crontab(minute=45, hour=2),
+    },
 }
 
 CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")

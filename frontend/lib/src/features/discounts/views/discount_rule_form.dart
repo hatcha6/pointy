@@ -13,6 +13,7 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/async_selection/async_selection.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/customer_rank_presentation.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
@@ -75,6 +76,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   late bool _limitByMinimumLineQuantity;
   late bool _limitByProducts;
   late bool _limitByContacts;
+  late bool _limitByRank;
   late bool _showSchedule;
   late bool _showUsageLimits;
   late bool _showAdvancedSettings;
@@ -83,6 +85,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   late List<AsyncSelectionOption<int>> _selectedProductCategories;
   late List<AsyncSelectionOption<int>> _selectedCustomers;
   late List<AsyncSelectionOption<int>> _selectedSuppliers;
+  late List<CustomerRank> _selectedRanks;
   DateTime? _startsAt;
   DateTime? _endsAt;
 
@@ -148,6 +151,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     );
     _selectedCustomers = _selectionsFromIds(rule?.customers ?? const []);
     _selectedSuppliers = _selectionsFromIds(rule?.suppliers ?? const []);
+    _selectedRanks = List.of(rule?.customerRanks ?? const <CustomerRank>[]);
     _startsAt = rule?.startsAt;
     _endsAt = rule?.endsAt;
     _showDescription = _descriptionController.text.trim().isNotEmpty;
@@ -161,6 +165,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
         _selectedProductCategories.isNotEmpty;
     _limitByContacts =
         _selectedCustomers.isNotEmpty || _selectedSuppliers.isNotEmpty;
+    _limitByRank = _selectedRanks.isNotEmpty;
     _showSchedule = _startsAt != null || _endsAt != null;
     _showUsageLimits =
         rule?.usageLimit != null ||
@@ -542,9 +547,84 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
             showCustomerFields: showCustomerFields,
             showSupplierFields: showSupplierFields,
           ),
+        if (showCustomerFields) ...[
+          _InlineSwitch(
+            label: l10n.discountRankScopeToggle,
+            subtitle: l10n.discountRankScopeHint,
+            value: _limitByRank,
+            onChanged: (value) => setState(() => _limitByRank = value),
+          ),
+          if (_limitByRank) _buildRankConstraints(l10n),
+        ],
       ],
     );
   }
+
+  /// Multi-select of RFM ranks the discount targets. Ranks are assigned
+  /// automatically by the backend, so a rule keyed on a rank keeps targeting the
+  /// right segment as customers move between ranks over time.
+  Widget _buildRankConstraints(AppLocalizations l10n) {
+    final spacing = AdaptiveSpacing.of(context);
+    return Padding(
+      padding: EdgeInsets.only(top: spacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.discountRankConstraintLabel,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: context.pointyColors.mutedInk,
+            ),
+          ),
+          SizedBox(height: spacing.xs),
+          Wrap(
+            spacing: spacing.sm,
+            runSpacing: spacing.xs,
+            children: [
+              for (final rank in _targetableRanks)
+                _rankFilterChip(rank),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rankFilterChip(CustomerRank rank) {
+    final style = customerRankStyle(context, rank);
+    final selected = _selectedRanks.contains(rank);
+    return FilterChip(
+      avatar: Icon(style.icon, size: 18, color: style.color),
+      label: Text(style.label),
+      selected: selected,
+      onSelected: (value) {
+        setState(() {
+          if (value) {
+            _selectedRanks = [..._selectedRanks, rank];
+          } else {
+            _selectedRanks = _selectedRanks
+                .where((item) => item != rank)
+                .toList();
+          }
+        });
+      },
+    );
+  }
+
+  /// Ranks offered as discount targets — every scored segment. "No purchases"
+  /// (inactive) is excluded: it has no recognized history to reward or win back.
+  static const List<CustomerRank> _targetableRanks = [
+    CustomerRank.champion,
+    CustomerRank.loyal,
+    CustomerRank.potentialLoyalist,
+    CustomerRank.newCustomer,
+    CustomerRank.promising,
+    CustomerRank.needsAttention,
+    CustomerRank.atRisk,
+    CustomerRank.cantLose,
+    CustomerRank.hibernating,
+    CustomerRank.lost,
+  ];
 
   Widget _conditionsSection(AppLocalizations l10n) {
     return _FormSection(
@@ -864,6 +944,12 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       }
     }
 
+    if (_limitByRank &&
+        _channel != DiscountChannel.purchasing &&
+        _selectedRanks.isNotEmpty) {
+      chips.add(l10n.discountRankConstraintSummary(_selectedRanks.length));
+    }
+
     if (_limitByMinimumSubtotal &&
         _minSubtotalController.text.trim().isNotEmpty) {
       chips.add(
@@ -971,6 +1057,9 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
           : const [],
       customers: _limitByContacts && _channel != DiscountChannel.purchasing
           ? _selectedCustomers.map((item) => item.id).toList()
+          : const [],
+      customerRanks: _limitByRank && _channel != DiscountChannel.purchasing
+          ? List.of(_selectedRanks)
           : const [],
       suppliers: _limitByContacts && _channel != DiscountChannel.sales
           ? _selectedSuppliers.map((item) => item.id).toList()

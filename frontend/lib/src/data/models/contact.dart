@@ -30,30 +30,91 @@ enum ContactOrdering implements QueryOrdering {
   final String apiValue;
 }
 
+/// RFM segment a customer falls into, assigned automatically by the backend
+/// nightly job. Ordered best → worst; [inactive] means "no recognized purchase
+/// yet". The [apiValue] mirrors the backend ``Customer.Rank`` slugs.
+enum CustomerRank {
+  champion('champion'),
+  loyal('loyal'),
+  potentialLoyalist('potential_loyalist'),
+  newCustomer('new_customer'),
+  promising('promising'),
+  needsAttention('needs_attention'),
+  atRisk('at_risk'),
+  cantLose('cant_lose'),
+  hibernating('hibernating'),
+  lost('lost'),
+  inactive('inactive');
+
+  const CustomerRank(this.apiValue);
+
+  final String apiValue;
+
+  static CustomerRank fromApi(String value) {
+    return CustomerRank.values.firstWhere(
+      (rank) => rank.apiValue == value,
+      orElse: () => CustomerRank.inactive,
+    );
+  }
+}
+
+/// Customers-list filter by RFM rank. [all] applies no filter; every other
+/// value pins the list to one rank via ``?rfm_segment=<slug>``.
+enum CustomerRankFilter implements QueryFilterSet {
+  all(null),
+  champion(CustomerRank.champion),
+  loyal(CustomerRank.loyal),
+  potentialLoyalist(CustomerRank.potentialLoyalist),
+  newCustomer(CustomerRank.newCustomer),
+  promising(CustomerRank.promising),
+  needsAttention(CustomerRank.needsAttention),
+  atRisk(CustomerRank.atRisk),
+  cantLose(CustomerRank.cantLose),
+  hibernating(CustomerRank.hibernating),
+  lost(CustomerRank.lost),
+  inactive(CustomerRank.inactive);
+
+  const CustomerRankFilter(this.rank);
+
+  final CustomerRank? rank;
+
+  @override
+  Iterable<QueryFilter> get filters {
+    final rank = this.rank;
+    return rank == null
+        ? const []
+        : [QueryFilter(parameter: 'rfm_segment', value: rank.apiValue)];
+  }
+}
+
 class ContactQuery extends ModelQuery {
   const ContactQuery({
     this.search = '',
     this.status = ContactStatusFilter.all,
+    this.rank = CustomerRankFilter.all,
     this.ordering = ContactOrdering.name,
   });
 
   @override
   final String search;
   final ContactStatusFilter status;
+  final CustomerRankFilter rank;
   @override
   final ContactOrdering ordering;
 
   @override
-  Iterable<QueryFilter> get filters => status.filters;
+  Iterable<QueryFilter> get filters => [...status.filters, ...rank.filters];
 
   ContactQuery copyWith({
     String? search,
     ContactStatusFilter? status,
+    CustomerRankFilter? rank,
     ContactOrdering? ordering,
   }) {
     return ContactQuery(
       search: search ?? this.search,
       status: status ?? this.status,
+      rank: rank ?? this.rank,
       ordering: ordering ?? this.ordering,
     );
   }
@@ -122,6 +183,12 @@ class Customer {
     this.birthday,
     this.isAutoCreated = false,
     this.cardCount = 0,
+    this.rank = CustomerRank.inactive,
+    this.rankScore = 0,
+    this.totalSpent = 0,
+    this.purchaseCount = 0,
+    this.recencyDays,
+    this.lastPurchaseAt,
   });
 
   final int id;
@@ -142,6 +209,24 @@ class Customer {
   /// Number of payment cards attached to this customer (server-annotated).
   final int cardCount;
 
+  /// RFM segment assigned by the backend's nightly segmentation job.
+  final CustomerRank rank;
+
+  /// Combined RFM score (3–15 once scored, 0 while unscored).
+  final int rankScore;
+
+  /// Net recognized spend (committed sales less returns).
+  final double totalSpent;
+
+  /// Number of recognized purchases (committed sales).
+  final int purchaseCount;
+
+  /// Days since the last recognized purchase (null when none).
+  final int? recencyDays;
+
+  /// Timestamp of the last recognized purchase (null when none).
+  final DateTime? lastPurchaseAt;
+
   factory Customer.fromJson(Map<String, Object?> json) {
     return Customer(
       id: _intFromJson(json['id']),
@@ -156,6 +241,14 @@ class Customer {
       isActive: json['is_active'] != false,
       isAutoCreated: json['is_auto_created'] == true,
       cardCount: _intFromJson(json['card_count']),
+      rank: CustomerRank.fromApi(json['rfm_segment']?.toString() ?? ''),
+      rankScore: _intFromJson(json['rfm_score']),
+      totalSpent: _moneyFromJson(json['rfm_monetary']),
+      purchaseCount: _intFromJson(json['rfm_frequency']),
+      recencyDays: json['rfm_recency_days'] == null
+          ? null
+          : _intFromJson(json['rfm_recency_days']),
+      lastPurchaseAt: _dateFromJson(json['rfm_last_purchase_at']),
     );
   }
 

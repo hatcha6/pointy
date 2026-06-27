@@ -45,6 +45,10 @@ class DiscountContext:
     coupon_codes: tuple[str, ...] = ()
     location_id: int | str | None = None
     now: datetime | None = None
+    # The customer's RFM rank (``Customer.rfm_segment``). Optional: callers that
+    # already know it can pass it to skip a lookup; otherwise the engine resolves
+    # it on demand, but only when a candidate rule actually targets ranks.
+    customer_rank: str | None = None
 
     @property
     def normalized_coupon_codes(self) -> tuple[str, ...]:
@@ -219,9 +223,47 @@ class DiscountEngine:
             )
             .order_by("priority", "id")
         )
-        return [rule for rule in rules if self._context_matches_rule(rule, context)]
+        rules = list(rules)
+        customer_rank = self._resolve_customer_rank(context, rules)
+        return [
+            rule
+            for rule in rules
+            if self._context_matches_rule(rule, context, customer_rank)
+        ]
 
-    def _context_matches_rule(self, rule: DiscountRule, context: DiscountContext) -> bool:
+    def _resolve_customer_rank(
+        self,
+        context: DiscountContext,
+        rules: list[DiscountRule],
+    ) -> str | None:
+        """The customer's RFM rank, fetched lazily and only when it matters.
+
+        Returns the caller-supplied rank as-is when present. Otherwise we look it
+        up from the customer — but skip the query entirely unless at least one
+        candidate rule targets ranks, so rank targeting costs nothing on the
+        common path where no rule uses it.
+        """
+        if context.customer_rank is not None:
+            return context.customer_rank
+        if context.customer_id is None:
+            return None
+        if not any(rule.customer_ranks for rule in rules):
+            return None
+        # Local import avoids a discounts → customers import cycle.
+        from apps.customers.models import Customer
+
+        return (
+            Customer.objects.filter(pk=context.customer_id)
+            .values_list("rfm_segment", flat=True)
+            .first()
+        )
+
+    def _context_matches_rule(
+        self,
+        rule: DiscountRule,
+        context: DiscountContext,
+        customer_rank: str | None = None,
+    ) -> bool:
         if context.subtotal < rule.min_order_subtotal:
             return False
         if not discount_rule_usage_available(
@@ -233,6 +275,14 @@ class DiscountEngine:
 
         allowed_customer_ids = {customer.pk for customer in rule.customers.all()}
         if allowed_customer_ids and context.customer_id not in allowed_customer_ids:
+            return False
+
+        # Rank targeting: when a rule names ranks, the order's customer must sit
+        # in one of them. ANDs with the explicit customer whitelist above.
+        target_ranks = rule.customer_ranks or []
+        if target_ranks and (
+            customer_rank is None or customer_rank not in target_ranks
+        ):
             return False
 
         allowed_supplier_ids = {supplier.pk for supplier in rule.suppliers.all()}

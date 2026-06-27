@@ -29,6 +29,12 @@ class DiscountRuleSerializer(serializers.ModelSerializer):
         queryset=Customer.objects.all(),
         required=False,
     )
+    # RFM ranks this rule targets; empty/omitted = applies to every rank.
+    customer_ranks = serializers.ListField(
+        child=serializers.ChoiceField(choices=Customer.Rank.choices),
+        required=False,
+        allow_empty=True,
+    )
     suppliers = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=Supplier.objects.all(),
@@ -67,6 +73,7 @@ class DiscountRuleSerializer(serializers.ModelSerializer):
             "product_variants",
             "product_categories",
             "customers",
+            "customer_ranks",
             "suppliers",
             "metadata",
             "redemption_count",

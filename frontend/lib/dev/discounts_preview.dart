@@ -280,6 +280,7 @@ DiscountRule _rule({
     variants: const [],
     productCategories: productCategories,
     customers: const [],
+    customerRanks: const [],
     suppliers: suppliers,
     metadata: const {},
     redemptionCount: redemptionCount,

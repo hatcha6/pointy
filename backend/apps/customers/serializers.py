@@ -7,6 +7,11 @@ from .models import Customer, PaymentCard
 
 class CustomerSerializer(serializers.ModelSerializer):
     card_count = serializers.SerializerMethodField()
+    # Human label for the rank (e.g. "Champion"); the slug rides in ``rfm_segment``.
+    rfm_segment_display = serializers.CharField(
+        source="get_rfm_segment_display",
+        read_only=True,
+    )
 
     class Meta:
         model = Customer
@@ -23,10 +28,38 @@ class CustomerSerializer(serializers.ModelSerializer):
             "is_active",
             "is_auto_created",
             "card_count",
+            # RFM segmentation (read-only; set by the nightly task).
+            "rfm_segment",
+            "rfm_segment_display",
+            "rfm_score",
+            "rfm_recency_score",
+            "rfm_frequency_score",
+            "rfm_monetary_score",
+            "rfm_recency_days",
+            "rfm_frequency",
+            "rfm_monetary",
+            "rfm_last_purchase_at",
+            "rfm_calculated_at",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ("id", "customer_number", "created_at", "updated_at")
+        read_only_fields = (
+            "id",
+            "customer_number",
+            "rfm_segment",
+            "rfm_segment_display",
+            "rfm_score",
+            "rfm_recency_score",
+            "rfm_frequency_score",
+            "rfm_monetary_score",
+            "rfm_recency_days",
+            "rfm_frequency",
+            "rfm_monetary",
+            "rfm_last_purchase_at",
+            "rfm_calculated_at",
+            "created_at",
+            "updated_at",
+        )
 
     def get_card_count(self, obj):
         # Uses the list queryset's annotation when present, falling back to a

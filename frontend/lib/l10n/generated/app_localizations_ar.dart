@@ -7026,6 +7026,45 @@ class AppLocalizationsAr extends AppLocalizations {
   String get customerAutoCreatedBadge => 'بطاقة غير مُسمّاة';
 
   @override
+  String get customerRankFilterTitle => 'التصنيف';
+
+  @override
+  String get allRanksFilterLabel => 'كل التصنيفات';
+
+  @override
+  String get customerRankChampion => 'مميّز';
+
+  @override
+  String get customerRankLoyal => 'وفيّ';
+
+  @override
+  String get customerRankPotentialLoyalist => 'وفيّ محتمل';
+
+  @override
+  String get customerRankNew => 'جديد';
+
+  @override
+  String get customerRankPromising => 'واعد';
+
+  @override
+  String get customerRankNeedsAttention => 'يحتاج اهتمامًا';
+
+  @override
+  String get customerRankAtRisk => 'معرّض للفقدان';
+
+  @override
+  String get customerRankCantLose => 'لا يجب خسارته';
+
+  @override
+  String get customerRankHibernating => 'خامل';
+
+  @override
+  String get customerRankLost => 'مفقود';
+
+  @override
+  String get customerRankInactive => 'بدون مشتريات';
+
+  @override
   String get customerSalesSummaryTitle => 'ملخص تعاملات العميل';
 
   @override
@@ -8903,6 +8942,21 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String discountSupplierConstraintSummary(int count) {
     return '$count موردين';
+  }
+
+  @override
+  String get discountRankScopeToggle => 'حصره على تصنيفات عملاء معيّنة';
+
+  @override
+  String get discountRankScopeHint =>
+      'يُطبَّق تلقائيًا فقط على العملاء ضمن التصنيفات المختارة.';
+
+  @override
+  String get discountRankConstraintLabel => 'التصنيفات المستهدفة';
+
+  @override
+  String discountRankConstraintSummary(int count) {
+    return '$count تصنيف عميل';
   }
 
   @override

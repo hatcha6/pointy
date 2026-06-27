@@ -68,6 +68,7 @@ class CustomerViewSet(viewsets.ModelViewSet):
         "partial_update": ("customers.change_customer",),
         "destroy": ("customers.delete_customer",),
         "merge": ("customers.change_customer", "customers.delete_customer"),
+        "recompute_segments": ("customers.change_customer",),
         # Map entry = managers/accountants. Cashiers reach record_payment via
         # CustomerEndpointPermission when ``allow_cashier_customer_access`` is on
         # (they have ``sales.add_order`` + their own open session, and the
@@ -78,7 +79,14 @@ class CustomerViewSet(viewsets.ModelViewSet):
         "record_payment": ("customers.view_customer", "sales.add_order"),
     }
     queryset = Customer.objects.all()
-    filterset_fields = ("is_active", "gender", "marketing_consent", "is_auto_created")
+    filterset_fields = (
+        "is_active",
+        "gender",
+        "marketing_consent",
+        "is_auto_created",
+        # Filter the contacts list by RFM rank (?rfm_segment=champion).
+        "rfm_segment",
+    )
     search_fields = (
         "customer_number",
         "full_name",
@@ -91,6 +99,11 @@ class CustomerViewSet(viewsets.ModelViewSet):
         "updated_at",
         "birthday",
         "customer_number",
+        # Sort "best customers first" by overall RFM score / spend / recency.
+        "rfm_score",
+        "rfm_monetary",
+        "rfm_frequency",
+        "rfm_last_purchase_at",
     )
 
     def get_queryset(self):
@@ -184,6 +197,22 @@ class CustomerViewSet(viewsets.ModelViewSet):
                 "customer_number": customer_number,
                 "was_active": is_active,
             },
+        )
+
+    @action(detail=False, methods=["post"], url_path="recompute-segments")
+    def recompute_segments(self, request):
+        """Kick off an out-of-band RFM re-segmentation of all customers.
+
+        Ranks otherwise refresh on the nightly schedule; this lets a manager
+        force a refresh (e.g. right after a big import) without waiting. The work
+        runs on a Celery worker so the request returns immediately.
+        """
+        from .tasks import recompute_customer_segments_task
+
+        async_result = recompute_customer_segments_task.delay()
+        return Response(
+            {"status": "scheduled", "task_id": async_result.id},
+            status=status.HTTP_202_ACCEPTED,
         )
 
     @action(detail=True, methods=["post"], url_path="record-payment")

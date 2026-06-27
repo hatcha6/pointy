@@ -555,6 +555,44 @@ class AiAdviceToolTests(TestCase):
         result = customer_insights(user=self.manager, mode="top")
         self.assertTrue(result["ok"], result)
         self.assertEqual(result["data"]["customers"][0]["name"], "كبير")
+        # Each row carries the customer's RFM rank for segment-aware advice.
+        self.assertIn("rfm_rank", result["data"]["customers"][0])
+
+    def test_customer_insights_by_rank_rolls_up_segments(self):
+        from apps.customers.models import Customer
+
+        Customer.objects.create(
+            full_name="بطل أ",
+            rfm_segment=Customer.Rank.CHAMPION,
+            rfm_monetary="500.00",
+        )
+        Customer.objects.create(
+            full_name="بطل ب",
+            rfm_segment=Customer.Rank.CHAMPION,
+            rfm_monetary="300.00",
+        )
+        Customer.objects.create(
+            full_name="معرّض",
+            rfm_segment=Customer.Rank.AT_RISK,
+            rfm_monetary="40.00",
+        )
+        # Auto-created placeholders are excluded from the rollup.
+        Customer.objects.create(
+            full_name="بطاقة",
+            is_auto_created=True,
+            rfm_segment=Customer.Rank.CHAMPION,
+        )
+
+        result = customer_insights(user=self.manager, mode="by_rank")
+        self.assertTrue(result["ok"], result)
+        segments = {s["rank"]: s for s in result["data"]["segments"]}
+        self.assertEqual(segments[Customer.Rank.CHAMPION]["customer_count"], 2)
+        self.assertEqual(
+            float(segments[Customer.Rank.CHAMPION]["total_spend"]), 800.0
+        )
+        self.assertEqual(segments[Customer.Rank.AT_RISK]["customer_count"], 1)
+        # Segments with no customers are omitted.
+        self.assertNotIn(Customer.Rank.LOST, segments)
 
     # ── business_health ──────────────────────────────────────────────────────
 
