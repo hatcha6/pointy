@@ -679,7 +679,9 @@ class _CartScrollContentState extends State<_CartScrollContent> {
                                 ).hasSellableUnits
                             ? null
                             : () => _editLineUnit(context, line),
-                        onEditNote: widget.isCartLocked
+                        onEditNote:
+                            widget.isCartLocked ||
+                                !_viewModel.enableKitchenOperations
                             ? null
                             : () => _editLineNote(context, line),
                       );

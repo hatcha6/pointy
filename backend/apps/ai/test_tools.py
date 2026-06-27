@@ -11,11 +11,17 @@ from .tools import (
     _json_safe,
     _safe_host,
     aggregate,
+    business_health,
+    compare_periods,
     create_resource,
+    customer_insights,
     execute_tool,
     frequently_bought_together,
     get_dashboard,
     get_resource,
+    inventory_intelligence,
+    profitability,
+    project_forecast,
     query_resource,
     update_resource,
 )
@@ -367,3 +373,308 @@ class AiToolDispatchTests(TestCase):
         unknown = execute_tool("nope", {}, user=self.manager)
         self.assertFalse(unknown["ok"])
         self.assertEqual(unknown["error"], "unknown_tool")
+
+
+class AiAdviceToolTests(TestCase):
+    """The business-advice tools must (a) compute the right numbers, (b) reuse the
+    same revenue-recognition the dashboard does, and (c) inherit the exact
+    permission boundary of every other tool. Orders are built directly via the ORM
+    so cost/date/sale-type are controlled precisely."""
+
+    def setUp(self):
+        ensure_role_groups()
+        self.cashier = User.objects.create_user(username="adv-cashier", password="pw")
+        self.manager = User.objects.create_user(username="adv-manager", password="pw")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+
+    def _variant(self, name, sku, price, *, on_hand="0", reorder_level=5):
+        from apps.catalog.models import Product, ProductVariant
+        from apps.inventory.models import StockItem
+
+        product = Product.objects.create(name=name)
+        variant = ProductVariant.objects.create(
+            product=product, sku=sku, unit_price=Decimal(price), is_default=True
+        )
+        StockItem.objects.create(
+            variant=variant,
+            quantity_on_hand=Decimal(on_hand),
+            reorder_level=reorder_level,
+        )
+        return variant
+
+    def _order(self, lines, *, when=None, status="paid", sale_type="standard", customer=None, paid=None):
+        """lines = [(variant, qty, price, cost)]. ``paid`` overrides the cash
+        recorded (defaults to the order total for standard sales)."""
+        from apps.payments.models import Payment
+        from apps.sales.models import Order, OrderLine
+
+        order = Order.objects.create(status=status, sale_type=sale_type, customer=customer)
+        for variant, qty, price, cost in lines:
+            OrderLine.objects.create(
+                order=order,
+                variant=variant,
+                quantity=Decimal(qty),
+                unit_price=Decimal(price),
+                unit_cost=Decimal(cost),
+            )
+        order.recalculate()
+        order.save()
+        cash = order.total if paid is None else Decimal(paid)
+        if cash > 0:
+            Payment.objects.create(order=order, method=Payment.Method.CASH, amount=cash)
+        if when is not None:
+            from datetime import datetime, time
+
+            from django.utils import timezone
+
+            dt = timezone.make_aware(datetime.combine(when, time(12, 0)))
+            Order.objects.filter(pk=order.pk).update(created_at=dt)
+        return order
+
+    def _days_ago(self, n):
+        from django.utils import timezone
+
+        from datetime import timedelta
+
+        return timezone.localdate() - timedelta(days=n)
+
+    # ── compare_periods ──────────────────────────────────────────────────────
+
+    def test_compare_periods_computes_period_over_period_delta(self):
+        v = self._variant("شاي", "ADV-CMP", "10.00", on_hand="100")
+        # Previous 30-day window (~45 days ago): revenue 100.
+        self._order([(v, "10", "10.00", "4.00")], when=self._days_ago(45))
+        # Current window (today): revenue 50.
+        self._order([(v, "5", "10.00", "4.00")])
+
+        result = compare_periods(user=self.manager, period="last_30_days")
+        self.assertTrue(result["ok"], result)
+        data = result["data"]
+        self.assertEqual(float(data["current"]["revenue"]), 50.0)
+        self.assertEqual(float(data["previous"]["revenue"]), 100.0)
+        # (50-100)/100 = -50%
+        self.assertEqual(data["change"]["revenue_percent"], -50.0)
+        # profit current = 5*(10-4) = 30; margin = 30/50 = 60%
+        self.assertEqual(float(data["current"]["profit"]), 30.0)
+        self.assertEqual(data["current"]["margin_percent"], 60.0)
+
+    def test_compare_periods_no_baseline_is_null_not_zero(self):
+        v = self._variant("قهوة", "ADV-CMP2", "8.00", on_hand="100")
+        self._order([(v, "2", "8.00", "3.00")])  # only current, no previous
+        result = compare_periods(user=self.manager, period="last_7_days")
+        self.assertTrue(result["ok"], result)
+        # Growth from nothing is undefined — must be null, never a fake 0 or huge %.
+        self.assertIsNone(result["data"]["change"]["revenue_percent"])
+
+    # ── profitability ────────────────────────────────────────────────────────
+
+    def test_profitability_ranks_and_exposes_low_margin(self):
+        # High revenue but thin margin vs. lower revenue but fat margin.
+        thin = self._variant("ثلّاجة", "ADV-THIN", "100.00", on_hand="50")
+        fat = self._variant("ملحقات", "ADV-FAT", "10.00", on_hand="50")
+        self._order([(thin, "5", "100.00", "95.00")])  # rev 500, profit 25, margin 5%
+        self._order([(fat, "20", "10.00", "4.00")])  # rev 200, profit 120, margin 60%
+
+        top = profitability(user=self.manager, group_by="product", order="top")
+        self.assertTrue(top["ok"], top)
+        self.assertEqual(top["data"]["groups"][0]["group"], "ملحقات")  # most profit first
+
+        bottom = profitability(user=self.manager, group_by="product", order="bottom")
+        worst = bottom["data"]["groups"][0]
+        self.assertEqual(worst["group"], "ثلّاجة")
+        self.assertEqual(worst["margin_percent"], 5.0)  # the trap the top-seller view hides
+
+        overall = profitability(user=self.manager, group_by=None)
+        self.assertEqual(float(overall["data"]["profit"]), 145.0)  # 25 + 120
+        self.assertEqual(float(overall["data"]["revenue"]), 700.0)
+
+    def test_profitability_rejects_unknown_group_by(self):
+        result = profitability(user=self.manager, group_by="category")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "invalid_arguments")
+
+    # ── inventory_intelligence ───────────────────────────────────────────────
+
+    def test_inventory_reorder_suggests_quantities(self):
+        low = self._variant("سكر", "ADV-LOW", "5.00", on_hand="2", reorder_level=10)
+        self._variant("أرز", "ADV-OK", "5.00", on_hand="100", reorder_level=10)
+
+        result = inventory_intelligence(user=self.manager, mode="reorder")
+        self.assertTrue(result["ok"], result)
+        skus = {r["sku"] for r in result["data"]["items"]}
+        self.assertIn("ADV-LOW", skus)
+        self.assertNotIn("ADV-OK", skus)  # well-stocked item is not flagged
+        row = next(r for r in result["data"]["items"] if r["sku"] == "ADV-LOW")
+        # reorder_level*2 - on_hand - expected = 20 - 2 - 0 = 18
+        self.assertEqual(row["suggested_quantity"], 18)
+
+    def test_inventory_dead_stock_excludes_recently_sold(self):
+        dead = self._variant("بضاعة راكدة", "ADV-DEAD", "20.00", on_hand="10")
+        moving = self._variant("بضاعة رائجة", "ADV-MOVE", "20.00", on_hand="10")
+        self._order([(moving, "1", "20.00", "10.00")])  # sold today → not dead
+
+        result = inventory_intelligence(user=self.manager, mode="dead_stock", days=30)
+        self.assertTrue(result["ok"], result)
+        skus = {r["sku"] for r in result["data"]["items"]}
+        self.assertIn("ADV-DEAD", skus)
+        self.assertNotIn("ADV-MOVE", skus)
+        # value tied up at retail = 10 units * 20.00
+        dead_row = next(r for r in result["data"]["items"] if r["sku"] == "ADV-DEAD")
+        self.assertEqual(float(dead_row["value_at_retail"]), 200.0)
+
+    # ── customer_insights ────────────────────────────────────────────────────
+
+    def test_customer_insights_outstanding_credit(self):
+        from apps.customers.models import Customer
+
+        debtor = Customer.objects.create(full_name="عميل مدين")
+        v = self._variant("بضاعة", "ADV-CR", "100.00", on_hand="100")
+        # Credit invoice total 100, paid 30 → balance 70.
+        self._order(
+            [(v, "1", "100.00", "40.00")],
+            status="open",
+            sale_type="credit",
+            customer=debtor,
+            paid="30",
+        )
+        result = customer_insights(user=self.manager, mode="outstanding_credit")
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(float(result["data"]["total_outstanding"]), 70.0)
+        self.assertEqual(result["data"]["customers"][0]["name"], "عميل مدين")
+        self.assertEqual(float(result["data"]["customers"][0]["balance"]), 70.0)
+
+    def test_customer_insights_top_ranks_by_spend(self):
+        from apps.customers.models import Customer
+
+        big = Customer.objects.create(full_name="كبير")
+        small = Customer.objects.create(full_name="صغير")
+        v = self._variant("منتج", "ADV-TOP", "10.00", on_hand="1000")
+        self._order([(v, "10", "10.00", "4.00")], customer=big)  # 100
+        self._order([(v, "2", "10.00", "4.00")], customer=small)  # 20
+        result = customer_insights(user=self.manager, mode="top")
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["data"]["customers"][0]["name"], "كبير")
+
+    # ── business_health ──────────────────────────────────────────────────────
+
+    def test_business_health_flags_multiple_findings(self):
+        from apps.customers.models import Customer
+
+        # Revenue down: big previous window, small current.
+        v = self._variant("سلعة", "ADV-BH", "50.00", on_hand="100")
+        self._order([(v, "20", "50.00", "20.00")], when=self._days_ago(45))  # prev 1000
+        self._order([(v, "1", "50.00", "20.00")])  # current 50 → down ~95%
+        # Dead + low stock.
+        self._variant("راكد", "ADV-BH-DEAD", "30.00", on_hand="5")
+        self._variant("ناقص", "ADV-BH-LOW", "30.00", on_hand="1", reorder_level=10)
+        # Outstanding credit.
+        debtor = Customer.objects.create(full_name="مدين BH")
+        self._order(
+            [(v, "1", "50.00", "20.00")],
+            status="open",
+            sale_type="credit",
+            customer=debtor,
+            paid="0",
+        )
+
+        result = business_health(user=self.manager, days=30)
+        self.assertTrue(result["ok"], result)
+        keys = {f["key"] for f in result["data"]["findings"]}
+        self.assertIn("revenue_down", keys)
+        self.assertIn("dead_stock", keys)
+        self.assertIn("low_stock", keys)
+        self.assertIn("outstanding_credit", keys)
+        # Highest-severity finding sorts first.
+        self.assertEqual(result["data"]["findings"][0]["severity"], "high")
+
+    # ── project_forecast ─────────────────────────────────────────────────────
+
+    def test_project_forecast_projects_and_reports_receivables(self):
+        from apps.customers.models import Customer
+
+        v = self._variant("منتج", "ADV-FC", "10.00", on_hand="1000")
+        self._order([(v, "5", "10.00", "4.00")])  # MTD revenue 50
+        debtor = Customer.objects.create(full_name="مدين FC")
+        self._order(
+            [(v, "1", "10.00", "4.00")],
+            status="open",
+            sale_type="credit",
+            customer=debtor,
+            paid="0",
+        )  # +10 receivable (and +10 MTD recognized credit revenue)
+
+        result = project_forecast(user=self.manager)
+        self.assertTrue(result["ok"], result)
+        self.assertGreater(float(result["data"]["projection"]["projected_month_revenue"]), 0.0)
+        self.assertEqual(float(result["data"]["receivables"]["outstanding_credit_total"]), 10.0)
+        self.assertEqual(result["data"]["receivables"]["open_invoices"], 1)
+
+    # ── permission boundary + serialization ──────────────────────────────────
+
+    def test_advice_tools_inherit_permission_scope(self):
+        # Orders created here have no register session, so a cashier (scoped to
+        # their own sessions) sees none — the same boundary as every read tool.
+        v = self._variant("منتج", "ADV-SCOPE", "10.00", on_hand="100")
+        self._order([(v, "5", "10.00", "4.00")])
+
+        scoped = compare_periods(user=self.cashier, period="last_30_days")
+        self.assertTrue(scoped["ok"], scoped)
+        self.assertEqual(float(scoped["data"]["current"]["revenue"]), 0.0)
+
+        manager_view = compare_periods(user=self.manager, period="last_30_days")
+        self.assertEqual(float(manager_view["data"]["current"]["revenue"]), 50.0)
+
+    def test_advice_tools_results_are_json_serializable(self):
+        import json
+
+        v = self._variant("منتج", "ADV-JSON", "10.00", on_hand="20")
+        self._order([(v, "2", "10.00", "4.00")])
+        for out in (
+            compare_periods(user=self.manager, period="last_7_days"),
+            profitability(user=self.manager, group_by="product"),
+            inventory_intelligence(user=self.manager, mode="reorder"),
+            customer_insights(user=self.manager, mode="top"),
+            business_health(user=self.manager),
+            project_forecast(user=self.manager),
+        ):
+            self.assertTrue(out["ok"], out)
+            json.dumps(out)  # must not raise (Decimals/dates coerced)
+
+    def test_advice_tools_route_through_execute_tool(self):
+        out = execute_tool("business_health", {"days": 30}, user=self.manager)
+        self.assertTrue(out["ok"], out)
+        self.assertIn("findings", out["data"])
+
+    def test_advice_tools_have_arabic_chip_labels(self):
+        # Resource-less tools fall back to _TOOL_LABELS; without an entry a chip
+        # would show the raw English name to the user.
+        from .tools import tool_label
+
+        for name in (
+            "compare_periods",
+            "profitability",
+            "inventory_intelligence",
+            "customer_insights",
+            "business_health",
+            "project_forecast",
+        ):
+            label = tool_label(name)
+            self.assertNotEqual(label, name, f"{name} has no Arabic chip label")
+            self.assertTrue(any("؀" <= ch <= "ۿ" for ch in label))
+
+
+class AiAdvisorPromptTests(TestCase):
+    def test_prompt_includes_advisor_persona_and_advice_tools(self):
+        from .relay_stream import build_system_prompt
+
+        prompt = build_system_prompt(supports_actions=True)
+        self.assertIn("مستشار أعمال", prompt)  # advisor persona
+        self.assertIn("منهج تقديم المشورة", prompt)  # advice method
+        self.assertIn("الأمانة في المشورة", prompt)  # honesty guardrail
+        self.assertIn("استرشد بمبادئ نشاطك", prompt)  # shop-type playbook
+        self.assertIn("إغلاق حلقة المشورة", prompt)  # offer-to-act loop
+        for tool in ("compare_periods", "profitability", "business_health"):
+            self.assertIn(tool, prompt)
+        # The anti-tamper guardrail must survive the rewrite.
+        self.assertIn("حماية عدّ الصندوق", prompt)

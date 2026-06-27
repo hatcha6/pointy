@@ -13,11 +13,14 @@ model can reason about — it gets a clean denial, never the data.
 import json
 import logging
 import re
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, Sum
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, Max, Sum
+from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework import serializers as drf_serializers
 from rest_framework.exceptions import NotAuthenticated, PermissionDenied
 from rest_framework.pagination import PageNumberPagination
@@ -470,6 +473,686 @@ def frequently_bought_together(*, user, filters=None, limit=10, min_count=2):
         "ok": True,
         "data": {"total_orders": len(products_by_order), "pairs": pairs},
     }
+
+
+# ── Business-advice analytics ────────────────────────────────────────────────
+#
+# Diagnostic/prescriptive tools that turn the raw read tools into advice: period
+# comparison, profit & margin, inventory health, customer signals, a one-call
+# health digest, and a simple cash/sales projection. Every one reuses the SAME
+# permission-scoped queryset (``_scoped_queryset``) and the SAME revenue-
+# recognition the dashboard uses (``OrderQuerySet.committed_sales()`` — standard
+# orders once paid + credit invoices from issue, excluding quotations and voids),
+# so the numbers an owner is *advised* on can never silently diverge from the
+# numbers they *see* on the dashboard. Refund adjustments (partial returns on a
+# still-paid order) are not netted here; for the exact net-of-refund figure the
+# model has ``get_dashboard``. These are read-only and add no wire-contract change.
+
+# Named windows the model can ask for without doing date math itself; each
+# resolves to an inclusive (start, end) of local dates relative to "today".
+ADVICE_PERIODS = (
+    "today",
+    "yesterday",
+    "this_week",
+    "last_week",
+    "this_month",
+    "last_month",
+    "this_year",
+    "last_year",
+    "last_7_days",
+    "last_30_days",
+    "last_90_days",
+)
+
+
+def _money(value):
+    return (value or Decimal("0")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _qty(value):
+    return (value or Decimal("0")).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+
+
+def _margin_percent(profit, revenue):
+    """Profit as a % of revenue, rounded to 0.1; None when revenue is zero (the
+    margin is undefined, not zero — the model must not present it as 0%)."""
+    if not revenue:
+        return None
+    return round(float(profit) / float(revenue) * 100, 1)
+
+
+def _pct_change(current, previous):
+    """Period-over-period change as a %, rounded to 0.1. None when there's no
+    baseline (previous is zero/absent) — growth from nothing isn't a percentage."""
+    if not previous:
+        return None
+    return round((float(current) - float(previous)) / float(previous) * 100, 1)
+
+
+def _resolve_period(period, today):
+    """Inclusive (start, end) local dates for a named window relative to ``today``.
+    Weeks are ISO (Monday-start). Unknown/blank → last 30 days."""
+    p = (period or "last_30_days").strip()
+    if p == "today":
+        return today, today
+    if p == "yesterday":
+        d = today - timedelta(days=1)
+        return d, d
+    if p == "this_week":
+        return today - timedelta(days=today.weekday()), today
+    if p == "last_week":
+        this_start = today - timedelta(days=today.weekday())
+        return this_start - timedelta(days=7), this_start - timedelta(days=1)
+    if p == "this_month":
+        return today.replace(day=1), today
+    if p == "last_month":
+        first_this = today.replace(day=1)
+        last_prev = first_this - timedelta(days=1)
+        return last_prev.replace(day=1), last_prev
+    if p == "this_year":
+        return today.replace(month=1, day=1), today
+    if p == "last_year":
+        return date(today.year - 1, 1, 1), date(today.year - 1, 12, 31)
+    if p == "last_7_days":
+        return today - timedelta(days=6), today
+    if p == "last_90_days":
+        return today - timedelta(days=89), today
+    return today - timedelta(days=29), today
+
+
+def _previous_window(start, end):
+    """The equal-length window immediately preceding ``[start, end]`` — the
+    baseline every comparison measures against."""
+    length = (end - start).days + 1
+    prev_end = start - timedelta(days=1)
+    prev_start = prev_end - timedelta(days=length - 1)
+    return prev_start, prev_end
+
+
+def _window(period, start, end, today):
+    """Resolve a window from either explicit ``start``/``end`` dates (ISO) or a
+    named ``period``. Returns (start_date, end_date, error_or_None)."""
+    if start or end:
+        s = parse_date(start) if start else None
+        e = parse_date(end) if end else today
+        if (start and s is None) or (end and e is None):
+            return None, None, {
+                "ok": False,
+                "error": "invalid_arguments",
+                "message": "تاريخ غير صالح؛ استخدم صيغة YYYY-MM-DD أو مرّر period.",
+            }
+        return (s or e), e, None
+    return (*_resolve_period(period, today), None)
+
+
+def _scoped_orders(user, *, start=None, end=None):
+    """Permission-scoped ``OrderQuerySet`` (the same boundary as every read tool),
+    optionally bounded to a local-date range on ``created_at``. Returns
+    (queryset, error_or_None) — never raises."""
+    meta = get_registry().get("orders")
+    try:
+        qs = _scoped_queryset(meta.view_class, user=user, filters={})
+    except (PermissionDenied, NotAuthenticated):
+        return None, {
+            "ok": False,
+            "error": "permission_denied",
+            "message": "ليس لديك صلاحية الوصول لهذه البيانات.",
+        }
+    except Exception:
+        logger.exception("AI advice order scoping crashed")
+        return None, {"ok": False, "error": "internal_error"}
+    if start:
+        qs = qs.filter(created_at__date__gte=start)
+    if end:
+        qs = qs.filter(created_at__date__lte=end)
+    return qs, None
+
+
+def _line_profit_expr():
+    """Per-line profit in SQL: qty*(price - cost) - line discount. Identical to the
+    dashboard's profit formula so advice and dashboard agree."""
+    return ExpressionWrapper(
+        F("quantity") * (F("unit_price") - F("unit_cost")) - F("discount_total"),
+        output_field=DecimalField(max_digits=18, decimal_places=2),
+    )
+
+
+def _line_revenue_expr():
+    return ExpressionWrapper(
+        F("unit_price") * F("quantity") - F("discount_total"),
+        output_field=DecimalField(max_digits=18, decimal_places=2),
+    )
+
+
+def _line_cost_expr():
+    return ExpressionWrapper(
+        F("unit_cost") * F("quantity"),
+        output_field=DecimalField(max_digits=18, decimal_places=2),
+    )
+
+
+def _core_metrics(orders_qs):
+    """Recognized revenue, profit, units and order count over an order queryset —
+    the basis for the comparison and health tools. ``revenue`` (Σ line_total)
+    equals Σ order.total by construction (order.total is derived from the same
+    line figures), so it reconciles with the dashboard's net-sales line."""
+    from apps.sales.models import OrderLine
+
+    recognized = orders_qs.committed_sales()
+    head = recognized.aggregate(
+        revenue=Sum(_line_revenue()),
+        units=Sum("lines__quantity"),
+        order_count=Count("id", distinct=True),
+    )
+    profit = OrderLine.objects.filter(order__in=recognized).aggregate(
+        value=Sum(_line_profit_expr())
+    )["value"]
+    revenue = _money(head["revenue"])
+    profit = _money(profit)
+    return {
+        "revenue": revenue,
+        "profit": profit,
+        "units": _qty(head["units"]),
+        "order_count": head["order_count"] or 0,
+        "margin_percent": _margin_percent(profit, revenue),
+    }
+
+
+def compare_periods(*, user, period=None, start=None, end=None):
+    """Recognized revenue/profit/units/orders for a window vs the equal window
+    immediately before it, with % deltas — the one-call answer to 'how is business
+    doing?'. Pass a named ``period`` or explicit ``start``/``end`` dates."""
+    today = timezone.localdate()
+    cur_start, cur_end, err = _window(period, start, end, today)
+    if err is not None:
+        return err
+    prev_start, prev_end = _previous_window(cur_start, cur_end)
+
+    cur_qs, err = _scoped_orders(user, start=cur_start, end=cur_end)
+    if err is not None:
+        return err
+    prev_qs, err = _scoped_orders(user, start=prev_start, end=prev_end)
+    if err is not None:
+        return err
+
+    try:
+        cur = _core_metrics(cur_qs)
+        prev = _core_metrics(prev_qs)
+    except Exception:
+        logger.exception("AI compare_periods aggregation crashed")
+        return {"ok": False, "error": "internal_error"}
+
+    change = {
+        "revenue_percent": _pct_change(cur["revenue"], prev["revenue"]),
+        "profit_percent": _pct_change(cur["profit"], prev["profit"]),
+        "units_percent": _pct_change(cur["units"], prev["units"]),
+        "orders_percent": _pct_change(cur["order_count"], prev["order_count"]),
+        "margin_point_change": (
+            None
+            if cur["margin_percent"] is None or prev["margin_percent"] is None
+            else round(cur["margin_percent"] - prev["margin_percent"], 1)
+        ),
+    }
+    return {
+        "ok": True,
+        "data": _json_safe(
+            {
+                "current": {"start": cur_start, "end": cur_end, **cur},
+                "previous": {"start": prev_start, "end": prev_end, **prev},
+                "change": change,
+            }
+        ),
+    }
+
+
+def profitability(*, user, group_by="product", period=None, start=None, end=None, limit=10, order="top"):
+    """Profit & margin overall or ranked by product/variant for a window. Use
+    ``order='bottom'`` to surface the lowest-margin sellers — the trap a 'best
+    seller' ranking hides. Cost is the at-sale ``unit_cost`` snapshot on each line."""
+    from apps.sales.models import OrderLine
+
+    today = timezone.localdate()
+    win_start, win_end, err = _window(period, start, end, today)
+    if err is not None:
+        return err
+
+    dimensions = {"product": "variant__product__name", "variant": "variant__full_name"}
+    if group_by and group_by not in dimensions:
+        return {
+            "ok": False,
+            "error": "invalid_arguments",
+            "message": f"التجميع حسب '{group_by}' غير مدعوم. المتاح: {sorted(dimensions)} أو بدون تجميع.",
+        }
+
+    orders_qs, err = _scoped_orders(user, start=win_start, end=win_end)
+    if err is not None:
+        return err
+
+    try:
+        limit = max(1, min(int(limit), 50))
+    except (TypeError, ValueError):
+        limit = 10
+    lines = OrderLine.objects.filter(order__in=orders_qs.committed_sales())
+
+    try:
+        if group_by:
+            # variant__full_name is a property, not a column; group by the variant
+            # id and label from a cheap second pass when needed.
+            group_field = "variant__product__name" if group_by == "product" else "variant_id"
+            rows = (
+                lines.values(group_field)
+                .annotate(
+                    revenue=Sum(_line_revenue_expr()),
+                    cost=Sum(_line_cost_expr()),
+                    profit=Sum(_line_profit_expr()),
+                    units=Sum("quantity"),
+                )
+                .order_by("profit" if order == "bottom" else "-profit")[:limit]
+            )
+            rows = list(rows)
+            labels = {}
+            if group_by == "variant":
+                from apps.catalog.models import ProductVariant
+
+                ids = [r["variant_id"] for r in rows]
+                for v in ProductVariant.objects.filter(id__in=ids).select_related("product"):
+                    labels[v.id] = v.full_name
+            groups = []
+            for r in rows:
+                key = r[group_field]
+                if key is None:
+                    continue
+                label = labels.get(key, key) if group_by == "variant" else key
+                revenue = _money(r["revenue"])
+                profit = _money(r["profit"])
+                groups.append(
+                    {
+                        "group": label,
+                        "revenue": revenue,
+                        "cost": _money(r["cost"]),
+                        "profit": profit,
+                        "units": _qty(r["units"]),
+                        "margin_percent": _margin_percent(profit, revenue),
+                    }
+                )
+            data = {"group_by": group_by, "order": order, "start": win_start, "end": win_end, "groups": groups}
+        else:
+            agg = lines.aggregate(
+                revenue=Sum(_line_revenue_expr()),
+                cost=Sum(_line_cost_expr()),
+                profit=Sum(_line_profit_expr()),
+                units=Sum("quantity"),
+            )
+            revenue = _money(agg["revenue"])
+            profit = _money(agg["profit"])
+            data = {
+                "group_by": None,
+                "start": win_start,
+                "end": win_end,
+                "revenue": revenue,
+                "cost": _money(agg["cost"]),
+                "profit": profit,
+                "units": _qty(agg["units"]),
+                "margin_percent": _margin_percent(profit, revenue),
+            }
+    except Exception:
+        logger.exception("AI profitability aggregation crashed")
+        return {"ok": False, "error": "internal_error"}
+
+    return {"ok": True, "data": _json_safe(data)}
+
+
+def _velocity_by_variant(user, *, days):
+    """{variant_id: units sold} over the last ``days`` from recognized sales, scoped
+    to the user. Returns ({}, None) when the user can't read orders (velocity is
+    simply unknown then, not an error for the inventory view)."""
+    today = timezone.localdate()
+    orders_qs, err = _scoped_orders(user, start=today - timedelta(days=days - 1), end=today)
+    if err is not None:
+        return {}, err
+    from apps.sales.models import OrderLine
+
+    rows = (
+        OrderLine.objects.filter(order__in=orders_qs.committed_sales())
+        .values("variant_id")
+        .annotate(units=Sum("quantity"))
+    )
+    return {r["variant_id"]: r["units"] or Decimal("0") for r in rows}, None
+
+
+def inventory_intelligence(*, user, mode="reorder", days=30, limit=20):
+    """Join on-hand stock with sales velocity to drive concrete inventory action.
+    modes: ``reorder`` (at/below reorder level + suggested order qty), ``dead_stock``
+    (on hand but nothing sold in the window — capital tied up), ``fast_movers``
+    (highest velocity / shortest days-of-cover)."""
+    from apps.inventory.models import StockItem
+
+    if mode not in ("reorder", "dead_stock", "fast_movers"):
+        return {
+            "ok": False,
+            "error": "invalid_arguments",
+            "message": "mode غير مدعوم. المتاح: reorder / dead_stock / fast_movers.",
+        }
+    try:
+        days = max(1, min(int(days), 365))
+    except (TypeError, ValueError):
+        days = 30
+    try:
+        limit = max(1, min(int(limit), 50))
+    except (TypeError, ValueError):
+        limit = 20
+
+    meta = get_registry().get("stock")
+    try:
+        stock_qs = _scoped_queryset(meta.view_class, user=user, filters={})
+    except (PermissionDenied, NotAuthenticated):
+        return {
+            "ok": False,
+            "error": "permission_denied",
+            "message": "ليس لديك صلاحية الوصول لبيانات المخزون.",
+        }
+    except Exception:
+        logger.exception("AI inventory scoping crashed")
+        return {"ok": False, "error": "internal_error"}
+
+    velocity, _ = _velocity_by_variant(user, days=days)
+
+    if mode == "reorder":
+        stock_qs = stock_qs.filter(quantity_on_hand__lte=F("reorder_level"))
+    stock_qs = stock_qs.select_related("variant", "variant__product")
+
+    items = []
+    out_of_stock = 0
+    for st in stock_qs[:500]:  # bound the scan; ranked subsets are taken below
+        variant = st.variant
+        if variant is None:
+            continue
+        on_hand = st.quantity_on_hand or Decimal("0")
+        sold = velocity.get(variant.id, Decimal("0"))
+        daily = (sold / Decimal(days)) if days else Decimal("0")
+        if on_hand <= 0:
+            out_of_stock += 1
+        if mode == "dead_stock" and (on_hand <= 0 or sold > 0):
+            continue
+        if mode == "fast_movers" and sold <= 0:
+            continue
+        days_of_cover = (float(on_hand) / float(daily)) if daily > 0 else None
+        row = {
+            "product": variant.full_name,
+            "sku": variant.sku,
+            "quantity_on_hand": _qty(on_hand),
+            "units_sold": _qty(sold),
+            "units_per_day": round(float(daily), 3),
+            "days_of_cover": (round(days_of_cover, 1) if days_of_cover is not None else None),
+            "value_at_retail": _money(on_hand * (variant.unit_price or Decimal("0"))),
+        }
+        if mode == "reorder":
+            row["reorder_level"] = st.reorder_level
+            row["quantity_expected"] = _qty(st.quantity_expected)
+            row["suggested_quantity"] = max(
+                int(st.reorder_level) * 2 - float(on_hand) - float(st.quantity_expected or 0), 0
+            )
+        items.append(row)
+
+    if mode == "fast_movers":
+        items.sort(key=lambda r: r["units_per_day"], reverse=True)
+    elif mode == "dead_stock":
+        items.sort(key=lambda r: float(r["value_at_retail"]), reverse=True)
+    else:  # reorder: most urgent (lowest cover / most below level) first
+        items.sort(key=lambda r: (r["days_of_cover"] if r["days_of_cover"] is not None else -1))
+    items = items[:limit]
+
+    data = {
+        "mode": mode,
+        "velocity_window_days": days,
+        "items": items,
+    }
+    if mode in ("reorder", "dead_stock"):
+        data["tied_up_value_at_retail"] = _money(
+            sum((Decimal(str(r["value_at_retail"])) for r in items), Decimal("0"))
+        )
+    if mode == "reorder":
+        data["out_of_stock_in_view"] = out_of_stock
+    return {"ok": True, "data": _json_safe(data)}
+
+
+def customer_insights(*, user, mode="top", days=90, limit=10):
+    """Customer signals for retention/marketing advice. modes: ``top`` (highest
+    recognized spend in the window), ``at_risk`` (previously active, no purchase in
+    ``days``), ``outstanding_credit`` (largest unpaid آجل balances). Scoped through
+    the orders boundary like every other tool."""
+    if mode not in ("top", "at_risk", "outstanding_credit"):
+        return {
+            "ok": False,
+            "error": "invalid_arguments",
+            "message": "mode غير مدعوم. المتاح: top / at_risk / outstanding_credit.",
+        }
+    try:
+        days = max(1, min(int(days), 1095))
+    except (TypeError, ValueError):
+        days = 90
+    try:
+        limit = max(1, min(int(limit), 50))
+    except (TypeError, ValueError):
+        limit = 10
+
+    today = timezone.localdate()
+    orders_qs, err = _scoped_orders(user)
+    if err is not None:
+        return err
+
+    try:
+        if mode == "top":
+            window = orders_qs.filter(created_at__date__gte=today - timedelta(days=days - 1))
+            rows = (
+                window.committed_sales()
+                .exclude(customer__isnull=True)
+                .values("customer_id", "customer__full_name")
+                .annotate(spend=Sum(_line_revenue()), orders=Count("id", distinct=True))
+                .order_by("-spend")[:limit]
+            )
+            customers = [
+                {
+                    "customer_id": r["customer_id"],
+                    "name": r["customer__full_name"],
+                    "spend": _money(r["spend"]),
+                    "orders": r["orders"],
+                }
+                for r in rows
+            ]
+            data = {"mode": mode, "window_days": days, "customers": customers}
+        elif mode == "at_risk":
+            cutoff = today - timedelta(days=days)
+            agg = (
+                orders_qs.committed_sales()
+                .exclude(customer__isnull=True)
+                .values("customer_id", "customer__full_name")
+                .annotate(last_order=Max("created_at"), orders=Count("id", distinct=True))
+            )
+            at_risk = [r for r in agg if r["last_order"] is not None and r["last_order"].date() < cutoff]
+            at_risk.sort(key=lambda r: r["last_order"])  # longest-lapsed first
+            customers = [
+                {
+                    "customer_id": r["customer_id"],
+                    "name": r["customer__full_name"],
+                    "last_order": r["last_order"].date(),
+                    "lifetime_orders": r["orders"],
+                }
+                for r in at_risk[:limit]
+            ]
+            data = {"mode": mode, "inactive_days_threshold": days, "customers": customers}
+        else:  # outstanding_credit
+            rows = (
+                orders_qs.open_credit()
+                .exclude(customer__isnull=True)
+                .select_related("customer")
+                .prefetch_related("payments")
+            )
+            balances = {}
+            for o in rows:
+                bal = o.balance_due
+                if bal <= 0:
+                    continue
+                entry = balances.setdefault(
+                    o.customer_id,
+                    {"customer_id": o.customer_id, "name": o.customer.full_name, "balance": Decimal("0"), "invoices": 0},
+                )
+                entry["balance"] += bal
+                entry["invoices"] += 1
+            ranked = sorted(balances.values(), key=lambda e: e["balance"], reverse=True)[:limit]
+            customers = [
+                {**e, "balance": _money(e["balance"])} for e in ranked
+            ]
+            total = _money(sum((e["balance"] for e in balances.values()), Decimal("0")))
+            data = {"mode": mode, "total_outstanding": total, "customers": customers}
+    except Exception:
+        logger.exception("AI customer_insights crashed")
+        return {"ok": False, "error": "internal_error"}
+
+    return {"ok": True, "data": _json_safe(data)}
+
+
+def business_health(*, user, days=30):
+    """One-call diagnostic digest: scans revenue/margin trend, dead stock, low
+    stock and outstanding receivables and returns ranked findings (severity +
+    numbers + a suggested action key) — the raw material for proactive advice.
+    Each finding is grounded in the same scoped data the detail tools return."""
+    findings = []
+
+    # 1) Revenue & margin trend vs the prior equal window.
+    cmp = compare_periods(user=user, period=f"last_{days}_days" if days in (7, 30, 90) else "last_30_days")
+    if cmp.get("ok"):
+        change = cmp["data"]["change"]
+        cur = cmp["data"]["current"]
+        rev_pct = change.get("revenue_percent")
+        if rev_pct is not None and rev_pct <= -10:
+            findings.append(
+                {
+                    "key": "revenue_down",
+                    "severity": "high" if rev_pct <= -25 else "medium",
+                    "title": "تراجع الإيراد مقارنة بالفترة السابقة",
+                    "metrics": {"revenue": cur["revenue"], "change_percent": rev_pct},
+                    "suggested_action": "راجِع الأصناف الأكثر تراجعًا وفعّل عرضًا أو راجِع الأسعار.",
+                }
+            )
+        mp = change.get("margin_point_change")
+        if mp is not None and mp <= -2:
+            findings.append(
+                {
+                    "key": "margin_erosion",
+                    "severity": "high" if mp <= -5 else "medium",
+                    "title": "تآكل هامش الربح",
+                    "metrics": {"margin_percent": cur["margin_percent"], "margin_point_change": mp},
+                    "suggested_action": "افحص الأصناف منخفضة الهامش (profitability order=bottom) وراجِع التكاليف/الأسعار.",
+                }
+            )
+
+    # 2) Dead stock — capital tied up in items that didn't move.
+    dead = inventory_intelligence(user=user, mode="dead_stock", days=days, limit=10)
+    if dead.get("ok") and dead["data"]["items"]:
+        tied = dead["data"].get("tied_up_value_at_retail")
+        findings.append(
+            {
+                "key": "dead_stock",
+                "severity": "medium",
+                "title": "مخزون راكد لم يُبَع خلال الفترة",
+                "metrics": {"item_count": len(dead["data"]["items"]), "tied_up_value_at_retail": tied},
+                "suggested_action": "صفِّ الأصناف الراكدة بخصم (discount-rules) أو أوقف إعادة طلبها.",
+            }
+        )
+
+    # 3) Reorder / out-of-stock risk.
+    reorder = inventory_intelligence(user=user, mode="reorder", days=days, limit=10)
+    if reorder.get("ok") and reorder["data"]["items"]:
+        findings.append(
+            {
+                "key": "low_stock",
+                "severity": "high" if reorder["data"].get("out_of_stock_in_view") else "medium",
+                "title": "أصناف عند/تحت حد إعادة الطلب",
+                "metrics": {
+                    "item_count": len(reorder["data"]["items"]),
+                    "out_of_stock": reorder["data"].get("out_of_stock_in_view", 0),
+                },
+                "suggested_action": "أنشئ أمر شراء للأصناف الناقصة بالكميات المقترحة.",
+            }
+        )
+
+    # 4) Outstanding receivables (آجل).
+    credit = customer_insights(user=user, mode="outstanding_credit", limit=5)
+    if credit.get("ok") and credit["data"]["customers"]:
+        findings.append(
+            {
+                "key": "outstanding_credit",
+                "severity": "medium",
+                "title": "ذمم آجلة غير محصّلة",
+                "metrics": {
+                    "total_outstanding": credit["data"]["total_outstanding"],
+                    "customer_count": len(credit["data"]["customers"]),
+                },
+                "suggested_action": "تابِع العملاء الأعلى رصيدًا للتحصيل (record_customer_payment عند السداد).",
+            }
+        )
+
+    order = {"high": 0, "medium": 1, "low": 2}
+    findings.sort(key=lambda f: order.get(f["severity"], 3))
+    return {"ok": True, "data": _json_safe({"window_days": days, "findings": findings})}
+
+
+def project_forecast(*, user):
+    """Simple, clearly-labelled projection: month-to-date recognized sales, a
+    straight run-rate projection to month end, and outstanding receivables (the
+    cash still owed on آجل invoices). Estimates, not guarantees."""
+    today = timezone.localdate()
+    month_start = today.replace(day=1)
+    if today.month == 12:
+        next_month = today.replace(year=today.year + 1, month=1, day=1)
+    else:
+        next_month = today.replace(month=today.month + 1, day=1)
+    days_in_month = (next_month - month_start).days
+    days_elapsed = (today - month_start).days + 1
+
+    mtd_qs, err = _scoped_orders(user, start=month_start, end=today)
+    if err is not None:
+        return err
+    try:
+        mtd = _core_metrics(mtd_qs)
+        daily_rate = (mtd["revenue"] / Decimal(days_elapsed)) if days_elapsed else Decimal("0")
+        projected = _money(daily_rate * Decimal(days_in_month))
+
+        receivables_qs, err = _scoped_orders(user)
+        if err is not None:
+            return err
+        receivable_total = Decimal("0")
+        receivable_count = 0
+        for o in receivables_qs.open_credit().prefetch_related("payments"):
+            bal = o.balance_due
+            if bal > 0:
+                receivable_total += bal
+                receivable_count += 1
+    except Exception:
+        logger.exception("AI project_forecast crashed")
+        return {"ok": False, "error": "internal_error"}
+
+    data = {
+        "month_to_date": {
+            "start": month_start,
+            "through": today,
+            "revenue": mtd["revenue"],
+            "profit": mtd["profit"],
+            "days_elapsed": days_elapsed,
+        },
+        "projection": {
+            "days_in_month": days_in_month,
+            "daily_run_rate": _money(daily_rate),
+            "projected_month_revenue": projected,
+            "basis": "straight run-rate من المتوسط اليومي حتى الآن — تقدير لا ضمان",
+        },
+        "receivables": {
+            "outstanding_credit_total": _money(receivable_total),
+            "open_invoices": receivable_count,
+        },
+    }
+    return {"ok": True, "data": _json_safe(data)}
 
 
 # ── Write / action tools ─────────────────────────────────────────────────────
@@ -1388,6 +2071,12 @@ _TOOL_LABELS = {
     "get_expense_ledger": "سجل المصروفات",
     "aggregate": "تحليل البيانات",
     "frequently_bought_together": "المنتجات التي تُشترى معًا",
+    "compare_periods": "مقارنة الفترات",
+    "profitability": "تحليل الربحية",
+    "inventory_intelligence": "ذكاء المخزون",
+    "customer_insights": "تحليل العملاء",
+    "business_health": "تشخيص أداء المتجر",
+    "project_forecast": "إسقاط مالي",
     "describe_resource": "فحص الحقول",
     "create_sale": "تسجيل بيع",
     "record_customer_payment": "تسجيل دفعة عميل",
@@ -1634,6 +2323,37 @@ _TOOLS = {
         limit=args.get("limit", 10),
         min_count=args.get("min_count", 2),
     ),
+    "compare_periods": lambda user, args: compare_periods(
+        user=user,
+        period=args.get("period"),
+        start=args.get("start"),
+        end=args.get("end"),
+    ),
+    "profitability": lambda user, args: profitability(
+        user=user,
+        group_by=args.get("group_by", "product"),
+        period=args.get("period"),
+        start=args.get("start"),
+        end=args.get("end"),
+        limit=args.get("limit", 10),
+        order=args.get("order", "top"),
+    ),
+    "inventory_intelligence": lambda user, args: inventory_intelligence(
+        user=user,
+        mode=args.get("mode", "reorder"),
+        days=args.get("days", 30),
+        limit=args.get("limit", 20),
+    ),
+    "customer_insights": lambda user, args: customer_insights(
+        user=user,
+        mode=args.get("mode", "top"),
+        days=args.get("days", 90),
+        limit=args.get("limit", 10),
+    ),
+    "business_health": lambda user, args: business_health(
+        user=user, days=args.get("days", 30)
+    ),
+    "project_forecast": lambda user, args: project_forecast(user=user),
     "describe_resource": lambda user, args: describe_resource(
         user=user, resource=args.get("resource")
     ),
@@ -2221,6 +2941,134 @@ def tools_definitions(*, supports_ask_user=False, supports_actions=False):
                     },
                     "additionalProperties": False,
                 },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "compare_periods",
+                "description": (
+                    "قارن أداء فترة بالفترة المماثلة التي تسبقها مباشرةً (إيراد، ربح، "
+                    "كمية مباعة، عدد طلبات، الهامش) مع نسب التغيّر — أفضل أداة للسؤال "
+                    '"كيف أداء المتجر؟" أو "هل تحسّنا؟". مرّر period جاهزة '
+                    "(today, yesterday, this_week, last_week, this_month, last_month, "
+                    "this_year, last_year, last_7_days, last_30_days, last_90_days) أو "
+                    "حدّد start/end صراحةً. الأرقام تطابق احتساب لوحة المعلومات (مبيعات "
+                    "معترَف بها: العادي المدفوع + الآجل من لحظة إصداره، دون عروض الأسعار)."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "period": {"type": "string", "enum": list(ADVICE_PERIODS)},
+                        "start": {"type": "string", "description": "بداية الفترة YYYY-MM-DD (بديل عن period)."},
+                        "end": {"type": "string", "description": "نهاية الفترة YYYY-MM-DD."},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "profitability",
+                "description": (
+                    "الربح والهامش إجمالًا أو مرتّبًا حسب المنتج/المتغيّر لفترة. استخدم "
+                    "order=bottom لإظهار أقل الأصناف هامشًا (الأكثر مبيعًا قد يكون أقلّها "
+                    "ربحًا — لا تنصح بالاعتماد على الأكثر مبيعًا وحده). التكلفة من لقطة "
+                    "unit_cost المسجّلة لحظة البيع."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "group_by": {
+                            "type": "string",
+                            "enum": ["product", "variant"],
+                            "description": "اتركه فارغًا للإجمالي الكلي.",
+                        },
+                        "period": {"type": "string", "enum": list(ADVICE_PERIODS)},
+                        "start": {"type": "string", "description": "بداية الفترة YYYY-MM-DD."},
+                        "end": {"type": "string", "description": "نهاية الفترة YYYY-MM-DD."},
+                        "order": {
+                            "type": "string",
+                            "enum": ["top", "bottom"],
+                            "description": "top=الأعلى ربحًا (الافتراضي)، bottom=الأقل (لرصد المشاكل).",
+                        },
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "inventory_intelligence",
+                "description": (
+                    "يدمج المخزون الحالي مع سرعة البيع لتوجيه قرارات المخزون: "
+                    "mode=reorder (الأصناف عند/تحت حد إعادة الطلب مع كمية مقترحة للشراء)، "
+                    "dead_stock (مخزون لم يُبَع خلال الفترة — رأس مال مجمّد)، "
+                    "fast_movers (الأسرع بيعًا/الأقصر تغطية). days = نافذة حساب السرعة. "
+                    "بعد reorder يمكنك إنشاء أمر شراء، وبعد dead_stock يمكنك إنشاء خصم تصفية."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "mode": {"type": "string", "enum": ["reorder", "dead_stock", "fast_movers"]},
+                        "days": {"type": "integer", "minimum": 1, "maximum": 365},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "customer_insights",
+                "description": (
+                    "إشارات العملاء للاحتفاظ والتسويق: mode=top (الأعلى إنفاقًا في النافذة)، "
+                    "at_risk (عملاء كانوا نشطين ولم يشتروا منذ days يومًا)، "
+                    "outstanding_credit (أكبر الأرصدة الآجلة غير المسدّدة). days يضبط نافذة "
+                    "top أو عتبة عدم النشاط لـ at_risk."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "mode": {"type": "string", "enum": ["top", "at_risk", "outstanding_credit"]},
+                        "days": {"type": "integer", "minimum": 1, "maximum": 1095},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "business_health",
+                "description": (
+                    "تشخيص شامل باستدعاء واحد: يفحص اتجاه الإيراد والهامش، المخزون الراكد، "
+                    "نقص المخزون، والذمم الآجلة، ويعيد نتائج مرتّبة حسب الأهمية (severity + "
+                    "أرقام + إجراء مقترَح). ابدأ به عند أسئلة عامة مثل «كيف حال المتجر؟» أو "
+                    "«بمَ تنصحني؟» ثم تعمّق بالأداة المناسبة لكل نتيجة، واعرض الأهم أولًا."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {"days": {"type": "integer", "minimum": 1, "maximum": 365}},
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "project_forecast",
+                "description": (
+                    "إسقاط مبسّط وواضح أنه تقدير: مبيعات الشهر حتى الآن، وإسقاط نهاية الشهر "
+                    "بمعدّل التشغيل اليومي، وإجمالي الذمم الآجلة غير المحصّلة (نقد مستحق "
+                    "للمتجر). مفيد لسؤال «هل سأغطّي مصاريف/رواتب الشهر؟». قدّمه كتقدير لا ضمان."
+                ),
+                "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
             },
         },
     ]

@@ -329,6 +329,8 @@ class PosViewModel extends ChangeNotifier {
       _checkoutSettings?.enableTransferPayments ?? true;
   bool get requireCardPaymentReceipt =>
       _checkoutSettings?.requireCardPaymentReceipt ?? false;
+  bool get enableKitchenOperations =>
+      _checkoutSettings?.enableKitchenOperations ?? false;
 
   /// Whether a credit (آجل) or quotation (عرض سعر) sale must name a customer.
   bool get requireCustomerForCredit =>
