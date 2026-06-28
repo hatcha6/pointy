@@ -313,15 +313,20 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), s.aiRequestTimeout())
 	defer cancel()
 
-	// On a conversation's first turn, generate a short title from the user's
-	// message in parallel with the reply (a cheap fast-model call), so it's ready
-	// by the done event with no added latency. Buffered so the goroutine never
-	// leaks if the done handler stops waiting.
+	// Title generation for a turn that wants one. Prefer the user's own message:
+	// it's available now, so the title runs in parallel with the reply (a cheap
+	// fast-model call) and is ready by the done event with no added latency.
+	// Buffered so the goroutine never leaks if the done handler stops waiting.
+	// When the user gave no text — a voice/attachment turn — there's nothing to
+	// title from yet, so we fall back to the assistant's reply at done (below).
+	userTitlePrompt := latestUserMessage(request.Messages)
 	var titleCh chan string
-	if request.WantTitle && !isContinuation {
+	if request.WantTitle && userTitlePrompt != "" {
 		titleCh = make(chan string, 1)
-		go func() { titleCh <- s.generateTitle(ctx, request.Messages) }()
+		go func() { titleCh <- s.generateTitle(ctx, userTitlePrompt) }()
 	}
+	// Accumulates the reply text so a no-user-text turn can still be titled.
+	var replyBuf strings.Builder
 
 	streamErr := client.StreamChat(ctx, ai.ChatRequest{
 		Model:       model,
@@ -333,6 +338,7 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 	}, func(event ai.Event) error {
 		switch event.Type {
 		case ai.EventDelta:
+			replyBuf.WriteString(event.Text)
 			return writeSSE(w, flusher, "delta", map[string]string{"text": event.Text})
 		case ai.EventReasoning:
 			return writeSSE(w, flusher, "reasoning", map[string]string{"text": event.Text})
@@ -353,16 +359,29 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 				}
 				payload["sources"] = srcs
 			}
+			title := ""
 			if titleCh != nil {
 				// The title call usually finishes while the reply streams; a short
 				// backstop keeps a slow one from holding up the done event.
 				select {
-				case title := <-titleCh:
-					if title != "" {
-						payload["title"] = title
-					}
+				case title = <-titleCh:
 				case <-time.After(3 * time.Second):
 				}
+			}
+			// Voice/attachment turn (no user text to title from): title from the
+			// assistant's reply instead, so a voice chat still gets a real name
+			// rather than the attachment's filename. Generated at done since the
+			// reply only exists now; the backend re-requests want_title across the
+			// agentic loop until one lands, so a tools-first round is covered too.
+			if title == "" && request.WantTitle && userTitlePrompt == "" {
+				if reply := strings.TrimSpace(replyBuf.String()); reply != "" {
+					titleCtx, titleCancel := context.WithTimeout(ctx, s.aiRouterTimeout())
+					title = s.generateTitle(titleCtx, reply)
+					titleCancel()
+				}
+			}
+			if title != "" {
+				payload["title"] = title
 			}
 			if usage != nil {
 				payload["usage_limits"] = usage
@@ -567,11 +586,13 @@ const aiTitleSystemPrompt = "Generate a very short title for a chat conversation
 	"no surrounding quotes, no trailing punctuation, in the SAME language as the " +
 	"user's message. Summarize the topic concisely; do not answer the message."
 
-// generateTitle asks the cheap fast model for a short conversation title from the
-// user's first message. Returns "" on any failure so the caller can fall back to a
-// truncated title — a missing title must never block or break a reply.
-func (s HTTPServer) generateTitle(ctx context.Context, messages []aiChatMessage) string {
-	prompt := latestUserMessage(messages)
+// generateTitle asks the cheap fast model for a short conversation title from
+// ``prompt`` — the user's first message when they typed one, or the assistant's
+// reply when they didn't (a voice/attachment turn), so a chat always gets a real
+// name. Returns "" on any failure so the caller can fall back to a truncated
+// title — a missing title must never block or break a reply.
+func (s HTTPServer) generateTitle(ctx context.Context, prompt string) string {
+	prompt = strings.TrimSpace(prompt)
 	model := s.aiRouterModel()
 	if prompt == "" || model == "" {
 		return ""

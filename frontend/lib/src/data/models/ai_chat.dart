@@ -368,6 +368,22 @@ class AiAnswer {
     if (otherText != null && otherText!.isNotEmpty) 'other_text': otherText,
     'is_other': isOther,
   };
+
+  /// Rebuild a submitted answer from the persisted tool result, so an answered
+  /// question card re-renders its read-only recap when reopening past history.
+  factory AiAnswer.fromJson(Map<String, Object?> json) {
+    final rawValues = json['values'];
+    return AiAnswer(
+      questionId: (json['question_id'] as String?) ?? '',
+      type: _aiQuestionTypeFrom(json['type'] as String?),
+      value: json['value'],
+      values: rawValues is List
+          ? rawValues.map((e) => e.toString()).toList(growable: false)
+          : null,
+      otherText: json['other_text'] as String?,
+      isOther: json['is_other'] == true,
+    );
+  }
 }
 
 /// One web-search source the assistant consulted for a reply — shown as a favicon
@@ -418,6 +434,7 @@ class AiMessage extends ChangeNotifier {
     this.reasoning = '',
     this.attachments = const [],
     this.pendingQuestion,
+    this.submittedAnswers,
     List<AiToolRun>? toolRuns,
     List<AiSource>? sources,
     this.webSearched = false,
@@ -557,17 +574,26 @@ class AiMessage extends ChangeNotifier {
               .map(AiAttachment.fromMetadata)
               .toList(growable: false)
         : const <AiAttachment>[];
-    // A still-open ask_user turn rehydrates its interactive question from history,
-    // so a question survives a reload/reconnect and can be answered afterwards.
+    // An ask_user turn rehydrates its interactive question from history so the
+    // card survives a reload — both a still-open question (answerable) and an
+    // already-answered one (its read-only recap, via [submitted] below).
     final pendingSpec = json['pending_question'];
-    final pending = (json['status'] as String?) == 'awaiting_answer'
-        ? AiPendingQuestion.fromParts(
-            toolCallId: json['tool_call_id'] as String?,
-            messageId: (json['id'] as num?)?.toInt(),
-            questionsRaw: pendingSpec is Map<String, Object?>
-                ? pendingSpec['questions']
-                : null,
-          )
+    final pending = AiPendingQuestion.fromParts(
+      toolCallId: json['tool_call_id'] as String?,
+      messageId: (json['id'] as num?)?.toInt(),
+      questionsRaw: pendingSpec is Map<String, Object?>
+          ? pendingSpec['questions']
+          : null,
+    );
+    // Answered turns carry the user's submitted answers; setting them flips the
+    // card to its read-only recap (and keeps hasPendingQuestion false). An empty
+    // list means the question was skipped/declined.
+    final rawAnswers = json['answers'];
+    final submitted = rawAnswers is List
+        ? rawAnswers
+              .whereType<Map<String, Object?>>()
+              .map(AiAnswer.fromJson)
+              .toList(growable: false)
         : null;
     // Rehydrate only the *mutating* tool runs from the persisted trace, as
     // completed action chips — so a reload still shows what the assistant
@@ -602,6 +628,7 @@ class AiMessage extends ChangeNotifier {
       model: (json['model'] as String?) ?? '',
       attachments: attachments,
       pendingQuestion: pending,
+      submittedAnswers: submitted,
       toolRuns: toolRuns,
       sources: AiSource.listFrom(json['sources']),
       webSearched: json['web_searched'] == true,

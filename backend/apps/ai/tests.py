@@ -296,6 +296,31 @@ class AiChatViewTests(TestCase):
         conversation = AiConversation.objects.get(user=self.user)
         self.assertEqual(conversation.title, "فاتورة.png")
 
+    def test_audio_only_first_turn_titles_voice_message_not_filename(self):
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["تم"], reasoning="")  # relay returns no title
+            )
+            response = self.client.post(
+                reverse("ai-chat"),
+                {
+                    "message": "",
+                    "attachments": [
+                        {
+                            "kind": "audio",
+                            "data_uri": "data:audio/wav;base64,AAAA",
+                            "name": "voice-message.wav",
+                            "mime": "audio/wav",
+                        }
+                    ],
+                },
+                format="json",
+            )
+            b"".join(response.streaming_content)
+        # A voice turn must never title itself with the technical .wav filename.
+        conversation = AiConversation.objects.get(user=self.user)
+        self.assertEqual(conversation.title, "رسالة صوتية")
+
     def test_web_search_sources_are_persisted_and_streamed(self):
         with patch("apps.ai.views.RelayControlClient") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
@@ -821,12 +846,74 @@ class AskUserFlowTests(TestCase):
 
         paused.refresh_from_db()
         self.assertEqual(paused.status, AiMessage.STATUS_ANSWERED)
-        self.assertIsNone(paused.pending_question)
+        # The question spec is kept (not cleared) so the answered card re-renders
+        # read-only from history; ``status`` is what marks it no longer pending.
+        self.assertEqual(len(paused.pending_question["questions"]), 2)
         final = conversation.messages.filter(role=AiMessage.ROLE_ASSISTANT, status="").last()
         self.assertEqual(final.content, "تمام، تم")
         self.assertTrue(
             conversation.messages.filter(role=AiMessage.ROLE_TOOL, tool_call_id="call_1").exists()
         )
+
+    def test_answered_question_rehydrates_from_conversation_detail(self):
+        # Reopening a past chat must re-render the answered question card: the
+        # detail payload carries the (kept) question spec + the user's answers,
+        # resolved from the sibling tool reply.
+        conversation, paused, _ = self._seed_paused()
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["تمام"], reasoning="")
+            )
+            self.client.post(
+                reverse("ai-chat-resume"),
+                {
+                    "conversation_id": conversation.pk,
+                    "message_id": paused.pk,
+                    "tool_call_id": paused.tool_call_id,
+                    "answers": [
+                        {"question_id": "q1", "type": "single_select", "value": "main"},
+                        {"question_id": "q2", "type": "confirm", "value": True},
+                    ],
+                },
+                format="json",
+            )
+
+        response = self.client.get(reverse("ai-conversation-detail", args=[conversation.pk]))
+        self.assertEqual(response.status_code, 200)
+        answered = next(
+            m for m in response.data["messages"] if m["status"] == AiMessage.STATUS_ANSWERED
+        )
+        self.assertEqual(len(answered["pending_question"]["questions"]), 2)
+        self.assertEqual(
+            [a["question_id"] for a in answered["answers"]], ["q1", "q2"]
+        )
+        self.assertEqual(answered["answers"][0]["value"], "main")
+        # An ordinary turn carries no answers payload (stays null).
+        ordinary = next(m for m in response.data["messages"] if m["role"] == "user")
+        self.assertIsNone(ordinary["answers"])
+
+    def test_skipped_question_rehydrates_as_empty_answers(self):
+        conversation, paused, _ = self._seed_paused()
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["حسنًا"], reasoning="")
+            )
+            self.client.post(
+                reverse("ai-chat-resume"),
+                {
+                    "conversation_id": conversation.pk,
+                    "message_id": paused.pk,
+                    "tool_call_id": paused.tool_call_id,
+                    "declined": True,
+                },
+                format="json",
+            )
+        response = self.client.get(reverse("ai-conversation-detail", args=[conversation.pk]))
+        answered = next(
+            m for m in response.data["messages"] if m["status"] == AiMessage.STATUS_ANSWERED
+        )
+        # Declined → empty list (not null) so the card recaps it as skipped.
+        self.assertEqual(answered["answers"], [])
 
     def test_resume_skip_feeds_a_declined_result(self):
         conversation, paused, _ = self._seed_paused()

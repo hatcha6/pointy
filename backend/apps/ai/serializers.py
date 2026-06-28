@@ -1,3 +1,5 @@
+import json
+
 from django.urls import reverse
 from rest_framework import serializers
 
@@ -9,6 +11,20 @@ class AiMessageSerializer(serializers.ModelSerializer):
     # Stored sources are {url,title}; add the same-origin favicon-proxy URL on read
     # (built from the request) so a reloaded reply shows the same favicon avatars.
     sources = serializers.SerializerMethodField()
+    # The user's submitted answers to an answered ask_user turn, so the question
+    # card re-renders as a read-only recap from history. Resolved from the sibling
+    # tool reply via context (see AiConversationDetailSerializer); None otherwise.
+    answers = serializers.SerializerMethodField()
+
+    def get_answers(self, obj):
+        if obj.status != AiMessage.STATUS_ANSWERED or not obj.tool_call_id:
+            return None
+        result = (self.context.get("tool_results") or {}).get(obj.tool_call_id)
+        if not isinstance(result, dict) or result.get("declined"):
+            # Skipped/declined → an empty list so the recap shows "skipped".
+            return []
+        answers = result.get("answers")
+        return answers if isinstance(answers, list) else []
 
     def get_sources(self, obj):
         request = self.context.get("request")
@@ -43,6 +59,7 @@ class AiMessageSerializer(serializers.ModelSerializer):
             "tool_calls",
             "tool_call_id",
             "pending_question",
+            "answers",
             "status",
             "sources",
             "web_searched",
@@ -70,6 +87,23 @@ class AiConversationDetailSerializer(AiConversationSerializer):
 
     class Meta(AiConversationSerializer.Meta):
         fields = AiConversationSerializer.Meta.fields + ["messages"]
+
+    def to_representation(self, instance):
+        # Resolve each answered ask_user turn's answers from its sibling tool reply
+        # (the human-as-tool result, keyed by tool_call_id) in a single pass, so the
+        # nested message serializer can surface them for a read-only re-render.
+        results = {}
+        for message in instance.messages.all():
+            if message.role != AiMessage.ROLE_TOOL or not message.tool_call_id:
+                continue
+            try:
+                parsed = json.loads(message.content or "{}")
+            except (ValueError, TypeError):
+                parsed = {}
+            if isinstance(parsed, dict):
+                results[message.tool_call_id] = parsed
+        self.context["tool_results"] = results
+        return super().to_representation(instance)
 
 
 class AiAttachmentSerializer(serializers.Serializer):
