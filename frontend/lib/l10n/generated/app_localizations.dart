@@ -21521,6 +21521,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حدّثني أكثر عن {topic} في متجري.'**
   String aiDigestElaborate(String topic);
+
+  /// Label of the AppBar Smart Reorder action on the purchase orders and products screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة طلب ذكية'**
+  String get smartReorderButton;
+
+  /// Tooltip on the AppBar Smart Reorder action on the purchase orders and products screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'اقتراح أوامر شراء ذكية للأصناف الناقصة بالذكاء الاصطناعي'**
+  String get smartReorderTooltip;
+
+  /// Prompt auto-sent to the AI chat when the user confirms Smart Reorder; drives the reorder_plan tool flow.
+  ///
+  /// In ar, this message translates to:
+  /// **'راجع مخزوني وأنشئ أوامر شراء ذكية للأصناف التي تحتاج إعادة طلب. تجاهل الأصناف البطيئة والراكدة حتى لا أُجمّد رأس مالي، واحسب الكميات من سرعة البيع الفعلية مقرّبةً لوحدات الشراء. لكل صنف اختر المورّد الأنسب من سجلّ الشراء، وأنشئ أمر شراء منفصلًا لكل مورّد. اعرض لي ملخصًا بعدد الأوامر والموردين وإجمالي رأس المال المقدَّر وخُذ تأكيدي قبل الإنشاء.'**
+  String get smartReorderSeed;
 }
 
 class _AppLocalizationsDelegate

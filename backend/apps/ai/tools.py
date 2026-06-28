@@ -916,6 +916,241 @@ def inventory_intelligence(*, user, mode="reorder", days=30, limit=20):
     return {"ok": True, "data": _json_safe(data)}
 
 
+def reorder_plan(*, user, days=30, cover_days=14, limit=60):
+    """Build a smart, capital-aware purchase plan for items that need restocking,
+    with the supplier evidence to route each one. The plan is the input to creating
+    draft purchase orders — one per chosen supplier.
+
+    For each candidate it joins on-hand stock + sales velocity + the full history of
+    suppliers the product was bought from. It deliberately leaves capital decisions
+    to the data:
+      * dead movers (nothing sold in the window) are never reordered — no capital
+        tied up on stock with no demand;
+      * slow movers are only topped up when fully out of stock, and only by a
+        minimal pack;
+      * order sizes come from real velocity (cover ``cover_days`` of demand) and the
+        shop's manual ``reorder_level`` as a floor, rounded UP to whole purchase
+        packs so we never suggest loose pieces of a carton-bought item.
+
+    Each item carries ``supplier_candidates`` — every supplier the product was bought
+    from, ranked, with recency/frequency/price signals — so the caller picks the best
+    supplier per item rather than being handed one. Items with no purchase history go
+    to ``unassigned`` (ask the user which supplier). ``suggested_groups`` pre-buckets
+    items by their top candidate as a convenient starting point."""
+    import math
+
+    from apps.purchasing.services import (
+        default_purchase_pack_for_product,
+        supplier_candidates_for_variants,
+    )
+
+    try:
+        days = max(1, min(int(days), 365))
+    except (TypeError, ValueError):
+        days = 30
+    try:
+        cover_days = max(1, min(int(cover_days), 180))
+    except (TypeError, ValueError):
+        cover_days = 14
+    try:
+        limit = max(1, min(int(limit), 100))
+    except (TypeError, ValueError):
+        limit = 60
+
+    meta = get_registry().get("stock")
+    try:
+        stock_qs = _scoped_queryset(meta.view_class, user=user, filters={})
+    except (PermissionDenied, NotAuthenticated):
+        return {
+            "ok": False,
+            "error": "permission_denied",
+            "message": "ليس لديك صلاحية الوصول لبيانات المخزون.",
+        }
+    except Exception:
+        logger.exception("AI reorder scoping crashed")
+        return {"ok": False, "error": "internal_error"}
+
+    velocity, _ = _velocity_by_variant(user, days=days)
+    stock_qs = stock_qs.select_related("variant", "variant__product").prefetch_related(
+        "variant__product__units__unit"
+    )
+
+    window = Decimal(days)
+    cover = Decimal(cover_days)
+    raw = []
+    skipped_slow = 0
+    for st in stock_qs[:1000]:  # bound the scan; ranked subset taken below
+        variant = st.variant
+        if variant is None:
+            continue
+        product = variant.product
+        # Services and made-to-order prepared items hold no real stock to reorder.
+        if product is not None and (
+            getattr(product, "is_service", False) or getattr(product, "is_prepared", False)
+        ):
+            continue
+        on_hand = st.quantity_on_hand or Decimal("0")
+        expected = st.quantity_expected or Decimal("0")
+        reorder_level = Decimal(st.reorder_level or 0)
+        sold = velocity.get(variant.id, Decimal("0"))
+        daily = (sold / window) if window else Decimal("0")
+        out_of_stock = on_hand <= 0
+
+        # Dead in the window → never reorder (capital discipline).
+        if sold <= 0:
+            if on_hand + expected <= reorder_level:
+                skipped_slow += 1
+            continue
+
+        # Bring stock up to whichever is larger: velocity cover or the manual floor.
+        target_level = max(daily * cover, reorder_level)
+        is_candidate = (on_hand + expected <= reorder_level) or (
+            daily > 0 and on_hand + expected < daily * cover
+        )
+        if not is_candidate:
+            continue
+
+        slow_mover = (daily * cover) < 1
+        if slow_mover:
+            # Only top a slow mover up when it has actually run out, and then only
+            # minimally (one pack) — never up to the manual reorder_level, so we
+            # don't tie up capital chasing a floor the demand doesn't justify.
+            if not out_of_stock:
+                skipped_slow += 1
+                continue
+            needed_base = Decimal("1")
+        else:
+            needed_base = target_level - on_hand - expected
+        if needed_base <= 0:
+            continue
+
+        days_of_cover = (float(on_hand) / float(daily)) if daily > 0 else 0.0
+        raw.append(
+            {
+                "st": st,
+                "variant": variant,
+                "product": product,
+                "on_hand": on_hand,
+                "expected": expected,
+                "daily": daily,
+                "needed_base": needed_base,
+                "slow_mover": slow_mover,
+                "days_of_cover": days_of_cover,
+            }
+        )
+
+    # Most urgent first (lowest days-of-cover), then take the bounded subset.
+    raw.sort(key=lambda r: (r["days_of_cover"], -float(r["needed_base"])))
+    raw = raw[:limit]
+
+    candidates_by_variant = supplier_candidates_for_variants([r["variant"].id for r in raw])
+
+    items = []
+    for r in raw:
+        variant = r["variant"]
+        product = r["product"]
+        cands = candidates_by_variant.get(variant.id, [])
+        top = cands[0] if cands else None
+        preferred_unit = top["last_unit"] if top else None
+        unit_code, factor = (
+            default_purchase_pack_for_product(product, preferred_unit_code=preferred_unit)
+            if product is not None
+            else ("", Decimal("1"))
+        )
+        factor = factor or Decimal("1")
+        pack_qty = int(math.ceil(float(r["needed_base"]) / float(factor))) if factor > 0 else int(
+            math.ceil(float(r["needed_base"]))
+        )
+        pack_qty = max(pack_qty, 1)
+        suggested_base = Decimal(pack_qty) * factor
+
+        base_cost = top["last_base_unit_cost"] if top else None
+        pack_unit_cost = _money(base_cost * factor) if base_cost is not None else None
+        est_capital = _money(suggested_base * base_cost) if base_cost is not None else None
+
+        items.append(
+            {
+                "variant_id": variant.id,
+                "sku": variant.sku,
+                "product": variant.full_name,
+                "on_hand": _qty(r["on_hand"]),
+                "quantity_expected": _qty(r["expected"]),
+                "velocity_per_day": round(float(r["daily"]), 3),
+                "days_of_cover": round(r["days_of_cover"], 1),
+                "slow_mover": r["slow_mover"],
+                "suggested_base_qty": _qty(suggested_base),
+                "purchase_unit": unit_code or None,  # None = product base unit
+                "unit_factor": str(factor),
+                "suggested_pack_qty": pack_qty,
+                "unit_cost": pack_unit_cost,  # per purchase unit, for the PO line
+                "base_unit_cost": (_money(base_cost) if base_cost is not None else None),
+                "est_capital_outlay": est_capital,
+                "supplier_candidates": [
+                    {
+                        "supplier_id": c["supplier_id"],
+                        "supplier_name": c["supplier_name"],
+                        "supplier_is_active": c["supplier_is_active"],
+                        "order_count": c["order_count"],
+                        "last_purchased_at": c["last_purchased_at"],
+                        "last_base_unit_cost": _money(c["last_base_unit_cost"]),
+                        "avg_base_unit_cost": _money(c["avg_base_unit_cost"]),
+                        "min_base_unit_cost": _money(c["min_base_unit_cost"]),
+                    }
+                    for c in cands
+                ],
+            }
+        )
+
+    # Convenience grouping by each item's TOP candidate (a starting point only).
+    groups = {}
+    unassigned = []
+    for it in items:
+        cands = it["supplier_candidates"]
+        if not cands:
+            unassigned.append(it)
+            continue
+        top = cands[0]
+        g = groups.setdefault(
+            top["supplier_id"],
+            {
+                "supplier_id": top["supplier_id"],
+                "supplier_name": top["supplier_name"],
+                "line_count": 0,
+                "est_total_capital": Decimal("0"),
+                "variant_ids": [],
+            },
+        )
+        g["line_count"] += 1
+        g["variant_ids"].append(it["variant_id"])
+        if it["est_capital_outlay"] is not None:
+            g["est_total_capital"] += Decimal(str(it["est_capital_outlay"]))
+
+    suggested_groups = [
+        {**g, "est_total_capital": _money(g["est_total_capital"])}
+        for g in sorted(groups.values(), key=lambda g: float(g["est_total_capital"]), reverse=True)
+    ]
+
+    est_total = sum(
+        (Decimal(str(it["est_capital_outlay"])) for it in items if it["est_capital_outlay"] is not None),
+        Decimal("0"),
+    )
+    data = {
+        "velocity_window_days": days,
+        "cover_days": cover_days,
+        "summary": {
+            "total_items": len(items),
+            "est_total_capital": _money(est_total),
+            "supplier_count": len(suggested_groups),
+            "unassigned_count": len(unassigned),
+            "skipped_slow_movers": skipped_slow,
+        },
+        "items": items,
+        "suggested_groups": suggested_groups,
+        "unassigned": unassigned,
+    }
+    return {"ok": True, "data": _json_safe(data)}
+
+
 def customer_insights(*, user, mode="top", days=90, limit=10):
     """Customer signals for retention/marketing advice. modes: ``top`` (highest
     recognized spend in the window), ``at_risk`` (previously active, no purchase in
@@ -2111,6 +2346,7 @@ _TOOL_LABELS = {
     "compare_periods": "مقارنة الفترات",
     "profitability": "تحليل الربحية",
     "inventory_intelligence": "ذكاء المخزون",
+    "reorder_plan": "خطة إعادة الطلب الذكية",
     "customer_insights": "تحليل العملاء",
     "business_health": "تشخيص أداء المتجر",
     "project_forecast": "إسقاط مالي",
@@ -2380,6 +2616,12 @@ _TOOLS = {
         mode=args.get("mode", "reorder"),
         days=args.get("days", 30),
         limit=args.get("limit", 20),
+    ),
+    "reorder_plan": lambda user, args: reorder_plan(
+        user=user,
+        days=args.get("days", 30),
+        cover_days=args.get("cover_days", 14),
+        limit=args.get("limit", 60),
     ),
     "customer_insights": lambda user, args: customer_insights(
         user=user,
@@ -3053,6 +3295,35 @@ def tools_definitions(*, supports_ask_user=False, supports_actions=False):
                         "mode": {"type": "string", "enum": ["reorder", "dead_stock", "fast_movers"]},
                         "days": {"type": "integer", "minimum": 1, "maximum": 365},
                         "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "reorder_plan",
+                "description": (
+                    "خطة شراء ذكية للأصناف التي تحتاج إعادة طلب، مع أدلّة المورّدين لإنشاء "
+                    "أوامر شراء موثوقة. لكل صنف يدمج المخزون الحالي + سرعة البيع + كل المورّدين "
+                    "الذين اشتُري منهم سابقًا (supplier_candidates مرتّبة مع order_count وتاريخ "
+                    "آخر شراء والتكلفة). يتجاهل الأصناف الراكدة (لم تُبَع) ولا يعيد طلب بطيئة "
+                    "الحركة إلا عند نفادها، ويحسب الكمية من السرعة الفعلية مقرّبةً لأعلى لوحدات "
+                    "الشراء (كراتين). الاستخدام: استدعِ reorder_plan، ثم لكل صنف اختر أفضل مورّد "
+                    "من candidates موازنًا الحداثة وتكرار الشراء (order_count) والسعر — لا الأحدث "
+                    "آليًا — ثم أنشئ أمر شراء واحدًا لكل مورّد مختار (بدمج كل أصنافه) عبر "
+                    "create_resource(resource=\"purchase-orders\"). للأصناف في unassigned (بلا "
+                    "تاريخ شراء) اسأل المستخدم عن المورّد عبر ask_user أولًا. اعرض ملخصًا "
+                    "وروابط (pointy://purchase-order/<id>) لكل أمر أُنشئ. days=نافذة السرعة، "
+                    "cover_days=أيام التغطية المستهدفة."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "days": {"type": "integer", "minimum": 1, "maximum": 365},
+                        "cover_days": {"type": "integer", "minimum": 1, "maximum": 180},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 100},
                     },
                     "additionalProperties": False,
                 },

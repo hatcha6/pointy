@@ -23,6 +23,7 @@ from .tools import (
     profitability,
     project_forecast,
     query_resource,
+    reorder_plan,
     update_resource,
 )
 
@@ -716,3 +717,189 @@ class AiAdvisorPromptTests(TestCase):
             self.assertIn(tool, prompt)
         # The anti-tamper guardrail must survive the rewrite.
         self.assertIn("حماية عدّ الصندوق", prompt)
+
+    def test_action_prompt_includes_smart_reorder_playbook(self):
+        from .relay_stream import build_system_prompt
+
+        prompt = build_system_prompt(supports_actions=True)
+        self.assertIn("reorder_plan", prompt)  # the smart-reorder tool
+        self.assertIn("supplier_candidates", prompt)  # pick best supplier per item
+        self.assertIn("unassigned", prompt)  # ask_user fallback path
+        # ...but a read-only client is never told it can create POs this way.
+        read_only = build_system_prompt(supports_actions=False)
+        self.assertNotIn("reorder_plan", read_only)
+
+
+class AiReorderPlanTests(TestCase):
+    """``reorder_plan`` must (a) size orders from velocity not a naive multiplier,
+    (b) refuse to tie up capital on slow/dead movers, (c) round to whole purchase
+    packs, and (d) attach the full ranked supplier evidence + grouping."""
+
+    def setUp(self):
+        ensure_role_groups()
+        self.cashier = User.objects.create_user(username="ro-cashier", password="pw")
+        self.manager = User.objects.create_user(username="ro-manager", password="pw")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+
+    # ── builders ──────────────────────────────────────────────────────────────
+
+    def _variant(self, name, sku, price="5.00", *, on_hand="0", reorder_level=5):
+        from apps.catalog.models import Product, ProductVariant
+        from apps.inventory.models import StockItem
+
+        product = Product.objects.create(name=name)
+        variant = ProductVariant.objects.create(
+            product=product, sku=sku, unit_price=Decimal(price), is_default=True
+        )
+        StockItem.objects.create(
+            variant=variant,
+            quantity_on_hand=Decimal(on_hand),
+            reorder_level=reorder_level,
+        )
+        return variant
+
+    def _pack(self, product, code, factor):
+        from apps.catalog.models import ProductUnit, UnitOfMeasure
+
+        unit, _ = UnitOfMeasure.objects.get_or_create(code=code, defaults={"name": code})
+        return ProductUnit.objects.create(
+            product=product, unit=unit, factor_to_base=Decimal(factor)
+        )
+
+    def _sell(self, variant, qty, *, days_ago=1):
+        from datetime import datetime, time, timedelta
+
+        from django.utils import timezone
+
+        from apps.payments.models import Payment
+        from apps.sales.models import Order, OrderLine
+
+        order = Order.objects.create(status="paid", sale_type="standard")
+        OrderLine.objects.create(
+            order=order, variant=variant, quantity=Decimal(qty),
+            unit_price=variant.unit_price, unit_cost=Decimal("1.00"),
+        )
+        order.recalculate()
+        order.save()
+        if order.total > 0:
+            Payment.objects.create(order=order, method=Payment.Method.CASH, amount=order.total)
+        when = timezone.localdate() - timedelta(days=days_ago)
+        dt = timezone.make_aware(datetime.combine(when, time(12, 0)))
+        Order.objects.filter(pk=order.pk).update(created_at=dt)
+
+    def _purchase(self, variant, supplier, *, unit_cost, unit="", unit_factor="1", days_ago=10):
+        from datetime import datetime, time, timedelta
+
+        from django.utils import timezone
+
+        from apps.purchasing.models import PurchaseLine, PurchaseOrder
+
+        po = PurchaseOrder.objects.create(
+            supplier=supplier, status=PurchaseOrder.Status.RECEIVED
+        )
+        line = PurchaseLine.objects.create(
+            purchase_order=po, variant=variant, quantity=1, unit=unit,
+            unit_factor=Decimal(unit_factor), unit_cost=Decimal(unit_cost),
+        )
+        when = timezone.localdate() - timedelta(days=days_ago)
+        dt = timezone.make_aware(datetime.combine(when, time(12, 0)))
+        PurchaseOrder.objects.filter(pk=po.pk).update(created_at=dt, received_at=dt)
+        PurchaseLine.objects.filter(pk=line.pk).update(created_at=dt)
+
+    def _supplier(self, name):
+        from apps.purchasing.models import Supplier
+
+        return Supplier.objects.create(name=name)
+
+    # ── tests ─────────────────────────────────────────────────────────────────
+
+    def test_velocity_sizes_order_and_rounds_to_packs(self):
+        # Sells 2/day over 30 days = 60 units; with 14-day cover target = 28.
+        # On hand 4 → need 24 base units; carton of 12 → 2 cartons (24 units).
+        v = self._variant("ماء", "RP-WATER", "1.50", on_hand="4", reorder_level=10)
+        self._pack(v.product, "rp-carton", "12")
+        sup = self._supplier("مورد الماء")
+        self._purchase(v, sup, unit_cost="12.00", unit="rp-carton", unit_factor="12")
+        for d in range(1, 31):
+            self._sell(v, "2", days_ago=d)
+
+        result = reorder_plan(user=self.manager, days=30, cover_days=14)
+        self.assertTrue(result["ok"], result)
+        item = next(i for i in result["data"]["items"] if i["sku"] == "RP-WATER")
+        self.assertEqual(item["purchase_unit"], "rp-carton")
+        self.assertEqual(item["suggested_pack_qty"], 2)  # whole cartons, rounded up
+        self.assertEqual(float(item["suggested_base_qty"]), 24.0)
+        # base cost 12/12 = 1.00; pack cost = 12.00; capital = 24 * 1.00 = 24.00
+        self.assertEqual(float(item["unit_cost"]), 12.0)
+        self.assertEqual(float(item["est_capital_outlay"]), 24.0)
+
+    def test_dead_mover_low_on_stock_is_not_reordered(self):
+        # Below reorder level but ZERO sales in the window → must be skipped.
+        dead = self._variant("بضاعة راكدة", "RP-DEAD", on_hand="1", reorder_level=10)
+        sup = self._supplier("مورد")
+        self._purchase(dead, sup, unit_cost="3.00")
+
+        result = reorder_plan(user=self.manager, days=30, cover_days=14)
+        self.assertTrue(result["ok"], result)
+        skus = {i["sku"] for i in result["data"]["items"]}
+        self.assertNotIn("RP-DEAD", skus)
+        self.assertGreaterEqual(result["data"]["summary"]["skipped_slow_movers"], 1)
+
+    def test_slow_mover_only_topped_up_when_out_of_stock(self):
+        # ~1 unit/month: with stock it's left alone; fully out it gets a minimal pack.
+        held = self._variant("بطيء فيه مخزون", "RP-SLOW-IN", on_hand="2", reorder_level=10)
+        out = self._variant("بطيء نافد", "RP-SLOW-OUT", on_hand="0", reorder_level=10)
+        sup = self._supplier("مورد بطيء")
+        for v in (held, out):
+            self._purchase(v, sup, unit_cost="5.00")
+            self._sell(v, "1", days_ago=15)  # 1 sale in 30d → daily ~0.033, cover<1
+
+        result = reorder_plan(user=self.manager, days=30, cover_days=14)
+        skus = {i["sku"] for i in result["data"]["items"]}
+        self.assertNotIn("RP-SLOW-IN", skus)  # has stock → leave capital free
+        self.assertIn("RP-SLOW-OUT", skus)  # out of stock → minimal restock
+        out_item = next(i for i in result["data"]["items"] if i["sku"] == "RP-SLOW-OUT")
+        self.assertTrue(out_item["slow_mover"])
+        self.assertEqual(out_item["suggested_pack_qty"], 1)
+
+    def test_groups_by_supplier_and_buckets_unassigned(self):
+        # Two fast movers from different suppliers + one with no purchase history.
+        a = self._variant("صنف أ", "RP-A", on_hand="0", reorder_level=10)
+        b = self._variant("صنف ب", "RP-B", on_hand="0", reorder_level=10)
+        new = self._variant("صنف بلا تاريخ", "RP-NEW", on_hand="0", reorder_level=10)
+        sup_a = self._supplier("مورد أ")
+        sup_b = self._supplier("مورد ب")
+        self._purchase(a, sup_a, unit_cost="2.00")
+        self._purchase(b, sup_b, unit_cost="3.00")
+        for v in (a, b, new):
+            for d in range(1, 31):
+                self._sell(v, "2", days_ago=d)
+
+        result = reorder_plan(user=self.manager, days=30, cover_days=14)
+        data = result["data"]
+        # Each of the two history-bearing items lands in its own supplier group.
+        names = {g["supplier_name"] for g in data["suggested_groups"]}
+        self.assertEqual(names, {"مورد أ", "مورد ب"})
+        self.assertEqual(data["summary"]["supplier_count"], 2)
+        # The history-less item is surfaced for an ask_user supplier choice.
+        unassigned_skus = {i["sku"] for i in data["unassigned"]}
+        self.assertIn("RP-NEW", unassigned_skus)
+        # Every item exposes its ranked candidates (the AI chooses, not the helper).
+        a_item = next(i for i in data["items"] if i["sku"] == "RP-A")
+        self.assertEqual(a_item["supplier_candidates"][0]["supplier_name"], "مورد أ")
+
+    def test_scoped_to_permission_boundary(self):
+        # A cashier without stock-read permission gets a clean refusal, not data.
+        v = self._variant("سرّي", "RP-SCOPE", on_hand="0", reorder_level=10)
+        sup = self._supplier("مورد")
+        self._purchase(v, sup, unit_cost="2.00")
+        for d in range(1, 31):
+            self._sell(v, "2", days_ago=d)
+
+        result = reorder_plan(user=self.cashier)
+        # Either scoped-out (no items) or an explicit permission error — never leak.
+        if result["ok"]:
+            self.assertEqual(result["data"]["items"], [])
+        else:
+            self.assertEqual(result["error"], "permission_denied")

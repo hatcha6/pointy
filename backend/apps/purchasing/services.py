@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
@@ -39,6 +40,9 @@ from .models import (
 )
 
 
+_DATE_MIN = date.min
+
+
 def latest_purchase_line_for_variant(variant_id, *, before_line=None):
     lines = PurchaseLine.objects.filter(variant_id=variant_id).exclude(
         purchase_order__status=PurchaseOrder.Status.CANCELLED,
@@ -77,6 +81,120 @@ def latest_product_unit_cost(product_id, *, variant_id=None):
 
     line = latest_purchase_line_for_product(product_id)
     return None if line is None else line.unit_cost
+
+
+def supplier_candidates_for_variants(variant_ids):
+    """For each variant, the suppliers it has historically been purchased from, as a
+    ranked list of candidates (not a single winner) so a caller can choose on the
+    full evidence — recency, purchase frequency and price. Cancelled POs are
+    excluded. One bulk query, aggregated in Python (no N+1).
+
+    Returns ``{variant_id: [candidate, ...]}`` where each candidate rolls up that
+    variant × supplier history::
+
+        {
+            "supplier_id", "supplier_name",
+            "order_count",            # distinct purchase orders from this supplier
+            "last_purchased_at",      # most recent purchase date (date or None)
+            "last_base_unit_cost",    # cost-per-base-unit of the most recent line
+            "last_unit", "last_unit_factor",  # purchase pack of the most recent line
+            "avg_base_unit_cost", "min_base_unit_cost",
+        }
+
+    Candidates are sorted most-recent-first then by ``order_count`` as a sensible
+    default, but every raw signal is exposed so the caller makes the final call. A
+    variant with no purchase history is absent from the result (caller treats it as
+    unassigned)."""
+    ids = [int(v) for v in variant_ids if v is not None]
+    if not ids:
+        return {}
+
+    lines = (
+        PurchaseLine.objects.filter(variant_id__in=ids)
+        .exclude(purchase_order__status=PurchaseOrder.Status.CANCELLED)
+        .select_related("purchase_order", "purchase_order__supplier")
+        .order_by("-created_at", "-id")  # newest first → first seen wins for "last_*"
+    )
+
+    # variant_id -> supplier_id -> rollup
+    grouped: dict[int, dict[int, dict]] = {}
+    for line in lines:
+        po = line.purchase_order
+        supplier = po.supplier if po is not None else None
+        if supplier is None:
+            continue
+        per_variant = grouped.setdefault(line.variant_id, {})
+        agg = per_variant.get(supplier.id)
+        base_cost = line.base_unit_cost
+        purchased_at = (po.received_at or po.created_at)
+        purchased_date = purchased_at.date() if purchased_at is not None else None
+        if agg is None:
+            # First line seen for this supplier is the most recent (queryset is
+            # ordered newest-first), so it defines the "last_*" snapshot.
+            per_variant[supplier.id] = {
+                "supplier_id": supplier.id,
+                "supplier_name": supplier.name,
+                "supplier_is_active": supplier.is_active,
+                "order_ids": {po.id},
+                "last_purchased_at": purchased_date,
+                "last_base_unit_cost": base_cost,
+                "last_unit": line.unit or "",
+                "last_unit_factor": line.unit_factor or Decimal("1"),
+                "_cost_sum": base_cost,
+                "_cost_n": 1,
+                "min_base_unit_cost": base_cost,
+            }
+        else:
+            agg["order_ids"].add(po.id)
+            agg["_cost_sum"] += base_cost
+            agg["_cost_n"] += 1
+            if base_cost < agg["min_base_unit_cost"]:
+                agg["min_base_unit_cost"] = base_cost
+            if purchased_date is not None and (
+                agg["last_purchased_at"] is None
+                or purchased_date > agg["last_purchased_at"]
+            ):
+                # Defensive: ordering should already guarantee this, but keep the
+                # truly-latest date if created_at/received_at disagree.
+                agg["last_purchased_at"] = purchased_date
+
+    out: dict[int, list] = {}
+    for variant_id, suppliers in grouped.items():
+        candidates = []
+        for agg in suppliers.values():
+            n = agg.pop("_cost_n")
+            cost_sum = agg.pop("_cost_sum")
+            agg["order_count"] = len(agg.pop("order_ids"))
+            agg["avg_base_unit_cost"] = (cost_sum / n).quantize(Decimal("0.01"))
+            candidates.append(agg)
+        candidates.sort(
+            key=lambda c: (
+                c["last_purchased_at"] or _DATE_MIN,
+                c["order_count"],
+            ),
+            reverse=True,
+        )
+        out[variant_id] = candidates
+    return out
+
+
+def default_purchase_pack_for_product(product, *, preferred_unit_code=None):
+    """The unit a reorder quantity should be expressed in for ``product``.
+
+    Prefers the unit a supplier last actually bought in (``preferred_unit_code``,
+    when that product still has a purchasable ProductUnit for it). Otherwise the
+    largest purchasable pack (so we suggest whole cartons rather than loose pieces),
+    falling back to the base unit. Returns ``(unit_code, factor_to_base)`` where an
+    empty ``unit_code`` means the product's base unit (factor 1)."""
+    units = [u for u in product.units.all() if u.is_purchasable and u.unit.is_active]
+    if preferred_unit_code:
+        for u in units:
+            if u.unit.code == preferred_unit_code:
+                return u.unit.code, (u.factor_to_base or Decimal("1"))
+    if units:
+        biggest = max(units, key=lambda u: u.factor_to_base or Decimal("1"))
+        return biggest.unit.code, (biggest.factor_to_base or Decimal("1"))
+    return "", Decimal("1")
 
 
 def purchase_created_by(request):
