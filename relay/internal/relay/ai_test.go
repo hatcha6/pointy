@@ -495,6 +495,31 @@ func TestHandleAIChatGeneratesTitleOnFirstTurn(t *testing.T) {
 	}
 }
 
+func TestHandleAIChatTitlesVoiceTurnFromReply(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionAIInstallation(t, now)
+	// The stub returns this for any non-streaming Complete call (the title here).
+	openrouter := stubOpenRouterServer(t, "topic")
+	defer openrouter.Close()
+	server := newAITestServer(t, store, openrouter.URL)
+	server.AIVisionModel = "test/vision" // audio defaults to the vision model
+
+	// A voice turn: no user text, only an audio attachment. The title can't come
+	// from the (empty) user message, so it's generated from the assistant reply.
+	body := strings.NewReader(`{"messages":[{"role":"user","content":""}],` +
+		`"attachments":[{"kind":"audio","data_uri":"data:audio/wav;base64,QUJD","name":"voice-message.wav","mime":"audio/wav"}],` +
+		`"want_title":true}`)
+	request := httptest.NewRequest(http.MethodPost, "http://relay.test/v1/ai/chat", body)
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+
+	payload := recorder.Body.String()
+	if !strings.Contains(payload, `"title":"topic"`) {
+		t.Fatalf("expected a reply-derived title for the voice turn, got %q", payload)
+	}
+}
+
 func TestHandleAIChatSkipsTitleWhenNotRequested(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	store, provisioned := provisionAIInstallation(t, now)

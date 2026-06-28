@@ -12379,4 +12379,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String aiDigestElaborate(String topic) {
     return 'حدّثني أكثر عن $topic في متجري.';
   }
+
+  @override
+  String get smartReorderButton => 'إعادة طلب ذكية';
+
+  @override
+  String get smartReorderTooltip =>
+      'اقتراح أوامر شراء ذكية للأصناف الناقصة بالذكاء الاصطناعي';
+
+  @override
+  String get smartReorderSeed =>
+      'راجع مخزوني وأنشئ أوامر شراء ذكية للأصناف التي تحتاج إعادة طلب. تجاهل الأصناف البطيئة والراكدة حتى لا أُجمّد رأس مالي، واحسب الكميات من سرعة البيع الفعلية مقرّبةً لوحدات الشراء. لكل صنف اختر المورّد الأنسب من سجلّ الشراء، وأنشئ أمر شراء منفصلًا لكل مورّد. اعرض لي ملخصًا بعدد الأوامر والموردين وإجمالي رأس المال المقدَّر وخُذ تأكيدي قبل الإنشاء.';
 }

@@ -249,4 +249,84 @@ void main() {
       expect(question.allowCreateNew, isFalse);
     });
   });
+
+  group('ask_user question rehydration from history', () {
+    Map<String, Object?> questionSpec() => {
+      'pending_question': {
+        'questions': [
+          {
+            'id': 'q1',
+            'type': 'single_select',
+            'prompt': 'اختر',
+            'config': {
+              'options': [
+                {'value': 'main', 'label': 'الرئيسي'},
+                {'value': 'side', 'label': 'جانبي'},
+              ],
+            },
+          },
+        ],
+      },
+      'tool_call_id': 'call_1',
+    };
+
+    test('an awaiting turn rehydrates an answerable question card', () {
+      final message = AiMessage.fromJson({
+        'id': 5,
+        'role': 'assistant',
+        'content': '',
+        'status': 'awaiting_answer',
+        ...questionSpec(),
+      });
+      expect(message.pendingQuestion, isNotNull);
+      expect(message.pendingQuestion!.questions.single.prompt, 'اختر');
+      expect(message.submittedAnswers, isNull);
+      expect(message.hasPendingQuestion, isTrue); // still answerable after reload
+    });
+
+    test('an answered turn rehydrates a read-only recap (not pending)', () {
+      final message = AiMessage.fromJson({
+        'id': 6,
+        'role': 'assistant',
+        'content': '',
+        'status': 'answered',
+        ...questionSpec(),
+        'answers': [
+          {'question_id': 'q1', 'type': 'single_select', 'value': 'main'},
+        ],
+      });
+      // The card content survives so it can render at all...
+      expect(message.pendingQuestion, isNotNull);
+      // ...and the answer flips it to the read-only recap, no longer pending.
+      expect(message.submittedAnswers, isNotNull);
+      expect(message.submittedAnswers!.single.questionId, 'q1');
+      expect(message.submittedAnswers!.single.value, 'main');
+      expect(message.hasPendingQuestion, isFalse);
+    });
+
+    test('a skipped turn rehydrates as an empty (skipped) recap', () {
+      final message = AiMessage.fromJson({
+        'id': 7,
+        'role': 'assistant',
+        'content': '',
+        'status': 'answered',
+        ...questionSpec(),
+        'answers': <Object?>[],
+      });
+      expect(message.pendingQuestion, isNotNull);
+      expect(message.submittedAnswers, isEmpty); // non-null empty → "skipped"
+      expect(message.hasPendingQuestion, isFalse);
+    });
+
+    test('an ordinary turn has no question and no answers', () {
+      final message = AiMessage.fromJson({
+        'id': 8,
+        'role': 'assistant',
+        'content': 'مرحبا',
+      });
+      expect(message.pendingQuestion, isNull);
+      expect(message.submittedAnswers, isNull);
+      expect(message.hasPendingQuestion, isFalse);
+    });
+  });
 }

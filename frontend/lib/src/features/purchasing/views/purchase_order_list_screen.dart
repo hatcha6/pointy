@@ -14,6 +14,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../ai/views/smart_reorder_action.dart';
 import '../view_models/purchase_order_list_view_model.dart';
 import 'purchase_order_filter_sheet.dart';
 import 'purchase_order_query_controls.dart';
@@ -52,6 +53,11 @@ class PurchaseOrderListScreen extends StatelessWidget {
             leading: const PointyNavigationMenuButton(),
             title: Text(l10n.purchaseOrdersTitle),
             actions: [
+              SmartReorderAction(
+                navigation: navigation,
+                capabilities: capabilities,
+                from: AppNavigationDestination.purchasing,
+              ),
               AuthorizationGuard(
                 capabilities: capabilities,
                 capability: AppCapability.accessPurchasing,

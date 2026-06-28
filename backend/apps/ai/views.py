@@ -80,7 +80,12 @@ def _fallback_title(user_text, attachments):
     if text:
         return text[:60]
     if attachments:
-        name = (attachments[0].get("name") or "").strip()
+        first = attachments[0]
+        # A voice turn has only a technical filename (e.g. "voice-message.wav") —
+        # never show that as a title; use a readable label instead.
+        if (first.get("kind") or "") == "audio":
+            return "رسالة صوتية"
+        name = (first.get("name") or "").strip()
         return (name or "مرفق")[:60]
     return ""
 
@@ -594,6 +599,11 @@ class AiChatView(APIView):
                         count_usage=False,
                         route_tier=routed_tier,
                         web_search=web_searched,
+                        # Keep asking for a title until one lands. A voice turn can't
+                        # be titled until the model actually replies (no user text),
+                        # which may be after a tool round — so the request must ride
+                        # the continuation that produces the answer, not just turn 1.
+                        want_title=apply_title and not generated_title,
                     )
                 except RelayControlError:
                     yield sse_event("error", {"detail": "ai stream failed"})
@@ -811,9 +821,10 @@ class AiChatResumeView(AiChatView):
             tool_call_id=tool_call_id,
             content=json.dumps(result, ensure_ascii=False),
         )
+        # Keep the question spec (pending_question) on the answered turn so the card
+        # re-renders read-only from history; ``status`` marks it no longer pending.
         paused.status = AiMessage.STATUS_ANSWERED
-        paused.pending_question = None
-        paused.save(update_fields=["status", "pending_question"])
+        paused.save(update_fields=["status"])
 
         supports_actions = payload.get("supports_actions", True)
         messages = self._build_messages(

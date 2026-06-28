@@ -18,6 +18,7 @@ import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../shared/components/components.dart';
+import '../../ai/views/smart_reorder_action.dart';
 import '../view_models/catalog_view_model.dart';
 import '../view_models/product_details_view_model.dart';
 import '../view_models/units_management_view_model.dart';
@@ -102,6 +103,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
             leading: const PointyNavigationMenuButton(),
             title: Text(l10n.catalogManagementTitle),
             actions: [
+              SmartReorderAction(
+                navigation: widget.navigation,
+                capabilities: capabilities,
+                from: AppNavigationDestination.catalog,
+              ),
               CatalogManagementGuard(
                 capabilities: capabilities,
                 fallback: const SizedBox.shrink(),
