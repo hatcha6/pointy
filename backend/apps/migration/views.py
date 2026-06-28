@@ -15,6 +15,7 @@ from .serializers import (
     MigrationSourceSerializer,
     MigrationSystemSerializer,
 )
+from .discovery import discover_sql_servers_as_dicts
 from .services import queue_migration_run, run_compatibility, test_connection
 
 
@@ -47,9 +48,21 @@ class MigrationSourceViewSet(viewsets.ModelViewSet):
         "destroy": ("migration.delete_migrationsource",),
         "test": ("migration.change_migrationsource",),
         "check": ("migration.change_migrationsource",),
+        "discover": ("migration.add_migrationsource",),
     }
     queryset = MigrationSource.objects.all()
     filterset_fields = ("system_key", "transport_kind", "is_archived")
+
+    @action(detail=False, methods=["post"])
+    def discover(self, request):
+        """List SQL Server instances reachable on the LAN (SSRP broadcast).
+
+        Discovery only — no credentials are sent and no data connection is
+        opened. The operator picks the client's POS server from this list; the
+        connection (and any default-credential fallback) happens afterwards
+        against that chosen target via the normal ``test``/``check`` flow.
+        """
+        return Response({"servers": discover_sql_servers_as_dicts()})
 
     @action(detail=True, methods=["post"])
     def test(self, request, pk=None):

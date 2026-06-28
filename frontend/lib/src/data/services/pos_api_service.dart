@@ -384,6 +384,10 @@ class PosApiService {
     return _migration.deleteSource(id);
   }
 
+  Future<List<DiscoveredServer>> discoverMigrationServers() {
+    return _migration.discoverServers();
+  }
+
   Future<MigrationConnectionTest> testMigrationConnection(int id) {
     return _migration.testConnection(id);
   }

@@ -110,6 +110,12 @@
       "port": 8080
     },
     {
+      "name": "login-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-login-preview"],
+      "port": 8080
+    },
+    {
       "name": "relay",
       "runtimeExecutable": "make",
       "runtimeArgs": ["relay-run"],

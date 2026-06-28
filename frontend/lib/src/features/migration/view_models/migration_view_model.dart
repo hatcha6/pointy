@@ -36,6 +36,7 @@ class MigrationViewModel extends ChangeNotifier {
   bool _hasMutationError = false;
   bool _isTesting = false;
   bool _isChecking = false;
+  bool _isDiscovering = false;
   bool _isStartingRun = false;
   bool _isLoadingIssues = false;
   String? _mutationMessage;
@@ -69,6 +70,7 @@ class MigrationViewModel extends ChangeNotifier {
   bool get hasMutationError => _hasMutationError;
   bool get isTesting => _isTesting;
   bool get isChecking => _isChecking;
+  bool get isDiscovering => _isDiscovering;
   bool get isStartingRun => _isStartingRun;
   bool get isLoadingIssues => _isLoadingIssues;
   String? get mutationMessage => _mutationMessage;
@@ -230,6 +232,27 @@ class MigrationViewModel extends ChangeNotifier {
           }
         }) ??
         false;
+  }
+
+  /// Broadcasts on the LAN and returns reachable SQL Server instances. This is a
+  /// discovery probe only — no credentials are sent and no source is touched.
+  /// The caller lets the operator pick one to prefill host/port.
+  Future<List<DiscoveredServer>?> discoverServers() async {
+    if (_isDiscovering) return null;
+    _isDiscovering = true;
+    _hasMutationError = false;
+    notifyListeners();
+    final result = await _repository.discoverServers();
+    List<DiscoveredServer>? servers;
+    switch (result) {
+      case Ok<List<DiscoveredServer>>():
+        servers = result.value;
+      case Error<List<DiscoveredServer>>():
+        _failMutation(result.exception);
+    }
+    _isDiscovering = false;
+    notifyListeners();
+    return servers;
   }
 
   Future<MigrationConnectionTest?> testConnection() async {

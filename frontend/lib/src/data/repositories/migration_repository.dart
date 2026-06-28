@@ -27,6 +27,10 @@ class MigrationRepository {
     return Result.guard(() => _service.deleteMigrationSource(id));
   }
 
+  Future<Result<List<DiscoveredServer>>> discoverServers() {
+    return Result.guard(() => _service.discoverMigrationServers());
+  }
+
   Future<Result<MigrationConnectionTest>> testConnection(int id) {
     return Result.guard(() => _service.testMigrationConnection(id));
   }

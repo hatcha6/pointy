@@ -283,6 +283,21 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
                 ),
               ],
             ),
+            if (transport == 'mssql') ...[
+              SizedBox(height: spacing.xs),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: OutlinedButton.icon(
+                  onPressed: viewModel.isDiscovering
+                      ? null
+                      : () => _scanNetwork(context),
+                  icon: viewModel.isDiscovering
+                      ? const _Spinner()
+                      : const Icon(Icons.wifi_find_outlined),
+                  label: Text(l10n.migrationScanButton),
+                ),
+              ),
+            ],
             SizedBox(height: spacing.sm),
             TextField(
               controller: _databaseController,
@@ -739,6 +754,33 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
     await widget.viewModel.checkCompatibility();
   }
 
+  /// Discovers SQL Server instances on the LAN and lets the operator pick the
+  /// client's POS box. Discovery sends no credentials; picking only prefills
+  /// host/port — connecting (and any default-credential fallback) happens later
+  /// via the Test/Check buttons against the chosen target.
+  Future<void> _scanNetwork(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final servers = await widget.viewModel.discoverServers();
+    if (!context.mounted) return;
+    if (servers == null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.migrationScanFailed)),
+      );
+      return;
+    }
+    final picked = await showDialog<DiscoveredServer>(
+      context: context,
+      builder: (context) => _ServerPickerDialog(servers: servers),
+    );
+    if (picked == null || !mounted) return;
+    _hostController.text = picked.address;
+    _portController.text = picked.tcpPort?.toString() ?? '';
+    messenger.showSnackBar(
+      SnackBar(content: Text(l10n.migrationScanSelected(picked.displayName))),
+    );
+  }
+
   Future<void> _startRun(BuildContext context, {required bool dryRun}) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
@@ -796,6 +838,76 @@ class _SectionCard extends StatelessWidget {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(padding: EdgeInsets.all(spacing.md), child: child),
+    );
+  }
+}
+
+/// Lists the SQL Server instances found on the LAN. Picking one returns it so
+/// the caller can prefill host/port — no connection is made here.
+class _ServerPickerDialog extends StatelessWidget {
+  const _ServerPickerDialog({required this.servers});
+
+  final List<DiscoveredServer> servers;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return AlertDialog(
+      title: Text(l10n.migrationScanTitle),
+      content: SizedBox(
+        width: 360,
+        child: servers.isEmpty
+            ? PointyInlineMessage(
+                tone: PointyInlineMessageTone.neutral,
+                icon: Icons.search_off_outlined,
+                message: l10n.migrationScanEmpty,
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      l10n.migrationScanSubtitle,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: servers.length,
+                      itemBuilder: (context, index) {
+                        final server = servers[index];
+                        final subtitle = [
+                          server.address,
+                          if (server.version.isNotEmpty) server.version,
+                          if (server.tcpPort != null) 'tcp ${server.tcpPort}',
+                        ].join(' · ');
+                        return ListTile(
+                          leading: const Icon(Icons.dns_outlined),
+                          title: Text(
+                            server.displayName,
+                            textDirection: TextDirection.ltr,
+                          ),
+                          subtitle: Text(
+                            subtitle,
+                            textDirection: TextDirection.ltr,
+                          ),
+                          onTap: () => Navigator.of(context).pop(server),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+        ),
+      ],
     );
   }
 }

@@ -12,6 +12,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get appTitle => 'نقطة البيع';
 
   @override
+  String get brandName => 'دفتر';
+
+  @override
   String get errorUnexpectedMessage => 'حدث خطأ غير متوقع. حاول مرة أخرى.';
 
   @override
@@ -11859,6 +11862,28 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get migrationEncodingHint => 'مثال: cp1256 للنصوص العربية القديمة';
+
+  @override
+  String get migrationScanButton => 'بحث في الشبكة';
+
+  @override
+  String get migrationScanTitle => 'خوادم SQL Server في الشبكة';
+
+  @override
+  String get migrationScanSubtitle =>
+      'اختر خادم نظام نقاط البيع الخاص بالعميل لتعبئة المضيف والمنفذ.';
+
+  @override
+  String get migrationScanEmpty =>
+      'لم يُعثر على أي خادم. تأكد من تشغيل الجهاز على نفس الشبكة، أو أدخل المضيف يدويًا.';
+
+  @override
+  String get migrationScanFailed => 'تعذّر البحث في الشبكة';
+
+  @override
+  String migrationScanSelected(String server) {
+    return 'تم اختيار $server';
+  }
 
   @override
   String get migrationSaveSourceButton => 'حفظ المصدر';

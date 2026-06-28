@@ -100,6 +100,12 @@ abstract class AppLocalizations {
   /// **'نقطة البيع'**
   String get appTitle;
 
+  /// Customer-facing brand name, shown on the login brand panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفتر'**
+  String get brandName;
+
   /// Generic fallback shown when an action fails without a specific message.
   ///
   /// In ar, this message translates to:
@@ -20591,6 +20597,42 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مثال: cp1256 للنصوص العربية القديمة'**
   String get migrationEncodingHint;
+
+  /// No description provided for @migrationScanButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'بحث في الشبكة'**
+  String get migrationScanButton;
+
+  /// No description provided for @migrationScanTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'خوادم SQL Server في الشبكة'**
+  String get migrationScanTitle;
+
+  /// No description provided for @migrationScanSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر خادم نظام نقاط البيع الخاص بالعميل لتعبئة المضيف والمنفذ.'**
+  String get migrationScanSubtitle;
+
+  /// No description provided for @migrationScanEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُعثر على أي خادم. تأكد من تشغيل الجهاز على نفس الشبكة، أو أدخل المضيف يدويًا.'**
+  String get migrationScanEmpty;
+
+  /// No description provided for @migrationScanFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر البحث في الشبكة'**
+  String get migrationScanFailed;
+
+  /// No description provided for @migrationScanSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم اختيار {server}'**
+  String migrationScanSelected(String server);
 
   /// No description provided for @migrationSaveSourceButton.
   ///

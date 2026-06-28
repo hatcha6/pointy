@@ -30,8 +30,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
     return ListenableBuilder(
       listenable: widget.viewModel,
       builder: (context, _) {
@@ -54,7 +52,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         : AppContentWidth.compact,
                     expand: false,
                     child: _LoginLayout(
-                      appTitle: l10n.appTitle,
                       isWide: isWide,
                       form: _LoginForm(
                         formKey: _formKey,
@@ -88,13 +85,8 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 class _LoginLayout extends StatelessWidget {
-  const _LoginLayout({
-    required this.appTitle,
-    required this.isWide,
-    required this.form,
-  });
+  const _LoginLayout({required this.isWide, required this.form});
 
-  final String appTitle;
   final bool isWide;
   final Widget form;
 
@@ -103,21 +95,37 @@ class _LoginLayout extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
 
     if (isWide) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: AppPaneWidths.standard,
-            child: _LoginBrandPanel(
-              key: const ValueKey('login_brand_panel'),
-              appTitle: appTitle,
-              minHeight: 344,
-            ),
+      final colors = context.pointyColors;
+
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(
+            colors.primaryStrong.withValues(alpha: 0.08),
+            colors.surface,
           ),
-          SizedBox(width: spacing.paneGap),
-          Flexible(child: form),
-        ],
+          border: Border.all(
+            color: colors.primaryStrong.withValues(alpha: 0.12),
+          ),
+          borderRadius: BorderRadius.circular(PointyRadii.card),
+        ),
+        child: Padding(
+          padding: EdgeInsetsDirectional.all(spacing.xl),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: AppPaneWidths.standard,
+                child: _LoginBrandPanel(
+                  key: const ValueKey('login_brand_panel'),
+                  minHeight: 420,
+                ),
+              ),
+              SizedBox(width: spacing.paneGap),
+              Flexible(child: form),
+            ],
+          ),
+        ),
       );
     }
 
@@ -125,10 +133,7 @@ class _LoginLayout extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _CompactLoginHeader(
-          key: const ValueKey('login_compact_header'),
-          appTitle: appTitle,
-        ),
+        const _CompactLoginHeader(key: ValueKey('login_compact_header')),
         SizedBox(height: spacing.md),
         form,
       ],
@@ -137,15 +142,14 @@ class _LoginLayout extends StatelessWidget {
 }
 
 class _CompactLoginHeader extends StatelessWidget {
-  const _CompactLoginHeader({super.key, required this.appTitle});
-
-  final String appTitle;
+  const _CompactLoginHeader({super.key});
 
   @override
   Widget build(BuildContext context) {
     final spacing = AdaptiveSpacing.of(context);
     final theme = Theme.of(context);
     final colors = context.pointyColors;
+    final l10n = AppLocalizations.of(context)!;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -154,7 +158,7 @@ class _CompactLoginHeader extends StatelessWidget {
         SizedBox(width: spacing.sm),
         Flexible(
           child: Text(
-            appTitle,
+            l10n.brandName,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.headlineSmall?.copyWith(
@@ -169,13 +173,8 @@ class _CompactLoginHeader extends StatelessWidget {
 }
 
 class _LoginBrandPanel extends StatelessWidget {
-  const _LoginBrandPanel({
-    super.key,
-    required this.appTitle,
-    required this.minHeight,
-  });
+  const _LoginBrandPanel({super.key, required this.minHeight});
 
-  final String appTitle;
   final double minHeight;
 
   @override
@@ -183,40 +182,27 @@ class _LoginBrandPanel extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final theme = Theme.of(context);
     final colors = context.pointyColors;
+    final l10n = AppLocalizations.of(context)!;
 
     return ConstrainedBox(
       constraints: BoxConstraints(minHeight: minHeight),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Color.alphaBlend(
-            colors.primaryStrong.withValues(alpha: 0.08),
-            colors.surface,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _LoginMark(size: 168),
+          SizedBox(height: spacing.xl),
+          Text(
+            l10n.brandName,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.displaySmall?.copyWith(
+              color: colors.ink,
+              fontWeight: FontWeight.w900,
+            ),
           ),
-          border: Border.all(
-            color: colors.primaryStrong.withValues(alpha: 0.12),
-          ),
-          borderRadius: BorderRadius.circular(PointyRadii.card),
-        ),
-        child: Padding(
-          padding: EdgeInsetsDirectional.all(spacing.xl),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _LoginMark(size: 64),
-              SizedBox(height: spacing.xxl),
-              Text(
-                appTitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: colors.ink,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -230,13 +216,13 @@ class _LoginMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
+    final radius = BorderRadius.circular(PointyRadii.card);
 
     return SizedBox.square(
       dimension: size,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: colors.primaryStrong,
-          borderRadius: BorderRadius.circular(PointyRadii.card),
+          borderRadius: radius,
           boxShadow: [
             BoxShadow(
               color: colors.primaryStrong.withValues(alpha: 0.16),
@@ -245,10 +231,13 @@ class _LoginMark extends StatelessWidget {
             ),
           ],
         ),
-        child: Icon(
-          Icons.point_of_sale_outlined,
-          color: colors.surface,
-          size: size * 0.52,
+        child: ClipRRect(
+          borderRadius: radius,
+          child: Image.asset(
+            'assets/branding/logo.png',
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.medium,
+          ),
         ),
       ),
     );

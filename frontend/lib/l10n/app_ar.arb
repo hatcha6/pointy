@@ -4,6 +4,10 @@
   "@appTitle": {
     "description": "Application title."
   },
+  "brandName": "دفتر",
+  "@brandName": {
+    "description": "Customer-facing brand name, shown on the login brand panel."
+  },
   "errorUnexpectedMessage": "حدث خطأ غير متوقع. حاول مرة أخرى.",
   "@errorUnexpectedMessage": {
     "description": "Generic fallback shown when an action fails without a specific message."
@@ -6939,6 +6943,15 @@
   "migrationTdsVersionHint": "مثال: 7.0 لـ SQL Server 2000",
   "migrationEncodingLabel": "ترميز النص",
   "migrationEncodingHint": "مثال: cp1256 للنصوص العربية القديمة",
+  "migrationScanButton": "بحث في الشبكة",
+  "migrationScanTitle": "خوادم SQL Server في الشبكة",
+  "migrationScanSubtitle": "اختر خادم نظام نقاط البيع الخاص بالعميل لتعبئة المضيف والمنفذ.",
+  "migrationScanEmpty": "لم يُعثر على أي خادم. تأكد من تشغيل الجهاز على نفس الشبكة، أو أدخل المضيف يدويًا.",
+  "migrationScanFailed": "تعذّر البحث في الشبكة",
+  "migrationScanSelected": "تم اختيار {server}",
+  "@migrationScanSelected": {
+    "placeholders": { "server": { "type": "String" } }
+  },
   "migrationSaveSourceButton": "حفظ المصدر",
   "migrationTestButton": "اختبار الاتصال",
   "migrationCheckButton": "فحص التوافق",

@@ -46,6 +46,20 @@ class MigrationApiClient {
     _session.ensureSuccess(response, 'Delete migration source failed with status');
   }
 
+  /// Discovery only — broadcasts an SSRP request and lists reachable SQL Server
+  /// instances. No credentials are sent; the operator picks the target.
+  Future<List<DiscoveredServer>> discoverServers() async {
+    final response = await _session.post('migration/sources/discover/');
+    _session.ensureSuccess(response, 'Migration server discovery failed with status');
+    final decoded = _session.decodedBody(response);
+    final servers = decoded is Map<String, Object?> ? decoded['servers'] : null;
+    return [
+      if (servers is List)
+        for (final item in servers)
+          if (item is Map<String, Object?>) DiscoveredServer.fromJson(item),
+    ];
+  }
+
   Future<MigrationConnectionTest> testConnection(int id) async {
     final response = await _session.post('migration/sources/$id/test/');
     _session.ensureSuccess(response, 'Migration connection test failed with status');

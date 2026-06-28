@@ -93,6 +93,27 @@ class _FakeMigrationRepository extends MigrationRepository {
   }
 
   @override
+  Future<Result<List<DiscoveredServer>>> discoverServers() async {
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    return Ok([
+      DiscoveredServer.fromJson(const {
+        'address': '192.168.1.50',
+        'server_name': 'POSPC',
+        'instance_name': 'SQLEXPRESS',
+        'version': '10.50.1600.1',
+        'tcp_port': 1433,
+      }),
+      DiscoveredServer.fromJson(const {
+        'address': '192.168.1.77',
+        'server_name': 'BACKOFFICE',
+        'instance_name': 'MSSQLSERVER',
+        'version': '8.00.760',
+        'tcp_port': 1433,
+      }),
+    ]);
+  }
+
+  @override
   Future<Result<MigrationConnectionTest>> testConnection(int id) async {
     await Future<void>.delayed(const Duration(milliseconds: 400));
     return Ok(MigrationConnectionTest.fromJson(const {

@@ -242,6 +242,41 @@ class MigrationConnectionTest {
   }
 }
 
+/// A SQL Server instance found on the LAN via the discovery broadcast. This is
+/// the result of a *discovery* probe only — no credentials were sent. The
+/// operator picks the client's POS box from these, which prefills host/port.
+class DiscoveredServer {
+  const DiscoveredServer({
+    required this.address,
+    required this.serverName,
+    required this.instanceName,
+    required this.version,
+    required this.tcpPort,
+  });
+
+  final String address;
+  final String serverName;
+  final String instanceName;
+  final String version;
+  final int? tcpPort;
+
+  /// "POSPC\\SQLEXPRESS" style label, falling back to the IP.
+  String get displayName {
+    final name = serverName.isNotEmpty ? serverName : address;
+    return instanceName.isEmpty ? name : '$name\\$instanceName';
+  }
+
+  factory DiscoveredServer.fromJson(Map<String, Object?> json) {
+    return DiscoveredServer(
+      address: _str(json['address']),
+      serverName: _str(json['server_name']),
+      instanceName: _str(json['instance_name']),
+      version: _str(json['version']),
+      tcpPort: _intOrNull(json['tcp_port']),
+    );
+  }
+}
+
 class MigrationEntitySummary {
   const MigrationEntitySummary({
     required this.entityType,

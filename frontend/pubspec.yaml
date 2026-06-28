@@ -72,6 +72,34 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
+  # Generates per-platform launcher/app icons from assets/branding/logo.png.
+  # Run `flutter pub run flutter_launcher_icons` after changing the logo.
+  flutter_launcher_icons: ^0.14.4
+
+# App icon generation for all platforms. Source: assets/branding/logo.png.
+flutter_launcher_icons:
+  image_path: "assets/branding/logo.png"
+  # Android: legacy icon + adaptive icon (logo on a white background).
+  android: "ic_launcher"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/branding/logo.png"
+  # iOS / macOS require opaque icons; flatten transparency onto white.
+  ios: true
+  remove_alpha_ios: true
+  background_color_ios: "#FFFFFF"
+  macos:
+    generate: true
+    image_path: "assets/branding/logo.png"
+  windows:
+    generate: true
+    image_path: "assets/branding/logo.png"
+    icon_size: 256
+  web:
+    generate: true
+    image_path: "assets/branding/logo.png"
+    background_color: "#FFFFFF"
+    theme_color: "#FFFFFF"
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -101,6 +129,9 @@ flutter:
   assets:
     - assets/fonts/IBMPlexSansArabic-Regular.ttf
     - assets/fonts/IBMPlexSansArabic-Bold.ttf
+    # Brand logo, shown in-app (e.g. the login screen) and used to generate
+    # the per-platform launcher icons via flutter_launcher_icons.
+    - assets/branding/logo.png
 
   # To add more assets to your application, add an assets section, like this:
   # assets:

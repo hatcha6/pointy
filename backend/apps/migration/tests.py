@@ -818,3 +818,74 @@ class MssqlConnectionStringTests(TestCase):
         self.assertIn("SERVER=10.0.0.5,1433", conn)
         self.assertIn("Encrypt=yes", conn)
         self.assertIn("TrustServerCertificate=yes", conn)
+
+    def test_trusted_auth_connection_string(self):
+        # A None username switches to Windows/trusted auth, omitting UID/PWD.
+        transport = build_transport("mssql", {"host": "h", "database": "d"})
+        conn = transport._build_connection_string(None, "")
+        self.assertIn("Trusted_Connection=yes", conn)
+        self.assertNotIn("UID=", conn)
+        self.assertNotIn("PWD=", conn)
+
+
+class MssqlDefaultCredentialTests(TestCase):
+    def _candidates(self, config):
+        return build_transport("mssql", config)._credential_candidates()
+
+    def test_explicit_login_is_only_candidate(self):
+        # When the operator supplies a login we never try anything else.
+        cands = self._candidates(
+            {"host": "h", "database": "d", "username": "sa", "password": "secret"}
+        )
+        self.assertEqual(cands, [("sa", "secret")])
+
+    def test_blank_login_falls_back_to_vendor_defaults(self):
+        cands = self._candidates({"host": "h", "database": "d"})
+        self.assertGreater(len(cands), 1)
+        self.assertEqual(cands[0], (None, ""))  # trusted auth first
+        self.assertIn(("sa", ""), cands)  # blank sa (MSDE / SQL 2000)
+
+    def test_fallback_can_be_disabled(self):
+        # With the toggle off and no login, only trusted auth is attempted.
+        cands = self._candidates(
+            {"host": "h", "database": "d", "options": {"try_default_credentials": False}}
+        )
+        self.assertEqual(cands, [(None, "")])
+
+
+class SsrpDiscoveryParseTests(TestCase):
+    def _payload(self, body: str) -> bytes:
+        encoded = body.encode("latin-1")
+        return b"\x05" + len(encoded).to_bytes(2, "little") + encoded
+
+    def test_parses_single_instance(self):
+        from .discovery import _parse_ssrp_payload
+
+        raw = self._payload(
+            "ServerName;POSPC;InstanceName;SQLEXPRESS;IsClustered;No;"
+            "Version;10.50.1600.1;tcp;1433;;"
+        )
+        instances = _parse_ssrp_payload("192.168.1.20", raw)
+        self.assertEqual(len(instances), 1)
+        inst = instances[0]
+        self.assertEqual(inst.server_name, "POSPC")
+        self.assertEqual(inst.instance_name, "SQLEXPRESS")
+        self.assertEqual(inst.version, "10.50.1600.1")
+        self.assertEqual(inst.tcp_port, 1433)
+        self.assertEqual(inst.host, "192.168.1.20")
+
+    def test_parses_multiple_instances(self):
+        from .discovery import _parse_ssrp_payload
+
+        raw = self._payload(
+            "ServerName;SRV;InstanceName;MSSQLSERVER;Version;8.00.760;tcp;1433;;"
+            "ServerName;SRV;InstanceName;POS;Version;10.0.0;tcp;1450;;"
+        )
+        instances = _parse_ssrp_payload("10.0.0.9", raw)
+        self.assertEqual({i.instance_name for i in instances}, {"MSSQLSERVER", "POS"})
+
+    def test_ignores_non_ssrp_bytes(self):
+        from .discovery import _parse_ssrp_payload
+
+        self.assertEqual(_parse_ssrp_payload("10.0.0.1", b"\x00garbage"), [])
+        self.assertEqual(_parse_ssrp_payload("10.0.0.1", b""), [])
