@@ -1,3 +1,3 @@
-from .view import DashboardView
+from .view import DashboardView, build_dashboard_snapshot
 
-__all__ = ["DashboardView"]
+__all__ = ["DashboardView", "build_dashboard_snapshot"]

@@ -74,6 +74,8 @@ class ProductQuery extends ModelQuery {
     this.availability = ProductAvailabilityFilter.all,
     this.archived = ProductArchivedFilter.excludeArchived,
     this.stock = ProductStockFilter.all,
+    this.supplierId,
+    this.supplierName,
     this.ordering = ProductOrdering.name,
   });
 
@@ -84,6 +86,11 @@ class ProductQuery extends ModelQuery {
   final ProductAvailabilityFilter availability;
   final ProductArchivedFilter archived;
   final ProductStockFilter stock;
+  // Filter to products a given supplier has supplied (resolved server-side
+  // through that supplier's purchase orders). [supplierName] is carried only so
+  // the active-filter chip can label the selection.
+  final int? supplierId;
+  final String? supplierName;
   @override
   final ProductOrdering ordering;
 
@@ -99,6 +106,8 @@ class ProductQuery extends ModelQuery {
         parameter: 'category',
         value: categories.map((category) => category.id).join(','),
       ),
+    if (supplierId != null)
+      QueryFilter(parameter: 'supplier', value: '$supplierId'),
   ];
 
   ProductQuery copyWith({
@@ -117,7 +126,25 @@ class ProductQuery extends ModelQuery {
       availability: availability ?? this.availability,
       archived: archived ?? this.archived,
       stock: stock ?? this.stock,
+      supplierId: supplierId,
+      supplierName: supplierName,
       ordering: ordering ?? this.ordering,
+    );
+  }
+
+  /// Set or clear the supplier filter. Passing null clears it (which [copyWith]
+  /// can't express, since it preserves the current value).
+  ProductQuery withSupplier({int? supplierId, String? supplierName}) {
+    return ProductQuery(
+      search: search,
+      barcode: barcode,
+      categories: categories,
+      availability: availability,
+      archived: archived,
+      stock: stock,
+      supplierId: supplierId,
+      supplierName: supplierName,
+      ordering: ordering,
     );
   }
 
@@ -130,6 +157,7 @@ class ProductQuery extends ModelQuery {
         other.availability == availability &&
         other.archived == archived &&
         other.stock == stock &&
+        other.supplierId == supplierId &&
         other.ordering == ordering;
   }
 
@@ -141,6 +169,7 @@ class ProductQuery extends ModelQuery {
     availability,
     archived,
     stock,
+    supplierId,
     ordering,
   );
 

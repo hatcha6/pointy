@@ -18,6 +18,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'barcode_label_print_action.dart';
 import 'product_details_hero.dart';
+import 'variant_cost_metrics.dart';
 import 'stock_movement_form.dart';
 import 'stock_movements_sheet.dart';
 
@@ -126,6 +127,16 @@ class ProductVariantDetailsScreen extends StatelessWidget {
                           : product.description,
                     ),
                   ),
+                  if (viewModel.variantCostSummary != null) ...[
+                    const SizedBox(height: 12),
+                    PointyDetailSection(
+                      title: l10n.productCostOverviewTitle,
+                      icon: Icons.payments_outlined,
+                      child: VariantCostMetrics.fromSummary(
+                        viewModel.variantCostSummary!,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   PointyDetailSection(
                     title: l10n.productCostHistoryTitle,

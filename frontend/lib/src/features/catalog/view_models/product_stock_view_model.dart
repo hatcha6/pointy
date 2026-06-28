@@ -31,6 +31,7 @@ class ProductStockViewModel extends ChangeNotifier {
   List<StockMovement> _movements = [];
   List<ProductCostHistoryEntry> _costHistory = [];
   ProductMarginImpact? _marginImpact;
+  VariantCostSummary? _variantCostSummary;
   bool _isLoadingStock = false;
   bool _isLoadingMovements = false;
   bool _isLoadingCostInsights = false;
@@ -49,6 +50,7 @@ class ProductStockViewModel extends ChangeNotifier {
   List<ProductCostHistoryEntry> get costHistory =>
       List.unmodifiable(_costHistory);
   ProductMarginImpact? get marginImpact => _marginImpact;
+  VariantCostSummary? get variantCostSummary => _variantCostSummary;
   bool get isLoadingStock => _isLoadingStock;
   bool get isLoadingMovements => _isLoadingMovements;
   bool get isLoadingCostInsights => _isLoadingCostInsights;
@@ -138,8 +140,12 @@ class ProductStockViewModel extends ChangeNotifier {
             product.id,
             variantId: variantId,
           );
+    final summaryFuture = variantId == null
+        ? null
+        : _purchaseRepository.loadProductCostSummary(product.id);
     final historyResult = await historyFuture;
     final marginResult = await marginFuture;
+    final summaryResult = await summaryFuture;
 
     switch (historyResult) {
       case Ok<ProductCostHistoryPage>():
@@ -160,6 +166,19 @@ class ProductStockViewModel extends ChangeNotifier {
         case Error<ProductMarginImpact?>():
           _marginImpact = null;
           _hasCostInsightsError = true;
+      }
+    }
+    if (summaryResult == null) {
+      _variantCostSummary = null;
+    } else {
+      switch (summaryResult) {
+        case Ok<List<VariantCostSummary>>():
+          _variantCostSummary = summaryResult.value
+              .where((summary) => summary.variantId == variantId)
+              .cast<VariantCostSummary?>()
+              .firstWhere((summary) => summary != null, orElse: () => null);
+        case Error<List<VariantCostSummary>>():
+          _variantCostSummary = null;
       }
     }
 

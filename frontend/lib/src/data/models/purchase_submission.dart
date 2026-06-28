@@ -347,6 +347,63 @@ class ProductMarginImpact {
   }
 }
 
+/// Per-variant cost roll-up powering the product/variant detail cost metrics
+/// and the "Change prices" dialog. Costs are derived from received purchase
+/// history on the backend; any field can be null when a variant has never been
+/// purchased.
+class VariantCostSummary {
+  const VariantCostSummary({
+    required this.productId,
+    required this.variantId,
+    required this.variantName,
+    required this.unitPrice,
+    required this.purchasesCount,
+    this.lowestCost,
+    this.highestCost,
+    this.lastCost,
+    this.averageCost,
+  });
+
+  final int productId;
+  final int variantId;
+  final String variantName;
+  final double unitPrice;
+  final int purchasesCount;
+  final double? lowestCost;
+  final double? highestCost;
+  final double? lastCost;
+  final double? averageCost;
+
+  bool get hasCost => purchasesCount > 0;
+
+  factory VariantCostSummary.fromJson(Map<String, Object?> json) {
+    return VariantCostSummary(
+      productId: _intFromJson(json['product'] ?? json['product_id']),
+      variantId: _intFromJson(json['variant'] ?? json['variant_id']),
+      variantName: json['variant_name']?.toString() ?? '',
+      unitPrice: _moneyFromJson(json['unit_price']),
+      purchasesCount: _intFromJson(json['purchases_count']),
+      lowestCost: _nullableMoneyFromJson(json['lowest_cost']),
+      highestCost: _nullableMoneyFromJson(json['highest_cost']),
+      lastCost: _nullableMoneyFromJson(json['last_cost']),
+      averageCost: _nullableMoneyFromJson(json['average_cost']),
+    );
+  }
+
+  static List<VariantCostSummary> listFromAny(Object? json) {
+    final raw = json is Map<String, Object?>
+        ? _listFromJson(json['results'] ?? json['variants'])
+        : json;
+    if (raw is! List<Object?>) {
+      return const [];
+    }
+    return raw
+        .whereType<Map<String, Object?>>()
+        .map(VariantCostSummary.fromJson)
+        .toList(growable: false);
+  }
+}
+
 enum LandedCostAllocationMethod {
   byLineValue('line_value'),
   byQuantity('quantity'),

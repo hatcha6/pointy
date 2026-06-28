@@ -13,6 +13,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../../data/models/dashboard_ai_digest.dart';
 import '../view_models/dashboard_view_model.dart';
 
 part 'dashboard_screen_hero.dart';
@@ -103,6 +104,7 @@ class DashboardScreen extends StatelessWidget {
                   AppNavigationDestination.deviceSettings,
                 ),
                 openIntegrityMonitor: onOpenIntegrityMonitor,
+                openAiChat: _aiChatAction(context),
               ),
             ),
           ),
@@ -124,7 +126,25 @@ class DashboardScreen extends StatelessWidget {
       from: AppNavigationDestination.dashboard,
     );
   }
+
+  /// Opens the AI assistant seeded with a proactive question. Null when the
+  /// shop's AI entitlement is inactive — which also hides the insight band and
+  /// morning brief, since both route through this callback.
+  OpenAiChat? _aiChatAction(BuildContext context) {
+    if (!navigation.isDestinationAvailable(AppNavigationDestination.aiAssistant)) {
+      return null;
+    }
+    return (seedPrompt, {bool autoSend = false}) => navigation.openAiChat(
+      context,
+      seedPrompt: seedPrompt,
+      autoSend: autoSend,
+      from: AppNavigationDestination.dashboard,
+    );
+  }
 }
+
+/// Opens the AI chat seeded with [seedPrompt]; [autoSend] sends it immediately.
+typedef OpenAiChat = void Function(String seedPrompt, {bool autoSend});
 
 /// Targets the action center can deep-link to.
 class _DashboardNavigation {
@@ -138,6 +158,7 @@ class _DashboardNavigation {
     required this.openDiscounts,
     required this.openDeviceSettings,
     required this.openIntegrityMonitor,
+    required this.openAiChat,
   });
 
   final VoidCallback? openCatalog;
@@ -149,6 +170,10 @@ class _DashboardNavigation {
   final VoidCallback? openDiscounts;
   final VoidCallback? openDeviceSettings;
   final VoidCallback? openIntegrityMonitor;
+
+  /// Opens the AI chat seeded with a question. Null when AI is unavailable —
+  /// the insight band and morning brief check this to decide whether to show.
+  final OpenAiChat? openAiChat;
 }
 
 class _DashboardBody extends StatelessWidget {
@@ -217,6 +242,8 @@ class _DashboardBody extends StatelessWidget {
                 snapshot: snapshot,
                 capabilities: capabilities,
                 navigation: navigation,
+                digest: viewModel.aiDigest,
+                digestLoading: viewModel.isDigestLoading,
               ),
             ],
           ),
@@ -271,11 +298,15 @@ class _DashboardSections extends StatelessWidget {
     required this.snapshot,
     required this.capabilities,
     required this.navigation,
+    required this.digest,
+    required this.digestLoading,
   });
 
   final DashboardSnapshot snapshot;
   final AuthorizationCapabilities capabilities;
   final _DashboardNavigation navigation;
+  final DashboardAiDigest digest;
+  final bool digestLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -323,16 +354,41 @@ class _DashboardSections extends StatelessWidget {
         orderCount != null &&
         orderCount == 0;
 
+    // Inline AI text shows only when the shop has the AI entitlement (the
+    // callback is null otherwise) and isn't a brand-new shop still being set up.
+    final openAiChat = navigation.openAiChat;
+    final digest = (openAiChat != null && !showGetStarted)
+        ? this.digest
+        : DashboardAiDigest.empty;
+
+    // Wraps a card with its AI explainer line (when the digest annotated that
+    // card and AI is available); otherwise returns the card untouched.
+    Widget explained(String key, String topic, Widget card) {
+      final text = digest.explainerFor(key);
+      if (text == null || openAiChat == null) {
+        return card;
+      }
+      return _AiExplainerCard(
+        card: card,
+        text: text,
+        onTap: () => openAiChat(l10n.aiDigestElaborate(topic), autoSend: false),
+      );
+    }
+
     // Every detail card flows into a single masonry grid so cards pack tightly
     // across the whole page instead of leaving gaps inside per-section blocks.
     // Tall charts come first to anchor the columns; shorter cards fill behind.
     final cards = <Widget>[
       if (sales != null)
-        PointyDetailSection(
-          title: l10n.dashboardSalesTrendTitle,
-          icon: Icons.show_chart,
-          minHeight: 300,
-          child: _SalesTrendChart(points: sales.trend),
+        explained(
+          'sales_trend',
+          l10n.dashboardSalesTrendTitle,
+          PointyDetailSection(
+            title: l10n.dashboardSalesTrendTitle,
+            icon: Icons.show_chart,
+            minHeight: 300,
+            child: _SalesTrendChart(points: sales.trend),
+          ),
         ),
       if (sales != null)
         PointyDetailSection(
@@ -342,20 +398,40 @@ class _DashboardSections extends StatelessWidget {
           child: _HourlySalesChart(points: sales.hourlySales),
         ),
       if (payments != null)
-        PointyDetailSection(
-          title: l10n.dashboardPaymentMixTitle,
-          icon: Icons.pie_chart_outline,
-          minHeight: 300,
-          child: _PaymentMixChart(methods: payments.methods),
+        explained(
+          'payment_mix',
+          l10n.dashboardPaymentMixTitle,
+          PointyDetailSection(
+            title: l10n.dashboardPaymentMixTitle,
+            icon: Icons.pie_chart_outline,
+            minHeight: 300,
+            child: _PaymentMixChart(methods: payments.methods),
+          ),
         ),
-      if (profitability != null) _ProfitCard(section: profitability),
+      if (profitability != null)
+        explained(
+          'profit',
+          l10n.dashboardProfitabilitySectionTitle,
+          _ProfitCard(section: profitability),
+        ),
       if (fraud != null)
-        _IntegrityCard(section: fraud, onOpen: navigation.openIntegrityMonitor),
+        explained(
+          'fraud',
+          l10n.dashboardIntegritySectionTitle,
+          _IntegrityCard(
+            section: fraud,
+            onOpen: navigation.openIntegrityMonitor,
+          ),
+        ),
       if (sales != null)
-        PointyDetailSection(
-          title: l10n.dashboardTopProductsTitle,
-          icon: Icons.star_outline,
-          child: _TopProductsList(products: sales.topProducts),
+        explained(
+          'top_products',
+          l10n.dashboardTopProductsTitle,
+          PointyDetailSection(
+            title: l10n.dashboardTopProductsTitle,
+            icon: Icons.star_outline,
+            child: _TopProductsList(products: sales.topProducts),
+          ),
         ),
       if (sales != null && sales.reports.productProfit.isNotEmpty)
         PointyDetailSection(
@@ -367,10 +443,14 @@ class _DashboardSections extends StatelessWidget {
           ),
         ),
       if (sales != null)
-        PointyDetailSection(
-          title: l10n.dashboardTopCategoriesTitle,
-          icon: Icons.category_outlined,
-          child: _TopCategoriesList(categories: sales.topCategories),
+        explained(
+          'top_categories',
+          l10n.dashboardTopCategoriesTitle,
+          PointyDetailSection(
+            title: l10n.dashboardTopCategoriesTitle,
+            icon: Icons.category_outlined,
+            child: _TopCategoriesList(categories: sales.topCategories),
+          ),
         ),
       if (customers != null)
         PointyDetailSection(
@@ -385,10 +465,14 @@ class _DashboardSections extends StatelessWidget {
           child: _RecentOrdersList(orders: sales.recentOrders),
         ),
       if (sales != null)
-        PointyDetailSection(
-          title: l10n.dashboardRegistersTitle,
-          icon: Icons.point_of_sale_outlined,
-          child: _RegisterSummaryView(summary: sales.registers),
+        explained(
+          'registers',
+          l10n.dashboardRegistersTitle,
+          PointyDetailSection(
+            title: l10n.dashboardRegistersTitle,
+            icon: Icons.point_of_sale_outlined,
+            child: _RegisterSummaryView(summary: sales.registers),
+          ),
         ),
       if (payments != null)
         PointyDetailSection(
@@ -403,16 +487,24 @@ class _DashboardSections extends StatelessWidget {
           child: _TeamSummaryView(summary: payroll.summary),
         ),
       if (customers != null)
-        PointyDetailSection(
-          title: l10n.dashboardCustomersSectionTitle,
-          icon: Icons.groups_outlined,
-          child: _CustomersSummaryView(summary: customers.summary),
+        explained(
+          'customers',
+          l10n.dashboardCustomersSectionTitle,
+          PointyDetailSection(
+            title: l10n.dashboardCustomersSectionTitle,
+            icon: Icons.groups_outlined,
+            child: _CustomersSummaryView(summary: customers.summary),
+          ),
         ),
       if (discounts != null)
-        PointyDetailSection(
-          title: l10n.dashboardTopDiscountsTitle,
-          icon: Icons.local_offer_outlined,
-          child: _DiscountRuleList(rules: discounts.topRules),
+        explained(
+          'discounts',
+          l10n.dashboardTopDiscountsTitle,
+          PointyDetailSection(
+            title: l10n.dashboardTopDiscountsTitle,
+            icon: Icons.local_offer_outlined,
+            child: _DiscountRuleList(rules: discounts.topRules),
+          ),
         ),
       if (sales != null)
         PointyDetailSection(
@@ -427,16 +519,24 @@ class _DashboardSections extends StatelessWidget {
           child: _InventorySummaryView(summary: inventory.summary),
         ),
       if (inventory != null)
-        PointyDetailSection(
-          title: l10n.dashboardLowStockTitle,
-          icon: Icons.warning_amber,
-          child: _StockItemList(items: inventory.lowStockItems),
+        explained(
+          'low_stock',
+          l10n.dashboardLowStockTitle,
+          PointyDetailSection(
+            title: l10n.dashboardLowStockTitle,
+            icon: Icons.warning_amber,
+            child: _StockItemList(items: inventory.lowStockItems),
+          ),
         ),
       if (inventory != null)
-        PointyDetailSection(
-          title: l10n.dashboardDustyInventoryTitle,
-          icon: Icons.hourglass_empty,
-          child: _StockItemList(items: inventory.dustyItems),
+        explained(
+          'dead_stock',
+          l10n.dashboardDustyInventoryTitle,
+          PointyDetailSection(
+            title: l10n.dashboardDustyInventoryTitle,
+            icon: Icons.hourglass_empty,
+            child: _StockItemList(items: inventory.dustyItems),
+          ),
         ),
       if (purchasing != null)
         PointyDetailSection(
@@ -445,10 +545,14 @@ class _DashboardSections extends StatelessWidget {
           child: _PurchasingSummaryView(summary: purchasing.summary),
         ),
       if (purchasing != null)
-        PointyDetailSection(
-          title: l10n.dashboardOverduePurchasesTitle,
-          icon: Icons.event_busy_outlined,
-          child: _OverduePurchaseList(orders: purchasing.overdueOrders),
+        explained(
+          'overdue_purchases',
+          l10n.dashboardOverduePurchasesTitle,
+          PointyDetailSection(
+            title: l10n.dashboardOverduePurchasesTitle,
+            icon: Icons.event_busy_outlined,
+            child: _OverduePurchaseList(orders: purchasing.overdueOrders),
+          ),
         ),
       if (purchasing != null)
         PointyDetailSection(
@@ -467,6 +571,16 @@ class _DashboardSections extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (openAiChat != null && digest.brief.isNotEmpty) ...[
+          _AiBriefHeadline(
+            brief: digest.brief,
+            onOpen: () => openAiChat(l10n.aiDailyBriefSeed, autoSend: true),
+          ),
+          SizedBox(height: spacing.lg),
+        ] else if (openAiChat != null && digestLoading && !showGetStarted) ...[
+          const _AiBriefSkeleton(),
+          SizedBox(height: spacing.lg),
+        ],
         if (snapshot.todaySpecialDays.isNotEmpty) ...[
           _SpecialDayBanner(specialDays: snapshot.todaySpecialDays),
           SizedBox(height: spacing.lg),

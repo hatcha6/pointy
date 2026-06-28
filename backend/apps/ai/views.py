@@ -4,8 +4,10 @@ import logging
 import re
 import urllib.parse
 import urllib.request
+from datetime import timedelta
 from uuid import uuid4
 
+from django.core.cache import cache
 from django.http import HttpResponse, StreamingHttpResponse
 from django.urls import reverse
 from django.utils import timezone
@@ -13,9 +15,11 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.dashboard import build_dashboard_snapshot
 from apps.core.models import RelayInstallation
 from apps.core.relay import RelayControlClient, RelayControlError, relay_ai_available
 
+from .dashboard_digest import generate_dashboard_digest
 from .models import AiConversation, AiMessage
 from .relay_stream import build_system_prompt, favicon_url_for, iter_relay_sse, sse_event
 from .serializers import (
@@ -924,6 +928,68 @@ class AiUsageView(APIView):
         except RelayControlError as exc:
             return _relay_error_response(exc)
         return Response(usage)
+
+
+class DashboardAiDigestView(APIView):
+    """The dashboard's inline AI text: a short daily brief + per-card explainers.
+
+    Reuses the exact capability-gated dashboard snapshot, generates the text with
+    ONE non-persisted, non-metered relay call, and caches it for the rest of the
+    day (per user + period) so the dashboard renders cached text instantly and
+    the model runs at most once a day. Always 200 with possibly-empty content so
+    the client simply shows nothing when there's no digest."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    _EMPTY = {"brief": "", "explainers": {}, "generated_at": None}
+
+    def get(self, request):
+        installation = RelayInstallation.load()
+        if not relay_ai_available(installation):
+            return Response(
+                {"detail": "AI is not enabled for this shop."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        snapshot = build_dashboard_snapshot(request)
+        sections = snapshot.get("sections") or {}
+        period_days = (snapshot.get("period") or {}).get("days", 30)
+
+        # Bump the version to invalidate every shop's cached digest at once when
+        # the figures shape or generation prompt changes.
+        cache_key = (
+            f"ai_dashboard_digest:v2:{request.user.pk}:"
+            f"{period_days}:{timezone.localdate().isoformat()}"
+        )
+        try:
+            cached = cache.get(cache_key)
+        except Exception:
+            cached = None
+        if cached is not None:
+            return Response(cached)
+
+        digest = generate_dashboard_digest(installation, sections, period_days)
+        if digest is None:
+            # Don't cache a miss — a transient relay hiccup shouldn't blank the
+            # digest for the rest of the day.
+            return Response(self._EMPTY)
+
+        try:
+            cache.set(cache_key, digest, timeout=_seconds_until_local_midnight())
+        except Exception:
+            pass
+        return Response(digest)
+
+
+def _seconds_until_local_midnight():
+    """Seconds from now until the next local midnight, so a cached digest expires
+    at the day boundary (and regenerates fresh the next day). Floored so a call
+    moments before midnight still caches briefly rather than for ~0 seconds."""
+    now = timezone.localtime()
+    tomorrow = (now + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return max(int((tomorrow - now).total_seconds()), 300)
 
 
 class AiConversationTruncateView(APIView):

@@ -1681,6 +1681,8 @@ void main() {
     expect(productBody?['name'], 'قهوة مطورة');
     expect(productBody?['is_active'], isTrue);
 
+    await tester.ensureVisible(find.byTooltip('تعديل الخيار').first);
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('تعديل الخيار').first);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField).at(3), '4.25');
@@ -1707,7 +1709,8 @@ void main() {
 
     expect(find.text('اختر منتجًا من القائمة لعرض تفاصيله.'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('فتح تفاصيل المنتج').first);
+    // The catalog row is fully tappable; tapping it selects the product inline.
+    await tester.tap(find.byType(ProductTile).first);
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     // Detail renders inline: the product list stays visible, no route push.
@@ -2942,6 +2945,10 @@ void main() {
     await _openNavigationDestination(tester, 'إعدادات المتجر');
 
     expect(find.text('تصدير التتبع'), findsOneWidget);
+    // The export tile sits low in the (now longer) settings list; scroll it into
+    // view so the tap lands on it and opens the export page.
+    await tester.ensureVisible(find.text('تصدير التتبع'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('تصدير التتبع'));
     await tester.pumpAndSettle();
 
@@ -3378,7 +3385,10 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.text('البيع الحالي'), findsOneWidget);
-    expect(find.byTooltip('إغلاق جلسة الدرج'), findsOneWidget);
+    // The close-session control now lives inside the labeled session-pill menu.
+    await tester.tap(find.text('جلسة RS-1'));
+    await tester.pumpAndSettle();
+    expect(find.text('إغلاق جلسة الدرج'), findsOneWidget);
   });
 
   testWidgets('adaptive modal bottom sheet shrinks to fit short content', (
@@ -4216,6 +4226,8 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(find.text('الخيارات'), findsWidgets);
+    await tester.ensureVisible(find.text('COF-001').last);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('COF-001').last);
     await tester.pumpAndSettle(const Duration(seconds: 1));
 

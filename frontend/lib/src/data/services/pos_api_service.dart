@@ -33,6 +33,7 @@ import '../models/customer_asset.dart';
 import '../models/operations_job.dart';
 import '../models/payment_card.dart';
 import '../models/dashboard.dart';
+import '../models/dashboard_ai_digest.dart';
 import '../models/discount_rule.dart';
 import '../models/employee.dart';
 import '../models/expense.dart';
@@ -654,6 +655,16 @@ class PosApiService {
     return _catalog.bulkRepriceProducts(ids: ids, mode: mode, value: value);
   }
 
+  Future<Product> setVariantPrices({
+    required int productId,
+    required Map<int, double> pricesByVariant,
+  }) {
+    return _catalog.setVariantPrices(
+      productId: productId,
+      pricesByVariant: pricesByVariant,
+    );
+  }
+
   Future<int> bulkCategorizeProducts({
     required List<int> ids,
     required List<int> categoryIds,
@@ -876,6 +887,10 @@ class PosApiService {
 
   Future<DashboardSnapshot> fetchDashboard({required int days}) {
     return _dashboard.fetchDashboard(days: days);
+  }
+
+  Future<DashboardAiDigest> fetchDashboardAiDigest({required int days}) {
+    return _dashboard.fetchAiDigest(days: days);
   }
 
   Future<DiscountRulePage> fetchDiscountRules({
@@ -1509,6 +1524,10 @@ class PosApiService {
       variantId: variantId,
       page: page,
     );
+  }
+
+  Future<List<VariantCostSummary>> fetchProductCostSummary(int productId) {
+    return _purchasing.fetchProductCostSummary(productId);
   }
 
   Future<ProductMarginImpact?> fetchProductMarginImpact(

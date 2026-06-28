@@ -8,6 +8,7 @@ import '../../../core/authorization.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_query.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
@@ -32,6 +33,7 @@ class ProductList extends StatelessWidget {
     required this.purchaseRepository,
     required this.saleRepository,
     required this.shopSettingsRepository,
+    this.contactRepository,
     required this.capabilities,
     this.analyticsEngine,
     required this.onBarcodeSubmitted,
@@ -46,6 +48,7 @@ class ProductList extends StatelessWidget {
   final PurchaseRepository purchaseRepository;
   final SaleRepository saleRepository;
   final ShopSettingsRepository shopSettingsRepository;
+  final ContactRepository? contactRepository;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
   final FutureOr<bool> Function(String barcode) onBarcodeSubmitted;
@@ -75,10 +78,13 @@ class ProductList extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : (capabilities.canChangeProduct && !selectionMode)
-                ? IconButton(
-                    tooltip: l10n.bulkSelectTooltip,
-                    icon: const Icon(Icons.checklist_outlined),
-                    onPressed: viewModel.enterSelectionMode,
+                ? _CatalogOverflowMenu(
+                    isViewingArchived: viewModel.isViewingArchived,
+                    onBulkSelect: viewModel.enterSelectionMode,
+                    onToggleArchived: () => viewModel.setViewingArchived(
+                      !viewModel.isViewingArchived,
+                    ),
+                    onRefresh: viewModel.loadProducts,
                   )
                 : null,
           ),
@@ -103,6 +109,7 @@ class ProductList extends StatelessWidget {
             _CatalogActionBar(
               query: viewModel.query,
               catalogRepository: viewModel.catalogRepository,
+              contactRepository: contactRepository,
               onSearchChanged: viewModel.updateSearch,
               onQueryChanged: viewModel.applyQuery,
               onBarcodeSubmitted: onBarcodeSubmitted,
@@ -110,7 +117,7 @@ class ProductList extends StatelessWidget {
               canCreateProduct: capabilities.canCreateProduct,
               onCreateProduct: onCreateProduct,
             ),
-            if (capabilities.canChangeProduct) ...[
+            if (capabilities.canChangeProduct && viewModel.isViewingArchived) ...[
               SizedBox(height: spacing.sm),
               Align(
                 alignment: AlignmentDirectional.centerStart,
@@ -293,6 +300,78 @@ class _ArchivedFilterChip extends StatelessWidget {
   }
 }
 
+/// Single overflow menu for the products-list secondary actions, replacing the
+/// row of scattered icon buttons. Holds bulk-select, the archived-view toggle,
+/// and refresh behind one labelled "…" affordance.
+class _CatalogOverflowMenu extends StatelessWidget {
+  const _CatalogOverflowMenu({
+    required this.isViewingArchived,
+    required this.onBulkSelect,
+    required this.onToggleArchived,
+    required this.onRefresh,
+  });
+
+  final bool isViewingArchived;
+  final VoidCallback onBulkSelect;
+  final VoidCallback onToggleArchived;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return PopupMenuButton<_CatalogMenuAction>(
+      icon: const Icon(Icons.more_vert),
+      tooltip: l10n.moreActionsTooltip,
+      onSelected: (action) {
+        switch (action) {
+          case _CatalogMenuAction.bulkSelect:
+            onBulkSelect();
+          case _CatalogMenuAction.toggleArchived:
+            onToggleArchived();
+          case _CatalogMenuAction.refresh:
+            onRefresh();
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: _CatalogMenuAction.bulkSelect,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.checklist_outlined),
+            title: Text(l10n.bulkSelectTooltip),
+          ),
+        ),
+        PopupMenuItem(
+          value: _CatalogMenuAction.toggleArchived,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              isViewingArchived
+                  ? Icons.unarchive_outlined
+                  : Icons.archive_outlined,
+            ),
+            title: Text(
+              isViewingArchived
+                  ? l10n.viewActiveProductsAction
+                  : l10n.viewArchivedProductsAction,
+            ),
+          ),
+        ),
+        PopupMenuItem(
+          value: _CatalogMenuAction.refresh,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.sync),
+            title: Text(l10n.refreshCatalogTooltip),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+enum _CatalogMenuAction { bulkSelect, toggleArchived, refresh }
+
 class _BulkSelectionBar extends StatelessWidget {
   const _BulkSelectionBar({
     required this.viewModel,
@@ -406,6 +485,7 @@ class _CatalogActionBar extends StatelessWidget {
   const _CatalogActionBar({
     required this.query,
     required this.catalogRepository,
+    required this.contactRepository,
     required this.onSearchChanged,
     required this.onQueryChanged,
     required this.onBarcodeSubmitted,
@@ -416,6 +496,7 @@ class _CatalogActionBar extends StatelessWidget {
 
   final ProductQuery query;
   final CatalogRepository catalogRepository;
+  final ContactRepository? contactRepository;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<ProductQuery> onQueryChanged;
   final FutureOr<bool> Function(String barcode) onBarcodeSubmitted;
@@ -450,6 +531,7 @@ class _CatalogActionBar extends StatelessWidget {
               child: ProductQueryControls(
                 query: query,
                 catalogRepository: catalogRepository,
+                contactRepository: contactRepository,
                 searchFieldKey: const ValueKey('catalog_product_lookup_field'),
                 onSearchChanged: onSearchChanged,
                 onSearchSubmitted: onBarcodeSubmitted,

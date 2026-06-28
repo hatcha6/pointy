@@ -2783,7 +2783,7 @@ abstract class AppLocalizations {
   /// Supporting line on the dashboard banner shown when today is a holiday/special event; the event name(s) appear as the bold title above it.
   ///
   /// In ar, this message translates to:
-  /// **'تعرف بوينتي أن اليوم مناسبة خاصة 🎉'**
+  /// **'يعرف دفتر أن اليوم مناسبة خاصة 🎉'**
   String get dashboardSpecialDayMessage;
 
   /// No description provided for @dashboardSalesTrendTitle.
@@ -7058,7 +7058,7 @@ abstract class AppLocalizations {
   /// Retention explanation for automatic backups.
   ///
   /// In ar, this message translates to:
-  /// **'بعد نجاح النسخ يحتفظ Pointy بآخر {count} نسخ ويحذف الأقدم من مجلد النسخ.'**
+  /// **'بعد نجاح النسخ يحتفظ دفتر بآخر {count} نسخ ويحذف الأقدم من مجلد النسخ.'**
   String backupRetentionMessage(int count);
 
   /// No description provided for @backupDestinationRequiredError.
@@ -8490,43 +8490,49 @@ abstract class AppLocalizations {
   /// No description provided for @variantOptionsLabel.
   ///
   /// In ar, this message translates to:
-  /// **'قوالب الخيارات'**
+  /// **'خيارات المنتج'**
   String get variantOptionsLabel;
 
   /// No description provided for @variantOptionsHelper.
   ///
   /// In ar, this message translates to:
-  /// **'اختر الخيارات التي تميز المنتج مثل اللون أو السعة. سيتم استخدام قيمها لتوليد الخيارات تلقائيًا.'**
+  /// **'أضِف خيارًا يميّز المنتج مثل اللون أو المقاس، ثم أدخل قيمه. ستُستخدم القيم لتوليد خيارات المنتج تلقائيًا.'**
   String get variantOptionsHelper;
 
   /// No description provided for @variantOptionsEmpty.
   ///
   /// In ar, this message translates to:
-  /// **'لا توجد قوالب خيارات جاهزة.'**
+  /// **'لم تُضِف أي خيار بعد.'**
   String get variantOptionsEmpty;
 
   /// No description provided for @variantOptionsLoadError.
   ///
   /// In ar, this message translates to:
-  /// **'تعذر تحميل قوالب الخيارات.'**
+  /// **'تعذر تحميل الخيارات.'**
   String get variantOptionsLoadError;
 
   /// No description provided for @addVariantOptionButton.
   ///
   /// In ar, this message translates to:
-  /// **'إضافة قالب'**
+  /// **'إضافة خيار'**
   String get addVariantOptionButton;
+
+  /// No description provided for @reuseVariantOptionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أو أعد استخدام خيار سابق'**
+  String get reuseVariantOptionLabel;
 
   /// No description provided for @newVariantOptionTitle.
   ///
   /// In ar, this message translates to:
-  /// **'قالب خيار جديد'**
+  /// **'خيار جديد'**
   String get newVariantOptionTitle;
 
   /// No description provided for @variantOptionNameLabel.
   ///
   /// In ar, this message translates to:
-  /// **'اسم القالب'**
+  /// **'اسم الخيار'**
   String get variantOptionNameLabel;
 
   /// No description provided for @variantOptionNameHint.
@@ -8538,7 +8544,7 @@ abstract class AppLocalizations {
   /// No description provided for @variantOptionCodeLabel.
   ///
   /// In ar, this message translates to:
-  /// **'رمز القالب'**
+  /// **'رمز الخيار'**
   String get variantOptionCodeLabel;
 
   /// No description provided for @variantOptionCodeHint.
@@ -8550,25 +8556,25 @@ abstract class AppLocalizations {
   /// No description provided for @createVariantOptionButton.
   ///
   /// In ar, this message translates to:
-  /// **'حفظ القالب'**
+  /// **'حفظ الخيار'**
   String get createVariantOptionButton;
 
   /// No description provided for @variantOptionCreateError.
   ///
   /// In ar, this message translates to:
-  /// **'تعذر إنشاء قالب الخيار.'**
+  /// **'تعذر إنشاء الخيار.'**
   String get variantOptionCreateError;
 
   /// No description provided for @variantValuesNoOptions.
   ///
   /// In ar, this message translates to:
-  /// **'اختر قالب خيار واحدًا على الأقل لتحديد القيم.'**
+  /// **'أضِف خيارًا واحدًا على الأقل لتحديد قيمه.'**
   String get variantValuesNoOptions;
 
   /// No description provided for @variantOptionNoValues.
   ///
   /// In ar, this message translates to:
-  /// **'لا توجد قيم جاهزة لهذا الخيار.'**
+  /// **'لا توجد قيم لهذا الخيار بعد.'**
   String get variantOptionNoValues;
 
   /// No description provided for @variantOptionValueRequired.
@@ -8664,7 +8670,7 @@ abstract class AppLocalizations {
   /// No description provided for @generatedVariantsMissingValues.
   ///
   /// In ar, this message translates to:
-  /// **'اختر قيمة واحدة على الأقل لكل قالب خيار.'**
+  /// **'اختر قيمة واحدة على الأقل لكل خيار.'**
   String get generatedVariantsMissingValues;
 
   /// No description provided for @generatedVariantsDuplicateSku.
@@ -9435,6 +9441,18 @@ abstract class AppLocalizations {
   /// **'المؤرشفة'**
   String get archivedFilterLabel;
 
+  /// No description provided for @viewArchivedProductsAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض المنتجات المؤرشفة'**
+  String get viewArchivedProductsAction;
+
+  /// No description provided for @viewActiveProductsAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض المنتجات النشطة'**
+  String get viewActiveProductsAction;
+
   /// Label/tooltip for the action that archives a product.
   ///
   /// In ar, this message translates to:
@@ -9794,6 +9812,108 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تغير الهامش'**
   String get productMarginChangeLabel;
+
+  /// Section title on the product/variant detail screens grouping cost insights and the change-prices action.
+  ///
+  /// In ar, this message translates to:
+  /// **'التسعير والتكلفة'**
+  String get productPricingAndCostTitle;
+
+  /// No description provided for @productCostOverviewTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نظرة عامة على التكلفة'**
+  String get productCostOverviewTitle;
+
+  /// No description provided for @lowestCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل تكلفة'**
+  String get lowestCostLabel;
+
+  /// No description provided for @highestCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أعلى تكلفة'**
+  String get highestCostLabel;
+
+  /// No description provided for @lastCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر تكلفة'**
+  String get lastCostLabel;
+
+  /// No description provided for @averageCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوسط التكلفة'**
+  String get averageCostLabel;
+
+  /// No description provided for @currentPriceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر الحالي'**
+  String get currentPriceLabel;
+
+  /// No description provided for @noCostDataLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد بيانات تكلفة بعد'**
+  String get noCostDataLabel;
+
+  /// No description provided for @changePricesButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير الأسعار'**
+  String get changePricesButton;
+
+  /// No description provided for @changePricesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير الأسعار'**
+  String get changePricesTitle;
+
+  /// No description provided for @changePricesSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'راجع تكلفة كل خيار وحدّد سعر البيع الجديد بثقة.'**
+  String get changePricesSubtitle;
+
+  /// No description provided for @changePricesNewPriceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر الجديد'**
+  String get changePricesNewPriceLabel;
+
+  /// No description provided for @changePricesSaveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ الأسعار'**
+  String get changePricesSaveButton;
+
+  /// No description provided for @changePricesSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تحديث الأسعار.'**
+  String get changePricesSuccess;
+
+  /// No description provided for @changePricesError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحديث الأسعار. حاول مرة أخرى.'**
+  String get changePricesError;
+
+  /// No description provided for @changePricesLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل بيانات التكلفة.'**
+  String get changePricesLoadError;
+
+  /// No description provided for @changePricesNoVariants.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد خيارات لتسعيرها.'**
+  String get changePricesNoVariants;
 
   /// No description provided for @productIdentifierTitle.
   ///
@@ -19851,13 +19971,13 @@ abstract class AppLocalizations {
   /// No description provided for @aiAssistantDrawerLabel.
   ///
   /// In ar, this message translates to:
-  /// **'المساعد الذكي'**
+  /// **'GPT'**
   String get aiAssistantDrawerLabel;
 
   /// No description provided for @aiAssistantTitle.
   ///
   /// In ar, this message translates to:
-  /// **'المساعد الذكي'**
+  /// **'GPT'**
   String get aiAssistantTitle;
 
   /// No description provided for @aiAssistantInputHint.
@@ -19869,7 +19989,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiAssistantDisclaimer.
   ///
   /// In ar, this message translates to:
-  /// **'المساعد الذكي قد يخطئ. تحقّق من المعلومات المهمة.'**
+  /// **'GPT قد يخطئ. تحقّق من المعلومات المهمة.'**
   String get aiAssistantDisclaimer;
 
   /// No description provided for @aiAssistantSendTooltip.
@@ -19911,7 +20031,7 @@ abstract class AppLocalizations {
   /// No description provided for @aiAssistantEmptySubtitle.
   ///
   /// In ar, this message translates to:
-  /// **'اسأل المساعد عن أي شيء يخص متجرك.'**
+  /// **'اسأل GPT عن أي شيء يخص متجرك.'**
   String get aiAssistantEmptySubtitle;
 
   /// No description provided for @aiAssistantThinking.
@@ -19947,13 +20067,13 @@ abstract class AppLocalizations {
   /// No description provided for @aiAssistantErrorNotEntitled.
   ///
   /// In ar, this message translates to:
-  /// **'المساعد الذكي غير مفعّل لهذا المتجر.'**
+  /// **'GPT غير مفعّل لهذا المتجر.'**
   String get aiAssistantErrorNotEntitled;
 
   /// No description provided for @aiAssistantErrorNetwork.
   ///
   /// In ar, this message translates to:
-  /// **'تعذّر الاتصال بالمساعد. تحقق من الشبكة وحاول مجددًا.'**
+  /// **'تعذّر الاتصال بـ GPT. تحقق من الشبكة وحاول مجددًا.'**
   String get aiAssistantErrorNetwork;
 
   /// No description provided for @aiAssistantErrorGeneric.
@@ -20343,7 +20463,7 @@ abstract class AppLocalizations {
   /// No description provided for @migrationHeroDescription.
   ///
   /// In ar, this message translates to:
-  /// **'انقل منتجاتك وفئاتك وعملاءك ومورّديك ومخزونك من نظامك القديم إلى Pointy.'**
+  /// **'انقل منتجاتك وفئاتك وعملاءك ومورّديك ومخزونك من نظامك القديم إلى دفتر.'**
   String get migrationHeroDescription;
 
   /// No description provided for @migrationLoadError.
@@ -20571,7 +20691,7 @@ abstract class AppLocalizations {
   /// No description provided for @migrationWithoutQuantitiesSubtitle.
   ///
   /// In ar, this message translates to:
-  /// **'استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في Pointy.'**
+  /// **'استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في دفتر.'**
   String get migrationWithoutQuantitiesSubtitle;
 
   /// No description provided for @migrationEntityUnit.
@@ -21027,7 +21147,7 @@ abstract class AppLocalizations {
   /// Hero title used when the shop name is unknown.
   ///
   /// In ar, this message translates to:
-  /// **'اشتراك بوينتي'**
+  /// **'اشتراك دفتر'**
   String get subscriptionHeroFallbackTitle;
 
   /// Label for an active, unexpired subscription.
@@ -21129,7 +21249,7 @@ abstract class AppLocalizations {
   /// Callout body when remote access is available.
   ///
   /// In ar, this message translates to:
-  /// **'يمكنك استخدام التطبيق خارج المتجر عبر خادم بوينتي.'**
+  /// **'يمكنك استخدام التطبيق خارج المتجر عبر خادم دفتر.'**
   String get subscriptionRemoteAccessActiveMessage;
 
   /// Callout title when remote access is unavailable.
@@ -21207,7 +21327,7 @@ abstract class AppLocalizations {
   /// Callout body when AI is available.
   ///
   /// In ar, this message translates to:
-  /// **'اشتراكك يشمل المساعد الذكي. هذا هو استهلاكك الحالي.'**
+  /// **'اشتراكك يشمل GPT. هذا هو استهلاكك الحالي.'**
   String get subscriptionAiActiveMessage;
 
   /// Callout title when AI is unavailable.
@@ -21219,7 +21339,7 @@ abstract class AppLocalizations {
   /// Callout body when AI is unavailable.
   ///
   /// In ar, this message translates to:
-  /// **'أضِف المساعد الذكي إلى اشتراكك للاستفادة منه. تواصل مع الدعم.'**
+  /// **'أضِف GPT إلى اشتراكك للاستفادة منه. تواصل مع الدعم.'**
   String get subscriptionAiInactiveMessage;
 
   /// Shown when AI usage data could not be fetched.
@@ -21321,7 +21441,7 @@ abstract class AppLocalizations {
   /// No description provided for @getAppsDialogTitle.
   ///
   /// In ar, this message translates to:
-  /// **'تنزيل تطبيقات Pointy'**
+  /// **'تنزيل تطبيقات دفتر'**
   String get getAppsDialogTitle;
 
   /// No description provided for @getAppsInstructions.
@@ -21341,6 +21461,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تم نسخ الرابط'**
   String get getAppsLinkCopied;
+
+  /// Small eyebrow label above the dashboard's AI daily-brief headline.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملخص اليوم من GPT'**
+  String get aiDailyBriefLabel;
+
+  /// Prompt auto-sent to the AI chat when the dashboard AI daily-brief headline is tapped.
+  ///
+  /// In ar, this message translates to:
+  /// **'أعطني ملخصًا سريعًا لمتجري: كيف كان أداء المبيعات في الفترة، وما الذي يحتاج انتباهي اليوم، وأي شيء غير معتاد يجب أن أنتبه له.'**
+  String get aiDailyBriefSeed;
+
+  /// Prompt pre-filled in the AI chat when a dashboard card's AI explainer line is tapped; topic is the card's title.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّثني أكثر عن {topic} في متجري.'**
+  String aiDigestElaborate(String topic);
 }
 
 class _AppLocalizationsDelegate

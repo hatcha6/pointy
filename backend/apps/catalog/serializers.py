@@ -1072,6 +1072,24 @@ class ProductBulkFlagsSerializer(ProductBulkActionSerializer):
         return attrs
 
 
+class ProductSetVariantPricesSerializer(serializers.Serializer):
+    """Input for the product-details "Change prices" dialog.
+
+    Writes an explicit new selling price per variant in one atomic request so
+    the shop owner can reprice every variant of a product from the cost table.
+    """
+
+    class _PriceEntrySerializer(serializers.Serializer):
+        variant = serializers.IntegerField(min_value=1)
+        unit_price = serializers.DecimalField(
+            max_digits=10,
+            decimal_places=2,
+            min_value=Decimal("0"),
+        )
+
+    prices = serializers.ListField(child=_PriceEntrySerializer(), allow_empty=False)
+
+
 class BoughtTogetherProductSerializer(serializers.Serializer):
     """Compact product card for the "frequently bought together" panel.
 

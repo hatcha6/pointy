@@ -4,7 +4,10 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../data/models/product_category.dart';
 import '../data/models/product_query.dart';
 import '../data/repositories/catalog_repository.dart';
+import '../data/repositories/contact_repository.dart';
 import 'async_selection/async_multi_select_picker.dart';
+import 'components/components.dart';
+import 'contact_picker_sheet.dart';
 import 'product_category_picker.dart';
 import 'query_controls/query_filter_sheet.dart';
 
@@ -14,11 +17,17 @@ class ProductFilterSheet extends StatefulWidget {
     required this.query,
     required this.catalogRepository,
     required this.allowAvailabilityFilter,
+    this.contactRepository,
   });
 
   final ProductQuery query;
   final CatalogRepository catalogRepository;
   final bool allowAvailabilityFilter;
+
+  /// When provided, the sheet shows a "supplier" filter (products supplied by
+  /// the chosen supplier, resolved through their purchase orders). Omitted for
+  /// contexts where supplier filtering doesn't apply (e.g. POS).
+  final ContactRepository? contactRepository;
 
   @override
   State<ProductFilterSheet> createState() => _ProductFilterSheetState();
@@ -28,6 +37,8 @@ class _ProductFilterSheetState extends State<ProductFilterSheet> {
   late ProductAvailabilityFilter _availability;
   late ProductOrdering _ordering;
   late List<AsyncSelectionOption<int>> _selectedCategories;
+  late int? _supplierId;
+  late String? _supplierName;
 
   @override
   void initState() {
@@ -38,6 +49,8 @@ class _ProductFilterSheetState extends State<ProductFilterSheet> {
       for (final category in widget.query.categories)
         productCategoryOption(category),
     ];
+    _supplierId = widget.query.supplierId;
+    _supplierName = widget.query.supplierName;
   }
 
   @override
@@ -125,8 +138,49 @@ class _ProductFilterSheetState extends State<ProductFilterSheet> {
             ),
           ],
         ),
+        if (widget.contactRepository != null) ...[
+          const SizedBox(height: 22),
+          QueryFilterSection(
+            title: l10n.purchaseOrderSupplierFilterTitle,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.local_shipping_outlined),
+                title: Text(_supplierName ?? l10n.allSuppliersFilterLabel),
+                trailing: _supplierId == null
+                    ? const PointyDisclosureChevron()
+                    : IconButton(
+                        tooltip: l10n.clearSupplierFilterTooltip,
+                        onPressed: () => setState(() {
+                          _supplierId = null;
+                          _supplierName = null;
+                        }),
+                        icon: const Icon(Icons.close),
+                      ),
+                onTap: _chooseSupplier,
+              ),
+            ],
+          ),
+        ],
       ],
     );
+  }
+
+  Future<void> _chooseSupplier() async {
+    final repository = widget.contactRepository;
+    if (repository == null) {
+      return;
+    }
+    final supplier = await showSupplierPickerSheet(
+      context: context,
+      repository: repository,
+    );
+    if (!mounted || supplier == null) {
+      return;
+    }
+    setState(() {
+      _supplierId = supplier.id;
+      _supplierName = supplier.name;
+    });
   }
 
   void _selectAvailability(ProductAvailabilityFilter availability) {
@@ -144,21 +198,25 @@ class _ProductFilterSheetState extends State<ProductFilterSheet> {
           : widget.query.availability;
       _selectedCategories = [];
       _ordering = ProductOrdering.name;
+      _supplierId = null;
+      _supplierName = null;
     });
   }
 
   void _apply() {
     Navigator.of(context).pop(
-      widget.query.copyWith(
-        availability: widget.allowAvailabilityFilter
-            ? _availability
-            : widget.query.availability,
-        categories: [
-          for (final option in _selectedCategories)
-            ProductCategory(id: option.id, name: option.label),
-        ],
-        ordering: _ordering,
-      ),
+      widget.query
+          .copyWith(
+            availability: widget.allowAvailabilityFilter
+                ? _availability
+                : widget.query.availability,
+            categories: [
+              for (final option in _selectedCategories)
+                ProductCategory(id: option.id, name: option.label),
+            ],
+            ordering: _ordering,
+          )
+          .withSupplier(supplierId: _supplierId, supplierName: _supplierName),
     );
   }
 

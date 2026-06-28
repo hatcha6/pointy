@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from django.db.models import Count, Prefetch, Q, Sum
+from django.db.models import Avg, Count, Max, Min, Prefetch, Q, Sum
 from rest_framework import mixins, parsers, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -155,6 +155,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "variant_cost_history": ("purchasing.view_purchaseorder",),
         "product_margin_impact": ("purchasing.view_purchaseorder",),
         "variant_margin_impact": ("purchasing.view_purchaseorder",),
+        "product_cost_summary": ("purchasing.view_purchaseorder",),
         "outstanding_received_not_paid": ("purchasing.view_purchaseorder",),
         "adjustment_history": ("purchasing.view_purchaseorder",),
         "attachments": ("purchasing.view_purchaseorder", "attachments.view_attachment"),
@@ -356,6 +357,48 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                 previous_line=previous_line,
             )
         )
+
+    @action(detail=False, methods=["get"], url_path="product-cost-summary")
+    def product_cost_summary(self, request):
+        """Per-variant lowest/highest/last/average cost for a product.
+
+        Powers the "Lowest / Highest / Last cost" metrics on the product &
+        variant detail screens and the Change-prices dialog. Costs are derived
+        from received purchase history (excluding cancelled POs); ``last_cost``
+        uses the most recent line so it can differ from the lowest/highest.
+        """
+        product = self._get_required_product()
+        variants = list(product.variants.all().order_by("-is_default", "name", "id"))
+        lines = PurchaseLine.objects.filter(variant__product=product).exclude(
+            purchase_order__status=PurchaseOrder.Status.CANCELLED
+        )
+        stats_by_variant = {
+            row["variant_id"]: row
+            for row in lines.values("variant_id").annotate(
+                lowest_cost=Min("effective_unit_cost"),
+                highest_cost=Max("effective_unit_cost"),
+                average_cost=Avg("effective_unit_cost"),
+                purchases_count=Count("id"),
+            )
+        }
+        payload = []
+        for variant in variants:
+            stats = stats_by_variant.get(variant.pk)
+            last_line = latest_purchase_line_for_variant(variant.pk)
+            payload.append(
+                {
+                    "product": product.pk,
+                    "variant": variant.pk,
+                    "variant_name": variant.display_name,
+                    "unit_price": variant.unit_price,
+                    "lowest_cost": stats["lowest_cost"] if stats else None,
+                    "highest_cost": stats["highest_cost"] if stats else None,
+                    "average_cost": stats["average_cost"] if stats else None,
+                    "last_cost": None if last_line is None else last_line.effective_unit_cost,
+                    "purchases_count": stats["purchases_count"] if stats else 0,
+                }
+            )
+        return Response(payload)
 
     @action(detail=False, methods=["get"], url_path="outstanding-received-not-paid")
     def outstanding_received_not_paid(self, request):

@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../data/models/product_query.dart';
 import '../data/repositories/catalog_repository.dart';
+import '../data/repositories/contact_repository.dart';
 import 'product_filter_sheet.dart';
 import 'query_controls/query_control_bar.dart';
 import 'responsive/responsive.dart';
@@ -16,6 +17,7 @@ class ProductQueryControls extends StatelessWidget {
     required this.catalogRepository,
     required this.onSearchChanged,
     required this.onQueryChanged,
+    this.contactRepository,
     this.allowAvailabilityFilter = true,
     this.onSearchSubmitted,
     this.onOpenCameraScanner,
@@ -28,6 +30,7 @@ class ProductQueryControls extends StatelessWidget {
 
   final ProductQuery query;
   final CatalogRepository catalogRepository;
+  final ContactRepository? contactRepository;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<ProductQuery> onQueryChanged;
   final bool allowAvailabilityFilter;
@@ -68,6 +71,7 @@ class ProductQueryControls extends StatelessWidget {
             ? 1
             : 0) +
         (query.categories.isEmpty ? 0 : 1) +
+        (query.supplierId == null ? 0 : 1) +
         (query.ordering == ProductOrdering.name ? 0 : 1);
   }
 
@@ -79,6 +83,7 @@ class ProductQueryControls extends StatelessWidget {
         return ProductFilterSheet(
           query: query,
           catalogRepository: catalogRepository,
+          contactRepository: contactRepository,
           allowAvailabilityFilter: allowAvailabilityFilter,
         );
       },

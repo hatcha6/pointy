@@ -2,7 +2,7 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
@@ -1344,6 +1344,69 @@ class ProductBulkActionTests(TestCase):
             format="json",
         )
         self.assertEqual(a.default_variant.unit_price, Decimal("0.00"))
+
+    def test_set_variant_prices_updates_all_variants_atomically(self):
+        product = self._product("multi", "SVP-1", "10.00")
+        default_variant = product.default_variant
+        second = product.variants.create(
+            name="large",
+            sku="SVP-1-L",
+            unit_price=Decimal("12.00"),
+        )
+
+        response = self.client.post(
+            reverse("product-set-variant-prices", args=[product.id]),
+            {
+                "prices": [
+                    {"variant": default_variant.id, "unit_price": "15.50"},
+                    {"variant": second.id, "unit_price": "18.00"},
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        default_variant.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(default_variant.unit_price, Decimal("15.50"))
+        self.assertEqual(second.unit_price, Decimal("18.00"))
+
+    def test_set_variant_prices_rejects_variant_from_other_product(self):
+        product = self._product("a", "SVP-2", "10.00")
+        other = self._product("b", "SVP-3", "10.00")
+        other_variant = other.default_variant
+
+        response = self.client.post(
+            reverse("product-set-variant-prices", args=[product.id]),
+            {"prices": [{"variant": other_variant.id, "unit_price": "1.00"}]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        other_variant.refresh_from_db()
+        self.assertEqual(other_variant.unit_price, Decimal("10.00"))
+
+    def test_set_variant_prices_requires_change_permission(self):
+        product = self._product("a", "SVP-4", "10.00")
+        viewer = get_user_model().objects.create_user(
+            username="viewer",
+            password="pass",
+        )
+        viewer.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="catalog",
+                codename="view_product",
+            )
+        )
+        self.client.force_authenticate(user=viewer)
+
+        response = self.client.post(
+            reverse("product-set-variant-prices", args=[product.id]),
+            {"prices": [{"variant": product.default_variant.id, "unit_price": "1.00"}]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_bulk_categorize_add_then_replace(self):
         a = self._product("a", "BC-1", "1.00")

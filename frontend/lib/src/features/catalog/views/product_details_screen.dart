@@ -22,11 +22,13 @@ import '../../../shared/units.dart';
 import '../view_models/product_details_view_model.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'barcode_label_print_action.dart';
+import 'change_prices_dialog.dart';
 import 'product_document_history_section.dart';
 import 'product_parent_edit_sheet.dart';
 import 'product_variant_details_screen.dart';
 import 'product_variant_form_sheet.dart';
 import 'product_variant_generation_sheet.dart';
+import 'variant_cost_metrics.dart';
 
 class ProductDetailsScreen extends StatelessWidget {
   const ProductDetailsScreen({
@@ -142,6 +144,14 @@ class ProductDetailsView extends StatelessWidget {
               onArchive: () => _confirmArchive(context, l10n),
               onRestore: () => _restore(context, l10n),
             ),
+            if (capabilities.canAccessPurchasing) ...[
+              const SizedBox(height: 12),
+              _PricingAndCostSection(
+                viewModel: viewModel,
+                capabilities: capabilities,
+                onChangePrices: () => showChangePricesDialog(context, viewModel),
+              ),
+            ],
             const SizedBox(height: 12),
             _VariantsSection(
               product: product,
@@ -562,6 +572,68 @@ class _ParentSummaryCard extends StatelessWidget {
                   ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "Pricing & cost" overview: product-level lowest/highest/last/average cost
+/// (aggregated across variants from purchase history) plus a "Change prices"
+/// action that opens the per-variant repricing dialog.
+class _PricingAndCostSection extends StatelessWidget {
+  const _PricingAndCostSection({
+    required this.viewModel,
+    required this.capabilities,
+    required this.onChangePrices,
+  });
+
+  final ProductDetailsViewModel viewModel;
+  final AuthorizationCapabilities capabilities;
+  final VoidCallback onChangePrices;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final summaries = viewModel.costSummaries;
+    final hasAnyCost = summaries.any((summary) => summary.hasCost);
+
+    return PointyDetailSection(
+      title: l10n.productPricingAndCostTitle,
+      icon: Icons.payments_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (viewModel.isLoadingCostSummary && summaries.isEmpty)
+            const Center(child: CircularProgressIndicator())
+          else if (viewModel.hasCostSummaryError && summaries.isEmpty)
+            PointyInlineMessage.error(
+              message: l10n.changePricesLoadError,
+            )
+          else if (!hasAnyCost)
+            Text(
+              l10n.noCostDataLabel,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: context.pointyColors.mutedInk,
+              ),
+            )
+          else
+            VariantCostMetrics.aggregate(
+              summaries,
+              currentPrice: viewModel.product.effectiveUnitPrice,
+            ),
+          const SizedBox(height: 14),
+          ProductChangeGuard(
+            capabilities: capabilities,
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: FilledButton.icon(
+                onPressed: viewModel.isSavingPrices ? null : onChangePrices,
+                icon: const Icon(Icons.price_change_outlined),
+                label: Text(l10n.changePricesButton),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

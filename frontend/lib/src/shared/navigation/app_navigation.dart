@@ -86,6 +86,17 @@ abstract interface class AppNavigation {
     AppNavigationDestination? from,
   });
 
+  /// Open the AI assistant, optionally seeding the composer with [seedPrompt]
+  /// and immediately sending it ([autoSend]). Proactive AI hints across the app
+  /// call this to drop the user straight into a relevant question. A no-op when
+  /// the shop's AI entitlement is inactive, so callers needn't pre-check.
+  void openAiChat(
+    BuildContext context, {
+    String? seedPrompt,
+    bool autoSend = false,
+    AppNavigationDestination? from,
+  });
+
   void logout(BuildContext context);
 }
 

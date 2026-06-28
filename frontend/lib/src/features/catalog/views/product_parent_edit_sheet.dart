@@ -166,7 +166,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                               isSaving: widget.viewModel.isSavingImage,
                             ),
                             const SizedBox(height: 12),
-                            VariantOptionTemplateField(
+                            VariantOptionField(
                               availableOptions: _availableVariantOptions,
                               selectedOptions: _selectedVariantOptions,
                               isLoading: _isLoadingVariantOptions,

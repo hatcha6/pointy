@@ -1470,8 +1470,7 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get dashboardSpecialDayMessage =>
-      'تعرف بوينتي أن اليوم مناسبة خاصة 🎉';
+  String get dashboardSpecialDayMessage => 'يعرف دفتر أن اليوم مناسبة خاصة 🎉';
 
   @override
   String get dashboardSalesTrendTitle => 'اتجاه صافي المبيعات';
@@ -3992,7 +3991,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String backupRetentionMessage(int count) {
-    return 'بعد نجاح النسخ يحتفظ Pointy بآخر $count نسخ ويحذف الأقدم من مجلد النسخ.';
+    return 'بعد نجاح النسخ يحتفظ دفتر بآخر $count نسخ ويحذف الأقدم من مجلد النسخ.';
   }
 
   @override
@@ -4783,48 +4782,51 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get variantOptionsLabel => 'قوالب الخيارات';
+  String get variantOptionsLabel => 'خيارات المنتج';
 
   @override
   String get variantOptionsHelper =>
-      'اختر الخيارات التي تميز المنتج مثل اللون أو السعة. سيتم استخدام قيمها لتوليد الخيارات تلقائيًا.';
+      'أضِف خيارًا يميّز المنتج مثل اللون أو المقاس، ثم أدخل قيمه. ستُستخدم القيم لتوليد خيارات المنتج تلقائيًا.';
 
   @override
-  String get variantOptionsEmpty => 'لا توجد قوالب خيارات جاهزة.';
+  String get variantOptionsEmpty => 'لم تُضِف أي خيار بعد.';
 
   @override
-  String get variantOptionsLoadError => 'تعذر تحميل قوالب الخيارات.';
+  String get variantOptionsLoadError => 'تعذر تحميل الخيارات.';
 
   @override
-  String get addVariantOptionButton => 'إضافة قالب';
+  String get addVariantOptionButton => 'إضافة خيار';
 
   @override
-  String get newVariantOptionTitle => 'قالب خيار جديد';
+  String get reuseVariantOptionLabel => 'أو أعد استخدام خيار سابق';
 
   @override
-  String get variantOptionNameLabel => 'اسم القالب';
+  String get newVariantOptionTitle => 'خيار جديد';
+
+  @override
+  String get variantOptionNameLabel => 'اسم الخيار';
 
   @override
   String get variantOptionNameHint => 'مثال: اللون';
 
   @override
-  String get variantOptionCodeLabel => 'رمز القالب';
+  String get variantOptionCodeLabel => 'رمز الخيار';
 
   @override
   String get variantOptionCodeHint => 'مثال: color';
 
   @override
-  String get createVariantOptionButton => 'حفظ القالب';
+  String get createVariantOptionButton => 'حفظ الخيار';
 
   @override
-  String get variantOptionCreateError => 'تعذر إنشاء قالب الخيار.';
+  String get variantOptionCreateError => 'تعذر إنشاء الخيار.';
 
   @override
   String get variantValuesNoOptions =>
-      'اختر قالب خيار واحدًا على الأقل لتحديد القيم.';
+      'أضِف خيارًا واحدًا على الأقل لتحديد قيمه.';
 
   @override
-  String get variantOptionNoValues => 'لا توجد قيم جاهزة لهذا الخيار.';
+  String get variantOptionNoValues => 'لا توجد قيم لهذا الخيار بعد.';
 
   @override
   String get variantOptionValueRequired => 'اختر قيمة واحدة على الأقل.';
@@ -4883,7 +4885,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get generatedVariantsMissingValues =>
-      'اختر قيمة واحدة على الأقل لكل قالب خيار.';
+      'اختر قيمة واحدة على الأقل لكل خيار.';
 
   @override
   String get generatedVariantsDuplicateSku =>
@@ -5323,6 +5325,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get archivedFilterLabel => 'المؤرشفة';
 
   @override
+  String get viewArchivedProductsAction => 'عرض المنتجات المؤرشفة';
+
+  @override
+  String get viewActiveProductsAction => 'عرض المنتجات النشطة';
+
+  @override
   String get archiveProductAction => 'أرشفة';
 
   @override
@@ -5522,6 +5530,58 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get productMarginChangeLabel => 'تغير الهامش';
+
+  @override
+  String get productPricingAndCostTitle => 'التسعير والتكلفة';
+
+  @override
+  String get productCostOverviewTitle => 'نظرة عامة على التكلفة';
+
+  @override
+  String get lowestCostLabel => 'أقل تكلفة';
+
+  @override
+  String get highestCostLabel => 'أعلى تكلفة';
+
+  @override
+  String get lastCostLabel => 'آخر تكلفة';
+
+  @override
+  String get averageCostLabel => 'متوسط التكلفة';
+
+  @override
+  String get currentPriceLabel => 'السعر الحالي';
+
+  @override
+  String get noCostDataLabel => 'لا توجد بيانات تكلفة بعد';
+
+  @override
+  String get changePricesButton => 'تغيير الأسعار';
+
+  @override
+  String get changePricesTitle => 'تغيير الأسعار';
+
+  @override
+  String get changePricesSubtitle =>
+      'راجع تكلفة كل خيار وحدّد سعر البيع الجديد بثقة.';
+
+  @override
+  String get changePricesNewPriceLabel => 'السعر الجديد';
+
+  @override
+  String get changePricesSaveButton => 'حفظ الأسعار';
+
+  @override
+  String get changePricesSuccess => 'تم تحديث الأسعار.';
+
+  @override
+  String get changePricesError => 'تعذر تحديث الأسعار. حاول مرة أخرى.';
+
+  @override
+  String get changePricesLoadError => 'تعذر تحميل بيانات التكلفة.';
+
+  @override
+  String get changePricesNoVariants => 'لا توجد خيارات لتسعيرها.';
 
   @override
   String get productIdentifierTitle => 'بيانات التعريف';
@@ -11458,17 +11518,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseDraftRestoredMessage => 'تمت استعادة مسودة شراء محفوظة';
 
   @override
-  String get aiAssistantDrawerLabel => 'المساعد الذكي';
+  String get aiAssistantDrawerLabel => 'GPT';
 
   @override
-  String get aiAssistantTitle => 'المساعد الذكي';
+  String get aiAssistantTitle => 'GPT';
 
   @override
   String get aiAssistantInputHint => 'اكتب رسالتك هنا…';
 
   @override
-  String get aiAssistantDisclaimer =>
-      'المساعد الذكي قد يخطئ. تحقّق من المعلومات المهمة.';
+  String get aiAssistantDisclaimer => 'GPT قد يخطئ. تحقّق من المعلومات المهمة.';
 
   @override
   String get aiAssistantSendTooltip => 'إرسال';
@@ -11489,7 +11548,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aiAssistantEmptyTitle => 'كيف يمكنني مساعدتك؟';
 
   @override
-  String get aiAssistantEmptySubtitle => 'اسأل المساعد عن أي شيء يخص متجرك.';
+  String get aiAssistantEmptySubtitle => 'اسأل GPT عن أي شيء يخص متجرك.';
 
   @override
   String get aiAssistantThinking => 'يكتب…';
@@ -11507,12 +11566,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aiAssistantSuggestion3 => 'اكتب وصفًا جذابًا لمنتج جديد';
 
   @override
-  String get aiAssistantErrorNotEntitled =>
-      'المساعد الذكي غير مفعّل لهذا المتجر.';
+  String get aiAssistantErrorNotEntitled => 'GPT غير مفعّل لهذا المتجر.';
 
   @override
   String get aiAssistantErrorNetwork =>
-      'تعذّر الاتصال بالمساعد. تحقق من الشبكة وحاول مجددًا.';
+      'تعذّر الاتصال بـ GPT. تحقق من الشبكة وحاول مجددًا.';
 
   @override
   String get aiAssistantErrorGeneric =>
@@ -11731,7 +11789,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get migrationHeroDescription =>
-      'انقل منتجاتك وفئاتك وعملاءك ومورّديك ومخزونك من نظامك القديم إلى Pointy.';
+      'انقل منتجاتك وفئاتك وعملاءك ومورّديك ومخزونك من نظامك القديم إلى دفتر.';
 
   @override
   String get migrationLoadError => 'تعذّر تحميل أدوات النقل';
@@ -11859,7 +11917,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get migrationWithoutQuantitiesSubtitle =>
-      'استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في Pointy.';
+      'استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في دفتر.';
 
   @override
   String get migrationEntityUnit => 'وحدات القياس';
@@ -12107,7 +12165,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get subscriptionSyncedMessage => 'تم تحديث حالة الاشتراك.';
 
   @override
-  String get subscriptionHeroFallbackTitle => 'اشتراك بوينتي';
+  String get subscriptionHeroFallbackTitle => 'اشتراك دفتر';
 
   @override
   String get subscriptionStatusActive => 'نشط';
@@ -12167,7 +12225,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get subscriptionRemoteAccessActiveMessage =>
-      'يمكنك استخدام التطبيق خارج المتجر عبر خادم بوينتي.';
+      'يمكنك استخدام التطبيق خارج المتجر عبر خادم دفتر.';
 
   @override
   String get subscriptionRemoteAccessInactiveTitle =>
@@ -12211,14 +12269,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get subscriptionAiActiveMessage =>
-      'اشتراكك يشمل المساعد الذكي. هذا هو استهلاكك الحالي.';
+      'اشتراكك يشمل GPT. هذا هو استهلاكك الحالي.';
 
   @override
   String get subscriptionAiInactiveTitle => 'مساعد الذكاء الاصطناعي غير مُفعّل';
 
   @override
   String get subscriptionAiInactiveMessage =>
-      'أضِف المساعد الذكي إلى اشتراكك للاستفادة منه. تواصل مع الدعم.';
+      'أضِف GPT إلى اشتراكك للاستفادة منه. تواصل مع الدعم.';
 
   @override
   String get subscriptionAiUsageUnavailable =>
@@ -12273,7 +12331,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get appUpdatesRecheck => 'إعادة التحقق';
 
   @override
-  String get getAppsDialogTitle => 'تنزيل تطبيقات Pointy';
+  String get getAppsDialogTitle => 'تنزيل تطبيقات دفتر';
 
   @override
   String get getAppsInstructions =>
@@ -12284,4 +12342,16 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get getAppsLinkCopied => 'تم نسخ الرابط';
+
+  @override
+  String get aiDailyBriefLabel => 'ملخص اليوم من GPT';
+
+  @override
+  String get aiDailyBriefSeed =>
+      'أعطني ملخصًا سريعًا لمتجري: كيف كان أداء المبيعات في الفترة، وما الذي يحتاج انتباهي اليوم، وأي شيء غير معتاد يجب أن أنتبه له.';
+
+  @override
+  String aiDigestElaborate(String topic) {
+    return 'حدّثني أكثر عن $topic في متجري.';
+  }
 }

@@ -2577,6 +2577,95 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(row["landed_unit_cost"], "0.25")
         self.assertEqual(row["effective_unit_cost"], "2.75")
 
+    def test_product_cost_summary_reports_lowest_highest_last_average(self):
+        # Cancelled POs must not skew the summary.
+        cancelled = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.CANCELLED,
+        )
+        cancelled.lines.create(
+            variant=self.variant,
+            quantity=1,
+            unit_cost=Decimal("99.00"),
+        )
+        first = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        first.lines.create(variant=self.variant, quantity=2, unit_cost=Decimal("2.00"))
+        second = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        second.lines.create(variant=self.variant, quantity=1, unit_cost=Decimal("4.00"))
+        # Most recent purchase = the "last cost".
+        latest = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        latest.lines.create(variant=self.variant, quantity=1, unit_cost=Decimal("3.00"))
+
+        response = self.client.get(
+            reverse("purchaseorder-product-cost-summary"),
+            {"product": self.product.pk},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = {row["variant"]: row for row in response.data}
+        # The product carries both its own variant and other_variant? No — only
+        # self.variant belongs to self.product here.
+        summary = rows[self.variant.pk]
+        self.assertEqual(summary["variant_name"], self.variant.display_name)
+        self.assertEqual(Decimal(summary["unit_price"]), self.variant.unit_price)
+        self.assertEqual(Decimal(summary["lowest_cost"]), Decimal("2.00"))
+        self.assertEqual(Decimal(summary["highest_cost"]), Decimal("4.00"))
+        self.assertEqual(Decimal(summary["last_cost"]), Decimal("3.00"))
+        self.assertEqual(Decimal(summary["average_cost"]), Decimal("3.00"))
+        self.assertEqual(summary["purchases_count"], 3)
+
+    def test_product_cost_summary_handles_variants_without_purchases(self):
+        response = self.client.get(
+            reverse("purchaseorder-product-cost-summary"),
+            {"product": self.product.pk},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        summary = response.data[0]
+        self.assertEqual(summary["variant"], self.variant.pk)
+        self.assertIsNone(summary["lowest_cost"])
+        self.assertIsNone(summary["highest_cost"])
+        self.assertIsNone(summary["last_cost"])
+        self.assertIsNone(summary["average_cost"])
+        self.assertEqual(summary["purchases_count"], 0)
+
+    def test_products_list_filters_by_supplier_through_purchase_orders(self):
+        # self.product is bought from self.supplier; other_product is not.
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        order.lines.create(variant=self.variant, quantity=1, unit_cost=Decimal("2.00"))
+        # A cancelled PO from a different supplier for other_product must not
+        # make it show up under self.supplier.
+        cancelled = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.CANCELLED,
+        )
+        cancelled.lines.create(
+            variant=self.other_variant,
+            quantity=1,
+            unit_cost=Decimal("2.00"),
+        )
+
+        response = self.client.get(
+            reverse("product-list"),
+            {"supplier": self.supplier.pk},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {row["id"] for row in response.data["results"]}
+        self.assertEqual(ids, {self.product.pk})
+
     def test_product_margin_impact_compares_latest_and_previous_costs(self):
         previous = PurchaseOrder.objects.create(
             supplier=self.supplier,

@@ -283,7 +283,7 @@ class _ProductFormState extends State<ProductForm> {
                                           enabled: !widget.viewModel.isSaving,
                                         ),
                                         const SizedBox(height: 12),
-                                        VariantOptionTemplateField(
+                                        VariantOptionField(
                                           availableOptions:
                                               _availableVariantOptions,
                                           selectedOptions:

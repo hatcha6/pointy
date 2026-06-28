@@ -136,6 +136,25 @@ class CatalogApiClient {
     return _updatedCount(_session.decodedBody(response));
   }
 
+  Future<Product> setVariantPrices({
+    required int productId,
+    required Map<int, double> pricesByVariant,
+  }) async {
+    final response = await _session.post(
+      'products/$productId/set-variant-prices/',
+      body: {
+        'prices': [
+          for (final entry in pricesByVariant.entries)
+            {'variant': entry.key, 'unit_price': entry.value.toStringAsFixed(2)},
+        ],
+      },
+    );
+    _session.ensureSuccess(response, 'Set variant prices failed with status');
+    return Product.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<int> bulkCategorizeProducts({
     required List<int> ids,
     required List<int> categoryIds,

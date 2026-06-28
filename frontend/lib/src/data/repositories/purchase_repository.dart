@@ -84,6 +84,12 @@ class PurchaseRepository {
     );
   }
 
+  Future<Result<List<VariantCostSummary>>> loadProductCostSummary(
+    int productId,
+  ) async {
+    return Result.guard(() => _service.fetchProductCostSummary(productId));
+  }
+
   Future<Result<ProductMarginImpact?>> loadProductMarginImpact(
     int productId, {
     int? variantId,

@@ -143,7 +143,7 @@ class ClientLandingView(views.APIView):
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pointy apps</title>
+<title>تطبيقات دفتر</title>
 <style>
   body {{ font-family: system-ui, sans-serif; margin: 0; padding: 2rem;
          display: flex; flex-direction: column; align-items: center; gap: 1rem;
@@ -156,7 +156,7 @@ class ClientLandingView(views.APIView):
 </style>
 </head>
 <body>
-  <h1>Pointy</h1>
+  <h1>دفتر</h1>
   <p>Version {version}</p>
   {body}
 </body>

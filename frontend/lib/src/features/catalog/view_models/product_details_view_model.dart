@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/analytics_audit.dart';
@@ -36,6 +38,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
     }
     if (_shouldLoadPurchaseHistory) {
       loadPurchaseHistory();
+      loadCostSummary();
     }
     loadBoughtTogether();
   }
@@ -66,6 +69,10 @@ class ProductDetailsViewModel extends ChangeNotifier {
   bool _isLoadingBoughtTogether = false;
   bool _hasBoughtTogetherError = false;
   List<BoughtTogetherProduct> _boughtTogether = [];
+  bool _isLoadingCostSummary = false;
+  bool _hasCostSummaryError = false;
+  bool _isSavingPrices = false;
+  List<VariantCostSummary> _costSummaries = [];
   String? _errorMessage;
 
   CatalogRepository get catalogRepository => _catalogRepository;
@@ -104,6 +111,11 @@ class ProductDetailsViewModel extends ChangeNotifier {
   bool get hasBoughtTogetherError => _hasBoughtTogetherError;
   List<BoughtTogetherProduct> get boughtTogether =>
       List.unmodifiable(_boughtTogether);
+  bool get isLoadingCostSummary => _isLoadingCostSummary;
+  bool get hasCostSummaryError => _hasCostSummaryError;
+  bool get isSavingPrices => _isSavingPrices;
+  List<VariantCostSummary> get costSummaries =>
+      List.unmodifiable(_costSummaries);
   String? get errorMessage => _errorMessage;
 
   Future<void> loadProduct() async {
@@ -139,6 +151,59 @@ class ProductDetailsViewModel extends ChangeNotifier {
 
     _isLoadingBoughtTogether = false;
     notifyListeners();
+  }
+
+  Future<void> loadCostSummary() async {
+    if (!_shouldLoadPurchaseHistory) {
+      return;
+    }
+    _isLoadingCostSummary = true;
+    _hasCostSummaryError = false;
+    notifyListeners();
+
+    final result = await _purchaseRepository.loadProductCostSummary(
+      _product.id,
+    );
+    switch (result) {
+      case Ok<List<VariantCostSummary>>():
+        _costSummaries = result.value;
+      case Error<List<VariantCostSummary>>():
+        _costSummaries = [];
+        _hasCostSummaryError = true;
+    }
+
+    _isLoadingCostSummary = false;
+    notifyListeners();
+  }
+
+  /// Writes explicit new selling prices for the product's variants from the
+  /// "Change prices" dialog, then refreshes the product and its cost summary.
+  Future<bool> setVariantPrices(Map<int, double> pricesByVariant) async {
+    if (_isSavingPrices || pricesByVariant.isEmpty) {
+      return false;
+    }
+
+    _isSavingPrices = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final result = await _catalogRepository.setVariantPrices(
+      productId: _product.id,
+      pricesByVariant: pricesByVariant,
+    );
+    switch (result) {
+      case Ok<Product>():
+        _product = result.value;
+        _isSavingPrices = false;
+        notifyListeners();
+        unawaited(loadCostSummary());
+        return true;
+      case Error<Product>():
+        _errorMessage = 'variant_prices_update_error';
+        _isSavingPrices = false;
+        notifyListeners();
+        return false;
+    }
   }
 
   Future<bool> updateProduct(ProductUpdateDraft draft) async {

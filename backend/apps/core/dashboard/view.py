@@ -57,110 +57,118 @@ class DashboardView(APIView):
         return ()
 
     def get(self, request):
-        period = _period_from_request(request)
-        data = {
-            "generated_at": timezone.now().isoformat(),
-            "period": {
-                "days": period["days"],
-                "start": period["start"].isoformat(),
-                "end": period["end"].isoformat(),
-                "previous_start": period["previous_start"].isoformat(),
-                "previous_end": period["previous_end"].isoformat(),
-            },
-            "sections": {},
-            # Today's special day(s), if any, for the festive dashboard banner.
-            # Not permission-gated (every user sees it) and served from a cached,
-            # query-free helper so it never adds load to the dashboard.
-            "today_special_days": today_dashboard_special_days(),
-        }
+        return Response(build_dashboard_snapshot(request))
 
-        # Revenue aggregates additionally require the reporting permission.
-        # Cashiers hold ``sales.view_order``/``payments.view_payment`` to run
-        # the register, but exposing shop-wide cash totals to them would defeat
-        # the blind close: a cashier who can read today's cash sales can pocket
-        # the difference and type in a "perfect" closing count.
-        if _can(request.user, "reports.view_reportrun") and _can_any(
-            request.user,
-            ("sales.view_order", "sales.view_registersession"),
-        ):
-            data["sections"]["sales"] = _cached_dashboard_section(
-                "sales",
-                request,
-                period,
-                lambda: _sales_section(request, period),
-            )
-        if _can(request.user, "reports.view_reportrun") and _can(
-            request.user,
-            "payments.view_payment",
-        ):
-            data["sections"]["payments"] = _cached_dashboard_section(
-                "payments",
-                request,
-                period,
-                lambda: _payments_section(request, period),
-            )
-        if _can_any(request.user, ("inventory.view_stockitem", "inventory.view_stockmovement")):
-            data["sections"]["inventory"] = _cached_dashboard_section(
-                "inventory",
-                request,
-                period,
-                lambda: _inventory_section(period),
-            )
-        if _can_any(request.user, ("purchasing.view_purchaseorder", "purchasing.view_supplier")):
-            data["sections"]["purchasing"] = _cached_dashboard_section(
-                "purchasing",
-                request,
-                period,
-                lambda: _purchasing_section(period),
-                scope="global",
-            )
-        if _can(request.user, "employees.view_payrollrun"):
-            data["sections"]["payroll"] = _cached_dashboard_section(
-                "payroll",
-                request,
-                period,
-                lambda: _payroll_section(period),
-            )
-        if _can(request.user, "reports.view_reportrun") and _can(
-            request.user,
-            "sales.view_order",
-        ):
-            data["sections"]["profitability"] = _cached_dashboard_section(
-                "profitability",
-                request,
-                period,
-                lambda: _profitability_section(request, period),
-            )
-        if _can(request.user, "customers.view_customer"):
-            data["sections"]["customers"] = _cached_dashboard_section(
-                "customers",
-                request,
-                period,
-                lambda: _customers_section(period),
-            )
-        if _can(request.user, "discounts.view_discountrule"):
-            data["sections"]["discounts"] = _cached_dashboard_section(
-                "discounts",
-                request,
-                period,
-                lambda: _discounts_section(period),
-            )
-        if _can(request.user, "fraud.view_fraudfinding"):
-            data["sections"]["fraud"] = _cached_dashboard_section(
-                "fraud",
-                request,
-                period,
-                lambda: _fraud_section(),
-            )
-        if _can(request.user, "printing.view_printjob"):
-            data["sections"]["printing"] = _cached_dashboard_section(
-                "printing",
-                request,
-                period,
-                lambda: _printing_section(request, period),
-            )
 
-        return Response(data)
+def build_dashboard_snapshot(request):
+    """The dashboard payload (period + capability-gated sections + special days).
+
+    Extracted from the view so other endpoints — notably the AI digest — can
+    reuse the exact same capability-gated, per-section-cached snapshot the
+    dashboard renders, instead of re-deriving the figures."""
+    period = _period_from_request(request)
+    data = {
+        "generated_at": timezone.now().isoformat(),
+        "period": {
+            "days": period["days"],
+            "start": period["start"].isoformat(),
+            "end": period["end"].isoformat(),
+            "previous_start": period["previous_start"].isoformat(),
+            "previous_end": period["previous_end"].isoformat(),
+        },
+        "sections": {},
+        # Today's special day(s), if any, for the festive dashboard banner.
+        # Not permission-gated (every user sees it) and served from a cached,
+        # query-free helper so it never adds load to the dashboard.
+        "today_special_days": today_dashboard_special_days(),
+    }
+    # Revenue aggregates additionally require the reporting permission.
+    # Cashiers hold ``sales.view_order``/``payments.view_payment`` to run
+    # the register, but exposing shop-wide cash totals to them would defeat
+    # the blind close: a cashier who can read today's cash sales can pocket
+    # the difference and type in a "perfect" closing count.
+    if _can(request.user, "reports.view_reportrun") and _can_any(
+        request.user,
+        ("sales.view_order", "sales.view_registersession"),
+    ):
+        data["sections"]["sales"] = _cached_dashboard_section(
+            "sales",
+            request,
+            period,
+            lambda: _sales_section(request, period),
+        )
+    if _can(request.user, "reports.view_reportrun") and _can(
+        request.user,
+        "payments.view_payment",
+    ):
+        data["sections"]["payments"] = _cached_dashboard_section(
+            "payments",
+            request,
+            period,
+            lambda: _payments_section(request, period),
+        )
+    if _can_any(request.user, ("inventory.view_stockitem", "inventory.view_stockmovement")):
+        data["sections"]["inventory"] = _cached_dashboard_section(
+            "inventory",
+            request,
+            period,
+            lambda: _inventory_section(period),
+        )
+    if _can_any(request.user, ("purchasing.view_purchaseorder", "purchasing.view_supplier")):
+        data["sections"]["purchasing"] = _cached_dashboard_section(
+            "purchasing",
+            request,
+            period,
+            lambda: _purchasing_section(period),
+            scope="global",
+        )
+    if _can(request.user, "employees.view_payrollrun"):
+        data["sections"]["payroll"] = _cached_dashboard_section(
+            "payroll",
+            request,
+            period,
+            lambda: _payroll_section(period),
+        )
+    if _can(request.user, "reports.view_reportrun") and _can(
+        request.user,
+        "sales.view_order",
+    ):
+        data["sections"]["profitability"] = _cached_dashboard_section(
+            "profitability",
+            request,
+            period,
+            lambda: _profitability_section(request, period),
+        )
+    if _can(request.user, "customers.view_customer"):
+        data["sections"]["customers"] = _cached_dashboard_section(
+            "customers",
+            request,
+            period,
+            lambda: _customers_section(period),
+        )
+    if _can(request.user, "discounts.view_discountrule"):
+        data["sections"]["discounts"] = _cached_dashboard_section(
+            "discounts",
+            request,
+            period,
+            lambda: _discounts_section(period),
+        )
+    if _can(request.user, "fraud.view_fraudfinding"):
+        data["sections"]["fraud"] = _cached_dashboard_section(
+            "fraud",
+            request,
+            period,
+            lambda: _fraud_section(),
+        )
+    if _can(request.user, "printing.view_printjob"):
+        data["sections"]["printing"] = _cached_dashboard_section(
+            "printing",
+            request,
+            period,
+            lambda: _printing_section(request, period),
+        )
+
+    return data
 
 
 def _period_from_request(request):

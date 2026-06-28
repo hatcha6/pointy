@@ -319,5 +319,13 @@ class _FakeAppNavigation implements AppNavigation {
   }
 
   @override
+  void openAiChat(
+    BuildContext context, {
+    String? seedPrompt,
+    bool autoSend = false,
+    AppNavigationDestination? from,
+  }) {}
+
+  @override
   void logout(BuildContext context) {}
 }

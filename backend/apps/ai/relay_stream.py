@@ -238,7 +238,7 @@ def build_system_prompt(*, supports_actions=False, supports_navigation=False):
     shop_name = (getattr(shop, "shop_name", "") or "").strip() or "المتجر"
     today = timezone.localdate().isoformat()
     prompt = (
-        "أنت مساعد بوينتي الذكي لنقاط البيع، تساعد صاحب المتجر والعاملين فيه. "
+        "أنت GPT، مساعد نقاط البيع الذكي، تساعد صاحب المتجر والعاملين فيه. "
         f'اسم المتجر هو "{shop_name}". تاريخ اليوم هو {today} (استخدمه لحساب "اليوم" '
         'و"هذا الأسبوع" و"الشهر الماضي" بنفسك دون أن تسأل المستخدم عن التاريخ). '
         + _shop_context_sentence(shop)

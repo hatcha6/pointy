@@ -28,9 +28,9 @@ class ReportPdfGenerator {
     final pdf = pw.Document(
       title: report.title,
       author: report.generatedBy,
-      creator: 'Pointy',
+      creator: 'دفتر',
       subject: labels.typeLabel(report.type),
-      keywords: 'pointy, reports, ${report.type.name}',
+      keywords: 'daftar, reports, ${report.type.name}',
     );
 
     pdf.addPage(

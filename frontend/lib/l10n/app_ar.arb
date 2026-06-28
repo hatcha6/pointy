@@ -894,7 +894,7 @@
       }
     }
   },
-  "dashboardSpecialDayMessage": "تعرف بوينتي أن اليوم مناسبة خاصة 🎉",
+  "dashboardSpecialDayMessage": "يعرف دفتر أن اليوم مناسبة خاصة 🎉",
   "@dashboardSpecialDayMessage": {
     "description": "Supporting line on the dashboard banner shown when today is a holiday/special event; the event name(s) appear as the bold title above it."
   },
@@ -2346,7 +2346,7 @@
   },
   "backupNoWritableDestinationsMessage": "لم يجد الخادم قرصا خارجيا قابلا للكتابة. تأكد من توصيل القرص وربطه داخل Docker.",
   "backupScheduledTimeLabel": "وقت النسخ اليومي",
-  "backupRetentionMessage": "بعد نجاح النسخ يحتفظ Pointy بآخر {count} نسخ ويحذف الأقدم من مجلد النسخ.",
+  "backupRetentionMessage": "بعد نجاح النسخ يحتفظ دفتر بآخر {count} نسخ ويحذف الأقدم من مجلد النسخ.",
   "@backupRetentionMessage": {
     "description": "Retention explanation for automatic backups.",
     "placeholders": {
@@ -2728,20 +2728,21 @@
       }
     }
   },
-  "variantOptionsLabel": "قوالب الخيارات",
-  "variantOptionsHelper": "اختر الخيارات التي تميز المنتج مثل اللون أو السعة. سيتم استخدام قيمها لتوليد الخيارات تلقائيًا.",
-  "variantOptionsEmpty": "لا توجد قوالب خيارات جاهزة.",
-  "variantOptionsLoadError": "تعذر تحميل قوالب الخيارات.",
-  "addVariantOptionButton": "إضافة قالب",
-  "newVariantOptionTitle": "قالب خيار جديد",
-  "variantOptionNameLabel": "اسم القالب",
+  "variantOptionsLabel": "خيارات المنتج",
+  "variantOptionsHelper": "أضِف خيارًا يميّز المنتج مثل اللون أو المقاس، ثم أدخل قيمه. ستُستخدم القيم لتوليد خيارات المنتج تلقائيًا.",
+  "variantOptionsEmpty": "لم تُضِف أي خيار بعد.",
+  "variantOptionsLoadError": "تعذر تحميل الخيارات.",
+  "addVariantOptionButton": "إضافة خيار",
+  "reuseVariantOptionLabel": "أو أعد استخدام خيار سابق",
+  "newVariantOptionTitle": "خيار جديد",
+  "variantOptionNameLabel": "اسم الخيار",
   "variantOptionNameHint": "مثال: اللون",
-  "variantOptionCodeLabel": "رمز القالب",
+  "variantOptionCodeLabel": "رمز الخيار",
   "variantOptionCodeHint": "مثال: color",
-  "createVariantOptionButton": "حفظ القالب",
-  "variantOptionCreateError": "تعذر إنشاء قالب الخيار.",
-  "variantValuesNoOptions": "اختر قالب خيار واحدًا على الأقل لتحديد القيم.",
-  "variantOptionNoValues": "لا توجد قيم جاهزة لهذا الخيار.",
+  "createVariantOptionButton": "حفظ الخيار",
+  "variantOptionCreateError": "تعذر إنشاء الخيار.",
+  "variantValuesNoOptions": "أضِف خيارًا واحدًا على الأقل لتحديد قيمه.",
+  "variantOptionNoValues": "لا توجد قيم لهذا الخيار بعد.",
   "variantOptionValueRequired": "اختر قيمة واحدة على الأقل.",
   "addVariantOptionValueButton": "إضافة قيمة",
   "newVariantOptionValueTitle": "قيمة خيار جديدة",
@@ -2765,7 +2766,7 @@
     }
   },
   "generatedVariantNameLabel": "اسم الخيار",
-  "generatedVariantsMissingValues": "اختر قيمة واحدة على الأقل لكل قالب خيار.",
+  "generatedVariantsMissingValues": "اختر قيمة واحدة على الأقل لكل خيار.",
   "generatedVariantsDuplicateSku": "رموز الخيارات المولدة يجب أن تكون غير مكررة.",
   "generatedVariantsTooMany": "عدد الخيارات المولدة كبير جدًا. قلل القيم المحددة.",
   "generatedVariantsNoMissing": "كل التركيبات المحددة موجودة بالفعل.",
@@ -2974,6 +2975,8 @@
   "@archivedFilterLabel": {
     "description": "Toggle/chip label that switches the catalog list to show archived products."
   },
+  "viewArchivedProductsAction": "عرض المنتجات المؤرشفة",
+  "viewActiveProductsAction": "عرض المنتجات النشطة",
   "archiveProductAction": "أرشفة",
   "@archiveProductAction": {
     "description": "Label/tooltip for the action that archives a product."
@@ -3111,6 +3114,26 @@
   },
   "productCostChangeLabel": "تغير التكلفة",
   "productMarginChangeLabel": "تغير الهامش",
+  "productPricingAndCostTitle": "التسعير والتكلفة",
+  "@productPricingAndCostTitle": {
+    "description": "Section title on the product/variant detail screens grouping cost insights and the change-prices action."
+  },
+  "productCostOverviewTitle": "نظرة عامة على التكلفة",
+  "lowestCostLabel": "أقل تكلفة",
+  "highestCostLabel": "أعلى تكلفة",
+  "lastCostLabel": "آخر تكلفة",
+  "averageCostLabel": "متوسط التكلفة",
+  "currentPriceLabel": "السعر الحالي",
+  "noCostDataLabel": "لا توجد بيانات تكلفة بعد",
+  "changePricesButton": "تغيير الأسعار",
+  "changePricesTitle": "تغيير الأسعار",
+  "changePricesSubtitle": "راجع تكلفة كل خيار وحدّد سعر البيع الجديد بثقة.",
+  "changePricesNewPriceLabel": "السعر الجديد",
+  "changePricesSaveButton": "حفظ الأسعار",
+  "changePricesSuccess": "تم تحديث الأسعار.",
+  "changePricesError": "تعذر تحديث الأسعار. حاول مرة أخرى.",
+  "changePricesLoadError": "تعذر تحميل بيانات التكلفة.",
+  "changePricesNoVariants": "لا توجد خيارات لتسعيرها.",
   "productIdentifierTitle": "بيانات التعريف",
   "productDescriptionTitle": "الوصف",
   "productAvailabilityTitle": "حالة البيع",
@@ -6785,24 +6808,24 @@
   "dashboardGetStartedDone": "تم",
   "posCartRestoredMessage": "تمت استعادة سلة بيع غير مكتملة",
   "purchaseDraftRestoredMessage": "تمت استعادة مسودة شراء محفوظة",
-  "aiAssistantDrawerLabel": "المساعد الذكي",
-  "aiAssistantTitle": "المساعد الذكي",
+  "aiAssistantDrawerLabel": "GPT",
+  "aiAssistantTitle": "GPT",
   "aiAssistantInputHint": "اكتب رسالتك هنا…",
-  "aiAssistantDisclaimer": "المساعد الذكي قد يخطئ. تحقّق من المعلومات المهمة.",
+  "aiAssistantDisclaimer": "GPT قد يخطئ. تحقّق من المعلومات المهمة.",
   "aiAssistantSendTooltip": "إرسال",
   "aiAssistantNewChat": "محادثة جديدة",
   "aiAssistantHistoryTitle": "المحادثات السابقة",
   "aiAssistantHistoryEmpty": "لا توجد محادثات بعد",
   "aiAssistantDeleteConversation": "حذف المحادثة",
   "aiAssistantEmptyTitle": "كيف يمكنني مساعدتك؟",
-  "aiAssistantEmptySubtitle": "اسأل المساعد عن أي شيء يخص متجرك.",
+  "aiAssistantEmptySubtitle": "اسأل GPT عن أي شيء يخص متجرك.",
   "aiAssistantThinking": "يكتب…",
   "aiAssistantThinkingLabel": "طريقة التفكير",
   "aiAssistantSuggestion1": "اكتب رسالة ترحيب لعملاء متجري",
   "aiAssistantSuggestion2": "اقترح أفكارًا لعرض ترويجي لهذا الأسبوع",
   "aiAssistantSuggestion3": "اكتب وصفًا جذابًا لمنتج جديد",
-  "aiAssistantErrorNotEntitled": "المساعد الذكي غير مفعّل لهذا المتجر.",
-  "aiAssistantErrorNetwork": "تعذّر الاتصال بالمساعد. تحقق من الشبكة وحاول مجددًا.",
+  "aiAssistantErrorNotEntitled": "GPT غير مفعّل لهذا المتجر.",
+  "aiAssistantErrorNetwork": "تعذّر الاتصال بـ GPT. تحقق من الشبكة وحاول مجددًا.",
   "aiAssistantErrorGeneric": "حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.",
   "aiAssistantErrorRateLimited": "لقد بلغت حدّ الاستخدام. حاول مرة أخرى لاحقًا.",
   "aiAssistantErrorTooManyImages": "عدد الصور كبير جدًا. الحد الأقصى ٥ صور.",
@@ -6894,7 +6917,7 @@
   "aiAssistantAskUserPendingComposer": "أجب عن السؤال أعلاه للمتابعة",
   "migrationTitle": "نقل البيانات",
   "migrationSubtitle": "استيراد بياناتك من نظام نقاط البيع القديم",
-  "migrationHeroDescription": "انقل منتجاتك وفئاتك وعملاءك ومورّديك ومخزونك من نظامك القديم إلى Pointy.",
+  "migrationHeroDescription": "انقل منتجاتك وفئاتك وعملاءك ومورّديك ومخزونك من نظامك القديم إلى دفتر.",
   "migrationLoadError": "تعذّر تحميل أدوات النقل",
   "migrationConnectionSectionTitle": "الاتصال بقاعدة البيانات القديمة",
   "migrationConnectionSectionSubtitle": "اختر نظامك القديم وأدخل بيانات الاتصال بقاعدة بياناته.",
@@ -6938,7 +6961,7 @@
   "migrationEntitiesSectionTitle": "البيانات المراد نقلها",
   "migrationEntitiesSectionSubtitle": "اختر أنواع البيانات التي تريد نقلها.",
   "migrationWithoutQuantitiesLabel": "نقل المنتجات بدون كميات",
-  "migrationWithoutQuantitiesSubtitle": "استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في Pointy.",
+  "migrationWithoutQuantitiesSubtitle": "استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في دفتر.",
   "migrationEntityUnit": "وحدات القياس",
   "migrationEntityCategory": "الفئات",
   "migrationEntityProduct": "المنتجات",
@@ -7075,7 +7098,7 @@
   "@subscriptionSyncedMessage": {
     "description": "Snackbar shown after a successful relay sync."
   },
-  "subscriptionHeroFallbackTitle": "اشتراك بوينتي",
+  "subscriptionHeroFallbackTitle": "اشتراك دفتر",
   "@subscriptionHeroFallbackTitle": {
     "description": "Hero title used when the shop name is unknown."
   },
@@ -7152,7 +7175,7 @@
   "@subscriptionRemoteAccessActiveTitle": {
     "description": "Callout title when remote access is available."
   },
-  "subscriptionRemoteAccessActiveMessage": "يمكنك استخدام التطبيق خارج المتجر عبر خادم بوينتي.",
+  "subscriptionRemoteAccessActiveMessage": "يمكنك استخدام التطبيق خارج المتجر عبر خادم دفتر.",
   "@subscriptionRemoteAccessActiveMessage": {
     "description": "Callout body when remote access is available."
   },
@@ -7207,7 +7230,7 @@
   "@subscriptionAiActiveTitle": {
     "description": "Callout title when AI is available."
   },
-  "subscriptionAiActiveMessage": "اشتراكك يشمل المساعد الذكي. هذا هو استهلاكك الحالي.",
+  "subscriptionAiActiveMessage": "اشتراكك يشمل GPT. هذا هو استهلاكك الحالي.",
   "@subscriptionAiActiveMessage": {
     "description": "Callout body when AI is available."
   },
@@ -7215,7 +7238,7 @@
   "@subscriptionAiInactiveTitle": {
     "description": "Callout title when AI is unavailable."
   },
-  "subscriptionAiInactiveMessage": "أضِف المساعد الذكي إلى اشتراكك للاستفادة منه. تواصل مع الدعم.",
+  "subscriptionAiInactiveMessage": "أضِف GPT إلى اشتراكك للاستفادة منه. تواصل مع الدعم.",
   "@subscriptionAiInactiveMessage": {
     "description": "Callout body when AI is unavailable."
   },
@@ -7244,8 +7267,25 @@
   "appUpdatesFailed": "تعذّر التحديث. حاول مرة أخرى.",
   "appUpdatesUnsupportedWeb": "تتم إدارة تحديثات نسخة الويب من الخادم.",
   "appUpdatesRecheck": "إعادة التحقق",
-  "getAppsDialogTitle": "تنزيل تطبيقات Pointy",
+  "getAppsDialogTitle": "تنزيل تطبيقات دفتر",
   "getAppsInstructions": "امسح الرمز أو افتح الرابط على الجهاز الجديد (على نفس الشبكة) للتنزيل.",
   "getAppsCopyLink": "نسخ الرابط",
-  "getAppsLinkCopied": "تم نسخ الرابط"
+  "getAppsLinkCopied": "تم نسخ الرابط",
+  "aiDailyBriefLabel": "ملخص اليوم من GPT",
+  "@aiDailyBriefLabel": {
+    "description": "Small eyebrow label above the dashboard's AI daily-brief headline."
+  },
+  "aiDailyBriefSeed": "أعطني ملخصًا سريعًا لمتجري: كيف كان أداء المبيعات في الفترة، وما الذي يحتاج انتباهي اليوم، وأي شيء غير معتاد يجب أن أنتبه له.",
+  "@aiDailyBriefSeed": {
+    "description": "Prompt auto-sent to the AI chat when the dashboard AI daily-brief headline is tapped."
+  },
+  "aiDigestElaborate": "حدّثني أكثر عن {topic} في متجري.",
+  "@aiDigestElaborate": {
+    "description": "Prompt pre-filled in the AI chat when a dashboard card's AI explainer line is tapped; topic is the card's title.",
+    "placeholders": {
+      "topic": {
+        "type": "String"
+      }
+    }
+  }
 }

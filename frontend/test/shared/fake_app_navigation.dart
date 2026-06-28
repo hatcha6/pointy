@@ -11,6 +11,7 @@ class FakeAppNavigation implements AppNavigation {
     AuthorizationCapabilities? capabilities,
     this.onNavigate,
     this.onLogoutRequested,
+    this.onOpenAiChat,
   }) : capabilities =
            capabilities ?? AuthorizationCapabilities.forUser(currentUser);
 
@@ -22,6 +23,7 @@ class FakeAppNavigation implements AppNavigation {
 
   final void Function(AppNavigationDestination destination)? onNavigate;
   final VoidCallback? onLogoutRequested;
+  final void Function(String? seedPrompt, bool autoSend)? onOpenAiChat;
 
   @override
   void navigateTo(
@@ -30,6 +32,16 @@ class FakeAppNavigation implements AppNavigation {
     AppNavigationDestination? from,
   }) {
     onNavigate?.call(destination);
+  }
+
+  @override
+  void openAiChat(
+    BuildContext context, {
+    String? seedPrompt,
+    bool autoSend = false,
+    AppNavigationDestination? from,
+  }) {
+    onOpenAiChat?.call(seedPrompt, autoSend);
   }
 
   @override

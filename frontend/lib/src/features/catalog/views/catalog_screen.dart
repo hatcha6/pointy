@@ -5,6 +5,7 @@ import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
+import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
@@ -34,6 +35,7 @@ class CatalogScreen extends StatefulWidget {
     required this.purchaseRepository,
     required this.saleRepository,
     required this.shopSettingsRepository,
+    this.contactRepository,
     required this.navigation,
     required this.capabilities,
     this.analyticsEngine,
@@ -45,6 +47,7 @@ class CatalogScreen extends StatefulWidget {
   final PurchaseRepository purchaseRepository;
   final SaleRepository saleRepository;
   final ShopSettingsRepository shopSettingsRepository;
+  final ContactRepository? contactRepository;
   final AppNavigation navigation;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
@@ -61,6 +64,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
   SaleRepository get saleRepository => widget.saleRepository;
   ShopSettingsRepository get shopSettingsRepository =>
       widget.shopSettingsRepository;
+  ContactRepository? get contactRepository => widget.contactRepository;
   AuthorizationCapabilities get capabilities => widget.capabilities;
   AnalyticsEngine? get analyticsEngine => widget.analyticsEngine;
 
@@ -107,15 +111,6 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   icon: const Icon(Icons.straighten_outlined),
                 ),
               ),
-              CatalogManagementGuard(
-                capabilities: capabilities,
-                fallback: const SizedBox.shrink(),
-                child: IconButton(
-                  tooltip: l10n.refreshCatalogTooltip,
-                  onPressed: viewModel.loadProducts,
-                  icon: const Icon(Icons.sync),
-                ),
-              ),
             ],
           ),
           body: CatalogManagementGuard(
@@ -132,6 +127,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   purchaseRepository: purchaseRepository,
                   saleRepository: saleRepository,
                   shopSettingsRepository: shopSettingsRepository,
+                  contactRepository: contactRepository,
                   capabilities: capabilities,
                   analyticsEngine: analyticsEngine,
                   onBarcodeSubmitted: (barcode) {

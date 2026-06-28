@@ -168,6 +168,28 @@ class _AuthenticatedRoutes implements AppNavigation {
   }
 
   @override
+  void openAiChat(
+    BuildContext context, {
+    String? seedPrompt,
+    bool autoSend = false,
+    AppNavigationDestination? from,
+  }) {
+    if (!isDestinationAvailable(AppNavigationDestination.aiAssistant)) {
+      return;
+    }
+    _openDestinationScreen(
+      context,
+      AppNavigationDestination.aiAssistant,
+      from: from,
+      builder: (routeContext) => _buildAiAssistant(
+        routeContext,
+        seedPrompt: seedPrompt,
+        autoSend: autoSend,
+      ),
+    );
+  }
+
+  @override
   void logout(BuildContext context) {
     commandPaletteRecents.clear();
     Navigator.of(context).popUntil((route) => route.isFirst);
@@ -182,17 +204,18 @@ class _AuthenticatedRoutes implements AppNavigation {
     BuildContext context,
     AppNavigationDestination destination, {
     AppNavigationDestination? from,
+    WidgetBuilder? builder,
   }) {
-    final builder = _destinationRouteBuilder(destination);
+    final routeBuilder = builder ?? _destinationRouteBuilder(destination);
     if (from == AppNavigationDestination.pos) {
-      unawaited(_pushFromPos(context, destination, builder));
+      unawaited(_pushFromPos(context, destination, routeBuilder));
       return;
     }
     if (ModalRoute.of(context)?.isFirst ?? false) {
-      push(context, builder);
+      push(context, routeBuilder);
       return;
     }
-    replace(context, builder);
+    replace(context, routeBuilder);
   }
 
   Future<void> _pushFromPos(
@@ -332,6 +355,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         purchaseRepository: dependencies.purchaseRepository,
         saleRepository: dependencies.saleRepository,
         shopSettingsRepository: dependencies.shopSettingsRepository,
+        contactRepository: dependencies.contactRepository,
         capabilities: capabilities,
         analyticsEngine: dependencies.analyticsEngine,
         navigation: this,
@@ -488,7 +512,17 @@ class _AuthenticatedRoutes implements AppNavigation {
     );
   }
 
-  Widget aiAssistantRouteBuilder(BuildContext routeContext) {
+  Widget aiAssistantRouteBuilder(BuildContext routeContext) =>
+      _buildAiAssistant(routeContext);
+
+  /// Builds the AI assistant screen, optionally seeded by a proactive hint that
+  /// pre-fills (and maybe auto-sends) [seedPrompt]. The drawer-launched route
+  /// passes neither, so it opens blank as before.
+  Widget _buildAiAssistant(
+    BuildContext routeContext, {
+    String? seedPrompt,
+    bool autoSend = false,
+  }) {
     return _screen(
       'ai_assistant',
       AiAssistantScreen(
@@ -496,6 +530,8 @@ class _AuthenticatedRoutes implements AppNavigation {
         navigation: this,
         productSearch: _aiProductSearch,
         onOpenAiLink: openAiLink,
+        initialPrompt: seedPrompt,
+        autoSendInitialPrompt: autoSend,
       ),
     );
   }
@@ -1730,6 +1766,12 @@ class _AuthenticatedRoutes implements AppNavigation {
         return true;
       case AiEntityLink(:final type, :final id):
         return _openEntityDeepLink(context, type, id);
+      case AiChatLink(:final prompt, :final autoSend):
+        if (!isDestinationAvailable(AppNavigationDestination.aiAssistant)) {
+          return false;
+        }
+        openAiChat(context, seedPrompt: prompt, autoSend: autoSend);
+        return true;
     }
   }
 

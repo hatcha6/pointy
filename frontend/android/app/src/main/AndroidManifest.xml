@@ -20,7 +20,7 @@
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <application
-        android:label="frontend"
+        android:label="دفتر"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

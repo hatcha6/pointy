@@ -108,7 +108,9 @@ void main() {
         findsOneWidget,
       );
 
-      await tester.tap(find.byTooltip('حركات نقدية للدرج'));
+      // Session controls now live behind the labeled session pill instead of
+      // cryptic toolbar icons: open the menu, then choose the cash-out action.
+      await tester.tap(find.text('جلسة RS-PILOT'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('سحب نقدية'));
       await tester.pumpAndSettle();
@@ -120,7 +122,9 @@ void main() {
       expect(apiService.cashMovementDrafts.single.amount, 3);
       expect(apiService.cashMovementDrafts.single.reason, 'شراء أكياس');
 
-      await tester.tap(find.byTooltip('إغلاق جلسة الدرج'));
+      await tester.tap(find.text('جلسة RS-PILOT'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('إغلاق جلسة الدرج'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextFormField).at(0), '24.00');
       await tester.enterText(find.byType(TextFormField).at(1), '0');

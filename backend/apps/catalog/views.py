@@ -47,6 +47,7 @@ from .serializers import (
     ProductBulkRepriceSerializer,
     ProductCategorySerializer,
     ProductCatalogSerializer,
+    ProductSetVariantPricesSerializer,
     ProductVariantSerializer,
     UnitOfMeasureSerializer,
     VariantOptionSerializer,
@@ -159,6 +160,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         "bulk_reprice": ("catalog.change_product",),
         "bulk_categorize": ("catalog.change_product",),
         "bulk_set_flags": ("catalog.change_product",),
+        "set_variant_prices": ("catalog.change_product",),
         "image_search": ("catalog.view_product",),
         "image_import": ("catalog.change_product", "attachments.add_attachment"),
         "bought_together": ("catalog.view_product",),
@@ -207,6 +209,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         queryset = self._filter_by_barcode(queryset)
         queryset = self._filter_by_archived(queryset)
         queryset = self._filter_by_stock(queryset)
+        queryset = self._filter_by_supplier(queryset)
         queryset = queryset.order_by("name", "id")
         if self.request.query_params.get("is_active") == "true":
             if self._has_selective_list_filter():
@@ -273,6 +276,27 @@ class ProductViewSet(viewsets.ModelViewSet):
             return queryset
         return queryset.filter(variants__barcode=barcode).distinct()
 
+    def _filter_by_supplier(self, queryset):
+        # "Products from supplier X" is resolved through that supplier's purchase
+        # orders: any product whose variant appears on a (non-cancelled) purchase
+        # line of a PO placed with the supplier. Lets the inventory list show the
+        # catalogue a given supplier actually stocks. Resolved via a PurchaseLine
+        # subquery (rather than chaining filter+exclude across the multi-valued
+        # variants relation, which would wrongly drop products that also have a
+        # cancelled PO). Lazy import keeps catalog/purchasing free of an import
+        # cycle (purchasing already imports catalog models).
+        supplier_id = self.request.query_params.get("supplier")
+        if not supplier_id:
+            return queryset
+        from apps.purchasing.models import PurchaseLine
+
+        supplied_product_ids = (
+            PurchaseLine.objects.filter(purchase_order__supplier_id=supplier_id)
+            .exclude(purchase_order__status="cancelled")
+            .values_list("variant__product_id", flat=True)
+        )
+        return queryset.filter(id__in=supplied_product_ids)
+
     def _requested_category_ids(self):
         return requested_category_ids(self.request.query_params)
 
@@ -299,6 +323,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             or self.request.query_params.get("search")
             or self.request.query_params.get("category")
             or self.request.query_params.get("categories")
+            or self.request.query_params.get("supplier")
         )
 
     def perform_create(self, serializer):
@@ -622,6 +647,51 @@ class ProductViewSet(viewsets.ModelViewSet):
             )
         self._clear_catalog_cache()
         return Response({"updated": updated})
+
+    @action(detail=True, methods=["post"], url_path="set-variant-prices")
+    def set_variant_prices(self, request, pk=None):
+        """Set explicit selling prices for this product's variants in one go.
+
+        Backs the product-details "Change prices" dialog: validates every
+        variant belongs to this product, then writes all prices atomically so a
+        partial failure can't leave the product half-repriced.
+        """
+        product = self.get_object()
+        serializer = ProductSetVariantPricesSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        entries = serializer.validated_data["prices"]
+
+        valid_ids = set(
+            product.variants.values_list("id", flat=True)
+        )
+        prices_by_variant = {}
+        for entry in entries:
+            variant_id = entry["variant"]
+            if variant_id not in valid_ids:
+                raise ValidationError(
+                    {"prices": f"Variant {variant_id} does not belong to this product."}
+                )
+            prices_by_variant[variant_id] = entry["unit_price"]
+
+        now = timezone.now()
+        changed = []
+        with transaction.atomic():
+            variants = ProductVariant.objects.select_for_update().filter(
+                product=product,
+                id__in=prices_by_variant.keys(),
+            )
+            for variant in variants:
+                new_price = prices_by_variant[variant.id]
+                if new_price != variant.unit_price:
+                    variant.unit_price = new_price
+                    variant.updated_at = now
+                    changed.append(variant)
+            if changed:
+                ProductVariant.objects.bulk_update(changed, ["unit_price", "updated_at"])
+        self._clear_catalog_cache()
+        product.refresh_from_db()
+        serializer = self.get_serializer(product)
+        return Response(serializer.data)
 
     def perform_destroy(self, instance):
         # Soft-delete: archive instead of removing the row so sales/purchase

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../data/models/product.dart';
+import '../components/components.dart';
 import '../design/design.dart';
 import '../formatters.dart';
 import 'pointy_product_image_frame.dart';
@@ -110,11 +111,7 @@ class _ProductCompactRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton(
-                tooltip: l10n.openProductDetailsTooltip,
-                onPressed: onTap,
-                icon: const Icon(Icons.edit_outlined),
-              ),
+              const PointyDisclosureChevron(),
             ],
           ),
         ),
@@ -213,15 +210,11 @@ class _ProductTableRow extends StatelessWidget {
                     ).textTheme.bodyMedium?.copyWith(color: colors.ink),
                   ),
                 ),
-                SizedBox(
-                  width: 72,
+                const SizedBox(
+                  width: 40,
                   child: Align(
                     alignment: AlignmentDirectional.centerStart,
-                    child: IconButton(
-                      tooltip: l10n.openProductDetailsTooltip,
-                      onPressed: onTap,
-                      icon: const Icon(Icons.edit_outlined),
-                    ),
+                    child: PointyDisclosureChevron(),
                   ),
                 ),
               ],

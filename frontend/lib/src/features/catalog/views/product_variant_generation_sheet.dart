@@ -183,7 +183,7 @@ class _ProductVariantGenerationSheetState
                     ],
                   ),
                   const SizedBox(height: 16),
-                  VariantOptionTemplateField(
+                  VariantOptionField(
                     availableOptions: _availableOptions,
                     selectedOptions: _selectedOptions,
                     isLoading: _isLoadingOptions,

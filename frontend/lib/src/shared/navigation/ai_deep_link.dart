@@ -4,6 +4,9 @@
 /// Wire format (in a markdown link `[text](...)`):
 ///   - `pointy://screen/<key>`        → a top-level screen (key = a screen id)
 ///   - `pointy://<type>/<id>`         → an entity detail (e.g. product/42)
+///   - `pointy://chat`                → the AI assistant itself, optionally
+///     seeded: `pointy://chat/ask?prompt=<url-encoded>&send=1`. This is the one
+///     link that points *into* the AI; it powers the app's proactive AI hints.
 /// The `app/` host form (`pointy://app/<type>/<id>`) is accepted too, so the
 /// parser is forgiving about exactly how the model phrases the authority part.
 sealed class AiDeepLink {
@@ -24,6 +27,21 @@ sealed class AiDeepLink {
       for (final segment in uri.pathSegments)
         if (segment.trim().isNotEmpty) segment.trim(),
     ];
+    if (parts.isEmpty) {
+      return null;
+    }
+    // `pointy://chat` / `pointy://chat/ask?prompt=...&send=1` opens the AI
+    // assistant, optionally pre-filling the composer with a question (and
+    // auto-sending it). Handled before the two-segment guard since a bare
+    // `chat` link carries its payload in the query string, not the path.
+    if (parts.first.toLowerCase() == 'chat') {
+      final prompt = uri.queryParameters['prompt']?.trim();
+      final send = uri.queryParameters['send']?.toLowerCase();
+      return AiChatLink(
+        prompt: (prompt == null || prompt.isEmpty) ? null : prompt,
+        autoSend: send == '1' || send == 'true',
+      );
+    }
     if (parts.length < 2) {
       return null;
     }
@@ -55,6 +73,27 @@ class AiScreenLink extends AiDeepLink {
 
   @override
   String toString() => 'AiScreenLink($key)';
+}
+
+/// A link that opens the AI assistant itself. [prompt] pre-fills the composer
+/// (null leaves it empty); [autoSend] sends that prompt immediately instead of
+/// waiting for the user to tap send. Emitted by proactive AI hints across the
+/// app — and, optionally, by the model to offer a follow-up question.
+class AiChatLink extends AiDeepLink {
+  const AiChatLink({this.prompt, this.autoSend = false});
+
+  final String? prompt;
+  final bool autoSend;
+
+  @override
+  bool operator ==(Object other) =>
+      other is AiChatLink && other.prompt == prompt && other.autoSend == autoSend;
+
+  @override
+  int get hashCode => Object.hash(prompt, autoSend);
+
+  @override
+  String toString() => 'AiChatLink($prompt, autoSend: $autoSend)';
 }
 
 /// A link to one record's detail page (e.g. `product` 42). [type] is normalised

@@ -6,8 +6,13 @@ import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../view_models/variant_generation.dart';
 
-class VariantOptionTemplateField extends StatelessWidget {
-  const VariantOptionTemplateField({
+/// Lets the user define a product's options (e.g. Color, Size) by **creating a
+/// new option inline** as the primary action. Previously created options can
+/// still be reused from a secondary "reuse existing" chip list — options stay
+/// globally shareable under the hood — but the flow no longer reads as picking
+/// from a template catalogue.
+class VariantOptionField extends StatelessWidget {
+  const VariantOptionField({
     super.key,
     required this.availableOptions,
     required this.selectedOptions,
@@ -29,7 +34,14 @@ class VariantOptionTemplateField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
     final selectedIds = {for (final option in selectedOptions) option.id};
+    // Only options not already added to this product are offered for reuse, so
+    // the list stays short and never floods the form.
+    final reusableOptions = [
+      for (final option in availableOptions)
+        if (!selectedIds.contains(option.id)) option,
+    ];
 
     return FormField<List<VariantOption>>(
       initialValue: selectedOptions,
@@ -55,30 +67,55 @@ class VariantOptionTemplateField extends StatelessWidget {
                   ),
                 )
               else ...[
-                if (availableOptions.isEmpty && !isLoading)
-                  Text(l10n.variantOptionsEmpty)
-                else
+                // Options already chosen for this product.
+                if (selectedOptions.isNotEmpty)
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      for (final option in availableOptions)
+                      for (final option in selectedOptions)
                         FilterChip(
                           label: Text(option.displayLabel),
-                          selected: selectedIds.contains(option.id),
+                          selected: true,
                           onSelected: (_) => onToggleOption(option),
                         ),
                     ],
-                  ),
+                  )
+                else
+                  Text(l10n.variantOptionsEmpty),
+                // Primary action: create a fresh option + its values inline.
                 if (onCreateOption != null) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Align(
                     alignment: AlignmentDirectional.centerStart,
-                    child: OutlinedButton.icon(
+                    child: FilledButton.tonalIcon(
                       onPressed: onCreateOption,
                       icon: const Icon(Icons.add),
                       label: Text(l10n.addVariantOptionButton),
                     ),
+                  ),
+                ],
+                // Secondary: reuse a previously created option.
+                if (reusableOptions.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.reuseVariantOptionLabel,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colors.mutedInk,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final option in reusableOptions)
+                        ActionChip(
+                          avatar: const Icon(Icons.add, size: 16),
+                          label: Text(option.displayLabel),
+                          onPressed: () => onToggleOption(option),
+                        ),
+                    ],
                   ),
                 ],
               ],

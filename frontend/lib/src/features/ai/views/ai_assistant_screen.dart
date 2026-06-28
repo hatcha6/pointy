@@ -51,10 +51,20 @@ class AiAssistantScreen extends StatefulWidget {
     this.productSearch,
     this.onOpenAiLink,
     this.voiceRecorder,
+    this.initialPrompt,
+    this.autoSendInitialPrompt = false,
   });
 
   final AiChatViewModel viewModel;
   final AppNavigation navigation;
+
+  /// A question to seed the chat with when the screen opens, sent here by a
+  /// proactive AI hint elsewhere in the app. When [autoSendInitialPrompt] is
+  /// true it's sent immediately; otherwise it just pre-fills the composer so the
+  /// user can tweak it before sending. Null leaves the screen blank (the normal
+  /// drawer-launched case).
+  final String? initialPrompt;
+  final bool autoSendInitialPrompt;
 
   /// Captures microphone audio for voice messages. Injectable so widget tests
   /// can drive a fake; null falls back to the real `record`-backed recorder.
@@ -107,8 +117,25 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       if (mounted) {
         unawaited(widget.viewModel.loadHistory());
         unawaited(widget.viewModel.loadUsage());
+        _applyInitialPrompt();
       }
     });
+  }
+
+  /// Seed the chat from a proactive hint: auto-send it, or pre-fill the composer
+  /// and focus it so the user can adjust the question first.
+  void _applyInitialPrompt() {
+    final seed = widget.initialPrompt?.trim();
+    if (seed == null || seed.isEmpty) {
+      return;
+    }
+    if (widget.autoSendInitialPrompt) {
+      unawaited(widget.viewModel.sendMessage(seed));
+      return;
+    }
+    _controller.text = seed;
+    _controller.selection = TextSelection.collapsed(offset: seed.length);
+    _inputFocus.requestFocus();
   }
 
   @override

@@ -1020,7 +1020,7 @@ class _DocumentFrame {
     final pdf = pw.Document(
       title: '${template.title} ${template.reference}',
       author: template.shopName,
-      creator: 'Pointy',
+      creator: 'دفتر',
       subject: template.title,
     );
 

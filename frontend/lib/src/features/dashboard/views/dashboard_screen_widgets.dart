@@ -29,6 +29,191 @@ class _SpecialDayBanner extends StatelessWidget {
   }
 }
 
+/// The dashboard's AI daily-brief headline: the model-written summary sentence,
+/// shown in the same card chrome as every other dashboard card (so it sits at
+/// the top without looking out of place). Tapping it opens the AI chat for the
+/// full picture (the brief itself is auto-sent there).
+class _AiBriefHeadline extends StatelessWidget {
+  const _AiBriefHeadline({required this.brief, required this.onOpen});
+
+  final String brief;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+
+    return _DashboardCardShell(
+      onTap: onOpen,
+      title: l10n.aiDailyBriefLabel,
+      trailing: const PointyDisclosureChevron(),
+      child: Text(
+        brief,
+        style: textTheme.bodyLarge?.copyWith(
+          color: colors.ink,
+          height: 1.45,
+        ),
+      ),
+    );
+  }
+}
+
+/// The brief headline's loading placeholder, in the same card chrome — so while
+/// the digest generates, the dashboard shows the card is on its way rather than
+/// popping in from nothing.
+class _AiBriefSkeleton extends StatelessWidget {
+  const _AiBriefSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return _DashboardCardShell(
+      title: l10n.aiDailyBriefLabel,
+      child: const PointySkeleton(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PointySkeletonBox(height: 12),
+            SizedBox(height: 8),
+            PointySkeletonBox(height: 12, width: 220),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The shared dashboard-card chrome (matching [PointyDetailSection]): a raised
+/// white card with an AI-marked header and an optional tap. Used by the brief
+/// headline and its skeleton so they're visually identical to the data cards.
+class _DashboardCardShell extends StatelessWidget {
+  const _DashboardCardShell({
+    required this.title,
+    required this.child,
+    this.onTap,
+    this.trailing,
+  });
+
+  final String title;
+  final Widget child;
+  final VoidCallback? onTap;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(PointyRadii.card)),
+        boxShadow: PointyShadows.raised,
+      ),
+      child: Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: spacing.compactPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.auto_awesome, color: colors.primaryStrong),
+                    SizedBox(width: spacing.sm),
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    ?trailing,
+                  ],
+                ),
+                SizedBox(height: spacing.sm),
+                child,
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Wraps a dashboard card with the AI explainer line the digest produced for it:
+/// a clickable, tinted one-liner sitting directly under the card. Tapping opens
+/// the AI chat to go deeper on that card's topic.
+class _AiExplainerCard extends StatelessWidget {
+  const _AiExplainerCard({
+    required this.card,
+    required this.text,
+    required this.onTap,
+  });
+
+  final Widget card;
+  final String text;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final textTheme = Theme.of(context).textTheme;
+    final accent = colors.primaryStrong;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        card,
+        SizedBox(height: spacing.xs),
+        Material(
+          color: Color.alphaBlend(
+            accent.withValues(alpha: 0.08),
+            colors.surface,
+          ),
+          borderRadius: BorderRadius.circular(PointyRadii.chip),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: spacing.sm,
+                vertical: spacing.xs,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.auto_awesome, size: 14, color: accent),
+                  SizedBox(width: spacing.xs),
+                  Expanded(
+                    child: Text(
+                      text,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colors.primaryDark,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _SalesTrendChart extends StatelessWidget {
   const _SalesTrendChart({required this.points});
 

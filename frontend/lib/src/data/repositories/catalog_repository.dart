@@ -94,6 +94,18 @@ class CatalogRepository {
     );
   }
 
+  Future<Result<Product>> setVariantPrices({
+    required int productId,
+    required Map<int, double> pricesByVariant,
+  }) async {
+    return Result.guard(
+      () => _service.setVariantPrices(
+        productId: productId,
+        pricesByVariant: pricesByVariant,
+      ),
+    );
+  }
+
   Future<Result<int>> bulkCategorizeProducts({
     required List<int> ids,
     required List<int> categoryIds,
