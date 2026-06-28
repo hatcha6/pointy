@@ -22,15 +22,16 @@ val keystoreProperties = Properties().apply {
 }
 val hasReleaseSigning = keystorePropertiesFile.exists()
 
-// Oldest Android we serve: API 23 (Android 6.0 Marshmallow). 23 is the floor the
-// Flutter engine allows (it errors below 23) and the minimum the mobile_scanner
-// plugin accepts, so it reaches the widest base of old/minimal devices.
+// Oldest Android we serve: API 24 (Android 7.0 Nougat). We bumped from 23 because
+// image_picker_android (and other plugins) now require minSdk 24, and Flutter
+// itself is deprecating 23 and will soon drop support for it. 24 is also Flutter's
+// current `flutter.minSdkVersion` default.
 //
-// This MUST go through a variable, not a bare `minSdk = 23`: Flutter's gradle
-// migrator rewrites any literal `minSdk = 16..23` back to `flutter.minSdkVersion`
-// (currently 24) on every `flutter build`, which would silently drop Android 6.0
-// support. Assigning a val sidesteps that regex.
-val oldestSupportedApi = 23
+// Kept as a variable rather than a bare `minSdk = 24` so we stay clear of Flutter's
+// gradle migrator, which rewrites literal `minSdk = 16..23` back to
+// `flutter.minSdkVersion` on every `flutter build`. The val keeps the floor
+// explicit and self-documenting.
+val oldestSupportedApi = 24
 
 android {
     namespace = "ly.daftr"
@@ -52,7 +53,7 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         //
-        // Oldest supported Android (API 23 / Android 6.0). See oldestSupportedApi
+        // Oldest supported Android (API 24 / Android 7.0). See oldestSupportedApi
         // above for why this is a variable and not a literal.
         minSdk = oldestSupportedApi
         targetSdk = flutter.targetSdkVersion
