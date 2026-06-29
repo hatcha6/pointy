@@ -165,9 +165,31 @@ POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME=relay.yourdomain.com   # public name conn
 POINTY_RELAY_OPENROUTER_API_KEY=…                             # optional, enables AI
 ```
 
-The container image (`relay/Dockerfile`) `EXPOSE`s both ports and defaults its
-command to `server`. Run migrations automatically (the default here) or as a
-one-off deploy hook with `pointy-relay migrate`.
+### Container image
+
+`release.yml` builds `relay/Dockerfile` and publishes the hosted image to the
+GitHub Container Registry (**private**) — separate from the registry-free relay
+tar baked into the offline on-prem bundle:
+
+```
+ghcr.io/<owner>/pointy-relay:<version>   # every release + manual test build
+ghcr.io/<owner>/pointy-relay:latest      # moved on tagged releases only
+```
+
+`<owner>` is the repository owner (lowercased — ghcr requires it). The image
+`EXPOSE`s both ports and defaults its command to `server`, so a platform node
+needs nothing beyond the environment above; migrations apply on startup (the
+default here) or run as a one-off deploy hook with `pointy-relay migrate`.
+
+Because the package is private, the platform needs a pull credential — a GitHub
+**classic PAT** with the `read:packages` scope (username = your GitHub handle,
+password = the PAT), entered in the Docker node's registry settings.
+
+No local binary to hand? Generate the admin token straight from the image:
+
+```sh
+docker run --rm ghcr.io/<owner>/pointy-relay:latest gen-token
+```
 
 ### Two endpoints, two NGINX modes
 

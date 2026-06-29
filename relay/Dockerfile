@@ -18,17 +18,20 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o /out/pointy-relay \
     ./cmd/pointy-relay
 
-FROM alpine:3.22 AS certs
+FROM alpine:3.22 AS runtime
 
+# A minimal real OS userland, NOT `FROM scratch`: the Jelastic/Virtuozzo Docker
+# engine inspects the image to pick an OS template ("jem docker getpcstemplate")
+# and rejects images it can't identify — scratch has no /etc/os-release or
+# shell, so detection fails ("OS template cannot be detected"). Alpine is
+# detected fine and costs ~8 MB. The relay binary is static (CGO_ENABLED=0), so
+# Alpine only serves to satisfy the platform and ship CA roots + tzdata; there
+# is no libc dependency.
 RUN apk add --no-cache ca-certificates tzdata \
+    && adduser -D -H -u 65532 pointy \
     && mkdir -p /var/lib/pointy \
     && chown -R 65532:65532 /var/lib/pointy
 
-FROM scratch AS runtime
-
-COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=certs /usr/share/zoneinfo /usr/share/zoneinfo
-COPY --from=certs --chown=65532:65532 /var/lib/pointy /var/lib/pointy
 COPY --from=build /out/pointy-relay /usr/local/bin/pointy-relay
 
 USER 65532:65532
