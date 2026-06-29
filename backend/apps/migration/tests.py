@@ -675,6 +675,183 @@ class AboGhrisConnectorTests(MigrationTestBase):
         self.assertEqual(StockItem.objects.count(), stock_before)
         self.assertNotIn("stock", run.summary)
 
+    def test_stock_source_none_skips_stock(self):
+        """The explicit ``stock_source: none`` matches the legacy boolean."""
+        build_aboghris_sample(self.db_path)
+        source = self._aboghris_source()
+        stock_before = StockItem.objects.count()
+
+        run = self.run_sync(source, IMPORT, options={"stock_source": "none"})
+
+        self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
+        self.assertCreated(Product, 4)
+        self.assertEqual(StockItem.objects.count(), stock_before)
+        self.assertNotIn("stock", run.summary)
+
+    def test_reconstruct_stock_from_transactions(self):
+        build_aboghris_sample(self.db_path)
+        source = self._aboghris_source()
+
+        run = self.run_sync(source, IMPORT, options={"stock_source": "reconstruct"})
+
+        self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
+        v401 = ProductVariant.objects.get(barcode="6291100080489")
+        v402 = ProductVariant.objects.get(product__name="Item 402")
+        v404 = ProductVariant.objects.get(product__name="Item 404")
+        # On-hand = purchases − sales, NOT the stored snapshot (50 / 12 / none):
+        #   401: bought 10, sold 2 -> 8     402: bought 5, sold 1 -> 4
+        self.assertEqual(StockItem.objects.get(variant=v401).quantity_on_hand, Decimal("8.000"))
+        self.assertEqual(StockItem.objects.get(variant=v402).quantity_on_hand, Decimal("4.000"))
+        # 404 sold 3 but was never purchased -> clamped to 0 with a clear hint.
+        self.assertEqual(StockItem.objects.get(variant=v404).quantity_on_hand, Decimal("0.000"))
+        warning = MigrationIssue.objects.get(
+            run=run, entity_type="stock", code="sold_without_purchase"
+        )
+        self.assertIn("Item 404", warning.message)
+        self.assertEqual(warning.detail["sold"], "3")
+        self.assertEqual(warning.detail["purchased"], "0")
+        # Reconstruction stats ride along in the stock summary bucket…
+        recon = run.summary["stock"]["reconstruction"]
+        self.assertEqual(recon["products_set"], 2)
+        self.assertEqual(recon["products_zeroed"], 1)
+        self.assertEqual(recon["sold_without_purchase"], 1)
+        self.assertEqual(recon["total_deficit_units"], "3")
+        # …and the operator gets a single headline they can relay to the client.
+        self.assertTrue(
+            MigrationIssue.objects.filter(
+                run=run, code="reconstruction_incomplete_history"
+            ).exists()
+        )
+        # The stored snapshot (50 / 12) is read back and compared: both 401 and
+        # 402 reconstructed lower than the old system claimed, so the difference
+        # is reported as a likely un-invoiced opening balance.
+        self.assertEqual(recon["old_system_higher"], 2)
+        self.assertEqual(recon["total_implied_opening_units"], "50")  # (50-8)+(12-4)
+        self.assertTrue(MigrationIssue.objects.filter(run=run, code="snapshot_comparison").exists())
+        higher = {
+            issue.detail.get("product"): issue.detail
+            for issue in MigrationIssue.objects.filter(
+                run=run, code="quantity_higher_in_old_system"
+            )
+        }
+        self.assertEqual(higher["Item 401"]["old_system"], "50")
+        self.assertEqual(higher["Item 401"]["reconstructed"], "8")
+        self.assertEqual(higher["Item 401"]["difference"], "42")
+        # Money view: stored vs invoice-supported stock value at last cost (401@9,
+        # 402@2) — 8×9+4×2=80 reconstructed vs 50×9+12×2=474 stored.
+        self.assertEqual(recon["reconstructed_inventory_value"], "80.00")
+        self.assertEqual(recon["snapshot_inventory_value"], "474.00")
+        self.assertTrue(MigrationIssue.objects.filter(run=run, code="inventory_valuation").exists())
+
+    def test_reconstruct_auto_includes_transactions_when_not_selected(self):
+        """Reconstruct needs the history, so the engine pulls it in even when the
+        operator only ticked the catalog entities."""
+        build_aboghris_sample(self.db_path)
+        source = self._aboghris_source()
+
+        run = self.run_sync(
+            source,
+            IMPORT,
+            entities=["unit", "category", "product", "product_unit"],
+            options={"stock_source": "reconstruct"},
+        )
+
+        self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
+        v401 = ProductVariant.objects.get(barcode="6291100080489")
+        self.assertEqual(StockItem.objects.get(variant=v401).quantity_on_hand, Decimal("8.000"))
+
+
+class StockReconstructorTests(MigrationTestBase):
+    """Directly exercises the snapshot-comparison branches with a fake resolver,
+    so all four divergence directions are covered without a connector dump."""
+
+    class _FakeResolver:
+        def __init__(self, mapping):
+            self._mapping = mapping
+
+        def resolve(self, entity_type, key):
+            return self._mapping.get((entity_type, str(key)))
+
+    def _variant(self, name, sku):
+        product = Product.objects.create(name=name)
+        return product.ensure_default_variant(sku=sku, unit_price=Decimal("1"))
+
+    def test_snapshot_comparison_directions(self):
+        from .entity_plan import PURCHASE_ORDER, SALE, VARIANT
+        from .reconstruct import StockReconstructor
+
+        a = self._variant("A higher", "SKU-A")  # invoices 8  vs old 50
+        b = self._variant("B lower", "SKU-B")  # invoices 4  vs old 2
+        c = self._variant("C no history", "SKU-C")  # invoices 0  vs old 7
+        d = self._variant("D match", "SKU-D")  # invoices 0  vs old 0
+        resolver = self._FakeResolver(
+            {(VARIANT, "A"): a.pk, (VARIANT, "B"): b.pk, (VARIANT, "C"): c.pk, (VARIANT, "D"): d.pk}
+        )
+
+        recon = StockReconstructor(resolver)
+        recon.observe(
+            PURCHASE_ORDER,
+            canonical.CanonicalPurchaseOrder(
+                source_key="po1",
+                lines=[
+                    canonical.CanonicalPurchaseLine(variant_source_key="A", quantity=10, unit_cost=Decimal("9")),
+                    canonical.CanonicalPurchaseLine(variant_source_key="B", quantity=5, unit_cost=Decimal("2")),
+                    canonical.CanonicalPurchaseLine(variant_source_key="D", quantity=3, unit_cost=Decimal("1")),
+                ],
+            ),
+        )
+        recon.observe(
+            SALE,
+            canonical.CanonicalSale(
+                source_key="s1",
+                lines=[
+                    canonical.CanonicalSaleLine(variant_source_key="A", quantity=Decimal("2")),
+                    canonical.CanonicalSaleLine(variant_source_key="B", quantity=Decimal("1")),
+                    canonical.CanonicalSaleLine(variant_source_key="D", quantity=Decimal("3")),
+                ],
+            ),
+        )
+        for key, qty in (("A", 50), ("B", 2), ("C", 7), ("D", 0)):
+            recon.observe_snapshot(
+                canonical.CanonicalStock(
+                    source_key=f"st-{key}", variant_source_key=key, quantity_on_hand=Decimal(qty)
+                ),
+                resolver,
+            )
+
+        result = recon.flush(dry_run=False)
+
+        # Reconstructed on-hand: A 8, B 4, D 0; C has no invoices -> no stock row.
+        self.assertEqual(StockItem.objects.get(variant=a).quantity_on_hand, Decimal("8.000"))
+        self.assertEqual(StockItem.objects.get(variant=b).quantity_on_hand, Decimal("4.000"))
+        self.assertEqual(StockItem.objects.get(variant=d).quantity_on_hand, Decimal("0.000"))
+        self.assertFalse(StockItem.objects.filter(variant=c).exists())
+
+        stats = result.stats
+        self.assertEqual(stats["snapshot_compared"], 4)
+        self.assertEqual(stats["snapshot_matching"], 1)  # D
+        self.assertEqual(stats["snapshot_match_rate"], 25)
+        self.assertEqual(stats["old_system_higher"], 2)  # A, C
+        self.assertEqual(stats["old_system_lower"], 1)  # B
+        self.assertEqual(stats["total_implied_opening_units"], "49")  # (50-8) + (7-0)
+        self.assertEqual(stats["total_unexplained_shrinkage_units"], "2")  # (4-2)
+        self.assertEqual(stats["snapshot_only_no_history"], 1)  # C
+
+        # Valuation: both quantities costed at the last purchase price (A 9, B 2,
+        # D 1); C has no purchase so it can't be valued.
+        self.assertEqual(stats["reconstructed_inventory_value"], "80.00")  # 8×9 + 4×2 + 0×1
+        self.assertEqual(stats["snapshot_inventory_value"], "454.00")  # 50×9 + 2×2 + 0×1
+        self.assertEqual(stats["inventory_value_difference"], "-374.00")
+        self.assertEqual(stats["products_without_cost"], 1)  # C
+
+        codes = {issue.code for issue in result.issues}
+        self.assertIn("quantity_higher_in_old_system", codes)  # A
+        self.assertIn("quantity_lower_in_old_system", codes)  # B
+        self.assertIn("snapshot_without_history", codes)  # C
+        self.assertIn("snapshot_comparison", codes)  # headline
+        self.assertIn("snapshot_only_no_history", codes)  # headline
+        self.assertIn("inventory_valuation", codes)  # headline
+
 
 class FahdConnectorTests(MigrationTestBase):
     def _fahd_source(self, **overrides):

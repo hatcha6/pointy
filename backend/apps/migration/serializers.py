@@ -3,6 +3,7 @@ from rest_framework import serializers
 from .connectors import get_connector, list_connectors
 from .entity_plan import ENTITY_PLAN
 from .models import MigrationIssue, MigrationRun, MigrationSource
+from .reconstruct import VALID_STOCK_SOURCES
 
 
 class MigrationSystemSerializer(serializers.Serializer):
@@ -156,6 +157,14 @@ class MigrationRunCreateSerializer(serializers.Serializer):
         child=serializers.CharField(), required=False, default=list
     )
     options = serializers.DictField(required=False, default=dict)
+
+    def validate_options(self, value):
+        stock_source = (value or {}).get("stock_source")
+        if stock_source is not None and stock_source not in VALID_STOCK_SOURCES:
+            raise serializers.ValidationError(
+                {"stock_source": f"Must be one of {sorted(VALID_STOCK_SOURCES)}."}
+            )
+        return value
 
 
 class MigrationIssueSerializer(serializers.ModelSerializer):

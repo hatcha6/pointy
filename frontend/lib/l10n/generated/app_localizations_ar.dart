@@ -11945,6 +11945,31 @@ class AppLocalizationsAr extends AppLocalizations {
       'استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في دفتر.';
 
   @override
+  String get migrationStockSourceSectionTitle => 'كميات المخزون';
+
+  @override
+  String get migrationStockSourceSnapshotLabel => 'نقل الكميات كما هي';
+
+  @override
+  String get migrationStockSourceSnapshotSubtitle =>
+      'تُنقل كميات المخزون الحالية من النظام القديم كما هي.';
+
+  @override
+  String get migrationStockSourceReconstructLabel =>
+      'احتساب الكميات من الفواتير';
+
+  @override
+  String get migrationStockSourceReconstructSubtitle =>
+      'تُحتسب كمية كل صنف من فواتير الشراء ناقص فواتير البيع. مناسب عندما تكون كميات النظام القديم غير موثوقة لكن فواتيره سليمة. يتطلّب نقل فواتير الشراء والبيع، وسيُنبّهك إن بِيع صنف بكمية أكبر مما اشتُري.';
+
+  @override
+  String get migrationStockSourceNoneLabel => 'بدون كميات';
+
+  @override
+  String get migrationStockSourceNoneSubtitle =>
+      'تُنقل المنتجات دون أي كميات، ويُبدأ الجرد من جديد في دفتر.';
+
+  @override
   String get migrationEntityUnit => 'وحدات القياس';
 
   @override

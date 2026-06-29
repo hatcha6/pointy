@@ -20736,6 +20736,48 @@ abstract class AppLocalizations {
   /// **'استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في دفتر.'**
   String get migrationWithoutQuantitiesSubtitle;
 
+  /// No description provided for @migrationStockSourceSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كميات المخزون'**
+  String get migrationStockSourceSectionTitle;
+
+  /// No description provided for @migrationStockSourceSnapshotLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقل الكميات كما هي'**
+  String get migrationStockSourceSnapshotLabel;
+
+  /// No description provided for @migrationStockSourceSnapshotSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُنقل كميات المخزون الحالية من النظام القديم كما هي.'**
+  String get migrationStockSourceSnapshotSubtitle;
+
+  /// No description provided for @migrationStockSourceReconstructLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'احتساب الكميات من الفواتير'**
+  String get migrationStockSourceReconstructLabel;
+
+  /// No description provided for @migrationStockSourceReconstructSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحتسب كمية كل صنف من فواتير الشراء ناقص فواتير البيع. مناسب عندما تكون كميات النظام القديم غير موثوقة لكن فواتيره سليمة. يتطلّب نقل فواتير الشراء والبيع، وسيُنبّهك إن بِيع صنف بكمية أكبر مما اشتُري.'**
+  String get migrationStockSourceReconstructSubtitle;
+
+  /// No description provided for @migrationStockSourceNoneLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون كميات'**
+  String get migrationStockSourceNoneLabel;
+
+  /// No description provided for @migrationStockSourceNoneSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُنقل المنتجات دون أي كميات، ويُبدأ الجرد من جديد في دفتر.'**
+  String get migrationStockSourceNoneSubtitle;
+
   /// No description provided for @migrationEntityUnit.
   ///
   /// In ar, this message translates to:

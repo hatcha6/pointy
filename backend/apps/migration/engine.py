@@ -23,12 +23,18 @@ from django.db import transaction
 
 from .connectors import get_connector
 from .connectors.base import ExtractContext
-from .entity_plan import STOCK, ordered_entities
+from .entity_plan import PURCHASE_ORDER, SALE, STOCK, ordered_entities
 from .exceptions import CompatibilityError, MigrationError
 from .identity import IdentityResolver
 from .loaders import get_loader
 from .loaders.base import ERROR, FAILED
 from .models import MigrationIssue, MigrationRun
+from .reconstruct import (
+    STOCK_SOURCE_NONE,
+    STOCK_SOURCE_RECONSTRUCT,
+    StockReconstructor,
+    resolve_stock_source,
+)
 from .transports import build_transport
 
 MAX_ISSUES_PER_ENTITY = 1000
@@ -54,6 +60,10 @@ class MigrationEngine:
         self._summary: dict[str, dict] = {}
         self._issues: list[MigrationIssue] = []
         self._issue_counts: dict[str, int] = {}
+        # How stock on-hand is established: snapshot (import stored quantities),
+        # none (no quantities), or reconstruct (compute from purchases − sales).
+        self._stock_source = resolve_stock_source(run.options)
+        self._reconstructor: StockReconstructor | None = None
 
     # --- public entrypoint ----------------------------------------------
     def execute(self) -> dict:
@@ -69,6 +79,8 @@ class MigrationEngine:
             run_options=dict(self.run.options or {}),
         )
         resolver = IdentityResolver(self.source, self.run, dry_run=self.dry_run)
+        if self._stock_source == STOCK_SOURCE_RECONSTRUCT:
+            self._reconstructor = StockReconstructor(resolver)
 
         with transport:
             report = connector.check_compatibility(transport)
@@ -97,6 +109,11 @@ class MigrationEngine:
             )
             self._process_entity(spec, connector, transport, context, resolver)
             self._persist_summary()
+        if self._reconstructor is not None:
+            self.run.update_progress(96, "احتساب الكميات من الحركات…", current_entity=STOCK)
+            self._feed_reconstruction_snapshot(connector, transport, context, resolver)
+            self._reconstruct_stock()
+            self._persist_summary()
 
     def _run_dry(self, connector, transport, context, resolver, specs):
         # Single transaction across all entities (so children resolve their
@@ -107,6 +124,12 @@ class MigrationEngine:
             with transaction.atomic():
                 for spec in specs:
                     self._process_entity(spec, connector, transport, context, resolver)
+                # Reconstruct inside the transaction so its StockItem writes get
+                # the same real FK/constraint checks before being rolled back;
+                # its diagnostics are buffered and survive (like every issue).
+                if self._reconstructor is not None:
+                    self._feed_reconstruction_snapshot(connector, transport, context, resolver)
+                self._reconstruct_stock()
                 raise _DryRunRollback
         except _DryRunRollback:
             pass
@@ -126,6 +149,11 @@ class MigrationEngine:
         try:
             for record in connector.extract(spec.entity_type, transport, context):
                 self._load_one(spec, loader, record, resolver, counts)
+                # Feed the stock reconstructor (if active) regardless of whether
+                # the order/PO row itself loaded — stock follows the source's
+                # movements, not Pointy's import success.
+                if self._reconstructor is not None and spec.entity_type in (SALE, PURCHASE_ORDER):
+                    self._reconstructor.observe(spec.entity_type, record)
                 processed += 1
                 # Live count for big entities. Skipped during a dry run because
                 # those writes would be rolled back with the rest of the run.
@@ -158,6 +186,40 @@ class MigrationEngine:
                 issue.code,
                 issue.message,
                 issue.detail,
+            )
+
+    def _feed_reconstruction_snapshot(self, connector, transport, context, resolver):
+        """Best-effort read of the source's *stored* stock — without importing it
+        — so reconstruction can report how far the old system's own numbers were
+        from what its invoices imply. Never fatal: a failure just drops the
+        comparison hints, leaving the reconstruction itself intact.
+        """
+        if self._reconstructor is None or STOCK not in set(connector.supported_entities):
+            return
+        try:
+            for record in connector.extract(STOCK, transport, context):
+                self._reconstructor.observe_snapshot(record, resolver)
+        except Exception as exc:  # noqa: BLE001 - comparison is optional, not fatal
+            self._add_issue(STOCK, "", ERROR, "snapshot_read_failed", _friendly(exc))
+
+    def _reconstruct_stock(self):
+        """Net the observed purchase/sale movements into on-hand + diagnose.
+
+        Writes the result under the ``stock`` summary bucket (so it shows up in
+        the same place as a snapshot stock import) with an extra
+        ``reconstruction`` sub-dict of stats, and records each warning (negative
+        stock, etc.) as a regular issue.
+        """
+        if self._reconstructor is None:
+            return
+        result = self._reconstructor.flush(dry_run=self.dry_run)
+        bucket = dict(result.counts)
+        if result.stats:
+            bucket["reconstruction"] = result.stats
+        self._summary[STOCK] = bucket
+        for issue in result.issues:
+            self._add_issue(
+                STOCK, issue.source_key, issue.severity, issue.code, issue.message, issue.detail
             )
 
     # --- issues + summary ------------------------------------------------
@@ -193,10 +255,16 @@ class MigrationEngine:
     def _specs_to_run(self, connector):
         supported = set(connector.supported_entities)
         selected = set(self.run.selected_entities or []) or supported
-        # Generic, connector-agnostic option: bring products with no stock on
-        # hand by simply not running the stock entity.
-        if (self.run.options or {}).get("products_without_quantities"):
+        # The stock-source mode decides how (and whether) the stock entity runs:
+        #   snapshot    → import the source's stored quantities (the STOCK entity)
+        #   none        → products with no quantities (drop STOCK)
+        #   reconstruct → drop STOCK and compute on-hand from the purchase + sale
+        #                 history instead, which therefore must be part of the run
+        #                 (auto-included here even if the operator didn't tick it).
+        if self._stock_source in (STOCK_SOURCE_NONE, STOCK_SOURCE_RECONSTRUCT):
             selected.discard(STOCK)
+        if self._stock_source == STOCK_SOURCE_RECONSTRUCT:
+            selected |= {SALE, PURCHASE_ORDER} & supported
         return [
             spec
             for spec in ordered_entities()

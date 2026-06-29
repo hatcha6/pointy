@@ -8,6 +8,22 @@ import '../../../core/result.dart';
 import '../../../data/models/migration.dart';
 import '../../../data/repositories/migration_repository.dart';
 
+/// How stock on-hand is established when products are imported.
+///
+/// * [snapshot] — copy the old system's stored quantities as they are.
+/// * [reconstruct] — compute on-hand from the transaction history (purchases
+///   minus sales); for shops whose stored balances drifted but whose invoices
+///   are intact. Requires importing the purchase + sale history.
+/// * [none] — import products with no quantities and count physically later.
+enum MigrationStockSource {
+  snapshot,
+  reconstruct,
+  none;
+
+  /// The value sent in the run's ``options.stock_source``.
+  String get wireValue => name;
+}
+
 /// Drives the Data Migration page: connection config, compatibility check,
 /// dry-run / import, and live polling of the active run.
 class MigrationViewModel extends ChangeNotifier {
@@ -23,7 +39,7 @@ class MigrationViewModel extends ChangeNotifier {
   List<MigrationSource> _sources = const [];
   int? _selectedSourceId;
   final Set<String> _selectedEntities = <String>{};
-  bool _productsWithoutQuantities = false;
+  MigrationStockSource _stockSource = MigrationStockSource.snapshot;
   CompatibilityReport? _compatReport;
   MigrationConnectionTest? _connectionTest;
   MigrationRun? _activeRun;
@@ -55,7 +71,7 @@ class MigrationViewModel extends ChangeNotifier {
   }
 
   Set<String> get selectedEntities => _selectedEntities;
-  bool get productsWithoutQuantities => _productsWithoutQuantities;
+  MigrationStockSource get stockSource => _stockSource;
   CompatibilityReport? get compatibilityReport =>
       _compatReport ?? _checkedReportFromSource;
   MigrationConnectionTest? get connectionTest => _connectionTest;
@@ -172,8 +188,8 @@ class MigrationViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setProductsWithoutQuantities(bool value) {
-    _productsWithoutQuantities = value;
+  void setStockSource(MigrationStockSource value) {
+    _stockSource = value;
     notifyListeners();
   }
 
@@ -310,7 +326,7 @@ class MigrationViewModel extends ChangeNotifier {
       sourceId: source.id,
       mode: dryRun ? 'dry_run' : 'import',
       entities: _selectedEntities.toList(),
-      options: {'products_without_quantities': _productsWithoutQuantities},
+      options: {'stock_source': _stockSource.wireValue},
     );
     MigrationRun? run;
     switch (result) {

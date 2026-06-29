@@ -528,14 +528,19 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
                 ),
             ],
           ),
-          SizedBox(height: spacing.xs),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.migrationWithoutQuantitiesLabel),
-            subtitle: Text(l10n.migrationWithoutQuantitiesSubtitle),
-            value: viewModel.productsWithoutQuantities,
-            onChanged: viewModel.setProductsWithoutQuantities,
+          SizedBox(height: spacing.sm),
+          Text(
+            l10n.migrationStockSourceSectionTitle,
+            style: Theme.of(context).textTheme.titleSmall,
           ),
+          SizedBox(height: spacing.xs),
+          for (final source in MigrationStockSource.values)
+            _StockSourceOption(
+              label: _stockSourceLabel(l10n, source),
+              subtitle: _stockSourceSubtitle(l10n, source),
+              selected: viewModel.stockSource == source,
+              onTap: () => viewModel.setStockSource(source),
+            ),
         ],
       ),
     );
@@ -825,6 +830,54 @@ String _entityLabel(
     'expense' => l10n.migrationEntityExpense,
     _ => viewModel.entityLabel(type),
   };
+}
+
+String _stockSourceLabel(AppLocalizations l10n, MigrationStockSource source) {
+  return switch (source) {
+    MigrationStockSource.snapshot => l10n.migrationStockSourceSnapshotLabel,
+    MigrationStockSource.reconstruct => l10n.migrationStockSourceReconstructLabel,
+    MigrationStockSource.none => l10n.migrationStockSourceNoneLabel,
+  };
+}
+
+String _stockSourceSubtitle(AppLocalizations l10n, MigrationStockSource source) {
+  return switch (source) {
+    MigrationStockSource.snapshot => l10n.migrationStockSourceSnapshotSubtitle,
+    MigrationStockSource.reconstruct => l10n.migrationStockSourceReconstructSubtitle,
+    MigrationStockSource.none => l10n.migrationStockSourceNoneSubtitle,
+  };
+}
+
+/// A single tappable stock-source choice (title + explanation), styled like a
+/// radio option without the deprecated [Radio] groupValue API.
+class _StockSourceOption extends StatelessWidget {
+  const _StockSourceOption({
+    required this.label,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+        color: selected ? theme.colorScheme.primary : theme.disabledColor,
+      ),
+      title: Text(label),
+      subtitle: Text(subtitle),
+      selected: selected,
+      onTap: onTap,
+    );
+  }
 }
 
 class _SectionCard extends StatelessWidget {
