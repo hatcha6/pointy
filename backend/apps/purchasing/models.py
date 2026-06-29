@@ -124,6 +124,15 @@ class PurchaseOrder(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        # The PO list, payables view and dashboard aggregates all filter by
+        # status and order by -created_at; this composite serves those plus the
+        # default ordered listing (mirrors sales.Order's status/created index).
+        indexes = [
+            models.Index(
+                fields=["status", "-created_at"],
+                name="po_status_created_idx",
+            ),
+        ]
         permissions = [
             ("edit_draft_purchaseorder", "Can edit draft purchase order"),
             ("receive_purchaseorder", "Can receive purchase order"),

@@ -207,6 +207,15 @@ class Job(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        # The jobs board lists by status ordered by -created_at; this composite
+        # serves the (usually open) board plus the default listing as completed
+        # history grows (mirrors sales.Order's status/created index).
+        indexes = [
+            models.Index(
+                fields=["status", "-created_at"],
+                name="job_status_created_idx",
+            ),
+        ]
         permissions = [
             ("approve_job_quote", "Can approve a job quote"),
             ("reopen_job", "Can reopen a completed or cancelled job"),

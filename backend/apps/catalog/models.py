@@ -175,6 +175,17 @@ class Product(TimeStampedModel):
 
     class Meta:
         ordering = ["name"]
+        indexes = [
+            # The live catalog (POS + products list) is the single most-hit
+            # list: it always filters archived_at IS NULL and orders by name,
+            # id. A partial index keeps it small and serves that sort directly,
+            # avoiding a filesort over the whole catalog on every load.
+            models.Index(
+                fields=["name", "id"],
+                name="product_name_live_idx",
+                condition=Q(archived_at__isnull=True),
+            ),
+        ]
 
     @property
     def is_archived(self) -> bool:

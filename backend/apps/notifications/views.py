@@ -11,7 +11,7 @@ from .serializers import (
 from .services import (
     acknowledge_notification,
     acknowledge_notifications_for_user,
-    notification_is_hidden_for_user,
+    maybe_sync_business_notifications,
     restore_notification,
     restore_notifications_for_user,
     snooze_notification,
@@ -32,8 +32,12 @@ class BusinessNotificationViewSet(
     ordering_fields = ("last_seen_at", "severity", "category", "created_at")
 
     def get_queryset(self):
-        if self.action in ("list", "retrieve", "refresh"):
-            sync_business_notifications()
+        # Reads top up the feed inline, but throttled (see the service): the
+        # Celery beat is the primary refresher, so the bell/badge polled by every
+        # device no longer triggers a full recompute per request. The explicit
+        # POST /refresh below still forces an immediate, unthrottled recompute.
+        if self.action in ("list", "retrieve"):
+            maybe_sync_business_notifications()
         queryset = visible_notifications_for_user(self.request.user)
         include_hidden = self.action in {
             "dismiss",

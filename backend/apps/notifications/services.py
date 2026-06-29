@@ -2,6 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count, DecimalField, F, Q, Sum, Value
 from django.db.models.functions import Coalesce
@@ -112,6 +113,41 @@ def sync_business_notifications(now=None):
         ).count(),
         "generated": len(desired),
     }
+
+
+# The feed is recomputed on a Celery beat (notifications.sync_business_notifications).
+# Reads *also* top it up inline, but no more than once per this window (seconds),
+# so a fleet of devices polling the bell/badge can't each trigger a fresh
+# whole-catalog + all-time recompute. Tunable via settings; <= 0 disables the
+# throttle (recompute on every read, the old behaviour).
+INLINE_SYNC_THROTTLE_SECONDS = 300
+INLINE_SYNC_THROTTLE_CACHE_KEY = "notifications:inline-sync:lock"
+
+
+def maybe_sync_business_notifications(now=None):
+    """Recompute the notifications feed inline, at most once per throttle window.
+
+    The Celery beat is the primary path that keeps the table fresh. This inline
+    top-up exists to (a) prime the table immediately after a fresh deploy, before
+    the beat's first tick, and (b) keep the feed advancing if the worker is down.
+    ``cache.add`` is atomic on the Redis backend, so concurrent polls from every
+    signed-in device collapse into a single recompute per window instead of one
+    full scan per request.
+
+    Returns the sync result dict when this call actually recomputed, else None.
+    """
+    throttle_seconds = getattr(
+        settings,
+        "POINTY_NOTIFICATION_INLINE_SYNC_THROTTLE_SECONDS",
+        INLINE_SYNC_THROTTLE_SECONDS,
+    )
+    if throttle_seconds <= 0:
+        return sync_business_notifications(now=now)
+    # Only the first caller in the window sets the key and proceeds; the rest see
+    # the key already present and short-circuit, serving the last-computed table.
+    if not cache.add(INLINE_SYNC_THROTTLE_CACHE_KEY, "1", timeout=throttle_seconds):
+        return None
+    return sync_business_notifications(now=now)
 
 
 def visible_notifications_for_user(user):
@@ -573,9 +609,9 @@ def _upsert_notification(spec, now):
     if "payload" in spec:
         spec = {**spec, "payload": _json_safe_payload(spec["payload"])}
     # get_or_create keys on the unique fingerprint and absorbs the IntegrityError
-    # from a concurrent insert (sync runs on a 15-min beat AND synchronously on
-    # every notifications GET, so two syncs racing on the same fingerprint is
-    # routine). A plain filter-then-create would raise under that race.
+    # from a concurrent insert (sync runs on a Celery beat AND, throttled, inline
+    # on reads, so two syncs racing on the same fingerprint is possible). A plain
+    # filter-then-create would raise under that race.
     defaults = {key: value for key, value in spec.items() if key != "fingerprint"}
     notification, created = BusinessNotification.objects.get_or_create(
         fingerprint=spec["fingerprint"],

@@ -1,8 +1,11 @@
 from datetime import timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.cache import cache
+from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -17,9 +20,24 @@ from apps.printing.models import PrintJob, PrintTemplate, PrintTemplateVersion
 from apps.purchasing.models import PurchaseOrder, PurchaseReceipt, Supplier
 from apps.sales.models import RegisterSession
 
+# Reads now top up the feed inline only once per throttle window (via cache.add).
+# Pin a local in-process cache so the throttle is hermetic and deterministic —
+# no dependency on a live Redis, and one test's lock can't leak into the next.
+_INLINE_SYNC_TEST_CACHE = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "notifications-inline-sync-tests",
+    }
+}
 
+
+@override_settings(CACHES=_INLINE_SYNC_TEST_CACHE)
 class BusinessNotificationApiTests(APITestCase):
     def setUp(self):
+        # The inline-sync throttle lives in the cache, which outlives a TestCase;
+        # clear it so each test's first read recomputes.
+        cache.clear()
+        self.addCleanup(cache.clear)
         ensure_role_groups()
         User = get_user_model()
         self.manager = User.objects.create_user(
@@ -141,8 +159,10 @@ class BusinessNotificationApiTests(APITestCase):
 
         stock_item.quantity_on_hand = 12
         stock_item.save(update_fields=["quantity_on_hand", "updated_at"])
+        # A plain read is throttled (the beat is the primary refresher), so force
+        # an immediate recompute through the explicit refresh endpoint.
         self.assertEqual(
-            client.get(reverse("business-notification-list")).status_code,
+            client.post(reverse("business-notification-refresh")).status_code,
             status.HTTP_200_OK,
         )
         notification.refresh_from_db()
@@ -265,6 +285,34 @@ class BusinessNotificationApiTests(APITestCase):
         self.assertIn("printing.failed_job", manager_codes)
         self.assertIn("sales.register_variance", manager_codes)
         self.assertEqual(cashier_codes, {"printing.failed_job"})
+
+    def test_consecutive_reads_recompute_at_most_once_per_window(self):
+        # The dominant pre-beta cost was a full recompute on every bell/badge
+        # poll. Throttled, repeated reads in one window recompute only once.
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        with mock.patch(
+            "apps.notifications.services.sync_business_notifications",
+            return_value={"active": 0, "generated": 0},
+        ) as mocked_sync:
+            for _ in range(3):
+                response = client.get(reverse("business-notification-list"))
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(mocked_sync.call_count, 1)
+
+    @override_settings(POINTY_NOTIFICATION_INLINE_SYNC_THROTTLE_SECONDS=0)
+    def test_throttle_can_be_disabled_via_settings(self):
+        # The escape hatch restores recompute-on-every-read for anyone who wants
+        # it (e.g. a deployment without a running beat).
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        with mock.patch(
+            "apps.notifications.services.sync_business_notifications",
+            return_value={"active": 0, "generated": 0},
+        ) as mocked_sync:
+            client.get(reverse("business-notification-list"))
+            client.get(reverse("business-notification-list"))
+        self.assertEqual(mocked_sync.call_count, 2)
 
     def _create_failed_print_job(self):
         template = PrintTemplate.objects.create(
