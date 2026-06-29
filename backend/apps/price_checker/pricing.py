@@ -15,6 +15,8 @@ from decimal import Decimal
 
 from django.utils import timezone
 
+from apps.attachments.models import Attachment
+from apps.attachments.services import sign_attachment_content_token
 from apps.catalog.models import ProductVariant, normalize_barcode
 from apps.discounts.models import DiscountRule
 from apps.discounts.services import (
@@ -50,6 +52,11 @@ class PriceResult:
     discount_percent: Decimal = ZERO
     in_stock: bool = True
     discounts: tuple[AppliedDiscountInfo, ...] = field(default_factory=tuple)
+    # Primary product image, resolved on demand for web kiosks. The signed token
+    # lets an unauthenticated LAN kiosk fetch the image content; the absolute URL
+    # is assembled in the view, which has the request for ``build_absolute_uri``.
+    image_attachment_id: int | None = None
+    image_token: str = ""
 
     @property
     def has_discount(self) -> bool:
@@ -69,11 +76,26 @@ def _variant_in_stock(variant: ProductVariant) -> bool:
     return variant.quantity_on_hand > 0
 
 
+def _primary_image_attachment(variant: ProductVariant) -> Attachment | None:
+    """Best image for the kiosk: variant-level photo first, else the product's."""
+    for owner in (variant, variant.product):
+        attachment = (
+            owner.attachments.active()
+            .filter(role=Attachment.Role.PRODUCT_IMAGE)
+            .order_by("-is_primary", "-created_at", "-id")
+            .first()
+        )
+        if attachment is not None:
+            return attachment
+    return None
+
+
 def lookup_price(
     barcode: str,
     *,
     channel: str = DiscountRule.Channel.SALES,
     now: datetime | None = None,
+    with_image: bool = False,
 ) -> PriceResult:
     code = normalize_barcode(barcode)
     if not code:
@@ -127,6 +149,14 @@ def lookup_price(
         for application in result.applications
     )
 
+    image_attachment_id: int | None = None
+    image_token = ""
+    if with_image:
+        attachment = _primary_image_attachment(variant)
+        if attachment is not None:
+            image_attachment_id = attachment.pk
+            image_token = sign_attachment_content_token(attachment)
+
     return PriceResult(
         found=True,
         barcode=code,
@@ -141,4 +171,6 @@ def lookup_price(
         discount_percent=percent,
         in_stock=_variant_in_stock(variant),
         discounts=discounts,
+        image_attachment_id=image_attachment_id,
+        image_token=image_token,
     )

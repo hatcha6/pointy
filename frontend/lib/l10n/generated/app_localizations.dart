@@ -19806,6 +19806,288 @@ abstract class AppLocalizations {
   /// **'لا توجد عمليات فحص بعد لهذا الجهاز.'**
   String get priceCheckerActivityEmpty;
 
+  /// No description provided for @priceCheckerScanPrompt.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح الباركود لعرض السعر'**
+  String get priceCheckerScanPrompt;
+
+  /// No description provided for @priceCheckerLoading.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ البحث…'**
+  String get priceCheckerLoading;
+
+  /// No description provided for @priceCheckerScanAnother.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح منتجًا آخر'**
+  String get priceCheckerScanAnother;
+
+  /// No description provided for @priceCheckerNotFoundTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتج غير موجود'**
+  String get priceCheckerNotFoundTitle;
+
+  /// No description provided for @priceCheckerNotFoundBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحقّق من الباركود وحاول مرة أخرى'**
+  String get priceCheckerNotFoundBody;
+
+  /// Shows the scanned barcode when a product isn't found.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباركود: {barcode}'**
+  String priceCheckerScannedCode(String barcode);
+
+  /// No description provided for @priceCheckerDisconnectedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير متصل بالخادم'**
+  String get priceCheckerDisconnectedTitle;
+
+  /// No description provided for @priceCheckerDisconnectedBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ إعادة المحاولة…'**
+  String get priceCheckerDisconnectedBody;
+
+  /// No description provided for @priceCheckerInStock.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوفّر'**
+  String get priceCheckerInStock;
+
+  /// No description provided for @priceCheckerOutOfStock.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير متوفّر'**
+  String get priceCheckerOutOfStock;
+
+  /// Discount badge by percentage, e.g. وفّر 10٪.
+  ///
+  /// In ar, this message translates to:
+  /// **'وفّر {value}٪'**
+  String priceCheckerSavePercent(String value);
+
+  /// Discount badge by fixed amount, e.g. وفّر 2.00 د.ل.
+  ///
+  /// In ar, this message translates to:
+  /// **'وفّر {value}'**
+  String priceCheckerSaveAmount(String value);
+
+  /// No description provided for @priceCheckerManualEntry.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدخال يدوي'**
+  String get priceCheckerManualEntry;
+
+  /// No description provided for @priceCheckerManualEntryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل الباركود'**
+  String get priceCheckerManualEntryTitle;
+
+  /// No description provided for @priceCheckerExitTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخروج من وضع كاشف الأسعار'**
+  String get priceCheckerExitTooltip;
+
+  /// No description provided for @priceCheckerExitTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخروج من وضع كاشف الأسعار'**
+  String get priceCheckerExitTitle;
+
+  /// No description provided for @priceCheckerExitSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل الرمز السري للخروج'**
+  String get priceCheckerExitSubtitle;
+
+  /// No description provided for @priceCheckerWrongPin.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز غير صحيح، حاول مرة أخرى'**
+  String get priceCheckerWrongPin;
+
+  /// No description provided for @priceCheckerModeButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'وضع كاشف الأسعار'**
+  String get priceCheckerModeButton;
+
+  /// No description provided for @priceCheckerSetupTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعداد وضع كاشف الأسعار'**
+  String get priceCheckerSetupTitle;
+
+  /// No description provided for @priceCheckerSetupSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيعرض هذا الجهاز الأسعار للزبائن عند مسح الباركود. اختر رمزًا سريًا للخروج من هذا الوضع لاحقًا.'**
+  String get priceCheckerSetupSubtitle;
+
+  /// No description provided for @priceCheckerDeviceNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الجهاز'**
+  String get priceCheckerDeviceNameLabel;
+
+  /// No description provided for @priceCheckerDeviceNameHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: كاشف الأسعار - الممر 3'**
+  String get priceCheckerDeviceNameHint;
+
+  /// No description provided for @priceCheckerLocationLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموقع'**
+  String get priceCheckerLocationLabel;
+
+  /// No description provided for @priceCheckerPinLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرمز السري'**
+  String get priceCheckerPinLabel;
+
+  /// No description provided for @priceCheckerPinHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'من 4 إلى 6 أرقام'**
+  String get priceCheckerPinHint;
+
+  /// No description provided for @priceCheckerConfirmPinLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الرمز السري'**
+  String get priceCheckerConfirmPinLabel;
+
+  /// No description provided for @priceCheckerPinTooShort.
+  ///
+  /// In ar, this message translates to:
+  /// **'يجب أن يتكوّن الرمز من 4 أرقام على الأقل'**
+  String get priceCheckerPinTooShort;
+
+  /// No description provided for @priceCheckerPinMismatch.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرمزان غير متطابقين'**
+  String get priceCheckerPinMismatch;
+
+  /// No description provided for @priceCheckerRunOnStartupLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التشغيل تلقائيًا عند بدء النظام'**
+  String get priceCheckerRunOnStartupLabel;
+
+  /// No description provided for @priceCheckerRunOnStartupHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'يفتح التطبيق تلقائيًا عند تشغيل الجهاز'**
+  String get priceCheckerRunOnStartupHint;
+
+  /// No description provided for @priceCheckerStartButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدء الوضع'**
+  String get priceCheckerStartButton;
+
+  /// No description provided for @priceCheckerModeButtonTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل وضع كاشف الأسعار على هذا الجهاز'**
+  String get priceCheckerModeButtonTooltip;
+
+  /// No description provided for @priceCheckerSettingsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'وضع كاشف الأسعار'**
+  String get priceCheckerSettingsTitle;
+
+  /// No description provided for @priceCheckerSettingsDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'حوّل هذا الجهاز إلى شاشة لعرض الأسعار للزبائن. يعمل دون تسجيل دخول، ويُحمى الخروج منه برمز سري.'**
+  String get priceCheckerSettingsDescription;
+
+  /// No description provided for @priceCheckerSettingsSetupButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعداد كاشف الأسعار'**
+  String get priceCheckerSettingsSetupButton;
+
+  /// No description provided for @priceCheckerConfiguredStatus.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الجهاز مُعدّ ككاشف أسعار'**
+  String get priceCheckerConfiguredStatus;
+
+  /// No description provided for @priceCheckerNoNameSet.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون اسم'**
+  String get priceCheckerNoNameSet;
+
+  /// No description provided for @priceCheckerEnterModeButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدخول إلى الوضع'**
+  String get priceCheckerEnterModeButton;
+
+  /// No description provided for @priceCheckerChangePinButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير الرمز السري'**
+  String get priceCheckerChangePinButton;
+
+  /// No description provided for @priceCheckerEditDetailsButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل البيانات'**
+  String get priceCheckerEditDetailsButton;
+
+  /// No description provided for @priceCheckerRemoveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف الوضع'**
+  String get priceCheckerRemoveButton;
+
+  /// No description provided for @priceCheckerRemoveConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف وضع كاشف الأسعار؟'**
+  String get priceCheckerRemoveConfirmTitle;
+
+  /// No description provided for @priceCheckerRemoveConfirmMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيعود هذا الجهاز جهازًا عاديًا لنقطة البيع. يمكنك إعداده مجددًا في أي وقت.'**
+  String get priceCheckerRemoveConfirmMessage;
+
+  /// No description provided for @priceCheckerChangePinTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير الرمز السري'**
+  String get priceCheckerChangePinTitle;
+
+  /// No description provided for @startupSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدء التشغيل'**
+  String get startupSectionTitle;
+
+  /// No description provided for @startupSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اجعل التطبيق يفتح تلقائيًا عند تشغيل الجهاز — مفيد لأجهزة الكاشير والكاشف.'**
+  String get startupSectionSubtitle;
+
   /// No description provided for @clearCartConfirmTitle.
   ///
   /// In ar, this message translates to:

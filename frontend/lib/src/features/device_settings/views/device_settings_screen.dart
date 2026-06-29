@@ -5,15 +5,19 @@ import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/device_settings.dart';
 import '../../../data/repositories/prep_station_repository.dart';
+import '../../../data/repositories/price_checker_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
+import '../../../data/services/auto_start_service.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/price_checker/price_checker_mode_controller.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../shared/theme/theme_mode_controls.dart';
 import '../view_models/device_settings_view_model.dart';
+import '../../price_checker/views/price_checker_settings_panel.dart';
 import '../../printing/view_models/printing_settings_view_model.dart';
 import '../../printing/views/printing_settings_panel.dart';
 
@@ -24,6 +28,8 @@ class DeviceSettingsScreen extends StatelessWidget {
     required this.printingSettingsViewModel,
     required this.printingRepository,
     required this.prepStationRepository,
+    required this.priceCheckerController,
+    required this.priceCheckerRepository,
     required this.analyticsEngine,
     required this.capabilities,
     required this.navigation,
@@ -33,6 +39,8 @@ class DeviceSettingsScreen extends StatelessWidget {
   final PrintingSettingsViewModel printingSettingsViewModel;
   final PrintingRepository printingRepository;
   final PrepStationRepository prepStationRepository;
+  final PriceCheckerModeController priceCheckerController;
+  final PriceCheckerRepository priceCheckerRepository;
   final AnalyticsEngine? analyticsEngine;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
@@ -85,6 +93,8 @@ class DeviceSettingsScreen extends StatelessWidget {
                   printingSettingsViewModel: printingSettingsViewModel,
                   printingRepository: printingRepository,
                   prepStationRepository: prepStationRepository,
+                  priceCheckerController: priceCheckerController,
+                  priceCheckerRepository: priceCheckerRepository,
                   analyticsEngine: analyticsEngine,
                 ),
               ),
@@ -102,6 +112,8 @@ class _DeviceSettingsBody extends StatelessWidget {
     required this.printingSettingsViewModel,
     required this.printingRepository,
     required this.prepStationRepository,
+    required this.priceCheckerController,
+    required this.priceCheckerRepository,
     required this.analyticsEngine,
   });
 
@@ -109,6 +121,8 @@ class _DeviceSettingsBody extends StatelessWidget {
   final PrintingSettingsViewModel printingSettingsViewModel;
   final PrintingRepository printingRepository;
   final PrepStationRepository prepStationRepository;
+  final PriceCheckerModeController priceCheckerController;
+  final PriceCheckerRepository priceCheckerRepository;
   final AnalyticsEngine? analyticsEngine;
 
   @override
@@ -156,6 +170,41 @@ class _DeviceSettingsBody extends StatelessWidget {
             child: _DeviceUsageModePanel(viewModel: deviceSettingsViewModel),
           ),
         ),
+        SizedBox(height: spacing.lg),
+        AdaptiveMaxWidth(
+          width: AppContentWidth.form,
+          child: PointyDetailSection(
+            icon: Icons.price_check_outlined,
+            title: l10n.priceCheckerSettingsTitle,
+            child: PriceCheckerSettingsPanel(
+              controller: priceCheckerController,
+              repository: priceCheckerRepository,
+            ),
+          ),
+        ),
+        if (const AutoStartService().isSupportedPlatform) ...[
+          SizedBox(height: spacing.lg),
+          AdaptiveMaxWidth(
+            width: AppContentWidth.form,
+            child: PointyDetailSection(
+              icon: Icons.restart_alt_outlined,
+              title: l10n.startupSectionTitle,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(bottom: spacing.xs),
+                    child: Text(
+                      l10n.startupSectionSubtitle,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                  const RunOnStartupPanel(),
+                ],
+              ),
+            ),
+          ),
+        ],
         SizedBox(height: spacing.lg),
         AdaptiveMaxWidth(
           width: AppContentWidth.form,

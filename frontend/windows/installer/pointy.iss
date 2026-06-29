@@ -66,5 +66,13 @@ Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
+[Registry]
+; Clean up the launch-at-startup entry that the app's "run on startup" toggle
+; (autostart_channel.cpp) writes. ValueType: none means the installer never
+; creates it — the app owns that, opt-in — we only delete it on uninstall.
+; Covers the installing user's hive; a stale Run value left in another user's
+; hive is harmless, as Windows ignores Run entries whose target is missing.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "Pointy"; Flags: uninsdeletevalue
+
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent

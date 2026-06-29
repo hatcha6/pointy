@@ -76,6 +76,7 @@ def price_result_payload(
     *,
     allow_arabic: bool = True,
     display_lines: list[str] | None = None,
+    image_url: str = "",
 ) -> dict:
     """Display-ready JSON for a web kiosk (decimals as strings; RTL-safe)."""
     payload = {
@@ -94,6 +95,7 @@ def price_result_payload(
             "variant_name": result.variant_name,
             "sku": result.sku,
             "unit": result.unit,
+            "image_url": image_url,
             "original_price": f"{result.original_price:.2f}",
             "final_price": f"{result.final_price:.2f}",
             "discount_total": f"{result.discount_total:.2f}",

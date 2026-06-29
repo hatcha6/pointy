@@ -703,6 +703,8 @@ class _AuthenticatedRoutes implements AppNavigation {
         printingSettingsViewModel: dependencies.printingSettingsViewModel,
         printingRepository: dependencies.printingRepository,
         prepStationRepository: dependencies.prepStationRepository,
+        priceCheckerController: dependencies.priceCheckerModeController,
+        priceCheckerRepository: dependencies.priceCheckerRepository,
         analyticsEngine: dependencies.analyticsEngine,
         capabilities: capabilities,
         navigation: this,

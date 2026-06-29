@@ -11429,6 +11429,160 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckerActivityEmpty => 'لا توجد عمليات فحص بعد لهذا الجهاز.';
 
   @override
+  String get priceCheckerScanPrompt => 'امسح الباركود لعرض السعر';
+
+  @override
+  String get priceCheckerLoading => 'جارٍ البحث…';
+
+  @override
+  String get priceCheckerScanAnother => 'امسح منتجًا آخر';
+
+  @override
+  String get priceCheckerNotFoundTitle => 'المنتج غير موجود';
+
+  @override
+  String get priceCheckerNotFoundBody => 'تحقّق من الباركود وحاول مرة أخرى';
+
+  @override
+  String priceCheckerScannedCode(String barcode) {
+    return 'الباركود: $barcode';
+  }
+
+  @override
+  String get priceCheckerDisconnectedTitle => 'غير متصل بالخادم';
+
+  @override
+  String get priceCheckerDisconnectedBody => 'جارٍ إعادة المحاولة…';
+
+  @override
+  String get priceCheckerInStock => 'متوفّر';
+
+  @override
+  String get priceCheckerOutOfStock => 'غير متوفّر';
+
+  @override
+  String priceCheckerSavePercent(String value) {
+    return 'وفّر $value٪';
+  }
+
+  @override
+  String priceCheckerSaveAmount(String value) {
+    return 'وفّر $value';
+  }
+
+  @override
+  String get priceCheckerManualEntry => 'إدخال يدوي';
+
+  @override
+  String get priceCheckerManualEntryTitle => 'أدخل الباركود';
+
+  @override
+  String get priceCheckerExitTooltip => 'الخروج من وضع كاشف الأسعار';
+
+  @override
+  String get priceCheckerExitTitle => 'الخروج من وضع كاشف الأسعار';
+
+  @override
+  String get priceCheckerExitSubtitle => 'أدخل الرمز السري للخروج';
+
+  @override
+  String get priceCheckerWrongPin => 'رمز غير صحيح، حاول مرة أخرى';
+
+  @override
+  String get priceCheckerModeButton => 'وضع كاشف الأسعار';
+
+  @override
+  String get priceCheckerSetupTitle => 'إعداد وضع كاشف الأسعار';
+
+  @override
+  String get priceCheckerSetupSubtitle =>
+      'سيعرض هذا الجهاز الأسعار للزبائن عند مسح الباركود. اختر رمزًا سريًا للخروج من هذا الوضع لاحقًا.';
+
+  @override
+  String get priceCheckerDeviceNameLabel => 'اسم الجهاز';
+
+  @override
+  String get priceCheckerDeviceNameHint => 'مثال: كاشف الأسعار - الممر 3';
+
+  @override
+  String get priceCheckerLocationLabel => 'الموقع';
+
+  @override
+  String get priceCheckerPinLabel => 'الرمز السري';
+
+  @override
+  String get priceCheckerPinHint => 'من 4 إلى 6 أرقام';
+
+  @override
+  String get priceCheckerConfirmPinLabel => 'تأكيد الرمز السري';
+
+  @override
+  String get priceCheckerPinTooShort =>
+      'يجب أن يتكوّن الرمز من 4 أرقام على الأقل';
+
+  @override
+  String get priceCheckerPinMismatch => 'الرمزان غير متطابقين';
+
+  @override
+  String get priceCheckerRunOnStartupLabel => 'التشغيل تلقائيًا عند بدء النظام';
+
+  @override
+  String get priceCheckerRunOnStartupHint =>
+      'يفتح التطبيق تلقائيًا عند تشغيل الجهاز';
+
+  @override
+  String get priceCheckerStartButton => 'بدء الوضع';
+
+  @override
+  String get priceCheckerModeButtonTooltip =>
+      'تشغيل وضع كاشف الأسعار على هذا الجهاز';
+
+  @override
+  String get priceCheckerSettingsTitle => 'وضع كاشف الأسعار';
+
+  @override
+  String get priceCheckerSettingsDescription =>
+      'حوّل هذا الجهاز إلى شاشة لعرض الأسعار للزبائن. يعمل دون تسجيل دخول، ويُحمى الخروج منه برمز سري.';
+
+  @override
+  String get priceCheckerSettingsSetupButton => 'إعداد كاشف الأسعار';
+
+  @override
+  String get priceCheckerConfiguredStatus => 'هذا الجهاز مُعدّ ككاشف أسعار';
+
+  @override
+  String get priceCheckerNoNameSet => 'بدون اسم';
+
+  @override
+  String get priceCheckerEnterModeButton => 'الدخول إلى الوضع';
+
+  @override
+  String get priceCheckerChangePinButton => 'تغيير الرمز السري';
+
+  @override
+  String get priceCheckerEditDetailsButton => 'تعديل البيانات';
+
+  @override
+  String get priceCheckerRemoveButton => 'إيقاف الوضع';
+
+  @override
+  String get priceCheckerRemoveConfirmTitle => 'إيقاف وضع كاشف الأسعار؟';
+
+  @override
+  String get priceCheckerRemoveConfirmMessage =>
+      'سيعود هذا الجهاز جهازًا عاديًا لنقطة البيع. يمكنك إعداده مجددًا في أي وقت.';
+
+  @override
+  String get priceCheckerChangePinTitle => 'تغيير الرمز السري';
+
+  @override
+  String get startupSectionTitle => 'بدء التشغيل';
+
+  @override
+  String get startupSectionSubtitle =>
+      'اجعل التطبيق يفتح تلقائيًا عند تشغيل الجهاز — مفيد لأجهزة الكاشير والكاشف.';
+
+  @override
   String get clearCartConfirmTitle => 'مسح السلة؟';
 
   @override

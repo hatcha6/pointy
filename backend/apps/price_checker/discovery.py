@@ -260,6 +260,56 @@ def self_register_device(
     return device
 
 
+def register_http_kiosk(
+    *,
+    identifier: str,
+    name: str = "",
+    location: str = "",
+    address: str = "",
+) -> PriceCheckerDevice:
+    """Upsert a self-registering HTTP/web kiosk (our app in price-checker mode).
+
+    Idempotent on ``identifier`` so a kiosk re-announcing on each launch updates
+    its descriptive fields and refreshes ``last_seen`` instead of duplicating. An
+    admin's explicit *disable* is respected — re-registration never reactivates a
+    device, it only touches name/location/address and the last-seen timestamp.
+    """
+    driver = drivers.get_driver(drivers.DEFAULT_DRIVER_KEY)  # generic_http
+    normalized = normalize_device_identifier(identifier) or _unique_identifier(
+        _identifier_for(address=address)
+    )
+    fields = _seed_fields(driver)
+    fields.update(
+        {
+            "name": name or f"{driver.label} {address}".strip(),
+            "location": location,
+            "address": address or None,
+            "transport": PriceCheckerDevice.Transport.HTTP,
+            "status": PriceCheckerDevice.Status.ACTIVE,
+            "discovery_method": PriceCheckerDevice.DiscoveryMethod.SELF,
+        }
+    )
+    device, created = PriceCheckerDevice.objects.get_or_create(
+        identifier=normalized,
+        defaults=fields,
+    )
+    if not created:
+        changed = []
+        if name and device.name != name:
+            device.name = name
+            changed.append("name")
+        if location and device.location != location:
+            device.location = location
+            changed.append("location")
+        if address and device.address != address:
+            device.address = address
+            changed.append("address")
+        if changed:
+            device.save(update_fields=changed)
+    device.mark_seen(address=address or None)
+    return device
+
+
 def resolve_device_for_peer(
     peer_ip: str,
     transport: str,

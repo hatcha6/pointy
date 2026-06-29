@@ -10,6 +10,7 @@ add_executable(${BINARY_NAME} WIN32
   "flutter_window.cpp"
   "main.cpp"
   "app_update_channel.cpp"
+  "autostart_channel.cpp"
   "usb_print_channel.cpp"
   "utils.cpp"
   "win32_window.cpp"
@@ -40,6 +41,8 @@ target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "winspool.lib")
 # shell32: ShellExecuteW to launch the self-update installer (app_update_channel.cpp).
 target_link_libraries(${BINARY_NAME} PRIVATE "shell32.lib")
+# advapi32: registry APIs for launch-at-startup (autostart_channel.cpp).
+target_link_libraries(${BINARY_NAME} PRIVATE "advapi32.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.

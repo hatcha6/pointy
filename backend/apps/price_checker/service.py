@@ -64,10 +64,19 @@ def perform_lookup(
     device: PriceCheckerDevice | None = None,
     source_address: str = "",
     render_lines: Callable[[PriceResult], list[str]] | None = None,
+    with_image: bool = False,
 ) -> tuple[PriceResult, PriceCheckEvent]:
-    """Canonical "look up + touch device + audit" path for every transport."""
+    """Canonical "look up + touch device + audit" path for every transport.
+
+    ``with_image`` is opt-in so byte-oriented socket scanners (which only render
+    text) never pay for the extra attachment query — only HTTP/web kiosks do.
+    """
     started = time.perf_counter()
-    result = lookup_price(barcode) if barcode else PriceResult.not_found("")
+    result = (
+        lookup_price(barcode, with_image=with_image)
+        if barcode
+        else PriceResult.not_found("")
+    )
     latency_ms = int((time.perf_counter() - started) * 1000)
 
     if device is not None:

@@ -5,12 +5,14 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.attachments.models import Attachment, StorageVolume
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import DiscountRule
@@ -62,6 +64,31 @@ def add_percentage_discount(product, percent="10", name=None):
     return rule
 
 
+def attach_product_image(owner, *, filename="img.jpg", primary=True):
+    """A minimal ACTIVE product-image attachment row (no real file needed).
+
+    ``image_url`` is built from the row's pk + signed checksum token, so the
+    kiosk payload tests don't need bytes on disk.
+    """
+    volume, _ = StorageVolume.objects.get_or_create(
+        name="test-volume", defaults={"path": "/tmp/pointy-test-volume"}
+    )
+    return Attachment.objects.create(
+        owner_content_type=ContentType.objects.get_for_model(owner),
+        owner_object_id=owner.pk,
+        role=Attachment.Role.PRODUCT_IMAGE,
+        storage_volume=volume,
+        relative_path=f"products/{owner.pk}/{filename}",
+        original_filename=filename,
+        content_type="image/jpeg",
+        original_size=1024,
+        stored_size=1024,
+        checksum_sha256="0" * 64,
+        is_primary=primary,
+        status=Attachment.Status.ACTIVE,
+    )
+
+
 def profile(support=Arabic.UNICODE, *, cols=20, rows=5, encoding="utf-8"):
     return DisplayProfile(
         rows=rows, cols=cols, plan=plan_for_support(support), encoding=encoding
@@ -90,6 +117,21 @@ class PricingTests(TestCase):
         self.assertTrue(result.has_discount)
         self.assertEqual(len(result.discounts), 1)
         self.assertEqual(result.discounts[0].name, "10% off")
+
+    def test_image_is_resolved_only_when_requested(self):
+        product = make_product()
+        attachment = attach_product_image(product)
+        # Opt-in: socket scans (default) skip the attachment query entirely.
+        self.assertIsNone(lookup_price(BARCODE).image_attachment_id)
+        with_image = lookup_price(BARCODE, with_image=True)
+        self.assertEqual(with_image.image_attachment_id, attachment.pk)
+        self.assertTrue(with_image.image_token)
+
+    def test_image_absent_leaves_fields_empty(self):
+        make_product()
+        result = lookup_price(BARCODE, with_image=True)
+        self.assertIsNone(result.image_attachment_id)
+        self.assertEqual(result.image_token, "")
 
     def test_unknown_and_blank_barcode(self):
         self.assertFalse(lookup_price("does-not-exist").found)
@@ -395,6 +437,71 @@ class LookupApiTests(TestCase):
         self.assertEqual(
             PriceCheckEvent.objects.get().result, PriceCheckEvent.Result.NOT_FOUND
         )
+
+    def test_payload_includes_absolute_signed_image_url(self):
+        attachment = attach_product_image(self.product)
+        data = self.client.get(self.url, {"barcode": BARCODE}).json()
+        self.assertIn("image_url", data)
+        self.assertTrue(data["image_url"].startswith("http"))
+        self.assertIn(f"/api/attachments/{attachment.pk}/content/", data["image_url"])
+        self.assertIn("token=", data["image_url"])
+
+    def test_payload_image_url_blank_without_image(self):
+        data = self.client.get(self.url, {"barcode": BARCODE}).json()
+        self.assertEqual(data["image_url"], "")
+
+
+class RegisterApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = reverse("price-checker-register")
+        self.product = make_product(price="20.00")
+
+    def test_lan_self_register_creates_http_kiosk(self):
+        response = self.client.post(
+            self.url,
+            {"identifier": "Front Kiosk", "name": "Front", "location": "Entrance"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        device = PriceCheckerDevice.objects.get()
+        self.assertEqual(device.identifier, "front-kiosk")  # slugified
+        self.assertEqual(device.name, "Front")
+        self.assertEqual(device.location, "Entrance")
+        self.assertEqual(device.transport, PriceCheckerDevice.Transport.HTTP)
+        self.assertEqual(device.driver, "generic_http")
+        self.assertEqual(device.status, PriceCheckerDevice.Status.ACTIVE)
+        self.assertEqual(
+            device.discovery_method, PriceCheckerDevice.DiscoveryMethod.SELF
+        )
+        self.assertIsNotNone(device.last_seen_at)
+
+    def test_register_is_idempotent_and_updates_fields(self):
+        self.client.post(self.url, {"identifier": "k1", "name": "Old"}, format="json")
+        self.client.post(self.url, {"identifier": "k1", "name": "New"}, format="json")
+        self.assertEqual(PriceCheckerDevice.objects.count(), 1)
+        self.assertEqual(PriceCheckerDevice.objects.get().name, "New")
+
+    def test_register_respects_admin_disable(self):
+        self.client.post(self.url, {"identifier": "k1", "name": "Kiosk"}, format="json")
+        device = PriceCheckerDevice.objects.get()
+        device.status = PriceCheckerDevice.Status.DISABLED
+        device.save(update_fields=["status"])
+        self.client.post(self.url, {"identifier": "k1", "name": "Kiosk"}, format="json")
+        device.refresh_from_db()
+        self.assertEqual(device.status, PriceCheckerDevice.Status.DISABLED)
+
+    def test_register_requires_identifier(self):
+        response = self.client.post(self.url, {"name": "x"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_registered_device_attributes_scans(self):
+        self.client.post(self.url, {"identifier": "k1", "name": "Kiosk"}, format="json")
+        lookup_url = reverse("price-checker-lookup")
+        self.client.get(lookup_url, {"barcode": BARCODE, "device": "k1"})
+        event = PriceCheckEvent.objects.get()
+        self.assertEqual(event.device.identifier, "k1")
+        self.assertEqual(event.result, PriceCheckEvent.Result.FOUND)
 
 
 class DeviceApiTests(TestCase):

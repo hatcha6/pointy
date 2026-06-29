@@ -41,6 +41,7 @@ from apps.discounts.views import DiscountRuleViewSet
 from apps.price_checker.views import (
     PriceCheckEventViewSet,
     PriceCheckerDeviceViewSet,
+    price_checker_register_view,
     price_lookup_view,
 )
 from apps.expenses.views import (
@@ -329,6 +330,11 @@ urlpatterns = [
         "api/price-checker/lookup/",
         price_lookup_view,
         name="price-checker-lookup",
+    ),
+    path(
+        "api/price-checker/register/",
+        price_checker_register_view,
+        name="price-checker-register",
     ),
     path("api/", include(router.urls)),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

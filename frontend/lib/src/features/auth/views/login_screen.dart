@@ -8,9 +8,18 @@ import '../../../shared/shell/shell.dart';
 import '../view_models/auth_view_model.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.viewModel});
+  const LoginScreen({
+    super.key,
+    required this.viewModel,
+    this.onEnterPriceCheckerMode,
+  });
 
   final AuthViewModel viewModel;
+
+  /// When set, shows a "Price Checker mode" entry on the login screen so a
+  /// device can be turned into (or sent back into) a customer-facing kiosk
+  /// without signing in. Null hides the entry (e.g. in previews).
+  final Future<void> Function(BuildContext context)? onEnterPriceCheckerMode;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -51,16 +60,27 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? AppContentWidth.detail
                         : AppContentWidth.compact,
                     expand: false,
-                    child: _LoginLayout(
-                      isWide: isWide,
-                      form: _LoginForm(
-                        formKey: _formKey,
-                        usernameController: _usernameController,
-                        passwordController: _passwordController,
-                        isSubmitting: widget.viewModel.isSubmitting,
-                        hasError: widget.viewModel.hasError,
-                        onSubmit: _submit,
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _LoginLayout(
+                          isWide: isWide,
+                          form: _LoginForm(
+                            formKey: _formKey,
+                            usernameController: _usernameController,
+                            passwordController: _passwordController,
+                            isSubmitting: widget.viewModel.isSubmitting,
+                            hasError: widget.viewModel.hasError,
+                            onSubmit: _submit,
+                          ),
+                        ),
+                        if (widget.onEnterPriceCheckerMode != null)
+                          _PriceCheckerModeEntry(
+                            onPressed: () =>
+                                widget.onEnterPriceCheckerMode!(context),
+                          ),
+                      ],
                     ),
                   ),
                 ),
@@ -238,6 +258,33 @@ class _LoginMark extends StatelessWidget {
             fit: BoxFit.cover,
             filterQuality: FilterQuality.medium,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Secondary entry on the login screen to (re-)enter customer-facing kiosk mode
+/// without signing in.
+class _PriceCheckerModeEntry extends StatelessWidget {
+  const _PriceCheckerModeEntry({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final l10n = AppLocalizations.of(context)!;
+
+    return Padding(
+      padding: EdgeInsetsDirectional.only(top: spacing.lg),
+      child: Center(
+        child: TextButton.icon(
+          onPressed: onPressed,
+          icon: const Icon(Icons.price_check_rounded),
+          label: Text(l10n.priceCheckerModeButton),
+          style: TextButton.styleFrom(foregroundColor: colors.primaryStrong),
         ),
       ),
     );

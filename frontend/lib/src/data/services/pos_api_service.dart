@@ -13,6 +13,7 @@ import '../models/onboarding.dart';
 import '../models/permission_catalog.dart';
 import '../models/price_check_event.dart';
 import '../models/price_checker_device.dart';
+import '../models/price_lookup_result.dart';
 import '../models/print_audit_event.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
@@ -1725,6 +1726,28 @@ class PosApiService {
     int page = 1,
   }) {
     return _priceChecker.fetchEvents(deviceId: deviceId, page: page);
+  }
+
+  Future<PriceLookupResult> lookupPrice({
+    required String barcode,
+    String deviceIdentifier = '',
+  }) {
+    return _priceChecker.lookup(
+      barcode: barcode,
+      deviceIdentifier: deviceIdentifier,
+    );
+  }
+
+  Future<void> registerPriceCheckerKiosk({
+    required String identifier,
+    String name = '',
+    String location = '',
+  }) {
+    return _priceChecker.registerKiosk(
+      identifier: identifier,
+      name: name,
+      location: location,
+    );
   }
 
   Stream<AiChatEvent> streamAiChat({

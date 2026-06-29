@@ -14,11 +14,16 @@ class AuthGate extends StatelessWidget {
     required this.viewModel,
     required this.authenticatedBuilder,
     this.analyticsEngine,
+    this.onEnterPriceCheckerMode,
   });
 
   final AuthViewModel viewModel;
   final WidgetBuilder authenticatedBuilder;
   final AnalyticsEngine? analyticsEngine;
+
+  /// Forwarded to [LoginScreen] to offer a price-checker (kiosk) entry without
+  /// signing in.
+  final Future<void> Function(BuildContext context)? onEnterPriceCheckerMode;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +37,10 @@ class AuthGate extends StatelessWidget {
           AuthStatus.setupRequired => InitialAdminSetupScreen(
             viewModel: viewModel,
           ),
-          AuthStatus.unauthenticated => LoginScreen(viewModel: viewModel),
+          AuthStatus.unauthenticated => LoginScreen(
+            viewModel: viewModel,
+            onEnterPriceCheckerMode: onEnterPriceCheckerMode,
+          ),
           AuthStatus.authenticated => authenticatedBuilder(context),
         };
       },

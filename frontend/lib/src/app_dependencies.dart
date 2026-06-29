@@ -59,6 +59,7 @@ import 'features/purchasing/view_models/purchase_order_list_view_model.dart';
 import 'features/purchasing/view_models/purchase_view_model.dart';
 import 'features/stock_count/view_models/stock_count_sessions_view_model.dart';
 import 'features/user_settings/view_models/user_settings_view_model.dart';
+import 'shared/price_checker/price_checker_mode_controller.dart';
 import 'shared/theme/theme_controller.dart';
 
 /// Default API base URL for a fresh install.
@@ -94,6 +95,7 @@ class PointyAppDependencies {
     dashboardRepository = DashboardRepository(service);
     deviceSettingsRepository = const DeviceSettingsRepository();
     themeController = ThemeController();
+    priceCheckerModeController = PriceCheckerModeController();
     businessAlertRepository = BusinessAlertRepository(service);
     discountRepository = DiscountRepository(service);
     employeeRepository = EmployeeRepository(service);
@@ -155,6 +157,7 @@ class PointyAppDependencies {
   late final DashboardRepository dashboardRepository;
   late final DeviceSettingsRepository deviceSettingsRepository;
   late final ThemeController themeController;
+  late final PriceCheckerModeController priceCheckerModeController;
   late final BusinessAlertRepository businessAlertRepository;
   late final DiscountRepository discountRepository;
   late final EmployeeRepository employeeRepository;
@@ -202,6 +205,9 @@ class PointyAppDependencies {
     // Resolve the saved theme first so the app paints in the right mode without
     // a flash from the default.
     await themeController.load();
+    // Resolve kiosk mode before the first frame so a price-checker device boots
+    // straight into the kiosk instead of flashing the login screen.
+    await priceCheckerModeController.load();
     if (_enableAutomaticConnection) {
       await connectionCoordinator.bootstrap();
     }
@@ -342,6 +348,7 @@ class PointyAppDependencies {
     connectionCoordinator.dispose();
     analyticsEngine.dispose();
     themeController.dispose();
+    priceCheckerModeController.dispose();
     authViewModel.dispose();
     posViewModel.dispose();
     _deviceSettingsViewModel?.dispose();

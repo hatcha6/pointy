@@ -74,6 +74,12 @@
       "port": 8080
     },
     {
+      "name": "kiosk-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-price-checker-kiosk-preview"],
+      "port": 8080
+    },
+    {
       "name": "theme-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": ["frontend-theme-preview"],

@@ -266,6 +266,9 @@ frontend-command-palette-preview: frontend-install ## Run the global command pal
 frontend-price-checker-preview: frontend-install ## Run the price-checker settings UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/price_checker_preview.dart
 
+frontend-price-checker-kiosk-preview: frontend-install ## Run the customer-facing price-checker kiosk UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/price_checker_kiosk_preview.dart
+
 frontend-ai-preview: frontend-install ## Run the AI assistant UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/ai_chat_preview.dart
 

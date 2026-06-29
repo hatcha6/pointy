@@ -14,8 +14,11 @@ import 'data/services/pos_api_service.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'features/auth/views/auth_gate.dart';
 import 'features/onboarding/views/shop_setup_wizard.dart';
+import 'features/price_checker/price_checker_mode_actions.dart';
+import 'features/price_checker/views/price_checker_kiosk_screen.dart';
 import 'features/printing/view_models/printing_settings_view_model.dart';
 import 'shared/design/design.dart';
+import 'shared/price_checker/price_checker_mode_controller.dart';
 import 'shared/shell/shell.dart';
 import 'shared/theme/theme_controller.dart';
 
@@ -88,7 +91,12 @@ class _PointyAppState extends State<PointyApp> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: _dependencies.themeController,
+      // Rebuild on theme changes and when this device enters/leaves kiosk mode,
+      // so top-level routing can swap between the kiosk and the auth gate.
+      listenable: Listenable.merge([
+        _dependencies.themeController,
+        _dependencies.priceCheckerModeController,
+      ]),
       builder: (context, _) => _buildApp(),
     );
   }
@@ -110,24 +118,42 @@ class _PointyAppState extends State<PointyApp> {
       themeMode: _dependencies.themeController.mode,
       builder: (context, child) => ThemeControllerScope(
         controller: _dependencies.themeController,
-        child: AnalyticsInteractionTracker(
-          analyticsEngine: _dependencies.analyticsEngine,
-          child: _PrinterConnectionNotifier(
-            authViewModel: _dependencies.authViewModel,
-            printingSettingsViewModel: _dependencies.printingSettingsViewModel,
-            child: PointyNavigationRailScope(
-              isActive: false,
-              controller: _navigationRailController,
-              child: child ?? const SizedBox.shrink(),
+        child: PriceCheckerModeScope(
+          controller: _dependencies.priceCheckerModeController,
+          child: AnalyticsInteractionTracker(
+            analyticsEngine: _dependencies.analyticsEngine,
+            child: _PrinterConnectionNotifier(
+              authViewModel: _dependencies.authViewModel,
+              printingSettingsViewModel:
+                  _dependencies.printingSettingsViewModel,
+              child: PointyNavigationRailScope(
+                isActive: false,
+                controller: _navigationRailController,
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
           ),
         ),
       ),
-      home: AuthGate(
-        viewModel: _dependencies.authViewModel,
-        analyticsEngine: _dependencies.analyticsEngine,
-        authenticatedBuilder: _buildAuthenticatedHome,
-      ),
+      home: _dependencies.priceCheckerModeController.enabled
+          ? PriceCheckerKioskScreen(
+              repository: _dependencies.priceCheckerRepository,
+              controller: _dependencies.priceCheckerModeController,
+            )
+          : AuthGate(
+              viewModel: _dependencies.authViewModel,
+              analyticsEngine: _dependencies.analyticsEngine,
+              authenticatedBuilder: _buildAuthenticatedHome,
+              onEnterPriceCheckerMode: _enterPriceCheckerMode,
+            ),
+    );
+  }
+
+  Future<void> _enterPriceCheckerMode(BuildContext context) {
+    return enterPriceCheckerMode(
+      context,
+      controller: _dependencies.priceCheckerModeController,
+      repository: _dependencies.priceCheckerRepository,
     );
   }
 

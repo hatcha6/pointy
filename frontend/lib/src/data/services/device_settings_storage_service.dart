@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/device_settings.dart';
+import '../models/price_checker_config.dart';
 import '../models/printer_config.dart';
 
 class DeviceSettingsStorageService {
@@ -14,6 +15,7 @@ class DeviceSettingsStorageService {
   static const _defaultPrinterConfigKey = 'default_printer_config';
   static const _printerRoleConfigsKey = 'printer_role_configs';
   static const _kitchenStationConfigsKey = 'kitchen_station_configs';
+  static const _priceCheckerConfigKey = 'price_checker_config';
 
   Future<DeviceUsageMode?> loadDeviceUsageMode() async {
     final preferences = await SharedPreferences.getInstance();
@@ -51,6 +53,20 @@ class DeviceSettingsStorageService {
       ThemeMode.dark => 'dark',
       ThemeMode.system => 'system',
     });
+  }
+
+  /// The per-device price-checker (kiosk) configuration. Returns an empty
+  /// config when this device has never been set up as a price checker.
+  Future<PriceCheckerConfig> loadPriceCheckerConfig() async {
+    final preferences = await SharedPreferences.getInstance();
+    return PriceCheckerConfig.decode(
+      preferences.getString(_priceCheckerConfigKey),
+    );
+  }
+
+  Future<void> savePriceCheckerConfig(PriceCheckerConfig config) async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(_priceCheckerConfigKey, config.encode());
   }
 
   Future<PrinterConfig?> loadDefaultPrinterConfig() async {
