@@ -430,3 +430,55 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${{ needs.version.outputs.tag }}" dist/* --clobber
+
+  # ---------------------------------------------------------------------------
+  # Hosted relay — build the relay image and push it to GitHub Container
+  # Registry (ghcr.io, private) so the company-run JPaaS environment can pull
+  # and run it. This is the *central* relay that phones + on-prem connectors
+  # reach; it is separate from the relay image baked into the offline on-prem
+  # bundle above (that one stays registry-free for air-gapped sites).
+  #
+  # The image carries no secrets — the admin token, DB/Redis URLs and the
+  # OpenRouter key are all injected as env vars on the JPaaS node
+  # (POINTY_RELAY_PLATFORM=paas). Pull from JPaaS with a token that has
+  # read:packages. Runs off `version` only, so it ships without waiting on the
+  # Android/Windows client builds.
+  # ---------------------------------------------------------------------------
+  publish-relay:
+    name: Publish relay image (ghcr)
+    needs: version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # checkout
+      packages: write # push to ghcr.io
+    env:
+      DOCKER_BUILDKIT: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image name (ghcr requires lowercase)
+        id: image
+        shell: bash
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "ref=ghcr.io/${OWNER,,}/pointy-relay" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to ghcr.io
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build relay image
+        run: >
+          docker build -f relay/Dockerfile
+          --build-arg POINTY_VERSION=${{ needs.version.outputs.version }}
+          -t "${{ steps.image.outputs.ref }}:${{ needs.version.outputs.version }}" .
+
+      # Move :latest only for real releases so JPaaS can track a stable tag;
+      # manual test builds (workflow_dispatch) publish just their version tag.
+      - name: Tag :latest (releases only)
+        if: ${{ needs.version.outputs.is_release == 'true' }}
+        run: docker tag "${{ steps.image.outputs.ref }}:${{ needs.version.outputs.version }}" "${{ steps.image.outputs.ref }}:latest"
+
+      - name: Push relay image
+        run: docker push --all-tags "${{ steps.image.outputs.ref }}"
