@@ -1702,6 +1702,77 @@ func TestHTTPRelayIssuesConnectorCertificateWithInstallationAccessToken(t *testi
 	}
 }
 
+func TestHTTPRelayIssuesConnectorCertificateForInertInstallation(t *testing.T) {
+	// A freshly enrolled install is INERT (relay + subscription OFF) until the
+	// operator activates it. It must still be able to bootstrap its connector
+	// certificate and read its own status with its scoped access token —
+	// otherwise the connector could never come up before activation. The paid
+	// remote-access feature (per-device tickets) stays subscription-gated; see
+	// TestHTTPRelayTicketStillRequiresActiveSubscription.
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionInertRelayInstallation(t)
+	issuer := &stubConnectorCertificateIssuer{
+		issued: security.IssuedCertificate{
+			CertificatePEM:    "cert",
+			CACertificatePEM:  "ca",
+			FingerprintSHA256: "fingerprint",
+			SerialNumber:      "serial",
+			ExpiresAt:         now.Add(time.Hour),
+		},
+	}
+	server := HTTPServer{
+		Store:                      store,
+		Hub:                        NewHub(),
+		Logger:                     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminToken:                 "admin-token",
+		ConnectorCertificateIssuer: issuer,
+		ConnectorCertificateTTL:    time.Hour,
+		Clock:                      testClock{now: now},
+	}
+
+	// 1. Connector certificate issuance succeeds for an inert install.
+	certRequest, err := http.NewRequest(
+		http.MethodPost,
+		"http://relay.test/v1/installations/"+provisioned.Installation.ID+"/connector-certificate",
+		strings.NewReader(`{"csr_pem":"csr"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certRequest.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	certRecorder := httptest.NewRecorder()
+	server.ServeHTTP(certRecorder, certRequest)
+	certResponse := certRecorder.Result()
+	defer certResponse.Body.Close()
+	if certResponse.StatusCode != http.StatusCreated {
+		content, _ := io.ReadAll(certResponse.Body)
+		t.Fatalf("expected 201 issuing connector cert for inert install, got %d: %s", certResponse.StatusCode, string(content))
+	}
+	if issuer.csrPEM != "csr" {
+		t.Fatalf("unexpected CSR %q", issuer.csrPEM)
+	}
+
+	// 2. Reading own status succeeds for an inert install (so the backend can
+	//    discover when the operator later activates the subscription).
+	statusRequest, err := http.NewRequest(
+		http.MethodGet,
+		"http://relay.test/v1/installations/"+provisioned.Installation.ID,
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statusRequest.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	statusRecorder := httptest.NewRecorder()
+	server.ServeHTTP(statusRecorder, statusRequest)
+	statusResponse := statusRecorder.Result()
+	defer statusResponse.Body.Close()
+	if statusResponse.StatusCode != http.StatusOK {
+		content, _ := io.ReadAll(statusResponse.Body)
+		t.Fatalf("expected 200 reading own status for inert install, got %d: %s", statusResponse.StatusCode, string(content))
+	}
+}
+
 func TestHTTPRelayRejectsConnectorCertificateForOtherInstallation(t *testing.T) {
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	store, provisioned := provisionRelayInstallation(t)
@@ -2371,6 +2442,28 @@ func provisionRelayInstallation(t *testing.T) (*control.FileStore, control.Provi
 		BusinessID:         "business-1",
 		RelayEnabled:       &enabled,
 		SubscriptionActive: &enabled,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store, provisioned
+}
+
+// provisionInertRelayInstallation mirrors provisionRelayInstallation but leaves
+// the install INERT (relay + subscription OFF), exactly like a license-key
+// enrollment before the operator activates it.
+func provisionInertRelayInstallation(t *testing.T) (*control.FileStore, control.ProvisionedInstallation) {
+	t.Helper()
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, err := control.NewFileStore(filepath.Join(t.TempDir(), "installations.json"), testClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabled := false
+	provisioned, err := store.ProvisionInstallation(context.Background(), control.ProvisionInstallationRequest{
+		BusinessID:         "business-1",
+		RelayEnabled:       &disabled,
+		SubscriptionActive: &disabled,
 	})
 	if err != nil {
 		t.Fatal(err)

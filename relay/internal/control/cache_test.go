@@ -98,6 +98,10 @@ func (s *countingStore) ValidateAccessToken(context.Context, string) (Installati
 	return Installation{}, nil
 }
 
+func (s *countingStore) ValidateAccessTokenIdentity(context.Context, string) (Installation, error) {
+	return Installation{}, nil
+}
+
 func (s *countingStore) ValidateAIAccessToken(context.Context, string) (Installation, error) {
 	return Installation{}, nil
 }

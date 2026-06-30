@@ -169,6 +169,13 @@ type InstallationStore interface {
 	UpdateSubscription(ctx context.Context, id string, update SubscriptionUpdate) (Installation, error)
 	ValidateConnectorToken(ctx context.Context, rawToken string) (Installation, error)
 	ValidateAccessToken(ctx context.Context, rawToken string) (Installation, error)
+	// ValidateAccessTokenIdentity validates an access token's identity (purpose,
+	// installation match, secret) WITHOUT requiring an active subscription. It
+	// authorizes installation self-management — reading own status and issuing
+	// the connector certificate — which must work for a freshly enrolled, inert
+	// install before its subscription is activated. The paid remote-access
+	// feature (per-device relay tickets) stays gated by ValidateAccessToken.
+	ValidateAccessTokenIdentity(ctx context.Context, rawToken string) (Installation, error)
 	ValidateAIAccessToken(ctx context.Context, rawToken string) (Installation, error)
 	SetConnectorCertificate(ctx context.Context, id string, certificate ConnectorCertificateMetadata) (Installation, error)
 	RevokeConnectorCertificateFingerprint(ctx context.Context, revocation ConnectorCertificateRevocation) error
@@ -664,6 +671,31 @@ func (s *FileStore) ValidateConnectorToken(
 
 func (s *FileStore) ValidateAccessToken(ctx context.Context, rawToken string) (Installation, error) {
 	return s.validateToken(ctx, rawToken, TokenPurposeAccess)
+}
+
+func (s *FileStore) ValidateAccessTokenIdentity(
+	_ context.Context,
+	rawToken string,
+) (Installation, error) {
+	parsed, err := ParseToken(rawToken)
+	if err != nil {
+		return Installation{}, err
+	}
+	if parsed.Purpose != TokenPurposeAccess {
+		return Installation{}, ErrWrongPurpose
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	installation, ok := s.data.Installations[parsed.InstallationID]
+	if !ok {
+		return Installation{}, ErrNotFound
+	}
+	if err := installationTokenIdentityValid(rawToken, TokenPurposeAccess, installation); err != nil {
+		return Installation{}, err
+	}
+	return installation, nil
 }
 
 func (s *FileStore) ValidateAIAccessToken(_ context.Context, rawToken string) (Installation, error) {

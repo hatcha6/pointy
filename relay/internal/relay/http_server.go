@@ -1169,16 +1169,20 @@ func (s HTTPServer) handleInstallationRoutes(w http.ResponseWriter, r *http.Requ
 
 	// When a self-serviceable route is called with the installation's access
 	// token (and no admin Authorization header), authorize against that token
-	// and require it to belong to the {id} in the path. The access-token check
-	// also enforces an active subscription, exactly like the other scoped
-	// routes. Anything else falls through to the unchanged admin path below.
+	// and require it to belong to the {id} in the path. Identity is validated
+	// WITHOUT the subscription gate: reading own status and bootstrapping the
+	// connector certificate must work for a freshly enrolled, inert install
+	// before its subscription is switched on (enroll-inert-then-activate). The
+	// paid remote-access feature — per-device relay tickets — stays
+	// subscription-gated elsewhere. Anything else falls through to the
+	// unchanged admin path below.
 	if selfServiceable && r.Header.Get("Authorization") == "" {
 		if rawToken := strings.TrimSpace(r.Header.Get(AccessTokenHeader)); rawToken != "" {
 			if !(s.RouteMode.allowsPublic() || s.RouteMode.allowsAdmin()) {
 				writeNotFound(w)
 				return
 			}
-			installation, err := s.Store.ValidateAccessToken(r.Context(), rawToken)
+			installation, err := s.Store.ValidateAccessTokenIdentity(r.Context(), rawToken)
 			if err != nil {
 				s.recordCredentialError(err)
 				writeRelayCredentialError(w, err)
