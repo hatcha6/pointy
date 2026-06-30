@@ -1,10 +1,16 @@
 from django.contrib import admin
 
-from .models import AppliedDiscount, DiscountRedemption, DiscountRule
+from .models import AppliedDiscount, DiscountRedemption, DiscountRule, DiscountTier
+
+
+class DiscountTierInline(admin.TabularInline):
+    model = DiscountTier
+    extra = 0
 
 
 @admin.register(DiscountRule)
 class DiscountRuleAdmin(admin.ModelAdmin):
+    inlines = [DiscountTierInline]
     list_display = (
         "name",
         "channel",

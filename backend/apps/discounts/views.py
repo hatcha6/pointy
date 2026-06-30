@@ -57,6 +57,7 @@ class DiscountRuleViewSet(viewsets.ModelViewSet):
                 "product_categories",
                 "customers",
                 "suppliers",
+                "tiers",
             )
             .annotate(
                 redemption_count=Count("redemptions", distinct=True),

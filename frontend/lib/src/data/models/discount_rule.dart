@@ -54,16 +54,58 @@ enum DiscountValueType {
   percentage('percentage'),
   fixedAmount('fixed_amount'),
   fixedUnitAmount('fixed_unit_amount'),
-  fixedPrice('fixed_price');
+  fixedPrice('fixed_price'),
+  multiBuy('multi_buy'),
+  tiered('tiered'),
+  buyXGetY('buy_x_get_y');
 
   const DiscountValueType(this.apiValue);
 
   final String apiValue;
 
+  /// The quantity promotions priced over a pool of whole units. They are always
+  /// line-scoped and configured with their own parameters instead of [value]
+  /// alone.
+  bool get isQuantityPromotion =>
+      this == multiBuy || this == tiered || this == buyXGetY;
+
   static DiscountValueType fromApi(String value) {
     return DiscountValueType.values.firstWhere(
       (type) => type.apiValue == value,
       orElse: () => DiscountValueType.percentage,
+    );
+  }
+}
+
+enum DiscountBuyGetReward {
+  free('free'),
+  percentage('percentage'),
+  fixedPrice('fixed_price');
+
+  const DiscountBuyGetReward(this.apiValue);
+
+  final String apiValue;
+
+  static DiscountBuyGetReward fromApi(String value) {
+    return DiscountBuyGetReward.values.firstWhere(
+      (reward) => reward.apiValue == value,
+      orElse: () => DiscountBuyGetReward.free,
+    );
+  }
+}
+
+/// A single wholesale price break for a [DiscountValueType.tiered] rule: once a
+/// customer reaches [minQuantity] units, each unit reprices to [unitPrice].
+class DiscountTier {
+  const DiscountTier({required this.minQuantity, required this.unitPrice});
+
+  final int minQuantity;
+  final double unitPrice;
+
+  factory DiscountTier.fromJson(Map<String, Object?> json) {
+    return DiscountTier(
+      minQuantity: _intFromJson(json['min_quantity']),
+      unitPrice: _doubleFromJson(json['unit_price']),
     );
   }
 }
@@ -522,6 +564,11 @@ class DiscountRule {
     required this.scope,
     required this.valueType,
     required this.value,
+    required this.groupSize,
+    required this.buyQuantity,
+    required this.getQuantity,
+    required this.rewardType,
+    required this.tiers,
     required this.maxDiscountAmount,
     required this.roundingMode,
     required this.roundingIncrement,
@@ -557,6 +604,11 @@ class DiscountRule {
   final DiscountScope scope;
   final DiscountValueType valueType;
   final double value;
+  final int? groupSize;
+  final int? buyQuantity;
+  final int? getQuantity;
+  final DiscountBuyGetReward? rewardType;
+  final List<DiscountTier> tiers;
   final double? maxDiscountAmount;
   final DiscountRoundingMode roundingMode;
   final double? roundingIncrement;
@@ -599,6 +651,11 @@ class DiscountRule {
         json['value_type']?.toString() ?? '',
       ),
       value: _doubleFromJson(json['value']),
+      groupSize: _nullableIntFromJson(json['group_size']),
+      buyQuantity: _nullableIntFromJson(json['buy_quantity']),
+      getQuantity: _nullableIntFromJson(json['get_quantity']),
+      rewardType: _rewardTypeFromJson(json['reward_type']),
+      tiers: _tierListFromJson(json['tiers']),
       maxDiscountAmount: _nullableDoubleFromJson(json['max_discount_amount']),
       roundingMode: DiscountRoundingMode.fromApi(
         json['rounding_mode']?.toString() ?? '',
@@ -647,6 +704,11 @@ class DiscountRuleDraft {
     required this.scope,
     required this.valueType,
     required this.value,
+    required this.groupSize,
+    required this.buyQuantity,
+    required this.getQuantity,
+    required this.rewardType,
+    required this.tiers,
     required this.maxDiscountAmount,
     required this.roundingMode,
     required this.roundingIncrement,
@@ -677,6 +739,11 @@ class DiscountRuleDraft {
   final DiscountScope scope;
   final DiscountValueType valueType;
   final String value;
+  final String groupSize;
+  final String buyQuantity;
+  final String getQuantity;
+  final DiscountBuyGetReward? rewardType;
+  final List<DiscountTier> tiers;
   final String maxDiscountAmount;
   final DiscountRoundingMode roundingMode;
   final String roundingIncrement;
@@ -710,7 +777,20 @@ class DiscountRuleDraft {
           : '',
       'scope': scope.apiValue,
       'value_type': valueType.apiValue,
-      'value': value.trim(),
+      // Tiered rules derive their value from the cheapest tier, so an empty
+      // value is sent as null rather than a blank string the API would reject.
+      'value': _nullableDecimal(value),
+      'group_size': _nullableInt(groupSize),
+      'buy_quantity': _nullableInt(buyQuantity),
+      'get_quantity': _nullableInt(getQuantity),
+      'reward_type': rewardType?.apiValue ?? '',
+      'tiers': [
+        for (final tier in tiers)
+          {
+            'min_quantity': tier.minQuantity,
+            'unit_price': tier.unitPrice.toStringAsFixed(4),
+          },
+      ],
       'max_discount_amount': _nullableDecimal(maxDiscountAmount),
       'rounding_mode': roundingMode.apiValue,
       'rounding_increment': roundingMode == DiscountRoundingMode.none
@@ -774,6 +854,21 @@ List<int> _intListFromJson(Object? value) {
   return value
       .map(_nullableIntFromJson)
       .whereType<int>()
+      .toList(growable: false);
+}
+
+DiscountBuyGetReward? _rewardTypeFromJson(Object? value) {
+  final raw = value?.toString() ?? '';
+  return raw.isEmpty ? null : DiscountBuyGetReward.fromApi(raw);
+}
+
+List<DiscountTier> _tierListFromJson(Object? value) {
+  if (value is! List<Object?>) {
+    return const [];
+  }
+  return value
+      .whereType<Map<String, Object?>>()
+      .map(DiscountTier.fromJson)
       .toList(growable: false);
 }
 

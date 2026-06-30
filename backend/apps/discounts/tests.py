@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
@@ -17,7 +18,7 @@ from apps.customers.models import Customer
 from apps.purchasing.models import Supplier
 from apps.sales.models import Order
 
-from .models import AppliedDiscount, DiscountRedemption, DiscountRule
+from .models import AppliedDiscount, DiscountRedemption, DiscountRule, DiscountTier
 from .services import (
     DiscountContext,
     DiscountEngine,
@@ -884,6 +885,151 @@ class DiscountRuleApiTests(TestCase):
         self.assertEqual(response.status_code, 400, response.data)
         self.assertIn("customer_ranks", response.data)
 
+    def test_create_multi_buy_rule(self):
+        response = self.client.post(
+            "/api/discount-rules/",
+            {
+                "name": "3 for 1 dinar",
+                "channel": DiscountRule.Channel.SALES,
+                "application_type": DiscountRule.ApplicationType.AUTOMATIC,
+                "scope": DiscountRule.Scope.LINE,
+                "value_type": DiscountRule.ValueType.MULTI_BUY,
+                "group_size": 3,
+                "value": "1.00",
+                "products": [self.product.pk],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        rule = DiscountRule.objects.get(pk=response.data["id"])
+        self.assertEqual(rule.group_size, 3)
+        self.assertEqual(rule.value, Decimal("1.0000"))
+
+    def test_create_tiered_rule_derives_value_from_cheapest_tier(self):
+        response = self.client.post(
+            "/api/discount-rules/",
+            {
+                "name": "Wholesale breaks",
+                "channel": DiscountRule.Channel.SALES,
+                "application_type": DiscountRule.ApplicationType.AUTOMATIC,
+                "scope": DiscountRule.Scope.LINE,
+                "value_type": DiscountRule.ValueType.TIERED,
+                "products": [self.product.pk],
+                "tiers": [
+                    {"min_quantity": 6, "unit_price": "0.40"},
+                    {"min_quantity": 12, "unit_price": "0.35"},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(
+            response.data["tiers"],
+            [
+                {"min_quantity": 6, "unit_price": "0.4000"},
+                {"min_quantity": 12, "unit_price": "0.3500"},
+            ],
+        )
+        rule = DiscountRule.objects.get(pk=response.data["id"])
+        self.assertEqual(rule.value, Decimal("0.3500"))
+        self.assertEqual(rule.tiers.count(), 2)
+
+    def test_create_buy_x_get_y_rule(self):
+        response = self.client.post(
+            "/api/discount-rules/",
+            {
+                "name": "Buy 2 get 1 free",
+                "channel": DiscountRule.Channel.SALES,
+                "application_type": DiscountRule.ApplicationType.AUTOMATIC,
+                "scope": DiscountRule.Scope.LINE,
+                "value_type": DiscountRule.ValueType.BUY_X_GET_Y,
+                "buy_quantity": 2,
+                "get_quantity": 1,
+                "reward_type": DiscountRule.BuyGetReward.FREE,
+                "value": "100",
+                "products": [self.product.pk],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        rule = DiscountRule.objects.get(pk=response.data["id"])
+        self.assertEqual(rule.buy_quantity, 2)
+        self.assertEqual(rule.get_quantity, 1)
+        self.assertEqual(rule.reward_type, "free")
+
+    def test_tiered_rule_requires_at_least_one_tier(self):
+        response = self.client.post(
+            "/api/discount-rules/",
+            {
+                "name": "No tiers",
+                "channel": DiscountRule.Channel.SALES,
+                "application_type": DiscountRule.ApplicationType.AUTOMATIC,
+                "scope": DiscountRule.Scope.LINE,
+                "value_type": DiscountRule.ValueType.TIERED,
+                "products": [self.product.pk],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("tiers", response.data)
+
+    def test_tiers_rejected_on_non_tiered_rule(self):
+        response = self.client.post(
+            "/api/discount-rules/",
+            {
+                "name": "Percentage with tiers",
+                "channel": DiscountRule.Channel.SALES,
+                "application_type": DiscountRule.ApplicationType.AUTOMATIC,
+                "scope": DiscountRule.Scope.LINE,
+                "value_type": DiscountRule.ValueType.PERCENTAGE,
+                "value": "10",
+                "tiers": [{"min_quantity": 6, "unit_price": "0.40"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("tiers", response.data)
+
+    def test_update_retype_to_tiered_replaces_tiers_and_clears_group_size(self):
+        create = self.client.post(
+            "/api/discount-rules/",
+            {
+                "name": "Retype me",
+                "channel": DiscountRule.Channel.SALES,
+                "application_type": DiscountRule.ApplicationType.AUTOMATIC,
+                "scope": DiscountRule.Scope.LINE,
+                "value_type": DiscountRule.ValueType.MULTI_BUY,
+                "group_size": 3,
+                "value": "1.00",
+                "products": [self.product.pk],
+            },
+            format="json",
+        )
+        self.assertEqual(create.status_code, 201, create.data)
+        rule_id = create.data["id"]
+
+        patch = self.client.patch(
+            f"/api/discount-rules/{rule_id}/",
+            {
+                "value_type": DiscountRule.ValueType.TIERED,
+                "group_size": None,
+                "tiers": [{"min_quantity": 5, "unit_price": "0.40"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(patch.status_code, 200, patch.data)
+        rule = DiscountRule.objects.get(pk=rule_id)
+        self.assertIsNone(rule.group_size)
+        self.assertEqual(rule.value_type, "tiered")
+        self.assertEqual(rule.tiers.count(), 1)
+        self.assertEqual(rule.value, Decimal("0.4000"))
+
     def test_create_update_disable_and_archive_discount_rule(self):
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
@@ -1303,3 +1449,394 @@ class DiscountRuleApiTests(TestCase):
             [discount["rule_name"] for discount in response.data["applied_discounts"]],
             ["Category sales"],
         )
+
+
+class QuantityPromotionEngineTests(TestCase):
+    """Engine coverage for the pooled quantity promotions: multi-buy, tiered
+    unit price, and buy-X-get-Y. Prices are set per line so each test controls
+    the pool independently of catalog prices."""
+
+    def setUp(self):
+        self.engine = DiscountEngine()
+        self.yogurt = create_product_with_default_variant(
+            sku="YOG-1", name="Al Naseem yogurt", unit_price=Decimal("0.50")
+        )
+        self.premium = create_product_with_default_variant(
+            sku="PREM-1", name="Premium", unit_price=Decimal("2.00")
+        )
+        self.category = ProductCategory.objects.create(name="Dairy")
+        self.yogurt.categories.add(self.category)
+        self.premium.categories.add(self.category)
+
+    # -- helpers ---------------------------------------------------------
+    def _line(self, key, product, quantity, unit_amount):
+        return DiscountLineInput(
+            key=key,
+            product_id=product.pk,
+            quantity=quantity,
+            unit_amount=Decimal(unit_amount),
+            category_ids=tuple(product.categories.values_list("id", flat=True)),
+        )
+
+    def _ctx(self, *lines, **overrides):
+        data = {"channel": DiscountRule.Channel.SALES, "lines": tuple(lines)}
+        data.update(overrides)
+        return DiscountContext(**data)
+
+    def _target(self, rule, products, categories):
+        if products:
+            rule.products.set(products)
+        if categories:
+            rule.product_categories.set(categories)
+        return rule
+
+    def _multi_buy(
+        self, *, group_size, group_price, products=None, categories=None, **kwargs
+    ):
+        rule = DiscountRule.objects.create(
+            name=kwargs.pop("name", "Multi-buy"),
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.MULTI_BUY,
+            group_size=group_size,
+            value=Decimal(group_price),
+            **kwargs,
+        )
+        return self._target(rule, products, categories)
+
+    def _tiered(self, tiers, *, products=None, categories=None, **kwargs):
+        representative = min(Decimal(price) for _, price in tiers)
+        rule = DiscountRule.objects.create(
+            name=kwargs.pop("name", "Tiered"),
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.TIERED,
+            value=representative,
+            **kwargs,
+        )
+        for min_quantity, unit_price in tiers:
+            DiscountTier.objects.create(
+                rule=rule, min_quantity=min_quantity, unit_price=Decimal(unit_price)
+            )
+        return self._target(rule, products, categories)
+
+    def _buy_x_get_y(
+        self,
+        *,
+        buy,
+        get,
+        reward_type,
+        value="100",
+        products=None,
+        categories=None,
+        **kwargs,
+    ):
+        rule = DiscountRule.objects.create(
+            name=kwargs.pop("name", "Buy X get Y"),
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.BUY_X_GET_Y,
+            buy_quantity=buy,
+            get_quantity=get,
+            reward_type=reward_type,
+            value=Decimal(value),
+            **kwargs,
+        )
+        return self._target(rule, products, categories)
+
+    # -- multi-buy -------------------------------------------------------
+    def test_multi_buy_three_for_one(self):
+        self._multi_buy(group_size=3, group_price="1.00", products=[self.yogurt])
+        result = self.engine.calculate(
+            self._ctx(self._line("l1", self.yogurt, 3, "0.50"))
+        )
+        self.assertEqual(result.subtotal, Decimal("1.50"))
+        self.assertEqual(result.discount_total, Decimal("0.50"))
+        self.assertEqual(result.total, Decimal("1.00"))
+
+    def test_multi_buy_below_group_size_is_no_op(self):
+        self._multi_buy(group_size=3, group_price="1.00", products=[self.yogurt])
+        result = self.engine.calculate(
+            self._ctx(self._line("l1", self.yogurt, 2, "0.50"))
+        )
+        self.assertEqual(result.discount_total, Decimal("0.00"))
+
+    def test_multi_buy_self_stacks_per_group(self):
+        self._multi_buy(group_size=3, group_price="1.00", products=[self.yogurt])
+        six = self.engine.calculate(self._ctx(self._line("l1", self.yogurt, 6, "0.50")))
+        self.assertEqual(six.discount_total, Decimal("1.00"))
+        self.assertEqual(six.total, Decimal("2.00"))
+        seven = self.engine.calculate(
+            self._ctx(self._line("l1", self.yogurt, 7, "0.50"))
+        )
+        self.assertEqual(seven.discount_total, Decimal("1.00"))
+        self.assertEqual(seven.total, Decimal("2.50"))
+
+    def test_multi_buy_pools_and_prices_the_most_expensive_units(self):
+        # A 4-unit mixed pool, group of 3: the dearest 3 (2.00 + 0.50 + 0.50)
+        # are charged 1.00; the 4th (0.50) stays full price.
+        self._multi_buy(group_size=3, group_price="1.00", categories=[self.category])
+        result = self.engine.calculate(
+            self._ctx(
+                self._line("prem", self.premium, 1, "2.00"),
+                self._line("yog", self.yogurt, 3, "0.50"),
+            )
+        )
+        self.assertEqual(result.subtotal, Decimal("3.50"))
+        self.assertEqual(result.discount_total, Decimal("2.00"))
+        self.assertEqual(result.total, Decimal("1.50"))
+
+    def test_multi_buy_ignores_fractional_remainder(self):
+        self._multi_buy(group_size=3, group_price="1.00", categories=[self.category])
+        # 2 whole + floor(1.5)=1 -> 3 whole units make one group; the 0.5 stays.
+        result = self.engine.calculate(
+            self._ctx(
+                self._line("yog", self.yogurt, 2, "0.50"),
+                self._line("kg", self.premium, Decimal("1.5"), "0.50"),
+            )
+        )
+        self.assertEqual(result.subtotal, Decimal("1.75"))
+        self.assertEqual(result.discount_total, Decimal("0.50"))
+        self.assertEqual(result.total, Decimal("1.25"))
+
+    # -- tiered ----------------------------------------------------------
+    def test_tiered_reprices_all_units_at_highest_met_tier(self):
+        self._tiered([(6, "0.40"), (12, "0.35")], products=[self.yogurt])
+        result = self.engine.calculate(
+            self._ctx(self._line("l1", self.yogurt, 7, "0.50"))
+        )
+        self.assertEqual(result.subtotal, Decimal("3.50"))
+        self.assertEqual(result.discount_total, Decimal("0.70"))
+        self.assertEqual(result.total, Decimal("2.80"))
+
+    def test_tiered_below_first_threshold_is_no_op(self):
+        self._tiered([(6, "0.40")], products=[self.yogurt])
+        result = self.engine.calculate(
+            self._ctx(self._line("l1", self.yogurt, 5, "0.50"))
+        )
+        self.assertEqual(result.discount_total, Decimal("0.00"))
+
+    def test_tiered_highest_tier_wins(self):
+        self._tiered([(6, "0.40"), (12, "0.35")], products=[self.yogurt])
+        result = self.engine.calculate(
+            self._ctx(self._line("l1", self.yogurt, 12, "0.50"))
+        )
+        self.assertEqual(result.discount_total, Decimal("1.80"))
+        self.assertEqual(result.total, Decimal("4.20"))
+
+    def test_tiered_pools_quantities_across_lines(self):
+        self._tiered([(6, "0.40")], categories=[self.category])
+        result = self.engine.calculate(
+            self._ctx(
+                self._line("a", self.yogurt, 4, "0.50"),
+                self._line("b", self.premium, 3, "0.50"),
+            )
+        )
+        self.assertEqual(result.discount_total, Decimal("0.70"))
+
+    def test_tiered_skips_units_already_cheaper_than_tier_price(self):
+        self._tiered([(6, "0.40")], categories=[self.category])
+        result = self.engine.calculate(
+            self._ctx(
+                self._line("dear", self.yogurt, 6, "0.50"),
+                self._line("cheap", self.premium, 1, "0.30"),
+            )
+        )
+        self.assertEqual(result.discount_total, Decimal("0.60"))
+
+    def test_tiered_without_tiers_is_no_op(self):
+        rule = DiscountRule.objects.create(
+            name="Tiered",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.TIERED,
+            value=Decimal("0.40"),
+        )
+        rule.products.set([self.yogurt])
+        result = self.engine.calculate(
+            self._ctx(self._line("l1", self.yogurt, 10, "0.50"))
+        )
+        self.assertEqual(result.discount_total, Decimal("0.00"))
+
+    # -- buy X get Y -----------------------------------------------------
+    def test_buy_one_get_one_free(self):
+        self._buy_x_get_y(
+            buy=1,
+            get=1,
+            reward_type=DiscountRule.BuyGetReward.FREE,
+            products=[self.yogurt],
+        )
+        two = self.engine.calculate(self._ctx(self._line("l1", self.yogurt, 2, "0.50")))
+        self.assertEqual(two.discount_total, Decimal("0.50"))
+        self.assertEqual(two.total, Decimal("0.50"))
+        three = self.engine.calculate(
+            self._ctx(self._line("l1", self.yogurt, 3, "0.50"))
+        )
+        self.assertEqual(three.discount_total, Decimal("0.50"))
+        four = self.engine.calculate(
+            self._ctx(self._line("l1", self.yogurt, 4, "0.50"))
+        )
+        self.assertEqual(four.discount_total, Decimal("1.00"))
+
+    def test_buy_two_get_one_free(self):
+        self._buy_x_get_y(
+            buy=2,
+            get=1,
+            reward_type=DiscountRule.BuyGetReward.FREE,
+            products=[self.yogurt],
+        )
+        result = self.engine.calculate(
+            self._ctx(self._line("l1", self.yogurt, 3, "0.50"))
+        )
+        self.assertEqual(result.discount_total, Decimal("0.50"))
+        self.assertEqual(result.total, Decimal("1.00"))
+
+    def test_buy_x_get_y_percentage_reward(self):
+        self._buy_x_get_y(
+            buy=1,
+            get=1,
+            reward_type=DiscountRule.BuyGetReward.PERCENTAGE,
+            value="50",
+            products=[self.yogurt],
+        )
+        result = self.engine.calculate(
+            self._ctx(self._line("l1", self.yogurt, 2, "0.50"))
+        )
+        self.assertEqual(result.discount_total, Decimal("0.25"))
+
+    def test_buy_x_get_y_fixed_price_reward(self):
+        self._buy_x_get_y(
+            buy=1,
+            get=1,
+            reward_type=DiscountRule.BuyGetReward.FIXED_PRICE,
+            value="0.30",
+            products=[self.yogurt],
+        )
+        result = self.engine.calculate(
+            self._ctx(self._line("l1", self.yogurt, 2, "0.50"))
+        )
+        self.assertEqual(result.discount_total, Decimal("0.20"))
+
+    def test_buy_x_get_y_rewards_the_cheapest_units(self):
+        self._buy_x_get_y(
+            buy=1,
+            get=1,
+            reward_type=DiscountRule.BuyGetReward.FREE,
+            categories=[self.category],
+        )
+        result = self.engine.calculate(
+            self._ctx(
+                self._line("prem", self.premium, 1, "2.00"),
+                self._line("yog", self.yogurt, 1, "0.50"),
+            )
+        )
+        self.assertEqual(result.discount_total, Decimal("0.50"))
+        self.assertEqual(result.total, Decimal("2.00"))
+
+    # -- stacking / caps -------------------------------------------------
+    def test_pooled_promo_caps_at_remaining_when_stacked(self):
+        percentage = DiscountRule.objects.create(
+            name="Ten percent",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+            exclusive=False,
+            priority=10,
+        )
+        percentage.products.set([self.yogurt])
+        self._multi_buy(
+            group_size=3,
+            group_price="1.00",
+            products=[self.yogurt],
+            exclusive=False,
+            priority=20,
+        )
+        result = self.engine.calculate(
+            self._ctx(self._line("l1", self.yogurt, 3, "0.50"))
+        )
+        self.assertEqual(result.discount_total, Decimal("0.65"))
+        self.assertEqual(result.total, Decimal("0.85"))
+
+    # -- validation ------------------------------------------------------
+    def test_multi_buy_requires_group_size_of_at_least_two(self):
+        with self.assertRaises(ValidationError):
+            DiscountRule.objects.create(
+                name="x",
+                channel=DiscountRule.Channel.SALES,
+                scope=DiscountRule.Scope.LINE,
+                value_type=DiscountRule.ValueType.MULTI_BUY,
+                value=Decimal("1.00"),
+            )
+        with self.assertRaises(ValidationError):
+            DiscountRule.objects.create(
+                name="x",
+                channel=DiscountRule.Channel.SALES,
+                scope=DiscountRule.Scope.LINE,
+                value_type=DiscountRule.ValueType.MULTI_BUY,
+                value=Decimal("1.00"),
+                group_size=1,
+            )
+
+    def test_quantity_promotions_must_be_line_scoped(self):
+        with self.assertRaises(ValidationError):
+            DiscountRule.objects.create(
+                name="x",
+                channel=DiscountRule.Channel.SALES,
+                scope=DiscountRule.Scope.DOCUMENT,
+                value_type=DiscountRule.ValueType.MULTI_BUY,
+                value=Decimal("1.00"),
+                group_size=3,
+            )
+
+    def test_buy_x_get_y_requires_reward_and_quantities(self):
+        with self.assertRaises(ValidationError):
+            DiscountRule.objects.create(
+                name="x",
+                channel=DiscountRule.Channel.SALES,
+                scope=DiscountRule.Scope.LINE,
+                value_type=DiscountRule.ValueType.BUY_X_GET_Y,
+                value=Decimal("100"),
+            )
+
+    def test_buy_x_get_y_percentage_reward_cannot_exceed_100(self):
+        with self.assertRaises(ValidationError):
+            DiscountRule.objects.create(
+                name="x",
+                channel=DiscountRule.Channel.SALES,
+                scope=DiscountRule.Scope.LINE,
+                value_type=DiscountRule.ValueType.BUY_X_GET_Y,
+                value=Decimal("150"),
+                buy_quantity=1,
+                get_quantity=1,
+                reward_type=DiscountRule.BuyGetReward.PERCENTAGE,
+            )
+
+    def test_quantity_promotions_reject_min_line_quantity(self):
+        with self.assertRaises(ValidationError):
+            DiscountRule.objects.create(
+                name="x",
+                channel=DiscountRule.Channel.SALES,
+                scope=DiscountRule.Scope.LINE,
+                value_type=DiscountRule.ValueType.MULTI_BUY,
+                value=Decimal("1.00"),
+                group_size=3,
+                min_line_quantity=2,
+            )
+
+    def test_retyping_clears_stale_promo_fields(self):
+        rule = DiscountRule.objects.create(
+            name="x",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10"),
+            group_size=3,
+            buy_quantity=2,
+            get_quantity=1,
+            reward_type=DiscountRule.BuyGetReward.FREE,
+        )
+        self.assertIsNone(rule.group_size)
+        self.assertIsNone(rule.buy_quantity)
+        self.assertIsNone(rule.get_quantity)
+        self.assertEqual(rule.reward_type, "")

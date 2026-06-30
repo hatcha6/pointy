@@ -1,5 +1,20 @@
 part of 'discount_rule_form.dart';
 
+/// Mutable controllers backing one editable row of the tiered-price editor.
+class _TierFieldRow {
+  _TierFieldRow({String minQuantity = '', String unitPrice = ''})
+    : minQuantityController = TextEditingController(text: minQuantity),
+      unitPriceController = TextEditingController(text: unitPrice);
+
+  final TextEditingController minQuantityController;
+  final TextEditingController unitPriceController;
+
+  void dispose() {
+    minQuantityController.dispose();
+    unitPriceController.dispose();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Building blocks
 // ---------------------------------------------------------------------------

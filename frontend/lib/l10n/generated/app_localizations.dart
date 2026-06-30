@@ -15103,6 +15103,180 @@ abstract class AppLocalizations {
   /// **'تثبيت سعر الصنف عند قيمة محددة'**
   String get discountValueTypeFixedPriceHelp;
 
+  /// No description provided for @discountValueTypeMultiBuy.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشترِ عدّة بسعر'**
+  String get discountValueTypeMultiBuy;
+
+  /// No description provided for @discountValueTypeMultiBuyHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّد عدد القطع في المجموعة وسعرها، مثل ٣ قطع بدينار.'**
+  String get discountValueTypeMultiBuyHelp;
+
+  /// No description provided for @discountValueTypeTiered.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر متدرّج بالكمية'**
+  String get discountValueTypeTiered;
+
+  /// No description provided for @discountValueTypeTieredHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلما زادت الكمية انخفض سعر الوحدة عبر شرائح.'**
+  String get discountValueTypeTieredHelp;
+
+  /// No description provided for @discountValueTypeBuyXGetY.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشترِ X واحصل على Y'**
+  String get discountValueTypeBuyXGetY;
+
+  /// No description provided for @discountValueTypeBuyXGetYHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشترِ كمية واحصل على قطع مجانية أو بخصم.'**
+  String get discountValueTypeBuyXGetYHelp;
+
+  /// No description provided for @discountGroupSizeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد قطع المجموعة'**
+  String get discountGroupSizeLabel;
+
+  /// No description provided for @discountGroupPriceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر المجموعة'**
+  String get discountGroupPriceLabel;
+
+  /// No description provided for @discountBuyQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كمية الشراء (X)'**
+  String get discountBuyQuantityLabel;
+
+  /// No description provided for @discountGetQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كمية المكافأة (Y)'**
+  String get discountGetQuantityLabel;
+
+  /// No description provided for @discountRewardTypeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع المكافأة'**
+  String get discountRewardTypeLabel;
+
+  /// No description provided for @discountRewardFree.
+  ///
+  /// In ar, this message translates to:
+  /// **'مجانًا'**
+  String get discountRewardFree;
+
+  /// No description provided for @discountRewardPercentage.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة خصم'**
+  String get discountRewardPercentage;
+
+  /// No description provided for @discountRewardFixedPrice.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر ثابت للقطعة'**
+  String get discountRewardFixedPrice;
+
+  /// No description provided for @discountTiersLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'شرائح السعر'**
+  String get discountTiersLabel;
+
+  /// No description provided for @discountTiersHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّد سعر الوحدة عند كل كمية. تُطبَّق أعلى شريحة مؤهَّلة.'**
+  String get discountTiersHint;
+
+  /// No description provided for @discountTierMinQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابتداءً من كمية'**
+  String get discountTierMinQuantityLabel;
+
+  /// No description provided for @discountTierUnitPriceLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر الوحدة'**
+  String get discountTierUnitPriceLabel;
+
+  /// No description provided for @discountAddTierButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة شريحة'**
+  String get discountAddTierButton;
+
+  /// No description provided for @discountRemoveTierTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الشريحة'**
+  String get discountRemoveTierTooltip;
+
+  /// No description provided for @discountTiersRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف شريحة سعر واحدة على الأقل.'**
+  String get discountTiersRequiredError;
+
+  /// Multi-buy headline: N units for a group price.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} بـ {price}'**
+  String discountMultiBuyValue(int count, String price);
+
+  /// Tiered discount headline showing the lowest tier unit price.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {price}'**
+  String discountTieredValue(String price);
+
+  /// Buy X get Y headline.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشترِ {buy} واحصل على {get}'**
+  String discountBuyGetValue(int buy, int get);
+
+  /// Live-summary chip for a multi-buy rule.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} قطع بـ {price}'**
+  String discountMultiBuySummary(int count, String price);
+
+  /// Live-summary chip showing the number of price tiers.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} شرائح سعر'**
+  String discountTierCountSummary(int count);
+
+  /// No description provided for @discountRewardSummaryFree.
+  ///
+  /// In ar, this message translates to:
+  /// **'القطعة المكافأة مجانًا'**
+  String get discountRewardSummaryFree;
+
+  /// Buy X get Y percentage reward summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم {percent}% على المكافأة'**
+  String discountRewardSummaryPercentage(String percent);
+
+  /// Buy X get Y fixed-price reward summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'المكافأة بسعر {price}'**
+  String discountRewardSummaryFixedPrice(String price);
+
   /// No description provided for @discountWizardAdvancedToggle.
   ///
   /// In ar, this message translates to:

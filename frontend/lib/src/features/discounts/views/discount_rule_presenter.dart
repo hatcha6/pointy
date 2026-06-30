@@ -35,6 +35,17 @@ String discountValueTypeLabel(AppLocalizations l10n, DiscountValueType type) {
     DiscountValueType.fixedAmount => l10n.discountValueTypeFixedAmount,
     DiscountValueType.fixedUnitAmount => l10n.discountValueTypeFixedUnitAmount,
     DiscountValueType.fixedPrice => l10n.discountValueTypeFixedPrice,
+    DiscountValueType.multiBuy => l10n.discountValueTypeMultiBuy,
+    DiscountValueType.tiered => l10n.discountValueTypeTiered,
+    DiscountValueType.buyXGetY => l10n.discountValueTypeBuyXGetY,
+  };
+}
+
+String discountRewardLabel(AppLocalizations l10n, DiscountBuyGetReward reward) {
+  return switch (reward) {
+    DiscountBuyGetReward.free => l10n.discountRewardFree,
+    DiscountBuyGetReward.percentage => l10n.discountRewardPercentage,
+    DiscountBuyGetReward.fixedPrice => l10n.discountRewardFixedPrice,
   };
 }
 
@@ -58,6 +69,17 @@ String discountValueText(AppLocalizations l10n, DiscountRule rule) {
     DiscountValueType.fixedAmount ||
     DiscountValueType.fixedUnitAmount ||
     DiscountValueType.fixedPrice => formatMoney(rule.value),
+    DiscountValueType.multiBuy => l10n.discountMultiBuyValue(
+      rule.groupSize ?? 0,
+      formatMoney(rule.value),
+    ),
+    DiscountValueType.tiered => l10n.discountTieredValue(
+      formatMoney(rule.value),
+    ),
+    DiscountValueType.buyXGetY => l10n.discountBuyGetValue(
+      rule.buyQuantity ?? 0,
+      rule.getQuantity ?? 0,
+    ),
   };
 }
 

@@ -105,6 +105,18 @@ class DescribeResourceTests(_Fixtures):
         self.assertEqual(fields["products"]["relation"], {"kind": "m2m", "by": "id", "resource": "products"})
         self.assertEqual(fields["customers"]["relation"]["resource"], "customers")
 
+    def test_discount_rules_schema_exposes_quantity_promotion_fields(self):
+        schema = describe_resource(user=self.manager, resource="discount-rules")
+        fields = {f["name"]: f for f in schema["write_fields"]}
+        for value_type in ("multi_buy", "tiered", "buy_x_get_y"):
+            self.assertIn(value_type, fields["value_type"]["choices"])
+        self.assertIn("free", fields["reward_type"]["choices"])
+        tiers = fields["tiers"]
+        self.assertEqual(tiers["type"], "array_of_objects")
+        self.assertEqual(
+            {f["name"] for f in tiers["fields"]}, {"min_quantity", "unit_price"}
+        )
+
     def test_write_denied_resource_reports_not_creatable_with_note(self):
         schema = describe_resource(user=self.manager, resource="orders")
         self.assertTrue(schema["ok"])
@@ -163,6 +175,28 @@ class CreateResourceTests(_Fixtures):
         self.assertTrue(result["ok"], result)
         self.assertEqual(result["data"]["name"], "قهوة")
         self.assertTrue(Product.objects.filter(name="قهوة").exists())
+
+    def test_manager_creates_tiered_discount_with_nested_tiers(self):
+        from apps.discounts.models import DiscountRule
+
+        result = create_resource(
+            user=self.manager,
+            resource="discount-rules",
+            data={
+                "name": "سعر جملة",
+                "channel": "sales",
+                "scope": "line",
+                "value_type": "tiered",
+                "tiers": [
+                    {"min_quantity": 6, "unit_price": "0.40"},
+                    {"min_quantity": 12, "unit_price": "0.35"},
+                ],
+            },
+        )
+        self.assertTrue(result["ok"], result)
+        rule = DiscountRule.objects.get(name="سعر جملة")
+        self.assertEqual(rule.tiers.count(), 2)
+        self.assertEqual(rule.value, Decimal("0.3500"))
 
     def test_deny_listed_resources_blocked_before_dispatch(self):
         for resource in ("orders", "payments", "stock"):

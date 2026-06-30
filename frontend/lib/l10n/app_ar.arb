@@ -5070,6 +5070,80 @@
   "discountValueTypeFixedAmountHelp": "مبلغ ثابت يُخصم من الإجمالي",
   "discountValueTypeFixedUnitAmountHelp": "مبلغ يُخصم عن كل وحدة",
   "discountValueTypeFixedPriceHelp": "تثبيت سعر الصنف عند قيمة محددة",
+  "discountValueTypeMultiBuy": "اشترِ عدّة بسعر",
+  "discountValueTypeMultiBuyHelp": "حدّد عدد القطع في المجموعة وسعرها، مثل ٣ قطع بدينار.",
+  "discountValueTypeTiered": "سعر متدرّج بالكمية",
+  "discountValueTypeTieredHelp": "كلما زادت الكمية انخفض سعر الوحدة عبر شرائح.",
+  "discountValueTypeBuyXGetY": "اشترِ X واحصل على Y",
+  "discountValueTypeBuyXGetYHelp": "اشترِ كمية واحصل على قطع مجانية أو بخصم.",
+  "discountGroupSizeLabel": "عدد قطع المجموعة",
+  "discountGroupPriceLabel": "سعر المجموعة",
+  "discountBuyQuantityLabel": "كمية الشراء (X)",
+  "discountGetQuantityLabel": "كمية المكافأة (Y)",
+  "discountRewardTypeLabel": "نوع المكافأة",
+  "discountRewardFree": "مجانًا",
+  "discountRewardPercentage": "نسبة خصم",
+  "discountRewardFixedPrice": "سعر ثابت للقطعة",
+  "discountTiersLabel": "شرائح السعر",
+  "discountTiersHint": "حدّد سعر الوحدة عند كل كمية. تُطبَّق أعلى شريحة مؤهَّلة.",
+  "discountTierMinQuantityLabel": "ابتداءً من كمية",
+  "discountTierUnitPriceLabel": "سعر الوحدة",
+  "discountAddTierButton": "إضافة شريحة",
+  "discountRemoveTierTooltip": "حذف الشريحة",
+  "discountTiersRequiredError": "أضف شريحة سعر واحدة على الأقل.",
+  "discountMultiBuyValue": "{count} بـ {price}",
+  "@discountMultiBuyValue": {
+    "description": "Multi-buy headline: N units for a group price.",
+    "placeholders": {
+      "count": {"type": "int"},
+      "price": {"type": "String"}
+    }
+  },
+  "discountTieredValue": "من {price}",
+  "@discountTieredValue": {
+    "description": "Tiered discount headline showing the lowest tier unit price.",
+    "placeholders": {
+      "price": {"type": "String"}
+    }
+  },
+  "discountBuyGetValue": "اشترِ {buy} واحصل على {get}",
+  "@discountBuyGetValue": {
+    "description": "Buy X get Y headline.",
+    "placeholders": {
+      "buy": {"type": "int"},
+      "get": {"type": "int"}
+    }
+  },
+  "discountMultiBuySummary": "{count} قطع بـ {price}",
+  "@discountMultiBuySummary": {
+    "description": "Live-summary chip for a multi-buy rule.",
+    "placeholders": {
+      "count": {"type": "int"},
+      "price": {"type": "String"}
+    }
+  },
+  "discountTierCountSummary": "{count} شرائح سعر",
+  "@discountTierCountSummary": {
+    "description": "Live-summary chip showing the number of price tiers.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "discountRewardSummaryFree": "القطعة المكافأة مجانًا",
+  "discountRewardSummaryPercentage": "خصم {percent}% على المكافأة",
+  "@discountRewardSummaryPercentage": {
+    "description": "Buy X get Y percentage reward summary.",
+    "placeholders": {
+      "percent": {"type": "String"}
+    }
+  },
+  "discountRewardSummaryFixedPrice": "المكافأة بسعر {price}",
+  "@discountRewardSummaryFixedPrice": {
+    "description": "Buy X get Y fixed-price reward summary.",
+    "placeholders": {
+      "price": {"type": "String"}
+    }
+  },
   "discountWizardAdvancedToggle": "إظهار خيارات متقدمة",
   "discountWizardFixStepError": "راجع الخطوة المحددة وأكمل البيانات المطلوبة.",
   "discountWizardNoExtraRules": "بدون شروط إضافية",

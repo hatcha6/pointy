@@ -9,7 +9,35 @@ purchasing totals are always recalculated on the server.
 - `DiscountRule` is the mutable configuration record. A rule can target sales,
   purchasing, or both; automatic application or coupon codes; document or line
   scope; percentage, fixed document/line amount, fixed unit amount, or fixed
-  price values.
+  price values, plus the quantity promotions below.
+- `DiscountTier` rows belong to a `tiered` rule (one per quantity break).
+
+## Quantity Promotions
+
+Three line-scoped value types price a **pool of whole units** gathered across
+every line the rule matches (mix-and-match), instead of the flat per-line
+`value` math. Only whole units take part — a fractional remainder on a weighed
+line (e.g. 1.5 kg) never joins a group and keeps its full price. They reuse the
+per-line allocation/cap/rounding/snapshot machinery, so receipts, returns, and
+the price checker need no special handling.
+
+- `multi_buy` — N units for a fixed group price. `group_size` = N, `value` = the
+  group price. The **most-expensive** units form the priced groups; the cheaper
+  remainder stays full price. Self-stacks (2×N units → two priced groups). E.g.
+  "3 for 1.00 instead of 1.50".
+- `tiered` — wholesale-style price breaks via `DiscountTier(min_quantity,
+  unit_price)` rows. Once the pooled count of whole units reaches a tier, **every**
+  whole unit reprices to that tier's `unit_price`; the highest satisfied tier
+  wins; units already cheaper than the tier price are untouched. `value` is set by
+  the serializer to the cheapest tier price (the headline "from" price).
+- `buy_x_get_y` — buy `buy_quantity` to reward `get_quantity` units per block. The
+  **cheapest** units in the pool are the rewarded ones (standard BOGO).
+  `reward_type` is `free` (100% off), `percentage` (`value`% off), or
+  `fixed_price` (rewarded units down to `value`).
+
+All three are enforced line-scoped, reject `min_line_quantity` (they set their
+own threshold), and are `exclusive` by default. The pooled algorithms live in
+`DiscountEngine._pooled_allocations` and friends.
 - `AppliedDiscount` is the immutable document snapshot. It records the rule
   name, coupon code, source, value, priority, exclusivity, source subtotal,
   total discount, and line allocations as they were at calculation time.

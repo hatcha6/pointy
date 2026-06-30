@@ -8624,6 +8624,111 @@ class AppLocalizationsAr extends AppLocalizations {
       'تثبيت سعر الصنف عند قيمة محددة';
 
   @override
+  String get discountValueTypeMultiBuy => 'اشترِ عدّة بسعر';
+
+  @override
+  String get discountValueTypeMultiBuyHelp =>
+      'حدّد عدد القطع في المجموعة وسعرها، مثل ٣ قطع بدينار.';
+
+  @override
+  String get discountValueTypeTiered => 'سعر متدرّج بالكمية';
+
+  @override
+  String get discountValueTypeTieredHelp =>
+      'كلما زادت الكمية انخفض سعر الوحدة عبر شرائح.';
+
+  @override
+  String get discountValueTypeBuyXGetY => 'اشترِ X واحصل على Y';
+
+  @override
+  String get discountValueTypeBuyXGetYHelp =>
+      'اشترِ كمية واحصل على قطع مجانية أو بخصم.';
+
+  @override
+  String get discountGroupSizeLabel => 'عدد قطع المجموعة';
+
+  @override
+  String get discountGroupPriceLabel => 'سعر المجموعة';
+
+  @override
+  String get discountBuyQuantityLabel => 'كمية الشراء (X)';
+
+  @override
+  String get discountGetQuantityLabel => 'كمية المكافأة (Y)';
+
+  @override
+  String get discountRewardTypeLabel => 'نوع المكافأة';
+
+  @override
+  String get discountRewardFree => 'مجانًا';
+
+  @override
+  String get discountRewardPercentage => 'نسبة خصم';
+
+  @override
+  String get discountRewardFixedPrice => 'سعر ثابت للقطعة';
+
+  @override
+  String get discountTiersLabel => 'شرائح السعر';
+
+  @override
+  String get discountTiersHint =>
+      'حدّد سعر الوحدة عند كل كمية. تُطبَّق أعلى شريحة مؤهَّلة.';
+
+  @override
+  String get discountTierMinQuantityLabel => 'ابتداءً من كمية';
+
+  @override
+  String get discountTierUnitPriceLabel => 'سعر الوحدة';
+
+  @override
+  String get discountAddTierButton => 'إضافة شريحة';
+
+  @override
+  String get discountRemoveTierTooltip => 'حذف الشريحة';
+
+  @override
+  String get discountTiersRequiredError => 'أضف شريحة سعر واحدة على الأقل.';
+
+  @override
+  String discountMultiBuyValue(int count, String price) {
+    return '$count بـ $price';
+  }
+
+  @override
+  String discountTieredValue(String price) {
+    return 'من $price';
+  }
+
+  @override
+  String discountBuyGetValue(int buy, int get) {
+    return 'اشترِ $buy واحصل على $get';
+  }
+
+  @override
+  String discountMultiBuySummary(int count, String price) {
+    return '$count قطع بـ $price';
+  }
+
+  @override
+  String discountTierCountSummary(int count) {
+    return '$count شرائح سعر';
+  }
+
+  @override
+  String get discountRewardSummaryFree => 'القطعة المكافأة مجانًا';
+
+  @override
+  String discountRewardSummaryPercentage(String percent) {
+    return 'خصم $percent% على المكافأة';
+  }
+
+  @override
+  String discountRewardSummaryFixedPrice(String price) {
+    return 'المكافأة بسعر $price';
+  }
+
+  @override
   String get discountWizardAdvancedToggle => 'إظهار خيارات متقدمة';
 
   @override

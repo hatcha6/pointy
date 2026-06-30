@@ -55,6 +55,9 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   late final TextEditingController _roundingIncrementController;
   late final TextEditingController _minSubtotalController;
   late final TextEditingController _minLineQuantityController;
+  late final TextEditingController _groupSizeController;
+  late final TextEditingController _buyQuantityController;
+  late final TextEditingController _getQuantityController;
   late final TextEditingController _priorityController;
   late final TextEditingController _usageLimitController;
   late final TextEditingController _perCustomerLimitController;
@@ -66,6 +69,8 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   late DiscountApplicationType _applicationType;
   late DiscountScope _scope;
   late DiscountValueType _valueType;
+  late DiscountBuyGetReward _rewardType;
+  late List<_TierFieldRow> _tiers;
   late DiscountRoundingMode _roundingMode;
   late bool _exclusive;
   late bool _isActive;
@@ -121,6 +126,15 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     _minLineQuantityController = TextEditingController(
       text: rule?.minLineQuantity?.toString() ?? '',
     );
+    _groupSizeController = TextEditingController(
+      text: rule?.groupSize?.toString() ?? '',
+    );
+    _buyQuantityController = TextEditingController(
+      text: rule?.buyQuantity?.toString() ?? '',
+    );
+    _getQuantityController = TextEditingController(
+      text: rule?.getQuantity?.toString() ?? '',
+    );
     _priorityController = TextEditingController(
       text: '${rule?.priority ?? 100}',
     );
@@ -138,6 +152,17 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
         rule?.applicationType ?? DiscountApplicationType.automatic;
     _scope = rule?.scope ?? DiscountScope.document;
     _valueType = rule?.valueType ?? DiscountValueType.percentage;
+    _rewardType = rule?.rewardType ?? DiscountBuyGetReward.free;
+    _tiers = [
+      for (final tier in rule?.tiers ?? const <DiscountTier>[])
+        _TierFieldRow(
+          minQuantity: tier.minQuantity.toString(),
+          unitPrice: _formatMoney(tier.unitPrice),
+        ),
+    ];
+    if (_valueType == DiscountValueType.tiered && _tiers.isEmpty) {
+      _tiers.add(_TierFieldRow());
+    }
     final savedRoundingMode = rule?.roundingMode ?? DiscountRoundingMode.none;
     _roundingMode = savedRoundingMode == DiscountRoundingMode.none
         ? DiscountRoundingMode.down
@@ -179,6 +204,9 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       _nameController,
       _couponCodeController,
       _valueController,
+      _groupSizeController,
+      _buyQuantityController,
+      _getQuantityController,
       _maxDiscountController,
       _roundingIncrementController,
       _minSubtotalController,
@@ -210,6 +238,12 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     _usageLimitController.dispose();
     _perCustomerLimitController.dispose();
     _perSupplierLimitController.dispose();
+    _groupSizeController.dispose();
+    _buyQuantityController.dispose();
+    _getQuantityController.dispose();
+    for (final tier in _tiers) {
+      tier.dispose();
+    }
     super.dispose();
   }
 
@@ -235,6 +269,9 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       _descriptionController.text,
       _couponCodeController.text,
       _valueController.text,
+      _groupSizeController.text,
+      _buyQuantityController.text,
+      _getQuantityController.text,
       _maxDiscountController.text,
       _roundingIncrementController.text,
       _minSubtotalController.text,
@@ -247,6 +284,13 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       _applicationType,
       _scope,
       _valueType,
+      _rewardType,
+      _tiers
+          .map(
+            (tier) =>
+                '${tier.minQuantityController.text}:${tier.unitPriceController.text}',
+          )
+          .join(','),
       _roundingMode,
       _exclusive,
       _isActive,
@@ -427,7 +471,8 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   Widget _valueSection(AppLocalizations l10n) {
     final scopeLocked =
         _valueType == DiscountValueType.fixedPrice ||
-        _valueType == DiscountValueType.fixedUnitAmount;
+        _valueType == DiscountValueType.fixedUnitAmount ||
+        _valueType.isQuantityPromotion;
     return _FormSection(
       icon: Icons.price_change_outlined,
       title: l10n.discountWizardStepValue,
@@ -441,23 +486,17 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
             setState(() {
               _valueType = value;
               if (value == DiscountValueType.fixedPrice ||
-                  value == DiscountValueType.fixedUnitAmount) {
+                  value == DiscountValueType.fixedUnitAmount ||
+                  value.isQuantityPromotion) {
                 _scope = DiscountScope.line;
+              }
+              if (value == DiscountValueType.tiered && _tiers.isEmpty) {
+                _tiers.add(_TierFieldRow());
               }
             });
           },
         ),
-        TextFormField(
-          controller: _valueController,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [DecimalTextInputFormatter()],
-          decoration: InputDecoration(
-            labelText: l10n.discountValueLabel,
-            prefixIcon: const Icon(Icons.tag_outlined),
-            suffixText: _valueType == DiscountValueType.percentage ? '%' : null,
-          ),
-          validator: _validatePositiveDecimal,
-        ),
+        ..._valueInputs(l10n),
         if (scopeLocked)
           _NoteLine(icon: Icons.info_outline, text: l10n.discountScopeAutoNote)
         else
@@ -522,6 +561,180 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     );
   }
 
+  /// The value inputs that vary by value type: a single value field for the
+  /// classic types, or the quantity-promotion parameters (group size + price,
+  /// the tier editor, or buy/get + reward).
+  List<Widget> _valueInputs(AppLocalizations l10n) {
+    switch (_valueType) {
+      case DiscountValueType.multiBuy:
+        return [
+          _quantityField(
+            controller: _groupSizeController,
+            label: l10n.discountGroupSizeLabel,
+            icon: Icons.tag_outlined,
+          ),
+          _decimalField(
+            controller: _valueController,
+            label: l10n.discountGroupPriceLabel,
+            icon: Icons.payments_outlined,
+            validator: _validateRequiredPositiveAmount,
+          ),
+        ];
+      case DiscountValueType.tiered:
+        return [_buildTierEditor(l10n)];
+      case DiscountValueType.buyXGetY:
+        return [
+          _ResponsiveFields(
+            children: [
+              _quantityField(
+                controller: _buyQuantityController,
+                label: l10n.discountBuyQuantityLabel,
+                icon: Icons.shopping_basket_outlined,
+              ),
+              _quantityField(
+                controller: _getQuantityController,
+                label: l10n.discountGetQuantityLabel,
+                icon: Icons.card_giftcard_outlined,
+              ),
+            ],
+          ),
+          _SegmentedField<DiscountBuyGetReward>(
+            label: l10n.discountRewardTypeLabel,
+            selected: _rewardType,
+            values: DiscountBuyGetReward.values,
+            labelFor: (value) => _rewardLabel(l10n, value),
+            onSelected: (value) => setState(() => _rewardType = value),
+          ),
+          if (_rewardType != DiscountBuyGetReward.free)
+            _decimalField(
+              controller: _valueController,
+              label: _rewardType == DiscountBuyGetReward.percentage
+                  ? l10n.discountValueLabel
+                  : l10n.discountRewardFixedPrice,
+              icon: Icons.tag_outlined,
+              suffixText: _rewardType == DiscountBuyGetReward.percentage
+                  ? '%'
+                  : null,
+              validator: _validateRewardValue,
+            ),
+        ];
+      case DiscountValueType.percentage:
+      case DiscountValueType.fixedAmount:
+      case DiscountValueType.fixedUnitAmount:
+      case DiscountValueType.fixedPrice:
+        return [
+          _decimalField(
+            controller: _valueController,
+            label: l10n.discountValueLabel,
+            icon: Icons.tag_outlined,
+            suffixText: _valueType == DiscountValueType.percentage ? '%' : null,
+            validator: _validatePositiveDecimal,
+          ),
+        ];
+    }
+  }
+
+  Widget _quantityField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
+      validator: _validatePositiveInteger,
+    );
+  }
+
+  Widget _decimalField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required String? Function(String?) validator,
+    String? suffixText,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [DecimalTextInputFormatter()],
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        suffixText: suffixText,
+      ),
+      validator: validator,
+    );
+  }
+
+  Widget _buildTierEditor(AppLocalizations l10n) {
+    final spacing = AdaptiveSpacing.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _NoteLine(icon: Icons.info_outline, text: l10n.discountTiersHint),
+        for (var i = 0; i < _tiers.length; i++) ...[
+          SizedBox(height: spacing.sm),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _tiers[i].minQuantityController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: InputDecoration(
+                    labelText: l10n.discountTierMinQuantityLabel,
+                    prefixIcon: const Icon(Icons.numbers_outlined),
+                  ),
+                  validator: _validatePositiveInteger,
+                ),
+              ),
+              SizedBox(width: spacing.sm),
+              Expanded(
+                child: TextFormField(
+                  controller: _tiers[i].unitPriceController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [DecimalTextInputFormatter()],
+                  decoration: InputDecoration(
+                    labelText: l10n.discountTierUnitPriceLabel,
+                    prefixIcon: const Icon(Icons.payments_outlined),
+                  ),
+                  validator: _validateTierUnitPrice,
+                ),
+              ),
+              IconButton(
+                tooltip: l10n.discountRemoveTierTooltip,
+                onPressed: _tiers.length <= 1 ? null : () => _removeTier(i),
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+        ],
+        SizedBox(height: spacing.sm),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton.icon(
+            onPressed: () => setState(() => _tiers.add(_TierFieldRow())),
+            icon: const Icon(Icons.add),
+            label: Text(l10n.discountAddTierButton),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _removeTier(int index) {
+    final removed = _tiers.removeAt(index);
+    setState(() {});
+    // Dispose after the rebuild drops the row so the field never reads a
+    // disposed controller.
+    WidgetsBinding.instance.addPostFrameCallback((_) => removed.dispose());
+  }
+
   Widget _targetingSection(AppLocalizations l10n) {
     final showCustomerFields = _channel != DiscountChannel.purchasing;
     final showSupplierFields = _channel != DiscountChannel.sales;
@@ -581,8 +794,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
             spacing: spacing.sm,
             runSpacing: spacing.xs,
             children: [
-              for (final rank in _targetableRanks)
-                _rankFilterChip(rank),
+              for (final rank in _targetableRanks) _rankFilterChip(rank),
             ],
           ),
         ],
@@ -648,14 +860,16 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
             ),
             validator: _validateOptionalNonNegativeDecimal,
           ),
-        if (_scope == DiscountScope.line)
+        if (_scope == DiscountScope.line && !_valueType.isQuantityPromotion)
           _InlineSwitch(
             label: l10n.discountWizardMinimumLineQuantityToggle,
             value: _limitByMinimumLineQuantity,
             onChanged: (value) =>
                 setState(() => _limitByMinimumLineQuantity = value),
           ),
-        if (_scope == DiscountScope.line && _limitByMinimumLineQuantity)
+        if (_scope == DiscountScope.line &&
+            !_valueType.isQuantityPromotion &&
+            _limitByMinimumLineQuantity)
           TextFormField(
             controller: _minLineQuantityController,
             keyboardType: TextInputType.number,
@@ -880,14 +1094,79 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
   // -- live summary ------------------------------------------------------
 
   String _summaryHeadline(AppLocalizations l10n) {
-    final raw = _valueController.text.trim();
-    if (raw.isEmpty) {
-      return l10n.discountSummaryPlaceholder;
+    switch (_valueType) {
+      case DiscountValueType.multiBuy:
+        final size = int.tryParse(_groupSizeController.text.trim()) ?? 0;
+        final price = _valueController.text.trim();
+        if (size <= 0 || price.isEmpty) {
+          return l10n.discountSummaryPlaceholder;
+        }
+        return l10n.discountMultiBuyValue(size, price);
+      case DiscountValueType.tiered:
+        final cheapest = _cheapestTierPrice();
+        if (cheapest == null) {
+          return l10n.discountSummaryPlaceholder;
+        }
+        return l10n.discountTieredValue(_formatMoney(cheapest));
+      case DiscountValueType.buyXGetY:
+        final buy = int.tryParse(_buyQuantityController.text.trim()) ?? 0;
+        final get = int.tryParse(_getQuantityController.text.trim()) ?? 0;
+        if (buy <= 0 || get <= 0) {
+          return l10n.discountSummaryPlaceholder;
+        }
+        return l10n.discountBuyGetValue(buy, get);
+      case DiscountValueType.percentage:
+      case DiscountValueType.fixedAmount:
+      case DiscountValueType.fixedUnitAmount:
+      case DiscountValueType.fixedPrice:
+        final raw = _valueController.text.trim();
+        if (raw.isEmpty) {
+          return l10n.discountSummaryPlaceholder;
+        }
+        if (_valueType == DiscountValueType.percentage) {
+          return l10n.discountPercentageValue(raw);
+        }
+        return raw;
     }
-    if (_valueType == DiscountValueType.percentage) {
-      return l10n.discountPercentageValue(raw);
+  }
+
+  double? _cheapestTierPrice() {
+    double? best;
+    for (final tier in _tiers) {
+      final text = tier.unitPriceController.text.trim().replaceAll(',', '.');
+      final value = double.tryParse(text);
+      if (value != null && (best == null || value < best)) {
+        best = value;
+      }
     }
-    return raw;
+    return best;
+  }
+
+  String? _promoSummaryChip(AppLocalizations l10n) {
+    switch (_valueType) {
+      case DiscountValueType.tiered:
+        final count = _tiers
+            .where((tier) => tier.unitPriceController.text.trim().isNotEmpty)
+            .length;
+        return count > 0 ? l10n.discountTierCountSummary(count) : null;
+      case DiscountValueType.buyXGetY:
+        final value = _valueController.text.trim().isEmpty
+            ? '0'
+            : _valueController.text.trim();
+        return switch (_rewardType) {
+          DiscountBuyGetReward.free => l10n.discountRewardSummaryFree,
+          DiscountBuyGetReward.percentage =>
+            l10n.discountRewardSummaryPercentage(value),
+          DiscountBuyGetReward.fixedPrice =>
+            l10n.discountRewardSummaryFixedPrice(value),
+        };
+      case DiscountValueType.multiBuy:
+      case DiscountValueType.percentage:
+      case DiscountValueType.fixedAmount:
+      case DiscountValueType.fixedUnitAmount:
+      case DiscountValueType.fixedPrice:
+        return null;
+    }
   }
 
   String _summarySubhead(AppLocalizations l10n) {
@@ -896,6 +1175,10 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
 
   List<String> _summaryChips(AppLocalizations l10n) {
     final chips = <String>[_channelLabel(l10n, _channel)];
+    final promoChip = _promoSummaryChip(l10n);
+    if (promoChip != null) {
+      chips.add(promoChip);
+    }
     if (_applicationType == DiscountApplicationType.couponCode) {
       final code = _couponCodeController.text.trim().toUpperCase();
       chips.add(
@@ -995,6 +1278,34 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
 
   // -- submit ------------------------------------------------------------
 
+  /// The value submitted to the API: tiered rules derive it server-side (empty),
+  /// a free buy-X-get-Y reward is sent as 100 (= 100% off), otherwise the value
+  /// field is used verbatim.
+  String _valueForSubmit() {
+    if (_valueType == DiscountValueType.tiered) {
+      return '';
+    }
+    if (_valueType == DiscountValueType.buyXGetY &&
+        _rewardType == DiscountBuyGetReward.free) {
+      return '100';
+    }
+    return _valueController.text;
+  }
+
+  List<DiscountTier> _collectTiers() {
+    final tiers = <DiscountTier>[];
+    for (final row in _tiers) {
+      final quantity = int.tryParse(row.minQuantityController.text.trim());
+      final price = double.tryParse(
+        row.unitPriceController.text.trim().replaceAll(',', '.'),
+      );
+      if (quantity != null && quantity > 0 && price != null && price >= 0) {
+        tiers.add(DiscountTier(minQuantity: quantity, unitPrice: price));
+      }
+    }
+    return tiers;
+  }
+
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
     if (!(_formKey.currentState?.validate() ?? false)) {
@@ -1008,6 +1319,10 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       _showError(l10n.discountWizardFixStepError);
       return;
     }
+    if (_valueType == DiscountValueType.tiered && _collectTiers().isEmpty) {
+      _showError(l10n.discountTiersRequiredError);
+      return;
+    }
 
     final draft = DiscountRuleDraft(
       name: _nameController.text,
@@ -1017,7 +1332,20 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       couponCode: _couponCodeController.text,
       scope: _scope,
       valueType: _valueType,
-      value: _valueController.text,
+      value: _valueForSubmit(),
+      groupSize: _valueType == DiscountValueType.multiBuy
+          ? _groupSizeController.text
+          : '',
+      buyQuantity: _valueType == DiscountValueType.buyXGetY
+          ? _buyQuantityController.text
+          : '',
+      getQuantity: _valueType == DiscountValueType.buyXGetY
+          ? _getQuantityController.text
+          : '',
+      rewardType: _valueType == DiscountValueType.buyXGetY ? _rewardType : null,
+      tiers: _valueType == DiscountValueType.tiered
+          ? _collectTiers()
+          : const [],
       maxDiscountAmount: _showMaximumDiscount
           ? _maxDiscountController.text
           : '',
@@ -1029,7 +1357,9 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
           ? _minSubtotalController.text
           : '0.00',
       minLineQuantity:
-          _scope == DiscountScope.line && _limitByMinimumLineQuantity
+          _scope == DiscountScope.line &&
+              _limitByMinimumLineQuantity &&
+              !_valueType.isQuantityPromotion
           ? _minLineQuantityController.text
           : '',
       priority: _showAdvancedSettings ? _priorityController.text : '100',
@@ -1137,6 +1467,34 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     final parsed = parseDecimal(value);
     if (parsed == null || parsed <= 0) {
       return AppLocalizations.of(context)!.positiveNumberError;
+    }
+    return null;
+  }
+
+  String? _validateRequiredPositiveAmount(String? value) {
+    final parsed = parseDecimal(value);
+    if (parsed == null || parsed <= 0) {
+      return AppLocalizations.of(context)!.positiveNumberError;
+    }
+    return null;
+  }
+
+  String? _validateRewardValue(String? value) {
+    final l10n = AppLocalizations.of(context)!;
+    final parsed = parseDecimal(value);
+    if (parsed == null || parsed <= 0) {
+      return l10n.positiveNumberError;
+    }
+    if (_rewardType == DiscountBuyGetReward.percentage && parsed > 100) {
+      return l10n.discountPercentError;
+    }
+    return null;
+  }
+
+  String? _validateTierUnitPrice(String? value) {
+    final parsed = parseDecimal(value);
+    if (parsed == null || parsed < 0) {
+      return AppLocalizations.of(context)!.nonNegativeNumberError;
     }
     return null;
   }
@@ -1513,6 +1871,17 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       DiscountValueType.fixedUnitAmount =>
         l10n.discountValueTypeFixedUnitAmount,
       DiscountValueType.fixedPrice => l10n.discountValueTypeFixedPrice,
+      DiscountValueType.multiBuy => l10n.discountValueTypeMultiBuy,
+      DiscountValueType.tiered => l10n.discountValueTypeTiered,
+      DiscountValueType.buyXGetY => l10n.discountValueTypeBuyXGetY,
+    };
+  }
+
+  String _rewardLabel(AppLocalizations l10n, DiscountBuyGetReward reward) {
+    return switch (reward) {
+      DiscountBuyGetReward.free => l10n.discountRewardFree,
+      DiscountBuyGetReward.percentage => l10n.discountRewardPercentage,
+      DiscountBuyGetReward.fixedPrice => l10n.discountRewardFixedPrice,
     };
   }
 
@@ -1523,6 +1892,9 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
       DiscountValueType.fixedUnitAmount =>
         l10n.discountValueTypeFixedUnitAmountHelp,
       DiscountValueType.fixedPrice => l10n.discountValueTypeFixedPriceHelp,
+      DiscountValueType.multiBuy => l10n.discountValueTypeMultiBuyHelp,
+      DiscountValueType.tiered => l10n.discountValueTypeTieredHelp,
+      DiscountValueType.buyXGetY => l10n.discountValueTypeBuyXGetYHelp,
     };
   }
 

@@ -25,7 +25,9 @@ def money(value: Decimal) -> Decimal:
 class DiscountLineInput:
     key: str
     product_id: int | None
-    quantity: int
+    # Sales pass a ``Decimal`` (weighed/kg lines can be fractional); purchasing
+    # passes an ``int``. Pooled quantity promotions floor this to whole units.
+    quantity: Decimal | int
     unit_amount: Decimal
     variant_id: int | None = None
     category_ids: tuple[int | str, ...] = ()
@@ -220,6 +222,7 @@ class DiscountEngine:
                 "product_categories",
                 "customers",
                 "suppliers",
+                "tiers",
             )
             .order_by("priority", "id")
         )
@@ -470,6 +473,9 @@ class DiscountEngine:
         matching_lines: list[DiscountLineInput],
         remaining_by_line: dict[str, Decimal],
     ) -> tuple[DiscountAllocation, ...]:
+        if rule.value_type in DiscountRule.POOLED_VALUE_TYPES:
+            return self._pooled_allocations(rule, matching_lines, remaining_by_line)
+
         if rule.value_type == DiscountRule.ValueType.FIXED_UNIT_AMOUNT:
             return tuple(
                 DiscountAllocation(
@@ -517,6 +523,183 @@ class DiscountEngine:
                 {line.key: remaining_by_line[line.key] for line in matching_lines},
             )
         )
+
+    # -- Quantity-based ("pooled") promotions --------------------------------
+    #
+    # multi-buy, tiered, and buy-X-get-Y price a *pool* of whole units gathered
+    # across every line the rule matches (mix-and-match), instead of the flat
+    # per-line ``value`` math the classic types use. Only whole units take part —
+    # a fractional remainder on a weighed line (e.g. 1.5 kg) never joins a group
+    # and keeps its full price. All three are line-scoped (enforced in
+    # ``DiscountRule.clean``) and reuse the per-line allocation/cap/rounding/
+    # snapshot machinery downstream.
+
+    def _pooled_allocations(
+        self,
+        rule: DiscountRule,
+        matching_lines: list[DiscountLineInput],
+        remaining_by_line: dict[str, Decimal],
+    ) -> tuple[DiscountAllocation, ...]:
+        if rule.value_type == DiscountRule.ValueType.MULTI_BUY:
+            return self._multi_buy_allocations(rule, matching_lines, remaining_by_line)
+        if rule.value_type == DiscountRule.ValueType.TIERED:
+            return self._tiered_allocations(rule, matching_lines, remaining_by_line)
+        if rule.value_type == DiscountRule.ValueType.BUY_X_GET_Y:
+            return self._buy_x_get_y_allocations(
+                rule, matching_lines, remaining_by_line
+            )
+        return ()
+
+    def _pooled_units(
+        self,
+        matching_lines: list[DiscountLineInput],
+        remaining_by_line: dict[str, Decimal],
+    ) -> list[tuple[Decimal, str]]:
+        """Whole units available to a pooled promotion, most-expensive first.
+
+        Each entry is ``(unit_price, line_key)``. Lines with no remaining balance
+        are skipped so a stacked pooled promo can't discount value an earlier
+        rule already removed.
+        """
+        units: list[tuple[Decimal, str]] = []
+        for line in matching_lines:
+            if remaining_by_line.get(line.key, Decimal("0.00")) <= Decimal("0.00"):
+                continue
+            whole = int(line.quantity)
+            if whole <= 0:
+                continue
+            price = money(line.unit_amount)
+            units.extend((price, line.key) for _ in range(whole))
+        units.sort(key=lambda unit: (-unit[0], unit[1]))
+        return units
+
+    def _allocate_capped(
+        self,
+        amount: Decimal,
+        weights_by_key: dict[str, Decimal],
+        remaining_by_line: dict[str, Decimal],
+    ) -> tuple[DiscountAllocation, ...]:
+        """Allocate ``amount`` across lines weighted by ``weights_by_key`` while
+        capping each line at its remaining balance, so a pooled promo stacked on
+        an already-discounted line can never over-discount it."""
+        capped_weights = {
+            key: min(weight, remaining_by_line.get(key, Decimal("0.00")))
+            for key, weight in weights_by_key.items()
+            if weight > Decimal("0.00")
+        }
+        available = money(sum(capped_weights.values(), Decimal("0.00")))
+        amount = min(money(amount), available)
+        if amount <= Decimal("0.00"):
+            return ()
+        return allocate_discount_amount(amount, capped_weights)
+
+    def _multi_buy_allocations(
+        self,
+        rule: DiscountRule,
+        matching_lines: list[DiscountLineInput],
+        remaining_by_line: dict[str, Decimal],
+    ) -> tuple[DiscountAllocation, ...]:
+        """N units for a fixed group price (``value``). The most-expensive units
+        form the priced groups — the customer-friendly reading of "N for M" — and
+        the cheaper remainder stays at full price. Self-stacks: 2×N units in the
+        pool make two priced groups."""
+        group_size = rule.group_size or 0
+        if group_size < 2:
+            return ()
+        units = self._pooled_units(matching_lines, remaining_by_line)
+        groups = len(units) // group_size
+        if groups <= 0:
+            return ()
+        grouped = units[: groups * group_size]
+        normal = money(sum((price for price, _ in grouped), Decimal("0.00")))
+        charged = money(rule.value * groups)
+        discount = normal - charged
+        if discount <= Decimal("0.00"):
+            return ()
+        weights: dict[str, Decimal] = {}
+        for price, key in grouped:
+            weights[key] = money(weights.get(key, Decimal("0.00")) + price)
+        return self._allocate_capped(discount, weights, remaining_by_line)
+
+    def _tiered_allocations(
+        self,
+        rule: DiscountRule,
+        matching_lines: list[DiscountLineInput],
+        remaining_by_line: dict[str, Decimal],
+    ) -> tuple[DiscountAllocation, ...]:
+        """Wholesale-style price breaks: once the pooled count of whole units
+        reaches a tier's ``min_quantity`` every whole unit reprices to that tier's
+        ``unit_price``. The highest satisfied tier wins; units already cheaper
+        than the tier price are left untouched."""
+        tiers = sorted(rule.tiers.all(), key=lambda tier: tier.min_quantity)
+        if not tiers:
+            return ()
+        total_units = sum(max(int(line.quantity), 0) for line in matching_lines)
+        applicable = None
+        for tier in tiers:
+            if total_units >= tier.min_quantity:
+                applicable = tier
+            else:
+                break
+        if applicable is None:
+            return ()
+        tier_price = money(applicable.unit_price)
+        weights: dict[str, Decimal] = {}
+        for line in matching_lines:
+            whole = int(line.quantity)
+            if whole <= 0:
+                continue
+            per_unit = money(line.unit_amount) - tier_price
+            if per_unit <= Decimal("0.00"):
+                continue
+            weights[line.key] = money(per_unit * whole)
+        if not weights:
+            return ()
+        total = money(sum(weights.values(), Decimal("0.00")))
+        return self._allocate_capped(total, weights, remaining_by_line)
+
+    def _buy_x_get_y_allocations(
+        self,
+        rule: DiscountRule,
+        matching_lines: list[DiscountLineInput],
+        remaining_by_line: dict[str, Decimal],
+    ) -> tuple[DiscountAllocation, ...]:
+        """Buy ``buy_quantity`` units to reward ``get_quantity`` units per block.
+        The cheapest units in the pool are the rewarded ones (standard BOGO: the
+        cheaper item is the free/discounted one)."""
+        buy = rule.buy_quantity or 0
+        get = rule.get_quantity or 0
+        if buy < 1 or get < 1:
+            return ()
+        block = buy + get
+        units = self._pooled_units(matching_lines, remaining_by_line)
+        blocks = len(units) // block
+        rewarded_count = blocks * get
+        if rewarded_count <= 0:
+            return ()
+        # ``units`` is most-expensive first, so the cheapest rewarded units are
+        # the tail of the pool.
+        rewarded = units[len(units) - rewarded_count :]
+        weights: dict[str, Decimal] = {}
+        for price, key in rewarded:
+            per_unit = self._reward_unit_discount(rule, price)
+            if per_unit <= Decimal("0.00"):
+                continue
+            weights[key] = money(weights.get(key, Decimal("0.00")) + per_unit)
+        if not weights:
+            return ()
+        total = money(sum(weights.values(), Decimal("0.00")))
+        return self._allocate_capped(total, weights, remaining_by_line)
+
+    def _reward_unit_discount(self, rule: DiscountRule, unit_price: Decimal) -> Decimal:
+        reward = rule.reward_type
+        if reward == DiscountRule.BuyGetReward.FREE:
+            return money(unit_price)
+        if reward == DiscountRule.BuyGetReward.PERCENTAGE:
+            return money(unit_price * rule.value / Decimal("100"))
+        if reward == DiscountRule.BuyGetReward.FIXED_PRICE:
+            return max(money(unit_price - rule.value), Decimal("0.00"))
+        return Decimal("0.00")
 
 
 def allocate_discount_amount(

@@ -1326,6 +1326,67 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(snapshot.allocations[0]["line_object_id"], order.lines.get().pk)
         self.assertEqual(redemption.applied_discount, snapshot)
 
+    def test_checkout_applies_multi_buy_discount(self):
+        # 3 coffees for 9.00 instead of 10.50.
+        DiscountRule.objects.create(
+            name="3 coffees for 9",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.MULTI_BUY,
+            group_size=3,
+            value=Decimal("9.00"),
+        )
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(
+                lines=[{"variant": self.variant.pk, "quantity": 3}],
+                amount_received="9.00",
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["subtotal"], "10.50")
+        self.assertEqual(response.data["discount_total"], "1.50")
+        self.assertEqual(response.data["total"], "9.00")
+        order = Order.objects.get(pk=response.data["id"])
+        self.assertEqual(order.lines.get().discount_total, Decimal("1.50"))
+        snapshot = AppliedDiscount.objects.get()
+        self.assertEqual(snapshot.value_type, DiscountRule.ValueType.MULTI_BUY)
+        self.assertEqual(snapshot.discount_amount, Decimal("1.50"))
+
+    def test_checkout_applies_buy_one_get_one_free(self):
+        DiscountRule.objects.create(
+            name="Coffee BOGO",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.LINE,
+            value_type=DiscountRule.ValueType.BUY_X_GET_Y,
+            buy_quantity=1,
+            get_quantity=1,
+            reward_type=DiscountRule.BuyGetReward.FREE,
+            value=Decimal("100"),
+        )
+        self.start_session()
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(amount_received="3.50"),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["subtotal"], "7.00")
+        self.assertEqual(response.data["discount_total"], "3.50")
+        self.assertEqual(response.data["total"], "3.50")
+        order = Order.objects.get(pk=response.data["id"])
+        self.assertEqual(order.lines.get().discount_total, Decimal("3.50"))
+        self.assertEqual(
+            AppliedDiscount.objects.get().value_type,
+            DiscountRule.ValueType.BUY_X_GET_Y,
+        )
+
     def test_checkout_applies_coupon_discount(self):
         DiscountRule.objects.create(
             name="Coupon one dinar",

@@ -36,6 +36,25 @@ class DiscountRule(TimeStampedModel):
         FIXED_AMOUNT = "fixed_amount", "Fixed amount"
         FIXED_UNIT_AMOUNT = "fixed_unit_amount", "Fixed unit amount"
         FIXED_PRICE = "fixed_price", "Fixed price"
+        # Quantity-based promotions priced over a pool of whole units that the
+        # rule matches (see ``DiscountEngine._pooled_allocations``). All three
+        # are line-scoped and ignore the flat ``value`` semantics of the types
+        # above except where noted.
+        MULTI_BUY = "multi_buy", "Multi-buy (N for price)"
+        TIERED = "tiered", "Tiered unit price"
+        BUY_X_GET_Y = "buy_x_get_y", "Buy X get Y"
+
+    # The quantity-based value types that are priced by pooling whole units
+    # across every line a rule matches (mix-and-match) rather than by the flat
+    # per-line ``value`` math the classic types use.
+    POOLED_VALUE_TYPES = frozenset(
+        {ValueType.MULTI_BUY, ValueType.TIERED, ValueType.BUY_X_GET_Y}
+    )
+
+    class BuyGetReward(models.TextChoices):
+        FREE = "free", "Free"
+        PERCENTAGE = "percentage", "Percentage off"
+        FIXED_PRICE = "fixed_price", "Fixed unit price"
 
     class RoundingMode(models.TextChoices):
         NONE = "none", "No rounding"
@@ -93,6 +112,21 @@ class DiscountRule(TimeStampedModel):
         validators=[MinValueValidator(Decimal("0.00"))],
     )
     min_line_quantity = models.PositiveIntegerField(blank=True, null=True)
+    # -- Quantity-promotion parameters (only used by the pooled value types) --
+    # MULTI_BUY: units that form one priced group; ``value`` is the group price.
+    group_size = models.PositiveIntegerField(blank=True, null=True)
+    # BUY_X_GET_Y: buy ``buy_quantity`` units to reward ``get_quantity`` units.
+    buy_quantity = models.PositiveIntegerField(blank=True, null=True)
+    get_quantity = models.PositiveIntegerField(blank=True, null=True)
+    # BUY_X_GET_Y: how the rewarded units are discounted. ``value`` carries the
+    # magnitude (percent for PERCENTAGE, unit price for FIXED_PRICE; ignored and
+    # treated as 100% off for FREE).
+    reward_type = models.CharField(
+        max_length=16,
+        choices=BuyGetReward.choices,
+        blank=True,
+        default="",
+    )
     priority = models.PositiveIntegerField(default=100, db_index=True)
     exclusive = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
@@ -171,6 +205,7 @@ class DiscountRule(TimeStampedModel):
             and self.scope != self.Scope.LINE
         ):
             raise ValidationError({"scope": "Fixed price discounts must be line-level."})
+        self._clean_quantity_promotion()
         if (
             self.max_discount_amount is not None
             and self.max_discount_amount <= Decimal("0.00")
@@ -248,6 +283,76 @@ class DiscountRule(TimeStampedModel):
                     }
                 )
 
+    def _clean_quantity_promotion(self):
+        """Validate and normalise the quantity-promotion value types.
+
+        The pooled types (multi-buy, tiered, buy-X-get-Y) are always line-scoped
+        and price a pool of whole units, so the per-line ``min_line_quantity``
+        gate would wrongly drop small lines before pooling — it is rejected
+        here. Parameters that belong to a *different* value type are cleared so a
+        rule retyped from one promotion to another cannot keep stale config.
+        Tiered rows are validated by the serializer (they are child records that
+        do not exist yet at model-clean time).
+        """
+        value_type = self.value_type
+        if value_type != self.ValueType.MULTI_BUY:
+            self.group_size = None
+        if value_type != self.ValueType.BUY_X_GET_Y:
+            self.buy_quantity = None
+            self.get_quantity = None
+            self.reward_type = ""
+
+        if value_type not in self.POOLED_VALUE_TYPES:
+            return
+
+        if self.scope != self.Scope.LINE:
+            raise ValidationError(
+                {"scope": "Quantity promotions must be line-level."}
+            )
+        if self.min_line_quantity is not None:
+            raise ValidationError(
+                {
+                    "min_line_quantity": (
+                        "Quantity promotions set their own threshold; leave the "
+                        "minimum line quantity empty."
+                    )
+                }
+            )
+
+        if value_type == self.ValueType.MULTI_BUY:
+            if self.group_size is None or self.group_size < 2:
+                raise ValidationError(
+                    {"group_size": "Multi-buy requires a group size of at least 2."}
+                )
+        elif value_type == self.ValueType.BUY_X_GET_Y:
+            if self.buy_quantity is None or self.buy_quantity < 1:
+                raise ValidationError(
+                    {
+                        "buy_quantity": (
+                            "Buy X get Y requires a buy quantity of at least 1."
+                        )
+                    }
+                )
+            if self.get_quantity is None or self.get_quantity < 1:
+                raise ValidationError(
+                    {
+                        "get_quantity": (
+                            "Buy X get Y requires a get quantity of at least 1."
+                        )
+                    }
+                )
+            if self.reward_type not in self.BuyGetReward.values:
+                raise ValidationError(
+                    {"reward_type": "Choose how the rewarded items are discounted."}
+                )
+            if (
+                self.reward_type == self.BuyGetReward.PERCENTAGE
+                and self.value > Decimal("100")
+            ):
+                raise ValidationError(
+                    {"value": "Percentage rewards cannot exceed 100."}
+                )
+
     def save(self, *args, **kwargs):
         self.coupon_code = normalize_coupon_code(self.coupon_code)
         self.full_clean()
@@ -255,6 +360,36 @@ class DiscountRule(TimeStampedModel):
 
     def __str__(self) -> str:
         return self.name
+
+
+class DiscountTier(TimeStampedModel):
+    """A quantity break for a ``tiered`` discount rule: once the pooled count of
+    matched whole units reaches ``min_quantity``, every whole unit reprices to
+    ``unit_price``. The highest tier whose ``min_quantity`` is satisfied wins."""
+
+    rule = models.ForeignKey(
+        DiscountRule,
+        on_delete=models.CASCADE,
+        related_name="tiers",
+    )
+    min_quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    unit_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+
+    class Meta:
+        ordering = ["min_quantity", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["rule", "min_quantity"],
+                name="unique_discount_tier_min_quantity",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.rule_id}: {self.min_quantity}+ @ {self.unit_price}"
 
 
 class AppliedDiscount(TimeStampedModel):

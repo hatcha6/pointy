@@ -669,6 +669,43 @@ class _HowItWorksSection extends StatelessWidget {
             value: discountScopeLabel(l10n, rule.scope),
             icon: Icons.view_list_outlined,
           ),
+          if (rule.valueType == DiscountValueType.multiBuy) ...[
+            PointyMetricGridItem(
+              label: l10n.discountGroupSizeLabel,
+              value: (rule.groupSize ?? 0).toString(),
+              icon: Icons.tag_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.discountGroupPriceLabel,
+              value: formatMoney(rule.value),
+              icon: Icons.payments_outlined,
+            ),
+          ],
+          if (rule.valueType == DiscountValueType.buyXGetY) ...[
+            PointyMetricGridItem(
+              label: l10n.discountBuyQuantityLabel,
+              value: (rule.buyQuantity ?? 0).toString(),
+              icon: Icons.shopping_basket_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.discountGetQuantityLabel,
+              value: (rule.getQuantity ?? 0).toString(),
+              icon: Icons.card_giftcard_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.discountRewardTypeLabel,
+              value: rule.rewardType == null
+                  ? '—'
+                  : discountRewardLabel(l10n, rule.rewardType!),
+              icon: Icons.redeem_outlined,
+            ),
+          ],
+          for (final tier in rule.tiers)
+            PointyMetricGridItem(
+              label: l10n.discountTierMinQuantityLabel,
+              value: '${tier.minQuantity}+ · ${formatMoney(tier.unitPrice)}',
+              icon: Icons.straighten_outlined,
+            ),
           PointyMetricGridItem(
             label: l10n.discountPriorityLabel,
             value: rule.priority.toString(),

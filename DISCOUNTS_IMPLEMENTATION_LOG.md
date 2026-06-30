@@ -253,3 +253,49 @@ Closed the two remaining discount-system hardening items.
 - `make backend-test` - passed, 184 tests.
 - `backend/.venv/bin/python backend/manage.py makemigrations --check --dry-run` - passed, no changes detected.
 - `git diff --check` - passed.
+
+## Follow-up - Quantity Promotions (multi-buy, tiered, buy-X-get-Y)
+
+Added three line-scoped, **pooled** value types that price a pool of whole units
+gathered across every line a rule matches (mix-and-match). Only whole units take
+part — a fractional remainder on a weighed line keeps full price.
+
+### Backend
+- `DiscountRule.ValueType` += `multi_buy`, `tiered`, `buy_x_get_y`;
+  `POOLED_VALUE_TYPES`; `BuyGetReward` (free/percentage/fixed_price). New fields
+  `group_size`, `buy_quantity`, `get_quantity`, `reward_type`; new child model
+  `DiscountTier(rule, min_quantity, unit_price)`. Migration
+  `0008_discount_quantity_promotions` (additive/default-safe).
+- `DiscountRule._clean_quantity_promotion`: pooled types are line-only, reject
+  `min_line_quantity`, validate per-type params, and clear stale params on retype.
+- Engine (`DiscountEngine._pooled_allocations` + helpers): multi-buy charges the
+  **most-expensive** N-unit groups (self-stacks); tiered reprices **all** whole
+  units at the highest met tier; buy-X-get-Y rewards the **cheapest** units.
+  `_allocate_capped` caps each line at its remaining balance so stacking can't
+  over-discount. `eligible_rules` prefetches `tiers`.
+- `DiscountRuleSerializer`: nested writable `tiers`, `value` optional (derived =
+  cheapest tier price for tiered), new fields; create/update replace tier rows.
+  Viewset prefetches `tiers`; admin gains a `DiscountTier` inline.
+- AI: `describe_resource` auto-exposes the new fields + nested tiers + choices
+  through the live serializer (no tool code change); `relay_stream` system prompt
+  documents the three promos.
+- Tests: `QuantityPromotionEngineTests` (23) cover every type incl. pooling,
+  fractional lines, caps, stacking, validation; new API + AI create tests; two
+  real checkout integration tests (multi-buy, BOGO). Full backend suite green.
+
+### Frontend
+- `discount_rule.dart`: `DiscountValueType` += three types (+`isQuantityPromotion`);
+  `DiscountBuyGetReward`; `DiscountTier` model; new `DiscountRule`/`DiscountRuleDraft`
+  fields + nested `tiers` (toJson sends null value for tiered, 100 for free reward).
+- Form: type-specific inputs (group size+price / dynamic tier-row editor / buy+get+
+  reward selector), auto line scope, live summary + chips, validators; min-line-qty
+  hidden for promos. Presenter + details "how it works" render the new types/tiers;
+  preview harness gains one example rule per type.
+- l10n keys added to `app_ar.arb` (regenerated). Model serialization tests added
+  (`test/models/discount_rule_quantity_promotions_test.dart`); existing form
+  widget test still green. `flutter analyze` clean.
+
+### Known limitation
+- Per-line/pool grouping uses the line's `unit_amount`; stacking a pooled promo on
+  an already-discounted line caps at the remaining balance (rare; pooled promos are
+  exclusive by default). Rounding composes but is unusual for these types.
