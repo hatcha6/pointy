@@ -6,6 +6,7 @@ import 'api_session.dart';
 import 'backend_discovery_service.dart';
 import 'connection_profile_storage.dart';
 import 'pos_api_service.dart';
+import 'relay_endpoints.dart';
 import 'relay_ticket_refresh_client.dart';
 
 class ConnectionCoordinator {
@@ -58,7 +59,14 @@ class ConnectionCoordinator {
     }
 
     if (profile != null) {
-      await _refreshRelayTicketRemotely(profile, activateRelay: true);
+      // No LAN backend found: fall back to the relay. When the stored profile
+      // never learned a relay URL (e.g. it paired before the backend reported
+      // one), default to the production relay endpoint. The refresh below still
+      // requires a stored relay refresh token, so unpaired devices are no-ops.
+      final relayProfile = profile.relayApiBaseUrl.trim().isEmpty
+          ? profile.copyWith(relayApiBaseUrl: kDefaultRelayApiBaseUrl)
+          : profile;
+      await _refreshRelayTicketRemotely(relayProfile, activateRelay: true);
     }
   }
 
@@ -216,7 +224,9 @@ ConnectionProfile _profileFromPairing(
 }) {
   final relayApiBaseUrl = pairing.relayPublicApiUrl.trim().isNotEmpty
       ? _relayApiBaseUrl(pairing.relayPublicApiUrl)
-      : (existingProfile?.relayApiBaseUrl ?? '');
+      : (existingProfile?.relayApiBaseUrl.trim().isNotEmpty ?? false)
+      ? existingProfile!.relayApiBaseUrl
+      : kDefaultRelayApiBaseUrl;
   if (!pairing.hasTicket) {
     return ConnectionProfile(
       localApiBaseUrl: localApiBaseUrl,

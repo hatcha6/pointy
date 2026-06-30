@@ -354,6 +354,14 @@ POINTY_RELAY_CONTROL_URL = env("POINTY_RELAY_CONTROL_URL", default="")
 POINTY_RELAY_PUBLIC_API_URL = env("POINTY_RELAY_PUBLIC_API_URL", default="")
 POINTY_RELAY_CONNECTOR_ADDR = env("POINTY_RELAY_CONNECTOR_ADDR", default="")
 POINTY_RELAY_ADMIN_TOKEN = env("POINTY_RELAY_ADMIN_TOKEN", default="")
+# Scoped per-installation credentials handed out at central provisioning. When the
+# access token + installation id are set, the backend authenticates relay calls
+# with them and never needs the company-wide admin token — this is the on-prem
+# default. POINTY_RELAY_CONNECTOR_TOKEN is the matching secret the local connector
+# presents for heartbeat/renewal.
+POINTY_RELAY_ACCESS_TOKEN = env("POINTY_RELAY_ACCESS_TOKEN", default="")
+POINTY_RELAY_INSTALLATION_ID = env("POINTY_RELAY_INSTALLATION_ID", default="")
+POINTY_RELAY_CONNECTOR_TOKEN = env("POINTY_RELAY_CONNECTOR_TOKEN", default="")
 POINTY_RELAY_BUSINESS_ID = env("POINTY_RELAY_BUSINESS_ID", default="")
 POINTY_RELAY_REQUEST_TIMEOUT_SECONDS = env("POINTY_RELAY_REQUEST_TIMEOUT_SECONDS")
 POINTY_RELAY_AI_REQUEST_TIMEOUT_SECONDS = env("POINTY_RELAY_AI_REQUEST_TIMEOUT_SECONDS")

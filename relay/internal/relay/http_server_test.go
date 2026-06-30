@@ -1649,6 +1649,173 @@ func TestHTTPRelayIssuesConnectorCertificateAndStoresBinding(t *testing.T) {
 	}
 }
 
+func TestHTTPRelayIssuesConnectorCertificateWithInstallationAccessToken(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionRelayInstallation(t)
+	issuer := &stubConnectorCertificateIssuer{
+		issued: security.IssuedCertificate{
+			CertificatePEM:    "cert",
+			CACertificatePEM:  "ca",
+			FingerprintSHA256: "fingerprint",
+			SerialNumber:      "serial",
+			ExpiresAt:         now.Add(time.Hour),
+		},
+	}
+	server := HTTPServer{
+		Store:                      store,
+		Hub:                        NewHub(),
+		Logger:                     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminToken:                 "admin-token",
+		ConnectorCertificateIssuer: issuer,
+		ConnectorCertificateTTL:    time.Hour,
+		Clock:                      testClock{now: now},
+	}
+	request, err := http.NewRequest(
+		http.MethodPost,
+		"http://relay.test/v1/installations/"+provisioned.Installation.ID+"/connector-certificate",
+		strings.NewReader(`{"csr_pem":"csr"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No admin Authorization header — only the installation's OWN access token.
+	// This is the on-prem path: the backend never holds the fleet admin token.
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusCreated {
+		content, _ := io.ReadAll(response.Body)
+		t.Fatalf("expected 201 with scoped access token, got %d: %s", response.StatusCode, string(content))
+	}
+	if issuer.csrPEM != "csr" {
+		t.Fatalf("unexpected CSR %q", issuer.csrPEM)
+	}
+	installation, err := store.GetInstallation(context.Background(), provisioned.Installation.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if installation.ConnectorCertificateFingerprint != "fingerprint" {
+		t.Fatalf("expected stored fingerprint, got %q", installation.ConnectorCertificateFingerprint)
+	}
+}
+
+func TestHTTPRelayRejectsConnectorCertificateForOtherInstallation(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionRelayInstallation(t)
+	issuer := &stubConnectorCertificateIssuer{
+		issued: security.IssuedCertificate{ExpiresAt: now.Add(time.Hour)},
+	}
+	server := HTTPServer{
+		Store:                      store,
+		Hub:                        NewHub(),
+		Logger:                     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminToken:                 "admin-token",
+		ConnectorCertificateIssuer: issuer,
+		ConnectorCertificateTTL:    time.Hour,
+		Clock:                      testClock{now: now},
+	}
+	// A valid access token, but the URL targets a DIFFERENT installation id.
+	request, err := http.NewRequest(
+		http.MethodPost,
+		"http://relay.test/v1/installations/some-other-installation/connector-certificate",
+		strings.NewReader(`{"csr_pem":"csr"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for cross-installation token, got %d", response.StatusCode)
+	}
+	if issuer.csrPEM != "" {
+		t.Fatalf("certificate must not be issued for a mismatched installation")
+	}
+}
+
+func TestHTTPRelayRejectsConnectorCertificateWithWrongPurposeToken(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionRelayInstallation(t)
+	issuer := &stubConnectorCertificateIssuer{
+		issued: security.IssuedCertificate{ExpiresAt: now.Add(time.Hour)},
+	}
+	server := HTTPServer{
+		Store:                      store,
+		Hub:                        NewHub(),
+		Logger:                     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminToken:                 "admin-token",
+		ConnectorCertificateIssuer: issuer,
+		ConnectorCertificateTTL:    time.Hour,
+		Clock:                      testClock{now: now},
+	}
+	request, err := http.NewRequest(
+		http.MethodPost,
+		"http://relay.test/v1/installations/"+provisioned.Installation.ID+"/connector-certificate",
+		strings.NewReader(`{"csr_pem":"csr"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The connector token has the wrong purpose for access-token auth.
+	request.Header.Set(AccessTokenHeader, provisioned.ConnectorToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for wrong-purpose token, got %d", response.StatusCode)
+	}
+	if issuer.csrPEM != "" {
+		t.Fatalf("certificate must not be issued for a wrong-purpose token")
+	}
+}
+
+func TestHTTPRelayInstallationStatusWithInstallationAccessToken(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionRelayInstallation(t)
+	server := HTTPServer{
+		Store:      store,
+		Hub:        NewHub(),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminToken: "admin-token",
+		Clock:      testClock{now: now},
+	}
+	request, err := http.NewRequest(
+		http.MethodGet,
+		"http://relay.test/v1/installations/"+provisioned.Installation.ID,
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// On-prem entitlement sync reads its own status with the access token.
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		content, _ := io.ReadAll(response.Body)
+		t.Fatalf("expected 200 reading own status with access token, got %d: %s", response.StatusCode, string(content))
+	}
+	var payload map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["id"] != provisioned.Installation.ID {
+		t.Fatalf("expected own installation id, got %v", payload["id"])
+	}
+}
+
 func TestHTTPRelayChecksPresenceWhenConnectorIsNotOnLocalNode(t *testing.T) {
 	store, provisioned := provisionRelayInstallation(t)
 	presence := &staticPresence{

@@ -30,6 +30,9 @@ class RelayControlConfig:
     public_api_url: str
     connector_address: str
     admin_token: str
+    access_token: str
+    installation_id: str
+    connector_token: str
     timeout_seconds: int
     ai_timeout_seconds: int
     image_search_timeout_seconds: int
@@ -45,6 +48,9 @@ def relay_config():
         public_api_url=str(getattr(settings, "POINTY_RELAY_PUBLIC_API_URL", "")).strip(),
         connector_address=str(getattr(settings, "POINTY_RELAY_CONNECTOR_ADDR", "")).strip(),
         admin_token=str(getattr(settings, "POINTY_RELAY_ADMIN_TOKEN", "")).strip(),
+        access_token=str(getattr(settings, "POINTY_RELAY_ACCESS_TOKEN", "")).strip(),
+        installation_id=str(getattr(settings, "POINTY_RELAY_INSTALLATION_ID", "")).strip(),
+        connector_token=str(getattr(settings, "POINTY_RELAY_CONNECTOR_TOKEN", "")).strip(),
         timeout_seconds=max(
             int(getattr(settings, "POINTY_RELAY_REQUEST_TIMEOUT_SECONDS", 5)),
             1,
@@ -75,8 +81,12 @@ def validate_relay_config(config):
         raise ImproperlyConfigured("POINTY_RELAY_PUBLIC_API_URL is required.")
     if not config.connector_address:
         raise ImproperlyConfigured("POINTY_RELAY_CONNECTOR_ADDR is required.")
-    if not config.admin_token:
-        raise ImproperlyConfigured("POINTY_RELAY_ADMIN_TOKEN is required.")
+    if not config.admin_token and not (config.access_token and config.installation_id):
+        raise ImproperlyConfigured(
+            "Relay authentication is required: set POINTY_RELAY_ACCESS_TOKEN and "
+            "POINTY_RELAY_INSTALLATION_ID (scoped per-installation credentials for "
+            "on-prem) or POINTY_RELAY_ADMIN_TOKEN (operator/development only)."
+        )
     parsed = urlparse(config.control_url)
     if parsed.scheme != "https" and not config.allow_insecure_control:
         raise ImproperlyConfigured(
@@ -105,8 +115,23 @@ class RelayControlClient:
             admin=True,
         )
 
+    def _installation_auth(self):
+        """Auth kwargs for an installation-scoped relay call.
+
+        On-prem backends hold only their own per-installation access token, never
+        the company-wide admin token, so use the access token when configured and
+        fall back to the admin token for operator/development setups.
+        """
+        if self.config.access_token:
+            return {"relay_token": self.config.access_token}
+        return {"admin": True}
+
     def get_installation(self, installation_id):
-        return self._request("GET", f"/v1/installations/{installation_id}", admin=True)
+        return self._request(
+            "GET",
+            f"/v1/installations/{installation_id}",
+            **self._installation_auth(),
+        )
 
     def issue_ticket(self, *, access_token, device_id="", device_name=""):
         return self._request(
@@ -121,7 +146,7 @@ class RelayControlClient:
             "POST",
             f"/v1/installations/{installation_id}/connector-certificate",
             body={"csr_pem": csr_pem},
-            admin=True,
+            **self._installation_auth(),
         )
 
     def get_ai_usage(self, access_token):
@@ -359,12 +384,30 @@ def parse_relay_datetime(value):
     return parsed
 
 
-def ensure_relay_installation(*, client=None):
+def ensure_relay_installation(*, client=None, config=None):
     installation = RelayInstallation.load()
     if installation is not None:
         return installation, False
 
+    cfg = config or relay_config()
     shop_settings = ShopSettings.load()
+
+    # On-prem: build the installation from the per-installation credentials handed
+    # out at central provisioning. This path never calls the admin API, so a
+    # customer backend never needs the company-wide fleet admin token. Entitlement
+    # fields stay at their defaults until the first scoped sync populates them.
+    if cfg.access_token and cfg.installation_id:
+        installation = RelayInstallation.objects.create(
+            installation_id=cfg.installation_id,
+            shop_name=shop_settings.shop_name,
+            relay_public_api_url=cfg.public_api_url,
+            relay_connector_address=cfg.connector_address,
+            connector_token=cfg.connector_token,
+            access_token=cfg.access_token,
+        )
+        return installation, True
+
+    # Operator/development: self-provision through the admin API.
     relay_client = client or RelayControlClient()
     provisioned = relay_client.provision_installation(shop_name=shop_settings.shop_name)
     relay_installation = provisioned["installation"]

@@ -261,10 +261,13 @@ class RelayConnectorConfigView(views.APIView):
     def _valid_connector_token(self, installation, provided_token):
         if installation is None:
             return False
-        return secrets.compare_digest(
-            str(provided_token or ""),
-            installation.connector_token,
-        )
+        token = str(provided_token or "")
+        # Reject blanks explicitly: an empty stored connector_token (e.g. a
+        # misconfigured config bootstrap) would otherwise compare-equal to an
+        # empty provided token and bypass the one-time setup-token gate.
+        if not token or not installation.connector_token:
+            return False
+        return secrets.compare_digest(token, installation.connector_token)
 
     def _issue_connector_certificate(self, installation, csr_pem):
         if not csr_pem.strip():

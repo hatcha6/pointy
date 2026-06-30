@@ -83,6 +83,30 @@ PowerShell on Windows, with internet access). You only need:
 The backend runs database migrations on startup, then serves the API on
 port 8000. Celery and the relay connector start once the backend is healthy.
 
+### Relay enrollment (operator hand-off)
+
+The relay credentials in `.env` are **issued by us (the operator), not generated
+on this server.** An on-prem backend only ever holds its *own* per-installation,
+scoped credentials — never the company-wide relay admin token (which controls the
+whole hosted fleet).
+
+Before install, the operator provisions this shop's installation against the
+hosted relay (with the admin token, on a company-controlled host) and hands the
+shop four values to paste into `.env`:
+
+- `POINTY_RELAY_INSTALLATION_ID` — this shop's installation id
+- `POINTY_RELAY_ACCESS_TOKEN` — scoped token for relay calls (AI, tickets, status,
+  and connector-certificate issuance)
+- `POINTY_RELAY_CONNECTOR_TOKEN` — secret the local connector presents to the relay
+- `POINTY_RELAY_CONNECTOR_SETUP_TOKEN` — one-time token the connector uses to
+  bootstrap against this backend over the LAN
+
+The relay URLs (`POINTY_RELAY_CONTROL_URL`, `POINTY_RELAY_PUBLIC_API_URL`,
+`POINTY_RELAY_CONNECTOR_ADDR`, `POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME`) are the
+same for every shop and come pre-filled in the template. With these set, the
+backend enrolls the connector and renews its certificate using only the scoped
+access token — no admin token ever lands on the shop's server.
+
 ## Verify
 
 ```sh

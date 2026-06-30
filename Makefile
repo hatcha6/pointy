@@ -84,6 +84,25 @@ RELAY_SUBSCRIPTION_ACTIVE ?=
 RELAY_SUBSCRIPTION_AI_ENABLED ?=
 RELAY_SUBSCRIPTION_ENDS_AT ?=
 RELAY_SUBSCRIPTION_CLEAR_END ?= false
+# Remote-relay dev flavor (make dev-remote): point the LOCAL backend + connector at
+# a hosted relay instead of running one locally — mirrors the on-prem topology. The
+# backend authenticates with SCOPED per-installation credentials only (NO admin
+# token on the running backend), exactly like a customer site:
+#   1. make relay-remote-provision RELAY_REMOTE_ADMIN_TOKEN=...   # operator-only step
+#   2. paste the printed installation id + access/connector tokens into backend/.env
+#      (POINTY_RELAY_INSTALLATION_ID / ACCESS_TOKEN / CONNECTOR_TOKEN) with the relay
+#      URLs + CONNECTOR_TLS_SERVER_NAME + a CONNECTOR_SETUP_TOKEN you pick, insecure
+#      flags off — see deploy/onprem/.env.example for the full block.
+#   3. make dev-remote RELAY_REMOTE_SETUP_TOKEN=<that setup token>
+RELAY_REMOTE_HOST ?= env-9493505.tip2.libyanspider.cloud
+RELAY_REMOTE_ADMIN_TOKEN ?=
+RELAY_REMOTE_SHOP_NAME ?= Dev Remote Shop
+RELAY_REMOTE_BUSINESS_ID ?= dev-remote
+# Connector dial target: the Jelastic L4 TCP endpoint that forwards to the relay's
+# 8092 connector listener (the env hostname only carries HTTP/443 via the SLB).
+RELAY_REMOTE_CONNECTOR_DIAL ?= node11166-env-9493505.tip2.libyanspider.cloud:11061
+RELAY_REMOTE_SETUP_TOKEN ?=
+RELAY_REMOTE_CONNECTOR_STATE_FILE ?= $(abspath $(RELAY_DIR)/.connector-state-remote.json)
 POSTGRES_HOST ?= 127.0.0.1
 POSTGRES_PORT ?= 5432
 LOAD_BASE_URL ?= http://127.0.0.1:8000/api
@@ -105,8 +124,8 @@ ENDURANCE_WORKERS ?= 4
 	backend-load-test backend-stress-test backend-endurance-test \
 	backend-shell backend-superuser backend-test backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
-	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-migrate relay-provision relay-subscription-update \
-	format check test e2e dev dev-local dev-no-redis dev-ai ai-enable postgres-ready clean
+	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-migrate relay-provision relay-subscription-update relay-remote-provision \
+	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable postgres-ready clean
 
 help: ## Show available commands.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nPointy POS commands\n\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -426,6 +445,20 @@ relay-subscription-update: ## Update company-owned relay subscription state thro
 		--subscription-ends-at "$(RELAY_SUBSCRIPTION_ENDS_AT)" \
 		--clear-subscription-end="$(RELAY_SUBSCRIPTION_CLEAR_END)"
 
+relay-remote-provision: ## Provision an installation on the REMOTE relay and print its one-time scoped tokens for backend/.env (operator step; needs RELAY_REMOTE_ADMIN_TOKEN).
+	@test -n "$(RELAY_REMOTE_ADMIN_TOKEN)" || { \
+		printf "\nSet RELAY_REMOTE_ADMIN_TOKEN to the $(RELAY_REMOTE_HOST) admin token (operator only):\n"; \
+		printf "  make relay-remote-provision RELAY_REMOTE_ADMIN_TOKEN=...\n\n"; \
+		exit 1; \
+	}
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
+		$(GO) run ./cmd/pointy-relay installations provision \
+		--control-url "https://$(RELAY_REMOTE_HOST)" \
+		--admin-token "$(RELAY_REMOTE_ADMIN_TOKEN)" \
+		--business-id "$(RELAY_REMOTE_BUSINESS_ID)" \
+		--shop-name "$(RELAY_REMOTE_SHOP_NAME)" \
+		--relay-enabled --subscription-active
+
 format: frontend-l10n frontend-format relay-format ## Format all currently scaffolded code.
 
 check: backend-check frontend-analyze relay-check ## Run non-mutating project checks.
@@ -458,6 +491,20 @@ ai-enable: ## Provision the relay installation, enable AI, and sync Django (wait
 
 dev-ai: postgres redis postgres-ready relay-migrate backend-dev-migrate frontend-install ## Run the full AI stack (Postgres, Redis, relay, Django, Flutter) and enable AI.
 	$(MAKE) -j4 relay-run backend-run frontend-web ai-enable
+
+dev-remote: postgres redis postgres-ready backend-dev-migrate frontend-install ## Run Django (scoped creds, no admin token) + connector + Flutter vs a REMOTE relay. Run relay-remote-provision + set backend/.env first.
+	@test -n "$(RELAY_REMOTE_SETUP_TOKEN)" || { \
+		printf "\nSet RELAY_REMOTE_SETUP_TOKEN to the connector setup token that matches\n"; \
+		printf "backend/.env POINTY_RELAY_CONNECTOR_SETUP_TOKEN, e.g.\n\n"; \
+		printf "  make dev-remote RELAY_REMOTE_SETUP_TOKEN=xxxxxxxx\n\n"; \
+		exit 1; \
+	}
+	$(MAKE) -j3 backend-run frontend-web relay-connector \
+		RELAY_CONNECTOR_ADDR="$(RELAY_REMOTE_CONNECTOR_DIAL)" \
+		RELAY_TLS_SERVER_NAME="$(RELAY_REMOTE_HOST)" \
+		RELAY_ALLOW_INSECURE_CONNECTOR=false \
+		RELAY_CONNECTOR_SETUP_TOKEN="$(RELAY_REMOTE_SETUP_TOKEN)" \
+		RELAY_CONNECTOR_STATE_FILE="$(RELAY_REMOTE_CONNECTOR_STATE_FILE)"
 
 clean: ## Remove generated local caches and build output.
 	find "$(BACKEND_DIR)" -type d -name __pycache__ -prune -exec rm -rf {} +

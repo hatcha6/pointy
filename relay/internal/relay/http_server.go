@@ -520,11 +520,7 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		s.withAdmin(w, r, s.handleProvisionInstallation)
 	case strings.HasPrefix(r.URL.Path, "/v1/installations/"):
-		if !s.RouteMode.allowsAdmin() {
-			writeNotFound(w)
-			return
-		}
-		s.withAdmin(w, r, s.handleInstallation)
+		s.handleInstallationRoutes(w, r)
 	case r.URL.Path == "/v1/fleet" && r.Method == http.MethodGet:
 		if !s.RouteMode.allowsAdmin() {
 			writeNotFound(w)
@@ -1042,6 +1038,57 @@ func (s HTTPServer) handleProvisionInstallation(w http.ResponseWriter, r *http.R
 		return
 	}
 	writeJSON(w, http.StatusCreated, provisionedInstallationPayload(provisioned, s.clock().Now()))
+}
+
+// handleInstallationRoutes gates every /v1/installations/{id}/... route. Two of
+// them are "self-serviceable": an installation may authorize them with its OWN
+// access token (X-Pointy-Relay-Token) instead of the company-wide admin token,
+// so an on-prem backend never needs the fleet admin key. Those two are the
+// status read (GET {id}) and connector-certificate issuance/renewal
+// (POST {id}/connector-certificate). Every other sub-route — subscription,
+// audit-events, config update, etc. — stays admin-only, unchanged.
+func (s HTTPServer) handleInstallationRoutes(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/installations/"), "/")
+	id := ""
+	if len(parts) > 0 {
+		id = parts[0]
+	}
+	selfServiceable := id != "" &&
+		((len(parts) == 1 && r.Method == http.MethodGet) ||
+			(len(parts) == 2 && parts[1] == "connector-certificate" && r.Method == http.MethodPost))
+
+	// When a self-serviceable route is called with the installation's access
+	// token (and no admin Authorization header), authorize against that token
+	// and require it to belong to the {id} in the path. The access-token check
+	// also enforces an active subscription, exactly like the other scoped
+	// routes. Anything else falls through to the unchanged admin path below.
+	if selfServiceable && r.Header.Get("Authorization") == "" {
+		if rawToken := strings.TrimSpace(r.Header.Get(AccessTokenHeader)); rawToken != "" {
+			if !(s.RouteMode.allowsPublic() || s.RouteMode.allowsAdmin()) {
+				writeNotFound(w)
+				return
+			}
+			installation, err := s.Store.ValidateAccessToken(r.Context(), rawToken)
+			if err != nil {
+				s.recordCredentialError(err)
+				writeRelayCredentialError(w, err)
+				return
+			}
+			if installation.ID != id {
+				s.recordCredentialError(control.ErrInvalidToken)
+				writeRelayCredentialError(w, control.ErrInvalidToken)
+				return
+			}
+			s.handleInstallation(w, r)
+			return
+		}
+	}
+
+	if !s.RouteMode.allowsAdmin() {
+		writeNotFound(w)
+		return
+	}
+	s.withAdmin(w, r, s.handleInstallation)
 }
 
 func (s HTTPServer) handleInstallation(w http.ResponseWriter, r *http.Request) {

@@ -1024,6 +1024,103 @@ class RelayBackendApiTests(TestCase):
         self.assertEqual(renewal_event.installation_id, "installation-1")
         self.assertNotIn("connector_token", renewal_event.attributes)
 
+    @override_settings(
+        POINTY_RELAY_CONTROL_URL="https://relay.example",
+        POINTY_RELAY_PUBLIC_API_URL="https://relay.example",
+        POINTY_RELAY_CONNECTOR_ADDR="relay.example:443",
+        POINTY_RELAY_ADMIN_TOKEN="",
+        POINTY_RELAY_ACCESS_TOKEN="ptr1.installation-1.access-secret",
+        POINTY_RELAY_INSTALLATION_ID="installation-1",
+    )
+    def test_scoped_access_token_used_and_admin_not_required(self):
+        from apps.core.relay import (
+            RelayControlClient,
+            relay_config,
+            validate_relay_config,
+        )
+
+        config = relay_config()
+        # Must not raise even though no admin token is configured (on-prem).
+        validate_relay_config(config)
+        client = RelayControlClient(config=config)
+        self.assertEqual(
+            client._installation_auth(),
+            {"relay_token": "ptr1.installation-1.access-secret"},
+        )
+
+    @override_settings(
+        POINTY_RELAY_CONTROL_URL="https://relay.example",
+        POINTY_RELAY_PUBLIC_API_URL="https://relay.example",
+        POINTY_RELAY_CONNECTOR_ADDR="relay.example:443",
+        POINTY_RELAY_ADMIN_TOKEN="admin-token",
+        POINTY_RELAY_ACCESS_TOKEN="",
+        POINTY_RELAY_INSTALLATION_ID="",
+    )
+    def test_admin_auth_used_without_scoped_token(self):
+        from apps.core.relay import RelayControlClient, relay_config
+
+        client = RelayControlClient(config=relay_config())
+        self.assertEqual(client._installation_auth(), {"admin": True})
+
+    @override_settings(
+        POINTY_RELAY_CONTROL_URL="https://relay.example",
+        POINTY_RELAY_PUBLIC_API_URL="https://relay.example",
+        POINTY_RELAY_CONNECTOR_ADDR="relay.example:443",
+        POINTY_RELAY_ADMIN_TOKEN="",
+        POINTY_RELAY_ACCESS_TOKEN="",
+        POINTY_RELAY_INSTALLATION_ID="",
+    )
+    def test_relay_config_requires_some_auth(self):
+        from django.core.exceptions import ImproperlyConfigured
+
+        from apps.core.relay import relay_config, validate_relay_config
+
+        with self.assertRaises(ImproperlyConfigured):
+            validate_relay_config(relay_config())
+
+    @override_settings(
+        POINTY_RELAY_CONTROL_URL="https://relay.example",
+        POINTY_RELAY_PUBLIC_API_URL="https://relay.example",
+        POINTY_RELAY_CONNECTOR_ADDR="relay.example:443",
+        POINTY_RELAY_ADMIN_TOKEN="",
+        POINTY_RELAY_ACCESS_TOKEN="ptr1.installation-1.access-secret",
+        POINTY_RELAY_INSTALLATION_ID="installation-1",
+        POINTY_RELAY_CONNECTOR_TOKEN="ptc1.installation-1.connector-secret",
+        POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret",
+    )
+    def test_connector_config_bootstraps_from_config_without_admin(self):
+        # On-prem path: the backend has only scoped credentials and must NOT call
+        # the admin provision endpoint, yet still bootstrap the connector + cert.
+        fake_relay = FakeRelayControlClient()
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch(
+                "apps.core.relay.RelayControlClient",
+                return_value=fake_relay,
+            ), mock.patch(
+                "apps.core.relay_views.RelayControlClient",
+                return_value=fake_relay,
+            ):
+                response = APIClient().post(
+                    reverse("relay-connector-config"),
+                    {"csr_pem": "-----BEGIN CERTIFICATE REQUEST-----\ncsr\n-----END CERTIFICATE REQUEST-----\n"},
+                    format="json",
+                    HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        installation = RelayInstallation.objects.get()
+        # Built from the configured scoped credentials, not an admin provision call.
+        self.assertEqual(installation.installation_id, "installation-1")
+        self.assertEqual(installation.access_token, "ptr1.installation-1.access-secret")
+        self.assertEqual(
+            installation.connector_token, "ptc1.installation-1.connector-secret"
+        )
+        self.assertEqual(fake_relay.provisioned_shop_name, "")
+        self.assertIsNotNone(fake_relay.issued_connector_certificate_request)
+        self.assertEqual(
+            response.data["connector_token"], "ptc1.installation-1.connector-secret"
+        )
+
     @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
     def test_connector_config_rejects_relay_tunneled_request(self):
         with mock.patch("apps.core.relay_views.ensure_relay_installation") as ensure:
