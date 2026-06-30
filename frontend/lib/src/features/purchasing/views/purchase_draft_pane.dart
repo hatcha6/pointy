@@ -86,6 +86,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
+    final isEditing = viewModel.isEditing;
 
     return ColoredBox(
       color: colors.page,
@@ -113,7 +114,18 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                 compact: true,
               ),
             ],
-            if (viewModel.hasMissingExpiryDates) ...[
+            if (isEditing && viewModel.unresolvedEditLineNames.isNotEmpty) ...[
+              SizedBox(height: spacing.sm),
+              PointyInlineMessage.warning(
+                message: l10n.purchaseEditUnresolvedLines(
+                  viewModel.unresolvedEditLineNames.length,
+                ),
+                compact: true,
+              ),
+            ],
+            // Expiry dates only become mandatory at submit time, so the reminder
+            // belongs to the build/submit flow — saving a draft never needs it.
+            if (!isEditing && viewModel.hasMissingExpiryDates) ...[
               SizedBox(height: spacing.sm),
               PointyInlineMessage.warning(
                 message: l10n.purchaseExpiryDatesRequired,
@@ -134,31 +146,15 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _PurchaseDraftTotals(viewModel: viewModel),
-                  _ReceiveImmediatelyToggle(viewModel: viewModel),
+                  // Receiving on submit is a submit-time choice; saving a draft
+                  // never receives stock, so the toggle is hidden when editing.
+                  if (!isEditing)
+                    _ReceiveImmediatelyToggle(viewModel: viewModel),
                 ],
               ),
-              primaryAction: FilledButton.icon(
-                onPressed: viewModel.canSubmitDraft
-                    ? () => _submitDraft(context)
-                    : null,
-                icon: viewModel.isSubmitting
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.inventory_outlined),
-                label: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    viewModel.isSubmitting
-                        ? l10n.purchaseSubmitInProgressButton
-                        : l10n.submitPurchaseDraftButton(
-                            formatMoney(viewModel.total),
-                          ),
-                    maxLines: 1,
-                  ),
-                ),
-              ),
+              primaryAction: isEditing
+                  ? _buildSaveButton(context, l10n)
+                  : _buildSubmitButton(context, l10n),
             ),
           ],
         ),
@@ -178,6 +174,48 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
         numberFocusNode: _supplierInvoiceNumberFocusNode,
         dateFocusNode: _supplierInvoiceDateFocusNode,
         discountFocusNode: _discountCodeFocusNode,
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton(BuildContext context, AppLocalizations l10n) {
+    return FilledButton.icon(
+      onPressed: viewModel.canSubmitDraft ? () => _submitDraft(context) : null,
+      icon: viewModel.isSubmitting
+          ? const SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.inventory_outlined),
+      label: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          viewModel.isSubmitting
+              ? l10n.purchaseSubmitInProgressButton
+              : l10n.submitPurchaseDraftButton(formatMoney(viewModel.total)),
+          maxLines: 1,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSaveButton(BuildContext context, AppLocalizations l10n) {
+    return FilledButton.icon(
+      onPressed: viewModel.canSaveDraft ? () => _saveDraft(context) : null,
+      icon: viewModel.isSubmitting
+          ? const SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.save_outlined),
+      label: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          viewModel.isSubmitting
+              ? l10n.purchaseDraftSaveInProgressButton
+              : l10n.savePurchaseDraftButton,
+          maxLines: 1,
+        ),
       ),
     );
   }
@@ -251,6 +289,71 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       );
 
     if (result is Ok<PurchaseSubmission>) {
+      widget.onSubmitSuccess?.call();
+    }
+  }
+
+  /// Saves edits to a reopened draft without committing it. Mirrors
+  /// [_submitDraft]'s discount validation, but stays a draft (no submit/receive)
+  /// and does not require expiry dates.
+  Future<void> _saveDraft(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    await viewModel.refreshDiscountPreview();
+    if (!context.mounted) {
+      return;
+    }
+    if (viewModel.hasDiscountPreviewError) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.discountPreviewUnavailable)),
+        );
+      return;
+    }
+    if (viewModel.unappliedDiscountCodes.isNotEmpty) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              l10n.discountCouponUnavailable(
+                viewModel.unappliedDiscountCodes.join('، '),
+              ),
+            ),
+          ),
+        );
+      return;
+    }
+    final result = await viewModel.saveDraft();
+    if (!context.mounted) {
+      return;
+    }
+
+    final message = switch (result) {
+      Ok(:final value) => l10n.purchaseDraftSaveSuccess(value.orderNumber),
+      Error() => l10n.purchaseDraftSaveError,
+    };
+
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          action: result is Ok<PurchaseOrder>
+              ? null
+              : SnackBarAction(
+                  label: l10n.retryButton,
+                  onPressed: () {
+                    if (context.mounted) {
+                      _saveDraft(context);
+                    }
+                  },
+                ),
+        ),
+      );
+
+    if (result is Ok<PurchaseOrder>) {
       widget.onSubmitSuccess?.call();
     }
   }

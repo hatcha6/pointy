@@ -1465,6 +1465,13 @@ class PosApiService {
     );
   }
 
+  Future<PurchaseOrder> updatePurchaseOrder(
+    int purchaseOrderId,
+    PurchaseOrderDraft draft,
+  ) {
+    return _purchasing.updatePurchaseOrder(purchaseOrderId, draft);
+  }
+
   Future<PurchaseDiscountPreview> previewPurchaseDiscounts(
     PurchaseDiscountPreviewDraft draft,
   ) {

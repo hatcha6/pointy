@@ -48,6 +48,7 @@ import 'features/payments/views/payments_hub_screen.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'features/pos/views/pos_screen.dart';
 import 'features/purchasing/views/purchase_order_details_screen.dart';
+import 'features/purchasing/views/purchase_order_edit_screen.dart';
 import 'features/purchasing/views/purchase_order_list_screen.dart';
 import 'features/purchasing/views/purchasing_screen.dart';
 import 'features/stock_count/views/stock_count_sessions_screen.dart';
@@ -754,8 +755,19 @@ class _AuthenticatedRoutes implements AppNavigation {
                 shopSettingsRepository: dependencies.shopSettingsRepository,
                 initialOrder: order,
                 capabilities: capabilities,
+                onEditDraft: capabilities.canEditDraftPurchaseOrder
+                    ? (draft) =>
+                          openPurchaseOrderEditor(routeContext, draft.id)
+                    : null,
               ),
             );
+            await dependencies.purchaseOrderListViewModel.loadOrders();
+          },
+        ),
+        onEditPurchaseOrder: guardedPurchaseOrderAction(
+          AppCapability.editDraftPurchaseOrder,
+          (order) async {
+            await openPurchaseOrderEditor(routeContext, order.id);
             await dependencies.purchaseOrderListViewModel.loadOrders();
           },
         ),
@@ -785,6 +797,25 @@ class _AuthenticatedRoutes implements AppNavigation {
         capabilities: capabilities,
         navigation: this,
         showBackButton: true,
+      ),
+    );
+  }
+
+  /// Reopens a draft purchase [orderId] in the purchasing screen for editing,
+  /// in its own isolated, non-persisted workspace. Completes when the editor is
+  /// dismissed so callers can refresh.
+  Future<void> openPurchaseOrderEditor(BuildContext context, int orderId) {
+    _trackScreenView('purchase_edit');
+    return push(
+      context,
+      (_) => PurchaseOrderEditScreen(
+        purchaseOrderId: orderId,
+        catalogRepository: dependencies.catalogRepository,
+        purchaseRepository: dependencies.purchaseRepository,
+        contactRepository: dependencies.contactRepository,
+        analyticsEngine: dependencies.analyticsEngine,
+        capabilities: capabilities,
+        navigation: this,
       ),
     );
   }
@@ -871,6 +902,9 @@ class _AuthenticatedRoutes implements AppNavigation {
                   shopSettingsRepository: dependencies.shopSettingsRepository,
                   initialOrder: result.value,
                   capabilities: capabilities,
+                  onEditDraft: capabilities.canEditDraftPurchaseOrder
+                      ? (draft) => openPurchaseOrderEditor(context, draft.id)
+                      : null,
                 ),
               ),
             );
@@ -1727,6 +1761,9 @@ class _AuthenticatedRoutes implements AppNavigation {
         shopSettingsRepository: dependencies.shopSettingsRepository,
         initialOrder: order,
         capabilities: capabilities,
+        onEditDraft: capabilities.canEditDraftPurchaseOrder
+            ? (draft) => openPurchaseOrderEditor(context, draft.id)
+            : null,
       ),
     );
   }

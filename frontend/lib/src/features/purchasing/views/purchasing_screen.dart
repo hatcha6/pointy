@@ -27,6 +27,7 @@ class PurchasingScreen extends StatelessWidget {
     required this.capabilities,
     required this.navigation,
     this.showBackButton = false,
+    this.onSaved,
   });
 
   final PurchaseViewModel viewModel;
@@ -34,6 +35,10 @@ class PurchasingScreen extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
   final bool showBackButton;
+
+  /// Invoked after the draft is saved/submitted from this workspace. The edit
+  /// flow uses it to return to the order it reopened; null in the create flow.
+  final VoidCallback? onSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +60,11 @@ class PurchasingScreen extends StatelessWidget {
                     onPressed: () => Navigator.of(context).maybePop(),
                   )
                 : const PointyNavigationMenuButton(),
-            title: Text(l10n.newPurchaseOrderTitle),
+            title: Text(
+              viewModel.isEditing
+                  ? l10n.editPurchaseOrderTitle
+                  : l10n.newPurchaseOrderTitle,
+            ),
             actions: [
               AuthorizationGuard(
                 capabilities: capabilities,
@@ -75,6 +84,7 @@ class PurchasingScreen extends StatelessWidget {
             child: _PurchasingWorkspace(
               viewModel: viewModel,
               contactRepository: contactRepository,
+              onSaved: onSaved,
             ),
           ),
         );
@@ -87,10 +97,12 @@ class _PurchasingWorkspace extends StatelessWidget {
   const _PurchasingWorkspace({
     required this.viewModel,
     required this.contactRepository,
+    this.onSaved,
   });
 
   final PurchaseViewModel viewModel;
   final ContactRepository contactRepository;
+  final VoidCallback? onSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -111,6 +123,7 @@ class _PurchasingWorkspace extends StatelessWidget {
               secondaryPane: PurchaseDraftPane(
                 viewModel: viewModel,
                 contactRepository: contactRepository,
+                onSubmitSuccess: onSaved,
               ),
             );
           }
@@ -118,6 +131,7 @@ class _PurchasingWorkspace extends StatelessWidget {
           return _CompactPurchasingWorkspace(
             viewModel: viewModel,
             contactRepository: contactRepository,
+            onSaved: onSaved,
           );
         },
       ),
@@ -154,10 +168,12 @@ class _CompactPurchasingWorkspace extends StatelessWidget {
   const _CompactPurchasingWorkspace({
     required this.viewModel,
     required this.contactRepository,
+    this.onSaved,
   });
 
   final PurchaseViewModel viewModel;
   final ContactRepository contactRepository;
+  final VoidCallback? onSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -201,6 +217,7 @@ class _CompactPurchasingWorkspace extends StatelessWidget {
               contactRepository: contactRepository,
               onSubmitSuccess: () {
                 Navigator.of(sheetContext).pop();
+                onSaved?.call();
               },
             );
           },

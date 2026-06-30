@@ -500,25 +500,40 @@ class PurchaseOrderDraft {
     );
   }
 
-  Map<String, Object?> toJson() {
+  /// Serializes the draft for the API.
+  ///
+  /// For a create (`forUpdate: false`) the optional supplier-invoice and
+  /// discount fields are omitted when blank — the backend already defaults them.
+  /// For an edit (`forUpdate: true`) those editor-managed fields are *always*
+  /// included (an empty string / empty list / null date) so that clearing them
+  /// in the editor actually clears them on the draft, rather than silently
+  /// keeping the old value. Lines and landed costs are replaced wholesale either
+  /// way.
+  Map<String, Object?> toJson({bool forUpdate = false}) {
     final invoiceNumber = supplierInvoiceNumber.trim();
     final normalizedDiscountCode = discountCode.trim();
+    final invoiceDate = supplierInvoiceDate
+        ?.toIso8601String()
+        .split('T')
+        .first;
     return {
       'supplier': supplierId,
       if (dueDate != null)
         'due_date': dueDate!.toIso8601String().split('T').first,
-      if (invoiceNumber.isNotEmpty) 'supplier_invoice_number': invoiceNumber,
-      if (supplierInvoiceDate != null)
-        'supplier_invoice_date': supplierInvoiceDate!
-            .toIso8601String()
-            .split('T')
-            .first,
+      if (forUpdate || invoiceNumber.isNotEmpty)
+        'supplier_invoice_number': invoiceNumber,
+      if (forUpdate)
+        'supplier_invoice_date': invoiceDate
+      else
+        'supplier_invoice_date': ?invoiceDate,
       'landed_cost_entries': landedCostEntries
           .map((entry) => entry.toJson())
           .toList(growable: false),
       'landed_cost_allocation_method': landedCostAllocationMethod.apiValue,
-      if (normalizedDiscountCode.isNotEmpty)
-        'discount_codes': [normalizedDiscountCode],
+      if (forUpdate || normalizedDiscountCode.isNotEmpty)
+        'discount_codes': normalizedDiscountCode.isEmpty
+            ? const <String>[]
+            : [normalizedDiscountCode],
       'lines': lines.map((line) => line.toJson()).toList(),
     };
   }

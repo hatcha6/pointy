@@ -50,6 +50,16 @@ class PurchaseViewModel extends ChangeNotifier {
   List<ProductVariant> _variants = [];
   final List<PurchaseDraftLine> _draft = [];
   final Map<int, double> _lastCostByVariantId = {};
+
+  /// Non-null when this workspace is editing an existing draft purchase order
+  /// (its id) rather than building a brand-new one. Drives "save" vs "submit"
+  /// semantics and the screen's labels.
+  int? _editingOrderId;
+
+  /// Lines from the edited order whose product/variant could no longer be
+  /// resolved from the catalog (archived or deleted). Surfaced as a warning so
+  /// the user knows the reopened draft is missing items.
+  final List<String> _unresolvedEditLineNames = [];
   SupplierContact? _selectedSupplier;
   bool _isLoading = false;
   bool _isLoadingMore = false;
@@ -76,6 +86,12 @@ class PurchaseViewModel extends ChangeNotifier {
 
   List<ProductVariant> get variants => List.unmodifiable(_variants);
   List<PurchaseDraftLine> get draft => List.unmodifiable(_draft);
+
+  /// Whether this workspace is editing a saved draft purchase order.
+  bool get isEditing => _editingOrderId != null;
+  int? get editingOrderId => _editingOrderId;
+  List<String> get unresolvedEditLineNames =>
+      List.unmodifiable(_unresolvedEditLineNames);
   SupplierContact? get selectedSupplier => _selectedSupplier;
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
@@ -118,6 +134,16 @@ class PurchaseViewModel extends ChangeNotifier {
       _selectedSupplier != null &&
       !hasInvalidSupplierInvoiceDate &&
       !hasMissingExpiryDates &&
+      !_isSubmitting;
+
+  /// Whether the edited draft can be saved. Unlike submitting, saving a draft
+  /// does not require expiry dates — those only become mandatory at submit time
+  /// (mirroring the backend, which only enforces them on submit).
+  bool get canSaveDraft =>
+      isEditing &&
+      _draft.isNotEmpty &&
+      _selectedSupplier != null &&
+      !hasInvalidSupplierInvoiceDate &&
       !_isSubmitting;
 
   PurchaseDiscountPreviewLine? discountPreviewLineForDraftIndex(int index) {
@@ -584,6 +610,191 @@ class PurchaseViewModel extends ChangeNotifier {
     return result;
   }
 
+  /// Reopens an existing **draft** purchase [order] in this workspace for
+  /// editing. Reconstructs the draft lines — resolving each line's full product
+  /// variant from the catalog so units, pricing and expiry behave exactly like
+  /// a fresh draft — along with the supplier, invoice details, landed costs and
+  /// discount. Lines whose product can no longer be resolved (archived/deleted)
+  /// are dropped and recorded in [unresolvedEditLineNames] so the UI can warn.
+  Future<void> loadOrderForEditing(PurchaseOrder order) async {
+    _editingOrderId = order.id;
+    _unresolvedEditLineNames.clear();
+    final supplierId = order.supplierId;
+    _selectedSupplier = supplierId == null
+        ? null
+        : SupplierContact(
+            id: supplierId,
+            name: order.supplierName ?? '',
+            contactName: order.supplierContactName ?? '',
+            phone: order.supplierPhone ?? '',
+            email: order.supplierEmail ?? '',
+            address: order.supplierAddress ?? '',
+            notes: '',
+            isActive: true,
+          );
+    _supplierInvoiceNumber = order.supplierInvoiceNumber;
+    _supplierInvoiceDateInput = order.supplierInvoiceDate == null
+        ? ''
+        : order.supplierInvoiceDate!.toIso8601String().split('T').first;
+    // The draft pane edits a single coupon; a draft from the purchasing flow
+    // only ever carries one.
+    _discountCode = order.discountCodes.isEmpty ? '' : order.discountCodes.first;
+    _landedCostEntries = _normalizedLandedCostEntries(order.landedCostEntries);
+    _landedCostAllocationMethod = order.landedCostAllocationMethod;
+    // Receiving-on-submit is a submit-time concern; editing only saves a draft.
+    _receiveImmediately = false;
+    _submitIdempotencyKey = _newPurchaseIdempotencyKey('purchase-edit');
+
+    final lines = await _draftLinesForOrder(order);
+    _draft
+      ..clear()
+      ..addAll(lines);
+    notifyListeners();
+    unawaited(refreshDiscountPreview());
+  }
+
+  /// Persists edits to the reopened draft order without committing it — the
+  /// order stays a draft, ready to be submitted later from its details screen.
+  /// Returns an error result (and is a no-op) unless [isEditing].
+  Future<Result<PurchaseOrder>> saveDraft() async {
+    final supplier = _selectedSupplier;
+    final orderId = _editingOrderId;
+    if (orderId == null ||
+        _draft.isEmpty ||
+        supplier == null ||
+        hasInvalidSupplierInvoiceDate ||
+        _isSubmitting) {
+      return Error(Exception('purchase draft is not ready to save'));
+    }
+
+    _isSubmitting = true;
+    notifyListeners();
+
+    final result = await _purchaseRepository.updateDraftOrder(
+      orderId,
+      List.of(_draft),
+      supplierId: supplier.id,
+      supplierInvoiceNumber: _supplierInvoiceNumber,
+      supplierInvoiceDate: supplierInvoiceDate,
+      landedCostEntries: _landedCostEntries,
+      landedCostAllocationMethod: _landedCostAllocationMethod,
+      discountCode: _discountCode,
+    );
+    switch (result) {
+      case Ok<PurchaseOrder>():
+        _trackDraftSaved(result.value, supplier: supplier);
+      case Error<PurchaseOrder>():
+        _trackDraftSubmitFailed(supplier);
+    }
+
+    _isSubmitting = false;
+    notifyListeners();
+    return result;
+  }
+
+  Future<List<PurchaseDraftLine>> _draftLinesForOrder(
+    PurchaseOrder order,
+  ) async {
+    final productIds = <int>{
+      for (final line in order.lines) line.productId,
+    }.toList(growable: false);
+    final products = <int, Product>{};
+    final results = await Future.wait(
+      productIds.map(_catalogRepository.loadProduct),
+    );
+    for (var i = 0; i < productIds.length; i += 1) {
+      if (results[i] case Ok<Product>(:final value)) {
+        products[productIds[i]] = value;
+      }
+    }
+
+    final lines = <PurchaseDraftLine>[];
+    for (final line in order.lines) {
+      final draftLine = _draftLineForOrderLine(line, products[line.productId]);
+      if (draftLine == null) {
+        _unresolvedEditLineNames.add(
+          line.displayName.isEmpty
+              ? line.variantSku ?? '#${line.variantId}'
+              : line.displayName,
+        );
+      } else {
+        lines.add(draftLine);
+      }
+    }
+    return lines;
+  }
+
+  PurchaseDraftLine? _draftLineForOrderLine(
+    PurchaseOrderLine line,
+    Product? product,
+  ) {
+    final variant = _resolveVariantForLine(line, product);
+    if (variant == null) {
+      return null;
+    }
+    final unit = _resolvePurchaseUnit(product, line.unit);
+    return PurchaseDraftLine(
+      variant: variant,
+      quantity: line.quantity.clamp(1, 999),
+      unitCost: line.unitCost,
+      // Keep the order's unit even if it can no longer be resolved, so the
+      // saved line still round-trips the same purchase unit to the backend.
+      unitCode: unit?.code ?? line.unit,
+      unitLabel: unit?.label ?? line.unitLabel,
+      unitFactor: unit?.factorToBase ?? 1,
+      expiryDate: line.expiryDate,
+    );
+  }
+
+  ProductVariant? _resolveVariantForLine(
+    PurchaseOrderLine line,
+    Product? product,
+  ) {
+    if (product == null) {
+      return null;
+    }
+    ProductVariant? match;
+    for (final variant in product.variants) {
+      if (variant.id == line.variantId) {
+        match = variant;
+        break;
+      }
+    }
+    final defaultVariant = product.defaultVariant;
+    if (match == null &&
+        defaultVariant != null &&
+        defaultVariant.id == line.variantId) {
+      match = defaultVariant;
+    }
+    if (match == null) {
+      return null;
+    }
+    // Variants embedded in a product detail omit the product back-reference the
+    // draft tile relies on for unit/expiry resolution — attach it.
+    return match.productDetail == null
+        ? match.copyWith(productDetail: product)
+        : match;
+  }
+
+  ProductUnit? _resolvePurchaseUnit(Product? product, String unitCode) {
+    if (product == null || unitCode.isEmpty) {
+      return null;
+    }
+    for (final unit in product.purchasableUnits) {
+      if (unit.code == unitCode) {
+        return unit;
+      }
+    }
+    // The unit may have been made non-purchasable since the draft was created;
+    // still honour the snapshot if the product knows the conversion.
+    for (final unit in product.units) {
+      if (unit.code == unitCode) {
+        return unit;
+      }
+    }
+    return null;
+  }
+
   void rememberVariantCost(ProductVariant variant, double unitCost) {
     if (unitCost < 0) {
       return;
@@ -977,6 +1188,41 @@ class PurchaseViewModel extends ChangeNotifier {
             'item_count': _draftItemCount(draftSnapshot),
             'draft_total': _draftTotal(draftSnapshot),
             'purchase_total': submission.total,
+          },
+        ),
+      ),
+    );
+  }
+
+  void _trackDraftSaved(
+    PurchaseOrder order, {
+    required SupplierContact supplier,
+  }) {
+    final analyticsEngine = _analyticsEngine;
+    if (analyticsEngine == null) {
+      return;
+    }
+    final draftSnapshot = List<PurchaseDraftLine>.of(_draft);
+    unawaited(
+      analyticsEngine.track(
+        AnalyticsEventDraft.audit(
+          name: 'purchasing.draft.saved',
+          entityType: 'purchase_order',
+          entityId: '${order.id}',
+          attributes: {
+            'order_id': order.id,
+            'order_number': order.orderNumber,
+            'supplier_id': supplier.id,
+            'supplier_name': supplier.name,
+            'line_count': draftSnapshot.length,
+            'item_count': _draftItemCount(draftSnapshot),
+            'draft_total': _draftTotal(draftSnapshot),
+            'lines': _draftLineSnapshots(draftSnapshot),
+          },
+          metrics: {
+            'line_count': draftSnapshot.length,
+            'item_count': _draftItemCount(draftSnapshot),
+            'draft_total': _draftTotal(draftSnapshot),
           },
         ),
       ),

@@ -74,6 +74,11 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
 
   bool get canSubmit =>
       _capabilities.canEditDraftPurchaseOrder && _order.status == 'draft';
+
+  /// A not-yet-sent (draft) order can be reopened in the purchasing screen and
+  /// edited. Same gate as submitting — only drafts, only with edit permission.
+  bool get canEdit =>
+      _capabilities.canEditDraftPurchaseOrder && _order.status == 'draft';
   bool get canReceive =>
       _capabilities.canReceivePurchaseOrder &&
       (_order.status == 'submitted' ||

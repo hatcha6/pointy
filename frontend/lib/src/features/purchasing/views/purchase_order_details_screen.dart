@@ -34,6 +34,7 @@ class PurchaseOrderDetailsScreen extends StatefulWidget {
     required this.shopSettingsRepository,
     required this.initialOrder,
     required this.capabilities,
+    this.onEditDraft,
   });
 
   final PurchaseRepository purchaseRepository;
@@ -41,6 +42,11 @@ class PurchaseOrderDetailsScreen extends StatefulWidget {
   final ShopSettingsRepository shopSettingsRepository;
   final PurchaseOrder initialOrder;
   final AuthorizationCapabilities capabilities;
+
+  /// Opens the given draft order in the purchasing screen for editing. The
+  /// future completes when the editor is dismissed, after which this screen
+  /// reloads the (possibly changed) order. Null disables the Edit action.
+  final Future<void> Function(PurchaseOrder order)? onEditDraft;
 
   @override
   State<PurchaseOrderDetailsScreen> createState() =>
@@ -62,6 +68,18 @@ class _PurchaseOrderDetailsScreenState
   void dispose() {
     _viewModel.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleEditDraft() async {
+    final onEditDraft = widget.onEditDraft;
+    if (onEditDraft == null) {
+      return;
+    }
+    await onEditDraft(_viewModel.order);
+    if (mounted) {
+      // The draft may have changed (or been submitted) in the editor.
+      await _viewModel.loadOrder();
+    }
   }
 
   @override
@@ -95,7 +113,10 @@ class _PurchaseOrderDetailsScreenState
           // step — never competing with the document utilities in the app bar.
           bottomNavigationBar: _viewModel.hasLoadError
               ? null
-              : _PurchaseOrderActionFooter(viewModel: _viewModel),
+              : _PurchaseOrderActionFooter(
+                  viewModel: _viewModel,
+                  onEdit: widget.onEditDraft == null ? null : _handleEditDraft,
+                ),
           body: SafeArea(
             child: _viewModel.hasLoadError
                 ? Center(child: Text(l10n.purchaseOrderDetailsLoadError))

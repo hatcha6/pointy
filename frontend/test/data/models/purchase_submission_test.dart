@@ -31,6 +31,56 @@ void main() {
     ]);
   });
 
+  test('create payload omits blank invoice and discount fields', () {
+    final draft = PurchaseOrderDraft(
+      supplierId: 8,
+      lines: const [
+        PurchaseOrderLineDraft(variantId: 3, quantity: 1, unitCost: 5),
+      ],
+    );
+
+    final json = draft.toJson();
+
+    expect(json.containsKey('supplier_invoice_number'), isFalse);
+    expect(json.containsKey('supplier_invoice_date'), isFalse);
+    expect(json.containsKey('discount_codes'), isFalse);
+  });
+
+  test('update payload always includes editor-managed fields so they can be '
+      'cleared', () {
+    final draft = PurchaseOrderDraft(
+      supplierId: 8,
+      lines: const [
+        PurchaseOrderLineDraft(variantId: 3, quantity: 1, unitCost: 5),
+      ],
+    );
+
+    final json = draft.toJson(forUpdate: true);
+
+    expect(json['supplier_invoice_number'], '');
+    expect(json.containsKey('supplier_invoice_date'), isTrue);
+    expect(json['supplier_invoice_date'], isNull);
+    expect(json['discount_codes'], isEmpty);
+  });
+
+  test('update payload keeps set invoice and discount fields', () {
+    final draft = PurchaseOrderDraft(
+      supplierId: 8,
+      supplierInvoiceNumber: 'INV-9',
+      supplierInvoiceDate: DateTime.utc(2026, 6, 30),
+      discountCode: 'SAVE',
+      lines: const [
+        PurchaseOrderLineDraft(variantId: 3, quantity: 1, unitCost: 5),
+      ],
+    );
+
+    final json = draft.toJson(forUpdate: true);
+
+    expect(json['supplier_invoice_number'], 'INV-9');
+    expect(json['supplier_invoice_date'], '2026-06-30');
+    expect(json['discount_codes'], ['SAVE']);
+  });
+
   test('a purchase draft line round-trips through json persistence', () {
     const variant = ProductVariant(
       id: 55,

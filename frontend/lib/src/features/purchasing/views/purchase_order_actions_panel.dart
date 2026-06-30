@@ -150,9 +150,13 @@ class _PoAction {
 /// Pinned footer carrying one prominent, status-driven primary action and an
 /// "other actions" menu where every remaining action is spelled out.
 class _PurchaseOrderActionFooter extends StatelessWidget {
-  const _PurchaseOrderActionFooter({required this.viewModel});
+  const _PurchaseOrderActionFooter({required this.viewModel, this.onEdit});
 
   final PurchaseOrderDetailsViewModel viewModel;
+
+  /// Opens the draft in the purchasing screen for editing. Null hides the
+  /// action (no edit permission, or no editor wired in).
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -170,6 +174,14 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
             onTap: statusBusy
                 ? null
                 : () => _submitPurchaseOrder(context, viewModel),
+          )
+        : null;
+    final edit = (viewModel.canEdit && onEdit != null)
+        ? _PoAction(
+            icon: Icons.edit_outlined,
+            label: l10n.editPurchaseOrderAction,
+            description: l10n.purchaseOrderEditDescription,
+            onTap: statusBusy ? null : onEdit,
           )
         : null;
     final receive = viewModel.canReceive
@@ -249,7 +261,7 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
       ?cancel,
     ];
 
-    if (primary == null && extras.isEmpty) {
+    if (primary == null && extras.isEmpty && edit == null) {
       return const SizedBox.shrink();
     }
 
@@ -272,11 +284,29 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
           : OutlinedButton.icon(onPressed: onPressed, icon: icon, label: label);
     }
 
+    // For a draft, Send is the primary "next step" and Edit sits beside it as a
+    // visible secondary — corrections (e.g. Cancel) stay in the overflow sheet.
+    final editButton = edit == null
+        ? null
+        : _secondaryActionButton(context, edit);
+
     if (primary != null) {
       return PointyStickyActionFooter(
         summary: summary,
-        secondaryActions: [if (extras.isNotEmpty) moreButton(filled: false)],
+        secondaryActions: [
+          ?editButton,
+          if (extras.isNotEmpty) moreButton(filled: false),
+        ],
         primaryAction: _primaryActionButton(context, primary),
+      );
+    }
+
+    // No status-driven primary. Edit leads when it's the only action available.
+    if (edit != null) {
+      return PointyStickyActionFooter(
+        summary: summary,
+        secondaryActions: [if (extras.isNotEmpty) moreButton(filled: false)],
+        primaryAction: _primaryActionButton(context, edit),
       );
     }
 
@@ -288,6 +318,14 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
           : moreButton(filled: true),
     );
   }
+}
+
+Widget _secondaryActionButton(BuildContext context, _PoAction action) {
+  return OutlinedButton.icon(
+    onPressed: action.onTap,
+    icon: Icon(action.icon),
+    label: Text(action.label),
+  );
 }
 
 Widget _primaryActionButton(BuildContext context, _PoAction action) {

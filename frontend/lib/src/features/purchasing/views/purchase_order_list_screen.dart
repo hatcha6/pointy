@@ -28,6 +28,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
     required this.navigation,
     required this.onCreatePurchaseOrder,
     required this.onOpenPurchaseOrder,
+    required this.onEditPurchaseOrder,
   });
 
   final PurchaseOrderListViewModel viewModel;
@@ -36,6 +37,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
   final AppNavigation navigation;
   final VoidCallback onCreatePurchaseOrder;
   final ValueChanged<PurchaseOrder> onOpenPurchaseOrder;
+  final ValueChanged<PurchaseOrder> onEditPurchaseOrder;
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +88,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
               capabilities: capabilities,
               onCreatePurchaseOrder: onCreatePurchaseOrder,
               onOpenPurchaseOrder: onOpenPurchaseOrder,
+              onEditPurchaseOrder: onEditPurchaseOrder,
             ),
           ),
         );
@@ -101,6 +104,7 @@ class _PurchaseOrderListBody extends StatelessWidget {
     required this.capabilities,
     required this.onCreatePurchaseOrder,
     required this.onOpenPurchaseOrder,
+    required this.onEditPurchaseOrder,
   });
 
   final PurchaseOrderListViewModel viewModel;
@@ -108,6 +112,7 @@ class _PurchaseOrderListBody extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final VoidCallback onCreatePurchaseOrder;
   final ValueChanged<PurchaseOrder> onOpenPurchaseOrder;
+  final ValueChanged<PurchaseOrder> onEditPurchaseOrder;
 
   @override
   Widget build(BuildContext context) {
@@ -160,11 +165,15 @@ class _PurchaseOrderListBody extends StatelessWidget {
                     : null,
               ),
               itemBuilder: (context, order) {
+                final canEdit =
+                    capabilities.canEditDraftPurchaseOrder &&
+                    order.status == 'draft';
                 return PurchaseOrderTile(
                   order: order,
                   onTap: () => onOpenPurchaseOrder(order),
                   onPrint: () => _printOrder(context, order),
                   onShare: () => _shareOrder(context, order),
+                  onEdit: canEdit ? () => onEditPurchaseOrder(order) : null,
                 );
               },
             ),
@@ -557,12 +566,17 @@ class PurchaseOrderTile extends StatelessWidget {
     this.onTap,
     this.onPrint,
     this.onShare,
+    this.onEdit,
   });
 
   final PurchaseOrder order;
   final VoidCallback? onTap;
   final VoidCallback? onPrint;
   final VoidCallback? onShare;
+
+  /// Reopen this (draft) order in the purchasing screen to edit it. Null for
+  /// non-draft orders or without edit permission.
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -607,12 +621,14 @@ class PurchaseOrderTile extends StatelessWidget {
           ),
       ],
       actions: [
-        if (onPrint != null || onShare != null)
+        if (onPrint != null || onShare != null || onEdit != null)
           PopupMenuButton<_PurchaseOrderRowAction>(
             tooltip: l10n.purchaseOrderRowActionsTooltip,
             icon: const Icon(Icons.more_vert),
             onSelected: (action) {
               switch (action) {
+                case _PurchaseOrderRowAction.edit:
+                  onEdit?.call();
                 case _PurchaseOrderRowAction.print:
                   onPrint?.call();
                 case _PurchaseOrderRowAction.share:
@@ -620,6 +636,16 @@ class PurchaseOrderTile extends StatelessWidget {
               }
             },
             itemBuilder: (context) => [
+              if (onEdit != null)
+                PopupMenuItem<_PurchaseOrderRowAction>(
+                  value: _PurchaseOrderRowAction.edit,
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.edit_outlined),
+                    title: Text(l10n.editPurchaseOrderAction),
+                  ),
+                ),
               if (onPrint != null)
                 PopupMenuItem<_PurchaseOrderRowAction>(
                   value: _PurchaseOrderRowAction.print,
@@ -679,7 +705,7 @@ Color _statusColor(PointySemanticColors colors, String status) {
   };
 }
 
-enum _PurchaseOrderRowAction { print, share }
+enum _PurchaseOrderRowAction { edit, print, share }
 
 String _paymentStatusLabel(AppLocalizations l10n, String status) {
   return switch (status) {

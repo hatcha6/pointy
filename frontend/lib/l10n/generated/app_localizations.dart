@@ -12001,6 +12001,66 @@ abstract class AppLocalizations {
   /// **'تعذر إرسال أمر الشراء. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.'**
   String get purchaseDraftSubmitError;
 
+  /// App-bar title when reopening a draft purchase order to edit it.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل أمر الشراء'**
+  String get editPurchaseOrderTitle;
+
+  /// Action label to edit a draft purchase order.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل'**
+  String get editPurchaseOrderAction;
+
+  /// Description for the edit action on a draft purchase order.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح المسودة في شاشة الشراء لتعديل أصنافها قبل الإرسال.'**
+  String get purchaseOrderEditDescription;
+
+  /// Primary button label that saves edits to a draft purchase order without submitting it.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ التعديلات'**
+  String get savePurchaseDraftButton;
+
+  /// Primary button label while a draft purchase order is being saved.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ الحفظ...'**
+  String get purchaseDraftSaveInProgressButton;
+
+  /// Message shown after a draft purchase order's edits are saved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ مسودة أمر الشراء رقم {draftNumber}.'**
+  String purchaseDraftSaveSuccess(String draftNumber);
+
+  /// Message shown when saving edits to a draft purchase order fails.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ المسودة. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.'**
+  String get purchaseDraftSaveError;
+
+  /// Error shown when a draft purchase order cannot be loaded for editing.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر فتح أمر الشراء للتعديل.'**
+  String get editPurchaseOrderLoadError;
+
+  /// Error shown when trying to edit a purchase order that is no longer a draft.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن تعديل سوى المسودات.'**
+  String get editPurchaseOrderNotDraftError;
+
+  /// Warning shown when some lines of an edited draft could not be resolved from the catalog.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل {count} من الأصناف لأنها لم تعد متوفرة في الكتالوج.'**
+  String purchaseEditUnresolvedLines(int count);
+
   /// No description provided for @contactsTitle.
   ///
   /// In ar, this message translates to:

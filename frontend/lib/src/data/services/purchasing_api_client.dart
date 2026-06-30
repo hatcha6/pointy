@@ -181,6 +181,26 @@ class PurchasingApiClient {
     );
   }
 
+  /// Replaces an existing draft purchase order with the edited [draft]. The
+  /// backend rejects this for any non-draft order and replaces its lines and
+  /// landed costs wholesale, recalculating totals.
+  Future<PurchaseOrder> updatePurchaseOrder(
+    int purchaseOrderId,
+    PurchaseOrderDraft draft,
+  ) async {
+    final response = await _session.patch(
+      'purchase-orders/$purchaseOrderId/',
+      body: draft.toJson(forUpdate: true),
+    );
+    _session.throwApiException(
+      response,
+      'Purchase order update failed with status',
+    );
+    return PurchaseOrder.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<PurchaseDiscountPreview> previewDiscounts(
     PurchaseDiscountPreviewDraft draft,
   ) async {

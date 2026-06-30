@@ -184,6 +184,39 @@ class PurchaseRepository {
     });
   }
 
+  /// Saves edits to an existing **draft** purchase order without committing it
+  /// (it stays a draft). Replaces the order's lines, landed costs and
+  /// editor-managed fields with [lines] and the supplied values. The backend
+  /// rejects this for any non-draft order.
+  Future<Result<PurchaseOrder>> updateDraftOrder(
+    int purchaseOrderId,
+    List<PurchaseDraftLine> lines, {
+    required int supplierId,
+    String supplierInvoiceNumber = '',
+    DateTime? supplierInvoiceDate,
+    List<PurchaseLandedCostEntry> landedCostEntries = const [],
+    LandedCostAllocationMethod landedCostAllocationMethod =
+        LandedCostAllocationMethod.byLineValue,
+    String discountCode = '',
+  }) async {
+    if (lines.isEmpty) {
+      return Error(Exception('purchase draft is empty'));
+    }
+
+    return Result.guard(() {
+      final draft = PurchaseOrderDraft.fromDraftLines(
+        lines,
+        supplierId: supplierId,
+        supplierInvoiceNumber: supplierInvoiceNumber,
+        supplierInvoiceDate: supplierInvoiceDate,
+        landedCostEntries: landedCostEntries,
+        landedCostAllocationMethod: landedCostAllocationMethod,
+        discountCode: discountCode,
+      );
+      return _service.updatePurchaseOrder(purchaseOrderId, draft);
+    });
+  }
+
   Future<Result<PurchaseOrder>> submitOrder(
     int purchaseOrderId, {
     String? idempotencyKey,

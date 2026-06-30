@@ -3995,6 +3995,56 @@
     }
   },
   "purchaseDraftSubmitError": "تعذر إرسال أمر الشراء. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.",
+  "editPurchaseOrderTitle": "تعديل أمر الشراء",
+  "@editPurchaseOrderTitle": {
+    "description": "App-bar title when reopening a draft purchase order to edit it."
+  },
+  "editPurchaseOrderAction": "تعديل",
+  "@editPurchaseOrderAction": {
+    "description": "Action label to edit a draft purchase order."
+  },
+  "purchaseOrderEditDescription": "فتح المسودة في شاشة الشراء لتعديل أصنافها قبل الإرسال.",
+  "@purchaseOrderEditDescription": {
+    "description": "Description for the edit action on a draft purchase order."
+  },
+  "savePurchaseDraftButton": "حفظ التعديلات",
+  "@savePurchaseDraftButton": {
+    "description": "Primary button label that saves edits to a draft purchase order without submitting it."
+  },
+  "purchaseDraftSaveInProgressButton": "جارٍ الحفظ...",
+  "@purchaseDraftSaveInProgressButton": {
+    "description": "Primary button label while a draft purchase order is being saved."
+  },
+  "purchaseDraftSaveSuccess": "تم حفظ مسودة أمر الشراء رقم {draftNumber}.",
+  "@purchaseDraftSaveSuccess": {
+    "description": "Message shown after a draft purchase order's edits are saved.",
+    "placeholders": {
+      "draftNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseDraftSaveError": "تعذر حفظ المسودة. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.",
+  "@purchaseDraftSaveError": {
+    "description": "Message shown when saving edits to a draft purchase order fails."
+  },
+  "editPurchaseOrderLoadError": "تعذر فتح أمر الشراء للتعديل.",
+  "@editPurchaseOrderLoadError": {
+    "description": "Error shown when a draft purchase order cannot be loaded for editing."
+  },
+  "editPurchaseOrderNotDraftError": "لا يمكن تعديل سوى المسودات.",
+  "@editPurchaseOrderNotDraftError": {
+    "description": "Error shown when trying to edit a purchase order that is no longer a draft."
+  },
+  "purchaseEditUnresolvedLines": "تعذّر تحميل {count} من الأصناف لأنها لم تعد متوفرة في الكتالوج.",
+  "@purchaseEditUnresolvedLines": {
+    "description": "Warning shown when some lines of an edited draft could not be resolved from the catalog.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "contactsTitle": "العملاء والموردون",
   "customersTab": "العملاء",
   "suppliersTab": "الموردون",

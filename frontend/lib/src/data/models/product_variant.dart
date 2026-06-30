@@ -222,12 +222,12 @@ class ProductVariant {
     };
   }
 
-  ProductVariant copyWith({double? quantityOnHand}) {
+  ProductVariant copyWith({double? quantityOnHand, Product? productDetail}) {
     return ProductVariant(
       id: id,
       productId: productId,
       productName: productName,
-      productDetail: productDetail,
+      productDetail: productDetail ?? this.productDetail,
       name: name,
       displayName: displayName,
       fullName: fullName,

@@ -6832,6 +6832,42 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذر إرسال أمر الشراء. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.';
 
   @override
+  String get editPurchaseOrderTitle => 'تعديل أمر الشراء';
+
+  @override
+  String get editPurchaseOrderAction => 'تعديل';
+
+  @override
+  String get purchaseOrderEditDescription =>
+      'فتح المسودة في شاشة الشراء لتعديل أصنافها قبل الإرسال.';
+
+  @override
+  String get savePurchaseDraftButton => 'حفظ التعديلات';
+
+  @override
+  String get purchaseDraftSaveInProgressButton => 'جارٍ الحفظ...';
+
+  @override
+  String purchaseDraftSaveSuccess(String draftNumber) {
+    return 'تم حفظ مسودة أمر الشراء رقم $draftNumber.';
+  }
+
+  @override
+  String get purchaseDraftSaveError =>
+      'تعذر حفظ المسودة. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.';
+
+  @override
+  String get editPurchaseOrderLoadError => 'تعذر فتح أمر الشراء للتعديل.';
+
+  @override
+  String get editPurchaseOrderNotDraftError => 'لا يمكن تعديل سوى المسودات.';
+
+  @override
+  String purchaseEditUnresolvedLines(int count) {
+    return 'تعذّر تحميل $count من الأصناف لأنها لم تعد متوفرة في الكتالوج.';
+  }
+
+  @override
   String get contactsTitle => 'العملاء والموردون';
 
   @override

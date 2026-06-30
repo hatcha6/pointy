@@ -135,6 +135,7 @@ Widget _poList() {
     navigation: _FakeNavigation(),
     onCreatePurchaseOrder: () {},
     onOpenPurchaseOrder: (_) {},
+    onEditPurchaseOrder: (_) {},
   );
 }
 
