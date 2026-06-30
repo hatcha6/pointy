@@ -85,15 +85,11 @@ RELAY_SUBSCRIPTION_AI_ENABLED ?=
 RELAY_SUBSCRIPTION_ENDS_AT ?=
 RELAY_SUBSCRIPTION_CLEAR_END ?= false
 # Remote-relay dev flavor (make dev-remote): point the LOCAL backend + connector at
-# a hosted relay instead of running one locally — mirrors the on-prem topology. The
-# backend authenticates with SCOPED per-installation credentials only (NO admin
-# token on the running backend), exactly like a customer site:
-#   1. make relay-remote-provision RELAY_REMOTE_ADMIN_TOKEN=...   # operator-only step
-#   2. paste the printed installation id + access/connector tokens into backend/.env
-#      (POINTY_RELAY_INSTALLATION_ID / ACCESS_TOKEN / CONNECTOR_TOKEN) with the relay
-#      URLs + CONNECTOR_TLS_SERVER_NAME + a CONNECTOR_SETUP_TOKEN you pick, insecure
-#      flags off — see deploy/onprem/.env.example for the full block.
-#   3. make dev-remote RELAY_REMOTE_SETUP_TOKEN=<that setup token>
+# the hosted relay instead of running one locally — mirrors the on-prem topology.
+# The connector setup token is auto-generated each run; no manual steps needed.
+# The backend self-enrolls on first run using POINTY_RELAY_ENROLLMENT_TOKEN from
+# backend/.env; subsequent runs reuse the stored installation from the local DB.
+# To mint a fresh enrollment token: make relay-remote-provision ... (operator only).
 RELAY_REMOTE_HOST ?= env-9493505.tip2.libyanspider.cloud
 RELAY_REMOTE_ADMIN_TOKEN ?=
 RELAY_REMOTE_SHOP_NAME ?= Dev Remote Shop
@@ -101,8 +97,8 @@ RELAY_REMOTE_BUSINESS_ID ?= dev-remote
 # Connector dial target: the Jelastic L4 TCP endpoint that forwards to the relay's
 # 8092 connector listener (the env hostname only carries HTTP/443 via the SLB).
 RELAY_REMOTE_CONNECTOR_DIAL ?= node11166-env-9493505.tip2.libyanspider.cloud:11061
-RELAY_REMOTE_SETUP_TOKEN ?=
 RELAY_REMOTE_CONNECTOR_STATE_FILE ?= $(abspath $(RELAY_DIR)/.connector-state-remote.json)
+RELAY_REMOTE_TOKEN_FILE ?= $(abspath $(RELAY_DIR)/.remote-setup-token)
 POSTGRES_HOST ?= 127.0.0.1
 POSTGRES_PORT ?= 5432
 LOAD_BASE_URL ?= http://127.0.0.1:8000/api
@@ -120,11 +116,11 @@ ENDURANCE_DURATION ?= 3600
 ENDURANCE_WORKERS ?= 4
 
 .PHONY: help setup install docker-check postgres postgres-stop postgres-logs postgres-ping redis redis-local redis-stop redis-logs redis-ping \
-	backend-venv backend-install backend-env backend-migrate backend-migrations backend-dev-migrate backend-run \
+	backend-venv backend-install backend-env backend-migrate backend-migrations backend-dev-migrate backend-run backend-run-remote \
 	backend-load-test backend-stress-test backend-endurance-test \
 	backend-shell backend-superuser backend-test backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
-	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-migrate relay-provision relay-subscription-update relay-remote-provision \
+	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-provision \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable postgres-ready clean
 
 help: ## Show available commands.
@@ -206,6 +202,14 @@ backend-dev-migrate: backend-env backend-install
 
 backend-run: backend-env backend-install ## Run the Django API server.
 	POINTY_DISCOVERY_API_PORT="$(API_PORT)" $(MANAGE) runserver $(API_HOST):$(API_PORT)
+
+backend-run-remote: backend-env backend-install ## Run Django against the remote relay (used by dev-remote; self-enrolls on first run).
+	POINTY_RELAY_CONTROL_URL="https://$(RELAY_REMOTE_HOST)/api" \
+		POINTY_RELAY_PUBLIC_API_URL="https://$(RELAY_REMOTE_HOST)/api" \
+		POINTY_RELAY_ALLOW_INSECURE_CONTROL=false \
+		POINTY_RELAY_CONNECTOR_SETUP_TOKEN="$$(cat '$(RELAY_REMOTE_TOKEN_FILE)')" \
+		POINTY_DISCOVERY_API_PORT="$(API_PORT)" \
+		$(MANAGE) runserver $(API_HOST):$(API_PORT)
 
 backend-shell: backend-env backend-install ## Open the Django shell.
 	$(MANAGE) shell
@@ -418,6 +422,19 @@ relay-connector: ## Run the on-prem relay connector beside a local backend.
 		--relay "$(RELAY_CONNECTOR_ADDR)" \
 		--backend "$(RELAY_BACKEND_URL)"
 
+relay-connector-remote: ## Run the connector against the remote hosted relay (used by dev-remote).
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
+		POINTY_RELAY_CONNECTOR_SETUP_TOKEN="$$(cat '$(RELAY_REMOTE_TOKEN_FILE)')" \
+		POINTY_RELAY_CONNECTOR_STATE_FILE="$(RELAY_REMOTE_CONNECTOR_STATE_FILE)" \
+		POINTY_RELAY_ALLOW_INSECURE_CONNECTOR=false \
+		POINTY_RELAY_TLS_SERVER_NAME="$(RELAY_REMOTE_HOST)" \
+		POINTY_RELAY_CONNECTOR_REQUEST_TIMEOUT="$(RELAY_CONNECTOR_REQUEST_TIMEOUT)" \
+		POINTY_RELAY_CONNECTOR_MAX_CONCURRENT_REQUESTS="$(RELAY_CONNECTOR_MAX_CONCURRENT_REQUESTS)" \
+		POINTY_RELAY_CONNECTOR_CLIENT_CERT_ROTATION_WINDOW="$(RELAY_CONNECTOR_CLIENT_CERT_ROTATION_WINDOW)" \
+		$(GO) run ./cmd/pointy-relay connector \
+		--relay "$(RELAY_REMOTE_CONNECTOR_DIAL)" \
+		--backend "$(RELAY_BACKEND_URL)"
+
 relay-migrate: ## Apply relay PostgreSQL migrations.
 	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
 		$(GO) run ./cmd/pointy-relay migrate --database-url "$(RELAY_DATABASE_URL)"
@@ -444,6 +461,18 @@ relay-subscription-update: ## Update company-owned relay subscription state thro
 		--ai-enabled "$(RELAY_SUBSCRIPTION_AI_ENABLED)" \
 		--subscription-ends-at "$(RELAY_SUBSCRIPTION_ENDS_AT)" \
 		--clear-subscription-end="$(RELAY_SUBSCRIPTION_CLEAR_END)"
+
+relay-remote-mint: ## Mint an enrollment token on the remote relay for dev-remote (operator step; needs RELAY_REMOTE_ADMIN_TOKEN). Copy the printed pte1.xxx token to backend/.env POINTY_RELAY_ENROLLMENT_TOKEN.
+	@test -n "$(RELAY_REMOTE_ADMIN_TOKEN)" || { \
+		printf "\nSet RELAY_REMOTE_ADMIN_TOKEN to the $(RELAY_REMOTE_HOST) admin token (operator only):\n"; \
+		printf "  make relay-remote-mint RELAY_REMOTE_ADMIN_TOKEN=...\n\n"; \
+		exit 1; \
+	}
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
+		$(GO) run ./cmd/pointy-relay enrollment mint \
+		--count 1 \
+		--control-url "https://$(RELAY_REMOTE_HOST)" \
+		--admin-token "$(RELAY_REMOTE_ADMIN_TOKEN)"
 
 relay-remote-provision: ## Provision an installation on the REMOTE relay and print its one-time scoped tokens for backend/.env (operator step; needs RELAY_REMOTE_ADMIN_TOKEN).
 	@test -n "$(RELAY_REMOTE_ADMIN_TOKEN)" || { \
@@ -492,19 +521,9 @@ ai-enable: ## Provision the relay installation, enable AI, and sync Django (wait
 dev-ai: postgres redis postgres-ready relay-migrate backend-dev-migrate frontend-install ## Run the full AI stack (Postgres, Redis, relay, Django, Flutter) and enable AI.
 	$(MAKE) -j4 relay-run backend-run frontend-web ai-enable
 
-dev-remote: postgres redis postgres-ready backend-dev-migrate frontend-install ## Run Django (scoped creds, no admin token) + connector + Flutter vs a REMOTE relay. Run relay-remote-provision + set backend/.env first.
-	@test -n "$(RELAY_REMOTE_SETUP_TOKEN)" || { \
-		printf "\nSet RELAY_REMOTE_SETUP_TOKEN to the connector setup token that matches\n"; \
-		printf "backend/.env POINTY_RELAY_CONNECTOR_SETUP_TOKEN, e.g.\n\n"; \
-		printf "  make dev-remote RELAY_REMOTE_SETUP_TOKEN=xxxxxxxx\n\n"; \
-		exit 1; \
-	}
-	$(MAKE) -j3 backend-run frontend-web relay-connector \
-		RELAY_CONNECTOR_ADDR="$(RELAY_REMOTE_CONNECTOR_DIAL)" \
-		RELAY_TLS_SERVER_NAME="$(RELAY_REMOTE_HOST)" \
-		RELAY_ALLOW_INSECURE_CONNECTOR=false \
-		RELAY_CONNECTOR_SETUP_TOKEN="$(RELAY_REMOTE_SETUP_TOKEN)" \
-		RELAY_CONNECTOR_STATE_FILE="$(RELAY_REMOTE_CONNECTOR_STATE_FILE)"
+dev-remote: postgres redis postgres-ready backend-dev-migrate frontend-install ## Run Django + connector + Flutter against the REMOTE relay (no local relay; backend self-enrolls on first run).
+	@$(PYTHON) -c "import secrets; print(secrets.token_hex(24))" > "$(RELAY_REMOTE_TOKEN_FILE)"
+	$(MAKE) -j3 backend-run-remote frontend-web relay-connector-remote
 
 clean: ## Remove generated local caches and build output.
 	find "$(BACKEND_DIR)" -type d -name __pycache__ -prune -exec rm -rf {} +
