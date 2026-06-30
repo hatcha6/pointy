@@ -658,6 +658,11 @@ class ShopSettingsApiTests(TestCase):
         self.assertEqual(upload_response.status_code, status.HTTP_403_FORBIDDEN)
 
 
+# Pin the enrollment token empty so the suite stays hermetic: a developer's
+# personal license key in backend/.env (used by `make dev-remote`) must not leak
+# in and steer ensure_relay_installation() down the enroll branch. Tests that
+# exercise enrollment set POINTY_RELAY_ENROLLMENT_TOKEN themselves at method level.
+@override_settings(POINTY_RELAY_ENROLLMENT_TOKEN="")
 class RelayBackendApiTests(TestCase):
     def setUp(self):
         ensure_role_groups()
@@ -972,9 +977,6 @@ class RelayBackendApiTests(TestCase):
             with mock.patch(
                 "apps.core.relay.RelayControlClient",
                 return_value=fake_relay,
-            ), mock.patch(
-                "apps.core.relay_views.RelayControlClient",
-                return_value=fake_relay,
             ):
                 rejected = APIClient().post(
                     reverse("relay-connector-config"),
@@ -1111,9 +1113,6 @@ class RelayBackendApiTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             with mock.patch(
                 "apps.core.relay.RelayControlClient",
-                return_value=fake_relay,
-            ), mock.patch(
-                "apps.core.relay_views.RelayControlClient",
                 return_value=fake_relay,
             ):
                 response = APIClient().post(

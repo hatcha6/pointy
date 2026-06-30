@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import json
 import ssl
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone as datetime_timezone
 from urllib import error, request
 from urllib.parse import urljoin, urlparse
@@ -475,10 +475,30 @@ def ensure_relay_installation(*, client=None, config=None):
     return installation, True
 
 
+def scoped_relay_client(installation, *, config=None):
+    """Build a relay client authenticated as a specific installation.
+
+    Enrolled on-prem backends keep their scoped access token on the
+    RelayInstallation row — the .env only carries the single-use enrollment
+    (license) key, which is consumed on first boot. Installation-scoped calls
+    (status sync, connector-certificate issuance) must therefore read the
+    access token from the row; the process config's access token is empty in
+    the enroll model, which would force an admin-token fallback the on-prem
+    backend cannot satisfy.
+    """
+    base = config or relay_config()
+    scoped = replace(
+        base,
+        access_token=installation.access_token or base.access_token,
+        installation_id=installation.installation_id or base.installation_id,
+    )
+    return RelayControlClient(config=scoped)
+
+
 def sync_relay_installation(installation, *, client=None):
     if installation is None:
         return None
-    relay_client = client or RelayControlClient()
+    relay_client = client or scoped_relay_client(installation)
     relay_installation = relay_client.get_installation(installation.installation_id)
     installation.shop_name = relay_installation.get("shop_name") or installation.shop_name
     installation.relay_enabled = bool(relay_installation.get("relay_enabled", False))

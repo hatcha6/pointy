@@ -23,12 +23,12 @@ from .discovery import (
 from .models import RelayInstallation, ShopSettings
 from .permissions import HasPointyPermission
 from .relay import (
-    RelayControlClient,
     RelayControlError,
     consume_connector_setup_token,
     ensure_relay_installation,
     issue_pairing_ticket,
     relay_status_payload,
+    scoped_relay_client,
     sync_relay_installation,
 )
 from .relay_serializers import (
@@ -273,7 +273,7 @@ class RelayConnectorConfigView(views.APIView):
         if not csr_pem.strip():
             return None
         try:
-            return RelayControlClient().issue_connector_certificate(
+            return scoped_relay_client(installation).issue_connector_certificate(
                 installation_id=installation.installation_id,
                 csr_pem=csr_pem,
             )
