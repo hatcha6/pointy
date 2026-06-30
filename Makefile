@@ -120,7 +120,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-load-test backend-stress-test backend-endurance-test \
 	backend-shell backend-superuser backend-test backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
-	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-provision \
+	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable postgres-ready clean
 
 help: ## Show available commands.
@@ -477,6 +477,20 @@ relay-remote-mint: ## Mint an enrollment token on the remote relay for dev-remot
 	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
 		$(GO) run ./cmd/pointy-relay enrollment mint \
 		--count 1 \
+		--control-url "https://$(RELAY_REMOTE_HOST)" \
+		--admin-token "$(RELAY_REMOTE_ADMIN_TOKEN)"
+
+relay-remote-activate: backend-env backend-install ## Activate the locally-enrolled install's subscription on the REMOTE relay (operator step; needs RELAY_REMOTE_ADMIN_TOKEN).
+	@test -n "$(RELAY_REMOTE_ADMIN_TOKEN)" || { \
+		printf "\nSet RELAY_REMOTE_ADMIN_TOKEN to the $(RELAY_REMOTE_HOST) admin token (operator only):\n"; \
+		printf "  make relay-remote-activate RELAY_REMOTE_ADMIN_TOKEN=...\n\n"; \
+		exit 1; \
+	}
+	@id=$$($(MANAGE) shell -c "from apps.core.models import RelayInstallation as R; i=R.load(); print(i.installation_id if i else '')" 2>/dev/null | tail -n 1); \
+	test -n "$$id" || { printf "\nNo local RelayInstallation yet — run 'make dev-remote' once to enroll first.\n\n"; exit 1; }; \
+	printf "Activating subscription for %s on $(RELAY_REMOTE_HOST)...\n" "$$id"; \
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
+		$(GO) run ./cmd/pointy-relay subscription enable "$$id" \
 		--control-url "https://$(RELAY_REMOTE_HOST)" \
 		--admin-token "$(RELAY_REMOTE_ADMIN_TOKEN)"
 
