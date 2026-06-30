@@ -1816,6 +1816,113 @@ func TestHTTPRelayInstallationStatusWithInstallationAccessToken(t *testing.T) {
 	}
 }
 
+func enrollTestRequest(t *testing.T, method, target, body string, headers map[string]string) *http.Request {
+	t.Helper()
+	// Always a non-nil body reader: direct ServeHTTP (unlike the real net/http
+	// server) does not normalise a nil Body to http.NoBody, so a nil here would
+	// panic the handler's json.Decode.
+	request, err := http.NewRequest(method, target, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range headers {
+		request.Header.Set(key, value)
+	}
+	return request
+}
+
+func TestHTTPRelayEnrollmentMintRedeemSingleUse(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, err := control.NewFileStore(filepath.Join(t.TempDir(), "installations.json"), testClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := HTTPServer{
+		Store:      store,
+		Hub:        NewHub(),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminToken: "admin-token",
+		Clock:      testClock{now: now},
+	}
+
+	// Minting requires the admin token.
+	noAuth := httptest.NewRecorder()
+	server.ServeHTTP(noAuth, enrollTestRequest(t, http.MethodPost, "http://relay.test/v1/enrollment/tokens", `{"count":2}`, nil))
+	if noAuth.Result().StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 minting without admin, got %d", noAuth.Result().StatusCode)
+	}
+
+	// Mint two license keys.
+	mint := httptest.NewRecorder()
+	server.ServeHTTP(mint, enrollTestRequest(t, http.MethodPost, "http://relay.test/v1/enrollment/tokens", `{"count":2}`, map[string]string{"Authorization": "Bearer admin-token"}))
+	if mint.Result().StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 minting, got %d", mint.Result().StatusCode)
+	}
+	var minted struct {
+		Tokens []string `json:"tokens"`
+		Count  int      `json:"count"`
+	}
+	if err := json.NewDecoder(mint.Result().Body).Decode(&minted); err != nil {
+		t.Fatal(err)
+	}
+	if minted.Count != 2 || len(minted.Tokens) != 2 {
+		t.Fatalf("expected 2 license keys, got %d", len(minted.Tokens))
+	}
+	license := minted.Tokens[0]
+
+	// Redeem one license (public, NO admin token) — returns scoped credentials.
+	enroll := httptest.NewRecorder()
+	server.ServeHTTP(enroll, enrollTestRequest(t, http.MethodPost, "http://relay.test/v1/enroll", `{"shop_name":"متجر الاختبار"}`, map[string]string{EnrollmentTokenHeader: license}))
+	if enroll.Result().StatusCode != http.StatusCreated {
+		content, _ := io.ReadAll(enroll.Result().Body)
+		t.Fatalf("expected 201 enrolling, got %d: %s", enroll.Result().StatusCode, content)
+	}
+	var enrolled struct {
+		Installation   map[string]any `json:"installation"`
+		ConnectorToken string         `json:"connector_token"`
+		AccessToken    string         `json:"access_token"`
+	}
+	if err := json.NewDecoder(enroll.Result().Body).Decode(&enrolled); err != nil {
+		t.Fatal(err)
+	}
+	if enrolled.ConnectorToken == "" || enrolled.AccessToken == "" {
+		t.Fatal("expected scoped connector + access tokens in the enroll response")
+	}
+	installationID, _ := enrolled.Installation["id"].(string)
+	if installationID == "" {
+		t.Fatal("expected an installation id in the enroll response")
+	}
+	// The created installation must be INERT — enrolling never auto-activates.
+	created, err := store.GetInstallation(context.Background(), installationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.RelayEnabled || created.SubscriptionActive || created.AIEnabled {
+		t.Fatalf("enrolled installation must start inert, got %+v", created)
+	}
+
+	// Single-use: redeeming the same license again is rejected.
+	reuse := httptest.NewRecorder()
+	server.ServeHTTP(reuse, enrollTestRequest(t, http.MethodPost, "http://relay.test/v1/enroll", "", map[string]string{EnrollmentTokenHeader: license}))
+	if reuse.Result().StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 reusing a spent license, got %d", reuse.Result().StatusCode)
+	}
+
+	// A bogus license is rejected.
+	bogus := httptest.NewRecorder()
+	server.ServeHTTP(bogus, enrollTestRequest(t, http.MethodPost, "http://relay.test/v1/enroll", "", map[string]string{EnrollmentTokenHeader: "pte1.not-a-real-license"}))
+	if bogus.Result().StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for a bogus license, got %d", bogus.Result().StatusCode)
+	}
+
+	// The second minted license is independent and still works.
+	second := httptest.NewRecorder()
+	server.ServeHTTP(second, enrollTestRequest(t, http.MethodPost, "http://relay.test/v1/enroll", "", map[string]string{EnrollmentTokenHeader: minted.Tokens[1]}))
+	if second.Result().StatusCode != http.StatusCreated {
+		t.Fatalf("expected 201 enrolling with the second license, got %d", second.Result().StatusCode)
+	}
+}
+
 func TestHTTPRelayChecksPresenceWhenConnectorIsNotOnLocalNode(t *testing.T) {
 	store, provisioned := provisionRelayInstallation(t)
 	presence := &staticPresence{

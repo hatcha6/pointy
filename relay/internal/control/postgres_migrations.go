@@ -219,6 +219,26 @@ CREATE TABLE IF NOT EXISTS relay_channel_targets (
 );
 `,
 	},
+	{
+		version: 9,
+		name:    "enrollment tokens",
+		sql: `
+CREATE TABLE IF NOT EXISTS relay_enrollment_tokens (
+	token_hash text PRIMARY KEY,
+	expires_at timestamptz,
+	consumed_at timestamptz,
+	created_installation_id text,
+	created_at timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS relay_enrollment_tokens_created_at_idx
+	ON relay_enrollment_tokens (created_at DESC);
+
+CREATE INDEX IF NOT EXISTS relay_enrollment_tokens_unconsumed_idx
+	ON relay_enrollment_tokens (expires_at)
+	WHERE consumed_at IS NULL;
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

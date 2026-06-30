@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	ConnectorTokenPrefix = "ptc1"
-	AccessTokenPrefix    = "ptr1"
-	TicketTokenPrefix    = "ptt1"
-	RefreshTokenPrefix   = "ptrf1"
+	ConnectorTokenPrefix  = "ptc1"
+	AccessTokenPrefix     = "ptr1"
+	TicketTokenPrefix     = "ptt1"
+	RefreshTokenPrefix    = "ptrf1"
+	EnrollmentTokenPrefix = "pte1"
 )
 
 var (
@@ -60,6 +61,18 @@ func NewToken(prefix, installationID string) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%s.%s.%s", prefix, installationID, secret), nil
+}
+
+// NewEnrollmentToken mints a standalone single-use enrollment ("license") token.
+// Unlike installation tokens it is not bound to an installation id: it is
+// redeemed exactly once to CREATE an installation, then permanently consumed.
+// It is looked up by hash, so the format is simply prefix.secret.
+func NewEnrollmentToken() (string, error) {
+	secret, err := randomSecret(32)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s.%s", EnrollmentTokenPrefix, secret), nil
 }
 
 func ParseToken(raw string) (ParsedToken, error) {

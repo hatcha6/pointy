@@ -33,6 +33,7 @@ class RelayControlConfig:
     access_token: str
     installation_id: str
     connector_token: str
+    enrollment_token: str
     timeout_seconds: int
     ai_timeout_seconds: int
     image_search_timeout_seconds: int
@@ -51,6 +52,7 @@ def relay_config():
         access_token=str(getattr(settings, "POINTY_RELAY_ACCESS_TOKEN", "")).strip(),
         installation_id=str(getattr(settings, "POINTY_RELAY_INSTALLATION_ID", "")).strip(),
         connector_token=str(getattr(settings, "POINTY_RELAY_CONNECTOR_TOKEN", "")).strip(),
+        enrollment_token=str(getattr(settings, "POINTY_RELAY_ENROLLMENT_TOKEN", "")).strip(),
         timeout_seconds=max(
             int(getattr(settings, "POINTY_RELAY_REQUEST_TIMEOUT_SECONDS", 5)),
             1,
@@ -81,11 +83,16 @@ def validate_relay_config(config):
         raise ImproperlyConfigured("POINTY_RELAY_PUBLIC_API_URL is required.")
     if not config.connector_address:
         raise ImproperlyConfigured("POINTY_RELAY_CONNECTOR_ADDR is required.")
-    if not config.admin_token and not (config.access_token and config.installation_id):
+    if (
+        not config.admin_token
+        and not (config.access_token and config.installation_id)
+        and not config.enrollment_token
+    ):
         raise ImproperlyConfigured(
-            "Relay authentication is required: set POINTY_RELAY_ACCESS_TOKEN and "
-            "POINTY_RELAY_INSTALLATION_ID (scoped per-installation credentials for "
-            "on-prem) or POINTY_RELAY_ADMIN_TOKEN (operator/development only)."
+            "Relay authentication is required: set POINTY_RELAY_ENROLLMENT_TOKEN (the "
+            "shop's license key, redeemed on first boot), POINTY_RELAY_ACCESS_TOKEN + "
+            "POINTY_RELAY_INSTALLATION_ID (already-provisioned scoped credentials), or "
+            "POINTY_RELAY_ADMIN_TOKEN (operator/development only)."
         )
     parsed = urlparse(config.control_url)
     if parsed.scheme != "https" and not config.allow_insecure_control:
@@ -113,6 +120,18 @@ class RelayControlClient:
                 "ai_enabled": False,
             },
             admin=True,
+        )
+
+    def enroll_installation(self, *, enrollment_token, shop_name):
+        """Redeem a single-use enrollment (license) key for a brand-new
+        installation and its scoped credentials. Authenticated solely by the
+        license key, so an on-prem backend self-enrolls without the admin token.
+        """
+        return self._request(
+            "POST",
+            "/v1/enroll",
+            body={"shop_name": shop_name},
+            enrollment_token=enrollment_token,
         )
 
     def _installation_auth(self):
@@ -261,7 +280,9 @@ class RelayControlClient:
         except error.URLError as exc:
             raise RelayControlError(f"relay AI request failed: {exc.reason}") from exc
 
-    def _request(self, method, path, *, body=None, admin=False, relay_token="", timeout=None):
+    def _request(
+        self, method, path, *, body=None, admin=False, relay_token="", enrollment_token="", timeout=None
+    ):
         data = None
         headers = {"Accept": "application/json"}
         if body is not None:
@@ -271,6 +292,8 @@ class RelayControlClient:
             headers["Authorization"] = f"Bearer {self.config.admin_token}"
         if relay_token:
             headers["X-Pointy-Relay-Token"] = relay_token
+        if enrollment_token:
+            headers["X-Pointy-Enrollment-Token"] = enrollment_token
 
         url = urljoin(self.config.control_url.rstrip("/") + "/", path.lstrip("/"))
         http_request = request.Request(url, data=data, headers=headers, method=method)
@@ -384,6 +407,23 @@ def parse_relay_datetime(value):
     return parsed
 
 
+def _persist_provisioned(provisioned, *, public_api_url, connector_address, shop_settings):
+    relay_installation = provisioned["installation"]
+    return RelayInstallation.objects.create(
+        installation_id=relay_installation["id"],
+        shop_name=relay_installation.get("shop_name") or shop_settings.shop_name,
+        relay_public_api_url=public_api_url,
+        relay_connector_address=connector_address,
+        connector_token=provisioned["connector_token"],
+        access_token=provisioned["access_token"],
+        relay_enabled=bool(relay_installation.get("relay_enabled", False)),
+        subscription_active=bool(relay_installation.get("subscription_active", False)),
+        ai_enabled=bool(relay_installation.get("ai_enabled", False)),
+        subscription_ends_at=parse_relay_datetime(relay_installation.get("subscription_ends_at")),
+        last_synced_at=timezone.now(),
+    )
+
+
 def ensure_relay_installation(*, client=None, config=None):
     installation = RelayInstallation.load()
     if installation is not None:
@@ -407,22 +447,30 @@ def ensure_relay_installation(*, client=None, config=None):
         )
         return installation, True
 
+    # On-prem first boot: redeem the shop's single-use license key for scoped
+    # credentials. No admin token, no operator machine — the backend self-enrolls.
+    if cfg.enrollment_token:
+        relay_client = client or RelayControlClient()
+        provisioned = relay_client.enroll_installation(
+            enrollment_token=cfg.enrollment_token,
+            shop_name=shop_settings.shop_name,
+        )
+        installation = _persist_provisioned(
+            provisioned,
+            public_api_url=relay_client.config.public_api_url,
+            connector_address=relay_client.config.connector_address,
+            shop_settings=shop_settings,
+        )
+        return installation, True
+
     # Operator/development: self-provision through the admin API.
     relay_client = client or RelayControlClient()
     provisioned = relay_client.provision_installation(shop_name=shop_settings.shop_name)
-    relay_installation = provisioned["installation"]
-    installation = RelayInstallation.objects.create(
-        installation_id=relay_installation["id"],
-        shop_name=relay_installation.get("shop_name") or shop_settings.shop_name,
-        relay_public_api_url=relay_client.config.public_api_url,
-        relay_connector_address=relay_client.config.connector_address,
-        connector_token=provisioned["connector_token"],
-        access_token=provisioned["access_token"],
-        relay_enabled=bool(relay_installation.get("relay_enabled", False)),
-        subscription_active=bool(relay_installation.get("subscription_active", False)),
-        ai_enabled=bool(relay_installation.get("ai_enabled", False)),
-        subscription_ends_at=parse_relay_datetime(relay_installation.get("subscription_ends_at")),
-        last_synced_at=timezone.now(),
+    installation = _persist_provisioned(
+        provisioned,
+        public_api_url=relay_client.config.public_api_url,
+        connector_address=relay_client.config.connector_address,
+        shop_settings=shop_settings,
     )
     return installation, True
 

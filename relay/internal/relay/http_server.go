@@ -34,6 +34,7 @@ const (
 	RelayedRequestHeader  = "X-Pointy-Relayed-Request"
 	NodeProxyTokenHeader  = "X-Pointy-Relay-Node-Token"
 	NodeProxyMarkerHeader = "X-Pointy-Relay-Node-Proxy"
+	EnrollmentTokenHeader = "X-Pointy-Enrollment-Token"
 )
 
 var adminConsoleTemplate = template.Must(template.New("relay-admin").Parse(`<!doctype html>
@@ -519,6 +520,18 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withAdmin(w, r, s.handleProvisionInstallation)
+	case r.URL.Path == "/v1/enrollment/tokens" && r.Method == http.MethodPost:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleMintEnrollmentTokens)
+	case r.URL.Path == "/v1/enroll" && r.Method == http.MethodPost:
+		if !(s.RouteMode.allowsPublic() || s.RouteMode.allowsAdmin()) {
+			writeNotFound(w)
+			return
+		}
+		s.handleEnroll(w, r)
 	case strings.HasPrefix(r.URL.Path, "/v1/installations/"):
 		s.handleInstallationRoutes(w, r)
 	case r.URL.Path == "/v1/fleet" && r.Method == http.MethodGet:
@@ -1036,6 +1049,103 @@ func (s HTTPServer) handleProvisionInstallation(w http.ResponseWriter, r *http.R
 		s.logger().Error("relay installation provisioning failed", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "provisioning failed"})
 		return
+	}
+	writeJSON(w, http.StatusCreated, provisionedInstallationPayload(provisioned, s.clock().Now()))
+}
+
+// handleMintEnrollmentTokens (admin) mints N single-use enrollment ("license")
+// tokens and returns the raw values once. The operator ships one token per shop;
+// the on-prem backend redeems it at /v1/enroll.
+func (s HTTPServer) handleMintEnrollmentTokens(w http.ResponseWriter, r *http.Request) {
+	store, ok := s.Store.(control.EnrollmentStore)
+	if !ok {
+		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "enrollment is not supported"})
+		return
+	}
+	var request struct {
+		Count     int    `json:"count"`
+		ExpiresIn string `json:"expires_in,omitempty"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&request); err != nil && !errors.Is(err, io.EOF) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	if request.Count > 1000 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "count must be between 1 and 1000"})
+		return
+	}
+	mintRequest := control.MintEnrollmentTokensRequest{Count: request.Count}
+	if expiresIn := strings.TrimSpace(request.ExpiresIn); expiresIn != "" {
+		duration, err := time.ParseDuration(expiresIn)
+		if err != nil || duration <= 0 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "expires_in must be a positive Go duration (e.g. 720h)"})
+			return
+		}
+		expiresAt := s.clock().Now().Add(duration)
+		mintRequest.ExpiresAt = &expiresAt
+	}
+	tokens, err := store.MintEnrollmentTokens(r.Context(), mintRequest)
+	if err != nil {
+		s.logger().Error("enrollment mint failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "enrollment mint failed"})
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"tokens":     tokens,
+		"count":      len(tokens),
+		"expires_at": mintRequest.ExpiresAt,
+	})
+}
+
+// handleEnroll (public) redeems a single-use enrollment token for a brand-new
+// installation + its scoped credentials. The token is consumed atomically, and
+// the created installation starts inert (relay/AI/subscription OFF) — the
+// operator activates it later. Authenticated solely by the enrollment token in
+// the X-Pointy-Enrollment-Token header, so an on-prem backend self-enrolls
+// without the company admin token.
+func (s HTTPServer) handleEnroll(w http.ResponseWriter, r *http.Request) {
+	store, ok := s.Store.(control.EnrollmentStore)
+	if !ok {
+		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "enrollment is not supported"})
+		return
+	}
+	rawToken := strings.TrimSpace(r.Header.Get(EnrollmentTokenHeader))
+	if rawToken == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "enrollment token required"})
+		return
+	}
+	// Defence-in-depth rate limit (tokens are 256-bit, so this is DoS hygiene,
+	// not the primary guard); reuses the ticket-issue policy, keyed per token.
+	if limited, _, _ := s.enforceRateLimit(
+		w, r, "enroll", "enroll:"+control.TokenHash(rawToken), s.TicketIssueRateLimit,
+	); limited {
+		return
+	}
+	var request struct {
+		BusinessID string `json:"business_id,omitempty"`
+		ShopName   string `json:"shop_name,omitempty"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&request); err != nil && !errors.Is(err, io.EOF) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	provisioned, err := store.RedeemEnrollmentToken(r.Context(), rawToken, control.ProvisionInstallationRequest{
+		BusinessID: strings.TrimSpace(request.BusinessID),
+		ShopName:   strings.TrimSpace(request.ShopName),
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, control.ErrEnrollmentTokenInvalid),
+			errors.Is(err, control.ErrEnrollmentTokenConsumed),
+			errors.Is(err, control.ErrEnrollmentTokenExpired):
+			s.metrics().RecordCredentialRejected()
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "enrollment token rejected"})
+			return
+		default:
+			s.logger().Error("enrollment redeem failed", "error", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "enrollment failed"})
+			return
+		}
 	}
 	writeJSON(w, http.StatusCreated, provisionedInstallationPayload(provisioned, s.clock().Now()))
 }

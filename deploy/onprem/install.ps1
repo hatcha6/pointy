@@ -77,16 +77,47 @@ foreach ($img in $images) {
 }
 
 if (-not (Test-Path ".env")) {
+    # Every installation needs a license key, shipped by the provider as a
+    # license.key file placed next to this installer. No license, no install.
+    $licenseFile = if ($env:POINTY_LICENSE_FILE) { $env:POINTY_LICENSE_FILE } else { "license.key" }
+    if (-not (Test-Path $licenseFile)) {
+        Write-Error "No license key found at .\$licenseFile - place the license.key file from your provider next to this installer and re-run."
+        exit 1
+    }
+    $licenseKey = (Get-Content $licenseFile -Raw).Trim()
+    if (-not $licenseKey) {
+        Write-Error "$licenseFile is empty."
+        exit 1
+    }
+
     Copy-Item ".env.example" ".env"
-    Write-Host ""
-    Write-Host "A fresh .env was created from .env.example." -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "  >> Edit .env now: set the LAN IP, database/Redis passwords, Django"
-    Write-Host "     secret, and relay settings. Replace every 'replace-with-...'"
-    Write-Host "     placeholder, and point the backup drives at real Windows folders. <<"
-    Write-Host ""
-    Write-Host "Then re-run .\install.ps1 to start the stack."
-    exit 0
+
+    function Set-EnvVar([string]$Key, [string]$Value) {
+        $pattern = "^$([regex]::Escape($Key))="
+        $lines = Get-Content ".env"
+        if ($lines -match $pattern) {
+            ($lines | ForEach-Object { if ($_ -match $pattern) { "$Key=$Value" } else { $_ } }) |
+                Set-Content ".env"
+        } else {
+            Add-Content ".env" "$Key=$Value"
+        }
+    }
+
+    function New-Secret([int]$Bytes) {
+        $buffer = New-Object 'System.Byte[]' $Bytes
+        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($buffer)
+        ($buffer | ForEach-Object { $_.ToString("x2") }) -join ""
+    }
+
+    $pgPassword = New-Secret 24
+    Set-EnvVar "POINTY_POSTGRES_PASSWORD" $pgPassword
+    Set-EnvVar "POINTY_DATABASE_URL" "postgres://pointy:$pgPassword@postgres:5432/pointy"
+    Set-EnvVar "DJANGO_SECRET_KEY" (New-Secret 48)
+    Set-EnvVar "POINTY_RELAY_CONNECTOR_SETUP_TOKEN" (New-Secret 24)
+    Set-EnvVar "POINTY_RELAY_ENROLLMENT_TOKEN" $licenseKey
+    Set-EnvVar "POINTY_REQUIRE_LICENSE" "true"
+
+    Write-Host "==> Created .env: generated local secrets and applied your license key." -ForegroundColor Green
 }
 
 Write-Host "==> Starting the Pointy stack..."

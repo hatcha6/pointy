@@ -74,6 +74,7 @@ from apps.core.views import (
     logout_view,
     me_view,
     password_change_view,
+    enrollment_status_view,
     setup_initial_admin_view,
     setup_status_view,
 )
@@ -228,6 +229,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/setup/status/", setup_status_view, name="setup-status"),
     path("api/setup/admin/", setup_initial_admin_view, name="setup-initial-admin"),
+    path("api/enrollment/status/", enrollment_status_view, name="enrollment-status"),
     path("api/auth/login/", login_view, name="auth-login"),
     path("api/auth/logout/", logout_view, name="auth-logout"),
     path("api/auth/me/", me_view, name="auth-me"),

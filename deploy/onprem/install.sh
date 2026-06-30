@@ -85,17 +85,39 @@ for tar in "${images[@]}"; do
 done
 
 if [ ! -f .env ]; then
+  # Every installation needs a license key, shipped by the provider as a
+  # license.key file placed next to this installer. No license, no install.
+  LICENSE_FILE="${POINTY_LICENSE_FILE:-license.key}"
+  [ -f "$LICENSE_FILE" ] \
+    || err "No license key found at ./$LICENSE_FILE — place the license.key file from your provider next to this installer and re-run."
+  LICENSE_KEY="$(tr -d '[:space:]' < "$LICENSE_FILE")"
+  [ -n "$LICENSE_KEY" ] || err "$LICENSE_FILE is empty."
+  command -v openssl >/dev/null 2>&1 || err "openssl is required to generate secrets. Install it and re-run."
+
   cp .env.example .env
-  cat <<'MSG'
 
-A fresh .env was created from .env.example.
+  # Replace KEY=… in .env (or append). awk avoids GNU/BSD sed -i differences and
+  # sed metacharacter escaping; our values are hex/URLs with no '=' so FS='=' is safe.
+  set_env_var() {
+    local key="$1" value="$2" tmp
+    if grep -qE "^${key}=" .env; then
+      tmp="$(mktemp)"
+      awk -v k="$key" -v v="$value" 'BEGIN{FS=OFS="="} $1==k{print k FS v; next} {print}' .env >"$tmp"
+      mv "$tmp" .env
+    else
+      printf '%s=%s\n' "$key" "$value" >>.env
+    fi
+  }
 
-  >> Edit .env now: set the LAN IP, database/Redis passwords, Django secret,
-     and relay settings. Replace every "replace-with-…" placeholder. <<
+  pg_password="$(openssl rand -hex 24)"
+  set_env_var POINTY_POSTGRES_PASSWORD "$pg_password"
+  set_env_var POINTY_DATABASE_URL "postgres://pointy:${pg_password}@postgres:5432/pointy"
+  set_env_var DJANGO_SECRET_KEY "$(openssl rand -hex 48)"
+  set_env_var POINTY_RELAY_CONNECTOR_SETUP_TOKEN "$(openssl rand -hex 24)"
+  set_env_var POINTY_RELAY_ENROLLMENT_TOKEN "$LICENSE_KEY"
+  set_env_var POINTY_REQUIRE_LICENSE "true"
 
-Then re-run ./install.sh to start the stack.
-MSG
-  exit 0
+  echo "==> Created .env: generated local secrets and applied your license key."
 fi
 
 echo "==> Starting the Pointy stack…"

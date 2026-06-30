@@ -15,6 +15,7 @@ def main():
         require_secret("DJANGO_SECRET_KEY")
         wait_for_dependencies()
         run_migrations()
+        ensure_license()
         collect_static()
         exec_process(web_command(args))
     if command == "worker":
@@ -56,6 +57,19 @@ def wait_for_dependencies():
 
 def run_migrations():
     subprocess.check_call(["python", "manage.py", "migrate", "--noinput"])
+
+
+def ensure_license():
+    """Best-effort: redeem the configured license key on first boot so the API
+    unlocks. NEVER fatal — if the relay is unreachable the container still starts;
+    the license gate keeps the API locked and the connector (or a later boot)
+    retries enrollment. Only runs when licensing is required (on-prem)."""
+    if os.environ.get("POINTY_REQUIRE_LICENSE", "").lower() not in {"1", "true", "yes", "on"}:
+        return
+    try:
+        subprocess.run(["python", "manage.py", "relay_enroll"], check=False)
+    except Exception as exc:  # noqa: BLE001 — startup must never block on enrollment
+        print(f"relay_enroll skipped: {exc}", file=sys.stderr)
 
 
 def collect_static():

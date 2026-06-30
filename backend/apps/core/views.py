@@ -54,6 +54,18 @@ def setup_status_view(request):
     return Response({"requires_onboarding": initial_admin_setup_required()})
 
 
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def enrollment_status_view(request):
+    """Report whether this installation still needs a license (enrollment). The
+    frontend shows a "license required" screen while this is true; the license
+    gate (apps.core.license_gate) returns 503 for the rest of the API until then.
+    """
+    from .models import RelayInstallation
+
+    return Response({"requires_enrollment": RelayInstallation.load() is None})
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 @throttle_classes([SetupRateThrottle])

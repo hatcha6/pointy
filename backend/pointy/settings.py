@@ -30,6 +30,7 @@ env = environ.Env(
     POINTY_DISCOVERY_API_PORT=(int, 8000),
     POINTY_DISCOVERY_TRUST_PROXY_HEADERS=(bool, False),
     POINTY_ALLOW_PRIVATE_HOSTS=(bool, False),
+    POINTY_REQUIRE_LICENSE=(bool, False),
     POINTY_PRICE_CHECKER_AUTOSTART=(bool, False),
     POINTY_PRICE_CHECKER_TCP_ENABLED=(bool, True),
     POINTY_PRICE_CHECKER_TCP_PORT=(int, 9101),
@@ -64,6 +65,9 @@ ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
 # real policy: accept any private/loopback/link-local Host (any LAN address the
 # server might have) plus the explicitly listed names, and reject public hosts.
 POINTY_ALLOW_PRIVATE_HOSTS = env("POINTY_ALLOW_PRIVATE_HOSTS")
+# On-prem only: refuse to serve the API until the installation is licensed
+# (enrolled). Off by default, so development and tests are unaffected.
+POINTY_REQUIRE_LICENSE = env("POINTY_REQUIRE_LICENSE")
 if POINTY_ALLOW_PRIVATE_HOSTS:
     POINTY_LAN_ALLOWED_HOST_NAMES = sorted(
         {host.lower() for host in ALLOWED_HOSTS} | {"localhost", "127.0.0.1", "backend"}
@@ -127,6 +131,16 @@ if POINTY_ALLOW_PRIVATE_HOSTS:
     _security_mw = "django.middleware.security.SecurityMiddleware"
     _insert_at = MIDDLEWARE.index(_security_mw) + 1 if _security_mw in MIDDLEWARE else 0
     MIDDLEWARE.insert(_insert_at, "apps.core.host_validation.PrivateNetworkHostMiddleware")
+
+if POINTY_REQUIRE_LICENSE:
+    # Gate the API behind a valid license (enrollment). Inserted right after
+    # CommonMiddleware so request.path is resolved while auth/CSRF work is skipped
+    # for the 503. Off by default — only on-prem deployments set this.
+    _common_mw = "django.middleware.common.CommonMiddleware"
+    _license_at = (
+        MIDDLEWARE.index(_common_mw) + 1 if _common_mw in MIDDLEWARE else len(MIDDLEWARE)
+    )
+    MIDDLEWARE.insert(_license_at, "apps.core.license_gate.LicenseGateMiddleware")
 
 ROOT_URLCONF = "pointy.urls"
 
@@ -362,6 +376,11 @@ POINTY_RELAY_ADMIN_TOKEN = env("POINTY_RELAY_ADMIN_TOKEN", default="")
 POINTY_RELAY_ACCESS_TOKEN = env("POINTY_RELAY_ACCESS_TOKEN", default="")
 POINTY_RELAY_INSTALLATION_ID = env("POINTY_RELAY_INSTALLATION_ID", default="")
 POINTY_RELAY_CONNECTOR_TOKEN = env("POINTY_RELAY_CONNECTOR_TOKEN", default="")
+# Single-use license key the shop ships with its install (a "license.key" file).
+# Redeemed once on first boot to self-enroll: the relay returns the scoped
+# access/connector tokens, the backend persists them, and the key is spent. The
+# backend serves nothing until enrolled (see apps.core.license_gate).
+POINTY_RELAY_ENROLLMENT_TOKEN = env("POINTY_RELAY_ENROLLMENT_TOKEN", default="")
 POINTY_RELAY_BUSINESS_ID = env("POINTY_RELAY_BUSINESS_ID", default="")
 POINTY_RELAY_REQUEST_TIMEOUT_SECONDS = env("POINTY_RELAY_REQUEST_TIMEOUT_SECONDS")
 POINTY_RELAY_AI_REQUEST_TIMEOUT_SECONDS = env("POINTY_RELAY_AI_REQUEST_TIMEOUT_SECONDS")

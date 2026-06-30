@@ -219,40 +219,7 @@ func (s *PostgresStore) ProvisionInstallation(
 		UpdateStatus:       "idle",
 	}
 
-	_, err = s.pool.Exec(
-		ctx,
-		`INSERT INTO relay_installations (
-			id,
-			business_id,
-			shop_name,
-			connector_token_hash,
-			access_token_hash,
-			connector_certificate_fingerprint,
-			connector_certificate_serial,
-			connector_certificate_expires_at,
-			relay_enabled,
-			ai_enabled,
-			subscription_active,
-			subscription_ends_at,
-			created_at,
-			updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-		installation.ID,
-		installation.BusinessID,
-		installation.ShopName,
-		installation.ConnectorTokenHash,
-		installation.AccessTokenHash,
-		installation.ConnectorCertificateFingerprint,
-		installation.ConnectorCertificateSerial,
-		installation.ConnectorCertificateExpiresAt,
-		installation.RelayEnabled,
-		installation.AIEnabled,
-		installation.SubscriptionActive,
-		installation.SubscriptionEndsAt,
-		installation.CreatedAt,
-		installation.UpdatedAt,
-	)
-	if err != nil {
+	if _, err := s.pool.Exec(ctx, installationInsertSQL, installationInsertArgs(installation)...); err != nil {
 		return ProvisionedInstallation{}, err
 	}
 

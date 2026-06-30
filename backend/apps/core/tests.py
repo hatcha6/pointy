@@ -74,6 +74,22 @@ class FakeRelayControlClient:
         self.provisioned_shop_name = ""
         self.issued_ticket_request = None
         self.issued_connector_certificate_request = None
+        self.enrolled_with_token = None
+
+    def enroll_installation(self, *, enrollment_token, shop_name):
+        self.enrolled_with_token = enrollment_token
+        return {
+            "installation": {
+                "id": "installation-1",
+                "shop_name": shop_name,
+                "relay_enabled": False,
+                "subscription_active": False,
+                "ai_enabled": False,
+                "subscription_ends_at": None,
+            },
+            "connector_token": "ptc1.installation-1.connector-secret",
+            "access_token": "ptr1.installation-1.access-secret",
+        }
 
     def provision_installation(self, *, shop_name):
         self.provisioned_shop_name = shop_name
@@ -1120,6 +1136,80 @@ class RelayBackendApiTests(TestCase):
         self.assertEqual(
             response.data["connector_token"], "ptc1.installation-1.connector-secret"
         )
+
+    @override_settings(
+        POINTY_RELAY_CONTROL_URL="https://relay.example",
+        POINTY_RELAY_PUBLIC_API_URL="https://relay.example",
+        POINTY_RELAY_CONNECTOR_ADDR="relay.example:443",
+        POINTY_RELAY_ADMIN_TOKEN="",
+        POINTY_RELAY_ACCESS_TOKEN="",
+        POINTY_RELAY_INSTALLATION_ID="",
+        POINTY_RELAY_ENROLLMENT_TOKEN="license-key-123",
+    )
+    def test_ensure_relay_installation_enrolls_with_license_key(self):
+        from apps.core.relay import ensure_relay_installation
+
+        fake_relay = FakeRelayControlClient()
+        installation, created = ensure_relay_installation(client=fake_relay)
+        self.assertTrue(created)
+        self.assertEqual(fake_relay.enrolled_with_token, "license-key-123")
+        self.assertEqual(installation.installation_id, "installation-1")
+        self.assertEqual(installation.access_token, "ptr1.installation-1.access-secret")
+        self.assertEqual(
+            installation.connector_token, "ptc1.installation-1.connector-secret"
+        )
+        # Enrolling never auto-activates — inert until the operator flips it.
+        self.assertFalse(installation.relay_enabled)
+        self.assertFalse(installation.subscription_active)
+        # The admin provision endpoint was NOT called.
+        self.assertEqual(fake_relay.provisioned_shop_name, "")
+
+    @override_settings(
+        POINTY_RELAY_CONTROL_URL="https://relay.example",
+        POINTY_RELAY_PUBLIC_API_URL="https://relay.example",
+        POINTY_RELAY_CONNECTOR_ADDR="relay.example:443",
+        POINTY_RELAY_ADMIN_TOKEN="",
+        POINTY_RELAY_ACCESS_TOKEN="",
+        POINTY_RELAY_INSTALLATION_ID="",
+        POINTY_RELAY_ENROLLMENT_TOKEN="license-key-123",
+    )
+    def test_relay_config_accepts_enrollment_token_only(self):
+        from apps.core.relay import relay_config, validate_relay_config
+
+        validate_relay_config(relay_config())  # must not raise
+
+    def test_license_gate_blocks_until_enrolled(self):
+        from django.test import RequestFactory
+
+        from apps.core.license_gate import LicenseGateMiddleware
+
+        sentinel = object()
+        gate = LicenseGateMiddleware(lambda request: sentinel)
+        factory = RequestFactory()
+
+        # Unlicensed: a normal API path is refused with 503.
+        blocked = gate(factory.get("/api/products/"))
+        self.assertEqual(blocked.status_code, 503)
+        self.assertJSONEqual(
+            blocked.content,
+            {"detail": "license enrollment required", "requires_enrollment": True},
+        )
+
+        # Health, the enrollment probe, the connector bootstrap, and CORS preflight
+        # all pass through even while unlicensed.
+        self.assertIs(gate(factory.get("/healthz/")), sentinel)
+        self.assertIs(gate(factory.get("/api/enrollment/status/")), sentinel)
+        self.assertIs(gate(factory.get("/api/relay/connector-config/")), sentinel)
+        self.assertIs(gate(factory.options("/api/products/")), sentinel)
+
+        # Once an installation exists (licensed), the whole API opens.
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            relay_public_api_url="https://relay.example",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+        )
+        self.assertIs(gate(factory.get("/api/products/")), sentinel)
 
     @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
     def test_connector_config_rejects_relay_tunneled_request(self):

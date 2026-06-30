@@ -437,6 +437,7 @@ type fileStoreData struct {
 	RevokedConnectorCertFingerprints map[string]ConnectorCertificateRevocation `json:"revoked_connector_certificate_fingerprints,omitempty"`
 	Holidays                         map[string]Holiday                        `json:"holidays,omitempty"`
 	ChannelTargets                   map[string]ChannelTarget                  `json:"channel_targets,omitempty"`
+	EnrollmentTokens                 map[string]EnrollmentTokenRecord          `json:"enrollment_tokens,omitempty"`
 }
 
 func NewFileStore(path string, clock Clock) (*FileStore, error) {

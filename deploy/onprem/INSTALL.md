@@ -47,8 +47,12 @@ PowerShell on Windows, with internet access). You only need:
 1. **Extract** this bundle anywhere on the server (e.g. `C:\pointy` or
    `/opt/pointy`).
 
-2. **Run the installer.** It loads the bundled images and, on first run, creates
-   a `.env` for you to edit.
+2. **Drop in your license key.** Every installation needs one. Put the
+   `license.key` file your provider gave you **in this bundle folder**, right next
+   to `install.sh` / `install.ps1`. Without it the installer refuses to proceed.
+
+3. **Run the installer.** It loads the bundled images, generates the local
+   secrets, applies your license key, and starts the stack — no `.env` editing:
 
    - Windows (PowerShell):
      ```powershell
@@ -59,53 +63,49 @@ PowerShell on Windows, with internet access). You only need:
      bash install.sh
      ```
 
-3. **Edit `.env`.** Replace every `replace-with-…` placeholder: the database and
-   Redis passwords, the Django secret key, and the relay settings. On Windows,
-   point the backup drive paths at real connected folders (e.g. `D:/`,
-   `E:/PointyBackups`).
+   On first boot the backend **redeems the license with the relay** (this needs
+   internet once), receives its own scoped credentials, and unlocks. After that it
+   runs fully offline. You do **not** edit `.env` for secrets — the installer fills
+   them. (On Windows you may still point the backup-drive paths in `.env` at real
+   folders, e.g. `D:/`, `E:/PointyBackups`.)
 
-   You do **not** need to enter the server's LAN IP. Cashier tills find the
-   backend by UDP discovery, and the backend accepts connections on whatever
-   private LAN IP each till reaches it on. A **static IP (DHCP reservation) is
-   still recommended** for stability — if the IP changes, tills re-discover
-   automatically but drop briefly — but it is no longer required configuration.
+   You also do **not** need the server's LAN IP — tills find the backend by UDP
+   discovery. A static IP (DHCP reservation) is recommended for stability but not
+   required.
 
 4. **Open the firewall** for inbound **TCP 8000** (API), **UDP 47777**
    (LAN discovery), and **TCP 80** (browser access) so cashier devices can reach
    the server.
 
-5. **Re-run the installer.** With `.env` in place it starts the stack:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File .\install.ps1   # Windows
-   bash install.sh                                          # Linux / macOS
-   ```
+The backend runs migrations on startup, redeems the license, then serves the API
+on port 8000. Celery and the relay connector start once the backend is healthy.
 
-The backend runs database migrations on startup, then serves the API on
-port 8000. Celery and the relay connector start once the backend is healthy.
+### Licensing (how enrollment works)
 
-### Relay enrollment (operator hand-off)
+Each installation is licensed with a **single-use license key**. You (the
+operator) mint keys ahead of time and ship one with each shop's install — the
+shop's server never holds the company-wide relay admin token.
 
-The relay credentials in `.env` are **issued by us (the operator), not generated
-on this server.** An on-prem backend only ever holds its *own* per-installation,
-scoped credentials — never the company-wide relay admin token (which controls the
-whole hosted fleet).
+- **Mint keys** (operator, once, in bulk) on a machine with the relay admin token:
+  ```sh
+  pointy-relay enrollment mint --count 50
+  ```
+  The raw keys are printed only once — save each shop's key as its `license.key`.
 
-Before install, the operator provisions this shop's installation against the
-hosted relay (with the admin token, on a company-controlled host) and hands the
-shop four values to paste into `.env`:
+- **Ship + install:** put one `license.key` in the shop's bundle and run the
+  installer. On first boot the backend redeems the key at the relay, receives its
+  own scoped `access`/`connector` tokens (persisted locally), and the key is
+  **spent** — it can never enroll a second install.
 
-- `POINTY_RELAY_INSTALLATION_ID` — this shop's installation id
-- `POINTY_RELAY_ACCESS_TOKEN` — scoped token for relay calls (AI, tickets, status,
-  and connector-certificate issuance)
-- `POINTY_RELAY_CONNECTOR_TOKEN` — secret the local connector presents to the relay
-- `POINTY_RELAY_CONNECTOR_SETUP_TOKEN` — one-time token the connector uses to
-  bootstrap against this backend over the LAN
+- **Activate:** enrolling does **not** turn the subscription on. Flip a shop live
+  (remote access / AI) when you're ready, per installation, with the operator CLI:
+  ```sh
+  pointy-relay subscription enable <installation-id>
+  ```
 
-The relay URLs (`POINTY_RELAY_CONTROL_URL`, `POINTY_RELAY_PUBLIC_API_URL`,
-`POINTY_RELAY_CONNECTOR_ADDR`, `POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME`) are the
-same for every shop and come pre-filled in the template. With these set, the
-backend enrolls the connector and renews its certificate using only the scoped
-access token — no admin token ever lands on the shop's server.
+Until a backend is licensed it serves nothing but health checks and the enrollment
+path (`POINTY_REQUIRE_LICENSE=true`), so an unlicensed copy won't run. The relay
+URLs are the same for every shop and come pre-filled in the template.
 
 ## Verify
 

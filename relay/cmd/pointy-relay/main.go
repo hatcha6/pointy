@@ -79,6 +79,8 @@ func run(args []string) error {
 		return runProvision(args[1:])
 	case "installations":
 		return runInstallations(args[1:])
+	case "enrollment":
+		return runEnrollment(args[1:])
 	case "subscription":
 		return runSubscription(args[1:])
 	case "fleet":
@@ -1855,6 +1857,46 @@ func runInstallationsProvision(args []string) error {
 	}
 	// Always print the full JSON: the one-time connector and access tokens are
 	// only returned here and the operator must capture them.
+	return printRawJSON(raw)
+}
+
+func runEnrollment(args []string) error {
+	if len(args) == 0 {
+		return usageError("missing enrollment command (mint)")
+	}
+	switch args[0] {
+	case "mint":
+		return runEnrollmentMint(args[1:])
+	default:
+		return usageError("unknown enrollment command %q", args[0])
+	}
+}
+
+// runEnrollmentMint mints single-use enrollment ("license") keys on the relay.
+// Ship one key per shop; the on-prem backend redeems it on first boot. The raw
+// keys are printed only here, so capture them.
+func runEnrollmentMint(args []string) error {
+	flags := flag.NewFlagSet("enrollment mint", flag.ExitOnError)
+	admin := registerAdminControlFlags(flags)
+	count := flags.Int("count", 1, "number of license keys to mint (1-1000)")
+	expiresIn := flags.String("expires-in", "", "optional expiry as a Go duration, e.g. 720h (default: never expires)")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *count < 1 || *count > 1000 {
+		return usageError("count must be between 1 and 1000")
+	}
+	body := map[string]any{"count": *count}
+	if expires := strings.TrimSpace(*expiresIn); expires != "" {
+		if _, err := time.ParseDuration(expires); err != nil {
+			return fmt.Errorf("expires-in must be a Go duration (e.g. 720h): %w", err)
+		}
+		body["expires_in"] = expires
+	}
+	raw, err := admin.requestJSON(http.MethodPost, "/v1/enrollment/tokens", nil, body)
+	if err != nil {
+		return err
+	}
 	return printRawJSON(raw)
 }
 
