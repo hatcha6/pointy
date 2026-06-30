@@ -1065,6 +1065,15 @@ func (s HTTPServer) handleMintEnrollmentTokens(w http.ResponseWriter, r *http.Re
 	var request struct {
 		Count     int    `json:"count"`
 		ExpiresIn string `json:"expires_in,omitempty"`
+		// Subscription, when present, is baked into every key in the batch: the
+		// installation a key creates is activated on redemption (subscription
+		// clock starting then) instead of staying inert. Omit it for a plain
+		// license that the operator activates later.
+		Subscription *struct {
+			RelayEnabled bool   `json:"relay_enabled,omitempty"`
+			AIEnabled    bool   `json:"ai_enabled,omitempty"`
+			Duration     string `json:"duration,omitempty"`
+		} `json:"subscription,omitempty"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&request); err != nil && !errors.Is(err, io.EOF) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
@@ -1084,17 +1093,38 @@ func (s HTTPServer) handleMintEnrollmentTokens(w http.ResponseWriter, r *http.Re
 		expiresAt := s.clock().Now().Add(duration)
 		mintRequest.ExpiresAt = &expiresAt
 	}
+	if request.Subscription != nil {
+		duration, err := control.ParseLicenseDuration(request.Subscription.Duration)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		mintRequest.Entitlement = control.EnrollmentEntitlement{
+			SubscriptionActive: true,
+			RelayEnabled:       request.Subscription.RelayEnabled,
+			AIEnabled:          request.Subscription.AIEnabled,
+			Duration:           duration,
+		}
+	}
 	tokens, err := store.MintEnrollmentTokens(r.Context(), mintRequest)
 	if err != nil {
 		s.logger().Error("enrollment mint failed", "error", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "enrollment mint failed"})
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{
+	response := map[string]any{
 		"tokens":     tokens,
 		"count":      len(tokens),
 		"expires_at": mintRequest.ExpiresAt,
-	})
+	}
+	if mintRequest.Entitlement.SubscriptionActive {
+		response["subscription"] = map[string]any{
+			"relay_enabled":    mintRequest.Entitlement.RelayEnabled,
+			"ai_enabled":       mintRequest.Entitlement.AIEnabled,
+			"duration_seconds": int64(mintRequest.Entitlement.Duration / time.Second),
+		}
+	}
+	writeJSON(w, http.StatusCreated, response)
 }
 
 // handleEnroll (public) redeems a single-use enrollment token for a brand-new
@@ -1150,13 +1180,14 @@ func (s HTTPServer) handleEnroll(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, provisionedInstallationPayload(provisioned, s.clock().Now()))
 }
 
-// handleInstallationRoutes gates every /v1/installations/{id}/... route. Two of
+// handleInstallationRoutes gates every /v1/installations/{id}/... route. Three of
 // them are "self-serviceable": an installation may authorize them with its OWN
 // access token (X-Pointy-Relay-Token) instead of the company-wide admin token,
-// so an on-prem backend never needs the fleet admin key. Those two are the
-// status read (GET {id}) and connector-certificate issuance/renewal
-// (POST {id}/connector-certificate). Every other sub-route — subscription,
-// audit-events, config update, etc. — stays admin-only, unchanged.
+// so an on-prem backend never needs the fleet admin key. Those three are the
+// status read (GET {id}), connector-certificate issuance/renewal
+// (POST {id}/connector-certificate), and shop-owned metadata updates
+// (PATCH {id}/metadata, e.g. the display name). Every other sub-route —
+// subscription, audit-events, config update, etc. — stays admin-only, unchanged.
 func (s HTTPServer) handleInstallationRoutes(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/installations/"), "/")
 	id := ""
@@ -1165,7 +1196,8 @@ func (s HTTPServer) handleInstallationRoutes(w http.ResponseWriter, r *http.Requ
 	}
 	selfServiceable := id != "" &&
 		((len(parts) == 1 && r.Method == http.MethodGet) ||
-			(len(parts) == 2 && parts[1] == "connector-certificate" && r.Method == http.MethodPost))
+			(len(parts) == 2 && parts[1] == "connector-certificate" && r.Method == http.MethodPost) ||
+			(len(parts) == 2 && parts[1] == "metadata" && r.Method == http.MethodPatch))
 
 	// When a self-serviceable route is called with the installation's access
 	// token (and no admin Authorization header), authorize against that token
@@ -1237,6 +1269,10 @@ func (s HTTPServer) handleInstallation(w http.ResponseWriter, r *http.Request) {
 		s.handleIssueConnectorCertificate(w, r, id)
 		return
 	}
+	if len(parts) == 2 && parts[1] == "metadata" && r.Method == http.MethodPatch {
+		s.handleInstallationUpdateMetadata(w, r, id)
+		return
+	}
 	if len(parts) == 2 && parts[1] == "audit-events" && r.Method == http.MethodGet {
 		s.handleInstallationAuditEvents(w, r, id)
 		return
@@ -1265,6 +1301,41 @@ func (s HTTPServer) handleInstallation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+}
+
+// handleInstallationUpdateMetadata lets an installation update its own
+// shop-owned descriptive fields — currently the display name the merchant edits
+// in Shop Settings. It is self-serviceable with the installation's access token
+// (no subscription gate), so an inert / unsubscribed shop still keeps its name
+// current on the relay. The merchant's local backend is the source of truth for
+// the name; this route is how a rename reaches the operator's fleet console.
+func (s HTTPServer) handleInstallationUpdateMetadata(w http.ResponseWriter, r *http.Request, id string) {
+	store, ok := s.Store.(control.MetadataStore)
+	if !ok {
+		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "metadata store unavailable"})
+		return
+	}
+	var req struct {
+		ShopName *string `json:"shop_name,omitempty"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+	if req.ShopName == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "nothing to update"})
+		return
+	}
+	installation, err := store.UpdateInstallationMetadata(
+		r.Context(),
+		id,
+		control.MetadataUpdate{ShopName: req.ShopName},
+	)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, adminInstallationPayload(installation, s.clock().Now()))
 }
 
 const (

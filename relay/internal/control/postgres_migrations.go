@@ -239,6 +239,20 @@ CREATE INDEX IF NOT EXISTS relay_enrollment_tokens_unconsumed_idx
 	WHERE consumed_at IS NULL;
 `,
 	},
+	{
+		version: 10,
+		name:    "enrollment token baked subscription",
+		sql: `
+ALTER TABLE relay_enrollment_tokens
+	ADD COLUMN IF NOT EXISTS subscription_active boolean NOT NULL DEFAULT false;
+ALTER TABLE relay_enrollment_tokens
+	ADD COLUMN IF NOT EXISTS relay_enabled boolean NOT NULL DEFAULT false;
+ALTER TABLE relay_enrollment_tokens
+	ADD COLUMN IF NOT EXISTS ai_enabled boolean NOT NULL DEFAULT false;
+ALTER TABLE relay_enrollment_tokens
+	ADD COLUMN IF NOT EXISTS subscription_duration_seconds bigint NOT NULL DEFAULT 0;
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

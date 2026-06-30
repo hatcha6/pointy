@@ -68,24 +68,38 @@ class FakeRelayConfig:
 class FakeRelayControlClient:
     config = FakeRelayConfig()
 
-    def __init__(self, *, relay_enabled=False, subscription_active=False):
+    def __init__(
+        self,
+        *,
+        relay_enabled=False,
+        subscription_active=False,
+        ai_enabled=False,
+        shop_name="متجر آمن",
+        subscription_ends_at=None,
+    ):
         self.relay_enabled = relay_enabled
         self.subscription_active = subscription_active
+        self.ai_enabled = ai_enabled
+        self.shop_name = shop_name
+        self.subscription_ends_at = subscription_ends_at
         self.provisioned_shop_name = ""
         self.issued_ticket_request = None
         self.issued_connector_certificate_request = None
         self.enrolled_with_token = None
+        self.metadata_update = None
 
     def enroll_installation(self, *, enrollment_token, shop_name):
         self.enrolled_with_token = enrollment_token
+        # Reflect the configured entitlement, so a license with a baked
+        # subscription enrolls an already-activated installation (default: inert).
         return {
             "installation": {
                 "id": "installation-1",
                 "shop_name": shop_name,
-                "relay_enabled": False,
-                "subscription_active": False,
-                "ai_enabled": False,
-                "subscription_ends_at": None,
+                "relay_enabled": self.relay_enabled,
+                "subscription_active": self.subscription_active,
+                "ai_enabled": self.ai_enabled,
+                "subscription_ends_at": self.subscription_ends_at,
             },
             "connector_token": "ptc1.installation-1.connector-secret",
             "access_token": "ptr1.installation-1.access-secret",
@@ -109,7 +123,22 @@ class FakeRelayControlClient:
     def get_installation(self, installation_id):
         return {
             "id": installation_id,
-            "shop_name": "متجر آمن",
+            "shop_name": self.shop_name,
+            "relay_enabled": self.relay_enabled,
+            "subscription_active": self.subscription_active,
+            "ai_enabled": self.ai_enabled,
+            "subscription_ends_at": self.subscription_ends_at,
+        }
+
+    def update_installation_metadata(self, installation_id, *, shop_name):
+        self.metadata_update = {
+            "installation_id": installation_id,
+            "shop_name": shop_name,
+        }
+        self.shop_name = shop_name
+        return {
+            "id": installation_id,
+            "shop_name": shop_name,
             "relay_enabled": self.relay_enabled,
             "subscription_active": self.subscription_active,
             "ai_enabled": False,
@@ -717,6 +746,137 @@ class RelayBackendApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(RelayInstallation.objects.count(), 0)
 
+    def test_renaming_shop_pushes_new_name_to_relay(self):
+        installation = RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+        )
+        fake_relay = FakeRelayControlClient()
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+            response = client.patch(
+                reverse("shop-settings"),
+                {"shop_name": "متجر الوردية"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["shop_name"], "متجر الوردية")
+        # The rename was mirrored to the relay (with the installation's own id)...
+        self.assertIsNotNone(fake_relay.metadata_update)
+        self.assertEqual(fake_relay.metadata_update["installation_id"], "installation-1")
+        self.assertEqual(fake_relay.metadata_update["shop_name"], "متجر الوردية")
+        # ...and the local mirror now tracks the pushed name.
+        installation.refresh_from_db()
+        self.assertEqual(installation.shop_name, "متجر الوردية")
+
+    def test_saving_settings_without_rename_skips_relay_push(self):
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+        )
+        fake_relay = FakeRelayControlClient()
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+            response = client.patch(
+                reverse("shop-settings"),
+                {"low_stock_threshold": 7},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # shop_name was not among the changed fields, so the relay is left alone.
+        self.assertIsNone(fake_relay.metadata_update)
+
+    def test_settings_save_survives_relay_push_failure(self):
+        # A relay hiccup while pushing the rename must never fail the settings
+        # save; the local write stands and the periodic sync reconciles later.
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        with mock.patch(
+            "apps.core.views.push_shop_name_to_relay",
+            side_effect=RuntimeError("boom"),
+        ):
+            response = client.patch(
+                reverse("shop-settings"),
+                {"shop_name": "متجر الوردية"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(ShopSettings.load().shop_name, "متجر الوردية")
+
+    def test_sync_pushes_offline_rename_on_reconnect(self):
+        # The shop was renamed locally while offline; the relay still holds the old
+        # name. The next sync (a reconnect) pushes the new name up.
+        shop = ShopSettings.load()
+        shop.shop_name = "اسم جديد"
+        shop.save(update_fields=["shop_name"])
+        installation = RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="اسم قديم",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+        )
+        fake_relay = FakeRelayControlClient(shop_name="اسم قديم")
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+                response = client.post(
+                    reverse("relay-installation"),
+                    {"sync": True},
+                    format="json",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(fake_relay.metadata_update["shop_name"], "اسم جديد")
+        installation.refresh_from_db()
+        self.assertEqual(installation.shop_name, "اسم جديد")
+
+    def test_relay_sync_task_reconciles_when_online(self):
+        shop = ShopSettings.load()
+        shop.shop_name = "اسم جديد"
+        shop.save(update_fields=["shop_name"])
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="اسم قديم",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+        )
+        fake_relay = FakeRelayControlClient(shop_name="اسم قديم")
+
+        from apps.core.tasks import sync_relay_installation_task
+
+        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+            result = sync_relay_installation_task()
+
+        self.assertEqual(result, "synced")
+        self.assertEqual(fake_relay.metadata_update["shop_name"], "اسم جديد")
+
+    def test_relay_sync_task_noops_without_installation(self):
+        from apps.core.tasks import sync_relay_installation_task
+
+        self.assertEqual(sync_relay_installation_task(), "no relay installation")
+
     def test_manager_syncs_relay_installation_with_audit_event(self):
         installation = RelayInstallation.objects.create(
             installation_id="installation-1",
@@ -1162,6 +1322,37 @@ class RelayBackendApiTests(TestCase):
         self.assertFalse(installation.subscription_active)
         # The admin provision endpoint was NOT called.
         self.assertEqual(fake_relay.provisioned_shop_name, "")
+
+    @override_settings(
+        POINTY_RELAY_CONTROL_URL="https://relay.example",
+        POINTY_RELAY_PUBLIC_API_URL="https://relay.example",
+        POINTY_RELAY_CONNECTOR_ADDR="relay.example:443",
+        POINTY_RELAY_ADMIN_TOKEN="",
+        POINTY_RELAY_ACCESS_TOKEN="",
+        POINTY_RELAY_INSTALLATION_ID="",
+        POINTY_RELAY_ENROLLMENT_TOKEN="license-key-123",
+    )
+    def test_enrolling_with_baked_subscription_activates_installation(self):
+        # A license minted with a baked subscription returns an already-activated
+        # installation from /v1/enroll; the backend must persist it as active,
+        # with no separate operator step.
+        from apps.core.relay import ensure_relay_installation
+
+        ends_at = timezone.now() + timedelta(days=365)
+        fake_relay = FakeRelayControlClient(
+            relay_enabled=True,
+            subscription_active=True,
+            ai_enabled=True,
+            subscription_ends_at=ends_at,
+        )
+        installation, created = ensure_relay_installation(client=fake_relay)
+
+        self.assertTrue(created)
+        self.assertTrue(installation.relay_enabled)
+        self.assertTrue(installation.subscription_active)
+        self.assertTrue(installation.ai_enabled)
+        self.assertEqual(installation.subscription_ends_at, ends_at)
+        self.assertTrue(installation.remote_access_supported)
 
     @override_settings(
         POINTY_RELAY_CONTROL_URL="https://relay.example",

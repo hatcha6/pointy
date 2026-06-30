@@ -1887,6 +1887,91 @@ func TestHTTPRelayInstallationStatusWithInstallationAccessToken(t *testing.T) {
 	}
 }
 
+func TestHTTPRelayUpdatesShopNameWithInstallationAccessToken(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	// An INERT (no-subscription) install must still be able to update its own
+	// name: that is the common case — a shop that rarely connects and has no
+	// subscription, syncing its renamed shop on reconnect.
+	store, provisioned := provisionInertRelayInstallation(t)
+	server := HTTPServer{
+		Store:      store,
+		Hub:        NewHub(),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminToken: "admin-token",
+		Clock:      testClock{now: now},
+	}
+	request, err := http.NewRequest(
+		http.MethodPatch,
+		"http://relay.test/v1/installations/"+provisioned.Installation.ID+"/metadata",
+		strings.NewReader(`{"shop_name":"متجر الوردية"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No admin Authorization header — only the installation's OWN access token.
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		content, _ := io.ReadAll(response.Body)
+		t.Fatalf("expected 200 updating own shop name, got %d: %s", response.StatusCode, string(content))
+	}
+	var payload map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["shop_name"] != "متجر الوردية" {
+		t.Fatalf("expected updated shop name in payload, got %v", payload["shop_name"])
+	}
+	stored, err := store.GetInstallation(context.Background(), provisioned.Installation.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.ShopName != "متجر الوردية" {
+		t.Fatalf("expected stored shop name to be updated, got %q", stored.ShopName)
+	}
+}
+
+func TestHTTPRelayRejectsShopNameUpdateForOtherInstallation(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionRelayInstallation(t)
+	server := HTTPServer{
+		Store:      store,
+		Hub:        NewHub(),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminToken: "admin-token",
+		Clock:      testClock{now: now},
+	}
+	// A valid access token, but the URL targets a DIFFERENT installation id.
+	request, err := http.NewRequest(
+		http.MethodPatch,
+		"http://relay.test/v1/installations/some-other-installation/metadata",
+		strings.NewReader(`{"shop_name":"intruder"}`),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for cross-installation metadata update, got %d", response.StatusCode)
+	}
+	stored, err := store.GetInstallation(context.Background(), provisioned.Installation.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.ShopName == "intruder" {
+		t.Fatal("a cross-installation token must not rename another shop")
+	}
+}
+
 func enrollTestRequest(t *testing.T, method, target, body string, headers map[string]string) *http.Request {
 	t.Helper()
 	// Always a non-nil body reader: direct ServeHTTP (unlike the real net/http
@@ -1991,6 +2076,153 @@ func TestHTTPRelayEnrollmentMintRedeemSingleUse(t *testing.T) {
 	server.ServeHTTP(second, enrollTestRequest(t, http.MethodPost, "http://relay.test/v1/enroll", "", map[string]string{EnrollmentTokenHeader: minted.Tokens[1]}))
 	if second.Result().StatusCode != http.StatusCreated {
 		t.Fatalf("expected 201 enrolling with the second license, got %d", second.Result().StatusCode)
+	}
+}
+
+func TestHTTPRelayEnrollmentBakedSubscriptionActivatesOnRedeem(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, err := control.NewFileStore(filepath.Join(t.TempDir(), "installations.json"), testClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := HTTPServer{
+		Store:      store,
+		Hub:        NewHub(),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminToken: "admin-token",
+		Clock:      testClock{now: now},
+	}
+
+	// Mint a license with a 1-year relay+AI subscription baked in.
+	mint := httptest.NewRecorder()
+	server.ServeHTTP(mint, enrollTestRequest(
+		t,
+		http.MethodPost,
+		"http://relay.test/v1/enrollment/tokens",
+		`{"count":1,"subscription":{"relay_enabled":true,"ai_enabled":true,"duration":"1y"}}`,
+		map[string]string{"Authorization": "Bearer admin-token"},
+	))
+	if mint.Result().StatusCode != http.StatusCreated {
+		content, _ := io.ReadAll(mint.Result().Body)
+		t.Fatalf("expected 201 minting, got %d: %s", mint.Result().StatusCode, content)
+	}
+	var minted struct {
+		Tokens       []string `json:"tokens"`
+		Subscription *struct {
+			RelayEnabled    bool  `json:"relay_enabled"`
+			AIEnabled       bool  `json:"ai_enabled"`
+			DurationSeconds int64 `json:"duration_seconds"`
+		} `json:"subscription"`
+	}
+	if err := json.NewDecoder(mint.Result().Body).Decode(&minted); err != nil {
+		t.Fatal(err)
+	}
+	if minted.Subscription == nil || !minted.Subscription.RelayEnabled || !minted.Subscription.AIEnabled {
+		t.Fatalf("expected the mint response to echo the baked subscription, got %+v", minted.Subscription)
+	}
+	if want := int64((365 * 24 * time.Hour) / time.Second); minted.Subscription.DurationSeconds != want {
+		t.Fatalf("expected baked duration %d seconds, got %d", want, minted.Subscription.DurationSeconds)
+	}
+
+	// Redeem it — the created installation must come out already activated.
+	enroll := httptest.NewRecorder()
+	server.ServeHTTP(enroll, enrollTestRequest(
+		t,
+		http.MethodPost,
+		"http://relay.test/v1/enroll",
+		`{"shop_name":"متجر مفعل"}`,
+		map[string]string{EnrollmentTokenHeader: minted.Tokens[0]},
+	))
+	if enroll.Result().StatusCode != http.StatusCreated {
+		content, _ := io.ReadAll(enroll.Result().Body)
+		t.Fatalf("expected 201 enrolling, got %d: %s", enroll.Result().StatusCode, content)
+	}
+	var enrolled struct {
+		Installation map[string]any `json:"installation"`
+	}
+	if err := json.NewDecoder(enroll.Result().Body).Decode(&enrolled); err != nil {
+		t.Fatal(err)
+	}
+	installationID, _ := enrolled.Installation["id"].(string)
+
+	created, err := store.GetInstallation(context.Background(), installationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !created.RelayEnabled || !created.AIEnabled || !created.SubscriptionActive {
+		t.Fatalf("expected a baked-license install to be fully activated, got %+v", created)
+	}
+	if created.SubscriptionEndsAt == nil {
+		t.Fatal("expected a subscription end date for a fixed-duration license")
+	}
+	if want := now.Add(365 * 24 * time.Hour); !created.SubscriptionEndsAt.Equal(want) {
+		t.Fatalf("expected subscription to end at %s (redeem + 1y), got %s", want, created.SubscriptionEndsAt)
+	}
+	// RelayActive at redeem time confirms the subscription is genuinely live.
+	if !created.RelayActive(now) {
+		t.Fatal("expected the baked subscription to be active at redeem time")
+	}
+}
+
+func TestHTTPRelayEnrollmentBakedPerpetualSubscriptionHasNoEnd(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, err := control.NewFileStore(filepath.Join(t.TempDir(), "installations.json"), testClock{now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := HTTPServer{
+		Store:      store,
+		Hub:        NewHub(),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminToken: "admin-token",
+		Clock:      testClock{now: now},
+	}
+
+	// A perpetual AI-only license: active, no expiry, remote access still off.
+	mint := httptest.NewRecorder()
+	server.ServeHTTP(mint, enrollTestRequest(
+		t,
+		http.MethodPost,
+		"http://relay.test/v1/enrollment/tokens",
+		`{"count":1,"subscription":{"ai_enabled":true,"duration":"perpetual"}}`,
+		map[string]string{"Authorization": "Bearer admin-token"},
+	))
+	var minted struct {
+		Tokens []string `json:"tokens"`
+	}
+	if err := json.NewDecoder(mint.Result().Body).Decode(&minted); err != nil {
+		t.Fatal(err)
+	}
+
+	enroll := httptest.NewRecorder()
+	server.ServeHTTP(enroll, enrollTestRequest(
+		t,
+		http.MethodPost,
+		"http://relay.test/v1/enroll",
+		"",
+		map[string]string{EnrollmentTokenHeader: minted.Tokens[0]},
+	))
+	var enrolled struct {
+		Installation map[string]any `json:"installation"`
+	}
+	if err := json.NewDecoder(enroll.Result().Body).Decode(&enrolled); err != nil {
+		t.Fatal(err)
+	}
+	created, err := store.GetInstallation(context.Background(), enrolled.Installation["id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !created.SubscriptionActive || !created.AIEnabled {
+		t.Fatalf("expected an active AI subscription, got %+v", created)
+	}
+	if created.RelayEnabled {
+		t.Fatal("AI-only license must not bake remote-access")
+	}
+	if created.SubscriptionEndsAt != nil {
+		t.Fatalf("a perpetual license must have no end date, got %s", created.SubscriptionEndsAt)
+	}
+	if !created.AIActive(now) {
+		t.Fatal("expected perpetual AI subscription to be active")
 	}
 }
 

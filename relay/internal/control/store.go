@@ -120,6 +120,27 @@ type SubscriptionUpdate struct {
 	ClearEnd           bool       `json:"clear_subscription_end,omitempty"`
 }
 
+// MetadataUpdate carries the shop-owned descriptive fields an installation
+// reports about itself — currently just the display name the merchant edits in
+// Shop Settings. Pointer fields mean a PATCH touches only what it sends, mirroring
+// SubscriptionUpdate.
+type MetadataUpdate struct {
+	ShopName *string `json:"shop_name,omitempty"`
+}
+
+// Audit actions and actors recorded in the subscription history. An operator
+// toggling entitlements uses AuditActionSubscriptionUpdated; the other two mark
+// the automated lifecycle points so the history distinguishes "the operator did
+// this" from "a license baked it in" from "it lapsed on its own".
+const (
+	AuditActionSubscriptionUpdated            = "subscription.updated"
+	AuditActionSubscriptionActivatedByLicense = "subscription.activated_by_license"
+	AuditActionSubscriptionExpired            = "subscription.expired"
+
+	AuditActorLicense = "license"
+	AuditActorSystem  = "system"
+)
+
 type AdminAuditMetadata struct {
 	Action string
 	Actor  string
@@ -192,6 +213,22 @@ type AdminSubscriptionStore interface {
 	) (Installation, AdminAuditEvent, error)
 	ListAdminAuditEvents(ctx context.Context, installationID string, limit int) ([]AdminAuditEvent, error)
 	ListInstallations(ctx context.Context, filter InstallationFilter) ([]Installation, error)
+	// ExpireDueSubscriptions deactivates every installation whose fixed-term
+	// subscription has reached its end date (subscription_active true,
+	// subscription_ends_at <= now), recording a "subscription.expired" audit event
+	// for each. It is idempotent — clearing the active flag means an install is
+	// swept at most once — and returns the events it wrote so the caller can log
+	// them. Access control already gates on the end date; this keeps the stored
+	// flag (and the fleet view) honest.
+	ExpireDueSubscriptions(ctx context.Context, now time.Time) ([]AdminAuditEvent, error)
+}
+
+// MetadataStore is an optional store capability (type-asserted by the HTTP layer
+// like UpdateStore / HolidayStore) letting an installation update its own
+// shop-owned descriptive metadata — currently the display name. Kept off the core
+// InstallationStore so existing implementers stay unchanged.
+type MetadataStore interface {
+	UpdateInstallationMetadata(ctx context.Context, id string, update MetadataUpdate) (Installation, error)
 }
 
 // DefaultUpdateChannel is the channel an installation follows when none is set.
@@ -564,6 +601,29 @@ func (s *FileStore) UpdateSubscription(
 	return installation, nil
 }
 
+func (s *FileStore) UpdateInstallationMetadata(
+	_ context.Context,
+	id string,
+	update MetadataUpdate,
+) (Installation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	installation, ok := s.data.Installations[id]
+	if !ok {
+		return Installation{}, ErrNotFound
+	}
+	if update.ShopName != nil {
+		installation.ShopName = strings.TrimSpace(*update.ShopName)
+	}
+	installation.UpdatedAt = s.clock.Now()
+	s.data.Installations[id] = installation
+	if err := s.saveLocked(); err != nil {
+		return Installation{}, err
+	}
+	return installation, nil
+}
+
 func (s *FileStore) UpdateSubscriptionWithAudit(
 	_ context.Context,
 	id string,
@@ -598,6 +658,66 @@ func (s *FileStore) UpdateSubscriptionWithAudit(
 		return Installation{}, AdminAuditEvent{}, err
 	}
 	return installation, event, nil
+}
+
+func (s *FileStore) ExpireDueSubscriptions(_ context.Context, now time.Time) ([]AdminAuditEvent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	type swept struct {
+		original Installation
+		event    AdminAuditEvent
+	}
+	var changes []swept
+	for id, installation := range s.data.Installations {
+		if !installation.SubscriptionActive ||
+			installation.SubscriptionEndsAt == nil ||
+			now.Before(*installation.SubscriptionEndsAt) {
+			continue
+		}
+		original := installation
+		before := InstallationSubscriptionAuditState(installation, now)
+		installation.SubscriptionActive = false
+		installation.UpdatedAt = now
+		event, err := newAdminAuditEvent(
+			id,
+			AdminAuditMetadata{Action: AuditActionSubscriptionExpired, Actor: AuditActorSystem},
+			before,
+			InstallationSubscriptionAuditState(installation, now),
+			now,
+		)
+		if err != nil {
+			return nil, err
+		}
+		s.data.Installations[id] = installation
+		changes = append(changes, swept{original: original, event: event})
+	}
+	if len(changes) == 0 {
+		return nil, nil
+	}
+	if s.data.AdminAuditEvents == nil {
+		s.data.AdminAuditEvents = map[string][]AdminAuditEvent{}
+	}
+	for _, change := range changes {
+		id := change.event.InstallationID
+		s.data.AdminAuditEvents[id] = append([]AdminAuditEvent{change.event}, s.data.AdminAuditEvents[id]...)
+	}
+	if err := s.saveLocked(); err != nil {
+		// Restore in-memory state so it matches the unwritten disk.
+		for _, change := range changes {
+			id := change.event.InstallationID
+			s.data.Installations[id] = change.original
+			if events := s.data.AdminAuditEvents[id]; len(events) > 0 {
+				s.data.AdminAuditEvents[id] = events[1:]
+			}
+		}
+		return nil, err
+	}
+	events := make([]AdminAuditEvent, 0, len(changes))
+	for _, change := range changes {
+		events = append(events, change.event)
+	}
+	return events, nil
 }
 
 func (s *FileStore) ListAdminAuditEvents(

@@ -269,6 +269,11 @@ func runServer(args []string) error {
 		envDuration("POINTY_RELAY_TICKET_REFRESH_TTL", 7*24*time.Hour),
 		"rotating relay ticket refresh token TTL",
 	)
+	subscriptionSweepInterval := flags.Duration(
+		"subscription-sweep-interval",
+		envDuration("POINTY_RELAY_SUBSCRIPTION_SWEEP_INTERVAL", time.Hour),
+		"how often to deactivate installations whose fixed-term subscription has expired (0 disables)",
+	)
 	streamOpenTimeout := flags.Duration(
 		"stream-open-timeout",
 		envDuration("POINTY_RELAY_STREAM_OPEN_TIMEOUT", 5*time.Second),
@@ -854,6 +859,14 @@ func runServer(args []string) error {
 		}()
 	}
 
+	// Periodically deactivate installations whose fixed-term subscription has
+	// lapsed, so the fleet view (and the stored flag) reflects reality even
+	// though access control already gates on the end date. Runs only when the
+	// store supports audited subscription writes.
+	if sweeper, ok := store.(control.AdminSubscriptionStore); ok && *subscriptionSweepInterval > 0 {
+		go runSubscriptionExpirySweep(ctx, sweeper, logger, *subscriptionSweepInterval)
+	}
+
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -876,6 +889,40 @@ func runServer(args []string) error {
 			return err
 		}
 		return nil
+	}
+}
+
+// runSubscriptionExpirySweep deactivates lapsed fixed-term subscriptions on a
+// timer until ctx is cancelled. It sweeps once at startup so a restart promptly
+// reconciles anything that expired while the relay was down, then on the
+// interval. Failures are logged and retried on the next tick — a transient DB
+// blip never tears the server down.
+func runSubscriptionExpirySweep(
+	ctx context.Context,
+	store control.AdminSubscriptionStore,
+	logger *slog.Logger,
+	interval time.Duration,
+) {
+	sweep := func() {
+		events, err := store.ExpireDueSubscriptions(ctx, time.Now().UTC())
+		if err != nil {
+			logger.Warn("subscription expiry sweep failed", "error", err)
+			return
+		}
+		if len(events) > 0 {
+			logger.Info("expired lapsed subscriptions", "count", len(events))
+		}
+	}
+	sweep()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			sweep()
+		}
 	}
 }
 
@@ -1880,6 +1927,17 @@ func runEnrollmentMint(args []string) error {
 	admin := registerAdminControlFlags(flags)
 	count := flags.Int("count", 1, "number of license keys to mint (1-1000)")
 	expiresIn := flags.String("expires-in", "", "optional expiry as a Go duration, e.g. 720h (default: never expires)")
+	// Bake a subscription into the keys so a shop is activated the moment it
+	// redeems the license — no separate operator activation step.
+	relay := flags.Bool("relay", false, "bake the remote-access (relay) entitlement into the key")
+	ai := flags.Bool("ai", false, "bake the AI entitlement into the key")
+	subscription := flags.String(
+		"subscription",
+		"",
+		"bake a subscription of this length, counted from when the key is redeemed: "+
+			"e.g. 30d, 6mo, 1y, or a Go duration like 720h; 'perpetual' (or empty with "+
+			"--relay/--ai) for no expiry",
+	)
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -1892,6 +1950,20 @@ func runEnrollmentMint(args []string) error {
 			return fmt.Errorf("expires-in must be a Go duration (e.g. 720h): %w", err)
 		}
 		body["expires_in"] = expires
+	}
+	if *relay || *ai || strings.TrimSpace(*subscription) != "" {
+		if _, err := control.ParseLicenseDuration(*subscription); err != nil {
+			return err
+		}
+		if !*relay && !*ai {
+			fmt.Fprintln(os.Stderr,
+				"note: baking an active subscription with no features; pass --relay and/or --ai to grant access")
+		}
+		body["subscription"] = map[string]any{
+			"relay_enabled": *relay,
+			"ai_enabled":    *ai,
+			"duration":      strings.TrimSpace(*subscription),
+		}
 	}
 	raw, err := admin.requestJSON(http.MethodPost, "/v1/enrollment/tokens", nil, body)
 	if err != nil {
@@ -3148,6 +3220,7 @@ func printUsage() {
   pointy-relay connector [flags]
   pointy-relay installations <list|show|status|diagnostics|audit|provision> [args]
   pointy-relay subscription <set|update|enable|disable|extend|audit> <id> [flags]
+  pointy-relay enrollment mint [--count N] [--relay] [--ai] [--subscription DUR]
   pointy-relay fleet <status|set-version|rollout|pause|pin|unpin|channel> [args]
   pointy-relay artifacts upload --version X --bundle pointy-onprem-X.zip
   pointy-relay provision [flags]
@@ -3173,6 +3246,12 @@ Commands:
                    extend <id> --days N      set the end date N days out, active
                    update <id> [flags]       explicit field-by-field control
                    audit <id>                change history (alias)
+  enrollment     Mint single-use license keys (redeemed at /v1/enroll):
+                   mint [--count N] [--expires-in 720h]
+                                             plain keys (operator activates later)
+                   mint [--relay] [--ai] [--subscription 1y|6mo|30d|perpetual]
+                                             bake a subscription in — the shop is
+                                             activated the moment it redeems
   fleet          Remote on-prem update control plane (admin API):
                    status [--query q] [--json]   versions across the fleet
                    set-version <v> [--channel stable] [--rollout canary|all|N%]

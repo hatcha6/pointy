@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.middleware.csrf import get_token
@@ -20,7 +22,7 @@ from apps.attachments.services import active_attachments_for, content_type_for_u
 from .models import ShopSettings
 from .permission_catalog import grouped_for
 from .permissions import HasPointyPermission
-from .relay import relay_ai_available
+from .relay import push_shop_name_to_relay, relay_ai_available
 from .roles import (
     create_initial_admin_user,
     ensure_role_groups,
@@ -43,6 +45,8 @@ from .serializers import (
     UserSerializer,
 )
 from .user_activity import build_user_activity
+
+logger = logging.getLogger(__name__)
 
 
 SHOP_LOGO_ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png"}
@@ -371,6 +375,15 @@ class ShopSettingsView(views.APIView):
                 ),
             },
         )
+        if "shop_name" in changed_fields:
+            # Mirror the rename to the relay so the operator's fleet console stays
+            # current. Strictly best-effort and never blocks the save: shops are
+            # frequently offline (no subscription), and the periodic relay sync
+            # reconciles the name the next time the shop is online.
+            try:
+                push_shop_name_to_relay()
+            except Exception:  # noqa: BLE001 - a relay hiccup must not fail the save
+                logger.exception("relay shop-name push raised during settings update")
         return Response(
             ShopSettingsSerializer(settings, context={"request": request}).data
         )

@@ -71,6 +71,23 @@ func (s *CachedInstallationStore) UpdateSubscription(
 	return installation, nil
 }
 
+func (s *CachedInstallationStore) UpdateInstallationMetadata(
+	ctx context.Context,
+	id string,
+	update MetadataUpdate,
+) (Installation, error) {
+	metadataStore, ok := s.store.(MetadataStore)
+	if !ok {
+		return Installation{}, errors.New("metadata store is unavailable")
+	}
+	installation, err := metadataStore.UpdateInstallationMetadata(ctx, id, update)
+	if err != nil {
+		return Installation{}, err
+	}
+	_ = s.cacheInstallation(ctx, installation)
+	return installation, nil
+}
+
 func (s *CachedInstallationStore) UpdateSubscriptionWithAudit(
 	ctx context.Context,
 	id string,
@@ -104,6 +121,26 @@ func (s *CachedInstallationStore) ListAdminAuditEvents(
 		return nil, errors.New("admin audit store is unavailable")
 	}
 	return adminStore.ListAdminAuditEvents(ctx, installationID, limit)
+}
+
+func (s *CachedInstallationStore) ExpireDueSubscriptions(
+	ctx context.Context,
+	now time.Time,
+) ([]AdminAuditEvent, error) {
+	adminStore, ok := s.store.(AdminSubscriptionStore)
+	if !ok {
+		return nil, errors.New("admin audit store is unavailable")
+	}
+	events, err := adminStore.ExpireDueSubscriptions(ctx, now)
+	if err != nil {
+		return nil, err
+	}
+	// Drop cached copies of the swept installs so the next read reflects the flip
+	// to inactive instead of a stale "active" entry served from cache.
+	for _, event := range events {
+		_ = s.cache.DeleteInstallation(ctx, event.InstallationID)
+	}
+	return events, nil
 }
 
 func (s *CachedInstallationStore) ListInstallations(

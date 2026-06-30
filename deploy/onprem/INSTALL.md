@@ -97,10 +97,32 @@ shop's server never holds the company-wide relay admin token.
   own scoped `access`/`connector` tokens (persisted locally), and the key is
   **spent** — it can never enroll a second install.
 
-- **Activate:** enrolling does **not** turn the subscription on. Flip a shop live
-  (remote access / AI) when you're ready, per installation, with the operator CLI:
+- **Activate:** a plain key enrolls an **inert** install — turn the subscription
+  on per installation when you're ready, with the operator CLI:
   ```sh
   pointy-relay subscription enable <installation-id>
+  ```
+
+- **Or bake the subscription into the key.** Mint keys that activate the shop the
+  moment it redeems them — no separate `subscription enable` step. The
+  subscription clock starts at redemption, so keys can sit in inventory:
+  ```sh
+  # 50 keys, each granting remote access + AI for 1 year from activation:
+  pointy-relay enrollment mint --count 50 --relay --ai --subscription 1y
+  ```
+  `--subscription` accepts `30d`, `6mo`, `1y`, a Go duration like `720h`, or
+  `perpetual` (no expiry); `--relay` / `--ai` choose which entitlements to bake.
+
+- **Expiry is automatic.** A fixed-term subscription stops granting access the
+  moment its end date passes, and the relay also flips the stored
+  `subscription_active` flag off on a periodic sweep (hourly by default; tune with
+  `POINTY_RELAY_SUBSCRIPTION_SWEEP_INTERVAL`, or `0` to disable) so the fleet view
+  shows lapsed shops as inactive. Renew with `subscription extend <id> --days N`.
+
+- **History per shop.** Every subscription change is recorded — operator toggles,
+  license-baked activations, and automatic expiries alike — and is viewable with:
+  ```sh
+  pointy-relay installations audit <installation-id>
   ```
 
 Until a backend is licensed it serves nothing but health checks and the enrollment

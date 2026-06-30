@@ -293,6 +293,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "holidays.sync_holidays",
         "schedule": crontab(minute=30, hour=0),
     },
+    # Best-effort hourly reconcile with the relay: pull entitlement changes and
+    # push the shop name if it drifted while offline. Short cadence so a shop with
+    # no subscription — usually offline — syncs whenever it next reaches the
+    # internet, not only when a manager opens the Subscription status screen.
+    "core.sync-relay-installation": {
+        "task": "core.sync_relay_installation",
+        "schedule": crontab(minute=0),
+    },
     # Re-score every customer's RFM rank overnight, after the day's sales have
     # settled. Runs once daily; the ranks only shift on a daily granularity
     # (recency is measured in days) so anything more frequent is wasted work.

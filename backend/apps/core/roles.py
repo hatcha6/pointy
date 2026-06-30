@@ -6,6 +6,7 @@ from django.db.models import Q
 
 from apps.catalog.variant_option_defaults import DEFAULT_VARIANT_OPTIONS
 from apps.expenses.category_defaults import DEFAULT_EXPENSE_CATEGORY_NAMES
+from apps.holidays.rules import SOURCE_LOCAL as HOLIDAY_LOCAL_SOURCE
 
 MANAGER_GROUP = "manager"
 CASHIER_GROUP = "cashier"
@@ -445,6 +446,10 @@ def _model_has_initial_setup_blocking_data(model, model_label):
     if model_label == ("catalog", "unitofmeasure"):
         # Seeded built-in units are configuration scaffolding, not shop activity.
         return queryset.filter(is_system=False).exists()
+    if model_label == ("holidays", "holiday"):
+        # Built-in (migration-seeded) and relay-synced holidays are configuration,
+        # not shop activity — only a shop-authored local holiday counts.
+        return queryset.filter(source=HOLIDAY_LOCAL_SOURCE).exists()
     if model_label == ("catalog", "variantoption"):
         return queryset.exclude(
             code__in=INITIAL_SETUP_VARIANT_OPTION_CODES,

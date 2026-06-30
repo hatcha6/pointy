@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,20 +35,93 @@ type EnrollmentStore interface {
 	RedeemEnrollmentToken(ctx context.Context, rawToken string, request ProvisionInstallationRequest) (ProvisionedInstallation, error)
 }
 
+// EnrollmentEntitlement is the subscription "baked" into a license key at mint
+// time. When SubscriptionActive is true, redeeming the key creates an
+// already-activated installation instead of the default inert one, so a shop
+// gets its subscription the moment it activates the license — no separate
+// operator step. The subscription clock starts at redemption: a positive
+// Duration sets the installation's SubscriptionEndsAt to redeemed_at + Duration,
+// while a zero Duration means no expiry (perpetual). The zero value bakes
+// nothing, so a plain mint stays inert exactly as before.
+type EnrollmentEntitlement struct {
+	RelayEnabled       bool          `json:"relay_enabled,omitempty"`
+	AIEnabled          bool          `json:"ai_enabled,omitempty"`
+	SubscriptionActive bool          `json:"subscription_active,omitempty"`
+	Duration           time.Duration `json:"duration,omitempty"`
+}
+
+// applyTo activates a freshly built installation per the baked entitlement. The
+// zero entitlement (SubscriptionActive false) leaves it inert, so a plain license
+// behaves exactly as before. The subscription clock starts at now (redeem time).
+func (e EnrollmentEntitlement) applyTo(installation Installation, now time.Time) Installation {
+	if !e.SubscriptionActive {
+		return installation
+	}
+	installation.RelayEnabled = e.RelayEnabled
+	installation.AIEnabled = e.AIEnabled
+	installation.SubscriptionActive = true
+	if e.Duration > 0 {
+		endsAt := now.Add(e.Duration).UTC()
+		installation.SubscriptionEndsAt = &endsAt
+	}
+	return installation
+}
+
+// ParseLicenseDuration parses a human license length into a duration whose clock
+// starts when the key is redeemed. It accepts an empty string, "0", or
+// "perpetual" (no expiry → zero), the short calendar-ish forms "30d", "2w",
+// "6mo", "1y" (mo≈30d, y≈365d), or any positive Go duration like "720h".
+func ParseLicenseDuration(spec string) (time.Duration, error) {
+	spec = strings.ToLower(strings.TrimSpace(spec))
+	if spec == "" || spec == "0" || spec == "perpetual" {
+		return 0, nil
+	}
+	// Checked longest-suffix-first so "mo" wins over a bare unit; none of the
+	// short forms is a suffix of another, so there is no ambiguity.
+	for _, unit := range []struct {
+		suffix string
+		span   time.Duration
+	}{
+		{"mo", 30 * 24 * time.Hour},
+		{"y", 365 * 24 * time.Hour},
+		{"w", 7 * 24 * time.Hour},
+		{"d", 24 * time.Hour},
+	} {
+		if !strings.HasSuffix(spec, unit.suffix) {
+			continue
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(strings.TrimSuffix(spec, unit.suffix)))
+		if err != nil || n <= 0 {
+			return 0, fmt.Errorf("invalid license duration %q", spec)
+		}
+		return time.Duration(n) * unit.span, nil
+	}
+	span, err := time.ParseDuration(spec)
+	if err != nil || span <= 0 {
+		return 0, fmt.Errorf(
+			"invalid license duration %q (use e.g. 30d, 6mo, 1y, 720h, or 'perpetual')",
+			spec,
+		)
+	}
+	return span, nil
+}
+
 // MintEnrollmentTokensRequest controls a mint batch.
 type MintEnrollmentTokensRequest struct {
-	Count     int
-	ExpiresAt *time.Time
+	Count       int
+	ExpiresAt   *time.Time
+	Entitlement EnrollmentEntitlement
 }
 
 // EnrollmentTokenRecord is the FileStore persistence shape for a minted token.
 // Only the hash is stored; the raw token is shown once, at mint time.
 type EnrollmentTokenRecord struct {
-	TokenHash             string     `json:"token_hash"`
-	ExpiresAt             *time.Time `json:"expires_at,omitempty"`
-	ConsumedAt            *time.Time `json:"consumed_at,omitempty"`
-	CreatedInstallationID string     `json:"created_installation_id,omitempty"`
-	CreatedAt             time.Time  `json:"created_at"`
+	TokenHash             string                `json:"token_hash"`
+	ExpiresAt             *time.Time            `json:"expires_at,omitempty"`
+	ConsumedAt            *time.Time            `json:"consumed_at,omitempty"`
+	CreatedInstallationID string                `json:"created_installation_id,omitempty"`
+	CreatedAt             time.Time             `json:"created_at"`
+	Entitlement           EnrollmentEntitlement `json:"entitlement,omitempty"`
 }
 
 func normalizeMintCount(count int) (int, error) {
@@ -156,9 +230,10 @@ func (s *FileStore) MintEnrollmentTokens(_ context.Context, request MintEnrollme
 		}
 		hash := TokenHash(raw)
 		s.data.EnrollmentTokens[hash] = EnrollmentTokenRecord{
-			TokenHash: hash,
-			ExpiresAt: request.ExpiresAt,
-			CreatedAt: now,
+			TokenHash:   hash,
+			ExpiresAt:   request.ExpiresAt,
+			CreatedAt:   now,
+			Entitlement: request.Entitlement,
 		}
 		tokens = append(tokens, raw)
 		added = append(added, hash)
@@ -187,17 +262,45 @@ func (s *FileStore) RedeemEnrollmentToken(_ context.Context, rawToken string, re
 	if record.ExpiresAt != nil && !now.Before(*record.ExpiresAt) {
 		return ProvisionedInstallation{}, ErrEnrollmentTokenExpired
 	}
-	installation, connectorToken, accessToken, err := request.enrollmentInstallation(now)
+	inert, connectorToken, accessToken, err := request.enrollmentInstallation(now)
 	if err != nil {
 		return ProvisionedInstallation{}, err
 	}
+	// Activate per the subscription baked into the license at mint time (a plain
+	// license bakes nothing and stays inert).
+	installation := record.Entitlement.applyTo(inert, now)
 	consumedAt := now
 	record.ConsumedAt = &consumedAt
 	record.CreatedInstallationID = installation.ID
 	s.data.Installations[installation.ID] = installation
 	s.data.EnrollmentTokens[hash] = record
+	// Record the activation in the subscription history when the license carried
+	// one, so it reads the same as an operator turning the subscription on.
+	wroteAudit := false
+	if record.Entitlement.SubscriptionActive {
+		event, err := newAdminAuditEvent(
+			installation.ID,
+			AdminAuditMetadata{Action: AuditActionSubscriptionActivatedByLicense, Actor: AuditActorLicense},
+			InstallationSubscriptionAuditState(inert, now),
+			InstallationSubscriptionAuditState(installation, now),
+			now,
+		)
+		if err != nil {
+			return ProvisionedInstallation{}, err
+		}
+		if s.data.AdminAuditEvents == nil {
+			s.data.AdminAuditEvents = map[string][]AdminAuditEvent{}
+		}
+		s.data.AdminAuditEvents[installation.ID] = append(
+			[]AdminAuditEvent{event}, s.data.AdminAuditEvents[installation.ID]...,
+		)
+		wroteAudit = true
+	}
 	if err := s.saveLocked(); err != nil {
 		delete(s.data.Installations, installation.ID)
+		if wroteAudit {
+			delete(s.data.AdminAuditEvents, installation.ID)
+		}
 		record.ConsumedAt = nil
 		record.CreatedInstallationID = ""
 		s.data.EnrollmentTokens[hash] = record
@@ -231,10 +334,17 @@ func (s *PostgresStore) MintEnrollmentTokens(ctx context.Context, request MintEn
 		}
 		if _, err := tx.Exec(
 			ctx,
-			`INSERT INTO relay_enrollment_tokens (token_hash, expires_at, created_at) VALUES ($1, $2, $3)`,
+			`INSERT INTO relay_enrollment_tokens (
+				token_hash, expires_at, created_at,
+				subscription_active, relay_enabled, ai_enabled, subscription_duration_seconds
+			) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 			TokenHash(raw),
 			request.ExpiresAt,
 			now,
+			request.Entitlement.SubscriptionActive,
+			request.Entitlement.RelayEnabled,
+			request.Entitlement.AIEnabled,
+			int64(request.Entitlement.Duration/time.Second),
 		); err != nil {
 			return nil, err
 		}
@@ -257,11 +367,22 @@ func (s *PostgresStore) RedeemEnrollmentToken(ctx context.Context, rawToken stri
 
 	var expiresAt *time.Time
 	var consumedAt *time.Time
+	var entitlement EnrollmentEntitlement
+	var durationSeconds int64
 	err = tx.QueryRow(
 		ctx,
-		`SELECT expires_at, consumed_at FROM relay_enrollment_tokens WHERE token_hash = $1 FOR UPDATE`,
+		`SELECT expires_at, consumed_at,
+			subscription_active, relay_enabled, ai_enabled, subscription_duration_seconds
+		FROM relay_enrollment_tokens WHERE token_hash = $1 FOR UPDATE`,
 		hash,
-	).Scan(&expiresAt, &consumedAt)
+	).Scan(
+		&expiresAt,
+		&consumedAt,
+		&entitlement.SubscriptionActive,
+		&entitlement.RelayEnabled,
+		&entitlement.AIEnabled,
+		&durationSeconds,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ProvisionedInstallation{}, ErrEnrollmentTokenInvalid
 	}
@@ -274,13 +395,33 @@ func (s *PostgresStore) RedeemEnrollmentToken(ctx context.Context, rawToken stri
 	if expiresAt != nil && !now.Before(*expiresAt) {
 		return ProvisionedInstallation{}, ErrEnrollmentTokenExpired
 	}
+	entitlement.Duration = time.Duration(durationSeconds) * time.Second
 
-	installation, connectorToken, accessToken, err := request.enrollmentInstallation(now)
+	inert, connectorToken, accessToken, err := request.enrollmentInstallation(now)
 	if err != nil {
 		return ProvisionedInstallation{}, err
 	}
+	// Activate per the subscription baked into the license at mint time.
+	installation := entitlement.applyTo(inert, now)
 	if _, err := tx.Exec(ctx, installationInsertSQL, installationInsertArgs(installation)...); err != nil {
 		return ProvisionedInstallation{}, err
+	}
+	// Record the activation in the subscription history when the license carried
+	// one (same transaction, so the audit row's FK to the new install holds).
+	if entitlement.SubscriptionActive {
+		event, err := newAdminAuditEvent(
+			installation.ID,
+			AdminAuditMetadata{Action: AuditActionSubscriptionActivatedByLicense, Actor: AuditActorLicense},
+			InstallationSubscriptionAuditState(inert, now),
+			InstallationSubscriptionAuditState(installation, now),
+			now,
+		)
+		if err != nil {
+			return ProvisionedInstallation{}, err
+		}
+		if err := insertAdminAuditEventTx(ctx, tx, event); err != nil {
+			return ProvisionedInstallation{}, err
+		}
 	}
 	if _, err := tx.Exec(
 		ctx,

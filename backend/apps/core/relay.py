@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import ssl
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone as datetime_timezone
@@ -15,6 +16,8 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from .models import RelayConnectorSetupToken, RelayInstallation, ShopSettings
+
+logger = logging.getLogger(__name__)
 
 
 class RelayControlError(RuntimeError):
@@ -149,6 +152,20 @@ class RelayControlClient:
         return self._request(
             "GET",
             f"/v1/installations/{installation_id}",
+            **self._installation_auth(),
+        )
+
+    def update_installation_metadata(self, installation_id, *, shop_name):
+        """Update this installation's shop-owned metadata (the display name) on
+        the relay so the operator's fleet console stays current after a rename.
+        Authenticated with the installation's own access token, like the status
+        read — so an on-prem backend keeps its name fresh without the admin token,
+        and an inert/unsubscribed shop can still update it.
+        """
+        return self._request(
+            "PATCH",
+            f"/v1/installations/{installation_id}/metadata",
+            body={"shop_name": shop_name},
             **self._installation_auth(),
         )
 
@@ -495,11 +512,46 @@ def scoped_relay_client(installation, *, config=None):
     return RelayControlClient(config=scoped)
 
 
+def push_shop_name_to_relay(installation=None, *, client=None):
+    """Best-effort: push the local shop name to the relay when our mirror of it is
+    stale (e.g. the merchant renamed the shop).
+
+    The merchant edits the name locally in Shop Settings; the relay only mirrors
+    it for the operator's fleet console. ``RelayInstallation.shop_name`` tracks the
+    name we last confirmed the relay holds, so a difference from
+    ``ShopSettings.shop_name`` means a push is due. Safe to call when offline or
+    when no relay is configured — transport/config errors are swallowed and it
+    returns ``False`` so the caller can carry on; the periodic sync retries on the
+    next reconnect. Returns ``True`` when the relay now has the current name (or
+    already did).
+    """
+    if installation is None:
+        installation = RelayInstallation.load()
+    if installation is None:
+        return False
+    desired = ShopSettings.load().shop_name
+    if desired == installation.shop_name:
+        return True
+    try:
+        relay_client = client or scoped_relay_client(installation)
+        updated = relay_client.update_installation_metadata(
+            installation.installation_id,
+            shop_name=desired,
+        )
+    except (ImproperlyConfigured, RelayControlError) as exc:
+        logger.warning("relay shop-name push failed (%s); retrying on next sync", exc)
+        return False
+    installation.shop_name = updated.get("shop_name") or desired
+    installation.save(update_fields=["shop_name", "updated_at"])
+    return True
+
+
 def sync_relay_installation(installation, *, client=None):
     if installation is None:
         return None
     relay_client = client or scoped_relay_client(installation)
     relay_installation = relay_client.get_installation(installation.installation_id)
+    # Entitlements are relay-owned, so mirror them down.
     installation.shop_name = relay_installation.get("shop_name") or installation.shop_name
     installation.relay_enabled = bool(relay_installation.get("relay_enabled", False))
     installation.subscription_active = bool(relay_installation.get("subscription_active", False))
@@ -519,6 +571,11 @@ def sync_relay_installation(installation, *, client=None):
             "updated_at",
         ]
     )
+    # The shop name is backend-owned; the line above mirrored the relay's current
+    # copy. If the merchant renamed the shop while offline, our local name now
+    # differs from that copy — push it up while we have the connection. Best-effort
+    # and reusing the same authenticated client.
+    push_shop_name_to_relay(installation, client=relay_client)
     return installation
 
 

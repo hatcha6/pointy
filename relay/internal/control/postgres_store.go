@@ -378,15 +378,28 @@ func (s *PostgresStore) UpdateSubscriptionWithAudit(
 	if err != nil {
 		return Installation{}, AdminAuditEvent{}, err
 	}
+	if err := insertAdminAuditEventTx(ctx, tx, event); err != nil {
+		return Installation{}, AdminAuditEvent{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Installation{}, AdminAuditEvent{}, err
+	}
+	return installation, event, nil
+}
+
+// insertAdminAuditEventTx writes one audit event inside an open transaction,
+// shared by every audited subscription operation (admin change, license
+// activation, expiry sweep) so the row shape stays in one place.
+func insertAdminAuditEventTx(ctx context.Context, tx pgx.Tx, event AdminAuditEvent) error {
 	beforeState, err := json.Marshal(event.Before)
 	if err != nil {
-		return Installation{}, AdminAuditEvent{}, err
+		return err
 	}
 	afterState, err := json.Marshal(event.After)
 	if err != nil {
-		return Installation{}, AdminAuditEvent{}, err
+		return err
 	}
-	if _, err := tx.Exec(
+	_, err = tx.Exec(
 		ctx,
 		`INSERT INTO relay_admin_audit_events (
 			id,
@@ -406,13 +419,74 @@ func (s *PostgresStore) UpdateSubscriptionWithAudit(
 		beforeState,
 		afterState,
 		event.CreatedAt,
-	); err != nil {
-		return Installation{}, AdminAuditEvent{}, err
+	)
+	return err
+}
+
+// ExpireDueSubscriptions flips subscription_active to false for every install
+// whose fixed-term subscription has lapsed, writing a "subscription.expired"
+// audit event for each in the same transaction.
+func (s *PostgresStore) ExpireDueSubscriptions(ctx context.Context, now time.Time) ([]AdminAuditEvent, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	rows, err := tx.Query(
+		ctx,
+		`UPDATE relay_installations
+		SET subscription_active = false, updated_at = $1::timestamptz
+		WHERE subscription_active = true
+			AND subscription_ends_at IS NOT NULL
+			AND subscription_ends_at <= $1::timestamptz
+		RETURNING `+installationColumns,
+		now,
+	)
+	if err != nil {
+		return nil, err
+	}
+	var expired []Installation
+	for rows.Next() {
+		installation, err := scanInstallation(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		expired = append(expired, installation)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(expired) == 0 {
+		return nil, nil
+	}
+
+	events := make([]AdminAuditEvent, 0, len(expired))
+	for _, after := range expired {
+		// Reconstruct the pre-sweep state: identical, but still active.
+		before := after
+		before.SubscriptionActive = true
+		event, err := newAdminAuditEvent(
+			after.ID,
+			AdminAuditMetadata{Action: AuditActionSubscriptionExpired, Actor: AuditActorSystem},
+			InstallationSubscriptionAuditState(before, now),
+			InstallationSubscriptionAuditState(after, now),
+			now,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if err := insertAdminAuditEventTx(ctx, tx, event); err != nil {
+			return nil, err
+		}
+		events = append(events, event)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return Installation{}, AdminAuditEvent{}, err
+		return nil, err
 	}
-	return installation, event, nil
+	return events, nil
 }
 
 func (s *PostgresStore) ListAdminAuditEvents(
@@ -631,6 +705,30 @@ func (s *PostgresStore) MarkConnectorConnected(
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (s *PostgresStore) UpdateInstallationMetadata(
+	ctx context.Context,
+	id string,
+	update MetadataUpdate,
+) (Installation, error) {
+	setShopName := update.ShopName != nil
+	shopName := ""
+	if setShopName {
+		shopName = strings.TrimSpace(*update.ShopName)
+	}
+	return scanInstallation(s.pool.QueryRow(
+		ctx,
+		`UPDATE relay_installations
+		SET shop_name = CASE WHEN $2 THEN $3 ELSE shop_name END,
+			updated_at = $4::timestamptz
+		WHERE id = $1
+		RETURNING `+installationColumns,
+		id,
+		setShopName,
+		shopName,
+		s.clock.Now(),
+	))
 }
 
 func (s *PostgresStore) SetInstallationChannel(
