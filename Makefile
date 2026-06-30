@@ -423,6 +423,10 @@ relay-connector: ## Run the on-prem relay connector beside a local backend.
 		--backend "$(RELAY_BACKEND_URL)"
 
 relay-connector-remote: ## Run the connector against the remote hosted relay (used by dev-remote).
+	@printf 'Waiting for backend'
+	@until curl -sf http://$(API_HOST):$(API_PORT)/healthz/ >/dev/null 2>&1; do \
+		printf '.'; sleep 1; \
+	done; printf ' ready.\n'
 	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
 		POINTY_RELAY_CONNECTOR_SETUP_TOKEN="$$(cat '$(RELAY_REMOTE_TOKEN_FILE)')" \
 		POINTY_RELAY_CONNECTOR_STATE_FILE="$(RELAY_REMOTE_CONNECTOR_STATE_FILE)" \
