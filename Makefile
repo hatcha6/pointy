@@ -206,6 +206,8 @@ backend-run: backend-env backend-install ## Run the Django API server.
 backend-run-remote: backend-env backend-install ## Run Django against the remote relay (used by dev-remote; self-enrolls on first run).
 	POINTY_RELAY_CONTROL_URL="https://$(RELAY_REMOTE_HOST)" \
 		POINTY_RELAY_PUBLIC_API_URL="https://$(RELAY_REMOTE_HOST)/api" \
+		POINTY_RELAY_CONNECTOR_ADDR="$(RELAY_REMOTE_CONNECTOR_DIAL)" \
+		POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME="$(RELAY_REMOTE_HOST)" \
 		POINTY_RELAY_ALLOW_INSECURE_CONTROL=false \
 		POINTY_RELAY_CONNECTOR_SETUP_TOKEN="$$(cat '$(RELAY_REMOTE_TOKEN_FILE)')" \
 		POINTY_DISCOVERY_API_PORT="$(API_PORT)" \
