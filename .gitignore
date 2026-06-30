@@ -15,6 +15,10 @@ backend/media/
 relay/.gocache/
 relay/.gomodcache/
 relay/data/
+# dev-remote: per-run connector setup token + connector state (holds the
+# connector's private key + scoped token). Both are regenerated locally.
+relay/.remote-setup-token
+relay/.connector-state-remote.json
 
 # Local PyArmor license material and generated diagnostics.
 pyarmor-regfile-1941/
