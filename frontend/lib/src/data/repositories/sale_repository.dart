@@ -40,6 +40,10 @@ class SaleRepository {
 
   final PosApiService _service;
 
+  Future<Result<void>> sendInvoiceSms(int saleOrderId) {
+    return Result.guard(() => _service.sendInvoiceSms(saleOrderId));
+  }
+
   Future<Result<SaleOrder>> checkout(
     SaleCheckoutDraft draft, {
     String? idempotencyKey,

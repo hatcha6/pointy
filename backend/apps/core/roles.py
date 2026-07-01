@@ -73,6 +73,8 @@ MANAGER_PERMISSION_DOMAINS = (
     "attendance",
     "expenses",
     "migration",
+    "messaging",
+    "crm",
 )
 USER_PERMISSION_CODES = (
     "auth.add_user",
@@ -119,6 +121,9 @@ CASHIER_PERMISSION_CODES = (
     "operations.view_workflowstage",
     "customers.add_asset",
     "customers.view_asset",
+    # Front-desk staff can read and reply to customer SMS conversations.
+    "crm.view_conversations",
+    "crm.manage_conversations",
 )
 TECHNICIAN_PERMISSION_CODES = (
     "operations.add_job",

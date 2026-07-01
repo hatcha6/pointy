@@ -57,6 +57,22 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
     super.dispose();
   }
 
+  Future<void> _sendSms(SaleOrder order) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await _viewModel.sendInvoiceSms();
+    if (!mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          ok ? l10n.invoiceSendSmsSuccess : l10n.invoiceSendSmsError,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -70,6 +86,13 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
           appBar: AppBar(
             title: Text(l10n.invoiceDetailsTitle(_receiptNumber(l10n, order))),
             actions: [
+              if ((order.customerPhone ?? '').trim().isNotEmpty)
+                IconButton(
+                  tooltip: l10n.invoiceSendSmsTooltip,
+                  onPressed:
+                      _viewModel.isLoading ? null : () => _sendSms(order),
+                  icon: const Icon(Icons.sms_outlined),
+                ),
               IconButton(
                 tooltip: l10n.refreshInvoiceDetailsTooltip,
                 onPressed: _viewModel.isLoading ? null : _viewModel.loadInvoice,

@@ -44,6 +44,13 @@ class SalesApiClient {
     );
   }
 
+  Future<void> sendInvoiceSms(int saleOrderId) async {
+    final response = await _session.post(
+      'crm/orders/$saleOrderId/send-invoice-sms/',
+    );
+    _session.throwApiException(response, 'Send invoice SMS failed with status');
+  }
+
   /// Customer money-IN payments for the Payments hub, read through the backend
   /// ledger projection. Optional [method], [customerId] and a [paidAtGte] /
   /// [paidAtLte] window narrow the list; newest-paid first.

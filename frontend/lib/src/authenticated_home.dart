@@ -24,6 +24,8 @@ import 'features/catalog/view_models/category_management_view_model.dart';
 import 'features/catalog/views/category_management_screen.dart';
 import 'features/catalog/views/catalog_screen.dart';
 import 'features/contacts/views/contact_management_screen.dart';
+import 'features/crm/views/campaigns_screen.dart';
+import 'features/crm/views/conversations_screen.dart';
 import 'features/dashboard/views/dashboard_screen.dart';
 import 'features/fraud/view_models/integrity_monitor_view_model.dart';
 import 'features/fraud/views/integrity_monitor_screen.dart';
@@ -63,6 +65,7 @@ import 'features/settings/view_models/prep_stations_view_model.dart';
 import 'features/settings/view_models/price_checkers_view_model.dart';
 import 'features/settings/view_models/sales_channels_view_model.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
+import 'features/settings/view_models/messaging_settings_view_model.dart';
 import 'features/settings/view_models/subscription_status_view_model.dart';
 import 'features/settings/views/shop_settings_screen.dart';
 import 'features/user_settings/views/user_settings_screen.dart';
@@ -246,6 +249,8 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.returnsExchange => returnsExchangeRouteBuilder,
       AppNavigationDestination.purchasing => purchasingRouteBuilder,
       AppNavigationDestination.contacts => contactsRouteBuilder,
+      AppNavigationDestination.conversations => conversationsRouteBuilder,
+      AppNavigationDestination.campaigns => campaignsRouteBuilder,
       AppNavigationDestination.catalog => catalogRouteBuilder,
       AppNavigationDestination.categories => categoryRouteBuilder,
       AppNavigationDestination.stockCount => stockCountRouteBuilder,
@@ -639,6 +644,9 @@ class _AuthenticatedRoutes implements AppNavigation {
         subscriptionViewModel: SubscriptionStatusViewModel(
           dependencies.subscriptionRepository,
         ),
+        messagingViewModel: MessagingSettingsViewModel(
+          dependencies.messagingRepository,
+        ),
         clientUpdateService: dependencies.clientUpdateService,
         capabilities: capabilities,
         navigation: this,
@@ -692,6 +700,28 @@ class _AuthenticatedRoutes implements AppNavigation {
         capabilities: capabilities,
         navigation: this,
         onOpenTarget: _openActivityTarget,
+      ),
+    );
+  }
+
+  Widget conversationsRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'conversations',
+      ConversationsScreen(
+        viewModel: dependencies.conversationsViewModel,
+        capabilities: capabilities,
+        navigation: this,
+      ),
+    );
+  }
+
+  Widget campaignsRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'campaigns',
+      CampaignsScreen(
+        viewModel: dependencies.campaignsViewModel,
+        capabilities: capabilities,
+        navigation: this,
       ),
     );
   }

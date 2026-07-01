@@ -22097,6 +22097,540 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'راجع مخزوني وأنشئ أوامر شراء ذكية للأصناف التي تحتاج إعادة طلب. تجاهل الأصناف البطيئة والراكدة حتى لا أُجمّد رأس مالي، واحسب الكميات من سرعة البيع الفعلية مقرّبةً لوحدات الشراء. لكل صنف اختر المورّد الأنسب من سجلّ الشراء، وأنشئ أمر شراء منفصلًا لكل مورّد. اعرض لي ملخصًا بعدد الأوامر والموردين وإجمالي رأس المال المقدَّر وخُذ تأكيدي قبل الإنشاء.'**
   String get smartReorderSeed;
+
+  /// No description provided for @messagingSettingsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات الرسائل'**
+  String get messagingSettingsTitle;
+
+  /// No description provided for @messagingSettingsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بوابة الإرسال (هاتف SMS Gate) وحدود الإرسال ورسالة اختبار'**
+  String get messagingSettingsSubtitle;
+
+  /// No description provided for @messagingHeroTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بوابة الرسائل'**
+  String get messagingHeroTitle;
+
+  /// No description provided for @messagingStatusActive.
+  ///
+  /// In ar, this message translates to:
+  /// **'جاهزة للإرسال'**
+  String get messagingStatusActive;
+
+  /// No description provided for @messagingStatusInactive.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مُهيّأة'**
+  String get messagingStatusInactive;
+
+  /// No description provided for @messagingHasRecentError.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطأ حديث'**
+  String get messagingHasRecentError;
+
+  /// No description provided for @messagingNotConfiguredTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُهيّأ البوابة بعد'**
+  String get messagingNotConfiguredTitle;
+
+  /// No description provided for @messagingNotConfiguredMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل عنوان هاتف SMS Gate على الشبكة واسم المستخدم وكلمة المرور، ثم احفظ.'**
+  String get messagingNotConfiguredMessage;
+
+  /// No description provided for @messagingConnectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاتصال بالجهاز'**
+  String get messagingConnectionTitle;
+
+  /// No description provided for @messagingBaseUrlLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عنوان الجهاز (Base URL)'**
+  String get messagingBaseUrlLabel;
+
+  /// No description provided for @messagingUsernameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم'**
+  String get messagingUsernameLabel;
+
+  /// No description provided for @messagingPasswordLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور'**
+  String get messagingPasswordLabel;
+
+  /// No description provided for @messagingPasswordKeepHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركه فارغًا للإبقاء على كلمة المرور الحالية'**
+  String get messagingPasswordKeepHint;
+
+  /// No description provided for @messagingRateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسائل/الدقيقة'**
+  String get messagingRateLabel;
+
+  /// No description provided for @messagingDailyCapLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد اليومي (0 = بلا حد)'**
+  String get messagingDailyCapLabel;
+
+  /// No description provided for @messagingSaveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ'**
+  String get messagingSaveButton;
+
+  /// No description provided for @messagingSavedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ إعدادات البوابة'**
+  String get messagingSavedMessage;
+
+  /// No description provided for @messagingSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الإعدادات'**
+  String get messagingSaveError;
+
+  /// No description provided for @messagingLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل إعدادات الرسائل'**
+  String get messagingLoadError;
+
+  /// No description provided for @messagingTestTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال رسالة اختبار'**
+  String get messagingTestTitle;
+
+  /// No description provided for @messagingTestNeedsSaveTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'احفظ البوابة أولًا'**
+  String get messagingTestNeedsSaveTitle;
+
+  /// No description provided for @messagingTestNeedsSaveMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل إعدادات الاتصال واحفظها قبل إرسال رسالة اختبار.'**
+  String get messagingTestNeedsSaveMessage;
+
+  /// No description provided for @messagingTestPhoneLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الهاتف'**
+  String get messagingTestPhoneLabel;
+
+  /// No description provided for @messagingTestSendButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال اختبار'**
+  String get messagingTestSendButton;
+
+  /// No description provided for @messagingTestSentTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الإرسال'**
+  String get messagingTestSentTitle;
+
+  /// No description provided for @messagingTestSentMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'غادرت رسالة الاختبار البوابة بنجاح.'**
+  String get messagingTestSentMessage;
+
+  /// No description provided for @messagingTestFailedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل الإرسال'**
+  String get messagingTestFailedTitle;
+
+  /// No description provided for @messagingTestFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إرسال رسالة الاختبار. تأكد من عنوان الجهاز وبيانات الدخول.'**
+  String get messagingTestFailedMessage;
+
+  /// No description provided for @messagingActivateButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل تلقائي وضبط الروابط'**
+  String get messagingActivateButton;
+
+  /// No description provided for @messagingActivateHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'يضبط الجهاز تلقائيًا لاستقبال الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي.'**
+  String get messagingActivateHint;
+
+  /// No description provided for @messagingActivateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر التفعيل التلقائي — تأكد من الاتصال بالجهاز.'**
+  String get messagingActivateError;
+
+  /// No description provided for @messagingActivatedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم التفعيل — سُجّلت {count} روابط تلقائيًا.'**
+  String messagingActivatedMessage(int count);
+
+  /// No description provided for @conversationsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المحادثات'**
+  String get conversationsTitle;
+
+  /// No description provided for @conversationsDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المحادثات'**
+  String get conversationsDrawerLabel;
+
+  /// No description provided for @conversationsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد محادثات بعد'**
+  String get conversationsEmpty;
+
+  /// No description provided for @conversationsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل المحادثات'**
+  String get conversationsLoadError;
+
+  /// No description provided for @conversationsUnreadBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} جديدة'**
+  String conversationsUnreadBadge(int count);
+
+  /// No description provided for @conversationThreadEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد رسائل في هذه المحادثة'**
+  String get conversationThreadEmpty;
+
+  /// No description provided for @conversationReplyHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب ردًا…'**
+  String get conversationReplyHint;
+
+  /// No description provided for @conversationSendTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال'**
+  String get conversationSendTooltip;
+
+  /// No description provided for @conversationSendError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إرسال الرسالة'**
+  String get conversationSendError;
+
+  /// No description provided for @conversationReadOnly.
+  ///
+  /// In ar, this message translates to:
+  /// **'ليس لديك صلاحية الرد على المحادثات'**
+  String get conversationReadOnly;
+
+  /// No description provided for @customerConsentTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفضيلات التواصل'**
+  String get customerConsentTitle;
+
+  /// No description provided for @customerMarketingAllowedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'السماح بالرسائل التسويقية'**
+  String get customerMarketingAllowedLabel;
+
+  /// No description provided for @customerMarketingAllowedHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال العروض والحملات عبر SMS. يمكن للعميل الإيقاف بإرسال STOP.'**
+  String get customerMarketingAllowedHelp;
+
+  /// No description provided for @customerDoNotContactLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدم الإزعاج'**
+  String get customerDoNotContactLabel;
+
+  /// No description provided for @customerDoNotContactHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف كل الرسائل التسويقية لهذا العميل (تبقى الرسائل المتعلقة بالفواتير مسموحة).'**
+  String get customerDoNotContactHelp;
+
+  /// No description provided for @customerConsentError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحديث تفضيلات التواصل'**
+  String get customerConsentError;
+
+  /// No description provided for @invoiceSendSmsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال الفاتورة كرسالة نصية'**
+  String get invoiceSendSmsTooltip;
+
+  /// No description provided for @invoiceSendSmsSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال الفاتورة برسالة نصية'**
+  String get invoiceSendSmsSuccess;
+
+  /// No description provided for @invoiceSendSmsError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إرسال الفاتورة برسالة نصية'**
+  String get invoiceSendSmsError;
+
+  /// No description provided for @campaignsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحملات'**
+  String get campaignsTitle;
+
+  /// No description provided for @campaignsDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحملات'**
+  String get campaignsDrawerLabel;
+
+  /// No description provided for @campaignsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد حملات بعد'**
+  String get campaignsEmpty;
+
+  /// No description provided for @campaignsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الحملات'**
+  String get campaignsLoadError;
+
+  /// No description provided for @campaignNewButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حملة جديدة'**
+  String get campaignNewButton;
+
+  /// No description provided for @campaignNewTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حملة جديدة'**
+  String get campaignNewTitle;
+
+  /// No description provided for @campaignEditTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الحملة'**
+  String get campaignEditTitle;
+
+  /// No description provided for @campaignStatusLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة'**
+  String get campaignStatusLabel;
+
+  /// No description provided for @campaignStatusDraft.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسودة'**
+  String get campaignStatusDraft;
+
+  /// No description provided for @campaignStatusSending.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد الإرسال'**
+  String get campaignStatusSending;
+
+  /// No description provided for @campaignStatusSent.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُرسَلة'**
+  String get campaignStatusSent;
+
+  /// No description provided for @campaignStatusCancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغاة'**
+  String get campaignStatusCancelled;
+
+  /// No description provided for @campaignStatusFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشلت'**
+  String get campaignStatusFailed;
+
+  /// No description provided for @campaignAiBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'اقتراح الذكاء الاصطناعي'**
+  String get campaignAiBadge;
+
+  /// No description provided for @campaignRecipientsSummary.
+  ///
+  /// In ar, this message translates to:
+  /// **'{sent} من {total} مُرسَلة'**
+  String campaignRecipientsSummary(int sent, int total);
+
+  /// No description provided for @campaignNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الحملة'**
+  String get campaignNameLabel;
+
+  /// No description provided for @campaignBodyLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نص الرسالة'**
+  String get campaignBodyLabel;
+
+  /// No description provided for @campaignBodyHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكن تضمين اسم العميل واسم المتجر في النص تلقائيًا.'**
+  String get campaignBodyHelp;
+
+  /// No description provided for @campaignSegmentsCounter.
+  ///
+  /// In ar, this message translates to:
+  /// **'≈ {count} مقطع'**
+  String campaignSegmentsCounter(int count);
+
+  /// No description provided for @campaignAudienceTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفئة المستهدفة'**
+  String get campaignAudienceTitle;
+
+  /// No description provided for @campaignSaveButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ المسودة'**
+  String get campaignSaveButton;
+
+  /// No description provided for @campaignSavedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ المسودة'**
+  String get campaignSavedMessage;
+
+  /// No description provided for @campaignSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ المسودة'**
+  String get campaignSaveError;
+
+  /// No description provided for @campaignSaveFirstTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'احفظ المسودة أولًا'**
+  String get campaignSaveFirstTitle;
+
+  /// No description provided for @campaignSaveFirstHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'احفظ الحملة كمسودة لتتمكن من معاينتها وإرسالها.'**
+  String get campaignSaveFirstHint;
+
+  /// No description provided for @campaignPreviewTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعاينة والإرسال'**
+  String get campaignPreviewTitle;
+
+  /// No description provided for @campaignPreviewButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'معاينة الفئة'**
+  String get campaignPreviewButton;
+
+  /// No description provided for @campaignPreviewAudience.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الفئة'**
+  String get campaignPreviewAudience;
+
+  /// No description provided for @campaignPreviewSendable.
+  ///
+  /// In ar, this message translates to:
+  /// **'القابلون للإرسال'**
+  String get campaignPreviewSendable;
+
+  /// No description provided for @campaignPreviewSkipped.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستبعدون (رفضوا التسويق)'**
+  String get campaignPreviewSkipped;
+
+  /// No description provided for @campaignPreviewSegments.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد المقاطع'**
+  String get campaignPreviewSegments;
+
+  /// No description provided for @campaignPreviewDurationLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدة التقديرية'**
+  String get campaignPreviewDurationLabel;
+
+  /// No description provided for @campaignPreviewDuration.
+  ///
+  /// In ar, this message translates to:
+  /// **'≈ {minutes} دقيقة'**
+  String campaignPreviewDuration(int minutes);
+
+  /// No description provided for @campaignSampleTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نموذج الرسالة'**
+  String get campaignSampleTitle;
+
+  /// No description provided for @campaignSendButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'موافقة وإرسال'**
+  String get campaignSendButton;
+
+  /// No description provided for @campaignSentMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدأ إرسال الحملة'**
+  String get campaignSentMessage;
+
+  /// No description provided for @campaignSendError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إرسال الحملة'**
+  String get campaignSendError;
+
+  /// No description provided for @campaignNoSendPermission.
+  ///
+  /// In ar, this message translates to:
+  /// **'ليس لديك صلاحية إرسال الحملات'**
+  String get campaignNoSendPermission;
 }
 
 class _AppLocalizationsDelegate

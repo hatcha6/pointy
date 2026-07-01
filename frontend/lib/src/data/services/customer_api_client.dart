@@ -39,6 +39,28 @@ class CustomerApiClient {
     );
   }
 
+  Future<void> setCustomerConsent(
+    int customerId, {
+    bool? marketingOptedOut,
+    bool? doNotContact,
+  }) async {
+    final body = <String, Object?>{};
+    if (marketingOptedOut != null) {
+      body['marketing_opted_out'] = marketingOptedOut;
+    }
+    if (doNotContact != null) {
+      body['do_not_contact'] = doNotContact;
+    }
+    final response = await _session.post(
+      'crm/customers/$customerId/consent/',
+      body: body,
+    );
+    _session.throwApiException(
+      response,
+      'Customer consent update failed with status',
+    );
+  }
+
   Future<CustomerSalesSummary> fetchCustomerSalesSummary(int customerId) async {
     final response = await _session.get('customers/$customerId/sales-summary/');
     _session.throwApiException(

@@ -100,6 +100,8 @@ INSTALLED_APPS = [
     "apps.printing",
     "apps.reports",
     "apps.notifications",
+    "apps.messaging",
+    "apps.crm",
     "apps.attachments",
     "apps.employees",
     "apps.attendance",
@@ -264,6 +266,25 @@ POINTY_BACKUP_STAGING_ROOT = Path(
     env("POINTY_BACKUP_STAGING_ROOT", default="/tmp/pointy-backup-staging")
 )
 POINTY_BACKUP_RESTORE_MAX_BYTES = env("POINTY_BACKUP_RESTORE_MAX_BYTES")
+POINTY_SMS_DEBT_REMINDERS_ENABLED = env.bool(
+    "POINTY_SMS_DEBT_REMINDERS_ENABLED", default=False
+)
+# When on, creating a discount auto-drafts a marketing campaign for it (still
+# awaiting human approval). Off by default so no shop gets surprise drafts.
+POINTY_SMS_AUTO_CAMPAIGN_ON_DISCOUNT = env.bool(
+    "POINTY_SMS_AUTO_CAMPAIGN_ON_DISCOUNT", default=False
+)
+# When on (and AI is entitled), a nightly task drafts a win-back campaign for
+# slipping cohorts. Opt-in; always a draft awaiting human approval, never sent.
+POINTY_SMS_AI_SUGGESTIONS_ENABLED = env.bool(
+    "POINTY_SMS_AI_SUGGESTIONS_ENABLED", default=False
+)
+# Explicit base URL the SMS Gate phone should POST webhooks to (e.g.
+# http://192.168.1.20:8000). Blank = derive from the activation request's Host
+# (the LAN address the admin reached the backend on).
+POINTY_MESSAGING_WEBHOOK_BASE_URL = env(
+    "POINTY_MESSAGING_WEBHOOK_BASE_URL", default=""
+)
 CELERY_BEAT_SCHEDULE = {
     "notifications.sync-business-notifications": {
         "task": "notifications.sync_business_notifications",
@@ -307,6 +328,34 @@ CELERY_BEAT_SCHEDULE = {
     "customers.recompute-customer-segments": {
         "task": "customers.recompute_customer_segments",
         "schedule": crontab(minute=45, hour=2),
+    },
+    # Pace the outbound message queue: drain due messages up to each gateway's
+    # per-minute throttle / daily cap, holding marketing during quiet hours.
+    "messaging.dispatch-outbound": {
+        "task": "messaging.dispatch_outbound",
+        "schedule": timedelta(seconds=10),
+    },
+    # Reconcile messages wedged in "sending" and expire stale ones.
+    "messaging.sweep-stuck": {
+        "task": "messaging.sweep_stuck",
+        "schedule": timedelta(minutes=5),
+    },
+    # Daily debt reminders for open-credit (آجل) invoices — opt-in via
+    # POINTY_SMS_DEBT_REMINDERS_ENABLED; the task no-ops when disabled.
+    "crm.debt-reminder-sweep": {
+        "task": "crm.debt_reminder_sweep",
+        "schedule": crontab(minute=0, hour=10),
+    },
+    # Drain sending campaigns into the outbound queue (the gateway limiter paces
+    # the actual sends).
+    "crm.pump-sending-campaigns": {
+        "task": "crm.pump_sending_campaigns",
+        "schedule": timedelta(minutes=1),
+    },
+    # Nightly proactive AI campaign drafts (opt-in; always drafts).
+    "crm.generate-ai-suggestions": {
+        "task": "crm.generate_ai_suggestions",
+        "schedule": crontab(minute=30, hour=3),
     },
 }
 

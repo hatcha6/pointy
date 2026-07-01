@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
   "arabic-reshaper>=3,<4",
   "celery[redis]>=5.4,<6",
+  "cryptography>=43,<48",
   "django>=5.1,<6",
   "django-cors-headers>=4.4,<5",
   "django-environ>=0.11,<1",
@@ -17,6 +18,7 @@ dependencies = [
   "django-redis>=5.4,<6",
   "djangorestframework>=3.15,<4",
   "drf-spectacular>=0.27,<1",
+  "phonenumbers>=8,<10",
   "pillow>=10,<12",
   "psycopg[binary]>=3.2,<4",
   # SQL Server is the most common legacy POS backend, so the data-migration

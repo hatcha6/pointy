@@ -9,6 +9,8 @@ import 'data/models/device_settings.dart';
 import 'data/repositories/ai_chat_repository.dart';
 import 'data/repositories/analytics_repository.dart';
 import 'data/repositories/auth_repository.dart';
+import 'data/repositories/crm_repository.dart';
+import 'data/repositories/messaging_repository.dart';
 import 'data/repositories/business_alert_repository.dart';
 import 'data/repositories/attendance_repository.dart';
 import 'data/repositories/migration_repository.dart';
@@ -45,6 +47,8 @@ import 'data/services/pos_http_client.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'features/activity_log/view_models/activity_log_view_model.dart';
 import 'features/contacts/view_models/contact_management_view_model.dart';
+import 'features/crm/view_models/campaigns_view_model.dart';
+import 'features/crm/view_models/conversations_view_model.dart';
 import 'features/dashboard/view_models/dashboard_view_model.dart';
 import 'features/device_settings/view_models/device_settings_view_model.dart';
 import 'features/discounts/view_models/discount_management_view_model.dart';
@@ -117,6 +121,8 @@ class PointyAppDependencies {
     paymentsRepository = PaymentsRepository(service);
     stockCountRepository = StockCountRepository(service);
     subscriptionRepository = SubscriptionRepository(service);
+    messagingRepository = MessagingRepository(service);
+    crmRepository = CrmRepository(service);
     userRepository = UserRepository(service);
     connectionCoordinator = ConnectionCoordinator(
       service: service,
@@ -179,6 +185,8 @@ class PointyAppDependencies {
   late final PaymentsRepository paymentsRepository;
   late final StockCountRepository stockCountRepository;
   late final SubscriptionRepository subscriptionRepository;
+  late final MessagingRepository messagingRepository;
+  late final CrmRepository crmRepository;
   late final UserRepository userRepository;
   late final ConnectionCoordinator connectionCoordinator;
   late final AuthViewModel authViewModel;
@@ -193,6 +201,8 @@ class PointyAppDependencies {
   NotificationCenterViewModel? _notificationCenterViewModel;
   ActivityLogViewModel? _activityLogViewModel;
   DashboardViewModel? _dashboardViewModel;
+  ConversationsViewModel? _conversationsViewModel;
+  CampaignsViewModel? _campaignsViewModel;
   InvoiceListViewModel? _invoiceListViewModel;
   PurchaseViewModel? _purchaseViewModel;
   PurchaseOrderListViewModel? _purchaseOrderListViewModel;
@@ -232,6 +242,12 @@ class PointyAppDependencies {
         printingRepository,
         analyticsEngine: analyticsEngine,
       );
+
+  ConversationsViewModel get conversationsViewModel =>
+      _conversationsViewModel ??= ConversationsViewModel(crmRepository);
+
+  CampaignsViewModel get campaignsViewModel =>
+      _campaignsViewModel ??= CampaignsViewModel(crmRepository);
 
   ContactManagementViewModel get contactManagementViewModel =>
       _contactManagementViewModel ??= ContactManagementViewModel(

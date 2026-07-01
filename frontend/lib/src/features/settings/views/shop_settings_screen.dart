@@ -30,11 +30,13 @@ import '../view_models/prep_stations_view_model.dart';
 import '../view_models/price_checkers_view_model.dart';
 import '../view_models/sales_channels_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
+import '../view_models/messaging_settings_view_model.dart';
 import '../view_models/subscription_status_view_model.dart';
 import 'operations_settings_page.dart';
 import 'app_updates_page.dart';
 import 'price_checkers_page.dart';
 import 'sales_channels_page.dart';
+import 'messaging_settings_page.dart';
 import 'subscription_status_page.dart';
 
 part 'shop_settings_widgets.dart';
@@ -52,6 +54,7 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.attendanceViewModel,
     required this.migrationViewModel,
     required this.subscriptionViewModel,
+    required this.messagingViewModel,
     required this.clientUpdateService,
     required this.capabilities,
     required this.navigation,
@@ -66,6 +69,7 @@ class ShopSettingsScreen extends StatelessWidget {
   final AttendanceViewModel attendanceViewModel;
   final MigrationViewModel migrationViewModel;
   final SubscriptionStatusViewModel subscriptionViewModel;
+  final MessagingSettingsViewModel messagingViewModel;
   final ClientUpdateService clientUpdateService;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
@@ -111,11 +115,13 @@ class ShopSettingsScreen extends StatelessWidget {
               attendanceViewModel: attendanceViewModel,
               migrationViewModel: migrationViewModel,
               subscriptionViewModel: subscriptionViewModel,
+              messagingViewModel: messagingViewModel,
               clientUpdateService: clientUpdateService,
               canManageSalesChannels: capabilities.canManageSalesChannels,
               canManagePriceCheckers: capabilities.canManagePriceCheckers,
               canManageWorkflows: capabilities.canManageWorkflows,
               canManageAttendance: capabilities.canManageAttendance,
+              canManageMessaging: capabilities.canManageMessaging,
             ),
           ),
         );
@@ -135,11 +141,13 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.attendanceViewModel,
     required this.migrationViewModel,
     required this.subscriptionViewModel,
+    required this.messagingViewModel,
     required this.clientUpdateService,
     required this.canManageSalesChannels,
     required this.canManagePriceCheckers,
     required this.canManageWorkflows,
     required this.canManageAttendance,
+    required this.canManageMessaging,
   });
 
   final ShopSettingsViewModel viewModel;
@@ -151,11 +159,13 @@ class _ShopSettingsBody extends StatelessWidget {
   final AttendanceViewModel attendanceViewModel;
   final MigrationViewModel migrationViewModel;
   final SubscriptionStatusViewModel subscriptionViewModel;
+  final MessagingSettingsViewModel messagingViewModel;
   final ClientUpdateService clientUpdateService;
   final bool canManageSalesChannels;
   final bool canManagePriceCheckers;
   final bool canManageWorkflows;
   final bool canManageAttendance;
+  final bool canManageMessaging;
 
   @override
   Widget build(BuildContext context) {
@@ -192,11 +202,13 @@ class _ShopSettingsBody extends StatelessWidget {
       attendanceViewModel: attendanceViewModel,
       migrationViewModel: migrationViewModel,
       subscriptionViewModel: subscriptionViewModel,
+      messagingViewModel: messagingViewModel,
       clientUpdateService: clientUpdateService,
       canManageSalesChannels: canManageSalesChannels,
       canManagePriceCheckers: canManagePriceCheckers,
       canManageWorkflows: canManageWorkflows,
       canManageAttendance: canManageAttendance,
+      canManageMessaging: canManageMessaging,
       settings: settings,
     );
   }
@@ -213,11 +225,13 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.attendanceViewModel,
     required this.migrationViewModel,
     required this.subscriptionViewModel,
+    required this.messagingViewModel,
     required this.clientUpdateService,
     required this.canManageSalesChannels,
     required this.canManagePriceCheckers,
     required this.canManageWorkflows,
     required this.canManageAttendance,
+    required this.canManageMessaging,
     required this.settings,
   });
 
@@ -230,11 +244,13 @@ class _ShopSettingsForm extends StatefulWidget {
   final AttendanceViewModel attendanceViewModel;
   final MigrationViewModel migrationViewModel;
   final SubscriptionStatusViewModel subscriptionViewModel;
+  final MessagingSettingsViewModel messagingViewModel;
   final ClientUpdateService clientUpdateService;
   final bool canManageSalesChannels;
   final bool canManagePriceCheckers;
   final bool canManageWorkflows;
   final bool canManageAttendance;
+  final bool canManageMessaging;
   final ShopSettings settings;
 
   @override
@@ -545,6 +561,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                             onTap: widget.viewModel.isSaving
                                 ? null
                                 : () => _openAttendanceSettings(context),
+                          ),
+                        if (widget.canManageMessaging)
+                          PointySettingsTile(
+                            icon: Icons.sms_outlined,
+                            title: l10n.messagingSettingsTitle,
+                            subtitle: l10n.messagingSettingsSubtitle,
+                            onTap: widget.viewModel.isSaving
+                                ? null
+                                : () => _openMessagingSettings(context),
                           ),
                         PointySettingsTile(
                           icon: Icons.backup_outlined,
@@ -1286,6 +1311,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       MaterialPageRoute<void>(
         builder: (routeContext) =>
             SubscriptionStatusPage(viewModel: widget.subscriptionViewModel),
+      ),
+    );
+  }
+
+  Future<void> _openMessagingSettings(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) =>
+            MessagingSettingsPage(viewModel: widget.messagingViewModel),
       ),
     );
   }

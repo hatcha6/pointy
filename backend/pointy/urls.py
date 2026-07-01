@@ -102,6 +102,17 @@ from apps.inventory.views import (
     StockItemViewSet,
     StockMovementViewSet,
 )
+from apps.crm.views import (
+    CampaignViewSet,
+    ConversationViewSet,
+    CustomerConsentView,
+    SendInvoiceSmsView,
+)
+from apps.messaging.views import (
+    DeliveryReceiptWebhookView,
+    InboundWebhookView,
+    MessagingGatewayViewSet,
+)
 from apps.notifications.views import BusinessNotificationViewSet
 from apps.payments.views import PaymentViewSet
 from apps.printing.views import (
@@ -180,6 +191,17 @@ router.register(
     BusinessNotificationViewSet,
     basename="business-notification",
 )
+router.register(
+    "messaging/gateways",
+    MessagingGatewayViewSet,
+    basename="messaging-gateway",
+)
+router.register(
+    "crm/conversations",
+    ConversationViewSet,
+    basename="crm-conversation",
+)
+router.register("crm/campaigns", CampaignViewSet, basename="crm-campaign")
 router.register("attachments", AttachmentViewSet, basename="attachment")
 router.register(
     "attendance/profiles",
@@ -337,6 +359,26 @@ urlpatterns = [
         "api/price-checker/register/",
         price_checker_register_view,
         name="price-checker-register",
+    ),
+    path(
+        "api/messaging/inbound/<int:gateway_id>/",
+        InboundWebhookView.as_view(),
+        name="messaging-inbound",
+    ),
+    path(
+        "api/messaging/receipts/<int:gateway_id>/",
+        DeliveryReceiptWebhookView.as_view(),
+        name="messaging-receipts",
+    ),
+    path(
+        "api/crm/customers/<int:customer_id>/consent/",
+        CustomerConsentView.as_view(),
+        name="crm-customer-consent",
+    ),
+    path(
+        "api/crm/orders/<int:order_id>/send-invoice-sms/",
+        SendInvoiceSmsView.as_view(),
+        name="crm-send-invoice-sms",
     ),
     path("api/", include(router.urls)),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),

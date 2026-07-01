@@ -53,6 +53,11 @@ enum AppCapability {
   manageShopSettings,
   manageSalesChannels,
   managePriceCheckers,
+  manageMessaging,
+  viewConversations,
+  manageConversations,
+  manageCampaigns,
+  sendCampaigns,
   viewExpenses,
   manageExpenses,
   viewPayments,
@@ -441,6 +446,40 @@ class AuthorizationCapabilities {
         capabilities.add(AppCapability.managePriceCheckers);
       }
       if (_hasAny(user, const [
+        'manage_gateways',
+        'messaging.manage_gateways',
+      ])) {
+        capabilities.add(AppCapability.manageMessaging);
+      }
+      if (_hasAny(user, const [
+        'view_conversations',
+        'crm.view_conversations',
+      ])) {
+        capabilities.add(AppCapability.viewConversations);
+      }
+      if (_hasAny(user, const [
+        'manage_conversations',
+        'crm.manage_conversations',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewConversations)
+          ..add(AppCapability.manageConversations);
+      }
+      if (_hasAny(user, const [
+        'manage_campaigns',
+        'crm.manage_campaigns',
+      ])) {
+        capabilities.add(AppCapability.manageCampaigns);
+      }
+      if (_hasAny(user, const [
+        'send_campaigns',
+        'crm.send_campaigns',
+      ])) {
+        capabilities
+          ..add(AppCapability.manageCampaigns)
+          ..add(AppCapability.sendCampaigns);
+      }
+      if (_hasAny(user, const [
         'view_attendanceday',
         'attendance.view_attendanceday',
       ])) {
@@ -676,6 +715,12 @@ class AuthorizationCapabilities {
   bool get canManageShopSettings => allows(AppCapability.manageShopSettings);
   bool get canManageSalesChannels => allows(AppCapability.manageSalesChannels);
   bool get canManagePriceCheckers => allows(AppCapability.managePriceCheckers);
+  bool get canManageMessaging => allows(AppCapability.manageMessaging);
+  bool get canViewConversations => allows(AppCapability.viewConversations);
+  bool get canManageConversations =>
+      allows(AppCapability.manageConversations);
+  bool get canManageCampaigns => allows(AppCapability.manageCampaigns);
+  bool get canSendCampaigns => allows(AppCapability.sendCampaigns);
   bool get canViewExpenses => allows(AppCapability.viewExpenses);
   bool get canManageExpenses => allows(AppCapability.manageExpenses);
   bool get canViewPayments => allows(AppCapability.viewPayments);

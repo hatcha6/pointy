@@ -253,6 +253,11 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
     return false;
   }
 
+  Future<bool> sendInvoiceSms() async {
+    final result = await _saleRepository.sendInvoiceSms(_order.id);
+    return result is Ok<void>;
+  }
+
   Future<OrderDocumentActionStatus> shareInvoice(SaleOrder order) async {
     final shopSettings = await _loadShopSettings();
     final status = await _printingRepository.shareSaleInvoice(

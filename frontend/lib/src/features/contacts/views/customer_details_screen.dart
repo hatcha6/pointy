@@ -136,6 +136,12 @@ class CustomerDetailsView extends StatelessWidget {
               ),
               SizedBox(height: spacing.md),
               PointyDetailSection(
+                title: l10n.customerConsentTitle,
+                icon: Icons.notifications_active_outlined,
+                child: _CustomerConsent(viewModel: viewModel),
+              ),
+              SizedBox(height: spacing.md),
+              PointyDetailSection(
                 title: l10n.paymentCardsTitle,
                 icon: Icons.credit_card_outlined,
                 child: _CustomerPaymentCards(viewModel: viewModel),
@@ -162,6 +168,60 @@ class CustomerDetailsView extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _CustomerConsent extends StatelessWidget {
+  const _CustomerConsent({required this.viewModel});
+
+  final CustomerDetailsViewModel viewModel;
+
+  Future<void> _set(
+    BuildContext context, {
+    bool? marketingOptedOut,
+    bool? doNotContact,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await viewModel.setConsent(
+      marketingOptedOut: marketingOptedOut,
+      doNotContact: doNotContact,
+    );
+    if (!ok) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.customerConsentError)),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final customer = viewModel.customer;
+    final busy = viewModel.isSaving;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SwitchListTile(
+          title: Text(l10n.customerMarketingAllowedLabel),
+          subtitle: Text(l10n.customerMarketingAllowedHelp),
+          value: !customer.marketingOptedOut && !customer.doNotContact,
+          onChanged: busy || customer.doNotContact
+              ? null
+              : (value) => _set(context, marketingOptedOut: !value),
+          contentPadding: EdgeInsets.zero,
+        ),
+        SwitchListTile(
+          title: Text(l10n.customerDoNotContactLabel),
+          subtitle: Text(l10n.customerDoNotContactHelp),
+          value: customer.doNotContact,
+          onChanged: busy
+              ? null
+              : (value) => _set(context, doNotContact: value),
+          contentPadding: EdgeInsets.zero,
+        ),
+      ],
     );
   }
 }

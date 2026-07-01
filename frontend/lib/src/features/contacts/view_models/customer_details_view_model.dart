@@ -75,6 +75,35 @@ class CustomerDetailsViewModel extends ChangeNotifier {
   bool get isLoadingCards => _isLoadingCards;
   bool get hasCardsError => _hasCardsError;
   bool get isSaving => _isSaving;
+
+  /// Set the customer's contact consent, then reload so the UI reflects the
+  /// server-recorded state. Backend enforces the ``crm.manage_consent``
+  /// permission — a forbidden change fails and the toggle reverts.
+  Future<bool> setConsent({bool? marketingOptedOut, bool? doNotContact}) async {
+    if (_isSaving) {
+      return false;
+    }
+    _isSaving = true;
+    notifyListeners();
+
+    final result = await _contactRepository.setCustomerConsent(
+      _customer.id,
+      marketingOptedOut: marketingOptedOut,
+      doNotContact: doNotContact,
+    );
+    var ok = false;
+    if (result is Ok<void>) {
+      final refreshed = await _contactRepository.loadCustomer(_customer.id);
+      if (refreshed is Ok<Customer>) {
+        _customer = refreshed.value;
+      }
+      ok = true;
+    }
+
+    _isSaving = false;
+    notifyListeners();
+    return ok;
+  }
   bool get isLoadingCustomer => _isLoadingCustomer;
   bool get isLoadingSummary => _isLoadingSummary;
   bool get isLoadingOrders => _isLoadingOrders;

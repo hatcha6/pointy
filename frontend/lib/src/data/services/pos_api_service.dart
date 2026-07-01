@@ -93,6 +93,11 @@ import 'fraud_api_client.dart';
 import 'inventory_api_client.dart';
 import 'operations_api_client.dart';
 import 'pos_http_client.dart';
+import '../models/campaign.dart';
+import '../models/conversation.dart';
+import '../models/messaging_gateway.dart';
+import 'crm_api_client.dart';
+import 'messaging_api_client.dart';
 import 'price_checker_api_client.dart';
 import 'printing_api_client.dart';
 import 'migration_api_client.dart';
@@ -146,6 +151,8 @@ class PosApiService {
     _unitsOfMeasure = UnitOfMeasureApiClient(_session);
     _purchasing = PurchasingApiClient(_session);
     _printing = PrintingApiClient(_session);
+    _messaging = MessagingApiClient(_session);
+    _crm = CrmApiClient(_session);
     _priceChecker = PriceCheckerApiClient(_session);
     _stockCounts = StockCountApiClient(_session);
     _ai = AiApiClient(_session);
@@ -181,6 +188,8 @@ class PosApiService {
   late final UnitOfMeasureApiClient _unitsOfMeasure;
   late final PurchasingApiClient _purchasing;
   late final PrintingApiClient _printing;
+  late final MessagingApiClient _messaging;
+  late final CrmApiClient _crm;
   late final PriceCheckerApiClient _priceChecker;
   late final StockCountApiClient _stockCounts;
   late final AiApiClient _ai;
@@ -824,6 +833,22 @@ class PosApiService {
     return _customers.fetchCustomer(customerId);
   }
 
+  Future<void> setCustomerConsent(
+    int customerId, {
+    bool? marketingOptedOut,
+    bool? doNotContact,
+  }) {
+    return _customers.setCustomerConsent(
+      customerId,
+      marketingOptedOut: marketingOptedOut,
+      doNotContact: doNotContact,
+    );
+  }
+
+  Future<void> sendInvoiceSms(int saleOrderId) {
+    return _sales.sendInvoiceSms(saleOrderId);
+  }
+
   Future<CustomerSalesSummary> fetchCustomerSalesSummary(int customerId) {
     return _customers.fetchCustomerSalesSummary(customerId);
   }
@@ -1429,6 +1454,57 @@ class PosApiService {
   Future<PrintJob> requeuePrintJob(int printJobId) {
     return _printing.requeuePrintJob(jobId: printJobId);
   }
+
+  Future<List<MessagingGateway>> fetchMessagingGateways() =>
+      _messaging.fetchGateways();
+
+  Future<MessagingGateway> createMessagingGateway(MessagingGatewayDraft draft) =>
+      _messaging.createGateway(draft);
+
+  Future<MessagingGateway> updateMessagingGateway(
+    int id,
+    MessagingGatewayDraft draft,
+  ) => _messaging.updateGateway(id, draft);
+
+  Future<void> deleteMessagingGateway(int id) => _messaging.deleteGateway(id);
+
+  Future<MessagingSendResult> testSendMessagingGateway({
+    required int id,
+    required String to,
+    String? body,
+  }) => _messaging.testSend(id: id, to: to, body: body);
+
+  Future<GatewayActivation> activateMessagingGateway(int id) =>
+      _messaging.activate(id);
+
+  Future<List<Conversation>> fetchConversations({String? status}) =>
+      _crm.fetchConversations(status: status);
+
+  Future<Conversation> fetchConversation(int id) => _crm.fetchConversation(id);
+
+  Future<ConversationMessage> replyToConversation(int id, String body) =>
+      _crm.reply(id, body);
+
+  Future<Conversation> markConversationRead(int id) => _crm.markRead(id);
+
+  Future<List<Campaign>> fetchCampaigns({String? status}) =>
+      _crm.fetchCampaigns(status: status);
+
+  Future<Campaign> fetchCampaign(int id) => _crm.fetchCampaign(id);
+
+  Future<Campaign> createCampaign(CampaignDraft draft) =>
+      _crm.createCampaign(draft);
+
+  Future<Campaign> updateCampaign(int id, CampaignDraft draft) =>
+      _crm.updateCampaign(id, draft);
+
+  Future<void> deleteCampaign(int id) => _crm.deleteCampaign(id);
+
+  Future<CampaignPreview> previewCampaign(int id) => _crm.previewCampaign(id);
+
+  Future<Campaign> sendCampaign(int id) => _crm.sendCampaign(id);
+
+  Future<Campaign> cancelCampaign(int id) => _crm.cancelCampaign(id);
 
   Future<SaleOrder> voidSaleOrder({
     required int saleOrderId,

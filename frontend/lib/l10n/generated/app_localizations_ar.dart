@@ -12710,4 +12710,292 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get smartReorderSeed =>
       'راجع مخزوني وأنشئ أوامر شراء ذكية للأصناف التي تحتاج إعادة طلب. تجاهل الأصناف البطيئة والراكدة حتى لا أُجمّد رأس مالي، واحسب الكميات من سرعة البيع الفعلية مقرّبةً لوحدات الشراء. لكل صنف اختر المورّد الأنسب من سجلّ الشراء، وأنشئ أمر شراء منفصلًا لكل مورّد. اعرض لي ملخصًا بعدد الأوامر والموردين وإجمالي رأس المال المقدَّر وخُذ تأكيدي قبل الإنشاء.';
+
+  @override
+  String get messagingSettingsTitle => 'إعدادات الرسائل';
+
+  @override
+  String get messagingSettingsSubtitle =>
+      'بوابة الإرسال (هاتف SMS Gate) وحدود الإرسال ورسالة اختبار';
+
+  @override
+  String get messagingHeroTitle => 'بوابة الرسائل';
+
+  @override
+  String get messagingStatusActive => 'جاهزة للإرسال';
+
+  @override
+  String get messagingStatusInactive => 'غير مُهيّأة';
+
+  @override
+  String get messagingHasRecentError => 'خطأ حديث';
+
+  @override
+  String get messagingNotConfiguredTitle => 'لم تُهيّأ البوابة بعد';
+
+  @override
+  String get messagingNotConfiguredMessage =>
+      'أدخل عنوان هاتف SMS Gate على الشبكة واسم المستخدم وكلمة المرور، ثم احفظ.';
+
+  @override
+  String get messagingConnectionTitle => 'الاتصال بالجهاز';
+
+  @override
+  String get messagingBaseUrlLabel => 'عنوان الجهاز (Base URL)';
+
+  @override
+  String get messagingUsernameLabel => 'اسم المستخدم';
+
+  @override
+  String get messagingPasswordLabel => 'كلمة المرور';
+
+  @override
+  String get messagingPasswordKeepHint =>
+      'اتركه فارغًا للإبقاء على كلمة المرور الحالية';
+
+  @override
+  String get messagingRateLabel => 'رسائل/الدقيقة';
+
+  @override
+  String get messagingDailyCapLabel => 'الحد اليومي (0 = بلا حد)';
+
+  @override
+  String get messagingSaveButton => 'حفظ';
+
+  @override
+  String get messagingSavedMessage => 'تم حفظ إعدادات البوابة';
+
+  @override
+  String get messagingSaveError => 'تعذّر حفظ الإعدادات';
+
+  @override
+  String get messagingLoadError => 'تعذّر تحميل إعدادات الرسائل';
+
+  @override
+  String get messagingTestTitle => 'إرسال رسالة اختبار';
+
+  @override
+  String get messagingTestNeedsSaveTitle => 'احفظ البوابة أولًا';
+
+  @override
+  String get messagingTestNeedsSaveMessage =>
+      'أدخل إعدادات الاتصال واحفظها قبل إرسال رسالة اختبار.';
+
+  @override
+  String get messagingTestPhoneLabel => 'رقم الهاتف';
+
+  @override
+  String get messagingTestSendButton => 'إرسال اختبار';
+
+  @override
+  String get messagingTestSentTitle => 'تم الإرسال';
+
+  @override
+  String get messagingTestSentMessage => 'غادرت رسالة الاختبار البوابة بنجاح.';
+
+  @override
+  String get messagingTestFailedTitle => 'فشل الإرسال';
+
+  @override
+  String get messagingTestFailedMessage =>
+      'تعذّر إرسال رسالة الاختبار. تأكد من عنوان الجهاز وبيانات الدخول.';
+
+  @override
+  String get messagingActivateButton => 'تفعيل تلقائي وضبط الروابط';
+
+  @override
+  String get messagingActivateHint =>
+      'يضبط الجهاز تلقائيًا لاستقبال الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي.';
+
+  @override
+  String get messagingActivateError =>
+      'تعذّر التفعيل التلقائي — تأكد من الاتصال بالجهاز.';
+
+  @override
+  String messagingActivatedMessage(int count) {
+    return 'تم التفعيل — سُجّلت $count روابط تلقائيًا.';
+  }
+
+  @override
+  String get conversationsTitle => 'المحادثات';
+
+  @override
+  String get conversationsDrawerLabel => 'المحادثات';
+
+  @override
+  String get conversationsEmpty => 'لا توجد محادثات بعد';
+
+  @override
+  String get conversationsLoadError => 'تعذّر تحميل المحادثات';
+
+  @override
+  String conversationsUnreadBadge(int count) {
+    return '$count جديدة';
+  }
+
+  @override
+  String get conversationThreadEmpty => 'لا توجد رسائل في هذه المحادثة';
+
+  @override
+  String get conversationReplyHint => 'اكتب ردًا…';
+
+  @override
+  String get conversationSendTooltip => 'إرسال';
+
+  @override
+  String get conversationSendError => 'تعذّر إرسال الرسالة';
+
+  @override
+  String get conversationReadOnly => 'ليس لديك صلاحية الرد على المحادثات';
+
+  @override
+  String get customerConsentTitle => 'تفضيلات التواصل';
+
+  @override
+  String get customerMarketingAllowedLabel => 'السماح بالرسائل التسويقية';
+
+  @override
+  String get customerMarketingAllowedHelp =>
+      'إرسال العروض والحملات عبر SMS. يمكن للعميل الإيقاف بإرسال STOP.';
+
+  @override
+  String get customerDoNotContactLabel => 'عدم الإزعاج';
+
+  @override
+  String get customerDoNotContactHelp =>
+      'إيقاف كل الرسائل التسويقية لهذا العميل (تبقى الرسائل المتعلقة بالفواتير مسموحة).';
+
+  @override
+  String get customerConsentError => 'تعذّر تحديث تفضيلات التواصل';
+
+  @override
+  String get invoiceSendSmsTooltip => 'إرسال الفاتورة كرسالة نصية';
+
+  @override
+  String get invoiceSendSmsSuccess => 'تم إرسال الفاتورة برسالة نصية';
+
+  @override
+  String get invoiceSendSmsError => 'تعذّر إرسال الفاتورة برسالة نصية';
+
+  @override
+  String get campaignsTitle => 'الحملات';
+
+  @override
+  String get campaignsDrawerLabel => 'الحملات';
+
+  @override
+  String get campaignsEmpty => 'لا توجد حملات بعد';
+
+  @override
+  String get campaignsLoadError => 'تعذّر تحميل الحملات';
+
+  @override
+  String get campaignNewButton => 'حملة جديدة';
+
+  @override
+  String get campaignNewTitle => 'حملة جديدة';
+
+  @override
+  String get campaignEditTitle => 'تعديل الحملة';
+
+  @override
+  String get campaignStatusLabel => 'الحالة';
+
+  @override
+  String get campaignStatusDraft => 'مسودة';
+
+  @override
+  String get campaignStatusSending => 'قيد الإرسال';
+
+  @override
+  String get campaignStatusSent => 'مُرسَلة';
+
+  @override
+  String get campaignStatusCancelled => 'ملغاة';
+
+  @override
+  String get campaignStatusFailed => 'فشلت';
+
+  @override
+  String get campaignAiBadge => 'اقتراح الذكاء الاصطناعي';
+
+  @override
+  String campaignRecipientsSummary(int sent, int total) {
+    return '$sent من $total مُرسَلة';
+  }
+
+  @override
+  String get campaignNameLabel => 'اسم الحملة';
+
+  @override
+  String get campaignBodyLabel => 'نص الرسالة';
+
+  @override
+  String get campaignBodyHelp =>
+      'يمكن تضمين اسم العميل واسم المتجر في النص تلقائيًا.';
+
+  @override
+  String campaignSegmentsCounter(int count) {
+    return '≈ $count مقطع';
+  }
+
+  @override
+  String get campaignAudienceTitle => 'الفئة المستهدفة';
+
+  @override
+  String get campaignSaveButton => 'حفظ المسودة';
+
+  @override
+  String get campaignSavedMessage => 'تم حفظ المسودة';
+
+  @override
+  String get campaignSaveError => 'تعذّر حفظ المسودة';
+
+  @override
+  String get campaignSaveFirstTitle => 'احفظ المسودة أولًا';
+
+  @override
+  String get campaignSaveFirstHint =>
+      'احفظ الحملة كمسودة لتتمكن من معاينتها وإرسالها.';
+
+  @override
+  String get campaignPreviewTitle => 'المعاينة والإرسال';
+
+  @override
+  String get campaignPreviewButton => 'معاينة الفئة';
+
+  @override
+  String get campaignPreviewAudience => 'إجمالي الفئة';
+
+  @override
+  String get campaignPreviewSendable => 'القابلون للإرسال';
+
+  @override
+  String get campaignPreviewSkipped => 'مستبعدون (رفضوا التسويق)';
+
+  @override
+  String get campaignPreviewSegments => 'عدد المقاطع';
+
+  @override
+  String get campaignPreviewDurationLabel => 'المدة التقديرية';
+
+  @override
+  String campaignPreviewDuration(int minutes) {
+    return '≈ $minutes دقيقة';
+  }
+
+  @override
+  String get campaignSampleTitle => 'نموذج الرسالة';
+
+  @override
+  String get campaignSendButton => 'موافقة وإرسال';
+
+  @override
+  String get campaignSentMessage => 'بدأ إرسال الحملة';
+
+  @override
+  String get campaignSendError => 'تعذّر إرسال الحملة';
+
+  @override
+  String get campaignNoSendPermission => 'ليس لديك صلاحية إرسال الحملات';
 }

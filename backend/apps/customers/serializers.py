@@ -12,6 +12,9 @@ class CustomerSerializer(serializers.ModelSerializer):
         source="get_rfm_segment_display",
         read_only=True,
     )
+    # Contact-consent state (read-only; changed via the CRM consent endpoint so
+    # every change is recorded as a ConsentEvent).
+    marketing_opted_out = serializers.SerializerMethodField()
 
     class Meta:
         model = Customer
@@ -24,6 +27,8 @@ class CustomerSerializer(serializers.ModelSerializer):
             "gender",
             "birthday",
             "marketing_consent",
+            "marketing_opted_out",
+            "do_not_contact",
             "notes",
             "is_active",
             "is_auto_created",
@@ -46,6 +51,8 @@ class CustomerSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id",
             "customer_number",
+            "marketing_opted_out",
+            "do_not_contact",
             "rfm_segment",
             "rfm_segment_display",
             "rfm_score",
@@ -60,6 +67,9 @@ class CustomerSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def get_marketing_opted_out(self, obj) -> bool:
+        return bool(obj.marketing_opted_out_at)
 
     def get_card_count(self, obj):
         # Uses the list queryset's annotation when present, falling back to a

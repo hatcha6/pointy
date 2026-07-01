@@ -189,6 +189,8 @@ class Customer {
     this.purchaseCount = 0,
     this.recencyDays,
     this.lastPurchaseAt,
+    this.marketingOptedOut = false,
+    this.doNotContact = false,
   });
 
   final int id;
@@ -227,6 +229,12 @@ class Customer {
   /// Timestamp of the last recognized purchase (null when none).
   final DateTime? lastPurchaseAt;
 
+  /// Contact consent (opt-out policy): the customer has opted out of marketing.
+  final bool marketingOptedOut;
+
+  /// A hard do-not-contact flag (blocks marketing; transactional still allowed).
+  final bool doNotContact;
+
   factory Customer.fromJson(Map<String, Object?> json) {
     return Customer(
       id: _intFromJson(json['id']),
@@ -249,6 +257,8 @@ class Customer {
           ? null
           : _intFromJson(json['rfm_recency_days']),
       lastPurchaseAt: _dateFromJson(json['rfm_last_purchase_at']),
+      marketingOptedOut: json['marketing_opted_out'] == true,
+      doNotContact: json['do_not_contact'] == true,
     );
   }
 

@@ -44,6 +44,12 @@ class Customer(TimeStampedModel):
     )
     birthday = models.DateField(blank=True, null=True)
     marketing_consent = models.BooleanField(default=False)
+    # Opt-out consent (the shop policy): marketing is allowed by default and
+    # blocked once the customer opts out — via an SMS STOP or a staff toggle — or
+    # is flagged do-not-contact. Transactional messages (invoice, debt, OTP)
+    # ignore both. The single authority is apps.crm.consent.can_send.
+    marketing_opted_out_at = models.DateTimeField(blank=True, null=True)
+    do_not_contact = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     # Placeholder customers minted automatically the first time a payment card is

@@ -36,6 +36,20 @@ class ContactRepository {
     return Result.guard(() => _service.fetchCustomer(customerId));
   }
 
+  Future<Result<void>> setCustomerConsent(
+    int customerId, {
+    bool? marketingOptedOut,
+    bool? doNotContact,
+  }) async {
+    return Result.guard(
+      () => _service.setCustomerConsent(
+        customerId,
+        marketingOptedOut: marketingOptedOut,
+        doNotContact: doNotContact,
+      ),
+    );
+  }
+
   Future<Result<CustomerSalesSummary>> loadCustomerSalesSummary(
     int customerId,
   ) async {

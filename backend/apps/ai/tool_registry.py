@@ -16,6 +16,7 @@ DENY_BASENAMES = frozenset(
         "pos-user",  # auth / users / PII / permission management
         "sales-channel",  # carries API keys
         "ai-conversation",  # the AI's own chat threads
+        "messaging-gateway",  # carries the encrypted send credential / webhook key
     }
 )
 
@@ -44,6 +45,12 @@ WRITE_DENY_RESOURCES = frozenset(
         "attachments",
         "attachment-storage-volumes",
         "reports",
+        # CRM sending is human-only: the AI drafts campaigns via the dedicated
+        # draft_campaign tool and never touches these directly (defense in depth —
+        # these aren't router resources today, but deny them if ever registered).
+        "outbound-messages",
+        "campaign-recipients",
+        "consent-events",
     }
 )
 

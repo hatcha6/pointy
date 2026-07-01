@@ -7508,5 +7508,120 @@
   "smartReorderSeed": "راجع مخزوني وأنشئ أوامر شراء ذكية للأصناف التي تحتاج إعادة طلب. تجاهل الأصناف البطيئة والراكدة حتى لا أُجمّد رأس مالي، واحسب الكميات من سرعة البيع الفعلية مقرّبةً لوحدات الشراء. لكل صنف اختر المورّد الأنسب من سجلّ الشراء، وأنشئ أمر شراء منفصلًا لكل مورّد. اعرض لي ملخصًا بعدد الأوامر والموردين وإجمالي رأس المال المقدَّر وخُذ تأكيدي قبل الإنشاء.",
   "@smartReorderSeed": {
     "description": "Prompt auto-sent to the AI chat when the user confirms Smart Reorder; drives the reorder_plan tool flow."
-  }
+  },
+  "messagingSettingsTitle": "إعدادات الرسائل",
+  "messagingSettingsSubtitle": "بوابة الإرسال (هاتف SMS Gate) وحدود الإرسال ورسالة اختبار",
+  "messagingHeroTitle": "بوابة الرسائل",
+  "messagingStatusActive": "جاهزة للإرسال",
+  "messagingStatusInactive": "غير مُهيّأة",
+  "messagingHasRecentError": "خطأ حديث",
+  "messagingNotConfiguredTitle": "لم تُهيّأ البوابة بعد",
+  "messagingNotConfiguredMessage": "أدخل عنوان هاتف SMS Gate على الشبكة واسم المستخدم وكلمة المرور، ثم احفظ.",
+  "messagingConnectionTitle": "الاتصال بالجهاز",
+  "messagingBaseUrlLabel": "عنوان الجهاز (Base URL)",
+  "messagingUsernameLabel": "اسم المستخدم",
+  "messagingPasswordLabel": "كلمة المرور",
+  "messagingPasswordKeepHint": "اتركه فارغًا للإبقاء على كلمة المرور الحالية",
+  "messagingRateLabel": "رسائل/الدقيقة",
+  "messagingDailyCapLabel": "الحد اليومي (0 = بلا حد)",
+  "messagingSaveButton": "حفظ",
+  "messagingSavedMessage": "تم حفظ إعدادات البوابة",
+  "messagingSaveError": "تعذّر حفظ الإعدادات",
+  "messagingLoadError": "تعذّر تحميل إعدادات الرسائل",
+  "messagingTestTitle": "إرسال رسالة اختبار",
+  "messagingTestNeedsSaveTitle": "احفظ البوابة أولًا",
+  "messagingTestNeedsSaveMessage": "أدخل إعدادات الاتصال واحفظها قبل إرسال رسالة اختبار.",
+  "messagingTestPhoneLabel": "رقم الهاتف",
+  "messagingTestSendButton": "إرسال اختبار",
+  "messagingTestSentTitle": "تم الإرسال",
+  "messagingTestSentMessage": "غادرت رسالة الاختبار البوابة بنجاح.",
+  "messagingTestFailedTitle": "فشل الإرسال",
+  "messagingTestFailedMessage": "تعذّر إرسال رسالة الاختبار. تأكد من عنوان الجهاز وبيانات الدخول.",
+  "messagingActivateButton": "تفعيل تلقائي وضبط الروابط",
+  "messagingActivateHint": "يضبط الجهاز تلقائيًا لاستقبال الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي.",
+  "messagingActivateError": "تعذّر التفعيل التلقائي — تأكد من الاتصال بالجهاز.",
+  "messagingActivatedMessage": "تم التفعيل — سُجّلت {count} روابط تلقائيًا.",
+  "@messagingActivatedMessage": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "conversationsTitle": "المحادثات",
+  "conversationsDrawerLabel": "المحادثات",
+  "conversationsEmpty": "لا توجد محادثات بعد",
+  "conversationsLoadError": "تعذّر تحميل المحادثات",
+  "conversationsUnreadBadge": "{count} جديدة",
+  "@conversationsUnreadBadge": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "conversationThreadEmpty": "لا توجد رسائل في هذه المحادثة",
+  "conversationReplyHint": "اكتب ردًا…",
+  "conversationSendTooltip": "إرسال",
+  "conversationSendError": "تعذّر إرسال الرسالة",
+  "conversationReadOnly": "ليس لديك صلاحية الرد على المحادثات",
+  "customerConsentTitle": "تفضيلات التواصل",
+  "customerMarketingAllowedLabel": "السماح بالرسائل التسويقية",
+  "customerMarketingAllowedHelp": "إرسال العروض والحملات عبر SMS. يمكن للعميل الإيقاف بإرسال STOP.",
+  "customerDoNotContactLabel": "عدم الإزعاج",
+  "customerDoNotContactHelp": "إيقاف كل الرسائل التسويقية لهذا العميل (تبقى الرسائل المتعلقة بالفواتير مسموحة).",
+  "customerConsentError": "تعذّر تحديث تفضيلات التواصل",
+  "invoiceSendSmsTooltip": "إرسال الفاتورة كرسالة نصية",
+  "invoiceSendSmsSuccess": "تم إرسال الفاتورة برسالة نصية",
+  "invoiceSendSmsError": "تعذّر إرسال الفاتورة برسالة نصية",
+  "campaignsTitle": "الحملات",
+  "campaignsDrawerLabel": "الحملات",
+  "campaignsEmpty": "لا توجد حملات بعد",
+  "campaignsLoadError": "تعذّر تحميل الحملات",
+  "campaignNewButton": "حملة جديدة",
+  "campaignNewTitle": "حملة جديدة",
+  "campaignEditTitle": "تعديل الحملة",
+  "campaignStatusLabel": "الحالة",
+  "campaignStatusDraft": "مسودة",
+  "campaignStatusSending": "قيد الإرسال",
+  "campaignStatusSent": "مُرسَلة",
+  "campaignStatusCancelled": "ملغاة",
+  "campaignStatusFailed": "فشلت",
+  "campaignAiBadge": "اقتراح الذكاء الاصطناعي",
+  "campaignRecipientsSummary": "{sent} من {total} مُرسَلة",
+  "@campaignRecipientsSummary": {
+    "placeholders": {
+      "sent": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+  "campaignNameLabel": "اسم الحملة",
+  "campaignBodyLabel": "نص الرسالة",
+  "campaignBodyHelp": "يمكن تضمين اسم العميل واسم المتجر في النص تلقائيًا.",
+  "campaignSegmentsCounter": "≈ {count} مقطع",
+  "@campaignSegmentsCounter": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "campaignAudienceTitle": "الفئة المستهدفة",
+  "campaignSaveButton": "حفظ المسودة",
+  "campaignSavedMessage": "تم حفظ المسودة",
+  "campaignSaveError": "تعذّر حفظ المسودة",
+  "campaignSaveFirstTitle": "احفظ المسودة أولًا",
+  "campaignSaveFirstHint": "احفظ الحملة كمسودة لتتمكن من معاينتها وإرسالها.",
+  "campaignPreviewTitle": "المعاينة والإرسال",
+  "campaignPreviewButton": "معاينة الفئة",
+  "campaignPreviewAudience": "إجمالي الفئة",
+  "campaignPreviewSendable": "القابلون للإرسال",
+  "campaignPreviewSkipped": "مستبعدون (رفضوا التسويق)",
+  "campaignPreviewSegments": "عدد المقاطع",
+  "campaignPreviewDurationLabel": "المدة التقديرية",
+  "campaignPreviewDuration": "≈ {minutes} دقيقة",
+  "@campaignPreviewDuration": {
+    "placeholders": {
+      "minutes": { "type": "int" }
+    }
+  },
+  "campaignSampleTitle": "نموذج الرسالة",
+  "campaignSendButton": "موافقة وإرسال",
+  "campaignSentMessage": "بدأ إرسال الحملة",
+  "campaignSendError": "تعذّر إرسال الحملة",
+  "campaignNoSendPermission": "ليس لديك صلاحية إرسال الحملات"
 }

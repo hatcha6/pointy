@@ -312,6 +312,15 @@ frontend-register-session-preview: frontend-install ## Run the register-session 
 frontend-subscription-preview: frontend-install ## Run the subscription / relay status settings UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/subscription_preview.dart
 
+frontend-messaging-preview: frontend-install ## Run the SMS device / messaging settings UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/messaging_preview.dart
+
+frontend-conversations-preview: frontend-install ## Run the customer conversations (CRM inbox) UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/conversations_preview.dart
+
+frontend-campaigns-preview: frontend-install ## Run the campaign editor / approval (CRM) UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/campaigns_preview.dart
+
 frontend-login-preview: frontend-install ## Run the login screen UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/login_preview.dart
 

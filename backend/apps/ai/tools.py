@@ -1446,6 +1446,7 @@ WRITE_TOOL_NAMES = frozenset(
         "create_resource",
         "update_resource",
         "create_sale",
+        "draft_campaign",
         "record_customer_payment",
         "convert_quotation",
         "record_supplier_payment",
@@ -1800,6 +1801,65 @@ def create_sale(
         logger.exception("AI create_sale checkout crashed")
         return {"ok": False, "error": "internal_error"}
     return _write_result(response, action="create_sale", resource="orders")
+
+
+def draft_campaign(*, user, name, body_template, rfm_segments=None, idempotency_key=None):
+    """Create a marketing SMS campaign as a DRAFT — it never sends.
+
+    One step by design: creating a draft is non-destructive (nothing goes out).
+    The draft is dispatched through the real CampaignViewSet (so the user's
+    ``crm.manage_campaigns`` permission is enforced and ``status`` is forced to
+    ``draft``), tagged ``created_via=ai``, and returned with an audience preview.
+    Sending is a separate human action (``crm.send_campaigns``) in the Campaigns
+    screen that no AI tool can reach."""
+    from apps.crm.campaigns import preview_campaign
+    from apps.crm.models import Campaign
+    from apps.crm.views import CampaignViewSet
+
+    if not name or not body_template:
+        return {
+            "ok": False,
+            "error": "invalid_arguments",
+            "message": "name وbody_template مطلوبان.",
+        }
+    segments = rfm_segments if isinstance(rfm_segments, list) else []
+    data = {"name": name, "body_template": body_template, "rfm_segments": segments}
+    try:
+        response = _run_write_viewset(
+            CampaignViewSet,
+            action="create",
+            method="post",
+            user=user,
+            data=data,
+            idempotency_key=idempotency_key,
+        )
+    except Exception:
+        logger.exception("AI draft_campaign crashed")
+        return {"ok": False, "error": "internal_error"}
+    result = _result_from_response(response)
+    if not result.get("ok"):
+        return result
+
+    preview = None
+    campaign_id = result["data"].get("id")
+    if campaign_id:
+        Campaign.objects.filter(pk=campaign_id).update(
+            created_via=Campaign.CreatedVia.AI
+        )
+        result["data"]["created_via"] = Campaign.CreatedVia.AI
+        try:
+            preview = preview_campaign(Campaign.objects.get(pk=campaign_id))
+        except Exception:
+            preview = None
+    return {
+        "ok": True,
+        "data": result["data"],
+        "preview": preview,
+        "message": (
+            "أنشأت مسودّة حملة فقط — لم تُرسَل. اعرض على المستخدم عدد الفئة من preview "
+            "وذكّره أن الاعتماد والإرسال يتمّان من شاشة الحملات."
+        ),
+    }
 
 
 def record_customer_payment(
@@ -2659,6 +2719,13 @@ _TOOLS = {
         confirm=bool(args.get("confirm")),
         idempotency_key=key,
     ),
+    "draft_campaign": lambda user, args, key=None: draft_campaign(
+        user=user,
+        name=args.get("name"),
+        body_template=args.get("body_template"),
+        rfm_segments=args.get("rfm_segments"),
+        idempotency_key=key,
+    ),
     "record_customer_payment": lambda user, args, key=None: record_customer_payment(
         user=user,
         order_id=args.get("order_id"),
@@ -2776,6 +2843,38 @@ def action_tool_definitions():
                         "data": {"type": "object", "description": "الحقول المراد تعديلها فقط."},
                     },
                     "required": ["resource", "id", "data"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "draft_campaign",
+                "description": (
+                    "أنشئ مسودّة حملة تسويقية عبر SMS — لا تُرسَل أبدًا. اكتب أنت نصّ الرسالة "
+                    "(يمكن تضمين {{first_name}} و{{shop_name}})، وحدّد الفئة المستهدفة عبر "
+                    "rfm_segments (تصنيفات RFM مثل champion أو at_risk، أو اتركها فارغة لكل "
+                    "العملاء). تُنشأ كمسودّة فقط ويعتمدها المستخدم ويُرسلها من شاشة الحملات — "
+                    "لا يمكنك أنت الإرسال. تُستبعَد تلقائيًا مَن أوقفوا الرسائل التسويقية. تُرجع "
+                    "الأداة معاينة بحجم الفئة فاعرضها للمستخدم."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "اسم الحملة (داخلي)."},
+                        "body_template": {"type": "string", "description": "نصّ الرسالة."},
+                        "rfm_segments": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": (
+                                "تصنيفات RFM المستهدفة (اختياري): champion, loyal, "
+                                "potential_loyalist, new_customer, at_risk, cant_lose, "
+                                "hibernating, lost."
+                            ),
+                        },
+                    },
+                    "required": ["name", "body_template"],
                     "additionalProperties": False,
                 },
             },
