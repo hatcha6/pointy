@@ -22386,6 +22386,42 @@ abstract class AppLocalizations {
   /// **'ليس لديك صلاحية الرد على المحادثات'**
   String get conversationReadOnly;
 
+  /// No description provided for @newConversationTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'محادثة جديدة'**
+  String get newConversationTitle;
+
+  /// No description provided for @newConversationCustomerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'العميل'**
+  String get newConversationCustomerLabel;
+
+  /// No description provided for @newConversationSelectCustomer.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر عميلاً'**
+  String get newConversationSelectCustomer;
+
+  /// No description provided for @newConversationNoPhoneWarning.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا العميل لا يملك رقم هاتف. أضِف رقمًا لبدء المحادثة.'**
+  String get newConversationNoPhoneWarning;
+
+  /// No description provided for @newConversationStartButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدء المحادثة'**
+  String get newConversationStartButton;
+
+  /// No description provided for @newConversationError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر بدء المحادثة.'**
+  String get newConversationError;
+
   /// No description provided for @customerConsentTitle.
   ///
   /// In ar, this message translates to:

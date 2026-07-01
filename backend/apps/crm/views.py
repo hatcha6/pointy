@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from apps.core.permissions import HasPointyPermission
 from apps.customers.models import Customer
+from apps.messaging.phone import normalize_phone
 from apps.messaging.serializers import OutboundMessageSerializer
 from apps.messaging.services import NoGatewayConfigured
 
@@ -24,7 +25,7 @@ from .serializers import (
     ConversationMessageSerializer,
     ConversationSerializer,
 )
-from .services import post_reply
+from .services import post_reply, start_conversation
 
 
 class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
@@ -33,6 +34,7 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_map = {
         "list": ("crm.view_conversations",),
         "retrieve": ("crm.view_conversations",),
+        "start": ("crm.manage_conversations",),
         "reply": ("crm.manage_conversations",),
         "mark_read": ("crm.view_conversations",),
         "close": ("crm.manage_conversations",),
@@ -51,6 +53,25 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action == "retrieve":
             queryset = queryset.prefetch_related("messages")
         return queryset
+
+    @action(detail=False, methods=["post"])
+    def start(self, request):
+        """Open (or resume) a conversation with a chosen customer so staff can
+        compose the first message. The customer must have a valid phone number;
+        returns 200 if a thread with that number is already open, else 201."""
+        customer_id = request.data.get("customer")
+        if not customer_id:
+            return Response({"detail": "العميل مطلوب."}, status=400)
+        customer = Customer.objects.filter(pk=customer_id).first()
+        if customer is None:
+            return Response({"detail": "العميل غير موجود."}, status=404)
+        if not normalize_phone(customer.phone or ""):
+            return Response(
+                {"detail": "هذا العميل لا يملك رقم هاتف صالح."}, status=400
+            )
+        conversation, created = start_conversation(customer, author=request.user)
+        serializer = ConversationSerializer(conversation)
+        return Response(serializer.data, status=201 if created else 200)
 
     @action(detail=True, methods=["post"])
     def reply(self, request, pk=None):

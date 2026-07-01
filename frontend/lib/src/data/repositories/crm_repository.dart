@@ -26,6 +26,10 @@ class CrmRepository {
     return Result.guard(() => _service.markConversationRead(id));
   }
 
+  Future<Result<Conversation>> startConversation(int customerId) {
+    return Result.guard(() => _service.startConversation(customerId));
+  }
+
   Future<Result<List<Campaign>>> loadCampaigns({String? status}) {
     return Result.guard(() => _service.fetchCampaigns(status: status));
   }

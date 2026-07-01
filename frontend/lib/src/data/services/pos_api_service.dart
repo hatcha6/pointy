@@ -1487,6 +1487,9 @@ class PosApiService {
 
   Future<Conversation> markConversationRead(int id) => _crm.markRead(id);
 
+  Future<Conversation> startConversation(int customerId) =>
+      _crm.startConversation(customerId);
+
   Future<List<Campaign>> fetchCampaigns({String? status}) =>
       _crm.fetchCampaigns(status: status);
 

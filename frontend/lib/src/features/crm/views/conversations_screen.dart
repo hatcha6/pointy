@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../data/models/conversation.dart';
+import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
@@ -12,6 +13,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/conversations_view_model.dart';
+import 'new_conversation_dialog.dart';
 
 /// Top-level Conversations inbox: the list of customer SMS threads. Tapping a
 /// thread opens [ConversationThreadScreen].
@@ -21,11 +23,13 @@ class ConversationsScreen extends StatefulWidget {
     required this.viewModel,
     required this.navigation,
     required this.capabilities,
+    required this.contactRepository,
   });
 
   final ConversationsViewModel viewModel;
   final AppNavigation navigation;
   final AuthorizationCapabilities capabilities;
+  final ContactRepository contactRepository;
 
   @override
   State<ConversationsScreen> createState() => _ConversationsScreenState();
@@ -51,6 +55,29 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     );
   }
 
+  /// Compose a new thread: pick (or create) a customer with a phone, open the
+  /// conversation on the backend, then drop straight into its chat view.
+  Future<void> _startNewConversation(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final customer = await showNewConversationDialog(
+      context: context,
+      contactRepository: widget.contactRepository,
+    );
+    if (customer == null || !mounted) return;
+
+    final conversation = await widget.viewModel.startConversation(customer);
+    if (!mounted) return;
+    if (conversation == null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.newConversationError)),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    await _openThread(context, conversation);
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -74,6 +101,16 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               ),
             ],
           ),
+          floatingActionButton: widget.capabilities.canManageConversations
+              ? FloatingActionButton.extended(
+                  key: const ValueKey('conversations_new_fab'),
+                  onPressed: widget.viewModel.isStarting
+                      ? null
+                      : () => _startNewConversation(context),
+                  icon: const Icon(Icons.add_comment_outlined),
+                  label: Text(l10n.newConversationTitle),
+                )
+              : null,
           body: _buildBody(context, l10n),
         );
       },

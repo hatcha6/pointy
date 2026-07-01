@@ -12867,6 +12867,25 @@ class AppLocalizationsAr extends AppLocalizations {
   String get conversationReadOnly => 'ليس لديك صلاحية الرد على المحادثات';
 
   @override
+  String get newConversationTitle => 'محادثة جديدة';
+
+  @override
+  String get newConversationCustomerLabel => 'العميل';
+
+  @override
+  String get newConversationSelectCustomer => 'اختر عميلاً';
+
+  @override
+  String get newConversationNoPhoneWarning =>
+      'هذا العميل لا يملك رقم هاتف. أضِف رقمًا لبدء المحادثة.';
+
+  @override
+  String get newConversationStartButton => 'بدء المحادثة';
+
+  @override
+  String get newConversationError => 'تعذّر بدء المحادثة.';
+
+  @override
   String get customerConsentTitle => 'تفضيلات التواصل';
 
   @override

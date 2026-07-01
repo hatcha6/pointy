@@ -195,3 +195,77 @@ class ReplyAndReceiptApiTests(TestCase):
         message.refresh_from_db()
         self.assertEqual(message.status, OutboundMessage.Status.DELIVERED)
         self.assertIsNotNone(message.delivered_at)
+
+
+class StartConversationApiTests(TestCase):
+    def setUp(self):
+        fake.reset()
+        self.gateway = make_fake_gateway()
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(username="mgr", password="x")
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.outsider = User.objects.create_user(username="out", password="x")
+        self.client = APIClient()
+
+    def _start(self, customer_id):
+        return self.client.post(
+            "/api/crm/conversations/start/",
+            {"customer": customer_id},
+            format="json",
+        )
+
+    def test_manager_starts_conversation_with_customer(self):
+        customer = Customer.objects.create(full_name="علي", phone="0912345678")
+        self.client.force_authenticate(self.manager)
+        resp = self._start(customer.id)
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.data["customer"], customer.id)
+        # The thread is keyed on the E.164-normalized number.
+        self.assertEqual(resp.data["phone"], "+218912345678")
+        self.assertEqual(resp.data["status"], "open")
+        self.assertEqual(Conversation.objects.count(), 1)
+
+    def test_start_is_idempotent_for_an_open_thread(self):
+        customer = Customer.objects.create(full_name="علي", phone="0912345678")
+        self.client.force_authenticate(self.manager)
+        first = self._start(customer.id)
+        second = self._start(customer.id)
+        self.assertEqual(first.status_code, 201)
+        # An already-open thread is resumed, not duplicated.
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.data["id"], second.data["id"])
+        self.assertEqual(Conversation.objects.count(), 1)
+
+    def test_start_adopts_an_unclaimed_open_thread(self):
+        # A thread with no linked customer (e.g. an unclaimed inbound) is adopted
+        # by the named customer the user picked.
+        Conversation.objects.create(
+            phone="+218912345678",
+            phone_raw="+218912345678",
+            status=Conversation.Status.OPEN,
+        )
+        customer = Customer.objects.create(full_name="علي", phone="0912345678")
+        self.client.force_authenticate(self.manager)
+        resp = self._start(customer.id)
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.data["customer"], customer.id)
+        self.assertEqual(Conversation.objects.count(), 1)
+
+    def test_start_requires_a_valid_phone(self):
+        customer = Customer.objects.create(full_name="بلا هاتف", phone="")
+        self.client.force_authenticate(self.manager)
+        resp = self._start(customer.id)
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(Conversation.objects.count(), 0)
+
+    def test_start_with_missing_or_unknown_customer(self):
+        self.client.force_authenticate(self.manager)
+        self.assertEqual(self._start("").status_code, 400)
+        self.assertEqual(self._start(999999).status_code, 404)
+
+    def test_outsider_cannot_start(self):
+        customer = Customer.objects.create(full_name="علي", phone="0912345678")
+        self.client.force_authenticate(self.outsider)
+        self.assertEqual(self._start(customer.id).status_code, 403)
+        self.assertEqual(Conversation.objects.count(), 0)

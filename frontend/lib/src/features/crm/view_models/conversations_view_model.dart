@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/result.dart';
+import '../../../data/models/contact.dart';
 import '../../../data/models/conversation.dart';
 import '../../../data/repositories/crm_repository.dart';
 
@@ -16,11 +17,15 @@ class ConversationsViewModel extends ChangeNotifier {
   List<Conversation> _conversations = const [];
   bool _isLoading = false;
   bool _hasLoadError = false;
+  bool _isStarting = false;
 
   List<Conversation> get conversations => _conversations;
   bool get isLoading => _isLoading;
   bool get hasLoadError => _hasLoadError;
   bool get isEmpty => _conversations.isEmpty;
+
+  /// True while a "new conversation" is being opened on the backend.
+  bool get isStarting => _isStarting;
 
   Future<void> load() async {
     _isLoading = true;
@@ -37,6 +42,31 @@ class ConversationsViewModel extends ChangeNotifier {
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  /// Open (or resume) a conversation with [customer] and surface it at the top of
+  /// the inbox. Returns the thread to open, or null if the request failed.
+  Future<Conversation?> startConversation(Customer customer) async {
+    if (_isStarting) return null;
+    _isStarting = true;
+    notifyListeners();
+
+    final result = await _repository.startConversation(customer.id);
+    Conversation? conversation;
+    switch (result) {
+      case Ok<Conversation>(value: final started):
+        conversation = started;
+        // Resuming an existing thread must not duplicate its inbox row.
+        if (!_conversations.any((c) => c.id == started.id)) {
+          _conversations = [started, ..._conversations];
+        }
+      case Error<Conversation>():
+        conversation = null;
+    }
+
+    _isStarting = false;
+    notifyListeners();
+    return conversation;
   }
 
   ConversationThreadViewModel threadViewModel(Conversation conversation) {

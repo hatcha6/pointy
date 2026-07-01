@@ -80,6 +80,38 @@ def thread_inbound(inbound: InboundMessage) -> tuple[Conversation, ConversationM
     return conversation, message
 
 
+def start_conversation(customer, *, author=None) -> tuple[Conversation, bool]:
+    """Open (or resume) a conversation with a chosen customer so staff can send
+    the first message.
+
+    Keyed on the customer's normalized phone, mirroring inbound threading: if a
+    thread with that number is already OPEN we return it (``created=False``) so a
+    staff "new conversation" never collides with the ``unique_open_conversation
+    _per_phone`` constraint or spawns a duplicate. Raises ``ValueError`` if the
+    customer has no sendable phone (the caller validates first for a nicer error).
+    """
+    raw = (getattr(customer, "phone", "") or "").strip()
+    normalized = normalize_phone(raw)
+    if not normalized:
+        raise ValueError("customer has no valid phone number")
+    conversation = Conversation.objects.filter(
+        phone=normalized, status=Conversation.Status.OPEN
+    ).first()
+    if conversation is not None:
+        # Adopt the named customer if the open thread was an unclaimed placeholder.
+        if conversation.customer_id is None:
+            conversation.customer = customer
+            conversation.save(update_fields=["customer", "updated_at"])
+        return conversation, False
+    conversation = Conversation.objects.create(
+        phone=normalized,
+        phone_raw=raw,
+        customer=customer,
+        status=Conversation.Status.OPEN,
+    )
+    return conversation, True
+
+
 def post_reply(conversation: Conversation, body: str, *, author=None) -> ConversationMessage:
     """Queue a staff reply on a conversation (transactional — always allowed)."""
     outbound = enqueue_message(

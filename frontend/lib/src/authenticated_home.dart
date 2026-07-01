@@ -711,6 +711,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         viewModel: dependencies.conversationsViewModel,
         capabilities: capabilities,
         navigation: this,
+        contactRepository: dependencies.contactRepository,
       ),
     );
   }

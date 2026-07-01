@@ -61,6 +61,19 @@ class CrmApiClient {
     );
   }
 
+  /// Open (or resume) a conversation with an existing customer, so staff can send
+  /// the first message. The backend keys the thread on the customer's phone.
+  Future<Conversation> startConversation(int customerId) async {
+    final response = await _session.post(
+      'crm/conversations/start/',
+      body: {'customer': customerId},
+    );
+    _session.ensureSuccess(response, 'Start conversation failed with status');
+    return Conversation.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<List<Campaign>> fetchCampaigns({String? status}) async {
     final response = await _session.get(
       'crm/campaigns/',
