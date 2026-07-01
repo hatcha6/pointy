@@ -69,16 +69,22 @@ def route_inbound_task(inbound_id):
     retry_backoff=True,
 )
 def debt_reminder_sweep_task():
-    """Queue a debt reminder for every open-credit order with an outstanding
-    balance and a reachable customer. Off by default (opt-in via
+    """Queue a debt reminder for every open-credit order that is *due* and has a
+    reachable customer. "Due" means the invoice's due date has arrived or passed,
+    or it carries no due date at all (an open tab is due now); a future due date
+    holds the reminder until that day. Off by default (opt-in via
     ``POINTY_SMS_DEBT_REMINDERS_ENABLED``) so a shop never sends surprise SMS.
     Honors do-not-contact and is idempotent per shop-local day.
     """
     if not getattr(django_settings, "POINTY_SMS_DEBT_REMINDERS_ENABLED", False):
         return {"skipped": "disabled"}
 
+    from django.db.models import Q
+
+    from apps.core.timeutils import business_local_date
     from apps.sales.models import Order
 
+    today = business_local_date()
     orders = (
         Order.objects.open_credit()
         .select_related("customer")
@@ -86,6 +92,9 @@ def debt_reminder_sweep_task():
         # Python) doesn't fire its own query — avoids an N+1 across the sweep.
         .prefetch_related("payments")
         .filter(customer__isnull=False)
+        # Only invoices that are actually due: due-on-or-before today, or with no
+        # due date set (treated as due now). A future due date defers the nudge.
+        .filter(Q(valid_until__isnull=True) | Q(valid_until__lte=today))
         .exclude(customer__phone="")
         .exclude(customer__do_not_contact=True)
     )

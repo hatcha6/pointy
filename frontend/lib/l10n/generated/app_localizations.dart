@@ -13291,6 +13291,42 @@ abstract class AppLocalizations {
   /// **'المبلغ المُدخَل دفعة مقدّمة؛ والباقي يُسجَّل دَينًا على العميل.'**
   String get creditDownPaymentHint;
 
+  /// No description provided for @creditDueDateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الاستحقاق'**
+  String get creditDueDateLabel;
+
+  /// No description provided for @creditDueDateUnset.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر تاريخًا (اختياري)'**
+  String get creditDueDateUnset;
+
+  /// No description provided for @creditDueDateClearTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة تاريخ الاستحقاق'**
+  String get creditDueDateClearTooltip;
+
+  /// No description provided for @creditDueDatePresetWeek.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعد أسبوع'**
+  String get creditDueDatePresetWeek;
+
+  /// No description provided for @creditDueDatePresetTwoWeeks.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعد أسبوعين'**
+  String get creditDueDatePresetTwoWeeks;
+
+  /// No description provided for @creditDueDatePresetMonth.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعد شهر'**
+  String get creditDueDatePresetMonth;
+
   /// No description provided for @creditDownPaymentTenderTitle.
   ///
   /// In ar, this message translates to:

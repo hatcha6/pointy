@@ -340,9 +340,10 @@ class _PaymentSheetState extends State<PaymentSheet> {
       _saleType = saleType;
       _showPaymentError = false;
       _reserveStock = saleType == SaleType.quotation && _reserveStock;
-      // Drop any picked validity date when leaving quotation so re-entering
-      // starts clean (reserve then defaults to +7 days, not a stale deadline).
-      _validUntil = saleType == SaleType.quotation ? _validUntil : null;
+      // Drop any picked date when the sale type changes: a quotation's stock-hold
+      // deadline and a credit invoice's due date are distinct meanings, and each
+      // type should start clean rather than inherit the other's date.
+      _validUntil = null;
       if (saleType == SaleType.standard) {
         // Paid-in-full sale: a single tender covering the whole total.
         _resetToFullPaymentTender();
@@ -523,6 +524,12 @@ class _PaymentSheetState extends State<PaymentSheet> {
             minimumSize: const Size.fromHeight(48),
           ),
         ),
+        // Credit (آجل): after the optional down-payment, set when the remaining
+        // balance is due. The debt-collection SMS holds off until this date.
+        if (_isCredit) ...[
+          SizedBox(height: spacing.md),
+          _buildCreditDueDatePicker(l10n),
+        ],
         if (widget.showPrintInvoiceToggle) ...[
           SizedBox(height: spacing.md),
           ReceiptToggleRow(
@@ -739,6 +746,70 @@ class _PaymentSheetState extends State<PaymentSheet> {
     return '${date.year}-$month-$day';
   }
 
+  /// Credit (آجل): an optional due date for the debt. The debt-collection SMS
+  /// holds off until it arrives; leaving it unset means the balance is due now.
+  /// Quick chips make the common terms one tap; the field opens a full calendar.
+  Widget _buildCreditDueDatePicker(AppLocalizations l10n) {
+    final spacing = AdaptiveSpacing.of(context);
+    final hasDate = _validUntil != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          key: const ValueKey('credit_due_date_picker'),
+          onTap: _pickValidUntil,
+          borderRadius: BorderRadius.circular(8),
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: l10n.creditDueDateLabel,
+              prefixIcon: const Icon(Icons.event_available_outlined),
+              suffixIcon: hasDate
+                  ? IconButton(
+                      key: const ValueKey('credit_due_date_clear'),
+                      tooltip: l10n.creditDueDateClearTooltip,
+                      icon: const Icon(Icons.close),
+                      onPressed: () => setState(() => _validUntil = null),
+                    )
+                  : const Icon(Icons.expand_more),
+            ),
+            child: Text(
+              hasDate ? _formatDate(_validUntil!) : l10n.creditDueDateUnset,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          ),
+        ),
+        SizedBox(height: spacing.sm),
+        Wrap(
+          spacing: spacing.sm,
+          runSpacing: spacing.sm,
+          children: [
+            _dueDatePresetChip(l10n.creditDueDatePresetWeek, 7),
+            _dueDatePresetChip(l10n.creditDueDatePresetTwoWeeks, 14),
+            _dueDatePresetChip(l10n.creditDueDatePresetMonth, 30),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _dueDatePresetChip(String label, int days) {
+    final now = DateTime.now();
+    final target = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(Duration(days: days));
+    final selected =
+        _validUntil != null && DateUtils.isSameDay(_validUntil, target);
+    return ChoiceChip(
+      key: ValueKey('credit_due_date_preset_$days'),
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => setState(() => _validUntil = target),
+    );
+  }
+
   void _submit() {
     final payments = _appliedPayments;
     if (payments == null ||
@@ -752,8 +823,11 @@ class _PaymentSheetState extends State<PaymentSheet> {
         payments: payments,
         shareInvoiceAfterPayment: _shareInvoiceAfterPayment,
         saleType: _saleType,
-        // The stock-hold deadline only applies to a held quotation.
-        validUntil: _isQuotation && _reserveStock ? _validUntil : null,
+        // A credit invoice carries an optional due date; a quotation carries a
+        // stock-hold deadline only when it actually holds stock.
+        validUntil: _isCredit
+            ? _validUntil
+            : (_isQuotation && _reserveStock ? _validUntil : null),
         reserveStock: _isQuotation && _reserveStock,
         printProof: _isCredit && _printProof,
       ),

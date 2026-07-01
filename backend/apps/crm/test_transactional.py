@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -9,6 +10,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
+from apps.core.timeutils import business_local_date
 from apps.customers.models import Customer
 from apps.messaging.models import MessagingGateway, OutboundMessage
 from apps.messaging.transports import fake
@@ -26,11 +28,12 @@ def make_gateway():
     )
 
 
-def make_credit_order(customer, total="100"):
+def make_credit_order(customer, total="100", valid_until=None):
     order = Order.objects.create(
         customer=customer,
         sale_type=Order.SaleType.CREDIT,
         status=Order.Status.OPEN,
+        valid_until=valid_until,
     )
     # Pin the total directly so Order.save() can't recompute it from (absent) lines.
     Order.objects.filter(pk=order.pk).update(total=Decimal(total))
@@ -88,6 +91,20 @@ class DebtReminderTests(TestCase):
         )
         self.assertIsNotNone(send_debt_reminder(make_credit_order(customer)))
 
+    def test_reminder_includes_due_date_when_set(self):
+        due = business_local_date()
+        customer = Customer.objects.create(full_name="علي", phone="+218912345678")
+        message = send_debt_reminder(
+            make_credit_order(customer, valid_until=due)
+        )
+        self.assertIn(due.strftime("%Y-%m-%d"), message.body)
+        self.assertIn("تاريخ الاستحقاق", message.body)
+
+    def test_reminder_omits_due_date_when_unset(self):
+        customer = Customer.objects.create(full_name="علي", phone="+218912345678")
+        message = send_debt_reminder(make_credit_order(customer))
+        self.assertNotIn("تاريخ الاستحقاق", message.body)
+
 
 class DebtSweepTests(TestCase):
     def setUp(self):
@@ -111,6 +128,25 @@ class DebtSweepTests(TestCase):
         self.assertEqual(result["sent"], 1)
         self.assertEqual(
             OutboundMessage.objects.filter(source_type="debt_reminder").count(), 1
+        )
+
+    @override_settings(POINTY_SMS_DEBT_REMINDERS_ENABLED=True)
+    def test_sweep_reminds_due_and_undated_but_holds_future(self):
+        today = business_local_date()
+        due = Customer.objects.create(full_name="Due", phone="+218912345670")
+        overdue = Customer.objects.create(full_name="Overdue", phone="+218912345671")
+        future = Customer.objects.create(full_name="Future", phone="+218912345672")
+        undated = Customer.objects.create(full_name="Undated", phone="+218912345673")
+        make_credit_order(due, valid_until=today)
+        make_credit_order(overdue, valid_until=today - timedelta(days=3))
+        make_credit_order(future, valid_until=today + timedelta(days=3))
+        make_credit_order(undated)  # no due date → due now
+
+        result = debt_reminder_sweep_task()
+        # Due-today + overdue + undated all remind; the future one is held back.
+        self.assertEqual(result["sent"], 3)
+        self.assertEqual(
+            OutboundMessage.objects.filter(source_type="debt_reminder").count(), 3
         )
 
     @override_settings(POINTY_SMS_DEBT_REMINDERS_ENABLED=True)

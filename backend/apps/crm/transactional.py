@@ -83,6 +83,9 @@ def send_debt_reminder(order, *, now=None) -> OutboundMessage | None:
         f"تذكير من {shop_name}: لديك مبلغ مستحق {_money(balance)} {currency} "
         f"على الفاتورة {order.receipt_number}."
     )
+    due_date = getattr(order, "valid_until", None)
+    if due_date is not None:
+        body += f" تاريخ الاستحقاق: {due_date:%Y-%m-%d}."
     if link:
         body += f" التفاصيل: {link}"
     day = business_local_date(now).strftime("%Y%m%d")

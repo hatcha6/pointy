@@ -7613,6 +7613,24 @@ class AppLocalizationsAr extends AppLocalizations {
       'المبلغ المُدخَل دفعة مقدّمة؛ والباقي يُسجَّل دَينًا على العميل.';
 
   @override
+  String get creditDueDateLabel => 'تاريخ الاستحقاق';
+
+  @override
+  String get creditDueDateUnset => 'اختر تاريخًا (اختياري)';
+
+  @override
+  String get creditDueDateClearTooltip => 'إزالة تاريخ الاستحقاق';
+
+  @override
+  String get creditDueDatePresetWeek => 'بعد أسبوع';
+
+  @override
+  String get creditDueDatePresetTwoWeeks => 'بعد أسبوعين';
+
+  @override
+  String get creditDueDatePresetMonth => 'بعد شهر';
+
+  @override
   String get creditDownPaymentTenderTitle => 'دفعة مقدّمة';
 
   @override

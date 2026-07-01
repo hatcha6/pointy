@@ -256,6 +256,56 @@ void main() {
     expect(submitted?.payments, isEmpty);
   });
 
+  testWidgets('credit sale carries the due date picked from a preset', (
+    tester,
+  ) async {
+    PaymentSheetResult? submitted;
+
+    await _pumpPaymentSheet(
+      tester,
+      total: 10,
+      width: 1366,
+      height: 900,
+      onSubmit: (result) => submitted = result,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('sale_type_credit')));
+    await tester.pump();
+
+    // The due-date picker is offered for a debt sale.
+    expect(find.byKey(const ValueKey('credit_due_date_picker')), findsOneWidget);
+
+    // One tap on the "+ a week" chip sets the due date to today + 7 days.
+    final weekChip = find.byKey(const ValueKey('credit_due_date_preset_7'));
+    await tester.ensureVisible(weekChip);
+    await tester.tap(weekChip);
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
+    await tester.pump();
+
+    expect(submitted?.saleType, SaleType.credit);
+    final now = DateTime.now();
+    final expected = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(const Duration(days: 7));
+    expect(submitted?.validUntil, expected);
+  });
+
+  testWidgets('the due-date picker is credit-only', (tester) async {
+    await _pumpPaymentSheet(tester, total: 10, width: 1366, height: 900);
+
+    // Standard sale: no due date.
+    expect(find.byKey(const ValueKey('credit_due_date_picker')), findsNothing);
+
+    // Quotation carries a stock-hold deadline instead, not a credit due date.
+    await tester.tap(find.byKey(const ValueKey('sale_type_quotation')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('credit_due_date_picker')), findsNothing);
+  });
+
   testWidgets(
     'credit down-payment line can be removed (back to fully on credit)',
     (tester) async {
