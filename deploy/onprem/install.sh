@@ -85,13 +85,21 @@ for tar in "${images[@]}"; do
 done
 
 if [ ! -f .env ]; then
-  # Every installation needs a license key, shipped by the provider as a
-  # license.key file placed next to this installer. No license, no install.
+  # LICENSING TEMPORARILY OFF ("for now"): on-prem installs don't require a
+  # license key, so a shop with no internet can run fully offline. The license
+  # gate unlocks by redeeming the key with the relay *online* — which an offline
+  # shop can never reach — so requiring it would brick the till. If a license.key
+  # is present we still record it, so re-enabling licensing later (set
+  # POINTY_REQUIRE_LICENSE=true once the shop has internet) enrolls without a
+  # reinstall. To restore enforcement: make the file required again (err/exit) and
+  # set POINTY_REQUIRE_LICENSE "true" below.
   LICENSE_FILE="${POINTY_LICENSE_FILE:-license.key}"
-  [ -f "$LICENSE_FILE" ] \
-    || err "No license key found at ./$LICENSE_FILE — place the license.key file from your provider next to this installer and re-run."
-  LICENSE_KEY="$(tr -d '[:space:]' < "$LICENSE_FILE")"
-  [ -n "$LICENSE_KEY" ] || err "$LICENSE_FILE is empty."
+  LICENSE_KEY=""
+  if [ -f "$LICENSE_FILE" ]; then
+    LICENSE_KEY="$(tr -d '[:space:]' < "$LICENSE_FILE")"
+  else
+    echo "WARN: no license key at ./$LICENSE_FILE — installing without a license (offline mode)."
+  fi
   command -v openssl >/dev/null 2>&1 || err "openssl is required to generate secrets. Install it and re-run."
 
   cp .env.example .env
@@ -115,9 +123,9 @@ if [ ! -f .env ]; then
   set_env_var DJANGO_SECRET_KEY "$(openssl rand -hex 48)"
   set_env_var POINTY_RELAY_CONNECTOR_SETUP_TOKEN "$(openssl rand -hex 24)"
   set_env_var POINTY_RELAY_ENROLLMENT_TOKEN "$LICENSE_KEY"
-  set_env_var POINTY_REQUIRE_LICENSE "true"
+  set_env_var POINTY_REQUIRE_LICENSE "false"
 
-  echo "==> Created .env: generated local secrets and applied your license key."
+  echo "==> Created .env: generated local secrets (licensing off — offline install)."
 fi
 
 echo "==> Starting the Pointy stack…"

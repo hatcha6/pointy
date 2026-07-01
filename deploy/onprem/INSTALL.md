@@ -47,12 +47,15 @@ PowerShell on Windows, with internet access). You only need:
 1. **Extract** this bundle anywhere on the server (e.g. `C:\pointy` or
    `/opt/pointy`).
 
-2. **Drop in your license key.** Every installation needs one. Put the
-   `license.key` file your provider gave you **in this bundle folder**, right next
-   to `install.sh` / `install.ps1`. Without it the installer refuses to proceed.
+2. **Drop in your license key (optional — off for now).** Licensing is currently
+   disabled so shops with no internet can run offline, so the installer no longer
+   requires a `license.key`. If your provider gave you one, put it **in this bundle
+   folder** next to `install.sh` / `install.ps1` and the installer records it for
+   later; if not, the installer proceeds without it.
 
 3. **Run the installer.** It loads the bundled images, generates the local
-   secrets, applies your license key, and starts the stack — no `.env` editing:
+   secrets, records your license key if present, and starts the stack — no `.env`
+   editing:
 
    - Windows (PowerShell):
      ```powershell
@@ -63,11 +66,12 @@ PowerShell on Windows, with internet access). You only need:
      bash install.sh
      ```
 
-   On first boot the backend **redeems the license with the relay** (this needs
-   internet once), receives its own scoped credentials, and unlocks. After that it
-   runs fully offline. You do **not** edit `.env` for secrets — the installer fills
-   them. (On Windows you may still point the backup-drive paths in `.env` at real
-   folders, e.g. `D:/`, `E:/PointyBackups`.)
+   With licensing off (the current default) the stack comes straight up and runs
+   fully offline — no relay round-trip needed. (When licensing is later enabled,
+   the backend redeems the license with the relay on first boot, which needs
+   internet once, then runs offline.) You do **not** edit `.env` for secrets — the
+   installer fills them. (On Windows you may still point the backup-drive paths in
+   `.env` at real folders, e.g. `D:/`, `E:/PointyBackups`.)
 
    You also do **not** need the server's LAN IP — tills find the backend by UDP
    discovery. A static IP (DHCP reservation) is recommended for stability but not
@@ -77,8 +81,9 @@ PowerShell on Windows, with internet access). You only need:
    (LAN discovery), and **TCP 80** (browser access) so cashier devices can reach
    the server.
 
-The backend runs migrations on startup, redeems the license, then serves the API
-on port 8000. Celery and the relay connector start once the backend is healthy.
+The backend runs migrations on startup, then serves the API on port 8000 (and
+redeems the license first when licensing is enabled). Celery and the relay
+connector start once the backend is healthy.
 
 ### Licensing (how enrollment works)
 
@@ -125,9 +130,14 @@ shop's server never holds the company-wide relay admin token.
   pointy-relay installations audit <installation-id>
   ```
 
-Until a backend is licensed it serves nothing but health checks and the enrollment
-path (`POINTY_REQUIRE_LICENSE=true`), so an unlicensed copy won't run. The relay
-URLs are the same for every shop and come pre-filled in the template.
+When `POINTY_REQUIRE_LICENSE=true`, a backend serves nothing but health checks and
+the enrollment path until it is licensed, so an unlicensed copy won't run.
+**Licensing is currently OFF by default** (`POINTY_REQUIRE_LICENSE=false`) so shops
+with no internet can run fully offline — the gate can only unlock by redeeming the
+license key with the relay online, which an offline install can never reach. Flip
+it back to `true` (and re-run `docker compose up -d`) once a shop has internet and
+you want to enforce licensing. The relay URLs are the same for every shop and come
+pre-filled in the template.
 
 ## Verify
 

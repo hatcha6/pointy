@@ -77,17 +77,20 @@ foreach ($img in $images) {
 }
 
 if (-not (Test-Path ".env")) {
-    # Every installation needs a license key, shipped by the provider as a
-    # license.key file placed next to this installer. No license, no install.
+    # LICENSING TEMPORARILY OFF ("for now"): on-prem installs don't require a
+    # license key, so a shop with no internet can run fully offline. The license
+    # gate unlocks by redeeming the key with the relay *online* - which an offline
+    # shop can never reach - so requiring it would brick the till. If a license.key
+    # is present we still record it, so re-enabling licensing later (set
+    # POINTY_REQUIRE_LICENSE=true once the shop has internet) enrolls without a
+    # reinstall. To restore enforcement: make the file required again (exit 1) and
+    # set POINTY_REQUIRE_LICENSE "true" below.
     $licenseFile = if ($env:POINTY_LICENSE_FILE) { $env:POINTY_LICENSE_FILE } else { "license.key" }
-    if (-not (Test-Path $licenseFile)) {
-        Write-Error "No license key found at .\$licenseFile - place the license.key file from your provider next to this installer and re-run."
-        exit 1
-    }
-    $licenseKey = (Get-Content $licenseFile -Raw).Trim()
-    if (-not $licenseKey) {
-        Write-Error "$licenseFile is empty."
-        exit 1
+    $licenseKey = ""
+    if (Test-Path $licenseFile) {
+        $licenseKey = (Get-Content $licenseFile -Raw).Trim()
+    } else {
+        Write-Warning "No license key at .\$licenseFile - installing without a license (offline mode)."
     }
 
     Copy-Item ".env.example" ".env"
@@ -115,9 +118,9 @@ if (-not (Test-Path ".env")) {
     Set-EnvVar "DJANGO_SECRET_KEY" (New-Secret 48)
     Set-EnvVar "POINTY_RELAY_CONNECTOR_SETUP_TOKEN" (New-Secret 24)
     Set-EnvVar "POINTY_RELAY_ENROLLMENT_TOKEN" $licenseKey
-    Set-EnvVar "POINTY_REQUIRE_LICENSE" "true"
+    Set-EnvVar "POINTY_REQUIRE_LICENSE" "false"
 
-    Write-Host "==> Created .env: generated local secrets and applied your license key." -ForegroundColor Green
+    Write-Host "==> Created .env: generated local secrets (licensing off - offline install)." -ForegroundColor Green
 }
 
 Write-Host "==> Starting the Pointy stack..."
