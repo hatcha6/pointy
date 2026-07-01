@@ -531,13 +531,14 @@ make redis-ping    # Check Redis connectivity
 `.github/workflows/release.yml` builds and publishes the customer-facing
 artifacts. It runs automatically when a **GitHub Release is published** (tag like
 `v1.2.3`), and can also be run from the Actions tab (**Run workflow**) to produce
-test artifacts without cutting a release. Three build jobs run in parallel and
+test artifacts without cutting a release. Four build jobs run in parallel and
 attach their output to the release:
 
 | Job             | Artifact                                  | Notes |
 | --------------- | ----------------------------------------- | ----- |
 | `build-android` | `pointy-<ver>-android-universal.apk`      | One universal APK (all ABIs, `minSdk 23` / Android 6.0) for sideloading to till devices. |
 | `build-windows` | `pointy-<ver>-windows-x64-setup.exe` (+ portable `.zip`) | **Inno Setup installer** (Start Menu + desktop shortcuts, uninstaller) for easy one-click setup — recommended. A portable extract-and-run `.zip` ships alongside for locked-down deployments. The Visual C++ runtime is bundled in both, so the app runs on old/minimal Windows 10+ PCs with no extra install. |
+| `build-linux`   | `pointy-<ver>-linux-x64.tar.gz`           | Portable extract-and-run bundle for Linux till PCs (needs GTK 3, preinstalled on desktop distros): `tar xzf`, then run `./pointy_frontend`. Not part of the LAN client self-update system (Android + Windows only). |
 | `build-onprem`  | `pointy-onprem-<ver>.zip`                 | Fully offline server bundle: backend + relay + **web (Flutter web + nginx)** + Postgres + Redis images saved as `docker load` tarballs, the Compose file (`restart: always`), `.env.example`, installers, and a boot/crash **watchdog** that self-heals the stack so the till has no outages. Browser users open `http://<server-ip>/`. See [`deploy/onprem/INSTALL.md`](deploy/onprem/INSTALL.md). |
 
 Toolchain versions are pinned in the workflow `env:` to match local development
