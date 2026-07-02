@@ -8273,6 +8273,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get invoicePaymentSuccess => 'تم تسجيل الدفعة على الفاتورة.';
 
   @override
+  String get invoiceAssignCustomerButton => 'تعيين عميل';
+
+  @override
+  String get invoiceChangeCustomerButton => 'تغيير العميل';
+
+  @override
+  String get invoiceAssignCustomerSuccess => 'تم تعيين العميل على الفاتورة.';
+
+  @override
+  String get invoiceAssignCustomerError =>
+      'تعذّر تعيين العميل على الفاتورة. لا يمكن ذلك بعد تسجيل أي دفعة.';
+
+  @override
   String get invoiceTotalsTitle => 'الإجماليات';
 
   @override
@@ -11636,6 +11649,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckerManualEntryTitle => 'أدخل الباركود';
 
   @override
+  String get priceCheckerCameraScanPrompt =>
+      'قرّب الباركود من الكاميرا لعرض السعر';
+
+  @override
+  String get priceCheckerCameraStarting => 'جارٍ تشغيل الكاميرا…';
+
+  @override
+  String get priceCheckerCameraUnavailable => 'الكاميرا غير متاحة';
+
+  @override
   String get priceCheckerExitTooltip => 'الخروج من وضع كاشف الأسعار';
 
   @override
@@ -11723,6 +11746,46 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get priceCheckerRemoveButton => 'إيقاف الوضع';
+
+  @override
+  String get priceCheckerScanSettingsTitle => 'إعدادات المسح';
+
+  @override
+  String get priceCheckerCameraToggleLabel => 'المسح بالكاميرا';
+
+  @override
+  String get priceCheckerCameraToggleHint =>
+      'قراءة الباركود بكاميرا الجهاز دون الحاجة إلى ماسح خارجي';
+
+  @override
+  String get priceCheckerCameraFacingLabel => 'الكاميرا المستخدمة';
+
+  @override
+  String get priceCheckerCameraFront => 'الأمامية';
+
+  @override
+  String get priceCheckerCameraBack => 'الخلفية';
+
+  @override
+  String get priceCheckerDwellLabel => 'مدة عرض المنتج';
+
+  @override
+  String get priceCheckerDwellHint =>
+      'المدة قبل العودة تلقائيًا إلى شاشة المسح';
+
+  @override
+  String priceCheckerDwellSecondsValue(int seconds) {
+    String _temp0 = intl.Intl.pluralLogic(
+      seconds,
+      locale: localeName,
+      other: '$seconds ثانية',
+      many: '$seconds ثانية',
+      few: '$seconds ثوانٍ',
+      two: 'ثانيتان',
+      one: 'ثانية واحدة',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get priceCheckerRemoveConfirmTitle => 'إيقاف وضع كاشف الأسعار؟';

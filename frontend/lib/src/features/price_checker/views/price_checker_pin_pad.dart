@@ -74,10 +74,7 @@ class PriceCheckerKeypad extends StatelessWidget {
             _KeypadButton(label: '$digit', onTap: () => onDigit('$digit')),
           const SizedBox.shrink(),
           _KeypadButton(label: '0', onTap: () => onDigit('0')),
-          _KeypadButton(
-            icon: Icons.backspace_outlined,
-            onTap: onBackspace,
-          ),
+          _KeypadButton(icon: Icons.backspace_outlined, onTap: onBackspace),
         ],
       ),
     );

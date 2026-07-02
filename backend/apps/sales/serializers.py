@@ -22,6 +22,7 @@ from .models import (
     RegisterSession,
 )
 from .services import (
+    assign_credit_invoice_customer,
     cashier_window_expired,
     can_adjust_order,
     calculate_sales_discounts,
@@ -375,6 +376,7 @@ class OrderSerializer(serializers.ModelSerializer):
     can_void = serializers.SerializerMethodField()
     can_return = serializers.SerializerMethodField()
     can_exchange = serializers.SerializerMethodField()
+    can_assign_customer = serializers.SerializerMethodField()
     requires_manager_adjustment = serializers.SerializerMethodField()
     applied_discounts = serializers.SerializerMethodField()
     public_invoice_url = serializers.SerializerMethodField()
@@ -430,6 +432,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "can_void",
             "can_return",
             "can_exchange",
+            "can_assign_customer",
             "requires_manager_adjustment",
             "created_at",
             "updated_at",
@@ -460,6 +463,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "can_void",
             "can_return",
             "can_exchange",
+            "can_assign_customer",
             "requires_manager_adjustment",
             "created_at",
             "updated_at",
@@ -476,6 +480,16 @@ class OrderSerializer(serializers.ModelSerializer):
         # order can be adjusted. The frontend additionally gates the button on the
         # operator's checkout capability.
         return self._can_adjust_order(order)
+
+    def get_can_assign_customer(self, order):
+        # Who owes a debt invoice is fixable only while nothing has been
+        # collected — mirrors ``assign_credit_invoice_customer``. Reads the
+        # prefetched ``payments`` cache instead of issuing an EXISTS per row.
+        return (
+            order.sale_type == Order.SaleType.CREDIT
+            and order.status != Order.Status.VOID
+            and len(order.payments.all()) == 0
+        )
 
     def get_requires_manager_adjustment(self, order):
         return cashier_window_expired(order, settings=self._shop_settings())
@@ -1013,6 +1027,21 @@ class CustomerAccountPaymentSerializer(serializers.Serializer):
             amount=self.validated_data["amount"],
             card_receipt_url=self.validated_data.get("card_receipt_url", ""),
             register_session=self.context["register_session"],
+            request=self.context.get("request"),
+        )
+
+
+class OrderAssignCustomerSerializer(serializers.Serializer):
+    """Assign or change the customer who owes a debt (آجل) invoice — allowed
+    only while no payment has been recorded against it. Context: ``order``,
+    ``request``."""
+
+    customer = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.all())
+
+    def save(self, **kwargs):
+        return assign_credit_invoice_customer(
+            self.context["order"],
+            customer=self.validated_data["customer"],
             request=self.context.get("request"),
         )
 

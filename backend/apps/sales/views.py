@@ -25,6 +25,7 @@ from .serializers import (
     ConvertQuotationSerializer,
     CustomerInvoicePaymentSerializer,
     DiscountPreviewSerializer,
+    OrderAssignCustomerSerializer,
     OrderExchangeInputSerializer,
     OrderSerializer,
     PublicInvoiceSerializer,
@@ -63,6 +64,7 @@ class OrderViewSet(
         "void": ("sales.add_order",),
         "exchange_items": ("sales.add_order",),
         "record_payment": ("sales.add_order",),
+        "assign_customer": ("sales.add_order",),
         "outstanding": ("sales.view_order",),
         "convert": ("sales.add_order",),
         "reprint": ("sales.view_order", "printing.add_printjob"),
@@ -255,6 +257,29 @@ class OrderViewSet(
         return Response(
             OrderSerializer(order, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="assign-customer")
+    def assign_customer(self, request, pk=None):
+        # No register session needed — no money moves; this only fixes WHO owes
+        # a not-yet-collected debt invoice.
+        return run_idempotent_request(
+            request,
+            lambda: self._assign_customer(request),
+        )
+
+    def _assign_customer(self, request):
+        order = self.get_object()
+        serializer = OrderAssignCustomerSerializer(
+            data=request.data,
+            context={"order": order, "request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        order.refresh_from_db()
+        return Response(
+            OrderSerializer(order, context={"request": request}).data,
+            status=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["post"])

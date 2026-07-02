@@ -2,7 +2,9 @@
 //
 // Renders [PriceCheckerKioskView] full-viewport with seeded data and no backend.
 // Pick a state with `?state=` and the theme with `?theme=dark`, then resize the
-// browser to test responsiveness (price checkers come in many sizes). Run with:
+// browser to test responsiveness (price checkers come in many sizes). Add
+// `?camera=1` to preview the camera-scanning layout (a fake feed stands in for
+// the live preview so the design reviews without camera hardware). Run with:
 //
 //   flutter run -d web-server --web-port 8080 -t lib/dev/price_checker_kiosk_preview.dart
 //
@@ -87,6 +89,9 @@ class _PreviewApp extends StatelessWidget {
       result: result,
       barcode: barcode,
       shopName: 'بقالة الأمل',
+      cameraPreview: _query('camera', '0') == '1'
+          ? const _FakeCameraFeed()
+          : null,
       onManualEntry: () {},
       onExitRequested: () {},
     );
@@ -153,6 +158,32 @@ class _PreviewApp extends StatelessWidget {
       finalPriceDisplay: '12.50 د.ل',
       originalPriceDisplay: '12.50 د.ل',
       imageUrl: _photoUrl,
+    );
+  }
+}
+
+/// Stands in for the live camera feed inside the viewfinder card so the
+/// camera layout can be reviewed in a browser without camera hardware.
+class _FakeCameraFeed extends StatelessWidget {
+  const _FakeCameraFeed();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2A2F36), Color(0xFF12151A)],
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.photo_camera_outlined,
+          color: Colors.white24,
+          size: 64,
+        ),
+      ),
     );
   }
 }

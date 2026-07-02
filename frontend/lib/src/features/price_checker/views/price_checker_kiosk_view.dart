@@ -29,6 +29,7 @@ class PriceCheckerKioskView extends StatelessWidget {
     this.result,
     this.barcode = '',
     this.shopName = '',
+    this.cameraPreview,
     this.onManualEntry,
     this.onExitRequested,
   });
@@ -37,6 +38,11 @@ class PriceCheckerKioskView extends StatelessWidget {
   final PriceLookupResult? result;
   final String barcode;
   final String shopName;
+
+  /// Live camera feed for hands-free scanning, or null when this device scans
+  /// with a wedge scanner only. The view frames it in a viewfinder card while
+  /// idle; the wrapping screen owns the camera itself (start/stop/detection).
+  final Widget? cameraPreview;
 
   /// Opens manual barcode entry (touch devices without a wedge scanner).
   final VoidCallback? onManualEntry;
@@ -122,17 +128,21 @@ class PriceCheckerKioskView extends StatelessWidget {
           title: AppLocalizations.of(context)!.priceCheckerDisconnectedTitle,
           subtitle: AppLocalizations.of(context)!.priceCheckerDisconnectedBody,
         ),
+        // With a camera, idle and loading share one child key so the switcher
+        // updates it in place — remounting would flicker the live preview.
         PriceCheckerKioskStatus.loading => _IdleContent(
-          key: const ValueKey('loading'),
+          key: ValueKey(cameraPreview != null ? 'camera-scan' : 'loading'),
           metrics: metrics,
           shopName: shopName,
           isLoading: true,
+          cameraPreview: cameraPreview,
         ),
         PriceCheckerKioskStatus.idle => _IdleContent(
-          key: const ValueKey('idle'),
+          key: ValueKey(cameraPreview != null ? 'camera-scan' : 'idle'),
           metrics: metrics,
           shopName: shopName,
           isLoading: false,
+          cameraPreview: cameraPreview,
         ),
       },
     );
@@ -208,21 +218,28 @@ class _BrandMedallion extends StatelessWidget {
   }
 }
 
-/// Idle (and loading) state: brand medallion + prompt + a gentle scan pulse.
+/// Idle (and loading) state: brand medallion + prompt, then either a live
+/// camera viewfinder (camera scanning) or a gentle scan pulse (wedge scanner).
 class _IdleContent extends StatelessWidget {
   const _IdleContent({
     super.key,
     required this.metrics,
     required this.shopName,
     required this.isLoading,
+    this.cameraPreview,
   });
 
   final _KioskMetrics metrics;
   final String shopName;
   final bool isLoading;
+  final Widget? cameraPreview;
 
   @override
   Widget build(BuildContext context) {
+    final preview = cameraPreview;
+    if (preview != null) {
+      return _buildCameraLayout(context, preview);
+    }
     final colors = context.pointyColors;
     final l10n = AppLocalizations.of(context)!;
     return Center(
@@ -285,6 +302,294 @@ class _IdleContent extends StatelessWidget {
       ),
     );
   }
+
+  /// Camera scanning is hands-free, so the live viewfinder is the hero: the
+  /// shopper aims the barcode using the preview as feedback. Branding sits
+  /// beside it on wide displays and above it on tall ones.
+  Widget _buildCameraLayout(BuildContext context, Widget preview) {
+    final l10n = AppLocalizations.of(context)!;
+
+    final branding = _CameraBranding(metrics: metrics, shopName: shopName);
+    final size = _viewfinderSize();
+    final viewfinder = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: size.width,
+          height: size.height,
+          child: _CameraViewfinder(
+            preview: preview,
+            metrics: metrics,
+            isLoading: isLoading,
+          ),
+        ),
+        SizedBox(height: metrics.gap * 0.6),
+        // Fixed-height slot so the loading line fades in without any reflow.
+        SizedBox(
+          height: metrics.font(16, min: 13, max: 28) * 1.5,
+          child: AnimatedOpacity(
+            opacity: isLoading ? 1 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: Text(
+              l10n.priceCheckerLoading,
+              style: TextStyle(
+                fontSize: metrics.font(16, min: 13, max: 28),
+                color: context.pointyColors.mutedInk,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (metrics.isWide) {
+      return Row(
+        children: [
+          Expanded(
+            flex: 5,
+            child: Center(child: SingleChildScrollView(child: branding)),
+          ),
+          SizedBox(width: metrics.gap * 1.6),
+          Expanded(flex: 6, child: Center(child: viewfinder)),
+        ],
+      );
+    }
+
+    return Center(
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            branding,
+            SizedBox(height: metrics.gap * 1.2),
+            viewfinder,
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The viewfinder fills the space branding leaves over: roughly the trailing
+  /// half on wide displays, the lower ~40% on tall ones, always clamped so the
+  /// preview stays generous on a wall monitor and sane on a shelf verifier.
+  Size _viewfinderSize() {
+    if (metrics.isWide) {
+      final height = (metrics.size.height * 0.58).clamp(180.0, 540.0);
+      final width = math.min(height * 4 / 3, metrics.size.width * 0.46);
+      return Size(width, height.toDouble());
+    }
+    final width = math.min(
+      metrics.size.width - metrics.gap * 4,
+      (metrics.scale * 340).clamp(240.0, 640.0),
+    );
+    final height = math.min(width * 0.75, metrics.size.height * 0.4);
+    return Size(width.toDouble(), height.toDouble());
+  }
+}
+
+/// The branding block shown next to the camera viewfinder: medallion, shop
+/// name, and the aim-at-the-camera prompt.
+class _CameraBranding extends StatelessWidget {
+  const _CameraBranding({required this.metrics, required this.shopName});
+
+  final _KioskMetrics metrics;
+  final String shopName;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _BrandMedallion(diameter: (metrics.scale * 100).clamp(72, 220)),
+        SizedBox(height: metrics.gap),
+        if (shopName.isNotEmpty) ...[
+          Text(
+            shopName,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: metrics.font(24, min: 17, max: 50),
+              fontWeight: FontWeight.w700,
+              color: colors.ink,
+              height: 1.1,
+            ),
+          ),
+          SizedBox(height: metrics.gap * 0.5),
+        ],
+        Text(
+          l10n.priceCheckerCameraScanPrompt,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: metrics.font(18, min: 14, max: 34),
+            fontWeight: FontWeight.w500,
+            color: colors.mutedInk,
+            height: 1.3,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The live preview framed as a viewfinder: a rounded elevated card (same
+/// treatment as the product photo) with corner brackets and a sweeping scan
+/// line, so it reads as "hold your barcode here" without any instructions.
+class _CameraViewfinder extends StatefulWidget {
+  const _CameraViewfinder({
+    required this.preview,
+    required this.metrics,
+    required this.isLoading,
+  });
+
+  final Widget preview;
+  final _KioskMetrics metrics;
+  final bool isLoading;
+
+  @override
+  State<_CameraViewfinder> createState() => _CameraViewfinderState();
+}
+
+class _CameraViewfinderState extends State<_CameraViewfinder>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final metrics = widget.metrics;
+    return Container(
+      decoration: BoxDecoration(
+        // Black backdrop keeps the card looking intentional while the camera
+        // warms up or shows a letterboxed feed.
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(metrics.gap * 1.4),
+        border: Border.all(color: colors.line),
+        boxShadow: [
+          BoxShadow(
+            color: colors.shadow.withValues(alpha: 0.14),
+            blurRadius: metrics.gap * 1.4,
+            offset: Offset(0, metrics.gap * 0.5),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          widget.preview,
+          IgnorePointer(
+            child: AnimatedBuilder(
+              animation: _sweep,
+              builder: (context, _) {
+                return CustomPaint(
+                  painter: _ViewfinderOverlayPainter(
+                    bracketColor: Colors.white.withValues(alpha: 0.9),
+                    sweepColor: colors.primary,
+                    sweep: widget.isLoading ? -1 : _sweep.value,
+                  ),
+                );
+              },
+            ),
+          ),
+          IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: widget.isLoading ? 1 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: ColoredBox(
+                color: Colors.black38,
+                child: Center(
+                  child: SizedBox(
+                    width: metrics.font(30, min: 24, max: 48),
+                    height: metrics.font(30, min: 24, max: 48),
+                    child: const CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Corner brackets + the sweeping scan line drawn over the camera feed.
+class _ViewfinderOverlayPainter extends CustomPainter {
+  _ViewfinderOverlayPainter({
+    required this.bracketColor,
+    required this.sweepColor,
+    required this.sweep,
+  });
+
+  final Color bracketColor;
+  final Color sweepColor;
+
+  /// 0..1 sweep position, or negative to hide the line (while loading).
+  final double sweep;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final shortest = math.min(size.width, size.height);
+    final inset = shortest * 0.09;
+    final arm = shortest * 0.14;
+    final paint = Paint()
+      ..color = bracketColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = (shortest * 0.014).clamp(2.0, 4.0)
+      ..strokeCap = StrokeCap.round;
+
+    for (final (dx, dy) in const [(1, 1), (-1, 1), (1, -1), (-1, -1)]) {
+      final corner = Offset(
+        dx > 0 ? inset : size.width - inset,
+        dy > 0 ? inset : size.height - inset,
+      );
+      canvas.drawPath(
+        Path()
+          ..moveTo(corner.dx + arm * dx, corner.dy)
+          ..lineTo(corner.dx, corner.dy)
+          ..lineTo(corner.dx, corner.dy + arm * dy),
+        paint,
+      );
+    }
+
+    if (sweep >= 0) {
+      final y = inset * 1.6 + (size.height - inset * 3.2) * sweep;
+      final glow = Paint()
+        ..shader =
+            LinearGradient(
+              colors: [
+                sweepColor.withValues(alpha: 0),
+                sweepColor.withValues(alpha: 0.85),
+                sweepColor.withValues(alpha: 0),
+              ],
+            ).createShader(
+              Rect.fromLTWH(inset, y - 10, size.width - inset * 2, 20),
+            );
+      canvas.drawRect(
+        Rect.fromLTWH(inset, y - 1.5, size.width - inset * 2, 3),
+        glow,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ViewfinderOverlayPainter oldDelegate) =>
+      oldDelegate.sweep != sweep ||
+      oldDelegate.bracketColor != bracketColor ||
+      oldDelegate.sweepColor != sweepColor;
 }
 
 /// A barcode glyph with a sweeping highlight line — a quiet "ready to scan" cue.
@@ -351,7 +656,31 @@ class _BarcodePainter extends CustomPainter {
 
   // A fixed, pleasant-looking bar pattern (relative widths).
   static const _bars = <double>[
-    3, 1, 1, 2, 1, 3, 1, 1, 2, 1, 1, 3, 2, 1, 1, 1, 2, 3, 1, 1, 2, 1, 3, 1, 1,
+    3,
+    1,
+    1,
+    2,
+    1,
+    3,
+    1,
+    1,
+    2,
+    1,
+    1,
+    3,
+    2,
+    1,
+    1,
+    1,
+    2,
+    3,
+    1,
+    1,
+    2,
+    1,
+    3,
+    1,
+    1,
   ];
 
   @override
@@ -562,7 +891,9 @@ class _ProductDetails extends StatelessWidget {
         Wrap(
           spacing: metrics.gap * 0.6,
           runSpacing: metrics.gap * 0.5,
-          alignment: metrics.isWide ? WrapAlignment.start : WrapAlignment.center,
+          alignment: metrics.isWide
+              ? WrapAlignment.start
+              : WrapAlignment.center,
           children: [
             _StockPill(inStock: result.inStock, metrics: metrics),
             if (result.sku.isNotEmpty)
@@ -732,9 +1063,7 @@ class _StockPill extends StatelessWidget {
           ),
           SizedBox(width: metrics.gap * 0.35),
           Text(
-            inStock
-                ? l10n.priceCheckerInStock
-                : l10n.priceCheckerOutOfStock,
+            inStock ? l10n.priceCheckerInStock : l10n.priceCheckerOutOfStock,
             style: TextStyle(
               fontSize: metrics.font(15, min: 12, max: 26),
               fontWeight: FontWeight.w600,
@@ -774,7 +1103,11 @@ class _InfoPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: metrics.font(15, min: 12, max: 24), color: colors.mutedInk),
+          Icon(
+            icon,
+            size: metrics.font(15, min: 12, max: 24),
+            color: colors.mutedInk,
+          ),
           SizedBox(width: metrics.gap * 0.35),
           Text(
             label,

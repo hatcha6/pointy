@@ -1319,6 +1319,18 @@ class PosApiService {
     );
   }
 
+  Future<SaleOrder> assignSaleOrderCustomer(
+    int saleOrderId, {
+    required int customerId,
+    String? idempotencyKey,
+  }) {
+    return _sales.assignSaleOrderCustomer(
+      saleOrderId,
+      customerId: customerId,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
   Future<SaleDiscountPreview> previewSaleDiscounts(
     SaleDiscountPreviewDraft draft,
   ) {

@@ -871,6 +871,53 @@ def record_customer_account_payment(
     return allocations
 
 
+@transaction.atomic
+def assign_credit_invoice_customer(order, *, customer, request=None):
+    """Assign or change the customer who owes a debt (آجل) invoice.
+
+    Allowed only while NOT A SINGLE payment row exists (down-payment at issue,
+    later collection, or a refund): once money moved, the invoice is part of a
+    customer's payment history and reassignment would silently rewrite who paid
+    whom. Sale terms (lines, totals, applied discounts) are snapshots agreed at
+    issue and are intentionally left untouched — this fixes WHO owes, never how
+    much.
+    """
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if locked.sale_type != Order.SaleType.CREDIT:
+        raise serializers.ValidationError(
+            {"order": "Only a credit (debt) invoice can be assigned a customer."}
+        )
+    if locked.status == Order.Status.VOID:
+        raise serializers.ValidationError({"order": "Order is void."})
+    if locked.payments.exists():
+        raise serializers.ValidationError(
+            {
+                "order": (
+                    "A payment has already been recorded against this invoice; "
+                    "its customer can no longer be changed."
+                )
+            }
+        )
+    previous_customer_id = locked.customer_id
+    if previous_customer_id == customer.pk:
+        return locked
+    locked.customer = customer
+    locked.save(update_fields=["customer", "updated_at"])
+    record_domain_event(
+        name="sales.customer.assigned",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        user=getattr(request, "user", None),
+        entity_type="sale_order",
+        entity_id=locked.pk,
+        attributes={
+            "receipt_number": locked.receipt_number,
+            "previous_customer_id": previous_customer_id,
+            "customer_id": customer.pk,
+        },
+    )
+    return locked
+
+
 def _quote_lines_to_checkout_data(lines):
     """Rebuild ``lines_data`` from a quotation's persisted lines so the
     conversion re-runs the normal checkout path (re-snapshotting cost at current

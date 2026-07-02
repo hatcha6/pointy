@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../data/models/price_checker_config.dart';
 import '../../../data/repositories/price_checker_repository.dart';
 import '../../../data/services/auto_start_service.dart';
 import '../../../shared/components/components.dart';
@@ -10,8 +13,9 @@ import '../../../shared/price_checker/price_checker_mode_controller.dart';
 import '../price_checker_mode_actions.dart';
 
 /// Device-settings panel to configure this device as a customer-facing price
-/// checker: set it up, jump into kiosk mode, change the exit PIN, edit the fleet
-/// name/location, or turn it back into a normal POS device.
+/// checker: set it up, jump into kiosk mode, tune scanning (camera on/off,
+/// which camera, how long a product stays on screen), change the exit PIN,
+/// edit the fleet name/location, or turn it back into a normal POS device.
 class PriceCheckerSettingsPanel extends StatelessWidget {
   const PriceCheckerSettingsPanel({
     super.key,
@@ -108,7 +112,9 @@ class _ConfiguredView extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
+        _ScanSettingsSection(controller: controller),
+        const SizedBox(height: 20),
         Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -195,6 +201,114 @@ class _ConfiguredView extends StatelessWidget {
     if (confirmed == true) {
       await controller.clear();
     }
+  }
+}
+
+/// Scanning preferences for this kiosk: camera on/off, which camera it scans
+/// with, and how long a found product stays on screen. The camera rows only
+/// appear on platforms with camera scanning; the dwell applies to every input
+/// method (camera, wedge scanner, manual entry).
+class _ScanSettingsSection extends StatefulWidget {
+  const _ScanSettingsSection({required this.controller});
+
+  final PriceCheckerModeController controller;
+
+  @override
+  State<_ScanSettingsSection> createState() => _ScanSettingsSectionState();
+}
+
+class _ScanSettingsSectionState extends State<_ScanSettingsSection> {
+  /// Live slider position while dragging; persisted once on release so a drag
+  /// doesn't write SharedPreferences on every tick.
+  int? _draggingDwell;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final config = widget.controller.config;
+    final dwell = _draggingDwell ?? config.foundDwellSeconds;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          l10n.priceCheckerScanSettingsTitle,
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        if (priceCheckerCameraScanningSupported) ...[
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: config.cameraEnabled,
+            onChanged: (value) => unawaited(
+              widget.controller.updateScanSettings(cameraEnabled: value),
+            ),
+            title: Text(l10n.priceCheckerCameraToggleLabel),
+            subtitle: Text(l10n.priceCheckerCameraToggleHint),
+          ),
+          if (config.cameraEnabled) ...[
+            const SizedBox(height: 4),
+            Text(l10n.priceCheckerCameraFacingLabel),
+            const SizedBox(height: 8),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: SegmentedButton<PriceCheckerCameraFacing>(
+                segments: [
+                  ButtonSegment(
+                    value: PriceCheckerCameraFacing.front,
+                    icon: const Icon(Icons.camera_front_rounded),
+                    label: Text(l10n.priceCheckerCameraFront),
+                  ),
+                  ButtonSegment(
+                    value: PriceCheckerCameraFacing.back,
+                    icon: const Icon(Icons.camera_rear_rounded),
+                    label: Text(l10n.priceCheckerCameraBack),
+                  ),
+                ],
+                selected: {config.cameraFacing},
+                showSelectedIcon: false,
+                onSelectionChanged: (selection) => unawaited(
+                  widget.controller.updateScanSettings(
+                    cameraFacing: selection.single,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ],
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.priceCheckerDwellLabel),
+          subtitle: Text(l10n.priceCheckerDwellHint),
+          trailing: Text(
+            l10n.priceCheckerDwellSecondsValue(dwell),
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: colors.primaryStrong,
+            ),
+          ),
+        ),
+        Slider(
+          value: dwell.toDouble(),
+          min: PriceCheckerConfig.minFoundDwellSeconds.toDouble(),
+          max: PriceCheckerConfig.maxFoundDwellSeconds.toDouble(),
+          divisions:
+              PriceCheckerConfig.maxFoundDwellSeconds -
+              PriceCheckerConfig.minFoundDwellSeconds,
+          label: l10n.priceCheckerDwellSecondsValue(dwell),
+          onChanged: (value) => setState(() => _draggingDwell = value.round()),
+          onChangeEnd: (value) {
+            unawaited(
+              widget.controller.updateScanSettings(
+                foundDwellSeconds: value.round(),
+              ),
+            );
+            setState(() => _draggingDwell = null);
+          },
+        ),
+      ],
+    );
   }
 }
 
@@ -323,7 +437,10 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
             const SizedBox(height: 10),
             Text(
               _error!,
-              style: TextStyle(color: colors.danger, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: colors.danger,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ],

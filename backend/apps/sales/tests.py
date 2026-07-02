@@ -18,6 +18,7 @@ from apps.catalog.models import (
     ProductModifierGroup,
     ProductVariant,
 )
+from apps.analytics.models import AnalyticsEvent
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import IdempotencyRecord, RelayInstallation, ShopSettings
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
@@ -2850,6 +2851,149 @@ class CustomerPaymentAndConversionTests(TestCase):
         self.assertEqual(quote.status, Order.Status.OPEN)
         self.stock_item.refresh_from_db()
         self.assertEqual(self.stock_item.quantity_on_hand, 10)
+
+
+class AssignCustomerToCreditInvoiceTests(TestCase):
+    """Assigning/changing the customer who owes a debt (آجل) invoice: allowed
+    only while the invoice is a non-void credit sale with NO payment recorded
+    against it — invoices are otherwise append-only."""
+
+    def setUp(self):
+        ensure_role_groups()
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="assign-cashier", password="pass"
+        )
+        self.user.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.client.force_authenticate(user=self.user)
+        self.product = create_product_with_default_variant(
+            sku="LEDGER", barcode="", name="Ledger", unit_price=Decimal("3.50")
+        )
+        self.variant = self.product.default_variant
+        StockItem.objects.create(variant=self.variant, quantity_on_hand=20)
+        self.customer = Customer.objects.create(full_name="Original Debtor")
+        self.other_customer = Customer.objects.create(full_name="Actual Debtor")
+        self.client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "0.00"},
+            format="json",
+        )
+
+    def _checkout(self, **overrides):
+        payload = {
+            "lines": [{"variant": self.variant.pk, "quantity": 2}],
+            "customer": self.customer.pk,
+        }
+        payload.update(overrides)
+        return self.client.post(reverse("order-checkout"), payload, format="json")
+
+    def _credit_invoice(self, **overrides):
+        response = self._checkout(sale_type="credit", **overrides)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        return Order.objects.get(pk=response.data["id"])
+
+    def _assign(self, order, customer):
+        return self.client.post(
+            reverse("order-assign-customer", args=[order.pk]),
+            {"customer": customer.pk},
+            format="json",
+        )
+
+    def test_changes_customer_on_unpaid_credit_invoice(self):
+        invoice = self._credit_invoice()
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self._assign(invoice, self.other_customer)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["customer"], self.other_customer.pk)
+        self.assertEqual(response.data["customer_name"], "Actual Debtor")
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.customer, self.other_customer)
+        # The receivable follows the new customer, and the audit trail records
+        # who owed before.
+        self.assertTrue(
+            Order.objects.open_credit()
+            .filter(customer=self.other_customer, pk=invoice.pk)
+            .exists()
+        )
+        event = AnalyticsEvent.objects.filter(name="sales.customer.assigned").latest(
+            "created_at"
+        )
+        self.assertEqual(
+            event.attributes["previous_customer_id"], self.customer.pk
+        )
+        self.assertEqual(event.attributes["customer_id"], self.other_customer.pk)
+
+    def test_assigns_customer_to_credit_invoice_issued_without_one(self):
+        settings = ShopSettings.load()
+        settings.require_customer_for_credit = False
+        settings.save(update_fields=["require_customer_for_credit"])
+        invoice = self._credit_invoice(customer=None)
+        self.assertIsNone(invoice.customer)
+        response = self._assign(invoice, self.other_customer)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.customer, self.other_customer)
+
+    def test_rejects_when_down_payment_was_taken_at_issue(self):
+        invoice = self._credit_invoice(payment_method="cash", amount_received="3.00")
+        response = self._assign(invoice, self.other_customer)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.customer, self.customer)
+
+    def test_rejects_after_a_later_collection(self):
+        invoice = self._credit_invoice()
+        self.client.post(
+            reverse("order-record-payment", args=[invoice.pk]),
+            {"method": "cash", "amount": "1.00"},
+            format="json",
+        )
+        response = self._assign(invoice, self.other_customer)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_rejects_standard_sale_and_quotation(self):
+        standard = Order.objects.get(pk=self._checkout().data["id"])
+        self.assertEqual(
+            self._assign(standard, self.other_customer).status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        quotation = Order.objects.get(
+            pk=self._checkout(sale_type="quotation").data["id"]
+        )
+        self.assertEqual(
+            self._assign(quotation, self.other_customer).status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_rejects_void_invoice(self):
+        invoice = self._credit_invoice()
+        Order.objects.filter(pk=invoice.pk).update(status=Order.Status.VOID)
+        response = self._assign(invoice, self.other_customer)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reassigning_the_same_customer_is_a_no_op(self):
+        invoice = self._credit_invoice()
+        response = self._assign(invoice, self.customer)
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["customer"], self.customer.pk)
+        self.assertFalse(
+            AnalyticsEvent.objects.filter(name="sales.customer.assigned").exists()
+        )
+
+    def test_serializer_exposes_can_assign_customer(self):
+        unpaid = self._credit_invoice()
+        with_down_payment = self._credit_invoice(
+            payment_method="cash", amount_received="3.00"
+        )
+        standard = Order.objects.get(pk=self._checkout().data["id"])
+        for order, expected in (
+            (unpaid, True),
+            (with_down_payment, False),
+            (standard, False),
+        ):
+            response = self.client.get(reverse("order-detail", args=[order.pk]))
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertIs(response.data["can_assign_customer"], expected)
 
 
 class CashierCustomerAccessTests(TestCase):

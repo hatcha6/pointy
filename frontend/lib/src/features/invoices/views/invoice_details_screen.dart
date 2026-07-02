@@ -6,9 +6,11 @@ import '../../../core/authorization.dart';
 import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/sale_order_details_content.dart';
 import '../../../shared/payments/record_payment_dialog.dart';
@@ -24,6 +26,7 @@ class InvoiceDetailsScreen extends StatefulWidget {
     required this.printingRepository,
     required this.shopSettingsRepository,
     required this.catalogRepository,
+    required this.contactRepository,
     required this.initialOrder,
     required this.capabilities,
     this.analyticsEngine,
@@ -33,6 +36,7 @@ class InvoiceDetailsScreen extends StatefulWidget {
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
   final CatalogRepository catalogRepository;
+  final ContactRepository contactRepository;
   final SaleOrder initialOrder;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
@@ -106,6 +110,7 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
               printingRepository: widget.printingRepository,
               shopSettingsRepository: widget.shopSettingsRepository,
               catalogRepository: widget.catalogRepository,
+              contactRepository: widget.contactRepository,
               initialOrder: widget.initialOrder,
               capabilities: widget.capabilities,
               analyticsEngine: widget.analyticsEngine,
@@ -127,6 +132,7 @@ class InvoiceDetailsView extends StatefulWidget {
     required this.printingRepository,
     required this.shopSettingsRepository,
     required this.catalogRepository,
+    required this.contactRepository,
     required this.initialOrder,
     required this.capabilities,
     this.analyticsEngine,
@@ -138,6 +144,7 @@ class InvoiceDetailsView extends StatefulWidget {
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
   final CatalogRepository catalogRepository;
+  final ContactRepository contactRepository;
   final SaleOrder initialOrder;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
@@ -206,6 +213,12 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
                       : null,
                   isRecordingPayment: _viewModel.isRecordingPayment,
                   onRecordPayment: _recordPayment,
+                  isAssigningCustomer: _viewModel.isAssigningCustomer,
+                  // Fixing who owes a debt is a sales-write operation — the
+                  // same right that issues the invoice (sales.add_order).
+                  onAssignCustomer: widget.capabilities.canCheckoutSale
+                      ? _assignCustomer
+                      : null,
                   isConverting: _viewModel.isConverting,
                   onConvert: widget.capabilities.canCheckoutSale
                       ? _convertQuotation
@@ -314,6 +327,37 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
     );
   }
 
+  /// Opens the customer picker and reassigns who owes this debt invoice.
+  /// Canceling the picker is a silent no-op. Returns true on success.
+  Future<bool> _assignCustomer(SaleOrder order) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final customer = await showCustomerPickerSheet(
+      context: context,
+      repository: widget.contactRepository,
+    );
+    if (customer == null || !mounted) {
+      return false;
+    }
+
+    final didAssign = await _viewModel.assignCustomer(customer.id);
+    if (!mounted) {
+      return didAssign;
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            didAssign
+                ? l10n.invoiceAssignCustomerSuccess
+                : l10n.invoiceAssignCustomerError,
+          ),
+        ),
+      );
+    return didAssign;
+  }
+
   /// Opens the convert dialog for an OPEN quotation, performs the conversion,
   /// and on success replaces this screen with the NEW sale's details.
   Future<bool> _convertQuotation(SaleOrder order) async {
@@ -359,6 +403,7 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
           printingRepository: widget.printingRepository,
           shopSettingsRepository: widget.shopSettingsRepository,
           catalogRepository: widget.catalogRepository,
+          contactRepository: widget.contactRepository,
           initialOrder: newOrder,
           capabilities: widget.capabilities,
           analyticsEngine: widget.analyticsEngine,

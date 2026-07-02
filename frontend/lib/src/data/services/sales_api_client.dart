@@ -136,6 +136,28 @@ class SalesApiClient {
     );
   }
 
+  /// Assigns or changes the customer who owes a debt (credit) invoice. The
+  /// backend allows this only while no payment has been recorded against it.
+  /// Returns the updated order.
+  Future<SaleOrder> assignSaleOrderCustomer(
+    int saleOrderId, {
+    required int customerId,
+    String? idempotencyKey,
+  }) async {
+    final response = await _session.post(
+      'orders/$saleOrderId/assign-customer/',
+      body: {'customer': customerId},
+      idempotencyKey: idempotencyKey,
+    );
+    _session.throwApiException(
+      response,
+      'Assigning the invoice customer failed with status',
+    );
+    return SaleOrder.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<SaleDiscountPreview> previewDiscounts(
     SaleDiscountPreviewDraft draft,
   ) async {

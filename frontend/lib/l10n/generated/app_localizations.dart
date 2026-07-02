@@ -14461,6 +14461,30 @@ abstract class AppLocalizations {
   /// **'تم تسجيل الدفعة على الفاتورة.'**
   String get invoicePaymentSuccess;
 
+  /// Action on an unpaid debt invoice that has no customer yet: assign one.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعيين عميل'**
+  String get invoiceAssignCustomerButton;
+
+  /// Action on an unpaid debt invoice: change which customer owes it.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير العميل'**
+  String get invoiceChangeCustomerButton;
+
+  /// No description provided for @invoiceAssignCustomerSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تعيين العميل على الفاتورة.'**
+  String get invoiceAssignCustomerSuccess;
+
+  /// No description provided for @invoiceAssignCustomerError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تعيين العميل على الفاتورة. لا يمكن ذلك بعد تسجيل أي دفعة.'**
+  String get invoiceAssignCustomerError;
+
   /// No description provided for @invoiceTotalsTitle.
   ///
   /// In ar, this message translates to:
@@ -20160,6 +20184,24 @@ abstract class AppLocalizations {
   /// **'أدخل الباركود'**
   String get priceCheckerManualEntryTitle;
 
+  /// No description provided for @priceCheckerCameraScanPrompt.
+  ///
+  /// In ar, this message translates to:
+  /// **'قرّب الباركود من الكاميرا لعرض السعر'**
+  String get priceCheckerCameraScanPrompt;
+
+  /// No description provided for @priceCheckerCameraStarting.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ تشغيل الكاميرا…'**
+  String get priceCheckerCameraStarting;
+
+  /// No description provided for @priceCheckerCameraUnavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاميرا غير متاحة'**
+  String get priceCheckerCameraUnavailable;
+
   /// No description provided for @priceCheckerExitTooltip.
   ///
   /// In ar, this message translates to:
@@ -20327,6 +20369,60 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'إيقاف الوضع'**
   String get priceCheckerRemoveButton;
+
+  /// No description provided for @priceCheckerScanSettingsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعدادات المسح'**
+  String get priceCheckerScanSettingsTitle;
+
+  /// No description provided for @priceCheckerCameraToggleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المسح بالكاميرا'**
+  String get priceCheckerCameraToggleLabel;
+
+  /// No description provided for @priceCheckerCameraToggleHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'قراءة الباركود بكاميرا الجهاز دون الحاجة إلى ماسح خارجي'**
+  String get priceCheckerCameraToggleHint;
+
+  /// No description provided for @priceCheckerCameraFacingLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاميرا المستخدمة'**
+  String get priceCheckerCameraFacingLabel;
+
+  /// No description provided for @priceCheckerCameraFront.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأمامية'**
+  String get priceCheckerCameraFront;
+
+  /// No description provided for @priceCheckerCameraBack.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخلفية'**
+  String get priceCheckerCameraBack;
+
+  /// No description provided for @priceCheckerDwellLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدة عرض المنتج'**
+  String get priceCheckerDwellLabel;
+
+  /// No description provided for @priceCheckerDwellHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'المدة قبل العودة تلقائيًا إلى شاشة المسح'**
+  String get priceCheckerDwellHint;
+
+  /// How long a found product stays on the kiosk screen, e.g. 8 ثوانٍ.
+  ///
+  /// In ar, this message translates to:
+  /// **'{seconds, plural, =1{ثانية واحدة} =2{ثانيتان} few{{seconds} ثوانٍ} many{{seconds} ثانية} other{{seconds} ثانية}}'**
+  String priceCheckerDwellSecondsValue(int seconds);
 
   /// No description provided for @priceCheckerRemoveConfirmTitle.
   ///

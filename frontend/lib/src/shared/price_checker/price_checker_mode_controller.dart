@@ -87,8 +87,21 @@ class PriceCheckerModeController extends ChangeNotifier {
   }
 
   Future<void> updateDetails({String? deviceName, String? location}) async {
+    await _update(_config.copyWith(deviceName: deviceName, location: location));
+  }
+
+  /// Camera + dwell preferences, edited from Device Settings.
+  Future<void> updateScanSettings({
+    bool? cameraEnabled,
+    PriceCheckerCameraFacing? cameraFacing,
+    int? foundDwellSeconds,
+  }) async {
     await _update(
-      _config.copyWith(deviceName: deviceName, location: location),
+      _config.copyWith(
+        cameraEnabled: cameraEnabled,
+        cameraFacing: cameraFacing,
+        foundDwellSeconds: foundDwellSeconds,
+      ),
     );
   }
 
@@ -124,7 +137,8 @@ class PriceCheckerModeController extends ChangeNotifier {
 
 /// Makes the [PriceCheckerModeController] available to descendants and rebuilds
 /// them (and top-level routing) when the mode changes.
-class PriceCheckerModeScope extends InheritedNotifier<PriceCheckerModeController> {
+class PriceCheckerModeScope
+    extends InheritedNotifier<PriceCheckerModeController> {
   const PriceCheckerModeScope({
     super.key,
     required PriceCheckerModeController controller,

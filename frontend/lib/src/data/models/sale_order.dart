@@ -350,6 +350,7 @@ class SaleOrder {
     this.canVoid = false,
     this.canReturn = false,
     this.canExchange = false,
+    this.canAssignCustomer = false,
     this.requiresManagerAdjustment = false,
     this.discountTotal = 0,
     this.appliedDiscounts = const [],
@@ -383,6 +384,10 @@ class SaleOrder {
   final bool canVoid;
   final bool canReturn;
   final bool canExchange;
+
+  /// Server-computed: an unpaid, non-void debt (credit) invoice may still be
+  /// assigned to a different customer — nothing has been collected yet.
+  final bool canAssignCustomer;
   final bool requiresManagerAdjustment;
   final List<SaleOrderLine> lines;
   final List<SalePayment> payments;
@@ -434,6 +439,7 @@ class SaleOrder {
       canVoid: _boolFromJson(json['can_void']),
       canReturn: _boolFromJson(json['can_return']),
       canExchange: _boolFromJson(json['can_exchange']),
+      canAssignCustomer: _boolFromJson(json['can_assign_customer']),
       requiresManagerAdjustment: _boolFromJson(
         json['requires_manager_adjustment'],
       ),

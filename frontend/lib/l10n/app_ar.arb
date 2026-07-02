@@ -4855,6 +4855,16 @@
   },
   "invoicePaymentAmountError": "أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقّي.",
   "invoicePaymentSuccess": "تم تسجيل الدفعة على الفاتورة.",
+  "invoiceAssignCustomerButton": "تعيين عميل",
+  "@invoiceAssignCustomerButton": {
+    "description": "Action on an unpaid debt invoice that has no customer yet: assign one."
+  },
+  "invoiceChangeCustomerButton": "تغيير العميل",
+  "@invoiceChangeCustomerButton": {
+    "description": "Action on an unpaid debt invoice: change which customer owes it."
+  },
+  "invoiceAssignCustomerSuccess": "تم تعيين العميل على الفاتورة.",
+  "invoiceAssignCustomerError": "تعذّر تعيين العميل على الفاتورة. لا يمكن ذلك بعد تسجيل أي دفعة.",
   "invoiceTotalsTitle": "الإجماليات",
   "invoiceOrderingNewest": "الأحدث أولًا",
   "invoiceOrderingUpdated": "آخر تحديث أولًا",
@@ -6946,6 +6956,9 @@
   },
   "priceCheckerManualEntry": "إدخال يدوي",
   "priceCheckerManualEntryTitle": "أدخل الباركود",
+  "priceCheckerCameraScanPrompt": "قرّب الباركود من الكاميرا لعرض السعر",
+  "priceCheckerCameraStarting": "جارٍ تشغيل الكاميرا…",
+  "priceCheckerCameraUnavailable": "الكاميرا غير متاحة",
   "priceCheckerExitTooltip": "الخروج من وضع كاشف الأسعار",
   "priceCheckerExitTitle": "الخروج من وضع كاشف الأسعار",
   "priceCheckerExitSubtitle": "أدخل الرمز السري للخروج",
@@ -6974,6 +6987,21 @@
   "priceCheckerChangePinButton": "تغيير الرمز السري",
   "priceCheckerEditDetailsButton": "تعديل البيانات",
   "priceCheckerRemoveButton": "إيقاف الوضع",
+  "priceCheckerScanSettingsTitle": "إعدادات المسح",
+  "priceCheckerCameraToggleLabel": "المسح بالكاميرا",
+  "priceCheckerCameraToggleHint": "قراءة الباركود بكاميرا الجهاز دون الحاجة إلى ماسح خارجي",
+  "priceCheckerCameraFacingLabel": "الكاميرا المستخدمة",
+  "priceCheckerCameraFront": "الأمامية",
+  "priceCheckerCameraBack": "الخلفية",
+  "priceCheckerDwellLabel": "مدة عرض المنتج",
+  "priceCheckerDwellHint": "المدة قبل العودة تلقائيًا إلى شاشة المسح",
+  "priceCheckerDwellSecondsValue": "{seconds, plural, =1{ثانية واحدة} =2{ثانيتان} few{{seconds} ثوانٍ} many{{seconds} ثانية} other{{seconds} ثانية}}",
+  "@priceCheckerDwellSecondsValue": {
+    "description": "How long a found product stays on the kiosk screen, e.g. 8 ثوانٍ.",
+    "placeholders": {
+      "seconds": { "type": "int" }
+    }
+  },
   "priceCheckerRemoveConfirmTitle": "إيقاف وضع كاشف الأسعار؟",
   "priceCheckerRemoveConfirmMessage": "سيعود هذا الجهاز جهازًا عاديًا لنقطة البيع. يمكنك إعداده مجددًا في أي وقت.",
   "priceCheckerChangePinTitle": "تغيير الرمز السري",

@@ -29,6 +29,11 @@ typedef SaleOrderReturnAction =
 /// Records a payment against a debt (credit) invoice. Returns true on success.
 typedef SaleOrderRecordPaymentAction = Future<bool> Function(SaleOrder order);
 
+/// Assigns or changes the customer who owes a debt (credit) invoice. The
+/// callback opens the picker, performs the assignment, and surfaces its own
+/// success/error feedback. Returns true on success.
+typedef SaleOrderAssignCustomerAction = Future<bool> Function(SaleOrder order);
+
 /// Converts an OPEN quotation into a sale. Returns true on success.
 typedef SaleOrderConvertAction = Future<bool> Function(SaleOrder order);
 
@@ -52,8 +57,10 @@ class SaleOrderDetailsContent extends StatefulWidget {
     this.onExchange,
     this.onProductSearch,
     this.onRecordPayment,
+    this.onAssignCustomer,
     this.onConvert,
     this.isRecordingPayment = false,
+    this.isAssigningCustomer = false,
     this.isConverting = false,
     this.showTitle = true,
     this.useInvoiceLabels = true,
@@ -78,10 +85,16 @@ class SaleOrderDetailsContent extends StatefulWidget {
   /// prominent "آجل — المتبقّي X" callout with a "تسجيل دفعة" action.
   final SaleOrderRecordPaymentAction? onRecordPayment;
 
+  /// When provided and the server allows it ([SaleOrder.canAssignCustomer]:
+  /// a non-void debt invoice with no payment recorded yet), surfaces an
+  /// assign/change-customer action. The callback opens the customer picker.
+  final SaleOrderAssignCustomerAction? onAssignCustomer;
+
   /// When provided and the order is an OPEN quotation, surfaces a
   /// "تحويل إلى بيع" action. The callback opens the conversion dialog.
   final SaleOrderConvertAction? onConvert;
   final bool isRecordingPayment;
+  final bool isAssigningCustomer;
   final bool isConverting;
   final bool showTitle;
   final bool useInvoiceLabels;
@@ -134,10 +147,13 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
               isSharing: _isSharing,
               isAdjusting: _isAdjusting,
               isConverting: widget.isConverting,
+              isAssigningCustomer: widget.isAssigningCustomer,
               canReturn: _canReturn,
               canVoid: _canVoid,
               canExchange: _canExchange,
               canConvert: _canConvert,
+              canAssignCustomer: _canAssignCustomer,
+              hasCustomer: order.customer != null,
               onReprint: widget.onReprint == null ? null : _requestReprint,
               onShare: widget.onShare == null ? null : _shareInvoice,
               onPrintAudit: widget.onPrintAudit,
@@ -145,6 +161,7 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
               onVoid: _canVoid ? _showVoidDialog : null,
               onExchange: _canExchange ? _showExchangeDialog : null,
               onConvert: _canConvert ? _convertQuotation : null,
+              onAssignCustomer: _canAssignCustomer ? _assignCustomer : null,
               useInvoiceLabels: widget.useInvoiceLabels,
             ),
             const SizedBox(height: 12),
@@ -193,7 +210,14 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
         _canReturn ||
         _canVoid ||
         _canExchange ||
-        _canConvert;
+        _canConvert ||
+        _canAssignCustomer;
+  }
+
+  /// The server flag already encodes the rule (non-void debt invoice with no
+  /// payment recorded yet); the callback carries the operator's permission.
+  bool get _canAssignCustomer {
+    return widget.onAssignCustomer != null && widget.order.canAssignCustomer;
   }
 
   bool get _isCreditWithBalance {
@@ -210,6 +234,17 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
 
   Future<void> _convertQuotation() async {
     await widget.onConvert!(widget.order);
+  }
+
+  /// The callback owns the picker and its success/error feedback; this only
+  /// holds the section busy while it runs.
+  Future<void> _assignCustomer() async {
+    setState(() => _isAdjusting = true);
+    await widget.onAssignCustomer!(widget.order);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isAdjusting = false);
   }
 
   Future<void> _recordPayment() async {
@@ -440,10 +475,13 @@ class _ActionsSection extends StatelessWidget {
     required this.isSharing,
     required this.isAdjusting,
     required this.isConverting,
+    required this.isAssigningCustomer,
     required this.canReturn,
     required this.canVoid,
     required this.canExchange,
     required this.canConvert,
+    required this.canAssignCustomer,
+    required this.hasCustomer,
     this.onReprint,
     this.onShare,
     this.onPrintAudit,
@@ -451,6 +489,7 @@ class _ActionsSection extends StatelessWidget {
     this.onVoid,
     this.onExchange,
     this.onConvert,
+    this.onAssignCustomer,
     required this.useInvoiceLabels,
   });
 
@@ -459,10 +498,13 @@ class _ActionsSection extends StatelessWidget {
   final bool isSharing;
   final bool isAdjusting;
   final bool isConverting;
+  final bool isAssigningCustomer;
   final bool canReturn;
   final bool canVoid;
   final bool canExchange;
   final bool canConvert;
+  final bool canAssignCustomer;
+  final bool hasCustomer;
   final VoidCallback? onReprint;
   final VoidCallback? onShare;
   final VoidCallback? onPrintAudit;
@@ -470,6 +512,7 @@ class _ActionsSection extends StatelessWidget {
   final VoidCallback? onVoid;
   final VoidCallback? onExchange;
   final VoidCallback? onConvert;
+  final VoidCallback? onAssignCustomer;
   final bool useInvoiceLabels;
 
   @override
@@ -495,6 +538,28 @@ class _ActionsSection extends StatelessWidget {
                     )
                   : const Icon(Icons.swap_horiz_outlined),
               label: Text(l10n.convertQuotationButton),
+            ),
+          if (canAssignCustomer)
+            OutlinedButton.icon(
+              key: const ValueKey('assign_invoice_customer_button'),
+              onPressed: isBusy || isAssigningCustomer
+                  ? null
+                  : onAssignCustomer,
+              icon: isAssigningCustomer
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      hasCustomer
+                          ? Icons.manage_accounts_outlined
+                          : Icons.person_add_alt_1_outlined,
+                    ),
+              label: Text(
+                hasCustomer
+                    ? l10n.invoiceChangeCustomerButton
+                    : l10n.invoiceAssignCustomerButton,
+              ),
             ),
           if (onReprint != null)
             OutlinedButton.icon(

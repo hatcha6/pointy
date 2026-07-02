@@ -105,6 +105,22 @@ class SaleRepository {
     );
   }
 
+  /// Assigns or changes the customer who owes a debt (credit) invoice. The
+  /// backend rejects this once any payment has been recorded against it.
+  Future<Result<SaleOrder>> assignInvoiceCustomer({
+    required int saleOrderId,
+    required int customerId,
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.assignSaleOrderCustomer(
+        saleOrderId,
+        customerId: customerId,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
+  }
+
   /// Converts an OPEN quotation into a standard or credit sale, optionally
   /// taking a down-payment ([amountReceived]). Returns the NEW order.
   Future<Result<SaleOrder>> convertQuotation(

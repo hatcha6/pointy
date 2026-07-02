@@ -113,7 +113,43 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('out-of-stock found product reads "out of stock"', (tester) async {
+  testWidgets('camera idle/loading layouts render at every size, no overflow', (
+    tester,
+  ) async {
+    for (final size in sizes) {
+      for (final loading in [false, true]) {
+        await pumpAt(
+          tester,
+          size,
+          PriceCheckerKioskView(
+            status: loading
+                ? PriceCheckerKioskStatus.loading
+                : PriceCheckerKioskStatus.idle,
+            shopName: 'بقالة الأمل',
+            cameraPreview: const ColoredBox(color: Colors.black),
+            onManualEntry: () {},
+            onExitRequested: () {},
+          ),
+        );
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'render error/overflow at $size (loading: $loading)',
+        );
+        // The aim-at-the-camera prompt replaces the wedge-scanner prompt.
+        expect(
+          find.text('قرّب الباركود من الكاميرا لعرض السعر'),
+          findsOneWidget,
+        );
+      }
+    }
+    // Tear down the animated viewfinder so its ticker is disposed cleanly.
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('out-of-stock found product reads "out of stock"', (
+    tester,
+  ) async {
     const outOfStock = PriceLookupResult(
       found: true,
       barcode: '6001',

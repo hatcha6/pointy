@@ -45,6 +45,7 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
   bool _hasLoadError = false;
   bool _isRecordingPayment = false;
   bool _isConverting = false;
+  bool _isAssigningCustomer = false;
   final Map<String, String> _idempotencyKeysBySignature = {};
 
   SaleOrder get order => _order;
@@ -52,6 +53,7 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
   bool get hasLoadError => _hasLoadError;
   bool get isRecordingPayment => _isRecordingPayment;
   bool get isConverting => _isConverting;
+  bool get isAssigningCustomer => _isAssigningCustomer;
 
   Future<void> loadInvoice() async {
     _isLoading = true;
@@ -150,6 +152,54 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
       proof: proof,
       paymentId: payment?.id ?? _order.id,
       paymentKind: PrintAuditPaymentKind.customer,
+    );
+  }
+
+  /// Assigns or changes the customer who owes this debt (credit) invoice and
+  /// swaps in the updated order on success. The backend rejects this once any
+  /// payment has been recorded. Uses a signature-based idempotency key so a
+  /// double-tap is a server no-op.
+  Future<bool> assignCustomer(int customerId) async {
+    if (_isAssigningCustomer) {
+      return false;
+    }
+
+    _isAssigningCustomer = true;
+    notifyListeners();
+
+    final signature = ['assign-customer', _order.id, customerId].join(':');
+    final previousCustomerId = _order.customer;
+    final result = await _saleRepository.assignInvoiceCustomer(
+      saleOrderId: _order.id,
+      customerId: customerId,
+      idempotencyKey: _idempotencyKeyFor(signature),
+    );
+    final didAssign = result is Ok<SaleOrder>;
+    if (didAssign) {
+      _clearIdempotencyKey(signature);
+      _order = result.value;
+      _trackCustomerAssigned(previousCustomerId: previousCustomerId);
+    }
+
+    _isAssigningCustomer = false;
+    notifyListeners();
+    return didAssign;
+  }
+
+  void _trackCustomerAssigned({int? previousCustomerId}) {
+    trackAuditEvent(
+      _analyticsEngine,
+      name: 'invoices.customer_assign.completed',
+      sessionId: _orderSessionId(_order),
+      entityType: 'sale_order',
+      entityId: _order.id,
+      attributes: {
+        ..._orderAttributes(_order),
+        'previous_customer_id': ?previousCustomerId,
+        'customer_id': ?_order.customer,
+        'source': 'invoice_details_screen',
+      },
+      metrics: {'total': _order.total},
     );
   }
 
