@@ -192,7 +192,7 @@ done
 rm -rf ./images
 cp -R "${BUNDLE_DIR}/images" ./images
 # Refresh the bundled client installers so a backend update also updates the
-# Android/Windows clients the shop serves on its LAN (install.sh publishes them).
+# Android/Windows/Linux clients the shop serves on its LAN (install.sh publishes them).
 if [ -d "${BUNDLE_DIR}/clients" ]; then
   rm -rf ./clients
   cp -R "${BUNDLE_DIR}/clients" ./clients

@@ -36,7 +36,11 @@ class FraudApiClient {
     return _triage(id, 'reopen');
   }
 
-  Future<FraudFinding> _triage(int id, String action, {String note = ''}) async {
+  Future<FraudFinding> _triage(
+    int id,
+    String action, {
+    String note = '',
+  }) async {
     final response = await _session.post(
       'fraud-findings/$id/$action/',
       body: {if (note.trim().isNotEmpty) 'note': note.trim()},

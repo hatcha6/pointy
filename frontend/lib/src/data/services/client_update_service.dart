@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show File, Platform;
+import 'dart:io'
+    show File, InternetAddress, InternetAddressType, NetworkInterface, Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -8,13 +9,17 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// The platforms that can self-update (download + install) from the local backend.
-enum ClientPlatform { android, windows, unsupported }
+import 'linux_self_update.dart';
+
+/// The platforms that can self-update (download + install) from the local
+/// backend. Enum names double as the platform keys in `/clients/manifest.json`.
+enum ClientPlatform { android, windows, linux, unsupported }
 
 ClientPlatform currentClientPlatform() {
   if (kIsWeb) return ClientPlatform.unsupported;
   if (Platform.isAndroid) return ClientPlatform.android;
   if (Platform.isWindows) return ClientPlatform.windows;
+  if (Platform.isLinux) return ClientPlatform.linux;
   return ClientPlatform.unsupported;
 }
 
@@ -92,7 +97,9 @@ class ClientUpdateStatus {
   bool get hasUpdate => available != null;
 }
 
-/// Bridges to the native installer (Android system installer / Windows installer).
+/// Applies a downloaded build: hands off to the native installer on
+/// Android/Windows (method channel); on Linux the portable tar.gz has no
+/// installer, so a Dart-side handoff swaps the app bundle and relaunches.
 class AppInstaller {
   const AppInstaller();
 
@@ -104,6 +111,8 @@ class AppInstaller {
         return _channel.invokeMethod('installApk', {'path': path});
       case ClientPlatform.windows:
         return _channel.invokeMethod('runInstaller', {'path': path});
+      case ClientPlatform.linux:
+        return installLinuxUpdate(path);
       case ClientPlatform.unsupported:
         throw UnsupportedError('self-update is not supported on this platform');
     }
@@ -120,17 +129,20 @@ class ClientUpdateService {
     AppInstaller installer = const AppInstaller(),
     Future<String> Function()? readRunningVersion,
     ClientPlatform Function()? platform,
+    Future<List<InternetAddress>> Function()? localAddresses,
   }) : _apiBaseUrl = apiBaseUrl,
        _client = client ?? http.Client(),
        _installer = installer,
        _readRunningVersion = readRunningVersion ?? _packageVersion,
-       _platform = platform ?? currentClientPlatform;
+       _platform = platform ?? currentClientPlatform,
+       _localAddresses = localAddresses ?? _machineIpv4Addresses;
 
   final String Function() _apiBaseUrl;
   final http.Client _client;
   final AppInstaller _installer;
   final Future<String> Function() _readRunningVersion;
   final ClientPlatform Function() _platform;
+  final Future<List<InternetAddress>> Function() _localAddresses;
 
   static Future<String> _packageVersion() async =>
       (await PackageInfo.fromPlatform()).version;
@@ -144,11 +156,66 @@ class ClientUpdateService {
 
   /// The friendly LAN page a fresh device opens (QR/link target), on the web
   /// front-door port so a phone browser needs no port number.
-  String lanDownloadUrl() {
+  ///
+  /// The API host is normally the server's LAN IP already — that is how this
+  /// device reaches it. But when the app runs on the server machine itself the
+  /// API host is loopback, which no other device can use, so swap in this
+  /// machine's own LAN address: app and server share the machine, so its LAN
+  /// IP *is* the server's LAN IP. (The backend can't self-detect this — inside
+  /// Docker its own probes see the container network, not the shop LAN.)
+  Future<String> lanDownloadUrl() async {
     final uri = Uri.tryParse(_origin());
-    final host = uri?.host ?? '';
+    var host = uri?.host ?? '';
     if (host.isEmpty) return '${_origin()}/clients/';
+    if (_isLoopbackHost(host)) {
+      host = await _lanHost() ?? host;
+    }
     return 'http://$host/clients/';
+  }
+
+  static bool _isLoopbackHost(String host) {
+    if (host == 'localhost') return true;
+    if (kIsWeb) return false; // dart:io InternetAddress is unavailable on web
+    return InternetAddress.tryParse(host)?.isLoopback ?? false;
+  }
+
+  static Future<List<InternetAddress>> _machineIpv4Addresses() async {
+    if (kIsWeb) return const [];
+    final interfaces = await NetworkInterface.list(
+      type: InternetAddressType.IPv4,
+    );
+    return [for (final interface in interfaces) ...interface.addresses];
+  }
+
+  /// Best LAN-reachable IPv4 of this machine, preferring the ranges shop
+  /// routers actually hand out (192.168/16, then 10/8, then 172.16/12) so a
+  /// VPN/virtual adapter doesn't win over the real LAN interface.
+  Future<String?> _lanHost() async {
+    try {
+      String? best;
+      var bestRank = _unrankedPrivate;
+      for (final address in await _localAddresses()) {
+        if (address.isLoopback || address.isLinkLocal) continue;
+        final rank = _privateIpv4Rank(address.rawAddress);
+        if (rank < bestRank) {
+          best = address.address;
+          bestRank = rank;
+        }
+      }
+      return best;
+    } catch (_) {
+      return null; // no interfaces readable — keep the configured host
+    }
+  }
+
+  static const _unrankedPrivate = 3;
+
+  static int _privateIpv4Rank(List<int> raw) {
+    if (raw.length != 4) return _unrankedPrivate;
+    if (raw[0] == 192 && raw[1] == 168) return 0;
+    if (raw[0] == 10) return 1;
+    if (raw[0] == 172 && raw[1] >= 16 && raw[1] <= 31) return 2;
+    return _unrankedPrivate;
   }
 
   Future<ClientUpdateStatus> check() async {
@@ -172,8 +239,7 @@ class ClientUpdateService {
       final clients =
           (body['clients'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
-      final key = platform == ClientPlatform.android ? 'android' : 'windows';
-      final entry = clients[key];
+      final entry = clients[platform.name];
       if (entry is! Map) {
         return ClientUpdateStatus(currentVersion: current, platform: platform);
       }

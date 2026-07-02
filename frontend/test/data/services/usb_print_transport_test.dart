@@ -44,37 +44,43 @@ void main() {
     expect(endpoints[1].name, 'serial:1a86:7523');
   });
 
-  test('printBytes routes printer-class devices to the native channel', () async {
-    MethodCall? received;
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      received = call;
-      return <Object?, Object?>{'success': true, 'message': 'ok'};
-    });
+  test(
+    'printBytes routes printer-class devices to the native channel',
+    () async {
+      MethodCall? received;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        received = call;
+        return <Object?, Object?>{'success': true, 'message': 'ok'};
+      });
 
-    final result = await buildTransport().printBytes(
-      bytes: const [1, 2, 3],
-      endpoint: printerEndpoint,
-    );
+      final result = await buildTransport().printBytes(
+        bytes: const [1, 2, 3],
+        endpoint: printerEndpoint,
+      );
 
-    expect(result.isSuccess, isTrue);
-    expect(received?.method, 'write');
-    final args = received!.arguments as Map;
-    // The route prefix is stripped before the address reaches native code.
-    expect(args['address'], '04b8:0202');
-    expect(args['bytes'], isA<Uint8List>());
-  });
+      expect(result.isSuccess, isTrue);
+      expect(received?.method, 'write');
+      final args = received!.arguments as Map;
+      // The route prefix is stripped before the address reaches native code.
+      expect(args['address'], '04b8:0202');
+      expect(args['bytes'], isA<Uint8List>());
+    },
+  );
 
-  test('printBytes fails gracefully when no native handler is registered', () async {
-    // No mock handler → MissingPluginException, surfaced as a failure result
-    // rather than an exception (the inert macOS/iOS case).
-    final result = await buildTransport().printBytes(
-      bytes: const [1, 2, 3],
-      endpoint: printerEndpoint,
-    );
+  test(
+    'printBytes fails gracefully when no native handler is registered',
+    () async {
+      // No mock handler → MissingPluginException, surfaced as a failure result
+      // rather than an exception (the inert macOS/iOS case).
+      final result = await buildTransport().printBytes(
+        bytes: const [1, 2, 3],
+        endpoint: printerEndpoint,
+      );
 
-    expect(result.isSuccess, isFalse);
-    expect(result.message.toLowerCase(), contains('not supported'));
-  });
+      expect(result.isSuccess, isFalse);
+      expect(result.message.toLowerCase(), contains('not supported'));
+    },
+  );
 
   test('discover returns empty when the platform has no handler', () async {
     expect(await buildTransport().discover(), isEmpty);

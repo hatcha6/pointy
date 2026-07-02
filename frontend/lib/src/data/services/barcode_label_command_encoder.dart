@@ -258,8 +258,7 @@ class BarcodeLabelCommandEncoder {
     return value.replaceAll(RegExp(r'[\r\n]'), '').trim();
   }
 
-  String _money(double value) =>
-      '${value.toStringAsFixed(2)} $currencySymbol';
+  String _money(double value) => '${value.toStringAsFixed(2)} $currencySymbol';
 
   String _date(DateTime value) {
     final local = value.toLocal();

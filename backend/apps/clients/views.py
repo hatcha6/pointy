@@ -1,4 +1,4 @@
-"""Serve the bundled Android/Windows client installers on the shop LAN.
+"""Serve the bundled Android/Windows/Linux client installers on the shop LAN.
 
 A new shop's on-prem build ships the client installers; the local backend serves
 them (plus a version manifest the apps poll for self-update) so onboarding a device
@@ -21,12 +21,14 @@ from rest_framework.response import Response
 
 from apps.core.discovery import request_discovery_allowed
 
-_PLATFORMS = ("android", "windows")
+_PLATFORMS = ("android", "windows", "linux")
 _CONTENT_TYPES = {
     ".apk": "application/vnd.android.package-archive",
     ".exe": "application/octet-stream",
+    # Path.suffix of the Linux .tar.gz archive.
+    ".gz": "application/gzip",
 }
-_PLATFORM_LABELS = {"android": "Android", "windows": "Windows"}
+_PLATFORM_LABELS = {"android": "Android", "windows": "Windows", "linux": "Linux"}
 
 
 def _clients_root() -> Path:

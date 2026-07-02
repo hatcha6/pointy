@@ -149,16 +149,16 @@ curl http://127.0.0.1:8000/readyz/     # web + PostgreSQL + Redis ready
 
 Connect from any device:
 
-- **Native tills** (Android / Windows apps) auto-discover the backend, or point
-  them at `http://<server-LAN-IP>:8000`.
+- **Native tills** (Android / Windows / Linux apps) auto-discover the backend,
+  or point them at `http://<server-LAN-IP>:8000`.
 - **A browser** — open `http://<server-LAN-IP>/` on any device on the LAN to use
   the Flutter web app directly, no install. It serves from the same server and
   talks to the API on the same origin, so there is nothing to configure.
 
 > Browser note: the web app covers day-to-day POS, management and reporting, but
 > hardware that needs the OS (USB/serial receipt printers, USB barcode scanners)
-> works only in the native Android/Windows apps. Use the web build for quick
-> access and back-office, the native apps at the counter.
+> works only in the native apps. Use the web build for quick access and
+> back-office, the native apps at the counter.
 
 ## Resilience (no-outage operation)
 
@@ -210,9 +210,12 @@ scheduled task fires, and the stack is back — hands-off.
 
 ### Linux
 
-Also make sure Docker starts on boot: `sudo systemctl enable docker`. The
-systemd timer (`pointy-watchdog.timer`) then reconciles the stack ~30s after
-boot and every 5 minutes.
+Nothing manual: `register-autostart.sh` enables Docker on boot
+(`systemctl enable docker`) alongside the timers, and the watchdog starts the
+Docker daemon itself if it is ever down. The systemd timer
+(`pointy-watchdog.timer`) reconciles the stack ~30s after boot and every
+5 minutes. (On a setup without a `docker.service` unit — e.g. rootless Docker —
+arrange for the daemon to start on boot yourself.)
 
 ### Doing maintenance
 

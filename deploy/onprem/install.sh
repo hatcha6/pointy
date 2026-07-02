@@ -131,8 +131,9 @@ fi
 echo "==> Starting the Pointy stack…"
 docker compose --env-file .env -f docker-compose.yml up -d
 
-# Publish the bundled client installers (Android APK + Windows installer) into the
-# volume Django serves on the LAN, so on-site devices can download and self-update.
+# Publish the bundled client installers (Android APK + Windows installer + Linux
+# tar.gz) into the volume Django serves on the LAN, so on-site devices can
+# download and self-update.
 if [ -d ./clients ]; then
   echo "==> Publishing client installers for LAN download…"
   if docker compose --env-file .env -f docker-compose.yml cp clients/. backend:/var/lib/pointy/clients/; then
@@ -165,6 +166,8 @@ Done. Useful follow-ups:
            curl http://127.0.0.1:8000/readyz/    (web + database + Redis)
 
 Resilience: every service uses `restart: always`, and the watchdog re-runs the
-stack at boot + every 5 min (recreating destroyed containers and restarting
-wedged ones). On Linux also ensure Docker starts on boot: sudo systemctl enable docker
+stack at boot + every 5 min (recreating destroyed containers, restarting wedged
+ones, and starting the Docker daemon itself if it is down). Registering the
+watchdog also enables Docker on boot; if you skipped registration, run:
+sudo systemctl enable docker
 MSG

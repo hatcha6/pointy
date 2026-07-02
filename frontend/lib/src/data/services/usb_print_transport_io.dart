@@ -250,16 +250,14 @@ class UsbPrintTransport extends PrintTransport {
       return const PrintTransportResponse.failure('usb device is required');
     }
     try {
-      final result = await _channel.invokeMapMethod<String, Object?>(
-        'transceive',
-        {
-          'address': _nativeAddress(address),
-          'bytes': bytes,
-          'timeoutMs':
-              (readTimeout ?? Duration(milliseconds: endpoint.timeoutMs))
-                  .inMilliseconds,
-        },
-      );
+      final result = await _channel
+          .invokeMapMethod<String, Object?>('transceive', {
+            'address': _nativeAddress(address),
+            'bytes': bytes,
+            'timeoutMs':
+                (readTimeout ?? Duration(milliseconds: endpoint.timeoutMs))
+                    .inMilliseconds,
+          });
       final success = result?['success'] == true;
       if (!success) {
         return PrintTransportResponse.failure(

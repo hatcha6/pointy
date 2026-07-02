@@ -8,7 +8,10 @@ class MigrationApiClient {
 
   Future<MigrationCatalog> fetchCatalog() async {
     final response = await _session.get('migration/systems/');
-    _session.ensureSuccess(response, 'Migration systems request failed with status');
+    _session.ensureSuccess(
+      response,
+      'Migration systems request failed with status',
+    );
     return MigrationCatalog.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -16,26 +19,41 @@ class MigrationApiClient {
 
   Future<List<MigrationSource>> fetchSources() async {
     final response = await _session.get('migration/sources/');
-    _session.ensureSuccess(response, 'Migration sources request failed with status');
-    return _decodeList(_session.decodedBody(response))
-        .map(MigrationSource.fromJson)
-        .toList();
+    _session.ensureSuccess(
+      response,
+      'Migration sources request failed with status',
+    );
+    return _decodeList(
+      _session.decodedBody(response),
+    ).map(MigrationSource.fromJson).toList();
   }
 
   Future<MigrationSource> createSource(MigrationSourceDraft draft) async {
-    final response = await _session.post('migration/sources/', body: draft.toJson());
-    _session.ensureSuccess(response, 'Create migration source failed with status');
+    final response = await _session.post(
+      'migration/sources/',
+      body: draft.toJson(),
+    );
+    _session.ensureSuccess(
+      response,
+      'Create migration source failed with status',
+    );
     return MigrationSource.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }
 
-  Future<MigrationSource> updateSource(int id, MigrationSourceDraft draft) async {
+  Future<MigrationSource> updateSource(
+    int id,
+    MigrationSourceDraft draft,
+  ) async {
     final response = await _session.patch(
       'migration/sources/$id/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(response, 'Update migration source failed with status');
+    _session.ensureSuccess(
+      response,
+      'Update migration source failed with status',
+    );
     return MigrationSource.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -43,14 +61,20 @@ class MigrationApiClient {
 
   Future<void> deleteSource(int id) async {
     final response = await _session.delete('migration/sources/$id/');
-    _session.ensureSuccess(response, 'Delete migration source failed with status');
+    _session.ensureSuccess(
+      response,
+      'Delete migration source failed with status',
+    );
   }
 
   /// Discovery only — broadcasts an SSRP request and lists reachable SQL Server
   /// instances. No credentials are sent; the operator picks the target.
   Future<List<DiscoveredServer>> discoverServers() async {
     final response = await _session.post('migration/sources/discover/');
-    _session.ensureSuccess(response, 'Migration server discovery failed with status');
+    _session.ensureSuccess(
+      response,
+      'Migration server discovery failed with status',
+    );
     final decoded = _session.decodedBody(response);
     final servers = decoded is Map<String, Object?> ? decoded['servers'] : null;
     return [
@@ -62,7 +86,10 @@ class MigrationApiClient {
 
   Future<MigrationConnectionTest> testConnection(int id) async {
     final response = await _session.post('migration/sources/$id/test/');
-    _session.ensureSuccess(response, 'Migration connection test failed with status');
+    _session.ensureSuccess(
+      response,
+      'Migration connection test failed with status',
+    );
     return MigrationConnectionTest.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -70,7 +97,10 @@ class MigrationApiClient {
 
   Future<CompatibilityReport> checkCompatibility(int id) async {
     final response = await _session.post('migration/sources/$id/check/');
-    _session.ensureSuccess(response, 'Migration compatibility check failed with status');
+    _session.ensureSuccess(
+      response,
+      'Migration compatibility check failed with status',
+    );
     return CompatibilityReport.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -99,7 +129,10 @@ class MigrationApiClient {
 
   Future<MigrationRun> fetchRun(int id) async {
     final response = await _session.get('migration/runs/$id/');
-    _session.ensureSuccess(response, 'Migration run request failed with status');
+    _session.ensureSuccess(
+      response,
+      'Migration run request failed with status',
+    );
     return MigrationRun.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -110,10 +143,13 @@ class MigrationApiClient {
       'migration/runs/',
       query: {if (sourceId != null) 'source': '$sourceId'},
     );
-    _session.ensureSuccess(response, 'Migration runs request failed with status');
-    return _decodeList(_session.decodedBody(response))
-        .map(MigrationRun.fromJson)
-        .toList();
+    _session.ensureSuccess(
+      response,
+      'Migration runs request failed with status',
+    );
+    return _decodeList(
+      _session.decodedBody(response),
+    ).map(MigrationRun.fromJson).toList();
   }
 
   Future<MigrationIssuePage> fetchIssues(
@@ -123,12 +159,12 @@ class MigrationApiClient {
   }) async {
     final response = await _session.get(
       'migration/runs/$runId/issues/',
-      query: {
-        'page': '$page',
-        'severity': ?severity,
-      },
+      query: {'page': '$page', 'severity': ?severity},
     );
-    _session.ensureSuccess(response, 'Migration issues request failed with status');
+    _session.ensureSuccess(
+      response,
+      'Migration issues request failed with status',
+    );
     return MigrationIssuePage.fromAny(_session.decodedBody(response));
   }
 

@@ -1470,8 +1470,9 @@ class PosApiService {
   Future<List<MessagingGateway>> fetchMessagingGateways() =>
       _messaging.fetchGateways();
 
-  Future<MessagingGateway> createMessagingGateway(MessagingGatewayDraft draft) =>
-      _messaging.createGateway(draft);
+  Future<MessagingGateway> createMessagingGateway(
+    MessagingGatewayDraft draft,
+  ) => _messaging.createGateway(draft);
 
   Future<MessagingGateway> updateMessagingGateway(
     int id,
@@ -1539,7 +1540,10 @@ class PosApiService {
     required int saleOrderId,
     required SaleExchangeDraft draft,
   }) {
-    return _sales.exchangeSaleOrderItems(saleOrderId: saleOrderId, draft: draft);
+    return _sales.exchangeSaleOrderItems(
+      saleOrderId: saleOrderId,
+      draft: draft,
+    );
   }
 
   Future<SaleOrder> lookupSaleOrderByReceipt(String receiptNumber) {

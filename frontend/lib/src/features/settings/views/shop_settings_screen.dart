@@ -440,11 +440,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                           icon: Icons.qr_code_2_outlined,
                           title: l10n.getAppsTitle,
                           subtitle: l10n.getAppsSubtitle,
-                          onTap: () => showGetAppsDialog(
-                            context,
-                            downloadUrl: widget.clientUpdateService
-                                .lanDownloadUrl(),
-                          ),
+                          onTap: () async {
+                            final downloadUrl = await widget.clientUpdateService
+                                .lanDownloadUrl();
+                            if (!context.mounted) return;
+                            await showGetAppsDialog(
+                              context,
+                              downloadUrl: downloadUrl,
+                            );
+                          },
                         ),
                         PointySettingsTile(
                           icon: Icons.storefront_outlined,

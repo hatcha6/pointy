@@ -47,7 +47,10 @@ class PriceCheckerApiClient {
         if (location.isNotEmpty) 'location': location,
       },
     );
-    _session.ensureSuccess(response, 'Price-checker register failed with status');
+    _session.ensureSuccess(
+      response,
+      'Price-checker register failed with status',
+    );
   }
 
   Future<List<PriceCheckerDevice>> fetchDevices({int page = 1}) async {
@@ -66,23 +69,20 @@ class PriceCheckerApiClient {
   /// returns a summary.
   Future<PriceCheckerScanSummary> runScan() async {
     final response = await _session.post('price-checker-devices/scan/');
-    _session.ensureSuccess(
-      response,
-      'Price-checker scan failed with status',
-    );
+    _session.ensureSuccess(response, 'Price-checker scan failed with status');
     final decoded = _session.decodedBody(response);
     return PriceCheckerScanSummary.fromJson(
       decoded is Map<String, Object?> ? decoded : const {},
     );
   }
 
-  Future<List<PriceCheckEvent>> fetchEvents({int? deviceId, int page = 1}) async {
+  Future<List<PriceCheckEvent>> fetchEvents({
+    int? deviceId,
+    int page = 1,
+  }) async {
     final response = await _session.get(
       'price-check-events/',
-      query: {
-        'page': '$page',
-        if (deviceId != null) 'device': '$deviceId',
-      },
+      query: {'page': '$page', if (deviceId != null) 'device': '$deviceId'},
     );
     _session.ensureSuccess(
       response,

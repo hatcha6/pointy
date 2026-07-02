@@ -302,9 +302,10 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Linux — x64 build packaged as a portable .tar.gz (extract and run
-  # ./pointy_frontend) for Linux till PCs. Not staged into the on-prem bundle's
-  # clients/ dir: LAN self-update covers Android + Windows only
-  # (client_update_service.dart treats Linux as unsupported).
+  # ./pointy_frontend) for Linux till PCs. Staged into the on-prem bundle's
+  # clients/ dir like Android/Windows so the backend serves it on the LAN
+  # download page and Linux tills self-update from it (in-app bundle swap,
+  # see linux_self_update.dart).
   # ---------------------------------------------------------------------------
   build-linux:
     name: Build Linux app
@@ -410,7 +411,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-onprem:
     name: Build on-prem bundle
-    needs: [version, build-android, build-windows]
+    needs: [version, build-android, build-windows, build-linux]
     runs-on: ubuntu-latest
     env:
       # The backend Dockerfile uses a `# syntax=` directive, which requires
@@ -419,8 +420,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The client installers built by the android/windows jobs are bundled so a
-      # new shop's backend can serve them on the LAN and clients can self-update.
+      # The client builds from the android/windows/linux jobs are bundled so a
+      # new shop's backend can serve them on the LAN and the client apps can
+      # self-update from it.
       - name: Download Android client
         uses: actions/download-artifact@v4
         with:
@@ -430,6 +432,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: pointy-windows
+          path: client-artifacts
+      - name: Download Linux client
+        uses: actions/download-artifact@v4
+        with:
+          name: pointy-linux
           path: client-artifacts
 
       - name: Build backend image
@@ -471,12 +478,14 @@ jobs:
           docker save "${POSTGRES_IMAGE}"          -o "${BUNDLE}/images/postgres.tar"
           docker save "${REDIS_IMAGE}"             -o "${BUNDLE}/images/redis.tar"
 
-          echo "==> Staging client installers (Android APK + Windows installer)…"
+          echo "==> Staging client installers (Android APK + Windows installer + Linux tar.gz)…"
           mkdir -p "${BUNDLE}/clients"
           apk="$(ls client-artifacts/pointy-*-android-universal.apk 2>/dev/null | head -1 || true)"
           win="$(ls client-artifacts/pointy-*-windows-x64-setup.exe 2>/dev/null | head -1 || true)"
+          lin="$(ls client-artifacts/pointy-*-linux-x64.tar.gz 2>/dev/null | head -1 || true)"
           android_json="null"
           windows_json="null"
+          linux_json="null"
           if [ -n "${apk}" ]; then
             cp "${apk}" "${BUNDLE}/clients/"
             f="$(basename "${apk}")"
@@ -487,8 +496,13 @@ jobs:
             f="$(basename "${win}")"
             windows_json="{\"file\":\"${f}\",\"sha256\":\"$(sha256sum "${win}" | awk '{print $1}')\",\"size\":$(stat -c%s "${win}")}"
           fi
-          printf '{"version":"%s","android":%s,"windows":%s}\n' \
-            "${VERSION}" "${android_json}" "${windows_json}" > "${BUNDLE}/clients/manifest.json"
+          if [ -n "${lin}" ]; then
+            cp "${lin}" "${BUNDLE}/clients/"
+            f="$(basename "${lin}")"
+            linux_json="{\"file\":\"${f}\",\"sha256\":\"$(sha256sum "${lin}" | awk '{print $1}')\",\"size\":$(stat -c%s "${lin}")}"
+          fi
+          printf '{"version":"%s","android":%s,"windows":%s,"linux":%s}\n' \
+            "${VERSION}" "${android_json}" "${windows_json}" "${linux_json}" > "${BUNDLE}/clients/manifest.json"
           echo "Client manifest:"; cat "${BUNDLE}/clients/manifest.json"
 
           echo "==> Rendering offline Compose (drop source 'build:' sections, keep anchors)…"

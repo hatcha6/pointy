@@ -25,10 +25,7 @@ class PrepStationApiClient {
       'prep-stations/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(
-      response,
-      'Prep station create failed with status',
-    );
+    _session.ensureSuccess(response, 'Prep station create failed with status');
     return PrepStation.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -42,10 +39,7 @@ class PrepStationApiClient {
       'prep-stations/$stationId/',
       body: changes,
     );
-    _session.ensureSuccess(
-      response,
-      'Prep station update failed with status',
-    );
+    _session.ensureSuccess(response, 'Prep station update failed with status');
     return PrepStation.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -53,9 +47,6 @@ class PrepStationApiClient {
 
   Future<void> deletePrepStation(int stationId) async {
     final response = await _session.delete('prep-stations/$stationId/');
-    _session.ensureSuccess(
-      response,
-      'Prep station delete failed with status',
-    );
+    _session.ensureSuccess(response, 'Prep station delete failed with status');
   }
 }

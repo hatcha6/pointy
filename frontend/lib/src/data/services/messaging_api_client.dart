@@ -11,7 +11,10 @@ class MessagingApiClient {
 
   Future<List<MessagingGateway>> fetchGateways() async {
     final response = await _session.get('messaging/gateways/');
-    _session.ensureSuccess(response, 'Messaging gateways request failed with status');
+    _session.ensureSuccess(
+      response,
+      'Messaging gateways request failed with status',
+    );
     final decoded = _session.decodedBody(response);
     final items = decoded is Map<String, Object?>
         ? (decoded['results'] as List<Object?>? ?? const [])
@@ -23,16 +26,24 @@ class MessagingApiClient {
   }
 
   Future<MessagingGateway> createGateway(MessagingGatewayDraft draft) async {
-    final response = await _session.post('messaging/gateways/', body: draft.toJson());
+    final response = await _session.post(
+      'messaging/gateways/',
+      body: draft.toJson(),
+    );
     _session.ensureSuccess(response, 'Gateway creation failed with status');
     return MessagingGateway.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }
 
-  Future<MessagingGateway> updateGateway(int id, MessagingGatewayDraft draft) async {
-    final response =
-        await _session.patch('messaging/gateways/$id/', body: draft.toJson());
+  Future<MessagingGateway> updateGateway(
+    int id,
+    MessagingGatewayDraft draft,
+  ) async {
+    final response = await _session.patch(
+      'messaging/gateways/$id/',
+      body: draft.toJson(),
+    );
     _session.ensureSuccess(response, 'Gateway update failed with status');
     return MessagingGateway.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,

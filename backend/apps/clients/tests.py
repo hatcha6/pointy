@@ -14,13 +14,16 @@ class ClientDownloadTests(TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name)
         self.apk_name = "pointy-1.4.0-android-universal.apk"
+        self.linux_name = "pointy-1.4.0-linux-x64.tar.gz"
         (self.root / self.apk_name).write_bytes(b"FAKE-APK-BYTES")
+        (self.root / self.linux_name).write_bytes(b"FAKE-TARBALL-BYTES")
         (self.root / "manifest.json").write_text(
             json.dumps(
                 {
                     "version": "1.4.0",
                     "android": {"file": self.apk_name, "sha256": "abc", "size": 14},
                     "windows": None,
+                    "linux": {"file": self.linux_name, "sha256": "def", "size": 18},
                 }
             )
         )
@@ -37,6 +40,9 @@ class ClientDownloadTests(TestCase):
         self.assertEqual(android["file"], self.apk_name)
         self.assertEqual(android["url"], f"/clients/files/{self.apk_name}")
         self.assertNotIn("windows", response.data["clients"])
+        linux = response.data["clients"]["linux"]
+        self.assertEqual(linux["file"], self.linux_name)
+        self.assertEqual(linux["url"], f"/clients/files/{self.linux_name}")
 
     def test_file_download_has_apk_content_type(self):
         response = self.client.get(
@@ -49,6 +55,16 @@ class ClientDownloadTests(TestCase):
         )
         self.assertIn("attachment", response["Content-Disposition"])
         self.assertEqual(b"".join(response.streaming_content), b"FAKE-APK-BYTES")
+
+    def test_linux_download_has_gzip_content_type(self):
+        response = self.client.get(
+            reverse("clients-file", args=[self.linux_name]),
+            REMOTE_ADDR="192.168.1.10",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/gzip")
+        self.assertIn("attachment", response["Content-Disposition"])
+        self.assertEqual(b"".join(response.streaming_content), b"FAKE-TARBALL-BYTES")
 
     def test_unknown_file_is_404(self):
         response = self.client.get(
@@ -75,6 +91,8 @@ class ClientDownloadTests(TestCase):
         body = response.content.decode()
         self.assertIn("Download for Android", body)
         self.assertIn(f"/clients/files/{self.apk_name}", body)
+        self.assertIn("Download for Linux", body)
+        self.assertIn(f"/clients/files/{self.linux_name}", body)
 
     def test_missing_manifest_yields_empty_clients(self):
         (self.root / "manifest.json").unlink()

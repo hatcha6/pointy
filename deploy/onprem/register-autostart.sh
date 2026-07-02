@@ -100,6 +100,16 @@ if [ -f "${UPDATE_TIMER}" ]; then
   systemctl enable --now pointy-update-agent.timer
 fi
 
+# Make Docker itself start on boot (the Linux counterpart of register-autostart.ps1
+# setting Docker Desktop to start at login). Best-effort: rootless/custom setups
+# may not ship a docker.service unit.
+echo "==> Ensuring Docker starts on boot"
+if systemctl enable docker >/dev/null 2>&1; then
+  echo "    docker.service enabled."
+else
+  echo "WARN: could not enable docker.service — make sure Docker starts on boot yourself."
+fi
+
 echo ""
 echo "Done. The watchdog runs ~30s after every boot and every 5 minutes."
 echo "The update agent runs ~2min after boot and every 30 minutes."
@@ -107,5 +117,3 @@ echo "Inspect with:"
 echo "  systemctl status pointy-watchdog.timer pointy-update-agent.timer"
 echo "  journalctl -u pointy-watchdog.service -f"
 echo "  journalctl -u pointy-update-agent.service -f"
-echo ""
-echo "Make sure Docker itself starts on boot:  sudo systemctl enable docker"

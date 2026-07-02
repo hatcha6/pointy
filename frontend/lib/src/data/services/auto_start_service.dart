@@ -39,10 +39,9 @@ class AutoStartService {
       return false;
     }
     try {
-      return await _channel.invokeMethod<bool>(
-            'setEnabled',
-            {'enabled': enabled},
-          ) ??
+      return await _channel.invokeMethod<bool>('setEnabled', {
+            'enabled': enabled,
+          }) ??
           false;
     } on MissingPluginException {
       return false;

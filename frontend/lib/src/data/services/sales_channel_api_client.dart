@@ -27,10 +27,7 @@ class SalesChannelApiClient {
       'sales-channels/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(
-      response,
-      'Sales channel create failed with status',
-    );
+    _session.ensureSuccess(response, 'Sales channel create failed with status');
     return SalesChannelKeyGrant.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -44,10 +41,7 @@ class SalesChannelApiClient {
       'sales-channels/$channelId/',
       body: changes,
     );
-    _session.ensureSuccess(
-      response,
-      'Sales channel update failed with status',
-    );
+    _session.ensureSuccess(response, 'Sales channel update failed with status');
     return SalesChannel.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -55,10 +49,7 @@ class SalesChannelApiClient {
 
   Future<void> deleteSalesChannel(int channelId) async {
     final response = await _session.delete('sales-channels/$channelId/');
-    _session.ensureSuccess(
-      response,
-      'Sales channel delete failed with status',
-    );
+    _session.ensureSuccess(response, 'Sales channel delete failed with status');
   }
 
   Future<SalesChannelKeyGrant> rotateSalesChannelKey(int channelId) async {

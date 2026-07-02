@@ -15,7 +15,10 @@ class CrmApiClient {
       'crm/conversations/',
       query: {if (status != null && status.isNotEmpty) 'status': status},
     );
-    _session.ensureSuccess(response, 'Conversations request failed with status');
+    _session.ensureSuccess(
+      response,
+      'Conversations request failed with status',
+    );
     final decoded = _session.decodedBody(response);
     final items = decoded is Map<String, Object?>
         ? (decoded['results'] as List<Object?>? ?? const [])
@@ -84,26 +87,40 @@ class CrmApiClient {
     final items = decoded is Map<String, Object?>
         ? (decoded['results'] as List<Object?>? ?? const [])
         : (decoded as List<Object?>? ?? const []);
-    return items.whereType<Map<String, Object?>>().map(Campaign.fromJson).toList();
+    return items
+        .whereType<Map<String, Object?>>()
+        .map(Campaign.fromJson)
+        .toList();
   }
 
   Future<Campaign> fetchCampaign(int id) async {
     final response = await _session.get('crm/campaigns/$id/');
     _session.ensureSuccess(response, 'Campaign request failed with status');
-    return Campaign.fromJson(_session.decodedBody(response) as Map<String, Object?>);
+    return Campaign.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 
   Future<Campaign> createCampaign(CampaignDraft draft) async {
-    final response = await _session.post('crm/campaigns/', body: draft.toJson());
+    final response = await _session.post(
+      'crm/campaigns/',
+      body: draft.toJson(),
+    );
     _session.ensureSuccess(response, 'Campaign create failed with status');
-    return Campaign.fromJson(_session.decodedBody(response) as Map<String, Object?>);
+    return Campaign.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 
   Future<Campaign> updateCampaign(int id, CampaignDraft draft) async {
-    final response =
-        await _session.patch('crm/campaigns/$id/', body: draft.toJson());
+    final response = await _session.patch(
+      'crm/campaigns/$id/',
+      body: draft.toJson(),
+    );
     _session.ensureSuccess(response, 'Campaign update failed with status');
-    return Campaign.fromJson(_session.decodedBody(response) as Map<String, Object?>);
+    return Campaign.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 
   Future<void> deleteCampaign(int id) async {
@@ -122,12 +139,16 @@ class CrmApiClient {
   Future<Campaign> sendCampaign(int id) async {
     final response = await _session.post('crm/campaigns/$id/send/');
     _session.ensureSuccess(response, 'Campaign send failed with status');
-    return Campaign.fromJson(_session.decodedBody(response) as Map<String, Object?>);
+    return Campaign.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 
   Future<Campaign> cancelCampaign(int id) async {
     final response = await _session.post('crm/campaigns/$id/cancel/');
     _session.ensureSuccess(response, 'Campaign cancel failed with status');
-    return Campaign.fromJson(_session.decodedBody(response) as Map<String, Object?>);
+    return Campaign.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 }

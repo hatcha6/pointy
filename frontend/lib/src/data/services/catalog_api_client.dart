@@ -145,7 +145,10 @@ class CatalogApiClient {
       body: {
         'prices': [
           for (final entry in pricesByVariant.entries)
-            {'variant': entry.key, 'unit_price': entry.value.toStringAsFixed(2)},
+            {
+              'variant': entry.key,
+              'unit_price': entry.value.toStringAsFixed(2),
+            },
         ],
       },
     );

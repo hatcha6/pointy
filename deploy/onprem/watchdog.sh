@@ -5,6 +5,7 @@
 # Keeps the till online with zero manual intervention. It is idempotent and
 # meant to run at boot and on a short timer (see register-autostart.sh). Every
 # run it:
+#   0. starts the Docker daemon if it is installed but not running,
 #   1. waits for the Docker daemon (it may still be coming up after a reboot),
 #   2. runs `docker compose up -d` — which (re)creates any container that
 #      crashed into a stopped state OR was destroyed/removed entirely, and
@@ -14,7 +15,7 @@
 # Layer this on top of `restart: always` in the compose file: the restart
 # policy gives instant in-place crash recovery, and the watchdog catches
 # everything the restart policy cannot (host reboot, removed containers, wedged
-# processes, the daemon not being up yet).
+# processes, the daemon not being up yet or stopped).
 #
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -23,6 +24,19 @@ PROJECT="${COMPOSE_PROJECT_NAME:-pointy}"
 COMPOSE=(docker compose --env-file .env -f docker-compose.yml)
 
 log() { printf '%s [pointy-watchdog] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "$*"; }
+
+# 0. Start the daemon if it is down (mirrors watchdog.ps1 starting Docker
+#    Desktop): systemd Linux hosts get `systemctl start docker` (the timer runs
+#    this script as root), macOS hosts get Docker Desktop (best-effort).
+if ! docker info >/dev/null 2>&1; then
+  if command -v systemctl >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
+    log "Docker daemon is down; starting docker.service…"
+    systemctl start docker >/dev/null 2>&1 || true
+  elif [ "$(uname -s)" = "Darwin" ] && [ -d "/Applications/Docker.app" ]; then
+    log "Docker daemon is down; starting Docker Desktop…"
+    open -a Docker >/dev/null 2>&1 || true
+  fi
+fi
 
 # 1. Wait for the Docker daemon (up to ~5 minutes).
 for i in $(seq 1 60); do

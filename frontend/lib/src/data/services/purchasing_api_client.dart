@@ -103,7 +103,9 @@ class PurchasingApiClient {
     return ProductCostHistoryPage.fromAny(_session.decodedBody(response));
   }
 
-  Future<List<VariantCostSummary>> fetchProductCostSummary(int productId) async {
+  Future<List<VariantCostSummary>> fetchProductCostSummary(
+    int productId,
+  ) async {
     final response = await _session.get(
       'purchase-orders/product-cost-summary/',
       query: {'product': '$productId'},
