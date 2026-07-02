@@ -2624,7 +2624,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('login_compact_header')), findsOneWidget);
     expect(find.byKey(const ValueKey('login_brand_panel')), findsNothing);
-    expect(find.text('نقطة البيع'), findsOneWidget);
+    expect(find.text('دفتر'), findsOneWidget);
     expect(find.text('تسجيل الدخول'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -2638,7 +2638,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('login_brand_panel')), findsOneWidget);
     expect(find.byKey(const ValueKey('login_compact_header')), findsNothing);
-    expect(find.text('نقطة البيع'), findsOneWidget);
+    expect(find.text('دفتر'), findsOneWidget);
     expect(find.text('تسجيل الدخول'), findsOneWidget);
   });
 
@@ -2906,6 +2906,10 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     await _openNavigationDestination(tester, 'إعدادات المتجر');
+    // The backup tile sits low in the (now longer) settings list; scroll it
+    // into view so the tap lands on it and opens the backup page.
+    await tester.ensureVisible(find.text('النسخ والاستعادة'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('النسخ والاستعادة'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('backup_destination_field')));
@@ -3013,11 +3017,18 @@ void main() {
     expect(find.text('تفعيل وكيل الطباعة المحلي'), findsNothing);
     expect(find.text('استلام مهام الطباعة تلقائيًا'), findsNothing);
 
+    // The printing section sits below the price-checker section in the (now
+    // longer) device settings list; scroll each button into view before
+    // tapping so the tap lands inside the viewport.
+    await tester.ensureVisible(find.text('اختبار الطابعة'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('اختبار الطابعة'));
     await tester.pumpAndSettle();
 
     expect(find.text('تم إرسال اختبار الطباعة.'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('اختيار طابعة الإيصال'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('اختيار طابعة الإيصال'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
