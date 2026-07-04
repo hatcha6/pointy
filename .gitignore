@@ -28,3 +28,6 @@ pyarmor.bug.log
 *.mdb
 fahd_data.sqlite
 fahd_migration.sqlite
+
+# FVM: local per-project Flutter SDK (installed side-by-side; not committed)
+frontend/.fvm/

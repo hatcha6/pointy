@@ -19,7 +19,9 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.10.7
+  # compat/win8: lowered to Dart 3.3 (Flutter 3.19 — the last Flutter that runs
+  # on Windows 7/8/8.1). See COMPAT_WIN8.md. Main pins ^3.10.7.
+  sdk: '>=3.3.0 <4.0.0'
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -44,24 +46,31 @@ dependencies:
   flutter_bluetooth_classic_serial: ^1.3.2
   multicast_dns: ^0.3.3
   shared_preferences: ^2.5.5
-  mobile_scanner: ^7.2.0
+  # ── compat/win8 downgrades ────────────────────────────────────────────────
+  # Each of these capped its floor above Dart 3.3 in a recent major. The ranges
+  # below target the last Flutter-3.19-era line. They are BEST-EFFORT and must
+  # be confirmed by a real Flutter 3.19 `pub get` (FVM or the compat CI) — the
+  # transitive tree may force further pins. Code that uses the newer APIs is
+  # listed in COMPAT_WIN8.md and needs adapting on this branch.
+  mobile_scanner: '>=4.0.0 <5.0.0'   # main ^7.2.0 (needs Flutter 3.29)
+  printing: '>=5.11.0 <5.13.0'       # main ^5.14.3 (needs Flutter 3.22)
+  file_picker: '>=6.1.1 <7.0.0'      # main ^11.0.2 (needs Flutter 3.22)
+  gpt_markdown: '>=1.0.0 <1.1.0'     # main ^1.1.7 (needs Dart 3.7)
+  record: '>=5.0.0 <6.0.0'           # main ^6.2.1 (needs Flutter 3.24)
+  wakelock_plus: '>=1.2.5 <1.3.0'    # main ^1.3.3 (needs Dart 3.4)
+  flutter_tts: '>=3.8.0 <4.0.0'      # main ^4.2.5 (needs Dart 3.4)
+  # ──────────────────────────────────────────────────────────────────────────
   pdf: ^3.12.0
-  printing: ^5.14.3
   qr: ^3.0.2
-  file_picker: ^11.0.2
   http_parser: ^4.1.2
   web: ^1.1.1
   usb_serial: ^0.5.2
   image_picker: ^1.2.2
-  gpt_markdown: ^1.1.7
   # Open web-search source citations (http/https links in AI replies) externally.
   url_launcher: ^6.3.1
-  record: ^6.2.1
   # Client self-update: read the running app version + a temp dir for the download.
   package_info_plus: ^8.0.0
   path_provider: ^2.1.4
-  wakelock_plus: ^1.3.3
-  flutter_tts: ^4.2.5
 
 dev_dependencies:
   flutter_test:
