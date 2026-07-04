@@ -62,7 +62,10 @@ dependencies:
   # uses): mobile_scanner (camera scan), record (AI voice), gpt_markdown (AI
   # markdown). See COMPAT_WIN8.md.
   # ──────────────────────────────────────────────────────────────────────────
-  pdf: ^3.12.0
+  # compat/win8: pdf 3.12.0 requires vector_math ^2.2.0, but Flutter 3.19's
+  # flutter_test pins vector_math 2.1.4 exactly — conflict. pdf 3.11.x uses
+  # vector_math ^2.1.0 (admits 2.1.4). printing 5.12 only needs pdf ^3.10.0.
+  pdf: '>=3.11.0 <3.12.0'
   # compat/win8: qr 3.0.2 floors at Dart 3.4 — 3.0.1 is the last 3.3-safe
   # release (same QrCode/QrImage API).
   qr: '>=3.0.0 <3.0.2'
