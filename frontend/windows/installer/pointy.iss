@@ -47,8 +47,11 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ; Per-machine install so every cashier user on the till sees the app.
 PrivilegesRequired=admin
-; Flutter Windows requires Windows 10+; show a clean message instead of crashing.
-MinVersion=10.0
+; compat/win8: this build targets the old tills (Flutter 3.19). Windows 8 is
+; version 6.2, 8.1 is 6.3, 10 is 10.0 — set the floor to 6.2 so the installer
+; runs on Windows 8/8.1 instead of rejecting it. (On `main`, this stays 10.0:
+; its Flutter 3.38 build genuinely requires Windows 10.)
+MinVersion=6.2
 ; Best-effort close a running instance during an upgrade.
 CloseApplications=yes
 
