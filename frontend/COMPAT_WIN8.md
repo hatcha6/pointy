@@ -41,7 +41,8 @@ Windows-native compile has been reproduced locally and passes:
 | `flutter pub get` | ✅ exit 0 — full tree resolves |
 | `flutter gen-l10n` | ✅ with `synthetic-package: false` (see below) |
 | `dart analyze lib` | ✅ **0 errors / 0 warnings** |
-| `flutter build windows` | Windows-only — the only step CI must prove |
+| `flutter build bundle` | ✅ exit 0 — **full Dart kernel compile** (`io` conditionals, same as Windows); proves the whole graph compiles, not just analyzes |
+| `flutter build windows` | Windows-only C++ link — the only step CI must prove |
 
 The heavy camera/AI-only features were **dropped** (not downgraded) and stubbed
 behind their existing signatures — a Windows-8 till uses a wedge/USB scanner and
@@ -196,6 +197,31 @@ Flutter 3.19's `gen-l10n` defaults `synthetic-package` to **true** — it delete
 its `flutter gen-l10n` step. `l10n.yaml` now pins `synthetic-package: false`
 (the default from 3.22 on, so harmless on `main`), keeping output in
 `output-dir`. The committed generated files are the 3.19 form.
+
+### Android embedding-v2 false positive → `android/build.gradle` marker
+
+`flutter pub get` on 3.19 failed with *"The plugin `X` requires your app to be
+migrated to the Android embedding v2"* — on plugin after plugin — even though
+`android/app/src/main/AndroidManifest.xml` correctly declares
+`<meta-data android:name="flutterEmbedding" android:value="2"/>`.
+
+Root cause (from the 3.19 `flutter_tools/lib/src/project.dart` source):
+`AndroidProject.isUsingGradle` only tests for a **Groovy** `android/build.gradle`;
+our Android project is **Kotlin-DSL** (`build.gradle.kts`) only. With
+`isUsingGradle == false`, `appManifestFile` resolves to `android/AndroidManifest.xml`
+(which doesn't exist) instead of `android/app/src/main/AndroidManifest.xml`, so
+`computeEmbeddingVersion()` never sees the marker and returns v1. Every v2 plugin
+then hard-fails `pub get` (exit 1). Main (3.38) understands `.kts` here.
+
+Fix: a comment-only Groovy **`android/build.gradle`** marker so 3.19's check is
+true and reads the right manifest. This is a Windows-only build — Gradle never
+runs, so the marker is inert and the real config stays in `build.gradle.kts`.
+(`flutter_bluetooth_classic_serial` was also dropped — it was the first plugin to
+trip the check and a USB-printer till never uses Bluetooth.)
+
+This class of failure — opaque Flutter tooling errors — is fastest to solve by
+**reading the isolated SDK's own `flutter_tools` source** (`$SCRATCH/flutter/
+packages/flutter_tools/lib/src/…`), which is exactly how this was pinned down.
 
 ## Re-validating after a `main` merge
 
