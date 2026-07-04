@@ -1,0 +1,211 @@
+# Legacy Windows (Windows 8 / 8.1) release target.
+#
+# Flutter 3.19 (Dart 3.3) is the LAST Flutter release whose Windows apps run on
+# Windows 7/8/8.1 — Flutter 3.20+ requires Windows 10. This workflow builds the
+# Windows till client with that toolchain and publishes it to a release tagged
+# `…-compat` (e.g. v0.2-compat). The main Release workflow (release.yml) ignores
+# `-compat` tags, so the two never collide.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# PREREQUISITE — the tagged commit MUST resolve under Dart 3.3:
+#   The default branch pins `environment: sdk: ^3.10.x` and modern packages
+#   (mobile_scanner ^7, etc.) that Flutter 3.19 cannot resolve — `pub get` will
+#   fail here against `main`. Tag a commit/branch whose frontend/pubspec.yaml is
+#   lowered to `sdk: '>=3.3.0 <4.0.0'` with 3.19-compatible package versions
+#   (see the compat notes in the PR that added this workflow). This workflow
+#   provides the toolchain + packaging; the caller provides compat-ready code.
+# ─────────────────────────────────────────────────────────────────────────────
+name: Release (Windows 8 compat)
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version for a manual compat test build (artifacts only), e.g. 0.2-compat"
+        required: false
+        default: "0.0.0-compat"
+
+permissions:
+  contents: write
+
+env:
+  # Pinned intentionally: the last Flutter that targets Windows 7/8/8.1.
+  FLUTTER_VERSION: "3.19.6"
+  FLUTTER_CHANNEL: "stable"
+
+jobs:
+  version:
+    name: Resolve compat version
+    # Only real "-compat" releases, plus manual dispatch for test builds.
+    if: ${{ github.event_name == 'workflow_dispatch' || endsWith(github.event.release.tag_name, '-compat') }}
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.derive.outputs.version }}
+      build_name: ${{ steps.derive.outputs.build_name }}
+      build_number: ${{ steps.derive.outputs.build_number }}
+      is_release: ${{ steps.derive.outputs.is_release }}
+      tag: ${{ steps.derive.outputs.tag }}
+    steps:
+      - id: derive
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+            IS_RELEASE=true
+          else
+            TAG="${{ github.event.inputs.version }}"
+            IS_RELEASE=false
+          fi
+          VERSION="${TAG#v}"                 # strip a leading "v": 0.2-compat
+          # Windows version resources need a numeric x.y[.z]; drop the -compat
+          # suffix for --build-name while keeping it in artifact filenames.
+          BUILD_NAME="${VERSION%-compat}"
+          [ -n "$BUILD_NAME" ] || BUILD_NAME="0.0.0"
+          {
+            echo "tag=${TAG}"
+            echo "version=${VERSION}"
+            echo "build_name=${BUILD_NAME}"
+            echo "build_number=${{ github.run_number }}"
+            echo "is_release=${IS_RELEASE}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Compat resolved: tag=${TAG} version=${VERSION} build_name=${BUILD_NAME} is_release=${IS_RELEASE}"
+
+  build-windows-compat:
+    name: Build Windows 8 app (Flutter 3.19)
+    needs: version
+    runs-on: windows-latest
+    env:
+      WINDOWS_SIGNING_CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+      WINDOWS_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: ${{ env.FLUTTER_CHANNEL }}
+          cache: true
+
+      - name: Flutter pub get
+        working-directory: frontend
+        run: |
+          flutter --version
+          flutter config --enable-windows-desktop
+          flutter pub get
+
+      - name: Generate localizations
+        working-directory: frontend
+        run: flutter gen-l10n
+
+      - name: Build Windows release (x64)
+        working-directory: frontend
+        run: >
+          flutter build windows --release
+          --build-name=${{ needs.version.outputs.build_name }}
+          --build-number=${{ needs.version.outputs.build_number }}
+
+      - name: Bundle VC++ runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          # Locate the Release output (build/windows/<arch>/runner/Release).
+          $release = (Get-ChildItem "frontend/build/windows" -Recurse -Directory |
+                      Where-Object { $_.Name -eq 'Release' -and $_.FullName -match 'runner' } |
+                      Select-Object -First 1).FullName
+          if (-not $release) { throw "Windows Release output not found." }
+          Write-Host "Release output: $release"
+
+          # App-local Visual C++ runtime so the app runs without the VC++
+          # Redistributable installed (essential on old Windows 8 till PCs).
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -property installationPath
+          $crtDir = Get-ChildItem "$vsPath\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT" -Directory |
+                    Sort-Object FullName | Select-Object -Last 1
+          if (-not $crtDir) { throw "Could not locate the VC++ redistributable CRT directory." }
+          Write-Host "Bundling VC++ runtime from: $($crtDir.FullName)"
+          Copy-Item "$($crtDir.FullName)\*.dll" -Destination $release -Force
+
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          "RELEASE_DIR=$release" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+
+      - name: Prepare code signing
+        if: ${{ env.WINDOWS_SIGNING_CERT_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pfx = Join-Path $env:RUNNER_TEMP "pointy-signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERT_BASE64))
+          $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+                       Sort-Object FullName | Select-Object -Last 1).FullName
+          if (-not $signtool) { throw "signtool.exe not found in the Windows SDK." }
+          "PFX_PATH=$pfx"      | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          "SIGNTOOL=$signtool" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+
+      - name: Code-sign the app
+        if: ${{ env.WINDOWS_SIGNING_CERT_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          & "$env:SIGNTOOL" sign /f "$env:PFX_PATH" /p "$env:WINDOWS_SIGNING_CERT_PASSWORD" `
+            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+            "$env:RELEASE_DIR\pointy_frontend.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Signing the app failed ($LASTEXITCODE)." }
+
+      - name: Package portable ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "${{ needs.version.outputs.version }}"
+          Compress-Archive -Path "$env:RELEASE_DIR\*" -DestinationPath "dist/pointy-$version-windows-x64.zip" -Force
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "${{ needs.version.outputs.version }}"
+          choco install innosetup --no-progress -y
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at $iscc" }
+          $out = (Resolve-Path dist).Path
+          & "$iscc" "/DAppVersion=$version" "/DSourceDir=$env:RELEASE_DIR" "/DOutputDir=$out" `
+            "frontend\windows\installer\pointy.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compile failed ($LASTEXITCODE)." }
+
+      - name: Code-sign the installer
+        if: ${{ env.WINDOWS_SIGNING_CERT_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $setup = "dist\pointy-${{ needs.version.outputs.version }}-windows-x64-setup.exe"
+          & "$env:SIGNTOOL" sign /f "$env:PFX_PATH" /p "$env:WINDOWS_SIGNING_CERT_PASSWORD" `
+            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "$setup"
+          if ($LASTEXITCODE -ne 0) { throw "Signing the installer failed ($LASTEXITCODE)." }
+
+      - name: Checksums
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Get-ChildItem dist -File | Where-Object { $_.Extension -in '.exe', '.zip' } | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash, $_.Name
+          } | Out-File -Encoding ascii "dist/SHA256SUMS-windows-compat.txt"
+          Get-ChildItem dist | Select-Object Name, Length | Format-Table -AutoSize
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pointy-windows-compat
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: ${{ needs.version.outputs.is_release == 'true' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $files = Get-ChildItem dist | ForEach-Object { $_.FullName }
+          gh release upload "${{ needs.version.outputs.tag }}" $files --clobber
