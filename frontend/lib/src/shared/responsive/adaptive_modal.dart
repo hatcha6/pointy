@@ -212,7 +212,7 @@ class AdaptiveFormSurfaceHeader extends StatelessWidget {
               ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
           ),
-          ?trailing,
+          if (trailing != null) trailing!,
           IconButton(
             icon: const Icon(Icons.close),
             tooltip: l10n.closeButton,

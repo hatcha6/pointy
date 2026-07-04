@@ -83,7 +83,7 @@ class AttendanceApiClient {
   }) async {
     final response = await _session.patch(
       'attendance/profiles/$profileId/',
-      body: {'biotime_emp_code': ?bioTimeEmpCode, 'is_tracked': ?isTracked},
+      body: {if (bioTimeEmpCode != null) 'biotime_emp_code': bioTimeEmpCode, if (isTracked != null) 'is_tracked': isTracked},
     );
     _session.ensureSuccess(
       response,

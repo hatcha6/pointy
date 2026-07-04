@@ -159,7 +159,7 @@ class MigrationApiClient {
   }) async {
     final response = await _session.get(
       'migration/runs/$runId/issues/',
-      query: {'page': '$page', 'severity': ?severity},
+      query: {'page': '$page', if (severity != null) 'severity': severity},
     );
     _session.ensureSuccess(
       response,

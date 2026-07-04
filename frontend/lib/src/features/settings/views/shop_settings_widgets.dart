@@ -163,7 +163,7 @@ class _ShopLogoField extends StatelessWidget {
 
   Future<void> _pickLogo(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['png', 'jpg', 'jpeg'],
       withData: true,

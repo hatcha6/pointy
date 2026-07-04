@@ -428,7 +428,7 @@ class _PayablesStripState extends State<_PayablesStrip> {
               padding: EdgeInsets.zero,
               itemCount:
                   orders.length + (widget.viewModel.hasMoreOutstanding ? 1 : 0),
-              separatorBuilder: (_, _) => SizedBox(width: spacing.sm),
+              separatorBuilder: (_, __) => SizedBox(width: spacing.sm),
               itemBuilder: (context, index) {
                 if (index >= orders.length) {
                   return const _PayableLoadingCard();

@@ -43,7 +43,7 @@ class AiAttachmentPicker {
   Future<List<AiAttachment>> pickFiles() async {
     final FilePickerResult? result;
     try {
-      result = await FilePicker.pickFiles(allowMultiple: true, withData: true);
+      result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
     } on Exception {
       return const [];
     }

@@ -97,7 +97,7 @@ class StockMovementsSheet extends StatelessWidget {
                     hasMore: viewModel.hasMoreMovements,
                     isLoadingInitial: viewModel.isLoadingMovements,
                     isLoadingMore: viewModel.isLoadingMoreMovements,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     emptyBuilder: (context) =>
                         Center(child: Text(l10n.emptyStockMovements)),
                     itemBuilder: (context, movement) {

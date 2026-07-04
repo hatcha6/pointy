@@ -255,10 +255,10 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
     final primary = submit ?? receive ?? pay;
     final extras = <_PoAction>[
       if (pay != null && !identical(pay, primary)) pay,
-      ?returnItems,
-      ?refund,
-      ?exchange,
-      ?cancel,
+      if (returnItems != null) returnItems,
+      if (refund != null) refund,
+      if (exchange != null) exchange,
+      if (cancel != null) cancel,
     ];
 
     if (primary == null && extras.isEmpty && edit == null) {
@@ -294,7 +294,7 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
       return PointyStickyActionFooter(
         summary: summary,
         secondaryActions: [
-          ?editButton,
+          if (editButton != null) editButton,
           if (extras.isNotEmpty) moreButton(filled: false),
         ],
         primaryAction: _primaryActionButton(context, primary),

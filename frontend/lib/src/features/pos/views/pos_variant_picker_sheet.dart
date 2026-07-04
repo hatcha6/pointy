@@ -57,7 +57,7 @@ class _PosVariantPickerSheet extends StatelessWidget {
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: variants.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
+              separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final variant = variants[index];
                 return ListTile(

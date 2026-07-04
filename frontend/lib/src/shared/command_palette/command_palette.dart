@@ -268,7 +268,10 @@ class CommandPaletteRecents {
       }
       _entries = [
         for (final item in decoded)
-          if (item is Map) ?RecentEntry.fromJson(item.cast<String, Object?>()),
+          if (item is Map)
+            if (RecentEntry.fromJson(item.cast<String, Object?>())
+                case final entry?)
+              entry,
       ];
     } catch (_) {
       // Ignore missing or corrupt storage.

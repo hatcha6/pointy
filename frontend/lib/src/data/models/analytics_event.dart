@@ -498,7 +498,7 @@ class AnalyticsEventQuery extends ModelQuery {
   final AnalyticsEventOrdering ordering;
 
   List<int> get selectedUserIds {
-    final ids = userIds.isNotEmpty ? userIds : [?userId];
+    final ids = userIds.isNotEmpty ? userIds : [if (userId != null) userId!];
     final seen = <int>{};
     return [
       for (final id in ids)

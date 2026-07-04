@@ -90,7 +90,7 @@ class _RecentSaleOrdersList extends StatelessWidget {
           hasError: viewModel.hasSaleHistoryError,
           padding: EdgeInsets.zero,
           framed: false,
-          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
           errorBuilder: (context) => PointyErrorState(
             title: l10n.productRecentInvoicesLoadError,
             icon: Icons.receipt_long_outlined,
@@ -144,7 +144,7 @@ class _RecentPurchaseOrdersList extends StatelessWidget {
           hasError: viewModel.hasPurchaseHistoryError,
           padding: EdgeInsets.zero,
           framed: false,
-          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
           errorBuilder: (context) => PointyErrorState(
             title: l10n.productRecentPurchaseBillsLoadError,
             icon: Icons.inventory_2_outlined,

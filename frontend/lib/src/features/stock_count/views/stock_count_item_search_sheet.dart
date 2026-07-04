@@ -166,7 +166,7 @@ class _ItemSearchSheetState extends State<_ItemSearchSheet> {
       shrinkWrap: true,
       padding: EdgeInsets.zero,
       itemCount: _results.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 4),
+      separatorBuilder: (_, __) => const SizedBox(height: 4),
       itemBuilder: (context, index) => _ResultRow(variant: _results[index]),
     );
   }

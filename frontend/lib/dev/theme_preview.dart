@@ -106,7 +106,7 @@ class _Gallery extends StatelessWidget {
                   isLoadingMore: false,
                   hasMore: false,
                   onLoadMore: () async {},
-                  itemBuilder: (_, _) => const SizedBox.shrink(),
+                  itemBuilder: (_, __) => const SizedBox.shrink(),
                   emptyBuilder: (_) => const SizedBox.shrink(),
                   skeletonItemCount: 3,
                 ),

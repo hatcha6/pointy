@@ -136,7 +136,7 @@ class _DashboardCardShell extends StatelessWidget {
                         ),
                       ),
                     ),
-                    ?trailing,
+                    if (trailing != null) trailing!,
                   ],
                 ),
                 SizedBox(height: spacing.sm),
@@ -665,9 +665,9 @@ class _EmptyWidgetData extends StatelessWidget {
   }
 }
 
-// compat/win8: _axisTitles / _maxValue / _chartColors removed with the charts
-// (they referenced fl_chart types). _compactNumber / _compactFormat stay unused
-// on this build — harmless for the release build, which never runs the linter.
+// compat/win8: _axisTitles / _maxValue / _chartColors / _compactNumber /
+// _compactFormat removed with the fl_chart charts (they referenced fl_chart
+// types or only fed the chart axes). Dashboard charts render a placeholder.
 
 Color _changeColor(BuildContext context, double value) {
   final colors = context.pointyColors;
@@ -683,7 +683,6 @@ Color _changeColor(BuildContext context, double value) {
 // Hoisted so the ICU locale data is parsed once, not rebuilt on every call
 // (these format the dashboard's metric tiles and every insight-list row).
 final NumberFormat _decimalFormat = NumberFormat.decimalPattern('ar');
-final NumberFormat _compactFormat = NumberFormat.compact(locale: 'ar');
 
 String _formatNumber(num value) => _decimalFormat.format(value);
 
@@ -693,8 +692,6 @@ String _formatChange(double value) {
   final prefix = value > 0 ? '+' : '';
   return '$prefix${value.toStringAsFixed(2)}%';
 }
-
-String _compactNumber(double value) => _compactFormat.format(value);
 
 String _paymentMethodLabel(AppLocalizations l10n, String method) {
   return switch (method) {

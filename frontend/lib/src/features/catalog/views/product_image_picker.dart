@@ -163,7 +163,7 @@ class ProductImageField extends StatelessWidget {
 
   Future<void> _pickLocalImage(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
       withData: true,
       allowMultiple: false,

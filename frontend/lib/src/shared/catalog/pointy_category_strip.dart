@@ -36,7 +36,7 @@ class PointyCategoryStrip<T extends Object> extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.zero,
         itemCount: items.length + 1,
-        separatorBuilder: (_, _) => SizedBox(width: spacing.sm),
+        separatorBuilder: (_, __) => SizedBox(width: spacing.sm),
         itemBuilder: (context, index) {
           if (index == 0) {
             return _StripChip(

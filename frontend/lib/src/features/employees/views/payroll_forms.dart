@@ -88,7 +88,7 @@ class _CreateEmployeeFormState extends State<CreateEmployeeForm> {
             openPickerTooltip: l10n.employeeUserOpenPickerTooltip,
             fallbackLabelForId: (id) => l10n.userFallbackLabel(id),
           ),
-          selected: [?_selectedUser],
+          selected: [if (_selectedUser != null) _selectedUser!],
           onPick: _pickUser,
           onClear: _selectedUser == null
               ? null
@@ -155,7 +155,7 @@ class _CreateEmployeeFormState extends State<CreateEmployeeForm> {
         confirmText: l10n.confirmButton,
         fallbackLabelForId: (id) => l10n.userFallbackLabel(id),
       ),
-      selected: [?_selectedUser],
+      selected: [if (_selectedUser != null) _selectedUser!],
       loadPage: _loadUserSelectionPage,
       optionKeyForId: (id) => ValueKey('employee_user_option_$id'),
       heightFactor: 0.74,

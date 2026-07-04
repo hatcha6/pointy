@@ -195,8 +195,8 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
       entityId: _order.id,
       attributes: {
         ..._orderAttributes(_order),
-        'previous_customer_id': ?previousCustomerId,
-        'customer_id': ?_order.customer,
+        if (previousCustomerId != null) 'previous_customer_id': previousCustomerId,
+        if (_order.customer != null) 'customer_id': _order.customer,
         'source': 'invoice_details_screen',
       },
       metrics: {'total': _order.total},

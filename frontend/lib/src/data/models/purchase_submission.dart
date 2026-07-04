@@ -522,7 +522,7 @@ class PurchaseOrderDraft {
       if (forUpdate)
         'supplier_invoice_date': invoiceDate
       else
-        'supplier_invoice_date': ?invoiceDate,
+        if (invoiceDate != null) 'supplier_invoice_date': invoiceDate,
       'landed_cost_entries': landedCostEntries
           .map((entry) => entry.toJson())
           .toList(growable: false),

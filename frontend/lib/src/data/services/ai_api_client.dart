@@ -18,7 +18,7 @@ class AiApiClient {
   }) async* {
     final body = <String, Object?>{
       'message': message,
-      'conversation_id': ?conversationId,
+      if (conversationId != null) 'conversation_id': conversationId,
       // This client can render the interactive question UI, so the backend may
       // advertise the ask_user tool to the model.
       'supports_ask_user': true,

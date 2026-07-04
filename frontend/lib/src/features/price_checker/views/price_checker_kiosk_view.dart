@@ -837,7 +837,7 @@ class _ProductPhoto extends StatelessWidget {
               ),
             );
           },
-          errorBuilder: (context, _, _) => Icon(
+          errorBuilder: (context, _, __) => Icon(
             Icons.inventory_2_outlined,
             size: side * 0.4,
             color: colors.mutedInk.withValues(alpha: 0.5),

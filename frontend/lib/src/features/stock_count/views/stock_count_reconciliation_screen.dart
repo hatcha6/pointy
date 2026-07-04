@@ -123,7 +123,7 @@ class _StockCountReconciliationScreenState
               hasError: _viewModel.hasLoadError,
               onLoadMore: () async {},
               padding: spacing.pagePadding,
-              separatorBuilder: (_, _) => SizedBox(height: spacing.sm),
+              separatorBuilder: (_, __) => SizedBox(height: spacing.sm),
               header: lines.isEmpty
                   ? null
                   : Padding(

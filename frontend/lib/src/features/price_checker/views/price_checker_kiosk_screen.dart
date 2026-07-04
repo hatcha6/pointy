@@ -8,7 +8,6 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../core/result.dart';
-import '../../../data/models/price_checker_config.dart';
 import '../../../data/models/price_lookup_result.dart';
 import '../../../data/repositories/price_checker_repository.dart';
 import '../../../data/services/connection_profile_storage.dart';
@@ -17,7 +16,6 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/price_checker/kiosk_speech_service.dart';
 import '../../../shared/price_checker/price_checker_mode_controller.dart';
-import '../price_checker_mode_actions.dart';
 import 'price_checker_kiosk_view.dart';
 import 'price_checker_pin_pad.dart';
 

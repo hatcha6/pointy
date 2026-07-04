@@ -244,7 +244,7 @@ class _ProductCostHistorySection extends StatelessWidget {
               isLoadingInitial: viewModel.isLoadingCostInsights,
               isLoadingMore: viewModel.isLoadingMoreCostHistory,
               emptyBuilder: (context) => Text(l10n.productCostHistoryEmpty),
-              separatorBuilder: (_, _) => const Divider(height: 1),
+              separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, entry) {
                 return ListTile(
                   contentPadding: EdgeInsets.zero,

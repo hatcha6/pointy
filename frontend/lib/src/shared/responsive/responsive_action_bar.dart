@@ -60,7 +60,7 @@ class ResponsiveActionBar extends StatelessWidget {
           runSpacing: resolvedRunSpacing,
           alignment: alignment,
           crossAxisAlignment: crossAxisAlignment,
-          children: [?leading, ...actions],
+          children: [if (leading != null) leading!, ...actions],
         );
       },
     );

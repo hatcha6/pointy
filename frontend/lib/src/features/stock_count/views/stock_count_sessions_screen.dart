@@ -148,7 +148,7 @@ class _StockCountSessionsScreenState extends State<StockCountSessionsScreen> {
               hasError: vm.hasLoadError,
               onLoadMore: vm.loadMore,
               padding: spacing.pagePadding,
-              separatorBuilder: (_, _) => SizedBox(height: spacing.sm),
+              separatorBuilder: (_, __) => SizedBox(height: spacing.sm),
               header: _Header(
                 current: current,
                 hasHistory: history.isNotEmpty,

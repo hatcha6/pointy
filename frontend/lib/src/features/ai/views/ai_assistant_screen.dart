@@ -551,7 +551,7 @@ class _MessageList extends StatelessWidget {
         vertical: spacing.lg,
       ),
       itemCount: messages.length,
-      separatorBuilder: (_, _) => SizedBox(height: spacing.lg),
+      separatorBuilder: (_, __) => SizedBox(height: spacing.lg),
       itemBuilder: (context, index) {
         final message = messages[index];
         final Widget child;
@@ -1838,7 +1838,7 @@ class _FaviconAvatar extends StatelessWidget {
           : Image.network(
               favicon,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) =>
+              errorBuilder: (_, __, ___) =>
                   Icon(Icons.public, size: size * 0.6, color: colors.mutedInk),
             ),
     );
@@ -1922,7 +1922,7 @@ class _SourcesSheet extends StatelessWidget {
               child: ListView.separated(
                 shrinkWrap: true,
                 itemCount: sources.length,
-                separatorBuilder: (_, _) => SizedBox(height: spacing.xs),
+                separatorBuilder: (_, __) => SizedBox(height: spacing.xs),
                 itemBuilder: (context, index) {
                   final source = sources[index];
                   return Material(
@@ -2958,7 +2958,7 @@ class _PendingAttachmentStrip extends StatelessWidget {
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           itemCount: attachments.length,
-          separatorBuilder: (_, _) => SizedBox(width: spacing.xs),
+          separatorBuilder: (_, __) => SizedBox(width: spacing.xs),
           itemBuilder: (context, index) {
             final attachment = attachments[index];
             return _PendingAttachmentTile(

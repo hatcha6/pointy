@@ -1,3 +1,6 @@
+// compat/win8: dart:io for writing the saved PDF ourselves — file_picker 6.x
+// saveFile() only returns the chosen path (no `bytes` param). Windows-only build.
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
@@ -618,13 +621,16 @@ class OrderDocumentService {
     }
 
     if (_shouldSaveWithDialog) {
-      final path = await FilePicker.saveFile(
+      final path = await FilePicker.platform.saveFile(
         dialogTitle: labels.savePdfDialogTitle,
         fileName: filename,
         type: FileType.custom,
         allowedExtensions: const ['pdf'],
-        bytes: bytes,
       );
+      // compat/win8: file_picker 6.x returns the path only; write the bytes here.
+      if (path != null) {
+        await File(path).writeAsBytes(bytes);
+      }
       return path == null
           ? OrderDocumentActionStatus.canceled
           : OrderDocumentActionStatus.completed;

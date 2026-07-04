@@ -222,7 +222,7 @@ class _AsyncMultiSelectPickerSheetState<T extends Object>
               isLoadingInitial: _isLoading,
               isLoadingMore: _isLoadingMore,
               emptyBuilder: (context) => Center(child: Text(strings.emptyText)),
-              separatorBuilder: (_, _) => const Divider(height: 1),
+              separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, option) {
                 final isSelected = _selected.containsKey(option.id);
                 return CheckboxListTile(

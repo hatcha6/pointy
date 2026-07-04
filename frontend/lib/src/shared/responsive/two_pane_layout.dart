@@ -66,10 +66,10 @@ class TwoPaneLayout extends StatelessWidget {
     final divider = verticalDivider;
 
     if (secondaryFirst) {
-      return [secondary, ?divider, primary];
+      return [secondary, if (divider != null) divider, primary];
     }
 
-    return [primary, ?divider, secondary];
+    return [primary, if (divider != null) divider, secondary];
   }
 
   List<Widget> _compactChildren() {
@@ -81,10 +81,10 @@ class TwoPaneLayout extends StatelessWidget {
     final divider = horizontalDivider;
 
     if (secondaryFirst) {
-      return [secondary, ?divider, primary];
+      return [secondary, if (divider != null) divider, primary];
     }
 
-    return [primary, ?divider, secondary];
+    return [primary, if (divider != null) divider, secondary];
   }
 
   double _effectiveWidth(BuildContext context, BoxConstraints constraints) {

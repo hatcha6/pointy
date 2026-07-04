@@ -50,7 +50,7 @@ class PointyDetailSection extends StatelessWidget {
                       ),
                     ),
                   ),
-                  ?trailing,
+                  if (trailing != null) trailing!,
                 ],
               ),
               SizedBox(height: spacing.sm),

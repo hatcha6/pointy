@@ -609,7 +609,7 @@ class _CategoryTreeList extends StatelessWidget {
         spacing.lg,
         spacing.xxl,
       ),
-      separatorBuilder: (_, _) => const Divider(height: 1),
+      separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (context, item) {
         return switch (item.type) {
           CategoryTreeItemType.category => _CategoryRow(
@@ -722,7 +722,7 @@ class _SearchResultsList extends StatelessWidget {
         spacing.lg,
         spacing.xxl,
       ),
-      separatorBuilder: (_, _) => const Divider(height: 1),
+      separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (context, category) {
         return _CategoryRow(
           category: category,

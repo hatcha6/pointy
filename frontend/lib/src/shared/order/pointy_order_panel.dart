@@ -68,7 +68,7 @@ class PointyOrderPanel extends StatelessWidget {
                     ],
                   ),
                 ),
-                ?trailing,
+                if (trailing != null) trailing!,
               ],
             ),
           ),

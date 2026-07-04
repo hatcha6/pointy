@@ -73,7 +73,7 @@ class PaymentMethodSegmentedControl extends StatelessWidget {
                   ),
                 ),
             ],
-            selected: {?selectedMethod},
+            selected: {if (selectedMethod != null) selectedMethod!},
             onSelectionChanged: (selected) {
               if (selected.isEmpty) {
                 return;
