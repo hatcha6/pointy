@@ -81,7 +81,8 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^6.0.0
+  # compat/win8: ^6 needs Dart 3.8; 3.0.x is the flutter_lints line for 3.19.
+  flutter_lints: ^3.0.0
 
   # Generates per-platform launcher/app icons from assets/branding/logo.png.
   # Run `flutter pub run flutter_launcher_icons` after changing the logo.
