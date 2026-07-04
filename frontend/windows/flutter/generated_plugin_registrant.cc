@@ -7,7 +7,6 @@
 #include "generated_plugin_registrant.h"
 
 #include <file_selector_windows/file_selector_windows.h>
-#include <flutter_bluetooth_classic_serial/flutter_bluetooth_classic_plugin.h>
 #include <flutter_libserialport/flutter_libserialport_plugin.h>
 #include <flutter_tts/flutter_tts_plugin.h>
 #include <printing/printing_plugin.h>
@@ -16,8 +15,6 @@
 void RegisterPlugins(flutter::PluginRegistry* registry) {
   FileSelectorWindowsRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("FileSelectorWindows"));
-  FlutterBluetoothClassicPluginRegisterWithRegistrar(
-      registry->GetRegistrarForPlugin("FlutterBluetoothClassicPlugin"));
   FlutterLibserialportPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("FlutterLibserialportPlugin"));
   FlutterTtsPluginRegisterWithRegistrar(

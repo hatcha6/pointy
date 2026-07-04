@@ -1,0 +1,6 @@
+// compat/win8: Flutter 3.19's isUsingGradle check only recognizes a Groovy
+// `build.gradle`, not our Kotlin-DSL `build.gradle.kts`. Without a Groovy file
+// it reads the manifest from the wrong path and wrongly reports Android
+// embedding v1, failing `flutter pub get` on every v2 plugin. This marker file
+// flips that check true; the real build config lives in build.gradle.kts and
+// Gradle never runs here anyway (Windows-only build).

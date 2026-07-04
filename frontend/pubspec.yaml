@@ -44,7 +44,10 @@ dependencies:
   flutter_libserialport: ^0.6.0
   esc_pos_utils_plus: ^2.0.4
   image: ^4.3.0
-  flutter_bluetooth_classic_serial: ^1.3.2
+  # compat/win8: flutter_bluetooth_classic_serial DROPPED — Android-only plugin
+  # (no Windows impl), unused by a USB-printer till, and its Android plugin
+  # definition trips Flutter 3.19's embedding-v2 check during the Windows build.
+  # bluetooth_print_transport_io.dart is stubbed to the no-op transport.
   # compat/win8: 0.3.3 floors at Dart 3.4 — cap at the 0.3.2 line.
   multicast_dns: '>=0.3.2 <0.3.3'
   # compat/win8: 2.3.2+ floors at Dart 3.4 — cap at 2.3.1 (classic
