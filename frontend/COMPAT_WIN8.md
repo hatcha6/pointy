@@ -223,6 +223,32 @@ This class of failure — opaque Flutter tooling errors — is fastest to solve 
 **reading the isolated SDK's own `flutter_tools` source** (`$SCRATCH/flutter/
 packages/flutter_tools/lib/src/…`), which is exactly how this was pinned down.
 
+### Windows CI: Visual Studio detection (the native build step)
+
+The one step that can't be validated off-Windows. The native build failed at
+CMake with *"Generator Visual Studio 16 2019 could not find any instance of
+Visual Studio."*
+
+Root cause (`flutter_tools/lib/src/windows/visual_studio.dart`): 3.19's
+`cmakeGenerator` returns **"Visual Studio 16 2019"** as its default whenever it
+can't positively identify a newer VS (`switch (_majorVersion) { case 17: …;
+case 16: default: 'Visual Studio 16 2019'; }`). `windows-latest` now maps to
+**windows-2025**, whose VS 2022 (17.12+) is newer than 3.19's vswhere-based
+detection understands, so it falls back to the 2019 generator — but the runner
+has no VS 2019, so CMake aborts. Main's Windows build works only because
+Flutter 3.38's detection reads the current VS.
+
+Fix in `.github/workflows/release-compat.yml` (build-windows-compat job), two
+independent paths to green:
+- `runs-on: windows-2022` — an older VS 2022 that 3.19 *can* detect → the
+  "Visual Studio 17 2022" generator, which CMake resolves; and
+- `choco install visualstudio2019buildtools visualstudio2019-workload-vctools`
+  — a deterministic backstop: if Flutter still emits "Visual Studio 16 2019",
+  CMake finds the freshly installed VS 2019 itself.
+
+The workflow lives on **both** `main` and `compat/win8` and must stay identical
+(GitHub may resolve a `workflow_dispatch` run's workflow file from either ref).
+
 ## Re-validating after a `main` merge
 
 A global-Flutter `dart analyze lib` (0 errors) is necessary but **not
