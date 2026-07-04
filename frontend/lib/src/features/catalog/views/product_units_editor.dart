@@ -330,7 +330,7 @@ class _UnitRowCard extends StatelessWidget {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  initialValue: row.unit.code,
+                  value: row.unit.code,
                   isDense: true,
                   decoration: InputDecoration(
                     labelText: l10n.productUnitPickLabel,
@@ -508,7 +508,7 @@ class _DefaultUnitPickers extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         DropdownButtonFormField<String>(
-          initialValue: _valueIfPresent(defaultSaleUnit, saleItems),
+          value: _valueIfPresent(defaultSaleUnit, saleItems),
           decoration: InputDecoration(
             labelText: l10n.productDefaultSaleUnitLabel,
             prefixIcon: const Icon(Icons.point_of_sale_outlined),
@@ -520,7 +520,7 @@ class _DefaultUnitPickers extends StatelessWidget {
         ),
         SizedBox(height: spacing.md),
         DropdownButtonFormField<String>(
-          initialValue: _valueIfPresent(defaultPurchaseUnit, purchaseItems),
+          value: _valueIfPresent(defaultPurchaseUnit, purchaseItems),
           decoration: InputDecoration(
             labelText: l10n.productDefaultPurchaseUnitLabel,
             prefixIcon: const Icon(Icons.local_shipping_outlined),

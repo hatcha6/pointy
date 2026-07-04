@@ -202,7 +202,7 @@ class _BrandMedallion extends StatelessWidget {
         boxShadow: elevated
             ? [
                 BoxShadow(
-                  color: colors.shadow.withValues(alpha: 0.16),
+                  color: colors.shadow.withOpacity(0.16),
                   blurRadius: diameter * 0.12,
                   offset: Offset(0, diameter * 0.05),
                 ),
@@ -476,7 +476,7 @@ class _CameraViewfinderState extends State<_CameraViewfinder>
         border: Border.all(color: colors.line),
         boxShadow: [
           BoxShadow(
-            color: colors.shadow.withValues(alpha: 0.14),
+            color: colors.shadow.withOpacity(0.14),
             blurRadius: metrics.gap * 1.4,
             offset: Offset(0, metrics.gap * 0.5),
           ),
@@ -493,7 +493,7 @@ class _CameraViewfinderState extends State<_CameraViewfinder>
               builder: (context, _) {
                 return CustomPaint(
                   painter: _ViewfinderOverlayPainter(
-                    bracketColor: Colors.white.withValues(alpha: 0.9),
+                    bracketColor: Colors.white.withOpacity(0.9),
                     sweepColor: colors.primary,
                     sweep: widget.isLoading ? -1 : _sweep.value,
                   ),
@@ -571,9 +571,9 @@ class _ViewfinderOverlayPainter extends CustomPainter {
         ..shader =
             LinearGradient(
               colors: [
-                sweepColor.withValues(alpha: 0),
-                sweepColor.withValues(alpha: 0.85),
-                sweepColor.withValues(alpha: 0),
+                sweepColor.withOpacity(0),
+                sweepColor.withOpacity(0.85),
+                sweepColor.withOpacity(0),
               ],
             ).createShader(
               Rect.fromLTWH(inset, y - 10, size.width - inset * 2, 20),
@@ -632,7 +632,7 @@ class _ScanPulseState extends State<_ScanPulse>
         builder: (context, _) {
           return CustomPaint(
             painter: _BarcodePainter(
-              color: colors.ink.withValues(alpha: 0.78),
+              color: colors.ink.withOpacity(0.78),
               sweepColor: colors.primary,
               sweep: widget.active ? _controller.value : -1,
             ),
@@ -708,9 +708,9 @@ class _BarcodePainter extends CustomPainter {
       final glow = Paint()
         ..shader = LinearGradient(
           colors: [
-            sweepColor.withValues(alpha: 0),
-            sweepColor.withValues(alpha: 0.9),
-            sweepColor.withValues(alpha: 0),
+            sweepColor.withOpacity(0),
+            sweepColor.withOpacity(0.9),
+            sweepColor.withOpacity(0),
           ],
         ).createShader(Rect.fromLTWH(0, y - 12, size.width, 24));
       canvas.drawRect(Rect.fromLTWH(0, y - 2, size.width, 4), glow);
@@ -811,7 +811,7 @@ class _ProductPhoto extends StatelessWidget {
         border: Border.all(color: colors.line),
         boxShadow: [
           BoxShadow(
-            color: colors.shadow.withValues(alpha: 0.12),
+            color: colors.shadow.withOpacity(0.12),
             blurRadius: metrics.gap * 1.4,
             offset: Offset(0, metrics.gap * 0.5),
           ),
@@ -840,7 +840,7 @@ class _ProductPhoto extends StatelessWidget {
           errorBuilder: (context, _, __) => Icon(
             Icons.inventory_2_outlined,
             size: side * 0.4,
-            color: colors.mutedInk.withValues(alpha: 0.5),
+            color: colors.mutedInk.withOpacity(0.5),
           ),
         ),
       ),
@@ -1064,9 +1064,9 @@ class _StockPill extends StatelessWidget {
         vertical: metrics.gap * 0.4,
       ),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(metrics.gap * 1.5),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
+        border: Border.all(color: color.withOpacity(0.5)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1210,7 +1210,7 @@ class _MessageContent extends StatelessWidget {
               width: (metrics.scale * 120).clamp(88, 240),
               height: (metrics.scale * 120).clamp(88, 240),
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
+                color: color.withOpacity(0.12),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -1284,7 +1284,7 @@ class _CornerControls extends StatelessWidget {
                   child: Icon(
                     Icons.lock_outline_rounded,
                     size: (metrics.scale * 22).clamp(18, 34),
-                    color: colors.mutedInk.withValues(alpha: 0.55),
+                    color: colors.mutedInk.withOpacity(0.55),
                   ),
                 ),
               ),

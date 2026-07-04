@@ -7,8 +7,6 @@ import 'package:intl/intl.dart' as intl;
 
 import 'app_localizations_ar.dart';
 
-// ignore_for_file: type=lint
-
 /// Callers can lookup localized strings with an instance of AppLocalizations
 /// returned by `AppLocalizations.of(context)`.
 ///
@@ -61,8 +59,7 @@ import 'app_localizations_ar.dart';
 /// be consistent with the languages listed in the AppLocalizations.supportedLocales
 /// property.
 abstract class AppLocalizations {
-  AppLocalizations(String locale)
-      : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+  AppLocalizations(String locale) : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -70,8 +67,7 @@ abstract class AppLocalizations {
     return Localizations.of<AppLocalizations>(context, AppLocalizations);
   }
 
-  static const LocalizationsDelegate<AppLocalizations> delegate =
-      _AppLocalizationsDelegate();
+  static const LocalizationsDelegate<AppLocalizations> delegate = _AppLocalizationsDelegate();
 
   /// A list of this localizations delegate along with the default localizations
   /// delegates.
@@ -83,8 +79,7 @@ abstract class AppLocalizations {
   /// Additional delegates can be added by appending to this list in
   /// MaterialApp. This list does not have to be used at all if a custom list
   /// of delegates is preferred or required.
-  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
-      <LocalizationsDelegate<dynamic>>[
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates = <LocalizationsDelegate<dynamic>>[
     delegate,
     GlobalMaterialLocalizations.delegate,
     GlobalCupertinoLocalizations.delegate,
@@ -92,7 +87,9 @@ abstract class AppLocalizations {
   ];
 
   /// A list of this localizations delegate's supported locales.
-  static const List<Locale> supportedLocales = <Locale>[Locale('ar')];
+  static const List<Locale> supportedLocales = <Locale>[
+    Locale('ar')
+  ];
 
   /// Application title.
   ///
@@ -668,8 +665,7 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'{date} بواسطة {user} - {summary}'**
-  String activityLogEventSubtitleWithSummary(
-      String date, String user, String summary);
+  String activityLogEventSubtitleWithSummary(String date, String user, String summary);
 
   /// Risk score label.
   ///
@@ -3393,15 +3389,13 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'{name}: المتبقي {quantity}، تاريخ الانتهاء {date}'**
-  String smartNotificationExpiringStockDetailBasic(
-      String name, int quantity, String date);
+  String smartNotificationExpiringStockDetailBasic(String name, int quantity, String date);
 
   /// Expiring stock detail with source context.
   ///
   /// In ar, this message translates to:
   /// **'{name}: المتبقي {quantity}، تاريخ الانتهاء {date}، المرجع {context}'**
-  String smartNotificationExpiringStockDetail(
-      String name, int quantity, String date, String context);
+  String smartNotificationExpiringStockDetail(String name, int quantity, String date, String context);
 
   /// No description provided for @smartNotificationDustyInventoryTitle.
   ///
@@ -3545,8 +3539,7 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'{runNumber}: من {start} إلى {end}'**
-  String smartNotificationPayrollReadyDetail(
-      String runNumber, String start, String end);
+  String smartNotificationPayrollReadyDetail(String runNumber, String start, String end);
 
   /// No description provided for @smartNotificationOperationsErrorTitle.
   ///
@@ -6792,15 +6785,13 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'تنبيه عند {count} قطع أو أقل، البيع فوق المخزون: {oversellStatus}، منع الخسارة: {lossStatus}'**
-  String inventorySettingsSummary(
-      int count, String oversellStatus, String lossStatus);
+  String inventorySettingsSummary(int count, String oversellStatus, String lossStatus);
 
   /// Summary for payment settings in the shop settings index.
   ///
   /// In ar, this message translates to:
   /// **'{count, plural, =0{لا توجد طرق دفع مفعلة} =1{طريقة دفع واحدة مفعلة} =2{طريقتان مفعّلتان} other{{count} طرق دفع مفعلة}}، بطاقة {cardCommission}%، تحويل {transferCommission}%، إثبات البطاقة: {receiptStatus}، {terminalStatus}'**
-  String paymentSettingsSummary(num count, String cardCommission,
-      String transferCommission, String receiptStatus, String terminalStatus);
+  String paymentSettingsSummary(num count, String cardCommission, String transferCommission, String receiptStatus, String terminalStatus);
 
   /// No description provided for @analyticsExportAllEventsSummary.
   ///
@@ -7022,8 +7013,7 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'سيتم الحفظ في {path}. المساحة المتاحة {freeSpace} من {totalSpace}.'**
-  String backupDestinationDetails(
-      String path, String freeSpace, String totalSpace);
+  String backupDestinationDetails(String path, String freeSpace, String totalSpace);
 
   /// No description provided for @backupNoWritableDestinationsMessage.
   ///
@@ -7185,8 +7175,7 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'{status}، {completedAt}، {filename}'**
-  String backupJobHistorySummary(
-      String status, String completedAt, String filename);
+  String backupJobHistorySummary(String status, String completedAt, String filename);
 
   /// No description provided for @backupOperationBackup.
   ///
@@ -11464,8 +11453,7 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'بديل: {product} × {quantity} بتكلفة {unitCost}'**
-  String purchaseExchangeReplacementHistoryLine(
-      String product, int quantity, String unitCost);
+  String purchaseExchangeReplacementHistoryLine(String product, int quantity, String unitCost);
 
   /// Message shown after a purchase order is submitted from details.
   ///
@@ -16361,8 +16349,7 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'{redemptions} استخدام • {documents} مستند • صافي {amount}'**
-  String discountDetailsChannelBreakdownValue(
-      int redemptions, int documents, String amount);
+  String discountDetailsChannelBreakdownValue(int redemptions, int documents, String amount);
 
   /// No description provided for @discountDetailsBeneficiariesEmpty.
   ///
@@ -16962,15 +16949,13 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'راتب شهري ثابت {amount} + {percent}% مبيعات'**
-  String employeeMonthlyFixedPlusCommissionPlanLabel(
-      String amount, String percent);
+  String employeeMonthlyFixedPlusCommissionPlanLabel(String amount, String percent);
 
   /// Active employee unit-based compensation plan label.
   ///
   /// In ar, this message translates to:
   /// **'{salaryType} - {amount} × {units}'**
-  String employeeUnitBasedPlanLabel(
-      String salaryType, String amount, String units);
+  String employeeUnitBasedPlanLabel(String salaryType, String amount, String units);
 
   /// No description provided for @employeeNoDetails.
   ///
@@ -22847,8 +22832,7 @@ abstract class AppLocalizations {
   String get campaignNoSendPermission;
 }
 
-class _AppLocalizationsDelegate
-    extends LocalizationsDelegate<AppLocalizations> {
+class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
   const _AppLocalizationsDelegate();
 
   @override
@@ -22857,23 +22841,24 @@ class _AppLocalizationsDelegate
   }
 
   @override
-  bool isSupported(Locale locale) =>
-      <String>['ar'].contains(locale.languageCode);
+  bool isSupported(Locale locale) => <String>['ar'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
 }
 
 AppLocalizations lookupAppLocalizations(Locale locale) {
+
+
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
-    case 'ar':
-      return AppLocalizationsAr();
+    case 'ar': return AppLocalizationsAr();
   }
 
   throw FlutterError(
-      'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
-      'an issue with the localizations generation tool. Please file an issue '
-      'on GitHub with a reproducible sample app and the gen-l10n configuration '
-      'that was used.');
+    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+    'an issue with the localizations generation tool. Please file an issue '
+    'on GitHub with a reproducible sample app and the gen-l10n configuration '
+    'that was used.'
+  );
 }

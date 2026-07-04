@@ -468,7 +468,7 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
                       ),
                       DropdownButtonFormField<ReceiptCutMode>(
                         key: ValueKey(endpoint.cutMode),
-                        initialValue: endpoint.cutMode,
+                        value: endpoint.cutMode,
                         isExpanded: true,
                         decoration: InputDecoration(
                           labelText: l10n.printerCutModeLabel,
@@ -527,7 +527,7 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
                               BarcodeLabelPrinterLanguage
                             >(
                               key: ValueKey(endpoint.barcodeLabelLanguage),
-                              initialValue: endpoint.barcodeLabelLanguage,
+                              value: endpoint.barcodeLabelLanguage,
                               isExpanded: true,
                               decoration: InputDecoration(
                                 labelText:
@@ -724,7 +724,7 @@ class _DiscoveredPrinterDropdown extends StatelessWidget {
             Expanded(
               child: DropdownButtonFormField<String>(
                 key: ValueKey('$selectedKey:${options.length}'),
-                initialValue: hasSelectedPrinter ? selectedKey : null,
+                value: hasSelectedPrinter ? selectedKey : null,
                 isExpanded: true,
                 decoration: InputDecoration(
                   labelText: l10n.discoveredPrintersLabel,

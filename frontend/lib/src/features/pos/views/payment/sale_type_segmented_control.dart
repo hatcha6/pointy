@@ -61,7 +61,7 @@ class SaleTypeSegmentedControl extends StatelessWidget {
               backgroundColor: colors.surface,
               foregroundColor: colors.ink,
               selectedBackgroundColor: Color.alphaBlend(
-                colors.primaryStrong.withValues(alpha: 0.14),
+                colors.primaryStrong.withOpacity(0.14),
                 colors.surface,
               ),
               selectedForegroundColor: colors.primaryDark,

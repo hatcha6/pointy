@@ -36,19 +36,21 @@ class PointyUnsavedChangesGuard extends StatelessWidget {
       // Always intercept so [isDirty] is consulted live rather than at build
       // time; a clean surface pops immediately inside the callback.
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
+      // compat/win8: Flutter 3.19's PopScope predates onPopInvokedWithResult —
+      // use the single-arg onPopInvoked (no pop result to forward here anyway).
+      onPopInvoked: (didPop) async {
         if (didPop) {
           return;
         }
         final navigator = Navigator.of(context);
         if (!isDirty()) {
-          navigator.pop(result);
+          navigator.pop();
           return;
         }
         final confirmed = await confirmDiscardUnsavedChanges(context);
         if (confirmed == true) {
           onDiscard?.call();
-          navigator.pop(result);
+          navigator.pop();
         }
       },
       child: child,

@@ -664,7 +664,7 @@ class _Frame extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF101828).withValues(alpha: 0.18),
+                color: const Color(0xFF101828).withOpacity(0.18),
                 blurRadius: 28,
                 offset: const Offset(0, 12),
               ),

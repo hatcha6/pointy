@@ -48,7 +48,7 @@ class _ReentrySheet extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: colors.warning.withValues(alpha: 0.12),
+                  color: colors.warning.withOpacity(0.12),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(

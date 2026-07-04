@@ -83,7 +83,7 @@ class PointyDetailHero extends StatelessWidget {
                 height: 44,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: onPrimary.withValues(alpha: 0.16),
+                  color: onPrimary.withOpacity(0.16),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, color: onPrimary),
@@ -128,7 +128,7 @@ class PointyDetailHero extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: textTheme.bodyMedium?.copyWith(
-                          color: onPrimary.withValues(alpha: 0.85),
+                          color: onPrimary.withOpacity(0.85),
                         ),
                       ),
                     ),
@@ -144,7 +144,7 @@ class PointyDetailHero extends StatelessWidget {
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: textTheme.bodyMedium?.copyWith(
-                color: onPrimary.withValues(alpha: 0.85),
+                color: onPrimary.withOpacity(0.85),
               ),
             ),
           ],
@@ -172,7 +172,7 @@ class _HeroPill extends StatelessWidget {
     const onPrimary = PointyColors.surface;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: onPrimary.withValues(alpha: 0.16),
+        color: onPrimary.withOpacity(0.16),
         borderRadius: BorderRadius.circular(PointyRadii.chip),
       ),
       child: Padding(

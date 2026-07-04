@@ -176,7 +176,7 @@ class _MonitorStatusCard extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Color.alphaBlend(
-                  accent.withValues(alpha: 0.12),
+                  accent.withOpacity(0.12),
                   colors.surface,
                 ),
               ),

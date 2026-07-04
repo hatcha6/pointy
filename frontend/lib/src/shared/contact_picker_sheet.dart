@@ -49,7 +49,7 @@ class ContactSelectionTile extends StatelessWidget {
     final hasValue = value.trim().isNotEmpty;
     final iconColor = enabled
         ? colors.mutedInk
-        : colors.ink.withValues(alpha: 0.38);
+        : colors.ink.withOpacity(0.38);
 
     return Material(
       color: colors.surface,
@@ -650,7 +650,7 @@ class _CustomerFormState extends State<CustomerForm> {
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<CustomerGender>(
-              initialValue: _gender,
+              value: _gender,
               decoration: InputDecoration(labelText: l10n.genderLabel),
               items: [
                 for (final gender in CustomerGender.values)

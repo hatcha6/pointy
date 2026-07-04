@@ -61,7 +61,7 @@ class TenderLineEditor extends StatelessWidget {
     return Material(
       color: isSelected
           ? Color.alphaBlend(
-              colors.primaryStrong.withValues(alpha: 0.06),
+              colors.primaryStrong.withOpacity(0.06),
               colors.surface,
             )
           : colors.surface,
@@ -92,7 +92,7 @@ class TenderLineEditor extends StatelessWidget {
               );
               final methodField = DropdownButtonFormField<PaymentMethod>(
                 key: ValueKey('payment_tender_method_$index'),
-                initialValue: method,
+                value: method,
                 decoration: InputDecoration(labelText: methodLabel),
                 items: [
                   for (final paymentMethod in enabledMethods)

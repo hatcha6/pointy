@@ -95,7 +95,7 @@ class _HeaderIcon extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Color.alphaBlend(
-          colors.primaryStrong.withValues(alpha: 0.10),
+          colors.primaryStrong.withOpacity(0.10),
           colors.surface,
         ),
         borderRadius: BorderRadius.circular(PointyRadii.card),
@@ -188,7 +188,7 @@ class QueryFilterOptionTile extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final foreground = isSelected ? colors.primaryDark : colors.ink;
     final selectedFill = Color.alphaBlend(
-      colors.primaryStrong.withValues(alpha: 0.10),
+      colors.primaryStrong.withOpacity(0.10),
       colors.surface,
     );
 

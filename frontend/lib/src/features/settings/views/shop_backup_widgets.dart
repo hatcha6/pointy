@@ -430,7 +430,7 @@ class _BackupScheduleFields extends StatelessWidget {
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
           key: const ValueKey('backup_destination_field'),
-          initialValue: destinationPath.isEmpty ? null : destinationPath,
+          value: destinationPath.isEmpty ? null : destinationPath,
           decoration: InputDecoration(
             labelText: l10n.backupDestinationLabel,
             errorText: destinationErrorText,
@@ -710,7 +710,7 @@ class _BackupJobHistoryRow extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.surfaceSunken.withValues(alpha: 0.32),
+        color: colors.surfaceSunken.withOpacity(0.32),
         borderRadius: BorderRadius.circular(8),
       ),
       child: ListTile(

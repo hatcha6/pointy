@@ -32,7 +32,7 @@ class ReceiptToggleRow extends StatelessWidget {
       child: Material(
         color: value
             ? Color.alphaBlend(
-                colors.primaryStrong.withValues(alpha: 0.06),
+                colors.primaryStrong.withOpacity(0.06),
                 colors.surface,
               )
             : colors.surface,

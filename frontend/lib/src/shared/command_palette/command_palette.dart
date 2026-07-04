@@ -423,7 +423,7 @@ class CommandPaletteScopeState extends State<CommandPaletteScope> {
       context: context,
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: PointyColors.ink.withValues(alpha: 0.45),
+      barrierColor: PointyColors.ink.withOpacity(0.45),
       transitionDuration: const Duration(milliseconds: 180),
       pageBuilder: (dialogContext, animation, secondaryAnimation) =>
           _CommandPaletteSheet(sources: widget.sources),

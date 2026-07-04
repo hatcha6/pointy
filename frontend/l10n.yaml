@@ -2,3 +2,9 @@ arb-dir: lib/l10n
 template-arb-file: app_ar.arb
 output-dir: lib/l10n/generated
 output-localization-file: app_localizations.dart
+# compat/win8: Flutter 3.19's `gen-l10n` defaults synthetic-package to TRUE,
+# which deletes lib/l10n/generated/*.dart and emits to .dart_tool/flutter_gen
+# instead — breaking our `package:pointy_frontend/l10n/generated/...` imports
+# during the CI build. Pin it false so output stays in output-dir on 3.19.
+# (Flutter 3.22+ made false the default; harmless there.)
+synthetic-package: false

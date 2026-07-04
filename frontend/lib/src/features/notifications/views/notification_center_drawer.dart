@@ -229,7 +229,7 @@ class _NotificationAlertRow extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.surface,
-        border: Border.all(color: severityColor.withValues(alpha: 0.22)),
+        border: Border.all(color: severityColor.withOpacity(0.22)),
         borderRadius: BorderRadius.circular(PointyRadii.card),
       ),
       child: Padding(
@@ -245,7 +245,7 @@ class _NotificationAlertRow extends StatelessWidget {
                   height: 36,
                   decoration: BoxDecoration(
                     color: Color.alphaBlend(
-                      severityColor.withValues(alpha: 0.10),
+                      severityColor.withOpacity(0.10),
                       colors.surface,
                     ),
                     borderRadius: BorderRadius.circular(PointyRadii.button),

@@ -49,7 +49,7 @@ class _VariancePromptSheet extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: colors.warning.withValues(alpha: 0.12),
+                  color: colors.warning.withOpacity(0.12),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -141,13 +141,13 @@ class _CompareCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: emphasized
             ? Color.alphaBlend(
-                PointyColors.primary.withValues(alpha: 0.06),
+                PointyColors.primary.withOpacity(0.06),
                 colors.surface,
               )
             : colors.surfaceSunken,
         border: Border.all(
           color: emphasized
-              ? PointyColors.primary.withValues(alpha: 0.30)
+              ? PointyColors.primary.withOpacity(0.30)
               : colors.line,
         ),
         borderRadius: BorderRadius.circular(PointyRadii.input),

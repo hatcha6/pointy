@@ -33,13 +33,13 @@ class PointyAmountDisplay extends StatelessWidget {
       decoration: BoxDecoration(
         color: emphasized
             ? Color.alphaBlend(
-                colors.primaryStrong.withValues(alpha: 0.10),
+                colors.primaryStrong.withOpacity(0.10),
                 colors.surface,
               )
             : colors.subtleFill,
         border: Border.all(
           color: emphasized
-              ? colors.primaryStrong.withValues(alpha: 0.30)
+              ? colors.primaryStrong.withOpacity(0.30)
               : colors.line,
         ),
         borderRadius: BorderRadius.circular(PointyRadii.card),

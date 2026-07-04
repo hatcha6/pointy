@@ -199,7 +199,7 @@ class _SelectableRow extends StatelessWidget {
     final colors = context.pointyColors;
     return ColoredBox(
       color: selected
-          ? colors.primaryContainer.withValues(alpha: 0.35)
+          ? colors.primaryContainer.withOpacity(0.35)
           : Colors.transparent,
       child: Row(
         children: [

@@ -100,7 +100,7 @@ class CartLineTile extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: selected
-              ? colors.primaryContainer.withValues(alpha: 0.35)
+              ? colors.primaryContainer.withOpacity(0.35)
               : null,
           border: BorderDirectional(
             start: BorderSide(

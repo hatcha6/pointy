@@ -292,10 +292,10 @@ class _VarianceStat extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: active
-            ? Color.alphaBlend(color.withValues(alpha: 0.08), colors.surface)
+            ? Color.alphaBlend(color.withOpacity(0.08), colors.surface)
             : colors.surfaceSunken,
         border: Border.all(
-          color: active ? color.withValues(alpha: 0.22) : colors.line,
+          color: active ? color.withOpacity(0.22) : colors.line,
         ),
         borderRadius: BorderRadius.circular(PointyRadii.chip),
       ),
@@ -351,7 +351,7 @@ class _MatchedState extends StatelessWidget {
                 width: 96,
                 height: 96,
                 decoration: BoxDecoration(
-                  color: colors.success.withValues(alpha: 0.10),
+                  color: colors.success.withOpacity(0.10),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -481,8 +481,8 @@ class _GapChip extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Color.alphaBlend(color.withValues(alpha: 0.12), colors.surface),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
+        color: Color.alphaBlend(color.withOpacity(0.12), colors.surface),
+        border: Border.all(color: color.withOpacity(0.24)),
         borderRadius: BorderRadius.circular(PointyRadii.chip),
       ),
       child: Padding(

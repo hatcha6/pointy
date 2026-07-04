@@ -356,11 +356,11 @@ class _DeviceAvatar extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: Color.alphaBlend(
-          statusColor.withValues(alpha: 0.12),
+          statusColor.withOpacity(0.12),
           colors.surface,
         ),
         shape: BoxShape.circle,
-        border: Border.all(color: statusColor.withValues(alpha: 0.22)),
+        border: Border.all(color: statusColor.withOpacity(0.22)),
       ),
       child: Icon(priceCheckerTransportIcon(device), color: statusColor),
     );

@@ -100,7 +100,7 @@ class ProductParentFormFields extends StatelessWidget {
         if (onUnitChanged != null) ...[
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
-            initialValue: unit,
+            value: unit,
             decoration: InputDecoration(
               labelText: l10n.productUnitLabel,
               prefixIcon: const Icon(Icons.straighten_outlined),

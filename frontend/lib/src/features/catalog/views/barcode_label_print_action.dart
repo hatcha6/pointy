@@ -426,7 +426,7 @@ class _BarcodeLabelPreview extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.surfaceSunken.withValues(alpha: 0.45),
+        color: colors.surfaceSunken.withOpacity(0.45),
         border: Border.all(color: colors.line),
         borderRadius: BorderRadius.circular(8),
       ),

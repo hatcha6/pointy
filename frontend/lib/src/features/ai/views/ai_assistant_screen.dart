@@ -3041,7 +3041,7 @@ class _PendingAttachmentTile extends StatelessWidget {
           child: Tooltip(
             message: l10n.aiAssistantRemoveAttachment,
             child: Material(
-              color: Colors.black.withValues(alpha: 0.55),
+              color: Colors.black.withOpacity(0.55),
               shape: const CircleBorder(),
               child: InkWell(
                 customBorder: const CircleBorder(),

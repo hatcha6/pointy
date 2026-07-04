@@ -170,8 +170,8 @@ class OperationsIconBadge extends StatelessWidget {
     final colors = context.pointyColors;
     final tint = color ?? colors.primaryStrong;
     final background = onDark
-        ? colors.surface.withValues(alpha: 0.14)
-        : tint.withValues(alpha: 0.12);
+        ? colors.surface.withOpacity(0.14)
+        : tint.withOpacity(0.12);
     final foreground = onDark ? colors.surface : tint;
     return Container(
       width: size,
@@ -208,10 +208,10 @@ class JobStageProgressBar extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final strong = onDark ? colors.surface : colors.ink;
     final muted = onDark
-        ? colors.surface.withValues(alpha: 0.72)
+        ? colors.surface.withOpacity(0.72)
         : colors.mutedInk;
     final track = onDark
-        ? colors.surface.withValues(alpha: 0.18)
+        ? colors.surface.withOpacity(0.18)
         : colors.surfaceSunken;
     final fill = onDark ? colors.surface : PointyColors.primary;
     final safeTotal = total <= 0 ? 1 : total;

@@ -49,17 +49,17 @@ abstract final class PointyTheme {
     return baseTheme.copyWith(
       scaffoldBackgroundColor: c.page,
       textTheme: textTheme,
-      hoverColor: c.ink.withValues(alpha: 0.04),
-      focusColor: c.ink.withValues(alpha: 0.08),
-      highlightColor: c.ink.withValues(alpha: 0.06),
-      splashColor: c.ink.withValues(alpha: 0.10),
+      hoverColor: c.ink.withOpacity(0.04),
+      focusColor: c.ink.withOpacity(0.08),
+      highlightColor: c.ink.withOpacity(0.06),
+      splashColor: c.ink.withOpacity(0.10),
       extensions: [c],
       appBarTheme: PointyComponentStyles.appBarTheme(c, textTheme),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: c.surface,
         surfaceTintColor: Colors.transparent,
         modalBackgroundColor: c.surface,
-        modalBarrierColor: c.shadow.withValues(alpha: 0.42),
+        modalBarrierColor: c.shadow.withOpacity(0.42),
         showDragHandle: true,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(
@@ -67,7 +67,7 @@ abstract final class PointyTheme {
           ),
         ),
       ),
-      cardTheme: CardThemeData(
+      cardTheme: CardTheme(
         color: c.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
@@ -75,7 +75,7 @@ abstract final class PointyTheme {
         shape: PointyComponentStyles.outlinedShape(PointyRadii.card, c.line),
       ),
       chipTheme: PointyComponentStyles.chipTheme(c, textTheme),
-      dialogTheme: DialogThemeData(
+      dialogTheme: DialogTheme(
         backgroundColor: c.surface,
         surfaceTintColor: Colors.transparent,
         shape: PointyComponentStyles.shape(PointyRadii.dialog),

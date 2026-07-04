@@ -585,7 +585,7 @@ class _IconBadge extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: color.withOpacity(0.12),
         shape: BoxShape.circle,
       ),
       child: Icon(icon, color: color, size: iconSize ?? size * 0.5),
@@ -703,7 +703,7 @@ class _StartFormState extends State<_StartForm> {
           if (_scope == StockCountScope.category) ...[
             SizedBox(height: spacing.md),
             DropdownButtonFormField<ProductCategory>(
-              initialValue: _selectedCategory,
+              value: _selectedCategory,
               isExpanded: true,
               decoration: InputDecoration(
                 labelText: l10n.stockCountSelectCategory,

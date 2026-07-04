@@ -235,7 +235,7 @@ class _ShopLogoPreview extends StatelessWidget {
       alignment: Alignment.center,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: colors.primaryContainer.withValues(alpha: 0.24),
+        color: colors.primaryContainer.withOpacity(0.24),
         borderRadius: BorderRadius.circular(8),
       ),
       child: child,
@@ -515,7 +515,7 @@ class _TrustedCardTerminalListField extends StatelessWidget {
     final colors = context.pointyColors;
     final borderColor = enabled
         ? colors.line
-        : colors.line.withValues(alpha: 0.55);
+        : colors.line.withOpacity(0.55);
     final foregroundColor = enabled ? colors.ink : colors.mutedInk;
 
     return DecoratedBox(
@@ -603,7 +603,7 @@ class _TrustedCardTerminalListRow extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.surfaceSunken.withValues(alpha: 0.38),
+        color: colors.surfaceSunken.withOpacity(0.38),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
@@ -824,7 +824,7 @@ class _EditableTrustedCardTerminalRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
 
     return Material(
-      color: context.pointyColors.surfaceSunken.withValues(alpha: 0.38),
+      color: context.pointyColors.surfaceSunken.withOpacity(0.38),
       borderRadius: BorderRadius.circular(8),
       child: ListTile(
         dense: true,
@@ -955,7 +955,7 @@ class _AnalyticsExportFields extends StatelessWidget {
       children: [
         DropdownButtonFormField<AnalyticsExportFormat>(
           key: const ValueKey('analytics_export_format_field'),
-          initialValue: format,
+          value: format,
           decoration: InputDecoration(
             labelText: l10n.analyticsExportFormatLabel,
             prefixIcon: const Icon(Icons.table_chart_outlined),
@@ -1027,7 +1027,7 @@ class _AnalyticsExportFields extends StatelessWidget {
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
           key: const ValueKey('analytics_export_event_type_field'),
-          initialValue: eventType,
+          value: eventType,
           decoration: InputDecoration(
             labelText: l10n.analyticsExportEventTypeLabel,
             prefixIcon: const Icon(Icons.category_outlined),
@@ -1044,7 +1044,7 @@ class _AnalyticsExportFields extends StatelessWidget {
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
           key: const ValueKey('analytics_export_severity_field'),
-          initialValue: severity,
+          value: severity,
           decoration: InputDecoration(
             labelText: l10n.analyticsExportSeverityLabel,
             prefixIcon: const Icon(Icons.priority_high_outlined),
@@ -1059,7 +1059,7 @@ class _AnalyticsExportFields extends StatelessWidget {
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
           key: const ValueKey('analytics_export_source_field'),
-          initialValue: source,
+          value: source,
           decoration: InputDecoration(
             labelText: l10n.analyticsExportSourceLabel,
             prefixIcon: const Icon(Icons.hub_outlined),

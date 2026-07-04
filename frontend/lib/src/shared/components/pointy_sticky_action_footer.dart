@@ -44,7 +44,7 @@ class PointyStickyActionFooter extends StatelessWidget {
             : null,
         boxShadow: [
           BoxShadow(
-            color: colors.shadow.withValues(alpha: 0.06),
+            color: colors.shadow.withOpacity(0.06),
             offset: const Offset(0, -2),
             blurRadius: 8,
           ),

@@ -244,7 +244,7 @@ class _PurchaseReplacementLineInput extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final productField = DropdownButtonFormField<int>(
-      initialValue: editor.option.variantId,
+      value: editor.option.variantId,
       decoration: InputDecoration(
         labelText: l10n.purchaseExchangeReplacementProductLabel,
         isDense: true,

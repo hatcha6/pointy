@@ -428,7 +428,7 @@ class _SalesChannelCreateDialogState extends State<_SalesChannelCreateDialog> {
             ),
             SizedBox(height: spacing.md),
             DropdownButtonFormField<SalesChannelType>(
-              initialValue: _type,
+              value: _type,
               decoration: InputDecoration(
                 labelText: l10n.salesChannelTypeLabel,
               ),

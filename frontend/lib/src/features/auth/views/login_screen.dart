@@ -120,11 +120,11 @@ class _LoginLayout extends StatelessWidget {
       return DecoratedBox(
         decoration: BoxDecoration(
           color: Color.alphaBlend(
-            colors.primaryStrong.withValues(alpha: 0.08),
+            colors.primaryStrong.withOpacity(0.08),
             colors.surface,
           ),
           border: Border.all(
-            color: colors.primaryStrong.withValues(alpha: 0.12),
+            color: colors.primaryStrong.withOpacity(0.12),
           ),
           borderRadius: BorderRadius.circular(PointyRadii.card),
         ),
@@ -245,7 +245,7 @@ class _LoginMark extends StatelessWidget {
           borderRadius: radius,
           boxShadow: [
             BoxShadow(
-              color: colors.primaryStrong.withValues(alpha: 0.16),
+              color: colors.primaryStrong.withOpacity(0.16),
               blurRadius: 18,
               offset: const Offset(0, 10),
             ),

@@ -523,7 +523,7 @@ class _QuickAccessChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.primaryContainer,
         borderRadius: BorderRadius.circular(PointyRadii.chip),
-        border: Border.all(color: colors.primaryStrong.withValues(alpha: 0.35)),
+        border: Border.all(color: colors.primaryStrong.withOpacity(0.35)),
       ),
       child: Padding(
         padding: const EdgeInsetsDirectional.only(start: 10, end: 4),

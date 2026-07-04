@@ -327,7 +327,7 @@ class _UsageModeOption extends StatelessWidget {
 
     return Material(
       color: selected
-          ? colors.primaryContainer.withValues(alpha: 0.35)
+          ? colors.primaryContainer.withOpacity(0.35)
           : colors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),

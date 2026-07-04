@@ -104,7 +104,7 @@ class RoleAvatar extends StatelessWidget {
     final presentation = rolePresentationFor(context, role);
     return CircleAvatar(
       radius: radius,
-      backgroundColor: presentation.color.withValues(alpha: 0.14),
+      backgroundColor: presentation.color.withOpacity(0.14),
       child: Icon(
         presentation.icon,
         color: presentation.color,

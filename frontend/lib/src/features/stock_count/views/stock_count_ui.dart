@@ -67,10 +67,10 @@ class StockCountScopeChip extends StatelessWidget {
 
     final foreground = onDark ? colors.surface : colors.mutedInk;
     final background = onDark
-        ? colors.surface.withValues(alpha: 0.12)
+        ? colors.surface.withOpacity(0.12)
         : colors.subtleFill;
     final border = onDark
-        ? colors.surface.withValues(alpha: 0.18)
+        ? colors.surface.withOpacity(0.18)
         : colors.line;
 
     return DecoratedBox(
@@ -130,10 +130,10 @@ class StockCountProgressBar extends StatelessWidget {
 
     final strong = onDark ? colors.surface : colors.ink;
     final muted = onDark
-        ? colors.surface.withValues(alpha: 0.72)
+        ? colors.surface.withOpacity(0.72)
         : colors.mutedInk;
     final track = onDark
-        ? colors.surface.withValues(alpha: 0.16)
+        ? colors.surface.withOpacity(0.16)
         : colors.surfaceSunken;
     final fill = onDark ? colors.surface : PointyColors.primary;
     final remaining = (total - counted).clamp(0, total);

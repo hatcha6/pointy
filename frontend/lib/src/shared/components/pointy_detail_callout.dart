@@ -47,7 +47,7 @@ class PointyDetailCallout extends StatelessWidget {
         ? colors.primaryDark
         : accent;
     final background = Color.alphaBlend(
-      accent.withValues(alpha: 0.10),
+      accent.withOpacity(0.10),
       colors.surface,
     );
 
@@ -55,7 +55,7 @@ class PointyDetailCallout extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(PointyRadii.chip),
-        border: Border.all(color: accent.withValues(alpha: 0.20)),
+        border: Border.all(color: accent.withOpacity(0.20)),
       ),
       padding: EdgeInsets.all(spacing.md),
       child: Row(

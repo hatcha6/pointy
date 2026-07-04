@@ -400,7 +400,7 @@ class _LedgerEntryTile extends StatelessWidget {
     return ListTile(
       leading: CircleAvatar(
         radius: 18,
-        backgroundColor: color.withValues(alpha: 0.16),
+        backgroundColor: color.withOpacity(0.16),
         child: Icon(expenseSourceIcon(entry.source), size: 18, color: color),
       ),
       title: Text(
@@ -451,7 +451,7 @@ class _SourceBadge extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
+          color: color.withOpacity(0.12),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Text(
@@ -585,7 +585,7 @@ class _ExpenseEditorDialogState extends State<_ExpenseEditorDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               DropdownButtonFormField<int>(
-                initialValue: _categoryId,
+                value: _categoryId,
                 isExpanded: true,
                 decoration: InputDecoration(
                   labelText: l10n.expenseCategoryLabel,
@@ -624,7 +624,7 @@ class _ExpenseEditorDialogState extends State<_ExpenseEditorDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<ExpensePaymentMethod>(
-                initialValue: _method,
+                value: _method,
                 isExpanded: true,
                 decoration: InputDecoration(
                   labelText: l10n.expensePaymentMethodLabel,

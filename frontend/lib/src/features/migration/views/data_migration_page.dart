@@ -214,7 +214,7 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
           ),
           SizedBox(height: spacing.sm),
           DropdownButtonFormField<String>(
-            initialValue: _systemKey,
+            value: _systemKey,
             isExpanded: true,
             decoration: InputDecoration(
               labelText: l10n.migrationSystemLabel,

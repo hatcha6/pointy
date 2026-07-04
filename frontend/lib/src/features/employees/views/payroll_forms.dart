@@ -96,7 +96,7 @@ class _CreateEmployeeFormState extends State<CreateEmployeeForm> {
           validator: (_) => null,
         ),
         DropdownButtonFormField<EmploymentType>(
-          initialValue: _employmentType,
+          value: _employmentType,
           decoration: InputDecoration(labelText: l10n.employeeTypeField),
           items: [
             for (final type in EmploymentType.values)
@@ -239,7 +239,7 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
       title: l10n.addCompensationPlanTitle(widget.employee.fullName),
       children: [
         DropdownButtonFormField<SalaryType>(
-          initialValue: _salaryType,
+          value: _salaryType,
           decoration: InputDecoration(labelText: l10n.salaryTypeField),
           items: SalaryType.values
               .map(
@@ -326,7 +326,7 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
           ),
         if (_usesOperationsCommission)
           DropdownButtonFormField<OperationsCommissionBase>(
-            initialValue: _operationsCommissionBase,
+            value: _operationsCommissionBase,
             decoration: InputDecoration(
               labelText: l10n.operationsCommissionBaseField,
               helperText: operationsCommissionBaseHelper(
@@ -542,7 +542,7 @@ class _CreatePayrollRunFormState extends State<CreatePayrollRunForm> {
           )
         else
           DropdownButtonFormField<Employee>(
-            initialValue: _employee,
+            value: _employee,
             decoration: InputDecoration(labelText: l10n.payrollEmployeeField),
             items: [
               for (final employee in employeesWithPlans)

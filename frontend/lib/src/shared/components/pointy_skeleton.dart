@@ -57,11 +57,11 @@ class _PointySkeletonState extends State<PointySkeleton>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colors = context.pointyColors;
     final base = Color.alphaBlend(
-      colors.mutedInk.withValues(alpha: isDark ? 0.22 : 0.18),
+      colors.mutedInk.withOpacity(isDark ? 0.22 : 0.18),
       colors.surface,
     );
     final highlight = Color.alphaBlend(
-      Colors.white.withValues(alpha: isDark ? 0.10 : 0.55),
+      Colors.white.withOpacity(isDark ? 0.10 : 0.55),
       base,
     );
 

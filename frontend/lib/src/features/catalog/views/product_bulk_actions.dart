@@ -99,7 +99,7 @@ class _BulkRepriceDialogState extends State<_BulkRepriceDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DropdownButtonFormField<ProductBulkRepriceMode>(
-              initialValue: _mode,
+              value: _mode,
               decoration: InputDecoration(labelText: l10n.bulkRepriceModeLabel),
               items: [
                 for (final mode in ProductBulkRepriceMode.values)
@@ -207,7 +207,7 @@ class _BulkCategorizeDialogState extends State<_BulkCategorizeDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DropdownButtonFormField<ProductBulkCategorizeMode>(
-              initialValue: _mode,
+              value: _mode,
               decoration: InputDecoration(labelText: l10n.bulkCategorizeModeLabel),
               items: [
                 for (final mode in ProductBulkCategorizeMode.values)

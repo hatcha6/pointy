@@ -902,7 +902,7 @@ class _ProductionBatchDialogState extends State<_ProductionBatchDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DropdownButtonFormField<BillOfMaterials>(
-              initialValue: _bom,
+              value: _bom,
               decoration: InputDecoration(
                 labelText: l10n.productionRecipeLabel,
               ),

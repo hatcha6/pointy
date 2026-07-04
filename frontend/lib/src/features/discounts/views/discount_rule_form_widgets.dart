@@ -40,7 +40,7 @@ class _DiscountSummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.primaryContainer,
         borderRadius: BorderRadius.circular(PointyRadii.card),
-        border: Border.all(color: colors.primaryStrong.withValues(alpha: 0.25)),
+        border: Border.all(color: colors.primaryStrong.withOpacity(0.25)),
       ),
       padding: EdgeInsets.all(spacing.md),
       child: Column(
@@ -125,7 +125,7 @@ class _FormSection extends StatelessWidget {
                 height: 36,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: colors.primaryStrong.withValues(alpha: 0.10),
+                  color: colors.primaryStrong.withOpacity(0.10),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, size: 19, color: colors.primaryStrong),

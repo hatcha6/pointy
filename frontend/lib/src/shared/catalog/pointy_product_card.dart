@@ -50,7 +50,7 @@ class PointyProductCard extends StatelessWidget {
     final resolvedPrice = priceLabel.trim();
     final inCart = cartQuantity > 0;
     final inCartFill = Color.alphaBlend(
-      colors.primaryStrong.withValues(alpha: 0.07),
+      colors.primaryStrong.withOpacity(0.07),
       colors.surface,
     );
 
@@ -73,27 +73,27 @@ class PointyProductCard extends StatelessWidget {
             child: Material(
               color: inCart ? inCartFill : colors.surface,
               elevation: enabled ? 1 : 0,
-              shadowColor: colors.ink.withValues(alpha: 0.08),
+              shadowColor: colors.ink.withOpacity(0.08),
               surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(PointyRadii.card),
                 side: BorderSide(
                   color: inCart
                       ? colors.primaryStrong
-                      : colors.line.withValues(alpha: 0.88),
+                      : colors.line.withOpacity(0.88),
                   width: inCart ? 1.5 : 1,
                 ),
               ),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 onTap: enabled ? onTap : null,
-                overlayColor: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.pressed)) {
-                    return colors.primaryStrong.withValues(alpha: 0.10);
+                overlayColor: MaterialStateProperty.resolveWith((states) {
+                  if (states.contains(MaterialState.pressed)) {
+                    return colors.primaryStrong.withOpacity(0.10);
                   }
-                  if (states.contains(WidgetState.hovered) ||
-                      states.contains(WidgetState.focused)) {
-                    return colors.primaryStrong.withValues(alpha: 0.05);
+                  if (states.contains(MaterialState.hovered) ||
+                      states.contains(MaterialState.focused)) {
+                    return colors.primaryStrong.withOpacity(0.05);
                   }
                   return null;
                 }),
@@ -111,11 +111,11 @@ class PointyProductCard extends StatelessWidget {
                                 fallbackText: fallbackText,
                                 padding: EdgeInsets.all(imagePadding),
                                 backgroundColor: Color.alphaBlend(
-                                  colors.primaryStrong.withValues(alpha: 0.035),
+                                  colors.primaryStrong.withOpacity(0.035),
                                   colors.subtleFill,
                                 ),
                                 border: Border.all(
-                                  color: colors.line.withValues(alpha: 0.52),
+                                  color: colors.line.withOpacity(0.52),
                                 ),
                               ),
                             ),
@@ -231,9 +231,9 @@ class _ProductCardBadge extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.88),
+        color: colors.surface.withOpacity(0.88),
         borderRadius: BorderRadius.circular(PointyRadii.pill),
-        border: Border.all(color: colors.line.withValues(alpha: 0.72)),
+        border: Border.all(color: colors.line.withOpacity(0.72)),
       ),
       child: child,
     );
@@ -261,7 +261,7 @@ class _CartQuantityBadge extends StatelessWidget {
         border: Border.all(color: colors.surface, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: colors.ink.withValues(alpha: 0.16),
+            color: colors.ink.withOpacity(0.16),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -300,9 +300,9 @@ class _ProductCardActionCue extends StatelessWidget {
       dimension: 30,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: cueColor.withValues(alpha: enabled ? 0.10 : 0.06),
+          color: cueColor.withOpacity(enabled ? 0.10 : 0.06),
           borderRadius: BorderRadius.circular(PointyRadii.card),
-          border: Border.all(color: cueColor.withValues(alpha: 0.12)),
+          border: Border.all(color: cueColor.withOpacity(0.12)),
         ),
         child: Icon(
           Icons.add_shopping_cart_outlined,

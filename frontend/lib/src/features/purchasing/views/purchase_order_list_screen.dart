@@ -356,11 +356,11 @@ class _PayablesStripState extends State<_PayablesStrip> {
     return Container(
       decoration: BoxDecoration(
         color: Color.alphaBlend(
-          colors.warning.withValues(alpha: 0.06),
+          colors.warning.withOpacity(0.06),
           colors.surface,
         ),
         borderRadius: BorderRadius.circular(PointyRadii.card),
-        border: Border.all(color: colors.warning.withValues(alpha: 0.22)),
+        border: Border.all(color: colors.warning.withOpacity(0.22)),
       ),
       padding: EdgeInsets.all(spacing.md),
       child: Column(
@@ -373,7 +373,7 @@ class _PayablesStripState extends State<_PayablesStrip> {
                 height: 40,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: colors.warning.withValues(alpha: 0.14),
+                  color: colors.warning.withOpacity(0.14),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(

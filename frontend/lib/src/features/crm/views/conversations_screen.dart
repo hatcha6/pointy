@@ -360,7 +360,7 @@ class _MessageBubble extends StatelessWidget {
                   Text(
                     formatDateTime(message.createdAt!),
                     style: textTheme.labelSmall?.copyWith(
-                      color: textColor.withValues(alpha: 0.75),
+                      color: textColor.withOpacity(0.75),
                     ),
                   ),
                 if (outbound) ...[
@@ -370,7 +370,7 @@ class _MessageBubble extends StatelessWidget {
                     size: 14,
                     color: message.outboundStatus == 'failed'
                         ? colors.danger
-                        : textColor.withValues(alpha: 0.75),
+                        : textColor.withOpacity(0.75),
                   ),
                 ],
               ],

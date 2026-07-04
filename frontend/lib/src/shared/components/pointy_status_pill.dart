@@ -21,14 +21,14 @@ class PointyStatusPill extends StatelessWidget {
     final colors = context.pointyColors;
     final resolvedColor = color ?? colors.primaryStrong;
     final backgroundColor = Color.alphaBlend(
-      resolvedColor.withValues(alpha: 0.10),
+      resolvedColor.withOpacity(0.10),
       colors.surface,
     );
 
     return DecoratedBox(
       decoration: BoxDecoration(
         color: backgroundColor,
-        border: Border.all(color: resolvedColor.withValues(alpha: 0.22)),
+        border: Border.all(color: resolvedColor.withOpacity(0.22)),
         borderRadius: BorderRadius.circular(PointyRadii.chip),
       ),
       child: Padding(

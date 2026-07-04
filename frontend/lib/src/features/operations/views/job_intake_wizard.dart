@@ -439,7 +439,7 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
         if (_creatingAsset) ...[
           SizedBox(height: spacing.md),
           DropdownButtonFormField<CustomerAssetType>(
-            initialValue: _newAssetType,
+            value: _newAssetType,
             decoration: InputDecoration(labelText: l10n.assetTypeLabel),
             items: [
               for (final type in CustomerAssetType.values)
@@ -502,7 +502,7 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
         ),
         SizedBox(height: spacing.md),
         DropdownButtonFormField<OperationsJobPriority>(
-          initialValue: _priority,
+          value: _priority,
           decoration: InputDecoration(labelText: l10n.jobPriorityLabel),
           items: [
             for (final priority in OperationsJobPriority.values)

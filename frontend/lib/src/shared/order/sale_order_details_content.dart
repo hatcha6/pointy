@@ -1160,7 +1160,7 @@ class _ExchangeNetSummary extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
+        color: theme.colorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(

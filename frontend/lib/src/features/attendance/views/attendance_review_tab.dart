@@ -129,7 +129,7 @@ class _AttendanceReviewTabState extends State<AttendanceReviewTab> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         DropdownButtonFormField<int>(
-          initialValue: _employeeId,
+          value: _employeeId,
           decoration: InputDecoration(
             labelText: l10n.attendanceSelectEmployeeLabel,
             prefixIcon: const Icon(Icons.person_search_outlined),

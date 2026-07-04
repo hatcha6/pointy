@@ -30,16 +30,16 @@ abstract final class PointyComponentStyles {
   /// Hover/focus/pressed feedback for controls, tinted by the surface's [ink]
   /// colour so the overlay reads correctly on both light and dark surfaces.
   /// POS terminals run with a mouse, so hover states matter as much as ripples.
-  static WidgetStateProperty<Color?> inkOverlay(Color ink) {
-    return WidgetStateProperty.resolveWith((states) {
-      if (states.contains(WidgetState.pressed)) {
-        return ink.withValues(alpha: 0.10);
+  static MaterialStateProperty<Color?> inkOverlay(Color ink) {
+    return MaterialStateProperty.resolveWith((states) {
+      if (states.contains(MaterialState.pressed)) {
+        return ink.withOpacity(0.10);
       }
-      if (states.contains(WidgetState.hovered)) {
-        return ink.withValues(alpha: 0.04);
+      if (states.contains(MaterialState.hovered)) {
+        return ink.withOpacity(0.04);
       }
-      if (states.contains(WidgetState.focused)) {
-        return ink.withValues(alpha: 0.08);
+      if (states.contains(MaterialState.focused)) {
+        return ink.withOpacity(0.08);
       }
       return null;
     });
@@ -47,16 +47,16 @@ abstract final class PointyComponentStyles {
 
   /// Feedback for controls on the primary green fill. White in both themes
   /// because the primary fill stays brand teal regardless of mode.
-  static WidgetStateProperty<Color?> get onPrimaryOverlay {
-    return WidgetStateProperty.resolveWith((states) {
-      if (states.contains(WidgetState.pressed)) {
-        return Colors.white.withValues(alpha: 0.16);
+  static MaterialStateProperty<Color?> get onPrimaryOverlay {
+    return MaterialStateProperty.resolveWith((states) {
+      if (states.contains(MaterialState.pressed)) {
+        return Colors.white.withOpacity(0.16);
       }
-      if (states.contains(WidgetState.hovered)) {
-        return Colors.white.withValues(alpha: 0.08);
+      if (states.contains(MaterialState.hovered)) {
+        return Colors.white.withOpacity(0.08);
       }
-      if (states.contains(WidgetState.focused)) {
-        return Colors.white.withValues(alpha: 0.12);
+      if (states.contains(MaterialState.focused)) {
+        return Colors.white.withOpacity(0.12);
       }
       return null;
     });
@@ -73,11 +73,11 @@ abstract final class PointyComponentStyles {
     );
   }
 
-  static AppBarThemeData appBarTheme(
+  static AppBarTheme appBarTheme(
     PointySemanticColors c,
     TextTheme textTheme,
   ) {
-    return AppBarThemeData(
+    return AppBarTheme(
       backgroundColor: c.page,
       foregroundColor: c.ink,
       surfaceTintColor: Colors.transparent,
@@ -95,8 +95,8 @@ abstract final class PointyComponentStyles {
 
   /// Fixed dark top bar for high-focus screens (e.g. POS). Intentionally the
   /// same in light and dark themes, so it stays separate from the palette.
-  static AppBarThemeData darkAppBarTheme(TextTheme textTheme) {
-    return AppBarThemeData(
+  static AppBarTheme darkAppBarTheme(TextTheme textTheme) {
+    return AppBarTheme(
       backgroundColor: PointyColors.darkTopBar,
       foregroundColor: PointyColors.surface,
       surfaceTintColor: Colors.transparent,
@@ -113,7 +113,7 @@ abstract final class PointyComponentStyles {
     );
   }
 
-  static InputDecorationThemeData inputDecorationTheme(
+  static InputDecorationTheme inputDecorationTheme(
     PointySemanticColors c,
     TextTheme textTheme,
   ) {
@@ -122,7 +122,7 @@ abstract final class PointyComponentStyles {
       borderSide: BorderSide(color: c.line),
     );
 
-    return InputDecorationThemeData(
+    return InputDecorationTheme(
       filled: true,
       fillColor: c.surface,
       border: border,
@@ -227,15 +227,15 @@ abstract final class PointyComponentStyles {
       surfaceTintColor: Colors.transparent,
       indicatorColor: c.primaryContainer,
       indicatorShape: shape(PointyRadii.button),
-      labelTextStyle: WidgetStateProperty.resolveWith((states) {
-        final isSelected = states.contains(WidgetState.selected);
+      labelTextStyle: MaterialStateProperty.resolveWith((states) {
+        final isSelected = states.contains(MaterialState.selected);
         return textTheme.labelLarge?.copyWith(
           color: isSelected ? c.primaryDark : c.ink,
           fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
         );
       }),
-      iconTheme: WidgetStateProperty.resolveWith((states) {
-        final isSelected = states.contains(WidgetState.selected);
+      iconTheme: MaterialStateProperty.resolveWith((states) {
+        final isSelected = states.contains(MaterialState.selected);
         return IconThemeData(color: isSelected ? c.primaryDark : c.mutedInk);
       }),
     );

@@ -344,7 +344,7 @@ class _CountingHeader extends StatelessWidget {
                           PointyTypography.numeric(
                             textTheme.titleSmall ?? const TextStyle(),
                           ).copyWith(
-                            color: colors.surface.withValues(alpha: 0.82),
+                            color: colors.surface.withOpacity(0.82),
                             fontWeight: FontWeight.w700,
                           ),
                     ),
@@ -397,10 +397,10 @@ class _ScanPanel extends StatelessWidget {
                   width: 132,
                   height: 132,
                   decoration: BoxDecoration(
-                    color: colors.primaryStrong.withValues(alpha: 0.08),
+                    color: colors.primaryStrong.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(PointyRadii.sheet),
                     border: Border.all(
-                      color: colors.primaryStrong.withValues(alpha: 0.20),
+                      color: colors.primaryStrong.withOpacity(0.20),
                       width: 1.5,
                     ),
                   ),

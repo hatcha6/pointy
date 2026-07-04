@@ -1018,7 +1018,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
             final isCompactDialog =
                 MediaQuery.sizeOf(context).width < AppBreakpoints.largePhoneMin;
             final daysField = DropdownButtonFormField<int>(
-              initialValue: selectedDays,
+              value: selectedDays,
               decoration: InputDecoration(
                 labelText: l10n.cashierReturnWindowDaysLabel,
               ),
@@ -1034,7 +1034,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
               },
             );
             final hoursField = DropdownButtonFormField<int>(
-              initialValue: selectedHours,
+              value: selectedHours,
               decoration: InputDecoration(
                 labelText: l10n.cashierReturnWindowHoursLabel,
               ),

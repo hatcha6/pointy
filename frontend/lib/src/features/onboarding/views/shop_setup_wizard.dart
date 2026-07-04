@@ -223,7 +223,7 @@ class _ShopTypeCard extends StatelessWidget {
     final colors = context.pointyColors;
     return Material(
       color: selected
-          ? colors.primaryContainer.withValues(alpha: 0.35)
+          ? colors.primaryContainer.withOpacity(0.35)
           : colors.surface,
       borderRadius: BorderRadius.circular(PointyRadii.card),
       child: InkWell(

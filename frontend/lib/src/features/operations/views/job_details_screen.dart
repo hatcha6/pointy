@@ -1358,7 +1358,7 @@ class _TimelineEntry extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isCurrent
                       ? dotColor
-                      : dotColor.withValues(alpha: 0.16),
+                      : dotColor.withOpacity(0.16),
                   shape: BoxShape.circle,
                   border: Border.all(color: dotColor, width: 2),
                 ),

@@ -343,7 +343,7 @@ Widget _primaryActionButton(BuildContext context, _PoAction action) {
       onPressed: action.onTap,
       style: OutlinedButton.styleFrom(
         foregroundColor: colors.danger,
-        side: BorderSide(color: colors.danger.withValues(alpha: 0.5)),
+        side: BorderSide(color: colors.danger.withOpacity(0.5)),
       ),
       icon: icon,
       label: label,
@@ -478,7 +478,7 @@ class _PurchaseOrderActionTile extends StatelessWidget {
       enabled: action.onTap != null,
       onTap: onInvoke,
       leading: CircleAvatar(
-        backgroundColor: accent.withValues(alpha: 0.12),
+        backgroundColor: accent.withOpacity(0.12),
         foregroundColor: accent,
         child: Icon(action.icon),
       ),

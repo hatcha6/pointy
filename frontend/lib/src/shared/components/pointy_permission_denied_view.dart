@@ -46,10 +46,10 @@ class PointyPermissionDeniedView extends StatelessWidget {
             children: [
               DecoratedBox(
                 decoration: BoxDecoration(
-                  color: colors.danger.withValues(alpha: 0.10),
+                  color: colors.danger.withOpacity(0.10),
                   borderRadius: BorderRadius.circular(PointyRadii.card),
                   border: Border.all(
-                    color: colors.danger.withValues(alpha: 0.18),
+                    color: colors.danger.withOpacity(0.18),
                   ),
                 ),
                 child: Padding(

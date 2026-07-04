@@ -178,7 +178,7 @@ class _AiExplainerCard extends StatelessWidget {
         SizedBox(height: spacing.xs),
         Material(
           color: Color.alphaBlend(
-            accent.withValues(alpha: 0.08),
+            accent.withOpacity(0.08),
             colors.surface,
           ),
           borderRadius: BorderRadius.circular(PointyRadii.chip),

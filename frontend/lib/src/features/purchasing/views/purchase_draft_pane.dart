@@ -794,7 +794,7 @@ class _PurchaseDraftSettingsDialogState
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<LandedCostAllocationMethod>(
-                initialValue: _landedCostAllocationMethod,
+                value: _landedCostAllocationMethod,
                 decoration: InputDecoration(
                   labelText: l10n.landedCostAllocationMethodLabel,
                   isDense: true,
@@ -1321,7 +1321,7 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
     final unitField = unitOptions.length <= 1 || widget.onUnitChanged == null
         ? null
         : DropdownButtonFormField<String>(
-            initialValue: selectedUnitCode,
+            value: selectedUnitCode,
             isDense: true,
             decoration: InputDecoration(
               labelText: l10n.purchaseLineUnitLabel,

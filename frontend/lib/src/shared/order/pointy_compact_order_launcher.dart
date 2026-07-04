@@ -34,7 +34,7 @@ class PointyCompactOrderLauncher extends StatelessWidget {
         border: Border(top: BorderSide(color: colors.line)),
         boxShadow: [
           BoxShadow(
-            color: colors.ink.withValues(alpha: 0.08),
+            color: colors.ink.withOpacity(0.08),
             blurRadius: 18,
             offset: const Offset(0, -6),
           ),

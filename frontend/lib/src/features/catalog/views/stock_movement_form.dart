@@ -57,7 +57,7 @@ class _StockMovementFormState extends State<StockMovementForm> {
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<StockMovementType>(
-                      initialValue: _movementType,
+                      value: _movementType,
                       decoration: InputDecoration(
                         labelText: l10n.stockMovementTypeLabel,
                         prefixIcon: const Icon(Icons.swap_horiz_outlined),

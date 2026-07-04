@@ -313,7 +313,7 @@ class _SaleSessionRow extends StatelessWidget {
       onTap: session.isActive || isLocked ? null : onSelect,
       selected: session.isActive,
       selectedTileColor: Color.alphaBlend(
-        colors.primaryStrong.withValues(alpha: 0.08),
+        colors.primaryStrong.withOpacity(0.08),
         colors.surface,
       ),
       shape: RoundedRectangleBorder(

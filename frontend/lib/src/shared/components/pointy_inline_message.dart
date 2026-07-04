@@ -50,7 +50,7 @@ class PointyInlineMessage extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: background,
-        border: Border.all(color: foreground.withValues(alpha: 0.20)),
+        border: Border.all(color: foreground.withOpacity(0.20)),
         borderRadius: BorderRadius.circular(PointyRadii.card),
       ),
       child: Padding(
@@ -98,15 +98,15 @@ class PointyInlineMessage extends StatelessWidget {
     return switch (tone) {
       PointyInlineMessageTone.error => colorScheme.errorContainer,
       PointyInlineMessageTone.neutral => Color.alphaBlend(
-        foreground.withValues(alpha: 0.08),
+        foreground.withOpacity(0.08),
         colors.surface,
       ),
       PointyInlineMessageTone.warning => Color.alphaBlend(
-        foreground.withValues(alpha: 0.10),
+        foreground.withOpacity(0.10),
         colors.surface,
       ),
       PointyInlineMessageTone.success => Color.alphaBlend(
-        foreground.withValues(alpha: 0.10),
+        foreground.withOpacity(0.10),
         colors.surface,
       ),
     };

@@ -611,7 +611,7 @@ class _UnitEditorDialogState extends State<_UnitEditorDialog> {
               ),
               SizedBox(height: spacing.md),
               DropdownButtonFormField<String>(
-                initialValue: _dimension,
+                value: _dimension,
                 decoration: InputDecoration(labelText: l10n.unitDimensionLabel),
                 items: [
                   for (final dimension in kUnitDimensions)

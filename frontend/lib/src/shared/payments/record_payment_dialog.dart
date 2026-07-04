@@ -148,7 +148,7 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
               ],
               DropdownButtonFormField<String>(
                 key: const ValueKey('record_payment_method_field'),
-                initialValue: _method,
+                value: _method,
                 decoration: InputDecoration(labelText: l10n.paymentMethodLabel),
                 items: [
                   for (final option in widget.methods)

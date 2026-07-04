@@ -351,7 +351,7 @@ class _RegisterSessionPill extends StatelessWidget {
         child: Tooltip(
           message: tooltip,
           child: Material(
-            color: onBar.withValues(alpha: 0.16),
+            color: onBar.withOpacity(0.16),
             shape: const StadiumBorder(),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
@@ -411,7 +411,7 @@ class _PosSessionActionTile extends StatelessWidget {
     return ListTile(
       onTap: onInvoke,
       leading: CircleAvatar(
-        backgroundColor: accent.withValues(alpha: 0.12),
+        backgroundColor: accent.withOpacity(0.12),
         foregroundColor: accent,
         child: Icon(action.icon),
       ),

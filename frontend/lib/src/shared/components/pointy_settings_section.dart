@@ -85,7 +85,7 @@ class PointySettingsTile extends StatelessWidget {
           children: [
             DecoratedBox(
               decoration: BoxDecoration(
-                color: resolvedColor.withValues(alpha: 0.10),
+                color: resolvedColor.withOpacity(0.10),
                 borderRadius: BorderRadius.circular(PointyRadii.card),
               ),
               child: SizedBox.square(
