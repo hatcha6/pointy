@@ -23,3 +23,8 @@ relay/.connector-state-remote.json
 # Local PyArmor license material and generated diagnostics.
 pyarmor-regfile-1941/
 pyarmor.bug.log
+
+# Legacy client DB exports for data migration (large binaries)
+*.mdb
+fahd_data.sqlite
+fahd_migration.sqlite

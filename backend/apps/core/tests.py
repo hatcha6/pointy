@@ -2634,3 +2634,75 @@ class SupervisorVisibilityTests(TestCase):
     def test_supervisor_sees_all_sessions_other_cashier_does_not(self):
         self.assertIn(self.order.id, self._order_ids(self.supervisor))
         self.assertNotIn(self.order.id, self._order_ids(self.other_cashier))
+
+
+_RELAY_URLS = dict(
+    POINTY_RELAY_CONTROL_URL="https://relay.example",
+    POINTY_RELAY_PUBLIC_API_URL="https://relay.example",
+    POINTY_RELAY_CONNECTOR_ADDR="relay.example:443",
+    POINTY_RELAY_ADMIN_TOKEN="",
+    POINTY_RELAY_ACCESS_TOKEN="",
+    POINTY_RELAY_INSTALLATION_ID="",
+)
+
+
+@override_settings(POINTY_RELAY_ENROLLMENT_TOKEN="")
+class RelayEnrollmentTaskTests(TestCase):
+    """core.ensure_relay_enrollment — the periodic license-redemption retry.
+
+    Runs regardless of POINTY_REQUIRE_LICENSE (the gate only decides whether an
+    unlicensed backend blocks the API); it must be a strict no-op without
+    self-service credentials so dev/operator environments never enroll
+    themselves through the admin-token fallback.
+    """
+
+    def test_noops_without_credentials(self):
+        from apps.core.tasks import ensure_relay_enrollment_task
+
+        self.assertEqual(ensure_relay_enrollment_task(), "no license key configured")
+        self.assertEqual(RelayInstallation.objects.count(), 0)
+
+    @override_settings(**_RELAY_URLS, POINTY_RELAY_ENROLLMENT_TOKEN="license-key-123")
+    def test_redeems_license_key_and_syncs_entitlements(self):
+        from apps.core.tasks import ensure_relay_enrollment_task
+
+        fake_relay = FakeRelayControlClient(relay_enabled=True, subscription_active=True)
+        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+            result = ensure_relay_enrollment_task()
+
+        self.assertEqual(result, "enrolled")
+        self.assertEqual(fake_relay.enrolled_with_token, "license-key-123")
+        installation = RelayInstallation.objects.get()
+        self.assertEqual(installation.installation_id, "installation-1")
+        # Entitlements were pulled immediately after enrolling, not left for the
+        # hourly sync tick.
+        self.assertTrue(installation.subscription_active)
+        # The admin provision endpoint was never touched.
+        self.assertEqual(fake_relay.provisioned_shop_name, "")
+
+    @override_settings(**_RELAY_URLS, POINTY_RELAY_ENROLLMENT_TOKEN="license-key-123")
+    def test_survives_relay_outage_and_reports_retry(self):
+        from apps.core.relay import RelayControlError
+        from apps.core.tasks import ensure_relay_enrollment_task
+
+        with mock.patch(
+            "apps.core.relay.RelayControlClient",
+            side_effect=RelayControlError("relay unreachable"),
+        ):
+            result = ensure_relay_enrollment_task()
+
+        self.assertEqual(result, "relay unavailable")
+        self.assertEqual(RelayInstallation.objects.count(), 0)
+
+    def test_noops_once_enrolled(self):
+        from apps.core.tasks import ensure_relay_enrollment_task
+
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+        )
+        self.assertEqual(ensure_relay_enrollment_task(), "already enrolled")

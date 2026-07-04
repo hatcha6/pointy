@@ -94,12 +94,16 @@ class PriceCheckerModeController extends ChangeNotifier {
   Future<void> updateScanSettings({
     bool? cameraEnabled,
     PriceCheckerCameraFacing? cameraFacing,
+    bool? torchEnabled,
+    bool? speakResults,
     int? foundDwellSeconds,
   }) async {
     await _update(
       _config.copyWith(
         cameraEnabled: cameraEnabled,
         cameraFacing: cameraFacing,
+        torchEnabled: torchEnabled,
+        speakResults: speakResults,
         foundDwellSeconds: foundDwellSeconds,
       ),
     );

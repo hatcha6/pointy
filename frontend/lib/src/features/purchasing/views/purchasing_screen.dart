@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
@@ -14,6 +16,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../../shared/unit_options.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_catalog_pane.dart';
 import 'purchase_draft_pane.dart';
@@ -104,6 +107,41 @@ class _PurchasingWorkspace extends StatelessWidget {
   final ContactRepository contactRepository;
   final VoidCallback? onSaved;
 
+  /// Scan-then-arrow: cycle the last scanned line through the product's
+  /// purchasable units. Up/Right = next, Down/Left = previous, wrapping.
+  bool _cycleLastScannedUnit(BuildContext context, LogicalKeyboardKey key) {
+    final line = viewModel.lastScannedDraftLine;
+    if (line == null) {
+      return false;
+    }
+    final options = purchasableUnitOptions(
+      AppLocalizations.of(context)!,
+      Product.fromVariant(line.variant),
+    );
+    if (options.length < 2) {
+      return false;
+    }
+    final currentCode = line.unitCode.isEmpty
+        ? options.first.code
+        : line.unitCode;
+    var index = options.indexWhere((option) => option.code == currentCode);
+    if (index == -1) {
+      index = 0;
+    }
+    final forward =
+        key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowRight;
+    final next =
+        options[(index + (forward ? 1 : -1) + options.length) % options.length];
+    viewModel.updateLineUnit(
+      line.variant,
+      unitCode: next.isBase ? '' : next.code,
+      unitLabel: next.label,
+      unitFactor: next.factorToBase,
+    );
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     return BarcodeScanListener(
@@ -111,6 +149,10 @@ class _PurchasingWorkspace extends StatelessWidget {
       onBarcodeScanned: (barcode) {
         unawaited(_addBarcode(context, barcode));
       },
+      // Fast receiving flow after a scan: type a number to set the scanned
+      // line's quantity, tap an arrow to flip its unit of measure.
+      onDigitsTyped: viewModel.applyQuickQuantityDigits,
+      onArrowKey: (key) => _cycleLastScannedUnit(context, key),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final width = constraints.hasBoundedWidth

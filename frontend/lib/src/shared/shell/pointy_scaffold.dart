@@ -109,6 +109,9 @@ class _PointyScaffoldState extends State<PointyScaffold> {
     return PointyNavigationRailScope(
       isActive: usesNavigationRail,
       controller: navigationRailController,
+      // Pass the app shell's bucket through so the drawer/rail surfaces (below
+      // this re-wrap) keep their scroll offsets across page changes.
+      navigationBucket: parentNavigationRailScope?.navigationBucket,
       child: Scaffold(
         appBar: widget.appBar,
         drawer: usesNavigationRail ? null : widget.drawer,

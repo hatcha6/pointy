@@ -1757,6 +1757,13 @@ class PosApiService {
     return _purchasing.createSupplier(draft);
   }
 
+  Future<SupplierContact> patchSupplier(
+    int supplierId,
+    Map<String, Object?> body,
+  ) {
+    return _purchasing.patchSupplier(supplierId, body);
+  }
+
   Future<List<PrintJob>> fetchPrintJobs({
     PrintJobStatus? status,
     int page = 1,

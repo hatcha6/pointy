@@ -2,6 +2,20 @@ import 'package:flutter/material.dart';
 
 import '../design/design.dart';
 import '../responsive/responsive.dart';
+import '../shell/pointy_navigation_rail_scope.dart';
+
+/// Wraps a navigation list in the app shell's scroll bucket (when one is
+/// provided): screens replace each other as routes (each with per-route
+/// PageStorage), so without the app-level bucket the drawer/rail list forgets
+/// its scroll offset on every navigation. Without a shell (tests, previews)
+/// the child renders as-is.
+Widget _withNavigationScrollBucket(BuildContext context, Widget child) {
+  final bucket = PointyNavigationRailScope.maybeOf(context)?.navigationBucket;
+  if (bucket == null) {
+    return child;
+  }
+  return PageStorage(bucket: bucket, child: child);
+}
 
 class PointyNavigationSurface extends StatelessWidget {
   const PointyNavigationSurface({
@@ -22,60 +36,63 @@ class PointyNavigationSurface extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
 
-    return NavigationDrawer(
-      children: [
-        Padding(
-          padding: EdgeInsetsDirectional.fromSTEB(
-            spacing.lg,
-            spacing.xl,
-            spacing.lg,
-            spacing.md,
-          ),
-          child: Row(
-            children: [
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: colors.primaryStrong,
-                  borderRadius: BorderRadius.circular(PointyRadii.card),
+    return _withNavigationScrollBucket(
+      context,
+      NavigationDrawer(
+        key: const PageStorageKey('app-navigation-drawer'),
+        children: [
+          Padding(
+            padding: EdgeInsetsDirectional.fromSTEB(
+              spacing.lg,
+              spacing.xl,
+              spacing.lg,
+              spacing.md,
+            ),
+            child: Row(
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.primaryStrong,
+                    borderRadius: BorderRadius.circular(PointyRadii.card),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(spacing.sm),
+                    child: Icon(Icons.point_of_sale, color: colors.surface),
+                  ),
                 ),
-                child: Padding(
-                  padding: EdgeInsets.all(spacing.sm),
-                  child: Icon(Icons.point_of_sale, color: colors.surface),
-                ),
-              ),
-              SizedBox(width: spacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      userLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
+                SizedBox(width: spacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        userLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
                       ),
-                    ),
-                    SizedBox(height: spacing.xs),
-                    Text(
-                      roleLabel,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
-                    ),
-                  ],
+                      SizedBox(height: spacing.xs),
+                      Text(
+                        roleLabel,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        const Divider(),
-        ...navigationChildren,
-        const Divider(),
-        logoutTile,
-      ],
+          const Divider(),
+          ...navigationChildren,
+          const Divider(),
+          logoutTile,
+        ],
+      ),
     );
   }
 }
@@ -130,12 +147,22 @@ class PointyNavigationRailSurface extends StatelessWidget {
                 behavior: ScrollConfiguration.of(
                   context,
                 ).copyWith(scrollbars: false),
-                child: ListView(
-                  padding: EdgeInsetsDirectional.symmetric(
-                    vertical: spacing.sm,
-                    horizontal: extended ? spacing.sm : spacing.xs,
+                child: _withNavigationScrollBucket(
+                  context,
+                  ListView(
+                    // Per-mode keys: the same offset means a different place
+                    // in the denser collapsed layout.
+                    key: PageStorageKey(
+                      extended
+                          ? 'app-navigation-rail-extended'
+                          : 'app-navigation-rail-collapsed',
+                    ),
+                    padding: EdgeInsetsDirectional.symmetric(
+                      vertical: spacing.sm,
+                      horizontal: extended ? spacing.sm : spacing.xs,
+                    ),
+                    children: navigationChildren,
                   ),
-                  children: navigationChildren,
                 ),
               ),
             ),

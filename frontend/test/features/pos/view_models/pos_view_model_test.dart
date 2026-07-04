@@ -31,6 +31,7 @@ import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/local_scoped_json_storage.dart';
 import 'package:pointy_frontend/src/data/services/print_transport.dart';
 import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart';
+import 'package:pointy_frontend/src/shared/unit_options.dart';
 
 void main() {
   test(
@@ -676,6 +677,101 @@ void main() {
       expect(third.cart, isEmpty);
     },
   );
+
+  group('scan quick adjust', () {
+    test('digits after a scan replace the line quantity and accumulate '
+        'across keystrokes', () async {
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_coffeeVariant],
+          },
+        ),
+      );
+      addTearDown(viewModel.dispose);
+
+      await viewModel.addVariantByBarcode('1000001');
+      expect(viewModel.cart.single.quantity, 1);
+      expect(viewModel.lastScannedCartLine, isNotNull);
+
+      expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
+      expect(viewModel.cart.single.quantity, 5);
+      // A second digit within the idle window appends: 5 → 50.
+      expect(viewModel.applyQuickQuantityDigits('0'), isTrue);
+      expect(viewModel.cart.single.quantity, 50);
+    });
+
+    test('a fresh scan re-arms the digit buffer', () async {
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_coffeeVariant],
+          },
+        ),
+      );
+      addTearDown(viewModel.dispose);
+
+      await viewModel.addVariantByBarcode('1000001');
+      viewModel.applyQuickQuantityDigits('5');
+      expect(viewModel.cart.single.quantity, 5);
+
+      // Re-scanning the same product increments its line (5 → 6) and starts a
+      // fresh buffer, so the next digit replaces rather than appending.
+      await viewModel.addVariantByBarcode('1000001');
+      expect(viewModel.cart.single.quantity, 6);
+      expect(viewModel.applyQuickQuantityDigits('3'), isTrue);
+      expect(viewModel.cart.single.quantity, 3);
+    });
+
+    test('digits do nothing when nothing was scanned', () {
+      final viewModel = _viewModel(_FakePosApiService());
+      addTearDown(viewModel.dispose);
+
+      viewModel.addVariant(_coffeeVariant);
+      expect(viewModel.lastScannedCartLine, isNull);
+      expect(viewModel.applyQuickQuantityDigits('7'), isFalse);
+      expect(viewModel.cart.single.quantity, 1);
+    });
+
+    test('applyQuickUnit switches the scanned line unit of measure', () async {
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_coffeeVariant],
+          },
+        ),
+      );
+      addTearDown(viewModel.dispose);
+
+      await viewModel.addVariantByBarcode('1000001');
+      const box = UnitOption(
+        code: 'box',
+        label: 'صندوق',
+        unitPrice: 40,
+        factorToBase: 12,
+        allowsFractional: false,
+        isBase: false,
+      );
+      expect(viewModel.applyQuickUnit(box), isTrue);
+      final line = viewModel.cart.single;
+      expect(line.unitCode, 'box');
+      expect(line.unitFactor, 12);
+      expect(line.unitPriceOverride, 40);
+
+      // Cycling back to the base unit clears the override.
+      const base = UnitOption(
+        code: 'piece',
+        label: 'قطعة',
+        unitPrice: 3.5,
+        factorToBase: 1,
+        allowsFractional: false,
+        isBase: true,
+      );
+      expect(viewModel.applyQuickUnit(base), isTrue);
+      expect(viewModel.cart.single.unitCode, '');
+      expect(viewModel.cart.single.unitPriceOverride, isNull);
+    });
+  });
 }
 
 PosViewModel _viewModel(

@@ -107,6 +107,22 @@ class ContactRepository {
     return Result.guard(() => _service.patchCustomer(customerId, body));
   }
 
+  /// Full profile edit. Editing an auto-created card placeholder is a
+  /// deliberate act of claiming it, so [claimAutoCreated] also clears the
+  /// placeholder flag (mirroring the "name customer" flow) — otherwise the
+  /// freshly edited customer would stay hidden from the customers list.
+  Future<Result<Customer>> updateCustomer(
+    int customerId,
+    CustomerDraft draft, {
+    bool claimAutoCreated = false,
+  }) async {
+    final body = draft.toJson();
+    if (claimAutoCreated) {
+      body['is_auto_created'] = false;
+    }
+    return Result.guard(() => _service.patchCustomer(customerId, body));
+  }
+
   Future<Result<Customer>> mergeCustomer({
     required int customerId,
     required int sourceId,
@@ -136,5 +152,14 @@ class ContactRepository {
 
   Future<Result<SupplierContact>> createSupplier(SupplierDraft draft) async {
     return Result.guard(() => _service.createSupplier(draft));
+  }
+
+  Future<Result<SupplierContact>> updateSupplier(
+    int supplierId,
+    SupplierDraft draft,
+  ) async {
+    return Result.guard(
+      () => _service.patchSupplier(supplierId, draft.toJson()),
+    );
   }
 }

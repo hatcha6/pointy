@@ -19,7 +19,10 @@ class MigrationRepository {
     return Result.guard(() => _service.createMigrationSource(draft));
   }
 
-  Future<Result<MigrationSource>> updateSource(int id, MigrationSourceDraft draft) {
+  Future<Result<MigrationSource>> updateSource(
+    int id,
+    MigrationSourceDraft draft,
+  ) {
     return Result.guard(() => _service.updateMigrationSource(id, draft));
   }
 
@@ -69,7 +72,8 @@ class MigrationRepository {
     String? severity,
   }) {
     return Result.guard(
-      () => _service.fetchMigrationIssues(runId, page: page, severity: severity),
+      () =>
+          _service.fetchMigrationIssues(runId, page: page, severity: severity),
     );
   }
 }

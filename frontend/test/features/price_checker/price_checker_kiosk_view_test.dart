@@ -147,6 +147,53 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('with no product image, the name is centred even on a wide '
+      'display', (tester) async {
+    const noImage = PriceLookupResult(
+      found: true,
+      barcode: '6002',
+      inStock: true,
+      currency: 'د.ل',
+      productName: 'عصير برتقال',
+      finalPrice: '3.00',
+      finalPriceDisplay: '3.00 د.ل',
+      originalPriceDisplay: '3.00 د.ل',
+    );
+    await pumpAt(
+      tester,
+      const Size(1280, 800), // wide — where start-alignment used to hug right
+      _view(PriceCheckerKioskStatus.found, result: noImage),
+    );
+    expect(tester.takeException(), isNull);
+    final nameText = tester.widget<Text>(find.text('عصير برتقال'));
+    expect(nameText.textAlign, TextAlign.center);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('with a product image on a wide display, the name is '
+      'start-aligned beside the photo', (tester) async {
+    const withImage = PriceLookupResult(
+      found: true,
+      barcode: '6003',
+      inStock: true,
+      currency: 'د.ل',
+      productName: 'عصير تفاح',
+      finalPrice: '4.00',
+      finalPriceDisplay: '4.00 د.ل',
+      originalPriceDisplay: '4.00 د.ل',
+      imageUrl: 'https://example.test/apple.png',
+    );
+    await pumpAt(
+      tester,
+      const Size(1280, 800),
+      _view(PriceCheckerKioskStatus.found, result: withImage),
+    );
+    expect(tester.takeException(), isNull);
+    final nameText = tester.widget<Text>(find.text('عصير تفاح'));
+    expect(nameText.textAlign, TextAlign.start);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('out-of-stock found product reads "out of stock"', (
     tester,
   ) async {

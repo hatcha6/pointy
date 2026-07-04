@@ -16,10 +16,15 @@ docker-compose.yml      The on-prem stack (images only; no build step)
 .env.example            Configuration template — copy to .env and edit
 install.sh              Installer for Linux / macOS hosts
 install.ps1             Installer for Windows hosts (Docker Desktop)
-register-autostart.ps1  Registers the boot/crash watchdog (Windows)
-register-autostart.sh   Registers the boot/crash watchdog (Linux / systemd)
+register-autostart.ps1  Registers the watchdog + discovery responder (Windows)
+register-autostart.sh   Registers the watchdog + discovery responder (Linux / systemd)
 watchdog.ps1            Keeps the stack up + heals it (Windows; run by the task)
 watchdog.sh             Keeps the stack up + heals it (Linux; run by the timer)
+discovery-responder.ps1 Answers POS clients' LAN discovery probes (Windows host)
+discovery-responder.py  Answers POS clients' LAN discovery probes (Linux host)
+update.sh / update.ps1  Applies a newer release bundle to this install (manual)
+update-agent.sh / .ps1  Applies relay-assigned updates automatically
+migrate-fahd.sh / .ps1  One-shot legacy-data import for shops coming from Fahd
 README.md               Full operations / hardening / backup guide
 VERSION.txt             The Pointy version this bundle was built from
 images/                 Saved Docker images (loaded by the installer)

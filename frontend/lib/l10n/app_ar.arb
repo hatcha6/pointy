@@ -6993,6 +6993,27 @@
   "priceCheckerCameraFacingLabel": "الكاميرا المستخدمة",
   "priceCheckerCameraFront": "الأمامية",
   "priceCheckerCameraBack": "الخلفية",
+  "editCustomerTitle": "تعديل بيانات الزبون",
+  "editSupplierTitle": "تعديل بيانات المورد",
+  "editContactTooltip": "تعديل البيانات",
+  "customerUpdateError": "تعذر حفظ بيانات الزبون. تحقق من الاتصال وحاول مجددًا.",
+  "supplierUpdateError": "تعذر حفظ بيانات المورد. تحقق من الاتصال وحاول مجددًا.",
+  "customerUpdatedMessage": "تم حفظ بيانات الزبون.",
+  "supplierUpdatedMessage": "تم حفظ بيانات المورد.",
+  "supplierProfileTitle": "بيانات المورد",
+  "priceCheckerTorchToggleLabel": "تشغيل الفلاش أثناء المسح",
+  "priceCheckerTorchToggleHint": "يحسّن قراءة الباركود في الإضاءة الضعيفة (يعمل مع الكاميرا الخلفية فقط)",
+  "priceCheckerTorchTooltip": "الفلاش",
+  "priceCheckerSpeakToggleLabel": "نطق اسم المنتج والسعر",
+  "priceCheckerSpeakToggleHint": "يقرأ الجهاز اسم المنتج وسعره بصوت مسموع عند العثور عليه",
+  "priceCheckerSpokenResult": "{product}، السعر {price} دينار",
+  "@priceCheckerSpokenResult": {
+    "description": "Spoken aloud when a product is found on the kiosk: name then price in dinar.",
+    "placeholders": {
+      "product": { "type": "String" },
+      "price": { "type": "String" }
+    }
+  },
   "priceCheckerDwellLabel": "مدة عرض المنتج",
   "priceCheckerDwellHint": "المدة قبل العودة تلقائيًا إلى شاشة المسح",
   "priceCheckerDwellSecondsValue": "{seconds, plural, =1{ثانية واحدة} =2{ثانيتان} few{{seconds} ثوانٍ} many{{seconds} ثانية} other{{seconds} ثانية}}",

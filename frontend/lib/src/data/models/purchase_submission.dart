@@ -512,10 +512,7 @@ class PurchaseOrderDraft {
   Map<String, Object?> toJson({bool forUpdate = false}) {
     final invoiceNumber = supplierInvoiceNumber.trim();
     final normalizedDiscountCode = discountCode.trim();
-    final invoiceDate = supplierInvoiceDate
-        ?.toIso8601String()
-        .split('T')
-        .first;
+    final invoiceDate = supplierInvoiceDate?.toIso8601String().split('T').first;
     return {
       'supplier': supplierId,
       if (dueDate != null)

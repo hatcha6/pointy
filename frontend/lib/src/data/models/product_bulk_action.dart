@@ -10,8 +10,7 @@ enum ProductBulkRepriceMode {
 
   final String apiValue;
 
-  bool get isPercent =>
-      this == increasePercent || this == decreasePercent;
+  bool get isPercent => this == increasePercent || this == decreasePercent;
 }
 
 /// How a bulk categorize change is applied to the selection's categories.

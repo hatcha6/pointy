@@ -60,11 +60,28 @@ def run_migrations():
 
 
 def ensure_license():
-    """Best-effort: redeem the configured license key on first boot so the API
-    unlocks. NEVER fatal — if the relay is unreachable the container still starts;
-    the license gate keeps the API locked and the connector (or a later boot)
-    retries enrollment. Only runs when licensing is required (on-prem)."""
-    if os.environ.get("POINTY_REQUIRE_LICENSE", "").lower() not in {"1", "true", "yes", "on"}:
+    """Best-effort: redeem the configured license key on first boot so the shop's
+    relay subscription activates. NEVER fatal — if the relay is unreachable the
+    container still starts and the periodic ``core.ensure_relay_enrollment`` task
+    keeps retrying whenever the shop next reaches the internet.
+
+    Runs whenever enrollment credentials are configured, independent of
+    POINTY_REQUIRE_LICENSE: the gate only decides whether an *unlicensed* backend
+    blocks the API, not whether we try to enroll."""
+    require_license = os.environ.get("POINTY_REQUIRE_LICENSE", "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    has_enrollment_credentials = bool(
+        os.environ.get("POINTY_RELAY_ENROLLMENT_TOKEN", "").strip()
+        or (
+            os.environ.get("POINTY_RELAY_ACCESS_TOKEN", "").strip()
+            and os.environ.get("POINTY_RELAY_INSTALLATION_ID", "").strip()
+        )
+    )
+    if not require_license and not has_enrollment_credentials:
         return
     try:
         subprocess.run(["python", "manage.py", "relay_enroll"], check=False)

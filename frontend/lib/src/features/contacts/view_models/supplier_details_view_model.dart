@@ -20,6 +20,8 @@ class SupplierDetailsViewModel extends ChangeNotifier {
   final ContactRepository _contactRepository;
   final PurchaseRepository _purchaseRepository;
 
+  ContactRepository get repository => _contactRepository;
+
   SupplierContact _supplier;
   List<PurchaseOrder> _purchaseHistory = [];
   List<PurchaseAdjustmentHistoryEntry> _adjustmentHistory = [];
@@ -61,6 +63,13 @@ class SupplierDetailsViewModel extends ChangeNotifier {
       loadPurchaseHistory(),
       loadAdjustments(),
     ]);
+  }
+
+  /// Adopts the supplier returned by the edit sheet (which performed the
+  /// PATCH itself, mirroring the create flow) into this view's state.
+  void applyUpdatedSupplier(SupplierContact supplier) {
+    _supplier = supplier;
+    notifyListeners();
   }
 
   Future<void> loadSupplier() async {

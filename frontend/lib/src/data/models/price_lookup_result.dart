@@ -80,8 +80,7 @@ class PriceLookupResult {
   bool get hasImage => imageUrl.isNotEmpty;
 
   /// A variant name worth showing (non-empty and different from the product).
-  bool get showsVariant =>
-      variantName.isNotEmpty && variantName != productName;
+  bool get showsVariant => variantName.isNotEmpty && variantName != productName;
 
   factory PriceLookupResult.fromJson(Map<String, Object?> json) {
     final discountsJson = json['discounts'];

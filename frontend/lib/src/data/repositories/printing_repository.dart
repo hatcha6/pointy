@@ -930,8 +930,10 @@ class PrintingRepository {
       'الوردية: ${summary.sessionNumber}',
       if (summary.ownerName.trim().isNotEmpty)
         'الكاشير: ${summary.ownerName.trim()}',
-      if (summary.openedAt != null) 'فُتحت: ${formatDateTime(summary.openedAt!)}',
-      if (summary.closedAt != null) 'أُغلقت: ${formatDateTime(summary.closedAt!)}',
+      if (summary.openedAt != null)
+        'فُتحت: ${formatDateTime(summary.openedAt!)}',
+      if (summary.closedAt != null)
+        'أُغلقت: ${formatDateTime(summary.closedAt!)}',
       'الحالة: ${summary.status == 'closed' ? 'مغلقة' : 'مفتوحة'}',
     ];
 
@@ -951,7 +953,10 @@ class PrintingRepository {
       if (sales.voidCount > 0)
         {'label': 'فواتير ملغاة', 'value': '${sales.voidCount}'},
       if (summary.expenses.count > 0)
-        {'label': 'مصروفات الوردية', 'value': formatMoney(summary.expenses.total)},
+        {
+          'label': 'مصروفات الوردية',
+          'value': formatMoney(summary.expenses.total),
+        },
     ];
 
     final paymentRows = <Map<String, Object?>>[

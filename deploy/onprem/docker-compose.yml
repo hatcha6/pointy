@@ -38,7 +38,13 @@ x-backend-environment: &backend-environment
   POINTY_RELAY_ALLOW_INSECURE_CONTROL: "${POINTY_RELAY_ALLOW_INSECURE_CONTROL:-false}"
   POINTY_DISCOVERY_ENABLED: "true"
   POINTY_DISCOVERY_PRIVATE_ONLY: "true"
-  POINTY_DISCOVERY_UDP_ENABLED: "true"
+  # UDP *broadcasts* never reach a container through a published port
+  # (docker-proxy forwards unicast only), so the in-container UDP responder can
+  # never hear a client probe here. discovery-responder.(py|ps1) runs on the
+  # host instead — registered by register-autostart.(sh|ps1) — and answers on
+  # udp/47777 with this backend's LAN URL. The HTTP discovery endpoint
+  # (/api/discovery/service/) stays on and serves the full payload.
+  POINTY_DISCOVERY_UDP_ENABLED: "false"
   POINTY_DISCOVERY_UDP_PORT: "47777"
   POINTY_DISCOVERY_API_PORT: "8000"
   # Leave empty: the backend auto-detects and advertises its own LAN IP to each
@@ -136,7 +142,6 @@ services:
       POINTY_ASGI_FORWARDED_ALLOW_IPS: "${POINTY_ASGI_FORWARDED_ALLOW_IPS:-127.0.0.1}"
     ports:
       - "${POINTY_BACKEND_BIND:-0.0.0.0}:8000:8000"
-      - "${POINTY_DISCOVERY_UDP_BIND:-0.0.0.0}:47777:47777/udp"
     volumes:
       - pointy-media:/var/lib/pointy/media
       - pointy-static:/var/lib/pointy/staticfiles

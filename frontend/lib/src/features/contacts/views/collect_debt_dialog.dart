@@ -120,8 +120,8 @@ class _CollectDebtDialogState extends State<CollectDebtDialog> {
       return;
     }
     final l10n = AppLocalizations.of(context)!;
-    final trustedTerminalIds =
-        await widget.shopSettingsRepository.loadTrustedCardTerminalIds();
+    final trustedTerminalIds = await widget.shopSettingsRepository
+        .loadTrustedCardTerminalIds();
     if (!mounted) {
       return;
     }

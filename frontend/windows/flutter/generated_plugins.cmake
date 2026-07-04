@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
   flutter_bluetooth_classic_serial
   flutter_libserialport
+  flutter_tts
   printing
   record_windows
   url_launcher_windows

@@ -4502,6 +4502,10 @@ Future<void> _openNavigationDestination(
       return destination;
     }
 
+    // The rail remembers its scroll offset across pages, so it may open
+    // mid-list; reset to the top before sweeping downward.
+    await tester.drag(railSurface(), const Offset(0, 2400));
+    await tester.pumpAndSettle();
     await expandVisibleGroups(railSurface(), railDestination);
     destination = railDestination();
     for (
@@ -4522,6 +4526,13 @@ Future<void> _openNavigationDestination(
 
   Future<Finder> revealDrawerDestination() async {
     var destination = drawerDestination();
+    if (!tester.any(destination) && tester.any(find.byType(NavigationDrawer))) {
+      // The drawer remembers its scroll offset across pages, so it may open
+      // mid-list; reset to the top before sweeping downward.
+      await tester.drag(find.byType(NavigationDrawer), const Offset(0, 2400));
+      await tester.pumpAndSettle();
+      destination = drawerDestination();
+    }
     for (
       var attempts = 0;
       attempts < 8 && !tester.any(destination);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,6 +13,9 @@ class BarcodeScanListener extends StatefulWidget {
     this.maxInterKeyDelay = const Duration(milliseconds: 80),
     this.ignoreTextInputFocus = true,
     this.requireCurrentRoute = true,
+    this.onDigitsTyped,
+    this.onArrowKey,
+    this.humanDigitDelay = const Duration(milliseconds: 160),
   });
 
   final Widget child;
@@ -21,6 +26,22 @@ class BarcodeScanListener extends StatefulWidget {
   final bool ignoreTextInputFocus;
   final bool requireCurrentRoute;
 
+  /// Digits typed by a HUMAN on the keyboard/numpad (never part of a scanner
+  /// burst — a scanner's keys arrive faster than [humanDigitDelay] and end in a
+  /// terminator). Powers the scan-then-type quantity flow: each slow keystroke
+  /// is reported as its own chunk, so the receiver accumulates "1","2" → 12.
+  final ValueChanged<String>? onDigitsTyped;
+
+  /// Arrow-key presses (with the same focus/route guards as scanning). Return
+  /// true to consume the event — e.g. cycling the last scanned line's unit —
+  /// or false to let focus traversal proceed.
+  final bool Function(LogicalKeyboardKey key)? onArrowKey;
+
+  /// How long a digit must sit alone in the buffer before it counts as human
+  /// typing. Must be comfortably above [maxInterKeyDelay] so a scanner burst in
+  /// progress never fires it.
+  final Duration humanDigitDelay;
+
   @override
   State<BarcodeScanListener> createState() => _BarcodeScanListenerState();
 }
@@ -28,12 +49,24 @@ class BarcodeScanListener extends StatefulWidget {
 class _BarcodeScanListenerState extends State<BarcodeScanListener> {
   final StringBuffer _buffer = StringBuffer();
   DateTime? _lastKeyAt;
+  Timer? _humanDigitTimer;
 
   static final _terminatorKeys = {
     LogicalKeyboardKey.enter,
     LogicalKeyboardKey.numpadEnter,
     LogicalKeyboardKey.tab,
   };
+
+  static final _arrowKeys = {
+    LogicalKeyboardKey.arrowUp,
+    LogicalKeyboardKey.arrowDown,
+    LogicalKeyboardKey.arrowLeft,
+    LogicalKeyboardKey.arrowRight,
+  };
+
+  // Human quantities are short; a longer terminator-less digit string is far
+  // more likely a mis-configured scanner than a cashier typing.
+  static const _maxHumanDigits = 4;
 
   @override
   void initState() {
@@ -44,6 +77,7 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    _humanDigitTimer?.cancel();
     super.dispose();
   }
 
@@ -79,6 +113,13 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
       return false;
     }
 
+    final onArrowKey = widget.onArrowKey;
+    if (onArrowKey != null &&
+        _arrowKeys.contains(event.logicalKey) &&
+        _buffer.isEmpty) {
+      return onArrowKey(event.logicalKey);
+    }
+
     final character = event.character;
     if (character == null || character.runes.length != 1) {
       return false;
@@ -93,7 +134,46 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
 
     _buffer.write(character);
     _lastKeyAt = now;
+    _scheduleHumanDigitFlush();
     return false;
+  }
+
+  /// A scanner burst keeps restarting this timer (keys < [maxInterKeyDelay]
+  /// apart) until its terminator submits and resets; only keys typed at human
+  /// speed live long enough to flush.
+  void _scheduleHumanDigitFlush() {
+    _humanDigitTimer?.cancel();
+    if (widget.onDigitsTyped == null) {
+      return;
+    }
+    final pending = _buffer.toString();
+    if (pending.isEmpty ||
+        pending.length > _maxHumanDigits ||
+        !_isAllDigits(pending)) {
+      return;
+    }
+    _humanDigitTimer = Timer(widget.humanDigitDelay, _flushHumanDigits);
+  }
+
+  void _flushHumanDigits() {
+    final digits = _buffer.toString();
+    if (digits.isEmpty || digits.length > _maxHumanDigits) {
+      return;
+    }
+    if (!_isAllDigits(digits)) {
+      return;
+    }
+    _reset();
+    widget.onDigitsTyped?.call(digits);
+  }
+
+  static bool _isAllDigits(String value) {
+    for (final code in value.codeUnits) {
+      if (code < 0x30 || code > 0x39) {
+        return false;
+      }
+    }
+    return true;
   }
 
   bool _submitBuffer() {
@@ -130,5 +210,7 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
   void _reset() {
     _buffer.clear();
     _lastKeyAt = null;
+    _humanDigitTimer?.cancel();
+    _humanDigitTimer = null;
   }
 }

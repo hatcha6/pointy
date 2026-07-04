@@ -181,6 +181,58 @@ Future<SupplierContact?> showCreateSupplierSheet({
   );
 }
 
+/// Edits an existing customer's profile in the same form the create flow uses.
+/// Returns the updated customer, or null when dismissed.
+Future<Customer?> showEditCustomerSheet({
+  required BuildContext context,
+  required ContactRepository repository,
+  required Customer customer,
+}) {
+  return showAdaptiveFormSurface<Customer?>(
+    context: context,
+    size: AdaptiveModalSize.standard,
+    maxHeightFactor: 0.92,
+    builder: (context) {
+      return Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: CustomerForm(
+          repository: repository,
+          initial: customer,
+          onSaved: (updated) => Navigator.of(context).pop(updated),
+        ),
+      );
+    },
+  );
+}
+
+/// Edits an existing supplier's profile in the same form the create flow uses.
+/// Returns the updated supplier, or null when dismissed.
+Future<SupplierContact?> showEditSupplierSheet({
+  required BuildContext context,
+  required ContactRepository repository,
+  required SupplierContact supplier,
+}) {
+  return showAdaptiveFormSurface<SupplierContact?>(
+    context: context,
+    size: AdaptiveModalSize.standard,
+    maxHeightFactor: 0.92,
+    builder: (context) {
+      return Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SupplierForm(
+          repository: repository,
+          initial: supplier,
+          onSaved: (updated) => Navigator.of(context).pop(updated),
+        ),
+      );
+    },
+  );
+}
+
 class _CustomerPicker extends StatefulWidget {
   const _CustomerPicker({required this.repository});
 
@@ -503,10 +555,15 @@ class CustomerForm extends StatefulWidget {
     super.key,
     required this.repository,
     required this.onSaved,
+    this.initial,
   });
 
   final ContactRepository repository;
   final ValueChanged<Customer> onSaved;
+
+  /// Non-null switches the form from create to edit: fields are prefilled and
+  /// submitting PATCHes this customer instead of creating a new one.
+  final Customer? initial;
 
   @override
   State<CustomerForm> createState() => _CustomerFormState();
@@ -524,6 +581,26 @@ class _CustomerFormState extends State<CustomerForm> {
   bool _isActive = true;
   bool _isSaving = false;
   bool _hasError = false;
+
+  bool get _isEditing => widget.initial != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initial;
+    if (initial != null) {
+      _nameController.text = initial.fullName;
+      _phoneController.text = initial.phone;
+      _emailController.text = initial.email;
+      _birthdayController.text = initial.birthday == null
+          ? ''
+          : initial.birthday!.toIso8601String().split('T').first;
+      _notesController.text = initial.notes;
+      _gender = initial.gender;
+      _marketingConsent = initial.marketingConsent;
+      _isActive = initial.isActive;
+    }
+  }
 
   @override
   void dispose() {
@@ -547,13 +624,13 @@ class _CustomerFormState extends State<CustomerForm> {
           shrinkWrap: true,
           children: [
             Text(
-              l10n.addCustomerButton,
+              _isEditing ? l10n.editCustomerTitle : l10n.addCustomerButton,
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _nameController,
-              autofocus: true,
+              autofocus: !_isEditing,
               decoration: InputDecoration(
                 labelText: l10n.customerFullNameLabel,
               ),
@@ -623,7 +700,9 @@ class _CustomerFormState extends State<CustomerForm> {
             if (_hasError) ...[
               const SizedBox(height: 8),
               Text(
-                l10n.customerCreateError,
+                _isEditing
+                    ? l10n.customerUpdateError
+                    : l10n.customerCreateError,
                 style: TextStyle(color: context.pointyColors.danger),
               ),
             ],
@@ -670,18 +749,24 @@ class _CustomerFormState extends State<CustomerForm> {
       _isSaving = true;
       _hasError = false;
     });
-    final result = await widget.repository.createCustomer(
-      CustomerDraft(
-        fullName: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
-        email: _emailController.text.trim(),
-        gender: _gender,
-        birthday: DateTime.tryParse(_birthdayController.text.trim()),
-        marketingConsent: _marketingConsent,
-        notes: _notesController.text.trim(),
-        isActive: _isActive,
-      ),
+    final draft = CustomerDraft(
+      fullName: _nameController.text.trim(),
+      phone: _phoneController.text.trim(),
+      email: _emailController.text.trim(),
+      gender: _gender,
+      birthday: DateTime.tryParse(_birthdayController.text.trim()),
+      marketingConsent: _marketingConsent,
+      notes: _notesController.text.trim(),
+      isActive: _isActive,
     );
+    final initial = widget.initial;
+    final result = initial == null
+        ? await widget.repository.createCustomer(draft)
+        : await widget.repository.updateCustomer(
+            initial.id,
+            draft,
+            claimAutoCreated: initial.isAutoCreated,
+          );
     if (!mounted) {
       return;
     }
@@ -702,10 +787,15 @@ class SupplierForm extends StatefulWidget {
     super.key,
     required this.repository,
     required this.onSaved,
+    this.initial,
   });
 
   final ContactRepository repository;
   final ValueChanged<SupplierContact> onSaved;
+
+  /// Non-null switches the form from create to edit: fields are prefilled and
+  /// submitting PATCHes this supplier instead of creating a new one.
+  final SupplierContact? initial;
 
   @override
   State<SupplierForm> createState() => _SupplierFormState();
@@ -722,6 +812,23 @@ class _SupplierFormState extends State<SupplierForm> {
   bool _isActive = true;
   bool _isSaving = false;
   bool _hasError = false;
+
+  bool get _isEditing => widget.initial != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initial;
+    if (initial != null) {
+      _nameController.text = initial.name;
+      _contactNameController.text = initial.contactName;
+      _phoneController.text = initial.phone;
+      _emailController.text = initial.email;
+      _addressController.text = initial.address;
+      _notesController.text = initial.notes;
+      _isActive = initial.isActive;
+    }
+  }
 
   @override
   void dispose() {
@@ -746,13 +853,13 @@ class _SupplierFormState extends State<SupplierForm> {
           shrinkWrap: true,
           children: [
             Text(
-              l10n.addSupplierButton,
+              _isEditing ? l10n.editSupplierTitle : l10n.addSupplierButton,
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _nameController,
-              autofocus: true,
+              autofocus: !_isEditing,
               decoration: InputDecoration(labelText: l10n.supplierNameLabel),
               validator: _requiredValidator,
             ),
@@ -795,7 +902,9 @@ class _SupplierFormState extends State<SupplierForm> {
             if (_hasError) ...[
               const SizedBox(height: 8),
               Text(
-                l10n.supplierCreateError,
+                _isEditing
+                    ? l10n.supplierUpdateError
+                    : l10n.supplierCreateError,
                 style: TextStyle(color: context.pointyColors.danger),
               ),
             ],
@@ -833,17 +942,19 @@ class _SupplierFormState extends State<SupplierForm> {
       _isSaving = true;
       _hasError = false;
     });
-    final result = await widget.repository.createSupplier(
-      SupplierDraft(
-        name: _nameController.text.trim(),
-        contactName: _contactNameController.text.trim(),
-        phone: _phoneController.text.trim(),
-        email: _emailController.text.trim(),
-        address: _addressController.text.trim(),
-        notes: _notesController.text.trim(),
-        isActive: _isActive,
-      ),
+    final draft = SupplierDraft(
+      name: _nameController.text.trim(),
+      contactName: _contactNameController.text.trim(),
+      phone: _phoneController.text.trim(),
+      email: _emailController.text.trim(),
+      address: _addressController.text.trim(),
+      notes: _notesController.text.trim(),
+      isActive: _isActive,
     );
+    final initial = widget.initial;
+    final result = initial == null
+        ? await widget.repository.createSupplier(draft)
+        : await widget.repository.updateSupplier(initial.id, draft);
     if (!mounted) {
       return;
     }

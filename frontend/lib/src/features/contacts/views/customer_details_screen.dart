@@ -91,6 +91,7 @@ class CustomerDetailsView extends StatelessWidget {
     required this.viewModel,
     this.onMerged,
     this.onClaimed,
+    this.onEdited,
   });
 
   final CustomerDetailsViewModel viewModel;
@@ -100,6 +101,9 @@ class CustomerDetailsView extends StatelessWidget {
 
   /// Invoked after a placeholder card-customer is named (claimed).
   final VoidCallback? onClaimed;
+
+  /// Invoked after the profile is edited (so list views can refresh the name).
+  final VoidCallback? onEdited;
 
   @override
   Widget build(BuildContext context) {
@@ -132,6 +136,12 @@ class CustomerDetailsView extends StatelessWidget {
               PointyDetailSection(
                 title: l10n.customerProfileTitle,
                 icon: Icons.badge_outlined,
+                trailing: IconButton(
+                  key: const ValueKey('edit_customer_button'),
+                  tooltip: l10n.editContactTooltip,
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: viewModel.isSaving ? null : () => _edit(context),
+                ),
                 child: _CustomerProfile(viewModel: viewModel),
               ),
               SizedBox(height: spacing.md),
@@ -169,6 +179,21 @@ class CustomerDetailsView extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _edit(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final updated = await showEditCustomerSheet(
+      context: context,
+      repository: viewModel.repository,
+      customer: viewModel.customer,
+    );
+    if (updated == null || !context.mounted) {
+      return;
+    }
+    viewModel.applyUpdatedCustomer(updated);
+    _showSnack(context, l10n.customerUpdatedMessage);
+    onEdited?.call();
   }
 }
 

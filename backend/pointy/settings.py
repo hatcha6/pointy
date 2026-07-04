@@ -322,6 +322,15 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.sync_relay_installation",
         "schedule": crontab(minute=0),
     },
+    # Keep retrying license-key redemption until it lands (an offline install
+    # enrolls the moment the shop first reaches the internet, activating its
+    # subscriptions). No-op once enrolled or when no self-service credentials
+    # are configured; independent of POINTY_REQUIRE_LICENSE, which only decides
+    # whether an unlicensed backend blocks the API.
+    "core.ensure-relay-enrollment": {
+        "task": "core.ensure_relay_enrollment",
+        "schedule": crontab(minute="*/10"),
+    },
     # Re-score every customer's RFM rank overnight, after the day's sales have
     # settled. Runs once daily; the ranks only shift on a daily granularity
     # (recency is measured in days) so anything more frequent is wasted work.

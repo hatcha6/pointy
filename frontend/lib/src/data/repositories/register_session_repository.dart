@@ -31,9 +31,7 @@ class RegisterSessionRepository {
   Future<Result<RegisterSessionSummary>> loadSessionSummary(
     int sessionId,
   ) async {
-    return Result.guard(
-      () => _service.fetchRegisterSessionSummary(sessionId),
-    );
+    return Result.guard(() => _service.fetchRegisterSessionSummary(sessionId));
   }
 
   Future<Result<RegisterSession>> startSession({

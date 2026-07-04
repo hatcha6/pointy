@@ -1066,3 +1066,258 @@ class SsrpDiscoveryParseTests(TestCase):
 
         self.assertEqual(_parse_ssrp_payload("10.0.0.1", b"\x00garbage"), [])
         self.assertEqual(_parse_ssrp_payload("10.0.0.1", b""), [])
+
+
+# --- Fahd (Access/SQLite export) connector ------------------------------------
+
+
+def build_fahd_database(path):
+    """A miniature file in the shape scripts/fahd_reconstruct.py produces:
+    Fahd catalogue tables + the reconstructed invoice tables."""
+    connection = sqlite3.connect(path)
+    connection.executescript(
+        """
+        CREATE TABLE TASNEEF (NO INTEGER, TASNEEF TEXT);
+        CREATE TABLE CAR_PART (
+            ser TEXT, CAR_PART TEXT, SER_KETAEE REAL, SER_GOMLA REAL,
+            TAK_ONE REAL, COUNT_ORG REAL, TASNEEF TEXT
+        );
+        CREATE TABLE CAR_PART_D (ser TEXT, NO_N TEXT, CAR_PART TEXT, PLACE TEXT);
+        CREATE TABLE CAR_PART_D2 (ser TEXT, NO_N TEXT, CAR_PART TEXT, PLACE TEXT);
+        CREATE TABLE COUSTMER (NO_SADER REAL, S_NAME TEXT, S_ADDRESS TEXT, S_PHONE TEXT);
+        CREATE TABLE WARED (NO_SADER REAL, S_NAME TEXT, S_ADDRESS TEXT, S_PHONE TEXT);
+        CREATE TABLE fahd_sales (
+            invoice_no INTEGER PRIMARY KEY, occurred_at TEXT, doc_date TEXT,
+            cashier TEXT, gross REAL, discount REAL, net REAL, n_lines INTEGER,
+            total_qty REAL, print_items INTEGER, print_qty REAL, print_gross REAL,
+            print_discount REAL, print_net REAL, status TEXT
+        );
+        CREATE TABLE fahd_sale_lines (
+            invoice_no INTEGER, ser TEXT, qty REAL, unit_price REAL, line_total REAL
+        );
+        CREATE TABLE fahd_purchases (
+            id INTEGER PRIMARY KEY, supplier_name TEXT, invoice_no TEXT,
+            doc_date TEXT, occurred_at TEXT, gross REAL, n_lines INTEGER,
+            is_opening INTEGER
+        );
+        CREATE TABLE fahd_purchase_lines (
+            purchase_id INTEGER, ser TEXT, qty REAL, unit_cost REAL, line_total REAL
+        );
+        """
+    )
+    connection.executemany(
+        "INSERT INTO TASNEEF VALUES (?, ?)",
+        [(1, "مشروبات")],
+    )
+    connection.executemany(
+        "INSERT INTO CAR_PART VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+            ("1001", "عصير برتقال", 2.5, 2.0, 1.8, 7, "مشروبات"),
+            ("2002", "حليب مجفف", 10.0, 0.0, 8.0, 3, "مشروبات"),
+            ("3003", "0", 5.0, 0.0, 4.0, 0, "0"),  # placeholder name + category
+        ],
+    )
+    connection.executemany(
+        "INSERT INTO CAR_PART_D VALUES (?, ?, ?, ?)",
+        [
+            ("SUB111", "1001", "عصير برتقال", "برتقالي"),  # real sub-barcode
+            ("2002", "1001", "0", "0"),  # collides with a main code -> skipped
+        ],
+    )
+    connection.executemany(
+        "INSERT INTO CAR_PART_D2 VALUES (?, ?, ?, ?)",
+        [
+            ("SUB222", "2002", "حليب مجفف", "0"),  # pack barcode
+            ("SUB111", "2002", "0", "0"),  # duplicate of the D row -> skipped
+        ],
+    )
+    connection.executemany(
+        "INSERT INTO COUSTMER VALUES (?, ?, ?, ?)",
+        [
+            (1, "زبون تجريبي", "طرابلس", "0911234567"),
+            (2, "المبيعات اليومية", "", ""),  # system account -> skipped
+        ],
+    )
+    connection.executemany(
+        "INSERT INTO WARED VALUES (?, ?, ?, ?)",
+        [
+            (10, "شركة الحسن", "بنغازي", "0923334444"),
+            (11, "جرد بداية المدة 2023", "", ""),  # opening pseudo-supplier
+            (12, "المعدوم", "", ""),  # system account
+        ],
+    )
+    connection.executemany(
+        "INSERT INTO fahd_sales VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            # gross 15, print discount 0.5 -> net 14.5; one line via a sub-barcode
+            (101, "2024-01-15 10:00:00", "2024-01-15", "عصام", 15.0, 0.5, 14.5,
+             2, 3, 2, 3, 15.0, 0.5, 14.5, "ok"),
+            # references an item deleted from the catalogue (ghost product)
+            (102, "2024-02-20 18:30:00", "2024-02-20", "عصام", 3.0, 0.0, 3.0,
+             1, 1, None, None, None, None, None, "no_print"),
+            # 3dp unit price typed as a line total in Fahd (1.4 / 3)
+            (103, "2024-03-05 12:00:00", "2024-03-05", "سالم", 1.4, 0.0, 1.4,
+             1, 3, None, None, None, None, None, "no_print"),
+        ],
+    )
+    connection.executemany(
+        "INSERT INTO fahd_sale_lines VALUES (?, ?, ?, ?, ?)",
+        [
+            (101, "1001", 2, 2.5, 5.0),
+            (101, "SUB222", 1, 10.0, 10.0),
+            (102, "9999", 1, 3.0, 3.0),
+            (103, "1001", 3, 0.466666666666667, 1.4),
+        ],
+    )
+    connection.executemany(
+        "INSERT INTO fahd_purchases VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (1, "شركة الحسن", "INV-77", "2023-05-01", "2023-05-01", 99.996, 1, 0),
+            (2, "مورد محذوف", "B-1", "2023-06-01", "2023-06-01", 20.0, 1, 0),
+            (3, "جرد بداية المدة 2023", "X", "2023-01-01", "2023-01-01", 500.0, 1, 1),
+        ],
+    )
+    connection.executemany(
+        "INSERT INTO fahd_purchase_lines VALUES (?, ?, ?, ?, ?)",
+        [
+            (1, "2002", 12, 8.333, 99.996),
+            (2, "1001", 10, 2.0, 20.0),
+            (3, "2002", 100, 5.0, 500.0),
+        ],
+    )
+    connection.commit()
+    connection.close()
+
+
+class FahdSqliteTests(MigrationTestBase):
+    def make_fahd_source(self):
+        build_fahd_database(self.db_path)
+        return self.make_source(system_key="fahd_sqlite")
+
+    def test_compatibility_requires_reconstructed_tables(self):
+        build_fahd_database(self.db_path)
+        connection = sqlite3.connect(self.db_path)
+        connection.execute("DROP TABLE fahd_sales")
+        connection.commit()
+        connection.close()
+        connector = get_connector("fahd_sqlite")
+        with build_transport("sqlite", {"database": str(self.db_path)}) as transport:
+            report = connector.check_compatibility(transport)
+        self.assertFalse(report.compatible)
+        self.assertIn("fahd_sales", report.missing_tables)
+
+    def test_dry_run_writes_nothing(self):
+        source = self.make_fahd_source()
+        run = self.run_sync(source, DRY_RUN, options={"stock_source": "none"})
+        self.assertEqual(run.status, MigrationRun.Status.SUCCEEDED)
+        self.assertCreated(Product, 0)
+        self.assertCreated(ProductVariant, 0)
+
+    def test_import_products_variants_and_sub_barcodes(self):
+        from apps.sales.models import Order
+
+        source = self.make_fahd_source()
+        run = self.run_sync(source, IMPORT, options={"stock_source": "none"})
+        self.assertIn(
+            run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL)
+        )
+
+        # 3 catalogue products + 1 ghost for the deleted item in invoice 102.
+        self.assertCreated(Product, 4)
+        # A default variant per product + the two sub-barcode variants.
+        self.assertCreated(ProductVariant, 6)
+
+        # Sub-barcodes scan straight to their parent product.
+        sub = ProductVariant.objects.get(barcode="SUB111")
+        self.assertEqual(sub.product.name, "عصير برتقال")
+        self.assertFalse(sub.is_default)
+        self.assertEqual(sub.name, "برتقالي")
+        self.assertEqual(sub.unit_price, Decimal("2.50"))
+        pack = ProductVariant.objects.get(barcode="SUB222")
+        self.assertEqual(pack.product.name, "حليب مجفف")
+        self.assertEqual(pack.unit_price, Decimal("10.00"))
+        # The colliding rows were deduplicated: the main product kept its code.
+        self.assertEqual(
+            ProductVariant.objects.filter(barcode="2002").count(), 1
+        )
+
+        # Placeholder-name product gets a readable fallback, ghosts stay hidden.
+        self.assertTrue(Product.objects.filter(name="صنف 3003", is_active=True).exists())
+        ghost = ProductVariant.objects.get(barcode="9999")
+        self.assertFalse(ghost.product.is_active)
+
+        # No stock was carried over.
+        self.assertCreated(StockItem, 0)
+
+        # Sales: all three invoices, exact totals, original dates, cash walk-in.
+        orders = {
+            identity.source_key: identity.target
+            for identity in MigrationIdentityMap.objects.filter(entity_type="sale")
+        }
+        self.assertEqual(len(orders), 3)
+        sale_101 = orders["sale-101"]
+        self.assertEqual(sale_101.total, Decimal("14.50"))
+        self.assertEqual(sale_101.discount_total, Decimal("0.50"))
+        self.assertEqual(sale_101.lines.count(), 2)
+        self.assertIsNone(sale_101.customer_id)
+        self.assertEqual(sale_101.created_at.date().isoformat(), "2024-01-15")
+        self.assertEqual(sale_101.payments.get().amount, Decimal("14.50"))
+        self.assertEqual(
+            set(sale_101.lines.values_list("variant__barcode", flat=True)),
+            {"1001", "SUB222"},
+        )
+        self.assertEqual(sale_101.status, Order.Status.PAID)
+        # 3 × 0.466666… rounds up to 0.47 with the residue returned as a
+        # discount, so the legacy total is preserved exactly.
+        sale_103 = orders["sale-103"]
+        self.assertEqual(sale_103.total, Decimal("1.40"))
+
+        # Purchases: opening-balance pseudo-bill excluded, totals exact.
+        purchases = {
+            identity.source_key: identity.target
+            for identity in MigrationIdentityMap.objects.filter(entity_type="purchase_order")
+        }
+        self.assertEqual(len(purchases), 2)
+        bill = purchases["buy-شركة الحسن-INV-77"]
+        self.assertEqual(bill.supplier.name, "شركة الحسن")
+        self.assertEqual(bill.total, Decimal("100.00"))  # 99.996 in 2dp money
+        self.assertEqual(bill.supplier_invoice_number, "INV-77")
+        ghost_bill = purchases["buy-مورد محذوف-B-1"]
+        self.assertEqual(ghost_bill.supplier.name, "مورد محذوف")
+        self.assertEqual(ghost_bill.total, Decimal("20.00"))
+
+        # Parties: the opening/system suppliers were not imported.
+        self.assertCreated(Customer, 1)
+        supplier_names = set(
+            Supplier.objects.values_list("name", flat=True)
+        )
+        self.assertIn("شركة الحسن", supplier_names)
+        self.assertIn("مورد محذوف", supplier_names)
+        self.assertNotIn("جرد بداية المدة 2023", supplier_names)
+        self.assertNotIn("المعدوم", supplier_names)
+
+    def test_import_is_idempotent(self):
+        from apps.sales.models import Order, OrderLine
+
+        source = self.make_fahd_source()
+        self.run_sync(source, IMPORT, options={"stock_source": "none"})
+        first = (
+            Product.objects.count(),
+            ProductVariant.objects.count(),
+            Order.objects.count(),
+            OrderLine.objects.count(),
+        )
+        self.run_sync(source, IMPORT, options={"stock_source": "none"})
+        second = (
+            Product.objects.count(),
+            ProductVariant.objects.count(),
+            Order.objects.count(),
+            OrderLine.objects.count(),
+        )
+        self.assertEqual(first, second)
+
+    def test_stock_snapshot_mode_still_available(self):
+        source = self.make_fahd_source()
+        self.run_sync(source, IMPORT, options={"stock_source": "snapshot"})
+        item = StockItem.objects.get(variant__barcode="1001")
+        self.assertEqual(item.quantity_on_hand, Decimal("7"))

@@ -104,6 +104,7 @@ class CustomerDetailsViewModel extends ChangeNotifier {
     notifyListeners();
     return ok;
   }
+
   bool get isLoadingCustomer => _isLoadingCustomer;
   bool get isLoadingSummary => _isLoadingSummary;
   bool get isLoadingOrders => _isLoadingOrders;
@@ -144,6 +145,13 @@ class CustomerDetailsViewModel extends ChangeNotifier {
     }
 
     _isLoadingCards = false;
+    notifyListeners();
+  }
+
+  /// Adopts the customer returned by the edit sheet (which performed the
+  /// PATCH itself, mirroring the create flow) into this view's state.
+  void applyUpdatedCustomer(Customer customer) {
+    _customer = customer;
     notifyListeners();
   }
 

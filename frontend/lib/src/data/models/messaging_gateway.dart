@@ -160,7 +160,8 @@ class GatewayActivation {
   final int total;
 
   factory GatewayActivation.fromJson(Map<String, Object?> json) {
-    final hooks = (json['webhooks'] as List?)?.whereType<Map>().toList() ?? const [];
+    final hooks =
+        (json['webhooks'] as List?)?.whereType<Map>().toList() ?? const [];
     return GatewayActivation(
       ok: json['ok'] == true,
       registered: hooks.where((hook) => hook['ok'] == true).length,

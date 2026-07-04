@@ -20406,6 +20406,90 @@ abstract class AppLocalizations {
   /// **'الخلفية'**
   String get priceCheckerCameraBack;
 
+  /// No description provided for @editCustomerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل بيانات الزبون'**
+  String get editCustomerTitle;
+
+  /// No description provided for @editSupplierTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل بيانات المورد'**
+  String get editSupplierTitle;
+
+  /// No description provided for @editContactTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل البيانات'**
+  String get editContactTooltip;
+
+  /// No description provided for @customerUpdateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ بيانات الزبون. تحقق من الاتصال وحاول مجددًا.'**
+  String get customerUpdateError;
+
+  /// No description provided for @supplierUpdateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ بيانات المورد. تحقق من الاتصال وحاول مجددًا.'**
+  String get supplierUpdateError;
+
+  /// No description provided for @customerUpdatedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ بيانات الزبون.'**
+  String get customerUpdatedMessage;
+
+  /// No description provided for @supplierUpdatedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ بيانات المورد.'**
+  String get supplierUpdatedMessage;
+
+  /// No description provided for @supplierProfileTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات المورد'**
+  String get supplierProfileTitle;
+
+  /// No description provided for @priceCheckerTorchToggleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل الفلاش أثناء المسح'**
+  String get priceCheckerTorchToggleLabel;
+
+  /// No description provided for @priceCheckerTorchToggleHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحسّن قراءة الباركود في الإضاءة الضعيفة (يعمل مع الكاميرا الخلفية فقط)'**
+  String get priceCheckerTorchToggleHint;
+
+  /// No description provided for @priceCheckerTorchTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفلاش'**
+  String get priceCheckerTorchTooltip;
+
+  /// No description provided for @priceCheckerSpeakToggleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نطق اسم المنتج والسعر'**
+  String get priceCheckerSpeakToggleLabel;
+
+  /// No description provided for @priceCheckerSpeakToggleHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'يقرأ الجهاز اسم المنتج وسعره بصوت مسموع عند العثور عليه'**
+  String get priceCheckerSpeakToggleHint;
+
+  /// Spoken aloud when a product is found on the kiosk: name then price in dinar.
+  ///
+  /// In ar, this message translates to:
+  /// **'{product}، السعر {price} دينار'**
+  String priceCheckerSpokenResult(String product, String price);
+
   /// No description provided for @priceCheckerDwellLabel.
   ///
   /// In ar, this message translates to:

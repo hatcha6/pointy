@@ -9,6 +9,7 @@ import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
@@ -97,6 +98,7 @@ class SupplierDetailsView extends StatelessWidget {
     required this.printingRepository,
     required this.shopSettingsRepository,
     required this.capabilities,
+    this.onEdited,
   });
 
   final SupplierDetailsViewModel viewModel;
@@ -104,6 +106,9 @@ class SupplierDetailsView extends StatelessWidget {
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
+
+  /// Invoked after the profile is edited (so list views can refresh the name).
+  final VoidCallback? onEdited;
 
   @override
   Widget build(BuildContext context) {
@@ -120,6 +125,18 @@ class SupplierDetailsView extends StatelessWidget {
             padding: EdgeInsets.all(spacing.lg),
             children: [
               _SupplierHero(supplier: supplier),
+              SizedBox(height: spacing.md),
+              PointyDetailSection(
+                title: l10n.supplierProfileTitle,
+                icon: Icons.badge_outlined,
+                trailing: IconButton(
+                  key: const ValueKey('edit_supplier_button'),
+                  tooltip: l10n.editContactTooltip,
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () => _edit(context),
+                ),
+                child: _SupplierProfile(supplier: supplier),
+              ),
               SizedBox(height: spacing.md),
               PointyDetailSection(
                 title: l10n.supplierPurchaseSummaryTitle,
@@ -160,6 +177,85 @@ class SupplierDetailsView extends StatelessWidget {
           capabilities: capabilities,
         ),
       ),
+    );
+  }
+
+  Future<void> _edit(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final updated = await showEditSupplierSheet(
+      context: context,
+      repository: viewModel.repository,
+      supplier: viewModel.supplier,
+    );
+    if (updated == null || !context.mounted) {
+      return;
+    }
+    viewModel.applyUpdatedSupplier(updated);
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(l10n.supplierUpdatedMessage)));
+    onEdited?.call();
+  }
+}
+
+/// The supplier's own contact card (everything the edit form manages) — the
+/// balances and histories below are derived, this is the editable identity.
+class _SupplierProfile extends StatelessWidget {
+  const _SupplierProfile({required this.supplier});
+
+  final SupplierContact supplier;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+
+    String valueOrEmpty(String value) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? l10n.customerEmptyValue : trimmed;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PointyMetricGrid(
+          maxColumns: 2,
+          minTileWidth: 200,
+          gap: PointyMetricGridGap.compact,
+          metrics: [
+            PointyMetricGridItem(
+              label: l10n.contactPersonLabel,
+              value: valueOrEmpty(supplier.contactName),
+              icon: Icons.person_outline,
+            ),
+            PointyMetricGridItem(
+              label: l10n.phoneOptionalLabel,
+              value: valueOrEmpty(supplier.phone),
+              icon: Icons.phone_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.emailOptionalLabel,
+              value: valueOrEmpty(supplier.email),
+              icon: Icons.alternate_email_outlined,
+            ),
+            PointyMetricGridItem(
+              label: l10n.addressOptionalLabel,
+              value: valueOrEmpty(supplier.address),
+              icon: Icons.location_on_outlined,
+            ),
+          ],
+        ),
+        if (supplier.notes.trim().isNotEmpty) ...[
+          SizedBox(height: spacing.md),
+          PointyDetailCallout(
+            icon: Icons.sticky_note_2_outlined,
+            tone: PointyCalloutTone.neutral,
+            title: l10n.notesOptionalLabel,
+            message: supplier.notes,
+          ),
+        ],
+      ],
     );
   }
 }

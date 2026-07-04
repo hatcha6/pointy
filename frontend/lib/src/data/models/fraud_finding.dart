@@ -77,8 +77,9 @@ class FraudFinding {
   final DateTime? reviewedAt;
   final String resolutionNote;
 
-  String get displayLabel =>
-      targetUserLabel.trim().isNotEmpty ? targetUserLabel.trim() : targetUsername;
+  String get displayLabel => targetUserLabel.trim().isNotEmpty
+      ? targetUserLabel.trim()
+      : targetUsername;
 
   factory FraudFinding.fromJson(Map<String, Object?> json) {
     final summary = _mapFromJson(json['summary']);

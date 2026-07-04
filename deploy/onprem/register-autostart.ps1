@@ -96,6 +96,31 @@ if (Test-Path $updateAgent) {
     Write-Host "    Registered. The update agent runs ~2 min after startup and every 30 minutes."
 }
 
+# Register the LAN discovery responder: Docker's published UDP port never
+# receives the clients' broadcast probes, so the responder must run on the host.
+$discoveryResponder = Join-Path $here "discovery-responder.ps1"
+if (Test-Path $discoveryResponder) {
+    Write-Host "==> Registering scheduled task 'PointyDiscoveryResponder'..."
+    $discoveryAction = New-ScheduledTaskAction -Execute "powershell.exe" `
+        -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$discoveryResponder`"" `
+        -WorkingDirectory $here
+    $discoveryTriggers = @(
+        (New-ScheduledTaskTrigger -AtLogOn),
+        (New-ScheduledTaskTrigger -AtStartup)
+    )
+    # Long-running: restart it if it ever dies, never time it out.
+    $discoverySettings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable `
+        -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
+        -ExecutionTimeLimit ([TimeSpan]::Zero) `
+        -MultipleInstances IgnoreNew
+    Register-ScheduledTask -TaskName "PointyDiscoveryResponder" -Action $discoveryAction `
+        -Trigger $discoveryTriggers -Principal $principal -Settings $discoverySettings -Force | Out-Null
+    Start-ScheduledTask -TaskName "PointyDiscoveryResponder"
+    Write-Host "    Registered and started (answers POS clients on udp/47777)."
+}
+
 # Configure Docker Desktop to start at login (best effort).
 try {
     $settingsPath = Join-Path $env:APPDATA "Docker\settings.json"

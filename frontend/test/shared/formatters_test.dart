@@ -23,4 +23,20 @@ void main() {
       expect(formatMoney(1), '1.00 €');
     });
   });
+
+  group('formatSpokenMoney', () {
+    test('drops trailing zeros for a clean spoken number', () {
+      expect(formatSpokenMoney('8.00'), '8');
+      expect(formatSpokenMoney('2.50'), '2.5');
+      expect(formatSpokenMoney('1.25'), '1.25');
+    });
+
+    test('carries no currency symbol (the phrase supplies the word)', () {
+      expect(formatSpokenMoney('12.00'), isNot(contains('د')));
+    });
+
+    test('falls back to the raw text when it is not a number', () {
+      expect(formatSpokenMoney('السعر'), 'السعر');
+    });
+  });
 }

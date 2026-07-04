@@ -106,7 +106,14 @@ Copy-Item ".env" (Join-Path $snap.FullName ".env") -Force
 if (Test-Path "docker-compose.yml") { Copy-Item "docker-compose.yml" (Join-Path $snap.FullName "docker-compose.yml") -Force }
 
 # Adopt the new bundle's files (keep .env), stage the agent self-update, pin tags.
-foreach ($f in @("docker-compose.yml", "install.ps1", "install.sh", "watchdog.ps1", "register-autostart.ps1", ".env.example", "VERSION.txt")) {
+foreach ($f in @(
+        "docker-compose.yml", "install.ps1", "install.sh",
+        "watchdog.ps1", "watchdog.sh",
+        "register-autostart.ps1", "register-autostart.sh",
+        "update.ps1", "update.sh",
+        "discovery-responder.ps1", "discovery-responder.py",
+        "migrate-fahd.ps1", "migrate-fahd.sh",
+        ".env.example", "VERSION.txt", "INSTALL.md", "README.md")) {
     $p = Join-Path $bundleDir $f
     if (Test-Path $p) { Copy-Item $p (Join-Path "." $f) -Force }
 }
@@ -137,6 +144,11 @@ try {
 
 if ($applied) {
     Set-Content "VERSION.txt" $assigned -Encoding UTF8
+    # Re-register autostart so tasks the new bundle ships (watchdog, discovery
+    # responder, this agent) are installed hands-off. The scheduled task runs
+    # elevated, so this normally just works; idempotent either way.
+    try { & (Join-Path $PSScriptRoot "register-autostart.ps1") }
+    catch { Log "WARN: autostart re-registration failed: $($_.Exception.Message)" }
     Report $assigned "succeeded" ""
     Log "updated to $assigned"
     exit 0

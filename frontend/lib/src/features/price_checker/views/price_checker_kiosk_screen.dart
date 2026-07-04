@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../../core/result.dart';
 import '../../../data/models/price_checker_config.dart';
@@ -11,6 +12,8 @@ import '../../../data/repositories/price_checker_repository.dart';
 import '../../../data/services/connection_profile_storage.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/formatters.dart';
+import '../../../shared/price_checker/kiosk_speech_service.dart';
 import '../../../shared/price_checker/price_checker_mode_controller.dart';
 import '../price_checker_mode_actions.dart';
 import 'price_checker_kiosk_view.dart';
@@ -30,11 +33,16 @@ class PriceCheckerKioskScreen extends StatefulWidget {
     required this.controller,
     this.connectionProfileStorage =
         const SharedPreferencesConnectionProfileStorage(),
+    this.speechService,
   });
 
   final PriceCheckerRepository repository;
   final PriceCheckerModeController controller;
   final ConnectionProfileStorage connectionProfileStorage;
+
+  /// Speaks found products aloud. Injectable for tests; a real one is created
+  /// on demand when the kiosk first needs to talk.
+  final KioskSpeechService? speechService;
 
   @override
   State<PriceCheckerKioskScreen> createState() =>
@@ -55,6 +63,8 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
 
   MobileScannerController? _camera;
   StreamSubscription<BarcodeCapture>? _detections;
+  KioskSpeechService? _speech;
+  bool _wakelockEnabled = false;
 
   /// How long a found product stays on screen (Device Settings, per device).
   Duration get _foundDwell =>
@@ -63,6 +73,10 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
   @override
   void initState() {
     super.initState();
+    // A shelf price checker must never sleep — the shopper should always meet a
+    // live screen. Best-effort: a platform without a wakelock plugin just
+    // stays on its normal timeout.
+    unawaited(_enableWakelock());
     _resolveShopName();
     _announceToFleet();
     if (priceCheckerCameraScanningSupported &&
@@ -79,7 +93,38 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
       unawaited(_detections?.cancel());
       unawaited(_camera!.dispose());
     }
+    unawaited(_speech?.dispose());
+    if (_wakelockEnabled) {
+      unawaited(WakelockPlus.disable());
+    }
     super.dispose();
+  }
+
+  Future<void> _enableWakelock() async {
+    try {
+      await WakelockPlus.enable();
+      _wakelockEnabled = true;
+    } catch (_) {
+      // No wakelock support on this platform — the kiosk still works.
+    }
+  }
+
+  /// Announces the found product over TTS (name + price), honouring the
+  /// per-device toggle. Silent when disabled or when no voice is available.
+  void _speakResult(PriceLookupResult result) {
+    if (!widget.controller.config.speakResults || !result.found) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final speech = _speech ??= widget.speechService ?? KioskSpeechService();
+    unawaited(
+      speech.speak(
+        l10n.priceCheckerSpokenResult(
+          result.productName,
+          formatSpokenMoney(result.finalPrice),
+        ),
+      ),
+    );
   }
 
   /// The screen owns the camera lifecycle (`autoStart: false`): the preview
@@ -96,7 +141,25 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
       // throttle instead and dedupe in [_handleScan].
       detectionSpeed: DetectionSpeed.normal,
       detectionTimeoutMs: 900,
-      formats: const [],
+      // Higher-res frames read small/low-contrast codes that the platform
+      // default resolution misses, especially in dim aisles.
+      cameraResolution: const Size(1920, 1080),
+      // ML Kit zooms in on a code held far from the camera (Android).
+      autoZoom: true,
+      // Restricting to retail symbologies gives the decoder more attempts per
+      // second than scanning for every format under the sun.
+      formats: const [
+        BarcodeFormat.ean13,
+        BarcodeFormat.ean8,
+        BarcodeFormat.upcA,
+        BarcodeFormat.upcE,
+        BarcodeFormat.code128,
+        BarcodeFormat.code39,
+        BarcodeFormat.code93,
+        BarcodeFormat.itf14,
+        BarcodeFormat.qrCode,
+        BarcodeFormat.dataMatrix,
+      ],
     );
     _camera = camera;
     _detections = camera.barcodes.listen(_onCameraDetection, onError: (_) {});
@@ -111,6 +174,12 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
     }
     try {
       await camera.start();
+      // Dim-aisle kiosks keep the torch lit (Device Settings, per device).
+      // Only meaningful after start, and only when the camera has one.
+      if (widget.controller.config.torchEnabled &&
+          camera.value.torchState == TorchState.off) {
+        await camera.toggleTorch();
+      }
     } on Exception {
       // Permission/hardware failures surface through controller.value.error,
       // which the preview's errorBuilder renders. A kiosk with a broken
@@ -243,6 +312,10 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
               ? PriceCheckerKioskStatus.found
               : PriceCheckerKioskStatus.notFound;
         });
+        // Announce the product aloud. Only reached on a genuine lookup (the
+        // camera's same-product re-reports short-circuit in _handleScan before
+        // here), so a product on the shelf isn't repeated every second.
+        _speakResult(lookup);
         _scheduleReset(lookup.found ? _foundDwell : _notFoundDwell);
       case Error<PriceLookupResult>():
         setState(() => _status = PriceCheckerKioskStatus.disconnected);
@@ -328,7 +401,8 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
 
 /// The raw camera feed handed to the view's viewfinder card. Failures (no
 /// permission, no camera) render as a quiet in-card message — the kiosk keeps
-/// serving wedge-scanner and manual lookups regardless.
+/// serving wedge-scanner and manual lookups regardless. When the camera has a
+/// torch, a corner toggle lets staff light up a dim aisle on the spot.
 class _CameraFeed extends StatelessWidget {
   const _CameraFeed({required this.camera});
 
@@ -337,20 +411,50 @@ class _CameraFeed extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return MobileScanner(
-      controller: camera,
-      fit: BoxFit.cover,
-      // The kiosk screen owns lifecycle for every kiosk state; the widget's
-      // own handling would fight it (and stops covering when unmounted).
-      useAppLifecycleState: false,
-      errorBuilder: (context, error) => _CameraFeedMessage(
-        icon: Icons.videocam_off_outlined,
-        message: l10n.priceCheckerCameraUnavailable,
-      ),
-      placeholderBuilder: (context) => _CameraFeedMessage(
-        icon: Icons.photo_camera_outlined,
-        message: l10n.priceCheckerCameraStarting,
-      ),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        MobileScanner(
+          controller: camera,
+          fit: BoxFit.cover,
+          // The kiosk screen owns lifecycle for every kiosk state; the widget's
+          // own handling would fight it (and stops covering when unmounted).
+          useAppLifecycleState: false,
+          errorBuilder: (context, error) => _CameraFeedMessage(
+            icon: Icons.videocam_off_outlined,
+            message: l10n.priceCheckerCameraUnavailable,
+          ),
+          placeholderBuilder: (context) => _CameraFeedMessage(
+            icon: Icons.photo_camera_outlined,
+            message: l10n.priceCheckerCameraStarting,
+          ),
+        ),
+        PositionedDirectional(
+          bottom: 8,
+          end: 8,
+          child: ValueListenableBuilder<MobileScannerState>(
+            valueListenable: camera,
+            builder: (context, state, _) {
+              if (!state.isRunning ||
+                  state.torchState == TorchState.unavailable) {
+                return const SizedBox.shrink();
+              }
+              final lit = state.torchState == TorchState.on;
+              return IconButton(
+                tooltip: l10n.priceCheckerTorchTooltip,
+                onPressed: () => camera.toggleTorch(),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black45,
+                  foregroundColor: lit ? Colors.amber : Colors.white70,
+                ),
+                icon: Icon(
+                  lit ? Icons.flashlight_on_rounded : Icons.flashlight_off,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

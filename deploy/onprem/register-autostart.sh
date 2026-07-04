@@ -92,12 +92,44 @@ WantedBy=timers.target
 EOF
 fi
 
+DISCOVERY_SERVICE=/etc/systemd/system/pointy-discovery.service
+
+# LAN discovery responder: Docker's published UDP port never receives the
+# clients' broadcast probes, so the responder must live on the host.
+if [ -f "${HERE}/discovery-responder.py" ]; then
+  if command -v python3 >/dev/null 2>&1; then
+    echo "==> Writing ${DISCOVERY_SERVICE}"
+    cat > "${DISCOVERY_SERVICE}" <<EOF
+[Unit]
+Description=Pointy LAN discovery responder (answers POS clients on udp/47777)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=${HERE}
+ExecStart=/usr/bin/env python3 ${HERE}/discovery-responder.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  else
+    echo "WARN: python3 not found — skipping the LAN discovery responder." >&2
+    echo "      Install python3 and re-run, or clients must type the server IP." >&2
+  fi
+fi
+
 echo "==> Enabling timers"
 systemctl daemon-reload
 systemctl enable --now pointy-watchdog.timer
 systemctl start pointy-watchdog.service || true
 if [ -f "${UPDATE_TIMER}" ]; then
   systemctl enable --now pointy-update-agent.timer
+fi
+if [ -f "${DISCOVERY_SERVICE}" ]; then
+  systemctl enable --now pointy-discovery.service
 fi
 
 # Make Docker itself start on boot (the Linux counterpart of register-autostart.ps1
@@ -113,7 +145,9 @@ fi
 echo ""
 echo "Done. The watchdog runs ~30s after every boot and every 5 minutes."
 echo "The update agent runs ~2min after boot and every 30 minutes."
+echo "The LAN discovery responder runs continuously on udp/47777."
 echo "Inspect with:"
-echo "  systemctl status pointy-watchdog.timer pointy-update-agent.timer"
+echo "  systemctl status pointy-watchdog.timer pointy-update-agent.timer pointy-discovery.service"
 echo "  journalctl -u pointy-watchdog.service -f"
 echo "  journalctl -u pointy-update-agent.service -f"
+echo "  journalctl -u pointy-discovery.service -f"

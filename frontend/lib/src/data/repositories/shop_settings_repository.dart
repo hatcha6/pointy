@@ -25,7 +25,8 @@ class ShopSettingsRepository {
   Future<List<String>> loadTrustedCardTerminalIds() async {
     final result = await loadSettings();
     return switch (result) {
-      Ok<ShopSettings>(value: final settings) => settings.trustedCardTerminalIds,
+      Ok<ShopSettings>(value: final settings) =>
+        settings.trustedCardTerminalIds,
       Error<ShopSettings>() => const <String>[],
     };
   }

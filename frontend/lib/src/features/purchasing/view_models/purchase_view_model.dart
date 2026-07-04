@@ -51,6 +51,14 @@ class PurchaseViewModel extends ChangeNotifier {
   final List<PurchaseDraftLine> _draft = [];
   final Map<int, double> _lastCostByVariantId = {};
 
+  // Scan-then-type quick adjust: the draft line the last barcode scan landed
+  // on (digits retype its quantity, arrows cycle its unit) and the digit
+  // buffer being accumulated ("1" then "2" → 12).
+  int? _lastScannedVariantId;
+  String _quickQuantityBuffer = '';
+  DateTime? _quickQuantityAt;
+  static const _quickQuantityIdle = Duration(seconds: 4);
+
   /// Non-null when this workspace is editing an existing draft purchase order
   /// (its id) rather than building a brand-new one. Drives "save" vs "submit"
   /// semantics and the screen's labels.
@@ -319,9 +327,89 @@ class PurchaseViewModel extends ChangeNotifier {
         source: source,
       );
     }
+    if (source == 'purchase_barcode_lookup') {
+      // Arm the scan-then-type quick adjust on the line the scan landed on.
+      _lastScannedVariantId = variant.id;
+      _quickQuantityBuffer = '';
+      _quickQuantityAt = null;
+    }
     _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
+  }
+
+  /// The draft line the last hardware scan landed on, if it is still in the
+  /// draft — the target of the scan-then-type quantity/unit shortcuts.
+  PurchaseDraftLine? get lastScannedDraftLine {
+    final variantId = _lastScannedVariantId;
+    if (variantId == null) {
+      return null;
+    }
+    return _draft.where((line) => line.variant.id == variantId).firstOrNull;
+  }
+
+  /// Sets a draft line's quantity outright (the scan-then-type flow; the
+  /// steppers keep using [addVariant]/[decrementVariant]).
+  void setLineQuantity(
+    ProductVariant variant,
+    int quantity, {
+    String source = 'purchase_quantity_edit',
+  }) {
+    if (_isSubmitting || quantity <= 0) {
+      return;
+    }
+    final index = _draft.indexWhere((line) => line.variant.id == variant.id);
+    if (index == -1) {
+      return;
+    }
+    final line = _draft[index];
+    final clamped = quantity.clamp(1, 999);
+    if (line.quantity == clamped) {
+      return;
+    }
+    final updatedLine = line.copyWith(quantity: clamped);
+    _draft[index] = updatedLine;
+    _trackDraftLineQuantityChanged(
+      updatedLine,
+      previousQuantity: line.quantity,
+      newQuantity: clamped,
+      reason: 'quantity_edit',
+      source: source,
+    );
+    _touchSubmissionIntent();
+    notifyListeners();
+    unawaited(refreshDiscountPreview());
+  }
+
+  /// Scan-then-type quantity: digits typed right after a scan REPLACE the last
+  /// scanned line's quantity, accumulating across keystrokes ("1" then "2" →
+  /// 12) until the idle window passes or another scan re-arms the flow.
+  bool applyQuickQuantityDigits(String digits) {
+    if (_isSubmitting || digits.isEmpty) {
+      return false;
+    }
+    final line = lastScannedDraftLine;
+    if (line == null) {
+      return false;
+    }
+    final now = DateTime.now();
+    final startedAt = _quickQuantityAt;
+    if (startedAt == null || now.difference(startedAt) > _quickQuantityIdle) {
+      _quickQuantityBuffer = '';
+    }
+    final accumulated = _quickQuantityBuffer + digits;
+    final quantity = int.tryParse(accumulated);
+    if (quantity == null || accumulated.length > 4) {
+      return false;
+    }
+    _quickQuantityBuffer = accumulated;
+    _quickQuantityAt = now;
+    if (quantity <= 0) {
+      // A leading "0": keep accumulating ("05" → 5) without touching the line.
+      return true;
+    }
+    setLineQuantity(line.variant, quantity, source: 'scan_quick_quantity');
+    return true;
   }
 
   void decrementVariant(
@@ -638,7 +726,9 @@ class PurchaseViewModel extends ChangeNotifier {
         : order.supplierInvoiceDate!.toIso8601String().split('T').first;
     // The draft pane edits a single coupon; a draft from the purchasing flow
     // only ever carries one.
-    _discountCode = order.discountCodes.isEmpty ? '' : order.discountCodes.first;
+    _discountCode = order.discountCodes.isEmpty
+        ? ''
+        : order.discountCodes.first;
     _landedCostEntries = _normalizedLandedCostEntries(order.landedCostEntries);
     _landedCostAllocationMethod = order.landedCostAllocationMethod;
     // Receiving-on-submit is a submit-time concern; editing only saves a draft.

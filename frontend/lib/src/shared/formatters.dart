@@ -14,4 +14,23 @@ void configureCurrencySymbol(String symbol) {
   }
 }
 
-String formatMoney(double value) => '${value.toStringAsFixed(2)} $_currencySymbol';
+String formatMoney(double value) =>
+    '${value.toStringAsFixed(2)} $_currencySymbol';
+
+/// A clean numeric string for text-to-speech: no currency symbol and no noisy
+/// trailing zeros, so a screen reader says "8" and "2.5" rather than "8.00" and
+/// "2.50". Accepts the API's stringly-typed price and falls back to the raw
+/// text if it isn't a number.
+String formatSpokenMoney(String rawValue) {
+  final value = double.tryParse(rawValue.trim());
+  if (value == null) {
+    return rawValue.trim();
+  }
+  if (value == value.roundToDouble()) {
+    return value.toStringAsFixed(0);
+  }
+  return value
+      .toStringAsFixed(2)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
+}

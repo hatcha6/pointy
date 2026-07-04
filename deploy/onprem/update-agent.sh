@@ -186,7 +186,10 @@ cp .env "${SNAPSHOT}/.env"
 
 # 5. Apply: adopt the new bundle's files (keeping .env + volumes), pin the new
 # image tags, then run the bundle's own installer (docker load + compose up).
-for file in docker-compose.yml install.sh watchdog.sh register-autostart.sh .env.example VERSION.txt INSTALL.md README.md; do
+for file in docker-compose.yml install.sh watchdog.sh register-autostart.sh \
+            update.sh discovery-responder.py discovery-responder.ps1 \
+            migrate-fahd.sh migrate-fahd.ps1 \
+            .env.example VERSION.txt INSTALL.md README.md; do
   [ -f "${BUNDLE_DIR}/${file}" ] && cp -f "${BUNDLE_DIR}/${file}" "./${file}"
 done
 rm -rf ./images
@@ -211,6 +214,12 @@ rm -f .env.bak
 log "applying ${ASSIGNED}…"
 if bash ./install.sh && healthy; then
   echo "${ASSIGNED}" >VERSION.txt
+  # Re-register autostart so services the new bundle ships (watchdog, discovery
+  # responder, this agent's timer) are installed hands-off. The timer runs this
+  # script as root, so this normally just works; idempotent either way.
+  if command -v systemctl >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
+    bash ./register-autostart.sh || log "WARN: autostart re-registration failed"
+  fi
   report_status "$ASSIGNED" "succeeded" ""
   log "updated to ${ASSIGNED}"
   exit 0

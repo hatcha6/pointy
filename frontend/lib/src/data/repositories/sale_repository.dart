@@ -189,9 +189,7 @@ class SaleRepository {
   }
 
   Future<Result<SaleOrder>> lookupByReceipt(String receiptNumber) async {
-    return Result.guard(
-      () => _service.lookupSaleOrderByReceipt(receiptNumber),
-    );
+    return Result.guard(() => _service.lookupSaleOrderByReceipt(receiptNumber));
   }
 
   List<SaleStockShortage> _stockShortagesFromException(

@@ -11767,6 +11767,54 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckerCameraBack => 'الخلفية';
 
   @override
+  String get editCustomerTitle => 'تعديل بيانات الزبون';
+
+  @override
+  String get editSupplierTitle => 'تعديل بيانات المورد';
+
+  @override
+  String get editContactTooltip => 'تعديل البيانات';
+
+  @override
+  String get customerUpdateError =>
+      'تعذر حفظ بيانات الزبون. تحقق من الاتصال وحاول مجددًا.';
+
+  @override
+  String get supplierUpdateError =>
+      'تعذر حفظ بيانات المورد. تحقق من الاتصال وحاول مجددًا.';
+
+  @override
+  String get customerUpdatedMessage => 'تم حفظ بيانات الزبون.';
+
+  @override
+  String get supplierUpdatedMessage => 'تم حفظ بيانات المورد.';
+
+  @override
+  String get supplierProfileTitle => 'بيانات المورد';
+
+  @override
+  String get priceCheckerTorchToggleLabel => 'تشغيل الفلاش أثناء المسح';
+
+  @override
+  String get priceCheckerTorchToggleHint =>
+      'يحسّن قراءة الباركود في الإضاءة الضعيفة (يعمل مع الكاميرا الخلفية فقط)';
+
+  @override
+  String get priceCheckerTorchTooltip => 'الفلاش';
+
+  @override
+  String get priceCheckerSpeakToggleLabel => 'نطق اسم المنتج والسعر';
+
+  @override
+  String get priceCheckerSpeakToggleHint =>
+      'يقرأ الجهاز اسم المنتج وسعره بصوت مسموع عند العثور عليه';
+
+  @override
+  String priceCheckerSpokenResult(String product, String price) {
+    return '$product، السعر $price دينار';
+  }
+
+  @override
   String get priceCheckerDwellLabel => 'مدة عرض المنتج';
 
   @override

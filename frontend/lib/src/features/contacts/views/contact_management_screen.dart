@@ -179,6 +179,7 @@ class _ContactManagementScreenState extends State<ContactManagementScreen>
         viewModel.loadContacts();
       },
       onClaimed: viewModel.loadContacts,
+      onEdited: viewModel.loadContacts,
     );
   }
 
@@ -195,6 +196,7 @@ class _ContactManagementScreenState extends State<ContactManagementScreen>
       printingRepository: widget.printingRepository,
       shopSettingsRepository: widget.shopSettingsRepository,
       capabilities: widget.capabilities,
+      onEdited: viewModel.loadContacts,
     );
   }
 }
@@ -247,7 +249,10 @@ class _ContactManagementBody extends StatelessWidget {
             tabController: tabController,
           ),
         ),
-        _CustomerStatusFilter(viewModel: viewModel, tabController: tabController),
+        _CustomerStatusFilter(
+          viewModel: viewModel,
+          tabController: tabController,
+        ),
         _CustomerRankFilter(viewModel: viewModel, tabController: tabController),
         if (viewModel.hasError)
           Padding(
@@ -330,12 +335,7 @@ class _CustomerStatusFilter extends StatelessWidget {
         final status = viewModel.query.status;
         final isUnclaimed = status == ContactStatusFilter.unclaimedCards;
         return Padding(
-          padding: EdgeInsets.fromLTRB(
-            spacing.lg,
-            0,
-            spacing.lg,
-            spacing.sm,
-          ),
+          padding: EdgeInsets.fromLTRB(spacing.lg, 0, spacing.lg, spacing.sm),
           child: Align(
             alignment: AlignmentDirectional.centerStart,
             child: Wrap(

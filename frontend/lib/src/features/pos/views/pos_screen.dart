@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/product.dart';
 import '../../../data/models/register_cash_movement.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
@@ -15,6 +16,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../../shared/unit_options.dart';
 import '../../contacts/views/collect_debt_dialog.dart';
 import '../view_models/pos_view_model.dart';
 import 'pos_cart_pane.dart';
@@ -132,7 +134,8 @@ class PosScreen extends StatelessWidget {
         duration: const Duration(seconds: 8),
         action: SnackBarAction(
           label: l10n.sessionPrintZReportThermal,
-          onPressed: () => _printClosedSessionZReport(messenger, l10n, sessionId),
+          onPressed: () =>
+              _printClosedSessionZReport(messenger, l10n, sessionId),
         ),
       ),
     );
@@ -143,7 +146,9 @@ class PosScreen extends StatelessWidget {
     AppLocalizations l10n,
     int sessionId,
   ) async {
-    final printed = await viewModel.printClosedRegisterSessionZReport(sessionId);
+    final printed = await viewModel.printClosedRegisterSessionZReport(
+      sessionId,
+    );
     messenger.showSnackBar(
       SnackBar(
         content: Text(
@@ -226,8 +231,9 @@ class PosScreen extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         l10n.activeRegisterSessionLabel(session.sessionNumber),
-                        style: Theme.of(sheetContext).textTheme.bodySmall
-                            ?.copyWith(color: colors.mutedInk),
+                        style: Theme.of(
+                          sheetContext,
+                        ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
                       ),
                     ],
                   ),
@@ -448,6 +454,37 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
 
   void _requestCheckout() => _checkoutController.onCheckout?.call();
 
+  /// Scan-then-arrow: cycle the last scanned line through the product's
+  /// sellable units. Up/Right = next, Down/Left = previous, wrapping.
+  bool _cycleLastScannedUnit(LogicalKeyboardKey key) {
+    final viewModel = widget.viewModel;
+    final line = viewModel.lastScannedCartLine;
+    if (line == null) {
+      return false;
+    }
+    final options = sellableUnitOptions(
+      AppLocalizations.of(context)!,
+      Product.fromVariant(line.variant),
+      line.variant.unitPrice,
+    );
+    if (options.length < 2) {
+      return false;
+    }
+    final currentCode = line.unitCode.isEmpty
+        ? options.first.code
+        : line.unitCode;
+    var index = options.indexWhere((option) => option.code == currentCode);
+    if (index == -1) {
+      index = 0;
+    }
+    final forward =
+        key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowRight;
+    final next =
+        options[(index + (forward ? 1 : -1) + options.length) % options.length];
+    return viewModel.applyQuickUnit(next);
+  }
+
   @override
   Widget build(BuildContext context) {
     final viewModel = widget.viewModel;
@@ -460,6 +497,10 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
           !viewModel.isResolvingBarcode,
       onBarcodeScanned: (barcode) =>
           viewModel.addVariantByBarcode(barcode, source: 'hardware_scanner'),
+      // Fast cashier flow after a scan: type a number to set the scanned
+      // line's quantity, tap an arrow to flip its unit of measure.
+      onDigitsTyped: viewModel.applyQuickQuantityDigits,
+      onArrowKey: _cycleLastScannedUnit,
       child: CallbackShortcuts(
         bindings: {
           const SingleActivator(LogicalKeyboardKey.enter, control: true):

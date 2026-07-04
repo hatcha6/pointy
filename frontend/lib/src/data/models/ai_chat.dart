@@ -143,8 +143,7 @@ class AiToolRun {
   String? output;
 
   /// True when there's anything to show in the tap-to-inspect sheet.
-  bool get hasDetails =>
-      done && (output != null || arguments != null);
+  bool get hasDetails => done && (output != null || arguments != null);
 }
 
 /// A single chat turn. Extends [ChangeNotifier] so a streaming reply can notify

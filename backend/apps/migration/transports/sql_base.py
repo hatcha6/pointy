@@ -129,8 +129,12 @@ class SqlTransport(BaseTransport):
         try:
             cursor.execute(sql, params or [])
             column_names = [description[0] for description in cursor.description]
-            for row in cursor.fetchall():
-                yield self._row_to_dict(column_names, row)
+            while True:
+                rows = cursor.fetchmany(DEFAULT_BATCH_SIZE)
+                if not rows:
+                    break
+                for row in rows:
+                    yield self._row_to_dict(column_names, row)
         except Exception as exc:  # noqa: BLE001
             raise TransportError(f"Query failed: {exc}") from exc
         finally:

@@ -100,7 +100,10 @@ class Conversation {
     );
   }
 
-  Conversation copyWith({int? unreadCount, List<ConversationMessage>? messages}) {
+  Conversation copyWith({
+    int? unreadCount,
+    List<ConversationMessage>? messages,
+  }) {
     return Conversation(
       id: id,
       phone: phone,

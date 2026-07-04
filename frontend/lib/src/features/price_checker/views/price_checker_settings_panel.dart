@@ -275,8 +275,26 @@ class _ScanSettingsSectionState extends State<_ScanSettingsSection> {
               ),
             ),
             const SizedBox(height: 8),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              value: config.torchEnabled,
+              onChanged: (value) => unawaited(
+                widget.controller.updateScanSettings(torchEnabled: value),
+              ),
+              title: Text(l10n.priceCheckerTorchToggleLabel),
+              subtitle: Text(l10n.priceCheckerTorchToggleHint),
+            ),
           ],
         ],
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          value: config.speakResults,
+          onChanged: (value) => unawaited(
+            widget.controller.updateScanSettings(speakResults: value),
+          ),
+          title: Text(l10n.priceCheckerSpeakToggleLabel),
+          subtitle: Text(l10n.priceCheckerSpeakToggleHint),
+        ),
         ListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.priceCheckerDwellLabel),

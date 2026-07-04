@@ -35,6 +35,8 @@ class PriceCheckerConfig {
     required this.identifier,
     this.cameraEnabled = true,
     this.cameraFacing = PriceCheckerCameraFacing.front,
+    this.torchEnabled = false,
+    this.speakResults = true,
     this.foundDwellSeconds = defaultFoundDwellSeconds,
   });
 
@@ -67,6 +69,15 @@ class PriceCheckerConfig {
   /// Which camera the kiosk scans with.
   final PriceCheckerCameraFacing cameraFacing;
 
+  /// Keep the camera torch lit while scanning — a shelf kiosk in a dim aisle
+  /// reads far more barcodes with it on. Only takes effect when the selected
+  /// camera has a torch (front cameras usually don't).
+  final bool torchEnabled;
+
+  /// Speak the found product's name and price aloud (needs an on-device voice
+  /// for the shop's language; silently does nothing where none is installed).
+  final bool speakResults;
+
   /// Seconds a found product stays on screen before auto-resetting.
   final int foundDwellSeconds;
 
@@ -91,6 +102,8 @@ class PriceCheckerConfig {
     String? identifier,
     bool? cameraEnabled,
     PriceCheckerCameraFacing? cameraFacing,
+    bool? torchEnabled,
+    bool? speakResults,
     int? foundDwellSeconds,
   }) {
     return PriceCheckerConfig(
@@ -101,6 +114,8 @@ class PriceCheckerConfig {
       identifier: identifier ?? this.identifier,
       cameraEnabled: cameraEnabled ?? this.cameraEnabled,
       cameraFacing: cameraFacing ?? this.cameraFacing,
+      torchEnabled: torchEnabled ?? this.torchEnabled,
+      speakResults: speakResults ?? this.speakResults,
       foundDwellSeconds: _clampDwell(
         foundDwellSeconds ?? this.foundDwellSeconds,
       ),
@@ -116,6 +131,8 @@ class PriceCheckerConfig {
       'identifier': identifier,
       'camera_enabled': cameraEnabled,
       'camera_facing': cameraFacing.toJson(),
+      'torch_enabled': torchEnabled,
+      'speak_results': speakResults,
       'found_dwell_seconds': foundDwellSeconds,
     };
   }
@@ -130,6 +147,9 @@ class PriceCheckerConfig {
       // Configs saved before camera support existed omit these keys.
       cameraEnabled: json['camera_enabled'] != false,
       cameraFacing: PriceCheckerCameraFacing.fromJson(json['camera_facing']),
+      torchEnabled: json['torch_enabled'] == true,
+      // Configs saved before TTS existed omit this key; default it on.
+      speakResults: json['speak_results'] != false,
       foundDwellSeconds: _clampDwell(switch (json['found_dwell_seconds']) {
         final int seconds => seconds,
         final String seconds =>

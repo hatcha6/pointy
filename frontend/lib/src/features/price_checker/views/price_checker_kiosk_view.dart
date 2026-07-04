@@ -737,11 +737,19 @@ class _FoundContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final details = _ProductDetails(result: result, metrics: metrics);
     final hasImage = result.hasImage;
+    // Details are start-aligned ONLY when they sit beside the photo (wide +
+    // image). With no photo, the details fill the width and must be centred —
+    // otherwise start-alignment hugs the right edge on this RTL layout.
+    final alongsidePhoto = metrics.isWide && hasImage;
+    final details = _ProductDetails(
+      result: result,
+      metrics: metrics,
+      centered: !alongsidePhoto,
+    );
 
     final Widget core;
-    if (metrics.isWide && hasImage) {
+    if (alongsidePhoto) {
       // Wide displays: photo on the leading side, details trailing.
       core = Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -841,19 +849,28 @@ class _ProductPhoto extends StatelessWidget {
 }
 
 class _ProductDetails extends StatelessWidget {
-  const _ProductDetails({required this.result, required this.metrics});
+  const _ProductDetails({
+    required this.result,
+    required this.metrics,
+    this.centered = false,
+  });
 
   final PriceLookupResult result;
   final _KioskMetrics metrics;
+
+  /// Centre every line (name, price, pills, hint). Set when the details fill
+  /// the width with no photo beside them; false only in the wide photo|details
+  /// split, where start-alignment reads correctly next to the image.
+  final bool centered;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
     final l10n = AppLocalizations.of(context)!;
-    final crossAxis = metrics.isWide
-        ? CrossAxisAlignment.start
-        : CrossAxisAlignment.center;
-    final textAlign = metrics.isWide ? TextAlign.start : TextAlign.center;
+    final crossAxis = centered
+        ? CrossAxisAlignment.center
+        : CrossAxisAlignment.start;
+    final textAlign = centered ? TextAlign.center : TextAlign.start;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -891,9 +908,7 @@ class _ProductDetails extends StatelessWidget {
         Wrap(
           spacing: metrics.gap * 0.6,
           runSpacing: metrics.gap * 0.5,
-          alignment: metrics.isWide
-              ? WrapAlignment.start
-              : WrapAlignment.center,
+          alignment: centered ? WrapAlignment.center : WrapAlignment.start,
           children: [
             _StockPill(inStock: result.inStock, metrics: metrics),
             if (result.sku.isNotEmpty)
@@ -906,9 +921,9 @@ class _ProductDetails extends StatelessWidget {
         ),
         SizedBox(height: metrics.gap * 1.2),
         Align(
-          alignment: metrics.isWide
-              ? AlignmentDirectional.centerStart
-              : Alignment.center,
+          alignment: centered
+              ? Alignment.center
+              : AlignmentDirectional.centerStart,
           child: Text(
             l10n.priceCheckerScanAnother,
             style: TextStyle(
@@ -1255,9 +1270,12 @@ class _CornerControls extends StatelessWidget {
           PositionedDirectional(
             top: metrics.gap * 0.4,
             start: metrics.gap * 0.4,
-            // Long-press only: customers won't trigger it by accident.
+            // Tap opens the exit PIN dialog — the PIN is the real guard, so a
+            // curious customer tap only shows a locked keypad that dismisses
+            // itself. (Long-press kept for staff used to the old gesture.)
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
+              onTap: onExitRequested,
               onLongPress: onExitRequested,
               child: Tooltip(
                 message: l10n.priceCheckerExitTooltip,
@@ -1266,7 +1284,7 @@ class _CornerControls extends StatelessWidget {
                   child: Icon(
                     Icons.lock_outline_rounded,
                     size: (metrics.scale * 22).clamp(18, 34),
-                    color: colors.mutedInk.withValues(alpha: 0.35),
+                    color: colors.mutedInk.withValues(alpha: 0.55),
                   ),
                 ),
               ),

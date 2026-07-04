@@ -34,6 +34,10 @@ class PointyApp extends StatefulWidget {
 class _PointyAppState extends State<PointyApp> {
   late final PointyAppDependencies _dependencies;
   late final PointyNavigationRailController _navigationRailController;
+  // App-lifetime home for the nav drawer/rail scroll offsets: screens replace
+  // each other as routes, so per-route PageStorage forgets the list position
+  // on every navigation.
+  final PageStorageBucket _navigationScrollBucket = PageStorageBucket();
   void Function(FlutterErrorDetails details)? _previousFlutterErrorHandler;
   ErrorCallback? _previousPlatformErrorHandler;
   late final TimingsCallback _frameTimingsCallback;
@@ -129,6 +133,7 @@ class _PointyAppState extends State<PointyApp> {
               child: PointyNavigationRailScope(
                 isActive: false,
                 controller: _navigationRailController,
+                navigationBucket: _navigationScrollBucket,
                 child: child ?? const SizedBox.shrink(),
               ),
             ),

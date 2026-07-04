@@ -38,6 +38,17 @@ class PurchasingApiClient {
     );
   }
 
+  Future<SupplierContact> patchSupplier(
+    int supplierId,
+    Map<String, Object?> body,
+  ) async {
+    final response = await _session.patch('suppliers/$supplierId/', body: body);
+    _session.throwApiException(response, 'Supplier update failed with status');
+    return SupplierContact.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<PurchaseOrderPage> fetchPurchaseOrders({
     required PurchaseOrderQuery query,
     int page = 1,

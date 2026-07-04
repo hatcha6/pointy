@@ -95,6 +95,8 @@ void main() {
         identifier: 'pc-aisle-3-ab12cd',
         cameraEnabled: false,
         cameraFacing: PriceCheckerCameraFacing.back,
+        torchEnabled: true,
+        speakResults: false,
         foundDwellSeconds: 15,
       );
       final decoded = PriceCheckerConfig.decode(config.encode());
@@ -105,6 +107,8 @@ void main() {
       expect(decoded.isConfigured, isTrue);
       expect(decoded.cameraEnabled, isFalse);
       expect(decoded.cameraFacing, PriceCheckerCameraFacing.back);
+      expect(decoded.torchEnabled, isTrue);
+      expect(decoded.speakResults, isFalse);
       expect(decoded.foundDwellSeconds, 15);
     });
 
@@ -120,6 +124,9 @@ void main() {
       );
       expect(decoded.cameraEnabled, isTrue);
       expect(decoded.cameraFacing, PriceCheckerCameraFacing.front);
+      // Speech defaults on for configs saved before it existed.
+      expect(decoded.speakResults, isTrue);
+      expect(decoded.torchEnabled, isFalse);
       expect(
         decoded.foundDwellSeconds,
         PriceCheckerConfig.defaultFoundDwellSeconds,
