@@ -30,28 +30,53 @@ Keep this branch's pubspec downgrade **off `main`** — merging it would break
 `main`'s Flutter 3.38 build. Rebase `main` *into* this branch each release
 cycle, never the reverse.
 
-## Status: ported and analyzer-clean — one CI resolve away from green
+## Status: fully validated against real Flutter 3.19.6 (pub get + gen-l10n + analyze)
 
-The full downgrade is done. `dart analyze lib` is **clean (0 errors,
-0 warnings)** under the pubspec's Dart 3.3 lower-bound language version, so all
-the Dart 3.7/3.8 syntax and the newer-package APIs have been ported. The heavy,
-camera/AI-only features were **dropped** (not downgraded) and stubbed behind
-their existing signatures — a Windows-8 till uses a wedge/USB scanner and
+The downgrade + port is done and validated against an **actual Flutter 3.19.6
+toolchain** (not just a language-version analyze). Everything CI runs before the
+Windows-native compile has been reproduced locally and passes:
+
+| CI step | local result (real Flutter 3.19.6, Dart 3.3.4) |
+|---|---|
+| `flutter pub get` | ✅ exit 0 — full tree resolves |
+| `flutter gen-l10n` | ✅ with `synthetic-package: false` (see below) |
+| `dart analyze lib` | ✅ **0 errors / 0 warnings** |
+| `flutter build windows` | Windows-only — the only step CI must prove |
+
+The heavy camera/AI-only features were **dropped** (not downgraded) and stubbed
+behind their existing signatures — a Windows-8 till uses a wedge/USB scanner and
 printer only, so nothing user-facing on that hardware is lost.
 
-The one thing that still can't be validated on this dev machine is the real
-Flutter 3.19 `pub get` — the transitive tree may force a few more patch pins.
-That resolve happens in the compat CI (or via FVM locally, below). Everything
-that a local Dart 3.3-language-version analyze can prove, is proven.
+### Validating locally against the real 3.19 SDK (no global change)
 
-### How the local analyze proves Dart 3.3 compatibility without Flutter 3.19
+A language-version `dart analyze` (below) catches Dart-3.3 *syntax* violations,
+but it can NOT see two whole classes of failure that only the real 3.19 SDK
+surfaces: (1) transitive **version conflicts** (e.g. pdf↔vector_math), and
+(2) Flutter **framework** API drift (`Color.withValues`, `WidgetState`, …). To
+catch those, download Flutter 3.19.6 into a throwaway dir — this touches nothing
+global (no PATH change, no FVM, no global Flutter modified):
+
+```bash
+cd "$SCRATCH"                 # any temp dir
+curl -sSL -o f319.zip \
+  https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_3.19.6-stable.zip
+unzip -q f319.zip             # -> ./flutter  (Dart 3.3.4 bundled)
+FL=$PWD/flutter/bin/flutter
+cd <repo>/frontend
+$FL pub get && $FL gen-l10n && $FL/../dart analyze lib   # the real CI gate
+```
+
+`$FL pub get` is the oracle for resolution; `dart analyze lib` (run via the
+isolated SDK, so it type-checks against the *3.19* package + framework APIs) is
+the oracle for code. This is exactly how the framework-API port below was found.
+
+### How a plain (global-Flutter) analyze still helps
 
 `dart analyze` reads the **language version from the pubspec lower bound**
-(`sdk: '>=3.3.0'`), not from the SDK running it. So running it under this
-machine's global Flutter still rejects any Dart 3.4+ syntax — which is exactly
-how the wildcard / null-aware-element / public-field-promotion errors were
-found and fixed. It does *not* prove the transitive package tree resolves under
-Flutter 3.19; only the compat CI does that.
+(`sdk: '>=3.3.0'`), not the SDK running it, so even the global Flutter rejects
+Dart 3.4+ *syntax* (wildcards, null-aware elements, public-field promotion). It
+does NOT see 3.19 framework APIs or transitive resolution — use the isolated
+SDK above for those.
 
 ## Validate locally WITHOUT disturbing your global Flutter
 
@@ -114,13 +139,19 @@ constraint includes 3.3.4 (checked against the pub.dev version metadata).
 | `multicast_dns` | ^0.3.3 | `>=0.3.2 <0.3.3` | 0.3.2+7 | 0.3.3 floors at Dart 3.4 |
 | `qr` | ^3.0.2 | `>=3.0.0 <3.0.2` | 3.0.1 | 3.0.2 floors at Dart 3.4; same `QrCode`/`QrImage` API |
 | `http_parser` | ^4.1.2 | `>=4.0.0 <4.1.0` | 4.0.2 | 4.1.0 floors at Dart 3.4; keeps `MediaType` |
+| `pdf` | ^3.12.0 | `>=3.11.0 <3.12.0` | 3.11.3 | **not** an SDK floor — pdf 3.12 needs `vector_math ^2.2.0`, but Flutter 3.19's `flutter_test` pins `vector_math 2.1.4` exactly; pdf 3.11 uses `^2.1.0` |
 | `flutter_lints` (dev) | ^6.0.0 | `^3.0.0` | 3.0.x | 6.x needs Dart 3.8 |
+
+The `pdf` row is the important lesson: a Dart-3.3-compatible package can still be
+**unresolvable** because of a *transitive version conflict* with an SDK-pinned
+package (here `vector_math`). Only the real 3.19 `pub get` finds these — the
+pub.dev-metadata audit that catches SDK floors does not.
 
 Direct deps whose existing caret pin *already* admits a Dart-3.3-safe version
 (so pub auto-picks it, no change needed): `cupertino_icons` (1.0.8), `http`
-(1.2.2), `pdf` (3.12.0), `url_launcher` (6.3.1), `path_provider` (2.1.4),
-`package_info_plus` (8.x). Transitive Flutter-SDK packages (`collection`,
-`meta`, `async`, …) are pinned by Flutter 3.19 itself; federated plugin
+(1.2.2), `url_launcher` (6.3.1), `path_provider` (2.1.4), `package_info_plus`
+(8.x). Transitive Flutter-SDK packages (`collection`, `meta`, `async`,
+`vector_math`, …) are pinned by Flutter 3.19 itself; federated plugin
 platform-impls (`image_picker_android`, `win32`, …) follow their capped
 top-level plugin.
 
@@ -138,17 +169,51 @@ top-level plugin.
 This was all found and fixed via local `dart analyze lib` — see the note above
 on why that catches 3.3 violations without Flutter 3.19 installed.
 
+### Framework API port (Flutter 3.38 → 3.19)
+
+`main` calls Flutter framework APIs newer than 3.19. These are invisible to a
+global-Flutter analyze (the framework *is* newer there) — only the isolated
+3.19 SDK surfaces them. All rewritten to their 3.19 equivalents:
+
+| 3.38 API (used on main) | 3.19 equivalent | added in | sites |
+|---|---|---|---|
+| `Color.withValues(alpha: x)` | `Color.withOpacity(x)` | 3.27 | 127 |
+| `WidgetState` / `WidgetStateProperty` | `MaterialState` / `MaterialStateProperty` | 3.22 | 18 |
+| `{AppBar,Card,Dialog,InputDecoration}ThemeData` | drop the `Data` suffix | 3.22 | 8 |
+| `ColorScheme.surfaceContainerHighest` | `surfaceVariant` | 3.22 | 1 |
+| `DropdownButtonFormField(initialValue:)` | `value:` | 3.22 | 37 |
+| `PopScope(onPopInvokedWithResult:)` | `onPopInvoked:` (single-arg) | 3.22 | 1 |
+
+`BottomSheetThemeData` and `ChipThemeData` already exist in 3.19 (they always
+carried the `Data` suffix) — left untouched.
+
+### l10n: pin `synthetic-package: false`
+
+Flutter 3.19's `gen-l10n` defaults `synthetic-package` to **true** — it deletes
+`lib/l10n/generated/*.dart` and emits to `.dart_tool/flutter_gen/` under
+`package:flutter_gen/...`. But the app imports
+`package:pointy_frontend/l10n/generated/...`, so the CI build breaks right after
+its `flutter gen-l10n` step. `l10n.yaml` now pins `synthetic-package: false`
+(the default from 3.22 on, so harmless on `main`), keeping output in
+`output-dir`. The committed generated files are the 3.19 form.
+
 ## Re-validating after a `main` merge
 
-`flutter build windows` compiles only the reachable `lib/` graph and fails only
-on **errors**, so the gate for a green build is:
+A global-Flutter `dart analyze lib` (0 errors) is necessary but **not
+sufficient** — it misses 3.19 framework APIs and transitive resolution. The real
+gate is the isolated 3.19 SDK (see "Validating locally against the real 3.19
+SDK" above):
 
 ```bash
+FL=$SCRATCH/flutter/bin/flutter          # the downloaded 3.19.6
 cd frontend
-dart analyze lib        # must be 0 errors (warnings/infos don't block the build)
+$FL pub get                              # transitive resolution (SDK floors + version conflicts)
+$FL gen-l10n                             # regenerates lib/l10n/generated (synthetic-package: false)
+$SCRATCH/flutter/bin/dart analyze lib    # 0 errors against 3.19 framework + package APIs
 ```
 
-If a future `main` merge reintroduces newer syntax or a dropped package's
-symbols, that command flags it. `test/` still references the dropped packages
-and will not analyze/run on this branch — that is expected and does not affect
-the release build.
+`flutter build windows` compiles only the reachable `lib/` graph and fails only
+on **errors**; the three commands above reproduce every CI step except the
+Windows-native compile. `test/` still references the dropped packages and will
+not analyze/run on this branch — that is expected and does not affect the
+release build.
