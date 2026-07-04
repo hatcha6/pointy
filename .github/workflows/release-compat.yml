@@ -76,7 +76,12 @@ jobs:
   build-windows-compat:
     name: Build Windows 8 app (Flutter 3.19)
     needs: version
-    runs-on: windows-latest
+    # Pin to windows-2022: `windows-latest` now points to windows-2025, whose
+    # VS 2022 (17.12+) is too new for Flutter 3.19's 2-year-old VS detection —
+    # it fails to detect it and falls back to the "Visual Studio 16 2019"
+    # CMake generator. windows-2022 ships an older VS 2022 3.19 can detect, and
+    # we also install a VS 2019 toolchain below as a deterministic backstop.
+    runs-on: windows-2022
     env:
       WINDOWS_SIGNING_CERT_BASE64: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
       WINDOWS_SIGNING_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
@@ -89,6 +94,17 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: ${{ env.FLUTTER_CHANNEL }}
           cache: true
+
+      # Flutter 3.19 emits the CMake generator "Visual Studio 16 2019" whenever
+      # it can't positively identify a newer VS. CMake then needs an actual VS
+      # 2019 toolchain to satisfy that generator. Install the VS 2019 C++ build
+      # tools so the native Windows build resolves regardless of what Flutter's
+      # (dated) VS detection decides on the runner.
+      - name: Install Visual Studio 2019 C++ build tools
+        shell: pwsh
+        run: |
+          choco install visualstudio2019buildtools -y --no-progress
+          choco install visualstudio2019-workload-vctools -y --no-progress
 
       - name: Flutter pub get
         working-directory: frontend
