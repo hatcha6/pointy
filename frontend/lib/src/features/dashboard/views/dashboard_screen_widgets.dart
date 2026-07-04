@@ -214,47 +214,16 @@ class _AiExplainerCard extends StatelessWidget {
   }
 }
 
+// compat/win8: fl_chart needs Flutter 3.6+; dropped on this build. The three
+// dashboard charts collapse to the shared "no widget data" placeholder — a
+// cashier till doesn't use the manager dashboard, so its charts aren't shipped.
 class _SalesTrendChart extends StatelessWidget {
   const _SalesTrendChart({required this.points});
 
   final List<SalesTrendPoint> points;
 
   @override
-  Widget build(BuildContext context) {
-    if (points.every((point) => point.netSales == 0)) {
-      return const _EmptyWidgetData();
-    }
-    final colors = context.pointyColors;
-    final maxY = _maxValue(points.map((point) => point.netSales));
-    return SizedBox(
-      height: 220,
-      child: LineChart(
-        LineChartData(
-          minY: 0,
-          maxY: maxY,
-          gridData: const FlGridData(show: true),
-          borderData: FlBorderData(show: false),
-          titlesData: _axisTitles(context),
-          lineBarsData: [
-            LineChartBarData(
-              spots: [
-                for (var index = 0; index < points.length; index += 1)
-                  FlSpot(index.toDouble(), points[index].netSales),
-              ],
-              isCurved: true,
-              color: colors.primaryStrong,
-              barWidth: 3,
-              dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(
-                show: true,
-                color: colors.primaryStrong.withValues(alpha: 0.14),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const _EmptyWidgetData();
 }
 
 class _HourlySalesChart extends StatelessWidget {
@@ -263,38 +232,7 @@ class _HourlySalesChart extends StatelessWidget {
   final List<HourlySalesPoint> points;
 
   @override
-  Widget build(BuildContext context) {
-    if (points.every((point) => point.netSales == 0)) {
-      return const _EmptyWidgetData();
-    }
-    final visible = points
-        .where((point) => point.hour % 3 == 0 || point.netSales > 0)
-        .toList(growable: false);
-    return SizedBox(
-      height: 220,
-      child: BarChart(
-        BarChartData(
-          gridData: const FlGridData(show: true),
-          borderData: FlBorderData(show: false),
-          titlesData: _axisTitles(context),
-          barGroups: [
-            for (final point in visible)
-              BarChartGroupData(
-                x: point.hour,
-                barRods: [
-                  BarChartRodData(
-                    toY: point.netSales,
-                    width: 9,
-                    borderRadius: BorderRadius.circular(4),
-                    color: context.pointyColors.accentAmber,
-                  ),
-                ],
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const _EmptyWidgetData();
 }
 
 class _PaymentMixChart extends StatelessWidget {
@@ -303,38 +241,7 @@ class _PaymentMixChart extends StatelessWidget {
   final List<PaymentMethodInsight> methods;
 
   @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final nonZero = methods
-        .where((method) => method.total.abs() > 0)
-        .toList(growable: false);
-    if (nonZero.isEmpty) {
-      return const _EmptyWidgetData();
-    }
-    final colors = _chartColors(context);
-    return SizedBox(
-      height: 220,
-      child: PieChart(
-        PieChartData(
-          centerSpaceRadius: 46,
-          sectionsSpace: 2,
-          sections: [
-            for (var index = 0; index < nonZero.length; index += 1)
-              PieChartSectionData(
-                value: nonZero[index].total.abs(),
-                title: _paymentMethodLabel(l10n, nonZero[index].method),
-                radius: 74,
-                color: colors[index % colors.length],
-                titleStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: context.pointyColors.surface,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const _EmptyWidgetData();
 }
 
 class _TopProductsList extends StatelessWidget {
@@ -758,46 +665,9 @@ class _EmptyWidgetData extends StatelessWidget {
   }
 }
 
-FlTitlesData _axisTitles(BuildContext context) {
-  final textStyle = Theme.of(context).textTheme.labelSmall;
-  return FlTitlesData(
-    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-    leftTitles: AxisTitles(
-      sideTitles: SideTitles(
-        showTitles: true,
-        reservedSize: 42,
-        getTitlesWidget: (value, meta) {
-          return Text(
-            _compactNumber(value),
-            style: textStyle,
-            textAlign: TextAlign.center,
-          );
-        },
-      ),
-    ),
-    bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-  );
-}
-
-double _maxValue(Iterable<double> values) {
-  final max = values.fold<double>(0, (current, value) {
-    return value > current ? value : current;
-  });
-  return max <= 0 ? 1 : max * 1.25;
-}
-
-List<Color> _chartColors(BuildContext context) {
-  final colors = context.pointyColors;
-  return [
-    colors.primaryStrong,
-    colors.accentAmber,
-    colors.primaryDark,
-    colors.warning,
-    colors.mutedInk,
-    colors.danger,
-  ];
-}
+// compat/win8: _axisTitles / _maxValue / _chartColors removed with the charts
+// (they referenced fl_chart types). _compactNumber / _compactFormat stay unused
+// on this build — harmless for the release build, which never runs the linter.
 
 Color _changeColor(BuildContext context, double value) {
   final colors = context.pointyColors;

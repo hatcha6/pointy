@@ -1,4 +1,5 @@
-import 'package:fl_chart/fl_chart.dart';
+// compat/win8: fl_chart needs Flutter 3.6+; dropped. Dashboard charts render a
+// placeholder (see dashboard_screen_widgets.dart).
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';

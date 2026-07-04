@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+// compat/win8: mobile_scanner (camera scanning) is dropped. The kiosk was
+// already camera-less on Windows (priceCheckerCameraScanningSupported is false
+// there), so it runs entirely on the wedge scanner + manual entry here.
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -49,8 +51,7 @@ class PriceCheckerKioskScreen extends StatefulWidget {
       _PriceCheckerKioskScreenState();
 }
 
-class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
-    with WidgetsBindingObserver {
+class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen> {
   static const _notFoundDwell = Duration(seconds: 7);
   static const _errorDwell = Duration(seconds: 5);
 
@@ -61,8 +62,6 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
   Timer? _resetTimer;
   int _lookupSeq = 0;
 
-  MobileScannerController? _camera;
-  StreamSubscription<BarcodeCapture>? _detections;
   KioskSpeechService? _speech;
   bool _wakelockEnabled = false;
 
@@ -79,20 +78,11 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
     unawaited(_enableWakelock());
     _resolveShopName();
     _announceToFleet();
-    if (priceCheckerCameraScanningSupported &&
-        widget.controller.config.cameraEnabled) {
-      _setUpCamera();
-    }
   }
 
   @override
   void dispose() {
     _resetTimer?.cancel();
-    if (_camera != null) {
-      WidgetsBinding.instance.removeObserver(this);
-      unawaited(_detections?.cancel());
-      unawaited(_camera!.dispose());
-    }
     unawaited(_speech?.dispose());
     if (_wakelockEnabled) {
       unawaited(WakelockPlus.disable());
@@ -127,106 +117,8 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
     );
   }
 
-  /// The screen owns the camera lifecycle (`autoStart: false`): the preview
-  /// widget unmounts while a result is on screen, but detection must keep
-  /// running so the next product can be scanned hands-free at any moment.
-  void _setUpCamera() {
-    final camera = MobileScannerController(
-      autoStart: false,
-      facing: switch (widget.controller.config.cameraFacing) {
-        PriceCheckerCameraFacing.front => CameraFacing.front,
-        PriceCheckerCameraFacing.back => CameraFacing.back,
-      },
-      // `noDuplicates` would swallow a re-scan of the same product forever;
-      // throttle instead and dedupe in [_handleScan].
-      detectionSpeed: DetectionSpeed.normal,
-      detectionTimeoutMs: 900,
-      // Higher-res frames read small/low-contrast codes that the platform
-      // default resolution misses, especially in dim aisles.
-      cameraResolution: const Size(1920, 1080),
-      // ML Kit zooms in on a code held far from the camera (Android).
-      autoZoom: true,
-      // Restricting to retail symbologies gives the decoder more attempts per
-      // second than scanning for every format under the sun.
-      formats: const [
-        BarcodeFormat.ean13,
-        BarcodeFormat.ean8,
-        BarcodeFormat.upcA,
-        BarcodeFormat.upcE,
-        BarcodeFormat.code128,
-        BarcodeFormat.code39,
-        BarcodeFormat.code93,
-        BarcodeFormat.itf14,
-        BarcodeFormat.qrCode,
-        BarcodeFormat.dataMatrix,
-      ],
-    );
-    _camera = camera;
-    _detections = camera.barcodes.listen(_onCameraDetection, onError: (_) {});
-    WidgetsBinding.instance.addObserver(this);
-    unawaited(_startCamera());
-  }
-
-  Future<void> _startCamera() async {
-    final camera = _camera;
-    if (camera == null) {
-      return;
-    }
-    try {
-      await camera.start();
-      // Dim-aisle kiosks keep the torch lit (Device Settings, per device).
-      // Only meaningful after start, and only when the camera has one.
-      if (widget.controller.config.torchEnabled &&
-          camera.value.torchState == TorchState.off) {
-        await camera.toggleTorch();
-      }
-    } on Exception {
-      // Permission/hardware failures surface through controller.value.error,
-      // which the preview's errorBuilder renders. A kiosk with a broken
-      // camera must keep serving wedge-scanner lookups, so never rethrow.
-    }
-  }
-
-  /// Kiosks run unattended around the clock: release the camera when the app
-  /// goes inactive and reclaim it on resume, whatever state the kiosk is in
-  /// (the preview widget's own handling only covers while it is mounted).
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    final camera = _camera;
-    if (camera == null || !camera.value.hasCameraPermission) {
-      return;
-    }
-    switch (state) {
-      case AppLifecycleState.resumed:
-        unawaited(_startCamera());
-      case AppLifecycleState.inactive:
-        unawaited(camera.stop());
-      case AppLifecycleState.detached:
-      case AppLifecycleState.paused:
-      case AppLifecycleState.hidden:
-        break;
-    }
-  }
-
-  void _onCameraDetection(BarcodeCapture capture) {
-    if (!mounted) {
-      return;
-    }
-    // Match the wedge listener: ignore scans while a dialog (PIN pad, manual
-    // entry) sits on top of the kiosk.
-    if (ModalRoute.of(context)?.isCurrent == false) {
-      return;
-    }
-    for (final barcode in capture.barcodes) {
-      final code = barcode.rawValue?.trim() ?? '';
-      if (code.isNotEmpty) {
-        _handleScan(code);
-        return;
-      }
-    }
-  }
-
-  /// Shared entry point for camera, wedge-scanner, and manual-entry scans.
+  /// Shared entry point for the wedge-scanner and manual-entry scans (camera
+  /// scanning is dropped on this build).
   void _handleScan(String code) {
     final barcode = code.trim();
     if (barcode.isEmpty) {
@@ -379,7 +271,6 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
 
   @override
   Widget build(BuildContext context) {
-    final camera = _camera;
     return PopScope(
       // A kiosk must not be dismissable with the Android back button.
       canPop: false,
@@ -390,7 +281,8 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
           result: _result,
           barcode: _barcode,
           shopName: _shopName,
-          cameraPreview: camera == null ? null : _CameraFeed(camera: camera),
+          // compat/win8: no camera preview (mobile_scanner dropped).
+          cameraPreview: null,
           onManualEntry: _manualEntry,
           onExitRequested: _requestExit,
         ),
@@ -399,95 +291,7 @@ class _PriceCheckerKioskScreenState extends State<PriceCheckerKioskScreen>
   }
 }
 
-/// The raw camera feed handed to the view's viewfinder card. Failures (no
-/// permission, no camera) render as a quiet in-card message — the kiosk keeps
-/// serving wedge-scanner and manual lookups regardless. When the camera has a
-/// torch, a corner toggle lets staff light up a dim aisle on the spot.
-class _CameraFeed extends StatelessWidget {
-  const _CameraFeed({required this.camera});
-
-  final MobileScannerController camera;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        MobileScanner(
-          controller: camera,
-          fit: BoxFit.cover,
-          // The kiosk screen owns lifecycle for every kiosk state; the widget's
-          // own handling would fight it (and stops covering when unmounted).
-          useAppLifecycleState: false,
-          errorBuilder: (context, error) => _CameraFeedMessage(
-            icon: Icons.videocam_off_outlined,
-            message: l10n.priceCheckerCameraUnavailable,
-          ),
-          placeholderBuilder: (context) => _CameraFeedMessage(
-            icon: Icons.photo_camera_outlined,
-            message: l10n.priceCheckerCameraStarting,
-          ),
-        ),
-        PositionedDirectional(
-          bottom: 8,
-          end: 8,
-          child: ValueListenableBuilder<MobileScannerState>(
-            valueListenable: camera,
-            builder: (context, state, _) {
-              if (!state.isRunning ||
-                  state.torchState == TorchState.unavailable) {
-                return const SizedBox.shrink();
-              }
-              final lit = state.torchState == TorchState.on;
-              return IconButton(
-                tooltip: l10n.priceCheckerTorchTooltip,
-                onPressed: () => camera.toggleTorch(),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black45,
-                  foregroundColor: lit ? Colors.amber : Colors.white70,
-                ),
-                icon: Icon(
-                  lit ? Icons.flashlight_on_rounded : Icons.flashlight_off,
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Icon + line shown on the viewfinder's black backdrop while the camera is
-/// starting or unavailable.
-class _CameraFeedMessage extends StatelessWidget {
-  const _CameraFeedMessage({required this.icon, required this.message});
-
-  final IconData icon;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white70, size: 34),
-            const SizedBox(height: 10),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70, fontSize: 15),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// compat/win8: _CameraFeed / _CameraFeedMessage removed (mobile_scanner).
 
 /// Numeric manual entry for touch devices without a wedge scanner.
 class _ManualEntryDialog extends StatefulWidget {

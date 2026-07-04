@@ -39,26 +39,25 @@ dependencies:
   http: ^1.2.2
   intl: any
   archive: ^4.0.9
-  fl_chart: ^1.2.0
+  # compat/win8: fl_chart (needs Flutter 3.6) DROPPED — dashboard charts render
+  # a placeholder on this cashier-only build.
   flutter_libserialport: ^0.6.0
   esc_pos_utils_plus: ^2.0.4
   image: ^4.3.0
   flutter_bluetooth_classic_serial: ^1.3.2
   multicast_dns: ^0.3.3
   shared_preferences: ^2.5.5
-  # ── compat/win8 downgrades ────────────────────────────────────────────────
-  # Each of these capped its floor above Dart 3.3 in a recent major. The ranges
-  # below target the last Flutter-3.19-era line. They are BEST-EFFORT and must
-  # be confirmed by a real Flutter 3.19 `pub get` (FVM or the compat CI) — the
-  # transitive tree may force further pins. Code that uses the newer APIs is
-  # listed in COMPAT_WIN8.md and needs adapting on this branch.
-  mobile_scanner: '>=4.0.0 <5.0.0'   # main ^7.2.0 (needs Flutter 3.29)
+  # ── compat/win8 ───────────────────────────────────────────────────────────
+  # Kept but DOWNGRADED to the last Flutter-3.19-era line (each floored above
+  # Dart 3.3 in a recent major). BEST-EFFORT — confirm with a Flutter 3.19
+  # `pub get` (FVM or the compat CI); the transitive tree may force more pins.
   printing: '>=5.11.0 <5.13.0'       # main ^5.14.3 (needs Flutter 3.22)
   file_picker: '>=6.1.1 <7.0.0'      # main ^11.0.2 (needs Flutter 3.22)
-  gpt_markdown: '>=1.0.0 <1.1.0'     # main ^1.1.7 (needs Dart 3.7)
-  record: '>=5.0.0 <6.0.0'           # main ^6.2.1 (needs Flutter 3.24)
   wakelock_plus: '>=1.2.5 <1.3.0'    # main ^1.3.3 (needs Dart 3.4)
   flutter_tts: '>=3.8.0 <4.0.0'      # main ^4.2.5 (needs Dart 3.4)
+  # DROPPED on this build (needed API-break downgrades a cashier till never
+  # uses): mobile_scanner (camera scan), record (AI voice), gpt_markdown (AI
+  # markdown). See COMPAT_WIN8.md.
   # ──────────────────────────────────────────────────────────────────────────
   pdf: ^3.12.0
   qr: ^3.0.2

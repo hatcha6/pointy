@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:record/record.dart';
+// compat/win8: the `record` package needs Flutter 3.24; dropped from this
+// build (a Windows-8 cashier till has no use for AI voice messages).
 
 /// Voice messages are captured as 16 kHz mono PCM16 and wrapped in a WAV
 /// container. 16 kHz mono is ideal for speech and keeps the base64 payload small
@@ -28,37 +29,25 @@ abstract class VoiceRecorder {
   Future<void> dispose();
 }
 
-/// [VoiceRecorder] backed by the `record` package, streaming raw PCM16 so the
-/// caller can both drive a live waveform and assemble a WAV file without any
-/// file I/O (works the same on mobile, desktop, and web).
+/// compat/win8: voice recording is disabled on this build (the `record` package
+/// requires a newer Flutter, and a cashier till has no microphone workflow).
+/// This no-op reports the mic as unavailable so the AI composer falls back to
+/// text-only. The optional argument is ignored (kept so callers/tests compile).
 class RecordVoiceRecorder implements VoiceRecorder {
-  RecordVoiceRecorder([AudioRecorder? recorder])
-    : _recorder = recorder ?? AudioRecorder();
-
-  final AudioRecorder _recorder;
+  RecordVoiceRecorder([Object? recorder]);
 
   @override
-  Future<bool> hasPermission() => _recorder.hasPermission();
+  Future<bool> hasPermission() async => false;
 
   @override
-  Future<Stream<Uint8List>> start() => _recorder.startStream(
-    const RecordConfig(
-      encoder: AudioEncoder.pcm16bits,
-      sampleRate: kVoiceSampleRate,
-      numChannels: kVoiceNumChannels,
-      // Speech-friendly cleanup where the platform supports it.
-      echoCancel: true,
-      noiseSuppress: true,
-    ),
-  );
+  Future<Stream<Uint8List>> start() async =>
+      throw UnsupportedError('Voice recording is disabled on this build.');
 
   @override
-  Future<void> stop() async {
-    await _recorder.stop();
-  }
+  Future<void> stop() async {}
 
   @override
-  Future<void> dispose() => _recorder.dispose();
+  Future<void> dispose() async {}
 }
 
 /// Wraps raw little-endian PCM16 [pcm] samples in a canonical 44-byte RIFF/WAVE

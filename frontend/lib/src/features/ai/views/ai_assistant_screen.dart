@@ -5,7 +5,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
+// compat/win8: gpt_markdown needs Dart 3.7; dropped. AI replies render as plain
+// selectable text on this build (a cashier till rarely uses the assistant).
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -820,44 +821,18 @@ class _AssistantText extends StatefulWidget {
 }
 
 class _AssistantTextState extends State<_AssistantText> {
-  Widget? _cached;
-  String? _content;
-  TextStyle? _style;
-  TextDirection? _direction;
-
-  // A stable method reference (not a fresh closure), so it's NOT a memoization
-  // input — the cached GptMarkdown keeps it across rebuilds, and it reads the
-  // current widget's callback at tap time (links stay live even when memoized).
-  void _handleLinkTap(String url, String title) => widget.onLinkTap(url);
-
   @override
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
     final base = Theme.of(context).textTheme.bodyMedium ?? const TextStyle();
     final style = base.copyWith(color: colors.ink, height: 1.55);
-    final direction = Directionality.of(context);
-    final content = widget.message.content;
-
-    // GptMarkdown re-parses its entire input on every build. Memoize the rendered
-    // tree by its inputs and hand back the *same* widget instance when nothing
-    // changed — the framework then short-circuits the rebuild, so a structural
-    // rebuild (or a sibling streaming) never re-parses a settled reply. Only
-    // genuinely new text (this turn while it streams) pays the parse cost.
-    if (_cached == null ||
-        content != _content ||
-        style != _style ||
-        direction != _direction) {
-      _content = content;
-      _style = style;
-      _direction = direction;
-      _cached = GptMarkdown(
-        content,
-        style: style,
-        textDirection: direction,
-        onLinkTap: _handleLinkTap,
-      );
-    }
-    return SelectionArea(child: _cached!);
+    // compat/win8: gpt_markdown dropped — render the reply as plain selectable
+    // text (markdown syntax shows as-is). onLinkTap is unused on this build.
+    return SelectableText(
+      widget.message.content,
+      style: style,
+      textDirection: Directionality.of(context),
+    );
   }
 }
 
