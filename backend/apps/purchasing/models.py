@@ -363,8 +363,14 @@ class PurchaseOrder(TimeStampedModel):
 
     @property
     def adjustment_credit_total(self):
-        total = self.supplier_credits.aggregate(total=Sum("amount"))["total"]
-        return (total or Decimal("0.00")).quantize(Decimal("0.01"))
+        # Sum in Python so a prefetched ``supplier_credits`` is reused instead
+        # of a per-order aggregate when serialising lists of purchase orders
+        # (``payment_status`` reaches this for every unpaid order).
+        total = sum(
+            (credit.amount for credit in self.supplier_credits.all()),
+            Decimal("0.00"),
+        )
+        return total.quantize(Decimal("0.01"))
 
     @property
     def raw_balance_due(self):
@@ -540,14 +546,28 @@ class PurchaseLine(TimeStampedModel):
                 kwargs["update_fields"] = set(update_fields) | {"effective_unit_cost"}
         return super().save(*args, **kwargs)
 
+    def _related_sum(self, relation_name, field):
+        """Sum ``field`` over the ``relation_name`` reverse relation, reusing
+        prefetched rows when present so serialising a page of orders does not
+        run one aggregate query per line per field (aggregates always hit the
+        DB, even with the relation prefetched). Returns None when there are no
+        rows, matching SQL ``SUM`` over an empty set."""
+        manager = getattr(self, relation_name)
+        prefetched = getattr(self, "_prefetched_objects_cache", None)
+        if prefetched is not None and relation_name in prefetched:
+            rows = manager.all()
+            if not rows:
+                return None
+            return sum(getattr(row, field) for row in rows)
+        return manager.aggregate(total=Sum(field))["total"]
+
     @property
     def adjusted_quantity(self) -> int:
-        total = self.adjustment_lines.aggregate(total=Sum("quantity"))["total"]
-        return total or 0
+        return self._related_sum("adjustment_lines", "quantity") or 0
 
     @property
     def accepted_quantity(self) -> int:
-        total = self.receipt_lines.aggregate(total=Sum("accepted_quantity"))["total"]
+        total = self._related_sum("receipt_lines", "accepted_quantity")
         if total is not None:
             return total
         if self.purchase_order.status == PurchaseOrder.Status.RECEIVED:
@@ -556,13 +576,11 @@ class PurchaseLine(TimeStampedModel):
 
     @property
     def damaged_quantity(self) -> int:
-        total = self.receipt_lines.aggregate(total=Sum("damaged_quantity"))["total"]
-        return total or 0
+        return self._related_sum("receipt_lines", "damaged_quantity") or 0
 
     @property
     def cancelled_quantity(self) -> int:
-        total = self.receipt_lines.aggregate(total=Sum("cancelled_quantity"))["total"]
-        return total or 0
+        return self._related_sum("receipt_lines", "cancelled_quantity") or 0
 
     @property
     def received_quantity(self) -> int:

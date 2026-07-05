@@ -284,7 +284,15 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         previous_cost = self._previous_unit_cost(line)
         return False if previous_cost is None else line.unit_cost != previous_cost
 
+    _MISSING = object()
+
     def _previous_unit_cost(self, line):
+        # List views annotate the previous cost in SQL (one correlated subquery
+        # inside the lines prefetch) — a per-line lookup here would fan out into
+        # a query for every line on the page.
+        annotated = getattr(line, "previous_unit_cost_value", self._MISSING)
+        if annotated is not self._MISSING:
+            return annotated
         if not hasattr(self, "_previous_unit_cost_cache"):
             self._previous_unit_cost_cache = {}
         if line.pk not in self._previous_unit_cost_cache:
@@ -990,6 +998,7 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     payment_status = serializers.CharField(read_only=True)
+    is_overdue = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = PurchaseOrder
@@ -1009,6 +1018,7 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
             "total",
             "balance_due",
             "payment_status",
+            "is_overdue",
             "submitted_at",
             "received_at",
             "created_at",

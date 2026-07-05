@@ -59,13 +59,13 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
     _nextOutstandingPage = 1;
     notifyListeners();
 
-    final outstandingResultFuture = _purchaseRepository
-        .loadOutstandingReceivedNotPaid(page: _nextOutstandingPage);
+    // Each request publishes as soon as it lands so the order list renders
+    // without waiting for the payables strip (and vice versa).
+    final outstandingFuture = _loadOutstandingFirstPage();
     final result = await _purchaseRepository.loadPurchaseOrders(
       query: _query,
       page: _nextPage,
     );
-    final outstandingResult = await outstandingResultFuture;
     switch (result) {
       case Ok<PurchaseOrderPage>():
         _orders = result.value.orders;
@@ -76,6 +76,14 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
         _hasLoadError = true;
         _hasMoreOrders = false;
     }
+    _isLoading = false;
+    notifyListeners();
+    await outstandingFuture;
+  }
+
+  Future<void> _loadOutstandingFirstPage() async {
+    final outstandingResult = await _purchaseRepository
+        .loadOutstandingReceivedNotPaid(page: 1);
     switch (outstandingResult) {
       case Ok<PurchaseOrderPage>():
         _outstandingReceivedNotPaid = outstandingResult.value.orders;
@@ -86,8 +94,6 @@ class PurchaseOrderListViewModel extends ChangeNotifier {
         _hasMoreOutstanding = false;
         _hasOutstandingError = true;
     }
-
-    _isLoading = false;
     _isLoadingOutstanding = false;
     notifyListeners();
   }

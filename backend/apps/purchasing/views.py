@@ -1,7 +1,20 @@
-from datetime import date
 from decimal import Decimal
 
-from django.db.models import Avg, Count, Max, Min, Prefetch, Q, Sum
+from django.db.models import (
+    Avg,
+    Count,
+    DecimalField,
+    F,
+    Max,
+    Min,
+    OuterRef,
+    Prefetch,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+)
+from django.db.models.functions import Coalesce
 from rest_framework import mixins, parsers, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -237,25 +250,56 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             return ("purchasing.view_purchaseorder", "attachments.add_attachment")
         return self.permission_map.get(self.action)
 
+    # Read-only list-shaped actions: the payables strip endpoint serves the
+    # same row summaries as the main list, so both share the lightweight
+    # serializer and the trimmed prefetches below.
+    _list_shaped_actions = ("list", "outstanding_received_not_paid")
+
     def get_serializer_class(self):
-        if self.action == "list":
+        if self.action in self._list_shaped_actions:
             return PurchaseOrderListSerializer
         return PurchaseOrderSerializer
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        if self.action == "list":
+        if self.action in self._list_shaped_actions:
             # The list serializer omits the receipt/adjustment/audit/attachment
             # trees, so drop those prefetches and keep only what the summary,
-            # line count, and balance need.
+            # line count, and balance need. The line queryset carries the
+            # previous-cost annotation so the serializer's unit-cost-change
+            # fields do not run one lookup query per line.
             queryset = queryset.prefetch_related(None).prefetch_related(
-                "lines__variant__product",
-                "lines__receipt_lines",
                 Prefetch(
-                    "lines__variant__option_values",
-                    queryset=VariantOptionValue.objects.select_related("option"),
+                    "lines",
+                    queryset=PurchaseLine.objects.select_related(
+                        "variant__product"
+                    )
+                    .prefetch_related(
+                        Prefetch(
+                            "variant__option_values",
+                            queryset=VariantOptionValue.objects.select_related(
+                                "option"
+                            ),
+                        ),
+                        "receipt_lines",
+                        "adjustment_lines",
+                    )
+                    .annotate(
+                        previous_unit_cost_value=Subquery(
+                            PurchaseLine.objects.filter(
+                                variant_id=OuterRef("variant_id"),
+                                created_at__lt=OuterRef("created_at"),
+                            )
+                            .exclude(
+                                purchase_order__status=PurchaseOrder.Status.CANCELLED
+                            )
+                            .order_by("-created_at", "-id")
+                            .values("unit_cost")[:1]
+                        )
+                    ),
                 ),
                 "supplier_payments",
+                "supplier_credits",
             )
         product_id = self.request.query_params.get("product")
         variant_id = self.request.query_params.get("variant")
@@ -402,16 +446,43 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="outstanding-received-not-paid")
     def outstanding_received_not_paid(self, request):
-        queryset = self.get_queryset().filter(status=PurchaseOrder.Status.RECEIVED)
-        purchase_orders = [
-            purchase_order
-            for purchase_order in queryset
-            if purchase_order.balance_due > Decimal("0.00")
-        ]
-        purchase_orders.sort(key=outstanding_purchase_order_sort_key)
-        page = self.paginate_queryset(purchase_orders)
+        # Filter, sort, and paginate in SQL — loading every received order to
+        # compute ``balance_due`` in Python hangs the purchases screen once the
+        # table grows (each order also drags its prefetch trees along).
+        # ``balance_due > 0`` is ``total > sum(all supplier payments)`` because
+        # paid_total + credit_applied_total together cover every payment method.
+        # A correlated subquery keeps that sum immune to row inflation from any
+        # multi-valued joins (e.g. the product/variant line filters).
+        paid = (
+            SupplierPayment.objects.filter(purchase_order=OuterRef("pk"))
+            .order_by()
+            .values("purchase_order")
+            .annotate(total=Sum("amount"))
+            .values("total")[:1]
+        )
+        money = DecimalField(max_digits=10, decimal_places=2)
+        queryset = (
+            self.get_queryset()
+            .filter(status=PurchaseOrder.Status.RECEIVED)
+            .annotate(
+                paid_amount=Coalesce(
+                    Subquery(paid, output_field=money),
+                    Value(Decimal("0.00")),
+                    output_field=money,
+                )
+            )
+            .filter(total__gt=F("paid_amount"))
+            # Most urgent first: dated orders by earliest due date, undated ones
+            # last, most recently received breaking ties.
+            .order_by(
+                F("due_date").asc(nulls_last=True),
+                Coalesce("received_at", "created_at").desc(),
+                "-id",
+            )
+        )
+        page = self.paginate_queryset(queryset)
         serializer = self.get_serializer(
-            page if page is not None else purchase_orders,
+            page if page is not None else queryset,
             many=True,
         )
         if page is not None:
@@ -703,12 +774,3 @@ def product_margin_impact_payload(*, product, variant, latest_line, previous_lin
     }
 
 
-def outstanding_purchase_order_sort_key(purchase_order):
-    due_date = purchase_order.due_date or date.max
-    recency = purchase_order.received_at or purchase_order.created_at
-    return (
-        purchase_order.due_date is None,
-        due_date,
-        -recency.timestamp(),
-        -purchase_order.pk,
-    )

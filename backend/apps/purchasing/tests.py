@@ -4,7 +4,9 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import FieldError
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import serializers, status
@@ -24,6 +26,7 @@ from .models import (
     PurchaseOrderAuditEvent,
     PurchaseOrderLandedCostEntry,
     PurchaseReceipt,
+    PurchaseReceiptLine,
     Supplier,
     SupplierCredit,
     SupplierPayment,
@@ -2769,6 +2772,134 @@ class PurchaseOrderApiTests(TestCase):
         )
         self.assertEqual(response.data["results"][0]["balance_due"], "10.00")
         self.assertEqual(response.data["results"][0]["payment_status"], "unpaid")
+
+    def test_outstanding_received_not_paid_sorts_undated_after_dated(self):
+        undated_order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+            received_at=timezone.now(),
+            subtotal=Decimal("5.00"),
+            total=Decimal("5.00"),
+        )
+        dated_order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+            due_date="2026-07-01",
+            subtotal=Decimal("7.00"),
+            total=Decimal("7.00"),
+        )
+
+        response = self.client.get(
+            reverse("purchaseorder-outstanding-received-not-paid"),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [row["id"] for row in response.data["results"]],
+            [dated_order.pk, undated_order.pk],
+        )
+
+    def test_outstanding_received_not_paid_uses_list_payload(self):
+        # The payables strip renders row summaries; the receipt/adjustment/
+        # audit trees belong to the detail fetch. Serialising them here is what
+        # made the endpoint crawl on big shops.
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+            due_date="2026-05-01",
+            subtotal=Decimal("10.00"),
+            total=Decimal("10.00"),
+        )
+        order.lines.create(variant=self.variant, quantity=2, unit_cost=Decimal("5.00"))
+
+        response = self.client.get(
+            reverse("purchaseorder-outstanding-received-not-paid"),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        row = response.data["results"][0]
+        self.assertEqual(row["balance_due"], "10.00")
+        self.assertTrue(row["is_overdue"])
+        self.assertEqual(len(row["lines"]), 1)
+        self.assertNotIn("receipts", row)
+        self.assertNotIn("adjustments", row)
+        self.assertNotIn("audit_events", row)
+
+    def _create_received_unpaid_order(self, index, *, paid=False):
+        order = PurchaseOrder.objects.create(
+            supplier=self.supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+            received_at=timezone.now(),
+            due_date=f"2026-06-{(index % 28) + 1:02d}",
+            subtotal=Decimal("10.00"),
+            total=Decimal("10.00"),
+        )
+        line = order.lines.create(
+            variant=self.variant if index % 2 else self.other_variant,
+            quantity=2,
+            unit_cost=Decimal("3.00"),
+        )
+        receipt = PurchaseReceipt.objects.create(purchase_order=order)
+        PurchaseReceiptLine.objects.create(
+            receipt=receipt,
+            purchase_line=line,
+            variant=line.variant,
+            ordered_quantity=line.quantity,
+            outstanding_before=line.quantity,
+            accepted_quantity=line.quantity,
+            outstanding_after=0,
+        )
+        if paid:
+            SupplierPayment.objects.create(
+                supplier=self.supplier,
+                purchase_order=order,
+                amount=order.total,
+                method=SupplierPayment.Method.CASH,
+            )
+        return order
+
+    def test_outstanding_received_not_paid_query_count_does_not_scale(self):
+        # The endpoint must page in SQL: loading every received order to
+        # compute balances in Python froze the purchases screen at ~12K orders.
+        for index in range(3):
+            self._create_received_unpaid_order(index, paid=index == 0)
+
+        url = reverse("purchaseorder-outstanding-received-not-paid")
+        self.client.get(url)  # warm auth/permission caches
+        with CaptureQueriesContext(connection) as small:
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        for index in range(3, 15):
+            self._create_received_unpaid_order(index)
+        with CaptureQueriesContext(connection) as large:
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 14)
+
+        self.assertEqual(len(small.captured_queries), len(large.captured_queries))
+
+    def test_purchase_order_list_query_count_does_not_scale(self):
+        # One page of the list must cost a fixed number of queries — the
+        # per-line receipt/adjustment aggregates and per-order credit lookups
+        # used to fan out with every row (worst with many unpaid orders).
+        for index in range(3):
+            self._create_received_unpaid_order(index)
+
+        url = reverse("purchaseorder-list")
+        self.client.get(url)  # warm auth/permission caches
+        with CaptureQueriesContext(connection) as small:
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        for index in range(3, 15):
+            self._create_received_unpaid_order(index)
+        with CaptureQueriesContext(connection) as large:
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["results"]), 15)
+
+        self.assertEqual(len(small.captured_queries), len(large.captured_queries))
 
     def test_adjustment_history_filters_return_and_refund_rows(self):
         other_supplier = Supplier.objects.create(name="Adjustment supplier")
