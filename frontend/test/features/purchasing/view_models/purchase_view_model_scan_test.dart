@@ -34,10 +34,27 @@ void main() {
     expect(viewModel.draft.single.quantity, 25);
   });
 
-  test('catalog taps do not arm the quick adjust', () async {
+  test('catalog taps arm the quick adjust like a scan does', () async {
     final viewModel = makeViewModel();
 
-    await viewModel.addVariant(variant, unitCost: 2);
+    await viewModel.addVariant(
+      variant,
+      unitCost: 2,
+      source: 'purchase_catalog_tile',
+    );
+    expect(viewModel.lastScannedDraftLine, isNotNull);
+    expect(viewModel.applyQuickQuantityDigits('7'), isTrue);
+    expect(viewModel.draft.single.quantity, 7);
+  });
+
+  test('stepper adds do not arm the quick adjust', () async {
+    final viewModel = makeViewModel();
+
+    await viewModel.addVariant(
+      variant,
+      unitCost: 2,
+      source: 'purchase_draft_quantity_button',
+    );
     expect(viewModel.lastScannedDraftLine, isNull);
     expect(viewModel.applyQuickQuantityDigits('7'), isFalse);
     expect(viewModel.draft.single.quantity, 1);

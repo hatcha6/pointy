@@ -19,37 +19,63 @@ extension PosBarcodeActions on PosViewModel {
     _barcodeScanStatus = BarcodeScanStatus.resolving;
     _notifyChanged();
 
-    final result = await _catalogRepository.findProductVariantByBarcode(
+    final result = await _catalogRepository.resolveBarcode(
       normalizedBarcode,
       activeOnly: true,
     );
 
     switch (result) {
-      case Ok<ProductVariant?>(:final value):
+      case Ok<BarcodeResolution?>(:final value):
         if (value == null) {
           _barcodeScanStatus = BarcodeScanStatus.notFound;
         } else {
+          final variant = value.variant;
+          final matchedUnit = value.unit;
+          // A packaging (unit) barcode — the carton EAN — rings up that unit:
+          // one carton at the carton price, deducting its pieces from stock.
+          final unitOption =
+              matchedUnit != null && matchedUnit.isSellable
+              ? UnitOption(
+                  code: matchedUnit.code,
+                  label: matchedUnit.label,
+                  unitPrice: matchedUnit.resolvedPrice(variant.unitPrice),
+                  factorToBase: matchedUnit.factorToBase,
+                  allowsFractional: matchedUnit.allowsFractional,
+                  isBase: false,
+                )
+              : null;
           // Digital-scale labels carry the weight inside the barcode; for
           // metric products that weight IS the sold quantity.
-          final scaleBarcode = parseScaleBarcode(normalizedBarcode);
-          final resolvedQuantity = scaleBarcode != null && value.unit != 'piece'
+          final scaleBarcode = unitOption == null
+              ? parseScaleBarcode(normalizedBarcode)
+              : null;
+          final resolvedQuantity =
+              scaleBarcode != null && variant.unit != 'piece'
               ? scaleBarcode.weightKg
               : quantity;
           _addVariantToCartAndTrack(
-            value,
+            variant,
             quantity: resolvedQuantity,
+            unit: unitOption,
             source: source,
           );
           // Arm the scan-then-type quick adjust on the line the scan landed on
-          // (plain add: no modifiers, base unit — same merge key as the add).
-          _lastScannedLineKey = _mergeableLineFor(value, const [], '')?.lineKey;
+          // (plain add: no modifiers, the scanned unit — same merge key as the
+          // add).
+          _lastScannedLineKey = _mergeableLineFor(
+            variant,
+            const [],
+            _unitCodeFor(unitOption),
+          )?.lineKey;
           _quickQuantityBuffer = '';
           _quickQuantityAt = null;
-          _lastScannedProductName = value.displayLabel;
+          _lastScannedProductName = unitOption == null
+              ? variant.displayLabel
+              : '${variant.displayLabel} — ${unitOption.label}';
           _barcodeScanStatus = BarcodeScanStatus.found;
           unawaited(refreshDiscountPreview());
         }
-      case Error<ProductVariant?>():
+      case Error<BarcodeResolution?>():
         _barcodeScanStatus = BarcodeScanStatus.error;
     }
 

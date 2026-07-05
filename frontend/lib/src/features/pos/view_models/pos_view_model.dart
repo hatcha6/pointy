@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
+import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/cart_line.dart';
 import '../../../data/models/modifier_group.dart';
 import '../../../shared/barcode/scale_barcode.dart';

@@ -14,7 +14,9 @@ import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_page.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
+import 'package:pointy_frontend/src/data/models/product_unit.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
+import 'package:pointy_frontend/src/data/models/unit_of_measure.dart';
 import 'package:pointy_frontend/src/data/models/product_variant_page.dart';
 import 'package:pointy_frontend/src/data/models/query.dart';
 import 'package:pointy_frontend/src/data/models/register_session.dart';
@@ -723,7 +725,7 @@ void main() {
       expect(viewModel.cart.single.quantity, 3);
     });
 
-    test('digits do nothing when nothing was scanned', () {
+    test('digits do nothing after a plain cart-button add', () {
       final viewModel = _viewModel(_FakePosApiService());
       addTearDown(viewModel.dispose);
 
@@ -731,6 +733,41 @@ void main() {
       expect(viewModel.lastScannedCartLine, isNull);
       expect(viewModel.applyQuickQuantityDigits('7'), isFalse);
       expect(viewModel.cart.single.quantity, 1);
+    });
+
+    test('a catalog tile add arms the quick adjust like a scan does', () {
+      final viewModel = _viewModel(_FakePosApiService());
+      addTearDown(viewModel.dispose);
+
+      viewModel.addVariant(_coffeeVariant, source: 'product_tile');
+      expect(viewModel.lastScannedCartLine, isNotNull);
+      expect(viewModel.applyQuickQuantityDigits('1'), isTrue);
+      expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
+      expect(viewModel.cart.single.quantity, 12);
+    });
+
+    test('scanning a packaging (unit) barcode rings up that unit', () async {
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_juiceVariant],
+          },
+        ),
+      );
+      addTearDown(viewModel.dispose);
+
+      final added = await viewModel.addVariantByBarcode('3000002');
+      expect(added, isTrue);
+      final line = viewModel.cart.single;
+      expect(line.variant.id, _juiceVariant.id);
+      expect(line.quantity, 1);
+      expect(line.unitCode, 'carton');
+      expect(line.unitFactor, 24);
+      // No custom carton price -> derived: 1.00 piece × 24.
+      expect(line.unitPriceOverride, 24.0);
+      // The scan armed the quick adjust on the carton line.
+      expect(viewModel.applyQuickQuantityDigits('3'), isTrue);
+      expect(viewModel.cart.single.quantity, 3);
     });
 
     test('applyQuickUnit switches the scanned line unit of measure', () async {
@@ -849,6 +886,33 @@ const _teaVariant = ProductVariant(
   quantityOnHand: 8,
   barcode: '1000002',
   isDefault: true,
+);
+
+// A product whose carton carries its own packaging barcode ('3000002'): the
+// unit-barcode scan flow resolves it through productDetail.units.
+const _juiceVariant = ProductVariant(
+  id: 104,
+  productId: 6,
+  productName: 'عصير صافي',
+  displayName: 'عصير صافي',
+  fullName: 'عصير صافي',
+  sku: 'JUICE-001',
+  unitPrice: 1.0,
+  quantityOnHand: 48,
+  barcode: '3000001',
+  isDefault: true,
+  productDetail: Product(
+    id: 6,
+    name: 'عصير صافي',
+    quantityOnHand: 48,
+    units: [
+      ProductUnit(
+        unit: UnitOfMeasure(id: 9, code: 'carton', name: 'كرتون'),
+        factorToBase: 24,
+        barcodes: ['3000002'],
+      ),
+    ],
+  ),
 );
 
 const _coffeeBeansVariant = ProductVariant(

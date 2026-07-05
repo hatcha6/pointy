@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/catalog/catalog.dart';
@@ -91,12 +92,17 @@ class PurchaseCatalogPane extends StatelessWidget {
                 cartQuantity: draftQuantities[variant.id] ?? 0,
                 onTap: viewModel.isSubmitting
                     ? null
-                    : () => unawaited(
-                        viewModel.addVariant(
-                          variant,
-                          source: 'purchase_catalog_tile',
-                        ),
-                      ),
+                    : () {
+                        // Release the search field's focus so typing right
+                        // after the tap sets the quantity (scan-then-type).
+                        FocusManager.instance.primaryFocus?.unfocus();
+                        unawaited(
+                          viewModel.addVariant(
+                            variant,
+                            source: 'purchase_catalog_tile',
+                          ),
+                        );
+                      },
               );
             },
           );
@@ -118,9 +124,9 @@ class PurchaseCatalogPane extends StatelessWidget {
   Future<bool> _addBarcode(BuildContext context, String barcode) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
-    ProductVariant? variant;
+    BarcodeResolution? resolution;
     try {
-      variant = await resolveOrCreatePurchaseVariant(
+      resolution = await resolveOrCreatePurchaseBarcode(
         context,
         viewModel: viewModel,
         barcode: barcode,
@@ -134,10 +140,14 @@ class PurchaseCatalogPane extends StatelessWidget {
         ..showSnackBar(SnackBar(content: Text(l10n.barcodeScanError)));
       return false;
     }
-    if (variant == null) {
+    if (resolution == null) {
       return false;
     }
-    await viewModel.addVariant(variant, source: 'purchase_barcode_lookup');
+    await viewModel.addVariant(
+      resolution.variant,
+      unit: resolution.unit,
+      source: 'purchase_barcode_lookup',
+    );
     return true;
   }
 

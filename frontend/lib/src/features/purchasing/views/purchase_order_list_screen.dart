@@ -165,9 +165,14 @@ class _PurchaseOrderListBody extends StatelessWidget {
                     : null,
               ),
               itemBuilder: (context, order) {
+                // Drafts always; submitted orders until the first receipt
+                // (which flips the status) or payment — same rule as the
+                // details screen and the backend.
                 final canEdit =
                     capabilities.canEditDraftPurchaseOrder &&
-                    order.status == 'draft';
+                    (order.status == 'draft' ||
+                        (order.status == 'submitted' &&
+                            order.paymentStatus == 'unpaid'));
                 return PurchaseOrderTile(
                   order: order,
                   onTap: () => onOpenPurchaseOrder(order),

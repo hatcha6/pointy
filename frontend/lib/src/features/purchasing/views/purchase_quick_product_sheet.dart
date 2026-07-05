@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/parsing.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/product_draft.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
@@ -12,23 +13,39 @@ import '../../../shared/product_category_picker.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/purchase_view_model.dart';
 
+/// Resolves a scanned code — variant barcode or packaging (unit) barcode — or
+/// walks the user through creating the product when nothing matches.
+Future<BarcodeResolution?> resolveOrCreatePurchaseBarcode(
+  BuildContext context, {
+  required PurchaseViewModel viewModel,
+  required String barcode,
+}) async {
+  final resolution = await viewModel.resolveBarcode(barcode);
+  if (resolution != null) {
+    return resolution;
+  }
+  if (!context.mounted) {
+    return null;
+  }
+  final created = await showPurchaseQuickProductSheet(
+    context,
+    barcode: barcode,
+    viewModel: viewModel,
+  );
+  return created == null ? null : BarcodeResolution(variant: created);
+}
+
 Future<ProductVariant?> resolveOrCreatePurchaseVariant(
   BuildContext context, {
   required PurchaseViewModel viewModel,
   required String barcode,
 }) async {
-  final variant = await viewModel.findVariantByBarcode(barcode);
-  if (variant != null) {
-    return variant;
-  }
-  if (!context.mounted) {
-    return null;
-  }
-  return showPurchaseQuickProductSheet(
+  final resolution = await resolveOrCreatePurchaseBarcode(
     context,
-    barcode: barcode,
     viewModel: viewModel,
+    barcode: barcode,
   );
+  return resolution?.variant;
 }
 
 Future<ProductVariant?> showPurchaseQuickProductSheet(

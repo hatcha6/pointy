@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
+import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_draft.dart';
@@ -17,6 +18,15 @@ import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
+
+/// Add sources that arm the type-a-quantity shortcut, exactly like a hardware
+/// scan does: picking a product from the catalog then typing "12" sets the new
+/// line's quantity — no extra tap on the draft line.
+const _quickQuantityAddSources = {
+  'purchase_barcode_lookup',
+  'purchase_catalog_tile',
+  'purchase_catalog',
+};
 
 class PurchaseViewModel extends ChangeNotifier {
   PurchaseViewModel(
@@ -240,20 +250,29 @@ class PurchaseViewModel extends ChangeNotifier {
   }
 
   Future<ProductVariant?> findVariantByBarcode(String barcode) async {
+    final resolution = await resolveBarcode(barcode);
+    // Packaging (unit) barcodes land on the product's default variant here —
+    // the draft line then opens in the product's default purchase unit.
+    return resolution?.variant;
+  }
+
+  /// Resolves a scanned code to its variant and, for packaging barcodes (the
+  /// carton EAN), the matched unit — so the draft line is created in cartons.
+  Future<BarcodeResolution?> resolveBarcode(String barcode) async {
     final normalizedBarcode = barcode.trim();
     if (normalizedBarcode.isEmpty) {
       return null;
     }
 
-    final result = await _catalogRepository.findProductVariantByBarcode(
+    final result = await _catalogRepository.resolveBarcode(
       normalizedBarcode,
       activeOnly: true,
     );
     return switch (result) {
-      Ok<ProductVariant?>(:final value) => value,
+      Ok<BarcodeResolution?>(:final value) => value,
       // A lookup failure (network/server) degrades to "not found" instead of
       // throwing into the scan handler; the nullable return already signals it.
-      Error<ProductVariant?>() => null,
+      Error<BarcodeResolution?>() => null,
     };
   }
 
@@ -283,6 +302,7 @@ class PurchaseViewModel extends ChangeNotifier {
     ProductVariant variant, {
     int quantity = 1,
     double? unitCost,
+    ProductUnit? unit,
     String source = 'purchase_catalog',
   }) async {
     if (_isSubmitting) {
@@ -296,18 +316,24 @@ class PurchaseViewModel extends ChangeNotifier {
       if (_isSubmitting) {
         return;
       }
-      final defaultUnit = _defaultPurchaseUnit(variant);
+      // A scanned packaging barcode dictates the line's unit; otherwise the
+      // product's configured default purchase unit applies.
+      final lineUnit = (unit != null && unit.isPurchasable)
+          ? unit
+          : _defaultPurchaseUnit(variant);
       _draft.add(
         PurchaseDraftLine(
           variant: variant,
           quantity: quantity.clamp(1, 999),
           unitCost: cost,
-          unitCode: defaultUnit?.code ?? '',
-          unitLabel: defaultUnit?.label ?? '',
-          unitFactor: defaultUnit?.factorToBase ?? 1,
+          unitCode: lineUnit?.code ?? '',
+          unitLabel: lineUnit?.label ?? '',
+          unitFactor: lineUnit?.factorToBase ?? 1,
         ),
       );
     } else {
+      // The draft keeps one line per variant: repeat adds bump the quantity in
+      // the line's existing unit (switch units from the line's unit chip).
       final line = _draft.removeAt(index);
       _draft.add(
         line.copyWith(
@@ -327,8 +353,10 @@ class PurchaseViewModel extends ChangeNotifier {
         source: source,
       );
     }
-    if (source == 'purchase_barcode_lookup') {
-      // Arm the scan-then-type quick adjust on the line the scan landed on.
+    if (_quickQuantityAddSources.contains(source)) {
+      // Arm the scan-then-type quick adjust on the line the add landed on —
+      // scanning and picking from the catalog behave the same: type a number
+      // right after to set the quantity.
       _lastScannedVariantId = variant.id;
       _quickQuantityBuffer = '';
       _quickQuantityAt = null;
