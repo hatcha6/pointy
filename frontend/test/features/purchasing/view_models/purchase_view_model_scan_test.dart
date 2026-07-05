@@ -60,6 +60,77 @@ void main() {
     expect(viewModel.draft.single.quantity, 1);
   });
 
+  test('unit switch rescales the line cost proportionally', () async {
+    final viewModel = makeViewModel();
+    // 0.45 per piece (per the line's base unit).
+    await viewModel.addVariant(variant, unitCost: 0.45);
+
+    // piece → tray of 30: 0.45 × 30 = 13.50 per tray.
+    viewModel.updateLineUnit(
+      variant,
+      unitCode: 'tray',
+      unitLabel: 'طبق',
+      unitFactor: 30,
+      allowsFractional: true,
+    );
+    expect(viewModel.draft.single.unitCost, 13.5);
+    expect(viewModel.draft.single.unitAllowsFractional, isTrue);
+
+    // tray → carton of 360: 13.50 / 30 × 360 = 162.00 per carton.
+    viewModel.updateLineUnit(
+      variant,
+      unitCode: 'carton',
+      unitLabel: 'كرتون',
+      unitFactor: 360,
+    );
+    expect(viewModel.draft.single.unitCost, 162.0);
+
+    // back to the base piece: 162 / 360 = 0.45.
+    viewModel.updateLineUnit(
+      variant,
+      unitCode: '',
+      unitLabel: '',
+      unitFactor: 1,
+    );
+    expect(viewModel.draft.single.unitCost, 0.45);
+  });
+
+  test('quick typing accepts decimals only for fractional units', () async {
+    final viewModel = makeViewModel();
+    await viewModel.addVariant(
+      variant,
+      unitCost: 15,
+      source: 'purchase_barcode_lookup',
+    );
+    viewModel.updateLineUnit(
+      variant,
+      unitCode: 'tray',
+      unitLabel: 'طبق',
+      unitFactor: 30,
+      allowsFractional: true,
+    );
+
+    // "2" then "." then "5" → 2.5 trays.
+    expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
+    expect(viewModel.applyQuickQuantityDigits('.'), isTrue);
+    expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
+    expect(viewModel.draft.single.quantity, 2.5);
+
+    // Whole-number unit: a decimal point drops the entry instead of
+    // silently reading "2.5" as 25.
+    viewModel.updateLineUnit(
+      variant,
+      unitCode: '',
+      unitLabel: '',
+      unitFactor: 1,
+    );
+    expect(viewModel.draft.single.quantity, 3); // 2.5 rounded up on switch
+    expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
+    expect(viewModel.applyQuickQuantityDigits('.'), isFalse);
+    expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
+    expect(viewModel.draft.single.quantity, 5);
+  });
+
   test('setLineQuantity clamps into the draft range', () async {
     final viewModel = makeViewModel();
     await viewModel.addVariant(variant, unitCost: 2);

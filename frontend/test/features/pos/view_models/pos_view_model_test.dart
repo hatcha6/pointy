@@ -746,6 +746,38 @@ void main() {
       expect(viewModel.cart.single.quantity, 12);
     });
 
+    test('decimal quick typing sells half a tray after a unit scan', () async {
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_eggVariant],
+          },
+        ),
+      );
+      addTearDown(viewModel.dispose);
+
+      // Scanning the tray barcode arms the (fractional) tray line.
+      expect(await viewModel.addVariantByBarcode('4000002'), isTrue);
+      expect(viewModel.cart.single.unitCode, 'tray');
+
+      expect(viewModel.applyQuickQuantityDigits('0'), isTrue);
+      expect(viewModel.applyQuickQuantityDigits('.'), isTrue);
+      expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
+      expect(viewModel.cart.single.quantity, 0.5);
+
+      // A plain piece line refuses the decimal point outright.
+      await viewModel.addVariantByBarcode('4000001');
+      expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
+      expect(viewModel.applyQuickQuantityDigits('.'), isFalse);
+      expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
+      expect(
+        viewModel.cart
+            .firstWhere((line) => line.unitCode.isEmpty)
+            .quantity,
+        5,
+      );
+    });
+
     test('scanning a packaging (unit) barcode rings up that unit', () async {
       final viewModel = _viewModel(
         _FakePosApiService(
@@ -886,6 +918,39 @@ const _teaVariant = ProductVariant(
   quantityOnHand: 8,
   barcode: '1000002',
   isDefault: true,
+);
+
+// Eggs: a fractional tray unit with its own packaging barcode ('4000002') —
+// exercises decimal quick-typing after a unit-barcode scan.
+const _eggVariant = ProductVariant(
+  id: 105,
+  productId: 7,
+  productName: 'بيض مائدة',
+  displayName: 'بيض مائدة',
+  fullName: 'بيض مائدة',
+  sku: 'EGG-001',
+  unitPrice: 0.75,
+  quantityOnHand: 300,
+  barcode: '4000001',
+  isDefault: true,
+  productDetail: Product(
+    id: 7,
+    name: 'بيض مائدة',
+    quantityOnHand: 300,
+    units: [
+      ProductUnit(
+        unit: UnitOfMeasure(
+          id: 11,
+          code: 'tray',
+          name: 'طبق',
+          allowsFractional: true,
+        ),
+        factorToBase: 30,
+        price: 15,
+        barcodes: ['4000002'],
+      ),
+    ],
+  ),
 );
 
 // A product whose carton carries its own packaging barcode ('3000002'): the

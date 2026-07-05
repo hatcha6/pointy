@@ -510,8 +510,22 @@ class _CartScrollContentState extends State<_CartScrollContent> {
 
     final digit = _digitFor(key);
     if (digit != null) {
-      if (_pendingQuantity.length < 5) {
+      if (_pendingQuantity.length < 7) {
         setState(() => _pendingQuantity = '$_pendingQuantity$digit');
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.period ||
+        key == LogicalKeyboardKey.numpadDecimal) {
+      // Fractional entry (2.5 trays) — only for units that allow it, and at
+      // most one decimal point.
+      if (_viewModel.cartLineAllowsFractional(line) &&
+          !_pendingQuantity.contains('.') &&
+          _pendingQuantity.length < 6) {
+        setState(
+          () => _pendingQuantity =
+              _pendingQuantity.isEmpty ? '0.' : '$_pendingQuantity.',
+        );
       }
       return KeyEventResult.handled;
     }
@@ -557,14 +571,10 @@ class _CartScrollContentState extends State<_CartScrollContent> {
   }
 
   void _applyPendingQuantity(CartLine line) {
-    final quantity = int.tryParse(_pendingQuantity);
+    final quantity = double.tryParse(_pendingQuantity);
     setState(() => _pendingQuantity = '');
     if (quantity != null && quantity > 0) {
-      _viewModel.setCartLineQuantity(
-        line.lineKey,
-        quantity.toDouble(),
-        source: 'keyboard',
-      );
+      _viewModel.setCartLineQuantity(line.lineKey, quantity, source: 'keyboard');
     }
   }
 

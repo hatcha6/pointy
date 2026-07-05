@@ -313,15 +313,20 @@ class PurchaseViewModel extends ChangeNotifier {
     final index = _draft.indexWhere((line) => line.variant.id == variant.id);
     final previousQuantity = index == -1 ? 0.0 : _draft[index].quantity;
     if (index == -1) {
-      final cost = unitCost ?? await _lastCostForVariant(variant);
-      if (_isSubmitting) {
-        return;
-      }
       // A scanned packaging barcode dictates the line's unit; otherwise the
       // product's configured default purchase unit applies.
       final lineUnit = (unit != null && unit.isPurchasable)
           ? unit
           : _defaultPurchaseUnit(variant);
+      final lineFactor = lineUnit?.factorToBase ?? 1;
+      // The fetched cost is per BASE unit; the line's cost is per its own
+      // unit, so a carton line starts at base × pieces-per-carton. An
+      // explicitly passed cost is already in the line's unit.
+      final cost =
+          unitCost ?? (await _lastCostForVariant(variant)) * lineFactor;
+      if (_isSubmitting) {
+        return;
+      }
       _draft.add(
         PurchaseDraftLine(
           variant: variant,
@@ -329,7 +334,7 @@ class PurchaseViewModel extends ChangeNotifier {
           unitCost: cost,
           unitCode: lineUnit?.code ?? '',
           unitLabel: lineUnit?.label ?? '',
-          unitFactor: lineUnit?.factorToBase ?? 1,
+          unitFactor: lineFactor,
           unitAllowsFractional: _unitAllowsFractional(variant, lineUnit),
         ),
       );
@@ -415,9 +420,10 @@ class PurchaseViewModel extends ChangeNotifier {
     unawaited(refreshDiscountPreview());
   }
 
-  /// Scan-then-type quantity: digits typed right after a scan REPLACE the last
+  /// Scan-then-type quantity: keys typed right after a scan REPLACE the last
   /// scanned line's quantity, accumulating across keystrokes ("1" then "2" →
-  /// 12) until the idle window passes or another scan re-arms the flow.
+  /// 12; "2","." ,"5" → 2.5 for fractional units) until the idle window passes
+  /// or another scan re-arms the flow.
   bool applyQuickQuantityDigits(String digits) {
     if (_isSubmitting || digits.isEmpty) {
       return false;
@@ -432,21 +438,29 @@ class PurchaseViewModel extends ChangeNotifier {
       _quickQuantityBuffer = '';
     }
     final accumulated = _quickQuantityBuffer + digits;
-    final quantity = int.tryParse(accumulated);
-    if (quantity == null || accumulated.length > 4) {
+    if (accumulated.contains('.') &&
+        (!line.unitAllowsFractional ||
+            '.'.allMatches(accumulated).length > 1)) {
+      // A decimal point the unit cannot honour: drop the whole entry rather
+      // than silently reading "2.5" as 25.
+      _quickQuantityBuffer = '';
+      return false;
+    }
+    final quantity = double.tryParse(accumulated);
+    if (quantity == null && accumulated != '.' && !accumulated.endsWith('.')) {
+      return false;
+    }
+    if (accumulated.length > 7) {
       return false;
     }
     _quickQuantityBuffer = accumulated;
     _quickQuantityAt = now;
-    if (quantity <= 0) {
-      // A leading "0": keep accumulating ("05" → 5) without touching the line.
+    if (quantity == null || quantity <= 0) {
+      // A leading "0" or a trailing "." — keep accumulating ("0.5", "2.5")
+      // without touching the line yet.
       return true;
     }
-    setLineQuantity(
-      line.variant,
-      quantity.toDouble(),
-      source: 'scan_quick_quantity',
-    );
+    setLineQuantity(line.variant, quantity, source: 'scan_quick_quantity');
     return true;
   }
 
@@ -535,13 +549,25 @@ class PurchaseViewModel extends ChangeNotifier {
     final quantity = (!allowsFractional && line.quantity != line.quantity.roundToDouble())
         ? line.quantity.ceilToDouble()
         : line.quantity;
+    // The cost is per the line's unit: switching carton → tray rescales it
+    // proportionally (162 per carton of 12 trays → 13.50 per tray), keeping
+    // hand-entered costs meaningful across unit changes.
+    final previousFactor = line.unitFactor <= 0 ? 1.0 : line.unitFactor;
+    final newFactor = unitFactor <= 0 ? 1.0 : unitFactor;
+    final rescaledCost = double.parse(
+      (line.unitCost / previousFactor * newFactor).toStringAsFixed(2),
+    );
     _draft[index] = line.copyWith(
       quantity: quantity,
+      unitCost: rescaledCost,
       unitCode: unitCode,
       unitLabel: unitLabel,
       unitFactor: unitFactor,
       unitAllowsFractional: allowsFractional,
     );
+    // A half-typed quick quantity belongs to the previous unit — drop it.
+    _quickQuantityBuffer = '';
+    _quickQuantityAt = null;
     _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());

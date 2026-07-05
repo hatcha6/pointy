@@ -26,10 +26,11 @@ class BarcodeScanListener extends StatefulWidget {
   final bool ignoreTextInputFocus;
   final bool requireCurrentRoute;
 
-  /// Digits typed by a HUMAN on the keyboard/numpad (never part of a scanner
-  /// burst — a scanner's keys arrive faster than [humanDigitDelay] and end in a
-  /// terminator). Powers the scan-then-type quantity flow: each slow keystroke
-  /// is reported as its own chunk, so the receiver accumulates "1","2" → 12.
+  /// Digits (or a decimal point) typed by a HUMAN on the keyboard/numpad
+  /// (never part of a scanner burst — a scanner's keys arrive faster than
+  /// [humanDigitDelay] and end in a terminator). Powers the scan-then-type
+  /// quantity flow: each slow keystroke is reported as its own chunk, so the
+  /// receiver accumulates "1","2" → 12, or "2",".","5" → 2.5.
   final ValueChanged<String>? onDigitsTyped;
 
   /// Arrow-key presses (with the same focus/route guards as scanning). Return
@@ -149,7 +150,7 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
     final pending = _buffer.toString();
     if (pending.isEmpty ||
         pending.length > _maxHumanDigits ||
-        !_isAllDigits(pending)) {
+        !_isQuantityChunk(pending)) {
       return;
     }
     _humanDigitTimer = Timer(widget.humanDigitDelay, _flushHumanDigits);
@@ -160,16 +161,19 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
     if (digits.isEmpty || digits.length > _maxHumanDigits) {
       return;
     }
-    if (!_isAllDigits(digits)) {
+    if (!_isQuantityChunk(digits)) {
       return;
     }
     _reset();
     widget.onDigitsTyped?.call(digits);
   }
 
-  static bool _isAllDigits(String value) {
+  // Digits plus the decimal point — the receiver decides whether the line's
+  // unit actually accepts fractions.
+  static bool _isQuantityChunk(String value) {
     for (final code in value.codeUnits) {
-      if (code < 0x30 || code > 0x39) {
+      final isDigit = code >= 0x30 && code <= 0x39;
+      if (!isDigit && code != 0x2e) {
         return false;
       }
     }

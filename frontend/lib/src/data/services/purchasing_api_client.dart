@@ -306,14 +306,17 @@ class PurchasingApiClient {
     if (decoded is! Map<String, Object?>) {
       return null;
     }
-    final unitCost = decoded['unit_cost'];
-    if (unitCost == null) {
+    // Prefer the per-base-unit cost: the raw unit_cost is in whatever unit the
+    // last purchase used (162 for a carton), which would mis-price a line
+    // bought in a different unit. Older backends only send unit_cost.
+    final cost = decoded['base_unit_cost'] ?? decoded['unit_cost'];
+    if (cost == null) {
       return null;
     }
-    if (unitCost is num) {
-      return unitCost.toDouble();
+    if (cost is num) {
+      return cost.toDouble();
     }
-    return double.tryParse(unitCost.toString());
+    return double.tryParse(cost.toString());
   }
 
   Future<PurchaseOrder> submitPurchaseOrder(

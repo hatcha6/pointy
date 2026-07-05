@@ -138,6 +138,7 @@ class _PurchasingWorkspace extends StatelessWidget {
       unitCode: next.isBase ? '' : next.code,
       unitLabel: next.label,
       unitFactor: next.factorToBase,
+      allowsFractional: next.allowsFractional,
     );
     return true;
   }
