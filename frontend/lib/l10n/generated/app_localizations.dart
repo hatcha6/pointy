@@ -22851,6 +22851,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الكمية'**
   String get purchaseLineQuantityLabel;
+
+  /// Label for the one-off manual discount amount on a purchase order.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم على أمر الشراء'**
+  String get purchaseExtraDiscountLabel;
+
+  /// Hint for the one-off purchase order discount field.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ يُخصم من إجمالي هذا الأمر (مثلاً لإزالة الكسور)'**
+  String get purchaseExtraDiscountHint;
 }
 
 class _AppLocalizationsDelegate

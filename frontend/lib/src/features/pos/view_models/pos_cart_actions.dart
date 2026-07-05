@@ -348,8 +348,11 @@ extension PosCartActions on PosViewModel {
         ),
       );
     } else {
-      final line = _cart.removeAt(index);
-      _cart.add(line.copyWith(quantity: line.quantity + quantity));
+      // Merge in place: a line's position is set on first insertion and never
+      // changes afterwards — re-adds and quantity edits must not shuffle the
+      // list under the cashier's eyes.
+      final line = _cart[index];
+      _cart[index] = line.copyWith(quantity: line.quantity + quantity);
     }
     _touchActiveSaleSession();
     return true;

@@ -13099,4 +13099,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchaseLineQuantityLabel => 'الكمية';
+
+  @override
+  String get purchaseExtraDiscountLabel => 'خصم على أمر الشراء';
+
+  @override
+  String get purchaseExtraDiscountHint =>
+      'مبلغ يُخصم من إجمالي هذا الأمر (مثلاً لإزالة الكسور)';
 }

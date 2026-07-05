@@ -7901,5 +7901,13 @@
   "purchaseLineQuantityLabel": "الكمية",
   "@purchaseLineQuantityLabel": {
     "description": "Label for the purchase draft line quantity entry dialog."
+  },
+  "purchaseExtraDiscountLabel": "خصم على أمر الشراء",
+  "@purchaseExtraDiscountLabel": {
+    "description": "Label for the one-off manual discount amount on a purchase order."
+  },
+  "purchaseExtraDiscountHint": "مبلغ يُخصم من إجمالي هذا الأمر (مثلاً لإزالة الكسور)",
+  "@purchaseExtraDiscountHint": {
+    "description": "Hint for the one-off purchase order discount field."
   }
 }

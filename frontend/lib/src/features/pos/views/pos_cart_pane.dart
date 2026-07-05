@@ -523,8 +523,9 @@ class _CartScrollContentState extends State<_CartScrollContent> {
           !_pendingQuantity.contains('.') &&
           _pendingQuantity.length < 6) {
         setState(
-          () => _pendingQuantity =
-              _pendingQuantity.isEmpty ? '0.' : '$_pendingQuantity.',
+          () => _pendingQuantity = _pendingQuantity.isEmpty
+              ? '0.'
+              : '$_pendingQuantity.',
         );
       }
       return KeyEventResult.handled;
@@ -574,7 +575,11 @@ class _CartScrollContentState extends State<_CartScrollContent> {
     final quantity = double.tryParse(_pendingQuantity);
     setState(() => _pendingQuantity = '');
     if (quantity != null && quantity > 0) {
-      _viewModel.setCartLineQuantity(line.lineKey, quantity, source: 'keyboard');
+      _viewModel.setCartLineQuantity(
+        line.lineKey,
+        quantity,
+        source: 'keyboard',
+      );
     }
   }
 
@@ -699,7 +704,7 @@ class _CartScrollContentState extends State<_CartScrollContent> {
                   ),
           ),
           if (_pendingQuantity.isNotEmpty && focusedLine != null)
-            _PendingQuantityBanner(
+            PendingQuantityBanner(
               quantity: _pendingQuantity,
               productName: focusedLine.variant.productLabel,
             ),
@@ -773,58 +778,6 @@ final Map<LogicalKeyboardKey, String> _digitKeys = {
   LogicalKeyboardKey.numpad8: '8',
   LogicalKeyboardKey.numpad9: '9',
 };
-
-class _PendingQuantityBanner extends StatelessWidget {
-  const _PendingQuantityBanner({
-    required this.quantity,
-    required this.productName,
-  });
-
-  final String quantity;
-  final String productName;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final colors = context.pointyColors;
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsetsDirectional.fromSTEB(12, 0, 12, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: colors.primaryContainer,
-        borderRadius: BorderRadius.circular(PointyRadii.chip),
-        border: Border.all(color: colors.primaryStrong),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.tag_outlined, size: 18, color: colors.primaryStrong),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              l10n.cartQuantityPendingLabel(quantity, productName),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: colors.primaryDark,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            l10n.cartQuantityPendingHint,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: colors.primaryStrong,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _PosCartHeaderActions extends StatelessWidget {
   const _PosCartHeaderActions({

@@ -15,6 +15,7 @@ class PurchaseOrder {
     required this.canRefund,
     required this.canExchange,
     this.discountTotal = 0,
+    this.extraDiscountAmount = 0,
     this.discountCodes = const [],
     this.appliedDiscounts = const [],
     this.landedCostEntries = const [],
@@ -49,6 +50,9 @@ class PurchaseOrder {
   final List<PurchaseReceipt> receipts;
   final double subtotal;
   final double discountTotal;
+
+  /// The one-off manual discount included in [discountTotal].
+  final double extraDiscountAmount;
   final List<String> discountCodes;
   final List<AppliedPurchaseDiscount> appliedDiscounts;
   final double total;
@@ -146,6 +150,7 @@ class PurchaseOrder {
           .toList(growable: false),
       subtotal: _moneyFromJson(json['subtotal']),
       discountTotal: _moneyFromJson(json['discount_total']),
+      extraDiscountAmount: _moneyFromJson(json['extra_discount_amount']),
       discountCodes: _listFromJson(
         json['discount_codes'],
       ).map((code) => code.toString()).toList(growable: false),

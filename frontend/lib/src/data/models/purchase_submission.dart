@@ -458,6 +458,7 @@ class PurchaseOrderDraft {
     this.landedCostEntries = const [],
     this.landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue,
     this.discountCode = '',
+    this.extraDiscountAmount = 0,
   });
 
   final List<PurchaseOrderLineDraft> lines;
@@ -469,6 +470,9 @@ class PurchaseOrderDraft {
   final LandedCostAllocationMethod landedCostAllocationMethod;
   final String discountCode;
 
+  /// One-off order discount typed by hand (mostly a fraction eliminator).
+  final double extraDiscountAmount;
+
   factory PurchaseOrderDraft.fromDraftLines(
     List<PurchaseDraftLine> lines, {
     required int supplierId,
@@ -478,6 +482,7 @@ class PurchaseOrderDraft {
     LandedCostAllocationMethod landedCostAllocationMethod =
         LandedCostAllocationMethod.byLineValue,
     String discountCode = '',
+    double extraDiscountAmount = 0,
   }) {
     return PurchaseOrderDraft(
       supplierId: supplierId,
@@ -486,6 +491,7 @@ class PurchaseOrderDraft {
       landedCostEntries: landedCostEntries,
       landedCostAllocationMethod: landedCostAllocationMethod,
       discountCode: discountCode,
+      extraDiscountAmount: extraDiscountAmount,
       lines: lines
           .map(
             (line) => PurchaseOrderLineDraft(
@@ -531,6 +537,8 @@ class PurchaseOrderDraft {
         'discount_codes': normalizedDiscountCode.isEmpty
             ? const <String>[]
             : [normalizedDiscountCode],
+      if (forUpdate || extraDiscountAmount > 0)
+        'extra_discount_amount': extraDiscountAmount.toStringAsFixed(2),
       'lines': lines.map((line) => line.toJson()).toList(),
     };
   }
@@ -543,6 +551,7 @@ class PurchaseDiscountPreviewDraft {
     this.landedCostEntries = const [],
     this.landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue,
     this.discountCode = '',
+    this.extraDiscountAmount = 0,
   });
 
   final List<PurchaseOrderLineDraft> lines;
@@ -550,6 +559,7 @@ class PurchaseDiscountPreviewDraft {
   final List<PurchaseLandedCostEntry> landedCostEntries;
   final LandedCostAllocationMethod landedCostAllocationMethod;
   final String discountCode;
+  final double extraDiscountAmount;
 
   factory PurchaseDiscountPreviewDraft.fromDraftLines(
     List<PurchaseDraftLine> lines, {
@@ -558,12 +568,14 @@ class PurchaseDiscountPreviewDraft {
     LandedCostAllocationMethod landedCostAllocationMethod =
         LandedCostAllocationMethod.byLineValue,
     String discountCode = '',
+    double extraDiscountAmount = 0,
   }) {
     return PurchaseDiscountPreviewDraft(
       supplierId: supplierId,
       landedCostEntries: landedCostEntries,
       landedCostAllocationMethod: landedCostAllocationMethod,
       discountCode: discountCode,
+      extraDiscountAmount: extraDiscountAmount,
       lines: lines
           .map(
             (line) => PurchaseOrderLineDraft(
@@ -587,6 +599,8 @@ class PurchaseDiscountPreviewDraft {
       'landed_cost_allocation_method': landedCostAllocationMethod.apiValue,
       if (normalizedDiscountCode.isNotEmpty)
         'discount_codes': [normalizedDiscountCode],
+      if (extraDiscountAmount > 0)
+        'extra_discount_amount': extraDiscountAmount.toStringAsFixed(2),
       'lines': lines.map((line) => line.toJson()).toList(),
     };
   }

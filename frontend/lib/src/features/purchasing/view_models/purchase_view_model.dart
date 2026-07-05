@@ -91,6 +91,7 @@ class PurchaseViewModel extends ChangeNotifier {
   String _supplierInvoiceDateInput = '';
   List<PurchaseLandedCostEntry> _landedCostEntries = [];
   String _discountCode = '';
+  double _extraDiscount = 0;
   String _submitIdempotencyKey = _newPurchaseIdempotencyKey('purchase-draft');
   PurchaseDiscountPreview? _discountPreview;
   bool _isLoadingDiscountPreview = false;
@@ -123,6 +124,9 @@ class PurchaseViewModel extends ChangeNotifier {
   List<PurchaseLandedCostEntry> get landedCostEntries =>
       List.unmodifiable(_landedCostEntries);
   String get discountCode => _discountCode;
+
+  /// One-off order discount typed by hand (mostly a fraction eliminator).
+  double get extraDiscount => _extraDiscount;
   PurchaseDiscountPreview? get discountPreview => _discountPreview;
   bool get isLoadingDiscountPreview => _isLoadingDiscountPreview;
   bool get hasDiscountPreviewError => _hasDiscountPreviewError;
@@ -341,12 +345,12 @@ class PurchaseViewModel extends ChangeNotifier {
     } else {
       // The draft keeps one line per variant: repeat adds bump the quantity in
       // the line's existing unit (switch units from the line's unit chip).
-      final line = _draft.removeAt(index);
-      _draft.add(
-        line.copyWith(
-          quantity: _clampQuantity(line.quantity + quantity),
-          unitCost: unitCost,
-        ),
+      // Updated in place — a line's position is set on first insertion and
+      // never changes afterwards.
+      final line = _draft[index];
+      _draft[index] = line.copyWith(
+        quantity: _clampQuantity(line.quantity + quantity),
+        unitCost: unitCost,
       );
     }
     final updatedLine = _draft
@@ -678,6 +682,16 @@ class PurchaseViewModel extends ChangeNotifier {
     unawaited(refreshDiscountPreview());
   }
 
+  void updateExtraDiscount(double value) {
+    if (_isSubmitting || value < 0) {
+      return;
+    }
+    _extraDiscount = value;
+    _touchSubmissionIntent();
+    notifyListeners();
+    unawaited(refreshDiscountPreview());
+  }
+
   void updateLandedCostAllocationMethod(LandedCostAllocationMethod method) {
     if (_isSubmitting) {
       return;
@@ -724,6 +738,7 @@ class PurchaseViewModel extends ChangeNotifier {
         landedCostEntries: _landedCostEntries,
         landedCostAllocationMethod: _landedCostAllocationMethod,
         discountCode: _discountCode,
+        extraDiscountAmount: _extraDiscount,
       ),
     );
     if (requestVersion != _discountPreviewRequestVersion) {
@@ -763,6 +778,7 @@ class PurchaseViewModel extends ChangeNotifier {
       landedCostEntries: _landedCostEntries,
       landedCostAllocationMethod: _landedCostAllocationMethod,
       discountCode: _discountCode,
+      extraDiscountAmount: _extraDiscount,
       idempotencyKey: _submitIdempotencyKey,
     );
     switch (result) {
@@ -819,6 +835,7 @@ class PurchaseViewModel extends ChangeNotifier {
         : order.discountCodes.first;
     _landedCostEntries = _normalizedLandedCostEntries(order.landedCostEntries);
     _landedCostAllocationMethod = order.landedCostAllocationMethod;
+    _extraDiscount = order.extraDiscountAmount;
     // Receiving-on-submit is a submit-time concern; editing only saves a draft.
     _receiveImmediately = false;
     _submitIdempotencyKey = _newPurchaseIdempotencyKey('purchase-edit');
@@ -857,6 +874,7 @@ class PurchaseViewModel extends ChangeNotifier {
       landedCostEntries: _landedCostEntries,
       landedCostAllocationMethod: _landedCostAllocationMethod,
       discountCode: _discountCode,
+      extraDiscountAmount: _extraDiscount,
     );
     switch (result) {
       case Ok<PurchaseOrder>():
@@ -1002,6 +1020,7 @@ class PurchaseViewModel extends ChangeNotifier {
   void _resetLandedCosts() {
     _landedCostEntries = [];
     _discountCode = '';
+    _extraDiscount = 0;
     _landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue;
   }
 

@@ -420,20 +420,21 @@ void main() {
     },
   );
 
-  test('re-adding an existing cart line makes it the newest line', () async {
+  test('re-adding an existing cart line keeps its position', () async {
     final viewModel = _viewModel(_FakePosApiService());
     addTearDown(viewModel.dispose);
 
     viewModel.addVariant(_coffeeVariant);
     viewModel.addVariant(_teaVariant);
+    // A repeat add (or any quantity change) merges IN PLACE — the list order
+    // is fixed at first insertion so lines never jump under the cashier.
     viewModel.addVariant(_coffeeVariant);
 
     expect(viewModel.cart.map((line) => line.variant.id), [
-      _teaVariant.id,
       _coffeeVariant.id,
+      _teaVariant.id,
     ]);
-    expect(viewModel.cart.last.quantity, 2);
-    expect(viewModel.cart.reversed.first.variant.id, _coffeeVariant.id);
+    expect(viewModel.cart.first.quantity, 2);
     await _settle();
   });
 
