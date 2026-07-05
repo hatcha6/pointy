@@ -518,12 +518,20 @@ class _PurchaseDraftScrollContent extends StatelessWidget {
                   expiryDate,
                 );
               },
-              onUnitChanged: (code, label, factor) {
+              onUnitChanged: (code, label, factor, allowsFractional) {
                 viewModel.updateLineUnit(
                   visibleDraft[index].variant,
                   unitCode: code,
                   unitLabel: label,
                   unitFactor: factor,
+                  allowsFractional: allowsFractional,
+                );
+              },
+              onQuantityChanged: (quantity) {
+                viewModel.setLineQuantity(
+                  visibleDraft[index].variant,
+                  quantity,
+                  source: 'purchase_quantity_edit',
                 );
               },
             ),
@@ -1169,6 +1177,7 @@ class PurchaseDraftLineTile extends StatefulWidget {
     required this.onCostChanged,
     required this.onExpiryDateChanged,
     this.onUnitChanged,
+    this.onQuantityChanged,
   });
 
   final PurchaseDraftLine line;
@@ -1181,7 +1190,14 @@ class PurchaseDraftLineTile extends StatefulWidget {
 
   /// Selected purchase unit changed: (code, label, factorToBase). Base unit is
   /// reported with an empty code.
-  final void Function(String code, String label, double factor)? onUnitChanged;
+  final void Function(
+    String code,
+    String label,
+    double factor,
+    bool allowsFractional,
+  )?
+  onUnitChanged;
+  final ValueChanged<double>? onQuantityChanged;
 
   @override
   State<PurchaseDraftLineTile> createState() => _PurchaseDraftLineTileState();
@@ -1304,11 +1320,14 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
     );
 
     final stepper = PointyQuantityStepper(
-      quantity: line.quantity.toDouble(),
+      quantity: line.quantity,
       incrementTooltip: l10n.addOneTooltip,
       decrementTooltip: l10n.removeOneTooltip,
       onIncrement: widget.enabled ? () => widget.onAdd() : null,
       onDecrement: widget.enabled ? widget.onRemove : null,
+      onQuantityTap: widget.enabled && widget.onQuantityChanged != null
+          ? () => _promptQuantity(context)
+          : null,
     );
 
     final unitOptions = purchasableUnitOptions(
@@ -1342,6 +1361,7 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                       option.isBase ? '' : option.code,
                       option.label,
                       option.factorToBase,
+                      option.allowsFractional,
                     );
                   }
                 : null,
@@ -1474,6 +1494,66 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
     }
     setState(() => _expiryInputInvalid = false);
     widget.onExpiryDateChanged(parsed);
+  }
+
+  /// Tap-to-type quantity entry on the stepper. Decimal input is offered only
+  /// when the line's unit transacts in fractions (half an egg tray, 2.5 kg) —
+  /// mirroring the backend's per-unit whole-number rule.
+  Future<void> _promptQuantity(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final line = widget.line;
+    final allowsFractional = line.unitAllowsFractional;
+    final controller = TextEditingController(
+      text: formatQuantity(line.quantity),
+    );
+    final submitted = await showDialog<double>(
+      context: context,
+      builder: (dialogContext) {
+        void submit() {
+          final parsed = double.tryParse(controller.text.trim());
+          if (parsed == null || parsed <= 0) {
+            return;
+          }
+          if (!allowsFractional && parsed != parsed.roundToDouble()) {
+            return;
+          }
+          Navigator.of(dialogContext).pop(parsed);
+        }
+
+        return AlertDialog(
+          title: Text(
+            line.unitLabel.isEmpty
+                ? l10n.purchaseLineQuantityLabel
+                : '${l10n.purchaseLineQuantityLabel} (${line.unitLabel})',
+          ),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: TextInputType.numberWithOptions(
+              decimal: allowsFractional,
+            ),
+            inputFormatters: [
+              if (allowsFractional)
+                DecimalTextInputFormatter()
+              else
+                FilteringTextInputFormatter.digitsOnly,
+            ],
+            onSubmitted: (_) => submit(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(l10n.cancelButton),
+            ),
+            FilledButton(onPressed: submit, child: Text(l10n.confirmButton)),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    if (submitted != null) {
+      widget.onQuantityChanged?.call(submitted);
+    }
   }
 
   Future<void> _pickExpiryDate() async {

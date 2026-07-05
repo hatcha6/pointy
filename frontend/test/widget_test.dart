@@ -2196,7 +2196,11 @@ void main() {
 
       expect(receiveBody?['note'], 'قطعة تالفة عند الوصول');
       expect(receiveBody?['lines'], [
-        {'purchase_line': 1, 'quantity_received': 1, 'quantity_damaged': 1},
+        {
+          'purchase_line': 1,
+          'quantity_received': '1.000',
+          'quantity_damaged': '1.000',
+        },
       ]);
       await tester.scrollUntilVisible(find.textContaining('تالف 1'), 120);
       await tester.pumpAndSettle();
@@ -2271,10 +2275,10 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
     expect(exchangeBody?['lines'], [
-      {'line': 1, 'quantity': 1},
+      {'line': 1, 'quantity': '1.000'},
     ]);
     expect(exchangeBody?['replacement_lines'], [
-      {'variant': 1, 'quantity': 1, 'unit_cost': '3.75'},
+      {'variant': 1, 'quantity': '1.000', 'unit_cost': '3.75'},
     ]);
   });
 
@@ -5622,13 +5626,16 @@ PosApiService _mockApiService({
         final firstLine = typedLines.isEmpty ? null : typedLines.first;
         final receivedQuantity = firstLine == null
             ? 2
-            : int.tryParse('${firstLine['quantity_received']}') ?? 0;
+            : (double.tryParse('${firstLine['quantity_received']}') ?? 0)
+                  .round();
         final damagedQuantity = firstLine == null
             ? 0
-            : int.tryParse('${firstLine['quantity_damaged']}') ?? 0;
+            : (double.tryParse('${firstLine['quantity_damaged']}') ?? 0)
+                  .round();
         final rejectedQuantity = firstLine == null
             ? 0
-            : int.tryParse('${firstLine['quantity_rejected']}') ?? 0;
+            : (double.tryParse('${firstLine['quantity_rejected']}') ?? 0)
+                  .round();
         final openQuantity =
             2 - receivedQuantity - damagedQuantity - rejectedQuantity;
         return _jsonResponse(
@@ -7162,7 +7169,7 @@ Map<String, Object?> _purchaseDiscountPreviewJson(Map<String, Object?> body) {
   final previewLines = <Map<String, Object?>>[];
   var subtotal = 0.0;
   for (final line in rawLines.whereType<Map<String, Object?>>()) {
-    final quantity = int.tryParse('${line['quantity']}') ?? 0;
+    final quantity = double.tryParse('${line['quantity']}') ?? 0;
     final unitCost = double.tryParse('${line['unit_cost']}') ?? 0;
     final lineTotal = unitCost * quantity;
     subtotal += lineTotal;
@@ -7196,7 +7203,7 @@ Map<String, Object?> _purchaseDiscountPreviewJson(Map<String, Object?> body) {
     weights: [
       for (final line in previewLines)
         switch (allocationMethod) {
-          'quantity' => (line['quantity'] as int).toDouble(),
+          'quantity' => double.tryParse('${line['quantity']}') ?? 0,
           'equal' => 1.0,
           _ => double.tryParse('${line['line_total']}') ?? 0,
         },
@@ -7218,7 +7225,7 @@ Map<String, Object?> _purchaseDiscountPreviewJson(Map<String, Object?> body) {
     'lines': [
       for (final (index, line) in previewLines.indexed)
         () {
-          final quantity = line['quantity'] as int;
+          final quantity = double.tryParse('${line['quantity']}') ?? 0;
           final lineTotal = double.tryParse('${line['line_total']}') ?? 0;
           final discountAmount = discountAllocations[index];
           final netLineTotal = lineTotal - discountAmount;

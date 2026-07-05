@@ -1,6 +1,8 @@
+// ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
+
+// ignore_for_file: type=lint
 
 /// The translations for Arabic (`ar`).
 class AppLocalizationsAr extends AppLocalizations {
@@ -16,13 +18,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get errorUnexpectedMessage => 'حدث خطأ غير متوقع. حاول مرة أخرى.';
 
   @override
-  String get errorServerMessage => 'تعذّر إكمال العملية على الخادم. حاول مرة أخرى لاحقًا.';
+  String get errorServerMessage =>
+      'تعذّر إكمال العملية على الخادم. حاول مرة أخرى لاحقًا.';
 
   @override
   String get commandPaletteTitle => 'تنقّل سريع';
 
   @override
-  String get commandPaletteSearchHint => 'ابحث عن شاشة أو منتج أو عميل أو فاتورة…';
+  String get commandPaletteSearchHint =>
+      'ابحث عن شاشة أو منتج أو عميل أو فاتورة…';
 
   @override
   String get commandPaletteScreensSection => 'الشاشات';
@@ -102,7 +106,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get commandPaletteOpenLabel => 'بحث وتنقّل سريع';
 
   @override
-  String get commandPaletteFooterHint => '↑↓ للتنقل · Enter للفتح · Esc للإغلاق';
+  String get commandPaletteFooterHint =>
+      '↑↓ للتنقل · Enter للفتح · Esc للإغلاق';
 
   @override
   String get commandPaletteActionsHint => 'Tab للإجراءات';
@@ -283,7 +288,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityLogHighRiskMetric => 'مخاطر عالية';
 
   @override
-  String get activityLogUsersLoadWarning => 'تعذر تحميل قائمة المستخدمين للفلاتر. يمكنك متابعة البحث والفلاتر الأخرى.';
+  String get activityLogUsersLoadWarning =>
+      'تعذر تحميل قائمة المستخدمين للفلاتر. يمكنك متابعة البحث والفلاتر الأخرى.';
 
   @override
   String get activityLogLoadError => 'تعذر تحميل سجل النشاط.';
@@ -308,7 +314,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String activityLogEventSubtitleWithSummary(String date, String user, String summary) {
+  String activityLogEventSubtitleWithSummary(
+      String date, String user, String summary) {
     return '$date بواسطة $user - $summary';
   }
 
@@ -596,10 +603,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityUiSourcePurchaseCameraScanner => 'ماسح كاميرا الشراء';
 
   @override
-  String get activityUiSourcePurchaseDraftQuantityButton => 'أزرار كمية مسودة الشراء';
+  String get activityUiSourcePurchaseDraftQuantityButton =>
+      'أزرار كمية مسودة الشراء';
 
   @override
-  String get activityUiSourcePurchaseDraftClearButton => 'زر تفريغ مسودة الشراء';
+  String get activityUiSourcePurchaseDraftClearButton =>
+      'زر تفريغ مسودة الشراء';
 
   @override
   String get activityUiSourceRegisterSessionGate => 'واجهة فتح الدرج';
@@ -608,7 +617,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityUiSourceRegisterSessionCloseSheet => 'نافذة إغلاق الدرج';
 
   @override
-  String get activityUiSourceRegisterCashMovementSheet => 'نافذة الحركة النقدية';
+  String get activityUiSourceRegisterCashMovementSheet =>
+      'نافذة الحركة النقدية';
 
   @override
   String get activityUiSourceRegisterSessionHistory => 'سجل جلسات الدرج';
@@ -707,7 +717,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityLogAllUsers => 'كل المستخدمين';
 
   @override
-  String get activityLogUserFilterHelper => 'اختر مستخدمًا أو أكثر لتصفية الإجراءات المسجلة.';
+  String get activityLogUserFilterHelper =>
+      'اختر مستخدمًا أو أكثر لتصفية الإجراءات المسجلة.';
 
   @override
   String get activityLogUsersOpenPickerTooltip => 'اختيار المستخدمين';
@@ -894,7 +905,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityEventOrderReturned => 'تم تسجيل مرتجع';
 
   @override
-  String get activityEventSuspectedActivityDetected => 'رُصد نمط مشتبه للمراجعة';
+  String get activityEventSuspectedActivityDetected =>
+      'رُصد نمط مشتبه للمراجعة';
 
   @override
   String get activityEventReceiptReprintQueued => 'أعيدت طباعة إيصال';
@@ -918,19 +930,23 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityEventSalesHistorySessionSelected => 'فتحت جلسة من السجل';
 
   @override
-  String get activityEventSalesHistoryOrderVoidCompleted => 'اكتمل إلغاء فاتورة من السجل';
+  String get activityEventSalesHistoryOrderVoidCompleted =>
+      'اكتمل إلغاء فاتورة من السجل';
 
   @override
-  String get activityEventSalesHistoryOrderReturnCompleted => 'اكتمل مرتجع فاتورة من السجل';
+  String get activityEventSalesHistoryOrderReturnCompleted =>
+      'اكتمل مرتجع فاتورة من السجل';
 
   @override
   String get activityEventPosLineAdded => 'أضيف سطر إلى سلة البيع';
 
   @override
-  String get activityEventPosLineQuantityIncreased => 'زادت كمية سطر في سلة البيع';
+  String get activityEventPosLineQuantityIncreased =>
+      'زادت كمية سطر في سلة البيع';
 
   @override
-  String get activityEventPosLineQuantityDecreased => 'نقصت كمية سطر في سلة البيع';
+  String get activityEventPosLineQuantityDecreased =>
+      'نقصت كمية سطر في سلة البيع';
 
   @override
   String get activityEventPosLineDeleted => 'حذف سطر من سلة البيع';
@@ -942,22 +958,26 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityEventPosCheckoutStarted => 'بدأ إرسال عملية بيع';
 
   @override
-  String get activityEventPosCheckoutCompleted => 'اكتملت عملية البيع من الواجهة';
+  String get activityEventPosCheckoutCompleted =>
+      'اكتملت عملية البيع من الواجهة';
 
   @override
   String get activityEventPosCheckoutFailed => 'فشل إرسال عملية بيع';
 
   @override
-  String get activityEventPosCheckoutStockRejected => 'رفضت عملية بيع بسبب المخزون';
+  String get activityEventPosCheckoutStockRejected =>
+      'رفضت عملية بيع بسبب المخزون';
 
   @override
   String get activityEventPurchaseLineAdded => 'أضيف سطر إلى مسودة الشراء';
 
   @override
-  String get activityEventPurchaseLineQuantityIncreased => 'زادت كمية سطر في مسودة الشراء';
+  String get activityEventPurchaseLineQuantityIncreased =>
+      'زادت كمية سطر في مسودة الشراء';
 
   @override
-  String get activityEventPurchaseLineQuantityDecreased => 'نقصت كمية سطر في مسودة الشراء';
+  String get activityEventPurchaseLineQuantityDecreased =>
+      'نقصت كمية سطر في مسودة الشراء';
 
   @override
   String get activityEventPurchaseLineDeleted => 'حذف سطر من مسودة الشراء';
@@ -966,7 +986,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityEventPurchaseDraftCleared => 'أفرغت مسودة الشراء';
 
   @override
-  String get activityEventPurchaseSupplierSelected => 'اختير مورد لمسودة الشراء';
+  String get activityEventPurchaseSupplierSelected =>
+      'اختير مورد لمسودة الشراء';
 
   @override
   String get activityEventPurchaseDraftSubmitted => 'أرسلت مسودة شراء';
@@ -1083,7 +1104,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityEventBarcodeLabelsFailed => 'فشلت طباعة ملصقات باركود';
 
   @override
-  String get activityEventPrinterDiscoveryCompleted => 'اكتمل البحث عن الطابعات';
+  String get activityEventPrinterDiscoveryCompleted =>
+      'اكتمل البحث عن الطابعات';
 
   @override
   String get activityEventPrinterDiscoveryFailed => 'فشل البحث عن الطابعات';
@@ -1125,7 +1147,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityEventAnalyticsExportDownloaded => 'نُزل ملف التحليلات';
 
   @override
-  String get activityEventAnalyticsExportDownloadFailed => 'فشل تنزيل ملف التحليلات';
+  String get activityEventAnalyticsExportDownloadFailed =>
+      'فشل تنزيل ملف التحليلات';
 
   @override
   String get activityEventReportGenerated => 'أنشئ تقرير';
@@ -1182,31 +1205,36 @@ class AppLocalizationsAr extends AppLocalizations {
   String get reportSalesSummaryTitle => 'ملخص المبيعات';
 
   @override
-  String get reportSalesSummarySubtitle => 'إجماليات الطلبات والمرتجعات والخصومات حسب الفترة.';
+  String get reportSalesSummarySubtitle =>
+      'إجماليات الطلبات والمرتجعات والخصومات حسب الفترة.';
 
   @override
   String get reportRegisterSessionsTitle => 'جلسات الدرج';
 
   @override
-  String get reportRegisterSessionsSubtitle => 'افتتاح وإغلاق الجلسات والفروقات النقدية لكل وردية.';
+  String get reportRegisterSessionsSubtitle =>
+      'افتتاح وإغلاق الجلسات والفروقات النقدية لكل وردية.';
 
   @override
   String get reportPaymentsTitle => 'المدفوعات';
 
   @override
-  String get reportPaymentsSubtitle => 'طرق الدفع والعمولات والتسويات خلال الفترة.';
+  String get reportPaymentsSubtitle =>
+      'طرق الدفع والعمولات والتسويات خلال الفترة.';
 
   @override
   String get reportInventoryValueTitle => 'قيمة المخزون';
 
   @override
-  String get reportInventoryValueSubtitle => 'الكميات الحالية وقيمة البيع والتكلفة عند توفرها.';
+  String get reportInventoryValueSubtitle =>
+      'الكميات الحالية وقيمة البيع والتكلفة عند توفرها.';
 
   @override
   String get reportStockMovementTitle => 'حركات المخزون';
 
   @override
-  String get reportStockMovementSubtitle => 'الاستلام والتعديل والبيع لكل منتج.';
+  String get reportStockMovementSubtitle =>
+      'الاستلام والتعديل والبيع لكل منتج.';
 
   @override
   String get reportPurchasesTitle => 'المشتريات والموردون';
@@ -1221,31 +1249,36 @@ class AppLocalizationsAr extends AppLocalizations {
   String get reportReorderItemsTitle => 'أصناف تحتاج إعادة طلب';
 
   @override
-  String get reportReorderItemsSubtitle => 'المنتجات التي بلغت حد إعادة الطلب مع الكميات المقترحة للشراء.';
+  String get reportReorderItemsSubtitle =>
+      'المنتجات التي بلغت حد إعادة الطلب مع الكميات المقترحة للشراء.';
 
   @override
   String get reportPayrollSummaryTitle => 'الرواتب والأجور';
 
   @override
-  String get reportPayrollSummarySubtitle => 'مسيرات الرواتب وتكلفة الموظفين خلال الفترة.';
+  String get reportPayrollSummarySubtitle =>
+      'مسيرات الرواتب وتكلفة الموظفين خلال الفترة.';
 
   @override
   String get reportProfitCostsTitle => 'الأرباح والتكاليف';
 
   @override
-  String get reportProfitCostsSubtitle => 'الربح الإجمالي مقابل الرواتب والعمولات وإنفاق المشتريات.';
+  String get reportProfitCostsSubtitle =>
+      'الربح الإجمالي مقابل الرواتب والعمولات وإنفاق المشتريات.';
 
   @override
   String get reportContactsTitle => 'أرصدة الجهات';
 
   @override
-  String get reportContactsSubtitle => 'نشاط العملاء والموردين والأرصدة المرتبطة بهم.';
+  String get reportContactsSubtitle =>
+      'نشاط العملاء والموردين والأرصدة المرتبطة بهم.';
 
   @override
   String get reportDiscountsTitle => 'سجل الخصومات';
 
   @override
-  String get reportDiscountsSubtitle => 'الخصومات النشطة والاستخدامات خلال الفترة.';
+  String get reportDiscountsSubtitle =>
+      'الخصومات النشطة والاستخدامات خلال الفترة.';
 
   @override
   String get reportA4Chip => 'A4';
@@ -1525,7 +1558,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardRecentStockMovementsTitle => 'آخر حركات المخزون';
 
   @override
-  String dashboardStockItemSubtitle(String sku, int reorderLevel, int expected) {
+  String dashboardStockItemSubtitle(
+      String sku, int reorderLevel, int expected) {
     return '$sku، حد الطلب $reorderLevel، المتوقع $expected';
   }
 
@@ -1703,13 +1737,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get smartNotificationsEmptyTitle => 'الأمور المهمة تحت السيطرة';
 
   @override
-  String get smartNotificationsEmptyMessage => 'سنظهر هنا فقط ما يحتاج انتباهًا فعليًا.';
+  String get smartNotificationsEmptyMessage =>
+      'سنظهر هنا فقط ما يحتاج انتباهًا فعليًا.';
 
   @override
   String get smartNotificationsHiddenOnlyTitle => 'كل التنبيهات الحالية مخفية';
 
   @override
-  String get smartNotificationsHiddenOnlyMessage => 'يمكنك إظهارها مرة أخرى إذا أردت مراجعتها.';
+  String get smartNotificationsHiddenOnlyMessage =>
+      'يمكنك إظهارها مرة أخرى إذا أردت مراجعتها.';
 
   @override
   String get smartNotificationsRestoreHiddenButton => 'إظهار المخفية';
@@ -1802,17 +1838,20 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String smartNotificationStockDetail(String name, int quantity, int threshold) {
+  String smartNotificationStockDetail(
+      String name, int quantity, int threshold) {
     return '$name: المتاح $quantity، حد الطلب $threshold';
   }
 
   @override
-  String smartNotificationExpiringStockDetailBasic(String name, int quantity, String date) {
+  String smartNotificationExpiringStockDetailBasic(
+      String name, int quantity, String date) {
     return '$name: المتبقي $quantity، تاريخ الانتهاء $date';
   }
 
   @override
-  String smartNotificationExpiringStockDetail(String name, int quantity, String date, String context) {
+  String smartNotificationExpiringStockDetail(
+      String name, int quantity, String date, String context) {
     return '$name: المتبقي $quantity، تاريخ الانتهاء $date، المرجع $context';
   }
 
@@ -1887,7 +1926,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get smartNotificationSuspectedActivityTitle => 'نشاط مشتبه يحتاج مراجعة';
+  String get smartNotificationSuspectedActivityTitle =>
+      'نشاط مشتبه يحتاج مراجعة';
 
   @override
   String smartNotificationSuspectedActivityMessage(String user, int score) {
@@ -1921,7 +1961,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get smartNotificationLowProfitMarginTitle => 'بيع بهامش سلبي';
 
   @override
-  String smartNotificationLowProfitMarginMessage(String percent, String amount) {
+  String smartNotificationLowProfitMarginMessage(
+      String percent, String amount) {
     return 'الهامش سلبي بنسبة $percent%، والفرق التقريبي $amount.';
   }
 
@@ -1961,7 +2002,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String smartNotificationPayrollReadyDetail(String runNumber, String start, String end) {
+  String smartNotificationPayrollReadyDetail(
+      String runNumber, String start, String end) {
     return '$runNumber: من $start إلى $end';
   }
 
@@ -2011,7 +2053,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get unauthorizedTitle => 'غير مصرح';
 
   @override
-  String get unauthorizedMessage => 'لا يملك هذا المستخدم صلاحية الوصول إلى هذه الشاشة.';
+  String get unauthorizedMessage =>
+      'لا يملك هذا المستخدم صلاحية الوصول إلى هذه الشاشة.';
 
   @override
   String get authCheckingSession => 'جار فحص الجلسة...';
@@ -2032,7 +2075,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get onboardingCreatingAdminButton => 'جار إنشاء المدير...';
 
   @override
-  String get onboardingCreateAdminError => 'تعذر إنشاء المدير. تحقق من البيانات وقوة كلمة المرور ثم حاول مرة أخرى.';
+  String get onboardingCreateAdminError =>
+      'تعذر إنشاء المدير. تحقق من البيانات وقوة كلمة المرور ثم حاول مرة أخرى.';
 
   @override
   String get loginTitle => 'تسجيل الدخول';
@@ -2050,7 +2094,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get loggingInButton => 'جار الدخول...';
 
   @override
-  String get loginError => 'تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.';
+  String get loginError =>
+      'تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.';
 
   @override
   String get managerRoleLabel => 'مدير';
@@ -2074,28 +2119,36 @@ class AppLocalizationsAr extends AppLocalizations {
   String get inventoryClerkRoleLabel => 'أمين المخزن';
 
   @override
-  String get managerRoleDescription => 'صلاحية كاملة على كل أقسام النظام والإعدادات.';
+  String get managerRoleDescription =>
+      'صلاحية كاملة على كل أقسام النظام والإعدادات.';
 
   @override
-  String get supervisorRoleDescription => 'إشراف على المبيعات والمخزون والمشتريات والتقارير على مستوى المتجر، دون إدارة المستخدمين أو الإعدادات أو اعتماد الرواتب.';
+  String get supervisorRoleDescription =>
+      'إشراف على المبيعات والمخزون والمشتريات والتقارير على مستوى المتجر، دون إدارة المستخدمين أو الإعدادات أو اعتماد الرواتب.';
 
   @override
-  String get accountantRoleDescription => 'المالية والرواتب والسلف والمصروفات والتقارير.';
+  String get accountantRoleDescription =>
+      'المالية والرواتب والسلف والمصروفات والتقارير.';
 
   @override
-  String get auditorRoleDescription => 'اطّلاع فقط على المبيعات والتقارير والمخزون والمشتريات دون أي تعديل.';
+  String get auditorRoleDescription =>
+      'اطّلاع فقط على المبيعات والتقارير والمخزون والمشتريات دون أي تعديل.';
 
   @override
-  String get purchasingAgentRoleDescription => 'إدارة دورة أوامر الشراء كاملة والموردين.';
+  String get purchasingAgentRoleDescription =>
+      'إدارة دورة أوامر الشراء كاملة والموردين.';
 
   @override
-  String get inventoryClerkRoleDescription => 'إدارة المخزون والجرد واستلام المشتريات.';
+  String get inventoryClerkRoleDescription =>
+      'إدارة المخزون والجرد واستلام المشتريات.';
 
   @override
-  String get technicianRoleDescription => 'تنفيذ أوامر الصيانة والتصنيع ومتابعة العملاء.';
+  String get technicianRoleDescription =>
+      'تنفيذ أوامر الصيانة والتصنيع ومتابعة العملاء.';
 
   @override
-  String get cashierRoleDescription => 'البيع عبر نقطة البيع وإدارة وردية الصندوق.';
+  String get cashierRoleDescription =>
+      'البيع عبر نقطة البيع وإدارة وردية الصندوق.';
 
   @override
   String get usersSearchHint => 'ابحث عن مستخدم';
@@ -2139,16 +2192,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get userEditTitle => 'تعديل المستخدم';
 
   @override
-  String get passwordResetLabel => 'كلمة مرور جديدة (اتركها فارغة لعدم التغيير)';
+  String get passwordResetLabel =>
+      'كلمة مرور جديدة (اتركها فارغة لعدم التغيير)';
 
   @override
-  String get userEditSelfRoleLocked => 'لا يمكنك تغيير دورك أو تعطيل حسابك بنفسك.';
+  String get userEditSelfRoleLocked =>
+      'لا يمكنك تغيير دورك أو تعطيل حسابك بنفسك.';
 
   @override
   String get userManagePermissionsLinkTitle => 'الصلاحيات الإضافية';
 
   @override
-  String get userManagePermissionsLinkSubtitle => 'منح صلاحيات فوق صلاحيات الدور';
+  String get userManagePermissionsLinkSubtitle =>
+      'منح صلاحيات فوق صلاحيات الدور';
 
   @override
   String get updateUserError => 'تعذّر تحديث المستخدم';
@@ -2162,7 +2218,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get permissionsLoadError => 'تعذّر تحميل الصلاحيات';
 
   @override
-  String get permissionsManagerHasAll => 'هذا المستخدم مدير ويملك جميع الصلاحيات.';
+  String get permissionsManagerHasAll =>
+      'هذا المستخدم مدير ويملك جميع الصلاحيات.';
 
   @override
   String permissionsSummaryInheritedExtra(int inherited, int extra) {
@@ -2213,7 +2270,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get userPermissionsNoExtras => 'لا توجد صلاحيات إضافية مخصصة لهذا المستخدم.';
+  String get userPermissionsNoExtras =>
+      'لا توجد صلاحيات إضافية مخصصة لهذا المستخدم.';
 
   @override
   String get refreshUsersTooltip => 'تحديث المستخدمين';
@@ -2264,7 +2322,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get userSettingsOverviewTitle => 'إعدادات الحساب';
 
   @override
-  String get userSettingsOverviewSubtitle => 'بيانات الدخول وطلبات السلفة المرتبطة بسجل الموظف';
+  String get userSettingsOverviewSubtitle =>
+      'بيانات الدخول وطلبات السلفة المرتبطة بسجل الموظف';
 
   @override
   String get userSettingsProfileSectionTitle => 'البيانات الشخصية';
@@ -2276,13 +2335,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get userSettingsLoansSectionTitle => 'طلبات السلفة';
 
   @override
-  String get userSettingsProfileSaveError => 'تعذر حفظ بيانات الحساب. تحقق من اسم المستخدم ثم حاول مرة أخرى.';
+  String get userSettingsProfileSaveError =>
+      'تعذر حفظ بيانات الحساب. تحقق من اسم المستخدم ثم حاول مرة أخرى.';
 
   @override
   String get userSettingsProfileSaved => 'تم حفظ بيانات الحساب.';
 
   @override
-  String get userSettingsPasswordChangeError => 'تعذر تغيير كلمة المرور. تحقق من كلمة المرور الحالية وشروط كلمة المرور الجديدة.';
+  String get userSettingsPasswordChangeError =>
+      'تعذر تغيير كلمة المرور. تحقق من كلمة المرور الحالية وشروط كلمة المرور الجديدة.';
 
   @override
   String get userSettingsPasswordChanged => 'تم تغيير كلمة المرور.';
@@ -2291,7 +2352,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get userSettingsLoansLoadError => 'تعذر تحميل طلبات السلفة.';
 
   @override
-  String get userSettingsLoanNoEmployeeRecord => 'لا يوجد سجل موظف مرتبط بهذا المستخدم، لذلك لا يمكن إرسال طلب سلفة.';
+  String get userSettingsLoanNoEmployeeRecord =>
+      'لا يوجد سجل موظف مرتبط بهذا المستخدم، لذلك لا يمكن إرسال طلب سلفة.';
 
   @override
   String get loanAmountLabel => 'مبلغ السلفة';
@@ -2303,13 +2365,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get loanPurposeLabel => 'سبب الطلب';
 
   @override
-  String get loanMonthlyDeductionTooHigh => 'لا يمكن أن يكون الخصم الشهري أكبر من مبلغ السلفة.';
+  String get loanMonthlyDeductionTooHigh =>
+      'لا يمكن أن يكون الخصم الشهري أكبر من مبلغ السلفة.';
 
   @override
   String get submitLoanRequestButton => 'إرسال طلب السلفة';
 
   @override
-  String get userSettingsLoanRequestError => 'تعذر إرسال طلب السلفة. راجع المبلغ والخصم الشهري ثم حاول مرة أخرى.';
+  String get userSettingsLoanRequestError =>
+      'تعذر إرسال طلب السلفة. راجع المبلغ والخصم الشهري ثم حاول مرة أخرى.';
 
   @override
   String get userSettingsLoanRequested => 'تم إرسال طلب السلفة للاعتماد.';
@@ -2321,7 +2385,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get userSettingsLoanHistoryTitle => 'سجل طلبات السلفة';
 
   @override
-  String userSettingsLoanBalanceDetail(String balance, String monthlyDeduction) {
+  String userSettingsLoanBalanceDetail(
+      String balance, String monthlyDeduction) {
     return 'المتبقي $balance، الخصم الشهري $monthlyDeduction';
   }
 
@@ -2335,7 +2400,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get createUserButton => 'إنشاء المستخدم';
 
   @override
-  String get createUserError => 'تعذر إنشاء المستخدم. راجع البيانات وحاول مرة أخرى.';
+  String get createUserError =>
+      'تعذر إنشاء المستخدم. راجع البيانات وحاول مرة أخرى.';
 
   @override
   String get usersLoadError => 'تعذر تحميل المستخدمين.';
@@ -2427,16 +2493,20 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get userActivityEmptyRecentSales => 'لا توجد فواتير عملاء لهذا المستخدم.';
+  String get userActivityEmptyRecentSales =>
+      'لا توجد فواتير عملاء لهذا المستخدم.';
 
   @override
-  String get userActivityEmptyRecentPurchases => 'لا توجد فواتير موردين لهذا المستخدم.';
+  String get userActivityEmptyRecentPurchases =>
+      'لا توجد فواتير موردين لهذا المستخدم.';
 
   @override
-  String get userActivityEmptyRecentSessions => 'لا توجد جلسات درج لهذا المستخدم.';
+  String get userActivityEmptyRecentSessions =>
+      'لا توجد جلسات درج لهذا المستخدم.';
 
   @override
-  String get userActivityEmptyRecentActivity => 'لا يوجد نشاط مسجل لهذا المستخدم.';
+  String get userActivityEmptyRecentActivity =>
+      'لا يوجد نشاط مسجل لهذا المستخدم.';
 
   @override
   String userActivityReceiptFallback(int id) {
@@ -2502,7 +2572,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shopSettingsLoadError => 'تعذر تحميل إعدادات المتجر.';
 
   @override
-  String get shopSettingsSaveError => 'تعذر حفظ إعدادات المتجر. راجع البيانات وحاول مرة أخرى.';
+  String get shopSettingsSaveError =>
+      'تعذر حفظ إعدادات المتجر. راجع البيانات وحاول مرة أخرى.';
 
   @override
   String get shopSettingsSavedMessage => 'تم حفظ إعدادات المتجر.';
@@ -2526,19 +2597,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get deviceUsageSingleUserTitle => 'مستخدم واحد';
 
   @override
-  String get deviceUsageSingleUserDescription => 'يفتح التطبيق بنفس الجلسة المحفوظة عند تشغيله مرة أخرى.';
+  String get deviceUsageSingleUserDescription =>
+      'يفتح التطبيق بنفس الجلسة المحفوظة عند تشغيله مرة أخرى.';
 
   @override
   String get deviceUsageMultiUserTitle => 'عدة مستخدمين';
 
   @override
-  String get deviceUsageMultiUserDescription => 'ينسى الجهاز المستخدم المسجل عند فتح التطبيق ويطلب تسجيل الدخول كل مرة.';
+  String get deviceUsageMultiUserDescription =>
+      'ينسى الجهاز المستخدم المسجل عند فتح التطبيق ويطلب تسجيل الدخول كل مرة.';
 
   @override
   String get appearanceSectionTitle => 'المظهر';
 
   @override
-  String get appearanceSectionSubtitle => 'يُحفظ هذا الاختيار على هذا الجهاز فقط، مناسب للمتاجر ذات الإضاءة المنخفضة.';
+  String get appearanceSectionSubtitle =>
+      'يُحفظ هذا الاختيار على هذا الجهاز فقط، مناسب للمتاجر ذات الإضاءة المنخفضة.';
 
   @override
   String get themeModeLight => 'فاتح';
@@ -2571,13 +2645,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shopSetupPickTypeTitle => 'ما نوع متجرك؟';
 
   @override
-  String get shopSetupPickTypeSubtitle => 'نفعّل لك الإعدادات المناسبة تلقائيًا — يمكنك تغيير أي شيء لاحقًا.';
+  String get shopSetupPickTypeSubtitle =>
+      'نفعّل لك الإعدادات المناسبة تلقائيًا — يمكنك تغيير أي شيء لاحقًا.';
 
   @override
   String get shopSetupTuneTitle => 'إعدادات سريعة';
 
   @override
-  String get shopSetupTuneSubtitle => 'اضبط القليل من الإعدادات الأساسية للبدء.';
+  String get shopSetupTuneSubtitle =>
+      'اضبط القليل من الإعدادات الأساسية للبدء.';
 
   @override
   String get shopSetupFinish => 'إنهاء الإعداد';
@@ -2601,43 +2677,50 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shopSetupOversellingTitle => 'السماح بالبيع رغم نفاد المخزون';
 
   @override
-  String get shopSetupOversellingSubtitle => 'يسمح ببيع المنتجات غير المتوفرة في المخزون.';
+  String get shopSetupOversellingSubtitle =>
+      'يسمح ببيع المنتجات غير المتوفرة في المخزون.';
 
   @override
   String get shopSetupOpeningCashTitle => 'طلب رصيد افتتاحي للدرج';
 
   @override
-  String get shopSetupOpeningCashSubtitle => 'يطلب من الكاشير إدخال النقد الافتتاحي عند بدء جلسة الدرج.';
+  String get shopSetupOpeningCashSubtitle =>
+      'يطلب من الكاشير إدخال النقد الافتتاحي عند بدء جلسة الدرج.';
 
   @override
   String get shopSetupReceiptsTitle => 'طباعة الإيصالات تلقائيًا';
 
   @override
-  String get shopSetupReceiptsSubtitle => 'يطبع إيصال العميل تلقائيًا بعد كل عملية بيع.';
+  String get shopSetupReceiptsSubtitle =>
+      'يطبع إيصال العميل تلقائيًا بعد كل عملية بيع.';
 
   @override
   String get shopTypeGeneral => 'متجر عام';
 
   @override
-  String get shopTypeGeneralDescription => 'بيع بالتجزئة بسيط دون ميزات إضافية.';
+  String get shopTypeGeneralDescription =>
+      'بيع بالتجزئة بسيط دون ميزات إضافية.';
 
   @override
   String get shopTypeRestaurant => 'مطعم / مقهى';
 
   @override
-  String get shopTypeRestaurantDescription => 'عمليات المطبخ وطباعة طلبات المطبخ والتحضير عند الطلب.';
+  String get shopTypeRestaurantDescription =>
+      'عمليات المطبخ وطباعة طلبات المطبخ والتحضير عند الطلب.';
 
   @override
   String get shopTypeGrocery => 'بقالة / سوبر ماركت';
 
   @override
-  String get shopTypeGroceryDescription => 'وحدات قياس متعددة وتنبيهات نقص المخزون ومراقبة صارمة.';
+  String get shopTypeGroceryDescription =>
+      'وحدات قياس متعددة وتنبيهات نقص المخزون ومراقبة صارمة.';
 
   @override
   String get shopTypePharmacy => 'صيدلية';
 
   @override
-  String get shopTypePharmacyDescription => 'مراقبة مخزون صارمة ومنع البيع بخسارة.';
+  String get shopTypePharmacyDescription =>
+      'مراقبة مخزون صارمة ومنع البيع بخسارة.';
 
   @override
   String get shopTypePhoneRepair => 'هواتف وصيانة';
@@ -2649,7 +2732,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shopTypeBakery => 'مخبز / حلويات';
 
   @override
-  String get shopTypeBakeryDescription => 'عمليات المطبخ والإنتاج للتحضير المسبق.';
+  String get shopTypeBakeryDescription =>
+      'عمليات المطبخ والإنتاج للتحضير المسبق.';
 
   @override
   String get shopTypeRetail => 'ملابس وتجزئة';
@@ -2685,13 +2769,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get salesChannelsSectionTitle => 'قنوات البيع';
 
   @override
-  String get salesChannelsSectionSubtitle => 'ربط تطبيقات التوصيل والمتاجر الإلكترونية وإدارة تفويضها';
+  String get salesChannelsSectionSubtitle =>
+      'ربط تطبيقات التوصيل والمتاجر الإلكترونية وإدارة تفويضها';
 
   @override
   String get salesChannelsLoadError => 'تعذر تحميل قنوات البيع.';
 
   @override
-  String get salesChannelsEmptyMessage => 'لا توجد قنوات بيع خارجية بعد. أضف قناة لربط تطبيقات التوصيل أو المتاجر الإلكترونية.';
+  String get salesChannelsEmptyMessage =>
+      'لا توجد قنوات بيع خارجية بعد. أضف قناة لربط تطبيقات التوصيل أو المتاجر الإلكترونية.';
 
   @override
   String get salesChannelAddButton => 'إضافة قناة';
@@ -2739,7 +2825,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get salesChannelSystemBadge => 'القناة الافتراضية';
 
   @override
-  String get salesChannelPosSubtitle => 'تطبيق نقطة البيع الخاص بالمتجر. يحدد الخادم هذه القناة تلقائيًا من جلسة الدخول ولا يمكن إيقافها.';
+  String get salesChannelPosSubtitle =>
+      'تطبيق نقطة البيع الخاص بالمتجر. يحدد الخادم هذه القناة تلقائيًا من جلسة الدخول ولا يمكن إيقافها.';
 
   @override
   String salesChannelKeyPrefixLabel(String prefix) {
@@ -2767,7 +2854,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get salesChannelRotateKeyConfirmTitle => 'تدوير مفتاح الربط؟';
 
   @override
-  String get salesChannelRotateKeyConfirmMessage => 'سيتوقف المفتاح الحالي عن العمل فورًا وسيظهر مفتاح جديد لمرة واحدة.';
+  String get salesChannelRotateKeyConfirmMessage =>
+      'سيتوقف المفتاح الحالي عن العمل فورًا وسيظهر مفتاح جديد لمرة واحدة.';
 
   @override
   String get salesChannelDeleteAction => 'حذف القناة';
@@ -2784,7 +2872,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get salesChannelApiKeyDialogTitle => 'مفتاح ربط القناة';
 
   @override
-  String get salesChannelApiKeyDialogMessage => 'انسخ المفتاح الآن واحفظه في مكان آمن، لن يظهر مرة أخرى.';
+  String get salesChannelApiKeyDialogMessage =>
+      'انسخ المفتاح الآن واحفظه في مكان آمن، لن يظهر مرة أخرى.';
 
   @override
   String get salesChannelApiKeyCopyButton => 'نسخ المفتاح';
@@ -2793,7 +2882,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get salesChannelApiKeyCopiedMessage => 'تم نسخ المفتاح.';
 
   @override
-  String get salesChannelActionError => 'تعذر تنفيذ العملية على القناة. حاول مرة أخرى.';
+  String get salesChannelActionError =>
+      'تعذر تنفيذ العملية على القناة. حاول مرة أخرى.';
 
   @override
   String get technicianRoleLabel => 'فني';
@@ -2893,7 +2983,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productUnitsSectionTitle => 'الوحدات والتحويلات';
 
   @override
-  String get productUnitsSectionDescription => 'أضف وحدات بيع وشراء إضافية (صندوق، كرتون، جملة) مع معامل التحويل إلى الوحدة الأساسية وسعر مخصّص اختياري لكل وحدة.';
+  String get productUnitsSectionDescription =>
+      'أضف وحدات بيع وشراء إضافية (صندوق، كرتون، جملة) مع معامل التحويل إلى الوحدة الأساسية وسعر مخصّص اختياري لكل وحدة.';
 
   @override
   String get productUnitsAddButton => 'إضافة وحدة';
@@ -2908,7 +2999,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productUnitPriceLabel => 'سعر مخصّص (اختياري)';
 
   @override
-  String get productUnitPriceHelper => 'اتركه فارغًا ليُحتسب من سعر الوحدة الأساسية × المعامل.';
+  String get productUnitPriceHelper =>
+      'اتركه فارغًا ليُحتسب من سعر الوحدة الأساسية × المعامل.';
 
   @override
   String get productUnitSellable => 'متاح للبيع';
@@ -2943,7 +3035,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get unitsManagementIntroTitle => 'وحدات القياس';
 
   @override
-  String get unitsManagementIntroMessage => 'أنشئ وحدات مخصّصة للبيع والشراء (صندوق، كرتون، جملة) وعدّل الوحدات الجاهزة. الوحدات المضمّنة لا تُحذف بل تُعطَّل.';
+  String get unitsManagementIntroMessage =>
+      'أنشئ وحدات مخصّصة للبيع والشراء (صندوق، كرتون، جملة) وعدّل الوحدات الجاهزة. الوحدات المضمّنة لا تُحذف بل تُعطَّل.';
 
   @override
   String get addUnitButton => 'إضافة وحدة';
@@ -3015,7 +3108,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get unitReferenceFactorLabel => 'معامل التحويل المرجعي';
 
   @override
-  String get unitReferenceFactorHelper => 'كمية الوحدة المرجعية في وحدة واحدة (مثلاً: 1 كجم = 1000 جم).';
+  String get unitReferenceFactorHelper =>
+      'كمية الوحدة المرجعية في وحدة واحدة (مثلاً: 1 كجم = 1000 جم).';
 
   @override
   String get unitAllowsFractionalLabel => 'يسمح بكميات كسرية';
@@ -3024,7 +3118,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get unitActiveLabel => 'مفعّلة';
 
   @override
-  String get unitSystemLockedHint => 'وحدة مضمّنة: لا يمكن تغيير الرمز أو النوع أو المعامل المرجعي.';
+  String get unitSystemLockedHint =>
+      'وحدة مضمّنة: لا يمكن تغيير الرمز أو النوع أو المعامل المرجعي.';
 
   @override
   String get unitSaveError => 'تعذّر حفظ الوحدة.';
@@ -3047,7 +3142,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get unitCannotDeleteSystemTitle => 'وحدة مضمّنة';
 
   @override
-  String get unitCannotDeleteSystemMessage => 'الوحدات المضمّنة لا تُحذف. يمكنك تعطيلها بدلاً من ذلك.';
+  String get unitCannotDeleteSystemMessage =>
+      'الوحدات المضمّنة لا تُحذف. يمكنك تعطيلها بدلاً من ذلك.';
 
   @override
   String get unitCannotDeleteInUseTitle => 'الوحدة قيد الاستخدام';
@@ -3067,7 +3163,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productIsPreparedTitle => 'يُحضّر عند الطلب';
 
   @override
-  String get productIsPreparedDescription => 'طبق مطبخ: يُباع دون مخزون خاص به وتُخصم مكوناته من الوصفة عند التحضير.';
+  String get productIsPreparedDescription =>
+      'طبق مطبخ: يُباع دون مخزون خاص به وتُخصم مكوناته من الوصفة عند التحضير.';
 
   @override
   String get productIsServiceTitle => 'منتج خدمي';
@@ -3079,7 +3176,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get jobsEmptyTitle => 'لا توجد مهام بعد';
 
   @override
-  String get jobsEmptyMessage => 'المهمة هي أي عمل تتابعه خطوة بخطوة: تصليح جهاز، دفعة إنتاج، أو طلب مطبخ. أنشئ أول مهمة وسيظهر مسارها هنا.';
+  String get jobsEmptyMessage =>
+      'المهمة هي أي عمل تتابعه خطوة بخطوة: تصليح جهاز، دفعة إنتاج، أو طلب مطبخ. أنشئ أول مهمة وسيظهر مسارها هنا.';
 
   @override
   String get newJobButton => 'مهمة جديدة';
@@ -3172,7 +3270,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get jobManagerOnlyMoveHint => 'الرجوع للخلف أو تخطي مرحلة يحتاج صلاحية مدير.';
+  String get jobManagerOnlyMoveHint =>
+      'الرجوع للخلف أو تخطي مرحلة يحتاج صلاحية مدير.';
 
   @override
   String get jobCustomerSection => 'الزبون';
@@ -3199,7 +3298,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get jobMaterialsSection => 'القطع والمواد';
 
   @override
-  String get jobMaterialsEmpty => 'لم تُستخدم قطع بعد. أضف كل قطعة تركّبها وسيُخصم المخزون تلقائيًا.';
+  String get jobMaterialsEmpty =>
+      'لم تُستخدم قطع بعد. أضف كل قطعة تركّبها وسيُخصم المخزون تلقائيًا.';
 
   @override
   String get addMaterialButton => 'إضافة قطعة';
@@ -3223,7 +3323,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get reverseMaterialConfirmTitle => 'إرجاع القطعة للمخزون؟';
 
   @override
-  String get reverseMaterialConfirmMessage => 'ستُعاد الكمية إلى المخزون وتُحذف من حساب المهمة.';
+  String get reverseMaterialConfirmMessage =>
+      'ستُعاد الكمية إلى المخزون وتُحذف من حساب المهمة.';
 
   @override
   String jobMaterialsTotalLabel(String amount) {
@@ -3237,7 +3338,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get jobApprovedPriceLabel => 'السعر المعتمد من الزبون';
 
   @override
-  String get jobApprovalRequiredHint => 'سجّل السعر الذي وافق عليه الزبون قبل بدء العمل.';
+  String get jobApprovalRequiredHint =>
+      'سجّل السعر الذي وافق عليه الزبون قبل بدء العمل.';
 
   @override
   String get jobWarrantyDaysLabel => 'أيام الضمان';
@@ -3276,7 +3378,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get jobInvoiceTitle => 'فاتورة المهمة';
 
   @override
-  String get jobInvoiceExplainer => 'ستُنشأ فاتورة عادية بالقطع المستخدمة وأجور العمل، ويدخل المبلغ في جلسة الدرج الحالية.';
+  String get jobInvoiceExplainer =>
+      'ستُنشأ فاتورة عادية بالقطع المستخدمة وأجور العمل، ويدخل المبلغ في جلسة الدرج الحالية.';
 
   @override
   String get jobLaborTotalLabel => 'أجور العمل';
@@ -3292,7 +3395,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get jobInvoiceNeedsRegister => 'افتح جلسة الدرج أولًا حتى يُسجل المبلغ في حساباتك.';
+  String get jobInvoiceNeedsRegister =>
+      'افتح جلسة الدرج أولًا حتى يُسجل المبلغ في حساباتك.';
 
   @override
   String jobInvoicedBadge(String receiptNumber) {
@@ -3306,7 +3410,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get jobCancelConfirmTitle => 'إلغاء المهمة؟';
 
   @override
-  String get jobCancelConfirmMessage => 'ستُلغى المهمة وتُعاد أي قطع مستخدمة إلى المخزون.';
+  String get jobCancelConfirmMessage =>
+      'ستُلغى المهمة وتُعاد أي قطع مستخدمة إلى المخزون.';
 
   @override
   String get jobCancelReasonLabel => 'سبب الإلغاء';
@@ -3336,7 +3441,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get intakeCreateButton => 'إنشاء المهمة';
 
   @override
-  String get intakeSelectCustomerHint => 'ابحث عن الزبون بالاسم أو الهاتف، أو أنشئ زبونًا جديدًا.';
+  String get intakeSelectCustomerHint =>
+      'ابحث عن الزبون بالاسم أو الهاتف، أو أنشئ زبونًا جديدًا.';
 
   @override
   String get intakeNewCustomerButton => 'زبون جديد';
@@ -3351,7 +3457,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get intakeCustomerRequired => 'اختر زبونًا للمتابعة.';
 
   @override
-  String get intakeSelectAssetHint => 'اختر جهاز الزبون أو أضف جهازًا جديدًا. يساعدك هذا لاحقًا في معرفة تاريخ كل جهاز.';
+  String get intakeSelectAssetHint =>
+      'اختر جهاز الزبون أو أضف جهازًا جديدًا. يساعدك هذا لاحقًا في معرفة تاريخ كل جهاز.';
 
   @override
   String get intakeNewAssetButton => 'جهاز جديد';
@@ -3430,16 +3537,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productionReceivedBadge => 'أُضيف للمخزون';
 
   @override
-  String get productionNoRecipesMessage => 'أنشئ وصفة أولًا من إعدادات المتجر حتى يعرف النظام مكونات كل منتج.';
+  String get productionNoRecipesMessage =>
+      'أنشئ وصفة أولًا من إعدادات المتجر حتى يعرف النظام مكونات كل منتج.';
 
   @override
   String get recipesTitle => 'الوصفات';
 
   @override
-  String get recipesSubtitle => 'حدد مكونات كل منتج تنتجه ليُخصم المخزون ويُحسب الناتج تلقائيًا';
+  String get recipesSubtitle =>
+      'حدد مكونات كل منتج تنتجه ليُخصم المخزون ويُحسب الناتج تلقائيًا';
 
   @override
-  String get recipesEmptyMessage => 'الوصفة تخبر النظام بمكونات كل منتج تنتجه — مثل الدقيق والخميرة لرغيف الخبز — ليخصم المخزون ويضيف الناتج تلقائيًا.';
+  String get recipesEmptyMessage =>
+      'الوصفة تخبر النظام بمكونات كل منتج تنتجه — مثل الدقيق والخميرة لرغيف الخبز — ليخصم المخزون ويضيف الناتج تلقائيًا.';
 
   @override
   String get newRecipeButton => 'وصفة جديدة';
@@ -3457,10 +3567,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get recipeMakeToOrderLabel => 'يُحضّر عند الطلب';
 
   @override
-  String get recipeMakeToOrderHelper => 'يُخصم المكوّنات عند بيع المنتج، دون الحاجة لمخزون خاص به.';
+  String get recipeMakeToOrderHelper =>
+      'يُخصم المكوّنات عند بيع المنتج، دون الحاجة لمخزون خاص به.';
 
   @override
-  String get recipeProduceToStockHelper => 'يُنتَج إلى المخزون مسبقًا عبر أمر إنتاج، ثم يُباع من المخزون.';
+  String get recipeProduceToStockHelper =>
+      'يُنتَج إلى المخزون مسبقًا عبر أمر إنتاج، ثم يُباع من المخزون.';
 
   @override
   String get recipeComponentsTitle => 'المكونات';
@@ -3504,49 +3616,57 @@ class AppLocalizationsAr extends AppLocalizations {
   String get operationsSettingsSectionTitle => 'العمليات والمهام';
 
   @override
-  String get operationsSettingsSectionSubtitle => 'تشغيل التصليح والإنتاج والمطبخ وإدارة مراحل العمل';
+  String get operationsSettingsSectionSubtitle =>
+      'تشغيل التصليح والإنتاج والمطبخ وإدارة مراحل العمل';
 
   @override
   String get operationsModesTitle => 'أقسام العمل';
 
   @override
-  String get operationsModesHint => 'فعّل ما يناسب نشاطك فقط — كل قسم يضيف نوع مهام جاهزًا بمراحله.';
+  String get operationsModesHint =>
+      'فعّل ما يناسب نشاطك فقط — كل قسم يضيف نوع مهام جاهزًا بمراحله.';
 
   @override
   String get enableRepairOperationsTitle => 'التصليح والصيانة';
 
   @override
-  String get enableRepairOperationsDescription => 'استلام أجهزة الزبائن، تتبع التصليح خطوة بخطوة، وفوترة القطع والأجور.';
+  String get enableRepairOperationsDescription =>
+      'استلام أجهزة الزبائن، تتبع التصليح خطوة بخطوة، وفوترة القطع والأجور.';
 
   @override
   String get enableProductionOperationsTitle => 'الإنتاج';
 
   @override
-  String get enableProductionOperationsDescription => 'دفعات إنتاج بوصفات محددة: تُخصم المكونات ويُضاف الناتج للمخزون تلقائيًا.';
+  String get enableProductionOperationsDescription =>
+      'دفعات إنتاج بوصفات محددة: تُخصم المكونات ويُضاف الناتج للمخزون تلقائيًا.';
 
   @override
   String get enableKitchenOperationsTitle => 'المطبخ';
 
   @override
-  String get enableKitchenOperationsDescription => 'طلبات مطبخ تمر بمراحل التحضير وتخصم المكونات عند الطبخ.';
+  String get enableKitchenOperationsDescription =>
+      'طلبات مطبخ تمر بمراحل التحضير وتخصم المكونات عند الطبخ.';
 
   @override
   String get kitchenPrintingSectionTitle => 'طباعة المطبخ';
 
   @override
-  String get kitchenPrintingSectionHint => 'اطبع تذاكر المطبخ تلقائيًا للأصناف المحضّرة عند الدفع، ووجّهها إلى الطابعات حسب الفئة.';
+  String get kitchenPrintingSectionHint =>
+      'اطبع تذاكر المطبخ تلقائيًا للأصناف المحضّرة عند الدفع، ووجّهها إلى الطابعات حسب الفئة.';
 
   @override
   String get autoPrintKitchenTicketsTitle => 'طباعة تذاكر المطبخ تلقائيًا';
 
   @override
-  String get autoPrintKitchenTicketsDescription => 'عند الدفع، تُطبع تذكرة تحضير لكل محطة معنية بالأصناف المحضّرة.';
+  String get autoPrintKitchenTicketsDescription =>
+      'عند الدفع، تُطبع تذكرة تحضير لكل محطة معنية بالأصناف المحضّرة.';
 
   @override
   String get prepStationsSectionTitle => 'محطات التحضير';
 
   @override
-  String get prepStationsSectionSubtitle => 'وجّه الأصناف المحضّرة إلى طابعات المحطات حسب الفئة.';
+  String get prepStationsSectionSubtitle =>
+      'وجّه الأصناف المحضّرة إلى طابعات المحطات حسب الفئة.';
 
   @override
   String get prepStationAddButton => 'إضافة محطة';
@@ -3564,7 +3684,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get prepStationCategoriesLabel => 'الفئات الموجّهة';
 
   @override
-  String get prepStationDefaultLabel => 'المحطة الافتراضية (تستقبل الأصناف غير المصنّفة)';
+  String get prepStationDefaultLabel =>
+      'المحطة الافتراضية (تستقبل الأصناف غير المصنّفة)';
 
   @override
   String get prepStationActiveLabel => 'مفعّلة';
@@ -3594,10 +3715,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get kitchenPrintersSectionTitle => 'طابعات المطبخ';
 
   @override
-  String get kitchenPrintersSectionHint => 'اربط طابعة حرارية بكل محطة تحضير يخدمها هذا الجهاز.';
+  String get kitchenPrintersSectionHint =>
+      'اربط طابعة حرارية بكل محطة تحضير يخدمها هذا الجهاز.';
 
   @override
-  String get kitchenPrintersNoStations => 'لا توجد محطات تحضير. أضِفها من إعدادات المتجر.';
+  String get kitchenPrintersNoStations =>
+      'لا توجد محطات تحضير. أضِفها من إعدادات المتجر.';
 
   @override
   String get kitchenPrintersLoadError => 'تعذّر تحميل محطات التحضير.';
@@ -3609,13 +3732,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get enableJobTrackingTitle => 'صفحة تتبع للزبائن';
 
   @override
-  String get enableJobTrackingDescription => 'رابط عام يطّلع منه الزبون على حالة مهمته دون الاتصال بك.';
+  String get enableJobTrackingDescription =>
+      'رابط عام يطّلع منه الزبون على حالة مهمته دون الاتصال بك.';
 
   @override
   String get workflowsTitle => 'مراحل العمل';
 
   @override
-  String get workflowStagesHint => 'هذه هي الخطوات التي تمر بها كل مهمة من الاستلام حتى التسليم. يمكنك إعادة تسميتها أو إضافة مراحل تناسب طريقة عملك.';
+  String get workflowStagesHint =>
+      'هذه هي الخطوات التي تمر بها كل مهمة من الاستلام حتى التسليم. يمكنك إعادة تسميتها أو إضافة مراحل تناسب طريقة عملك.';
 
   @override
   String get workflowStageNameLabel => 'اسم المرحلة';
@@ -3682,12 +3807,14 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String inventorySettingsSummary(int count, String oversellStatus, String lossStatus) {
+  String inventorySettingsSummary(
+      int count, String oversellStatus, String lossStatus) {
     return 'تنبيه عند $count قطع أو أقل، البيع فوق المخزون: $oversellStatus، منع الخسارة: $lossStatus';
   }
 
   @override
-  String paymentSettingsSummary(num count, String cardCommission, String transferCommission, String receiptStatus, String terminalStatus) {
+  String paymentSettingsSummary(num count, String cardCommission,
+      String transferCommission, String receiptStatus, String terminalStatus) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -3768,7 +3895,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get analyticsExportStartedMessage => 'بدأ تنزيل ملف التتبع.';
 
   @override
-  String get analyticsExportFailedMessage => 'تعذر تصدير التتبع. راجع الفلاتر وحاول مرة أخرى.';
+  String get analyticsExportFailedMessage =>
+      'تعذر تصدير التتبع. راجع الفلاتر وحاول مرة أخرى.';
 
   @override
   String get backupRestoreSectionTitle => 'النسخ والاستعادة';
@@ -3780,7 +3908,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get backupScheduleDisabledSummary => 'النسخ التلقائي متوقف';
 
   @override
-  String get backupScheduleMissingDestinationSummary => 'اختر قرصا خارجيا لتفعيل النسخ التلقائي';
+  String get backupScheduleMissingDestinationSummary =>
+      'اختر قرصا خارجيا لتفعيل النسخ التلقائي';
 
   @override
   String backupNextScheduledSummary(String dateTime) {
@@ -3805,7 +3934,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get backupScheduleEnabledLabel => 'تفعيل النسخ اليومي';
 
   @override
-  String get backupScheduleEnabledSubtitle => 'ينشئ النظام ملف ZIP واحدا يحتوي قاعدة البيانات والملفات المرفوعة.';
+  String get backupScheduleEnabledSubtitle =>
+      'ينشئ النظام ملف ZIP واحدا يحتوي قاعدة البيانات والملفات المرفوعة.';
 
   @override
   String get backupDestinationLabel => 'قرص النسخ الاحتياطي';
@@ -3816,12 +3946,14 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String backupDestinationDetails(String path, String freeSpace, String totalSpace) {
+  String backupDestinationDetails(
+      String path, String freeSpace, String totalSpace) {
     return 'سيتم الحفظ في $path. المساحة المتاحة $freeSpace من $totalSpace.';
   }
 
   @override
-  String get backupNoWritableDestinationsMessage => 'لم يجد الخادم قرصا خارجيا قابلا للكتابة. تأكد من توصيل القرص وربطه داخل Docker.';
+  String get backupNoWritableDestinationsMessage =>
+      'لم يجد الخادم قرصا خارجيا قابلا للكتابة. تأكد من توصيل القرص وربطه داخل Docker.';
 
   @override
   String get backupScheduledTimeLabel => 'وقت النسخ اليومي';
@@ -3853,7 +3985,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get backupStartedMessage => 'بدأ النسخ الاحتياطي.';
 
   @override
-  String get backupOperationFailedMessage => 'تعذرت عملية النسخ أو الاستعادة. حاول مرة أخرى.';
+  String get backupOperationFailedMessage =>
+      'تعذرت عملية النسخ أو الاستعادة. حاول مرة أخرى.';
 
   @override
   String backupActiveJobTitle(String operation) {
@@ -3869,7 +4002,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get restoreSectionTitle => 'استعادة نسخة';
 
   @override
-  String get restoreWarningMessage => 'الاستعادة تستبدل قاعدة البيانات والملفات الحالية بمحتوى النسخة المختارة.';
+  String get restoreWarningMessage =>
+      'الاستعادة تستبدل قاعدة البيانات والملفات الحالية بمحتوى النسخة المختارة.';
 
   @override
   String get restorePickFileButton => 'اختيار ملف ZIP';
@@ -3884,7 +4018,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get restoreConfirmTitle => 'تأكيد الاستعادة';
 
   @override
-  String get restoreConfirmMessage => 'سيتم استبدال بيانات المتجر الحالية بعد بدء الاستعادة. تأكد أن ملف النسخة صحيح.';
+  String get restoreConfirmMessage =>
+      'سيتم استبدال بيانات المتجر الحالية بعد بدء الاستعادة. تأكد أن ملف النسخة صحيح.';
 
   @override
   String get restoreConfirmButton => 'بدء الاستعادة';
@@ -3905,7 +4040,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get backupNoJobValue => 'لا توجد عملية مسجلة';
 
   @override
-  String backupJobHistorySummary(String status, String completedAt, String filename) {
+  String backupJobHistorySummary(
+      String status, String completedAt, String filename) {
     return '$status، $completedAt، $filename';
   }
 
@@ -4055,10 +4191,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get autoPrintReceiptsLabel => 'طباعة الإيصالات تلقائيًا';
 
   @override
-  String get enableOnlineInvoicesLabel => 'إظهار رابط وQR للفاتورة عبر الإنترنت';
+  String get enableOnlineInvoicesLabel =>
+      'إظهار رابط وQR للفاتورة عبر الإنترنت';
 
   @override
-  String get enableOnlineInvoicesSubtitle => 'بعد الدفع يظهر رابط الفاتورة الحقيقي عبر الريلاي ليتمكن العميل من حفظها كملف PDF.';
+  String get enableOnlineInvoicesSubtitle =>
+      'بعد الدفع يظهر رابط الفاتورة الحقيقي عبر الريلاي ليتمكن العميل من حفظها كملف PDF.';
 
   @override
   String get allowOversellingLabel => 'السماح بالبيع فوق المخزون';
@@ -4067,7 +4205,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get preventSellingAtLossLabel => 'منع البيع بخسارة';
 
   @override
-  String get preventSellingAtLossSubtitle => 'عند إيقافه سيظهر تحذير للكاشير قبل إتمام بيع بخسارة.';
+  String get preventSellingAtLossSubtitle =>
+      'عند إيقافه سيظهر تحذير للكاشير قبل إتمام بيع بخسارة.';
 
   @override
   String get paymentMethodCash => 'نقد';
@@ -4079,22 +4218,28 @@ class AppLocalizationsAr extends AppLocalizations {
   String get paymentMethodTransfer => 'تحويل';
 
   @override
-  String get requireCardReceiptSettingLabel => 'إلزام مسح ومطابقة إيصال البطاقة';
+  String get requireCardReceiptSettingLabel =>
+      'إلزام مسح ومطابقة إيصال البطاقة';
 
   @override
-  String get requireCardReceiptSettingSubtitle => 'يجب مسح رابط QR من إيصال معاملات ومطابقة المبلغ لكل دفعة بطاقة.';
+  String get requireCardReceiptSettingSubtitle =>
+      'يجب مسح رابط QR من إيصال معاملات ومطابقة المبلغ لكل دفعة بطاقة.';
 
   @override
-  String get requireCustomerForCreditLabel => 'طلب عميل للبيع الآجل وعروض الأسعار';
+  String get requireCustomerForCreditLabel =>
+      'طلب عميل للبيع الآجل وعروض الأسعار';
 
   @override
-  String get requireCustomerForCreditSubtitle => 'عند تفعيله يجب اختيار عميل قبل إتمام بيع آجل أو عرض سعر.';
+  String get requireCustomerForCreditSubtitle =>
+      'عند تفعيله يجب اختيار عميل قبل إتمام بيع آجل أو عرض سعر.';
 
   @override
-  String get allowCashierCustomerAccessLabel => 'السماح للكاشير بالعملاء والتحصيل';
+  String get allowCashierCustomerAccessLabel =>
+      'السماح للكاشير بالعملاء والتحصيل';
 
   @override
-  String get allowCashierCustomerAccessSubtitle => 'يتيح للكاشير اختيار عميل للبيع الآجل/عرض السعر وتحصيل ديون العملاء — دون رؤية فواتير الكاشيرين الآخرين أو تعديل بيانات العملاء.';
+  String get allowCashierCustomerAccessSubtitle =>
+      'يتيح للكاشير اختيار عميل للبيع الآجل/عرض السعر وتحصيل ديون العملاء — دون رؤية فواتير الكاشيرين الآخرين أو تعديل بيانات العملاء.';
 
   @override
   String get collectDebtTitle => 'تحصيل دين';
@@ -4129,7 +4274,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get trustedCardTerminalIdsLabel => 'أجهزة البطاقة الموثوقة';
 
   @override
-  String get trustedCardTerminalIdsHelper => 'حدد أجهزة البطاقة التي تقبل إيصالاتها عند مطابقة الدفع. اترك القائمة فارغة لقبول أي جهاز.';
+  String get trustedCardTerminalIdsHelper =>
+      'حدد أجهزة البطاقة التي تقبل إيصالاتها عند مطابقة الدفع. اترك القائمة فارغة لقبول أي جهاز.';
 
   @override
   String get manageTrustedCardTerminalsButton => 'إدارة الأجهزة';
@@ -4141,7 +4287,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get trustedCardTerminalsDialogTitle => 'إدارة أجهزة البطاقة';
 
   @override
-  String get trustedCardTerminalsDialogDescription => 'أضف رقم الجهاز كما يظهر في إيصال البطاقة. عند ترك القائمة فارغة سيتم قبول أي جهاز.';
+  String get trustedCardTerminalsDialogDescription =>
+      'أضف رقم الجهاز كما يظهر في إيصال البطاقة. عند ترك القائمة فارغة سيتم قبول أي جهاز.';
 
   @override
   String get trustedCardTerminalIdFieldLabel => 'رقم الجهاز';
@@ -4153,10 +4300,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get trustedCardTerminalRequiredError => 'أدخل رقم الجهاز.';
 
   @override
-  String get trustedCardTerminalDuplicateError => 'هذا الجهاز موجود في القائمة.';
+  String get trustedCardTerminalDuplicateError =>
+      'هذا الجهاز موجود في القائمة.';
 
   @override
-  String get trustedCardTerminalAllowAnyMessage => 'لا توجد أجهزة محددة؛ سيتم قبول أي جهاز بطاقة عند مطابقة الإيصال.';
+  String get trustedCardTerminalAllowAnyMessage =>
+      'لا توجد أجهزة محددة؛ سيتم قبول أي جهاز بطاقة عند مطابقة الإيصال.';
 
   @override
   String removeTrustedCardTerminalTooltip(String terminalId) {
@@ -4222,7 +4371,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posReceiptPrinterRoleTitle => 'إيصال نقطة البيع';
 
   @override
-  String get posReceiptPrinterRoleDescription => 'الطابعة الافتراضية لفواتير البيع وإعادة الطباعة من شاشة نقطة البيع.';
+  String get posReceiptPrinterRoleDescription =>
+      'الطابعة الافتراضية لفواتير البيع وإعادة الطباعة من شاشة نقطة البيع.';
 
   @override
   String get configurePrinterRoleButton => 'اختيار طابعة الإيصال';
@@ -4249,7 +4399,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerCapabilityProfileLabel => 'ملف تعريف الطابعة';
 
   @override
-  String get printerCapabilityProfileHelper => 'اتركه default إن لم تكن متأكدًا. اختر ملف الشركة المصنعة للطابعات غير المتوافقة.';
+  String get printerCapabilityProfileHelper =>
+      'اتركه default إن لم تكن متأكدًا. اختر ملف الشركة المصنعة للطابعات غير المتوافقة.';
 
   @override
   String get printerCutModeLabel => 'وضع قص الورق';
@@ -4267,7 +4418,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerFeedLinesLabel => 'أسطر التغذية قبل القص';
 
   @override
-  String get printerFeedLinesHelper => 'زدها إذا كان آخر الإيصال يُقطع قبل اكتمال الطباعة.';
+  String get printerFeedLinesHelper =>
+      'زدها إذا كان آخر الإيصال يُقطع قبل اكتمال الطباعة.';
 
   @override
   String get barcodeLabelPrinterSettingsTitle => 'إعدادات ملصقات الباركود';
@@ -4316,16 +4468,20 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get barcodeLabelLanguageDetected => 'تم اكتشاف لغة طابعة الملصقات وحفظها.';
+  String get barcodeLabelLanguageDetected =>
+      'تم اكتشاف لغة طابعة الملصقات وحفظها.';
 
   @override
-  String get barcodeLabelLanguageInferred => 'تم تخمين لغة طابعة الملصقات من اسم الطابعة. راجعها إذا لم تطبع الملصقات بشكل صحيح.';
+  String get barcodeLabelLanguageInferred =>
+      'تم تخمين لغة طابعة الملصقات من اسم الطابعة. راجعها إذا لم تطبع الملصقات بشكل صحيح.';
 
   @override
-  String get barcodeLabelLanguageDetectionUnavailable => 'تعذر اكتشاف لغة الملصقات تلقائيًا. اختر اللغة يدويًا لتجنب إرسال أوامر غير مناسبة.';
+  String get barcodeLabelLanguageDetectionUnavailable =>
+      'تعذر اكتشاف لغة الملصقات تلقائيًا. اختر اللغة يدويًا لتجنب إرسال أوامر غير مناسبة.';
 
   @override
-  String get barcodeLabelLanguageDetectionFailed => 'فشل اكتشاف لغة طابعة الملصقات. تحقق من الاتصال أو اختر اللغة يدويًا.';
+  String get barcodeLabelLanguageDetectionFailed =>
+      'فشل اكتشاف لغة طابعة الملصقات. تحقق من الاتصال أو اختر اللغة يدويًا.';
 
   @override
   String get discoveredPrintersLabel => 'اختر الطابعة';
@@ -4340,7 +4496,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discoverPrintersButton => 'اكتشاف الطابعات';
 
   @override
-  String get printerDiscoveryError => 'تعذر اكتشاف الطابعات. تحقق من الاتصال وحاول مرة أخرى.';
+  String get printerDiscoveryError =>
+      'تعذر اكتشاف الطابعات. تحقق من الاتصال وحاول مرة أخرى.';
 
   @override
   String get checkPrinterConnectionButton => 'فحص الاتصال';
@@ -4349,7 +4506,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerStatusUnknown => 'لم يتم فحص اتصال الطابعة بعد.';
 
   @override
-  String get printerStatusNotConfigured => 'اختر طابعة إيصال حتى يبدأ الجهاز بفحص اتصالها.';
+  String get printerStatusNotConfigured =>
+      'اختر طابعة إيصال حتى يبدأ الجهاز بفحص اتصالها.';
 
   @override
   String get printerStatusChecking => 'جار فحص اتصال الطابعة...';
@@ -4358,10 +4516,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerStatusConnected => 'طابعة الإيصال متصلة وجاهزة.';
 
   @override
-  String get printerStatusDisconnected => 'تعذر الاتصال بطابعة الإيصال. تحقق من تشغيلها واتصالها.';
+  String get printerStatusDisconnected =>
+      'تعذر الاتصال بطابعة الإيصال. تحقق من تشغيلها واتصالها.';
 
   @override
-  String get printerDisconnectedSnackBar => 'تعذر الاتصال بطابعة إيصال نقطة البيع.';
+  String get printerDisconnectedSnackBar =>
+      'تعذر الاتصال بطابعة إيصال نقطة البيع.';
 
   @override
   String get testPrinterButton => 'اختبار الطابعة';
@@ -4382,16 +4542,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerTestSuccess => 'تم إرسال اختبار الطباعة.';
 
   @override
-  String get printerTestFailure => 'تعذر اختبار الطابعة. تحقق من الاتصال والإعدادات وحاول مرة أخرى.';
+  String get printerTestFailure =>
+      'تعذر اختبار الطابعة. تحقق من الاتصال والإعدادات وحاول مرة أخرى.';
 
   @override
   String get barcodeLabelTestSuccess => 'تم إرسال ملصق اختبار الباركود.';
 
   @override
-  String get barcodeLabelTestFailure => 'تعذر إرسال ملصق اختبار الباركود. تحقق من لغة الملصقات والإعدادات.';
+  String get barcodeLabelTestFailure =>
+      'تعذر إرسال ملصق اختبار الباركود. تحقق من لغة الملصقات والإعدادات.';
 
   @override
-  String get printerTestUnsupported => 'طريقة الاتصال غير متاحة على هذا الجهاز.';
+  String get printerTestUnsupported =>
+      'طريقة الاتصال غير متاحة على هذا الجهاز.';
 
   @override
   String get fakePrintSuccess => 'نجحت الطباعة التجريبية بالمحاكاة.';
@@ -4412,7 +4575,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get backTooltip => 'رجوع';
 
   @override
-  String get sampleCatalogNotice => 'يتم عرض منتجات تجريبية إلى أن يعمل الخادم.';
+  String get sampleCatalogNotice =>
+      'يتم عرض منتجات تجريبية إلى أن يعمل الخادم.';
 
   @override
   String get emptyCatalog => 'لا توجد منتجات';
@@ -4487,7 +4651,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productCategoriesEmpty => 'لا توجد تصنيفات محددة';
 
   @override
-  String get productCategoriesHelper => 'اختياري، يساعد في البحث والتصفية داخل نقطة البيع والمشتريات';
+  String get productCategoriesHelper =>
+      'اختياري، يساعد في البحث والتصفية داخل نقطة البيع والمشتريات';
 
   @override
   String get productCategoriesOpenPickerTooltip => 'اختيار التصنيفات';
@@ -4514,7 +4679,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productImagePickError => 'تعذر قراءة الصورة المختارة.';
 
   @override
-  String get productImageCameraUnavailable => 'تعذّر فتح الكاميرا على هذا الجهاز.';
+  String get productImageCameraUnavailable =>
+      'تعذّر فتح الكاميرا على هذا الجهاز.';
 
   @override
   String get productImageSearchTitle => 'بحث صور المنتج';
@@ -4535,7 +4701,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productImageSearchShortQuery => 'أدخل حرفين على الأقل للبحث.';
 
   @override
-  String get productImageSearchError => 'تعذر البحث عن الصور. تحقق من إعداد مزود البحث وحاول مرة أخرى.';
+  String get productImageSearchError =>
+      'تعذر البحث عن الصور. تحقق من إعداد مزود البحث وحاول مرة أخرى.';
 
   @override
   String get productImageAttachError => 'تم حفظ المنتج، لكن تعذر حفظ الصورة.';
@@ -4584,7 +4751,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get variantOptionsLabel => 'خيارات المنتج';
 
   @override
-  String get variantOptionsHelper => 'أضِف خيارًا يميّز المنتج مثل اللون أو المقاس، ثم أدخل قيمه. ستُستخدم القيم لتوليد خيارات المنتج تلقائيًا.';
+  String get variantOptionsHelper =>
+      'أضِف خيارًا يميّز المنتج مثل اللون أو المقاس، ثم أدخل قيمه. ستُستخدم القيم لتوليد خيارات المنتج تلقائيًا.';
 
   @override
   String get variantOptionsEmpty => 'لم تُضِف أي خيار بعد.';
@@ -4620,7 +4788,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get variantOptionCreateError => 'تعذر إنشاء الخيار.';
 
   @override
-  String get variantValuesNoOptions => 'أضِف خيارًا واحدًا على الأقل لتحديد قيمه.';
+  String get variantValuesNoOptions =>
+      'أضِف خيارًا واحدًا على الأقل لتحديد قيمه.';
 
   @override
   String get variantOptionNoValues => 'لا توجد قيم لهذا الخيار بعد.';
@@ -4681,16 +4850,20 @@ class AppLocalizationsAr extends AppLocalizations {
   String get generatedVariantNameLabel => 'اسم الخيار';
 
   @override
-  String get generatedVariantsMissingValues => 'اختر قيمة واحدة على الأقل لكل خيار.';
+  String get generatedVariantsMissingValues =>
+      'اختر قيمة واحدة على الأقل لكل خيار.';
 
   @override
-  String get generatedVariantsDuplicateSku => 'رموز الخيارات المولدة يجب أن تكون غير مكررة.';
+  String get generatedVariantsDuplicateSku =>
+      'رموز الخيارات المولدة يجب أن تكون غير مكررة.';
 
   @override
-  String get generatedVariantsTooMany => 'عدد الخيارات المولدة كبير جدًا. قلل القيم المحددة.';
+  String get generatedVariantsTooMany =>
+      'عدد الخيارات المولدة كبير جدًا. قلل القيم المحددة.';
 
   @override
-  String get generatedVariantsNoMissing => 'كل التركيبات المحددة موجودة بالفعل.';
+  String get generatedVariantsNoMissing =>
+      'كل التركيبات المحددة موجودة بالفعل.';
 
   @override
   String get generateVariantsTitle => 'توليد الخيارات';
@@ -4702,7 +4875,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get variantsGeneratedMessage => 'تم حفظ الخيارات المولدة';
 
   @override
-  String get variantGenerateError => 'تعذر توليد الخيارات. راجع البيانات وحاول مرة أخرى.';
+  String get variantGenerateError =>
+      'تعذر توليد الخيارات. راجع البيانات وحاول مرة أخرى.';
 
   @override
   String get productVariantOptionsTitle => 'خيارات المنتج';
@@ -4747,7 +4921,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get creatingCategoryButton => 'جار الإنشاء...';
 
   @override
-  String get categoryCreateError => 'تعذر إنشاء التصنيف. راجع البيانات وحاول مرة أخرى.';
+  String get categoryCreateError =>
+      'تعذر إنشاء التصنيف. راجع البيانات وحاول مرة أخرى.';
 
   @override
   String get categoryEmptyState => 'لا توجد تصنيفات بعد.';
@@ -4849,19 +5024,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get deleteCategoryHasChildrenTitle => 'تعذر حذف التصنيف';
 
   @override
-  String get deleteCategoryHasChildrenMessage => 'يحتوي هذا التصنيف على فروع. احذف أو انقل التصنيفات الفرعية أولًا.';
+  String get deleteCategoryHasChildrenMessage =>
+      'يحتوي هذا التصنيف على فروع. احذف أو انقل التصنيفات الفرعية أولًا.';
 
   @override
   String get quickAccessSectionTitle => 'الوصول السريع';
 
   @override
-  String get quickAccessSectionSubtitle => 'تظهر كأزرار تصفية فوق البحث في نقطة البيع والمشتريات.';
+  String get quickAccessSectionSubtitle =>
+      'تظهر كأزرار تصفية فوق البحث في نقطة البيع والمشتريات.';
 
   @override
   String get quickAccessEmptyTitle => 'لا توجد تصنيفات سريعة بعد';
 
   @override
-  String get quickAccessEmptyMessage => 'ثبّت تصنيفًا ليظهر كزر تصفية بنقرة واحدة. تشمل التصفية التصنيف وكل فروعه.';
+  String get quickAccessEmptyMessage =>
+      'ثبّت تصنيفًا ليظهر كزر تصفية بنقرة واحدة. تشمل التصفية التصنيف وكل فروعه.';
 
   @override
   String get quickAccessReorderHint => 'اسحب الأزرار لإعادة ترتيبها';
@@ -4892,7 +5070,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get quickAccessSwitchLabel => 'إظهار في الوصول السريع';
 
   @override
-  String get quickAccessSwitchHelper => 'زر تصفية سريع في نقطة البيع والمشتريات';
+  String get quickAccessSwitchHelper =>
+      'زر تصفية سريع في نقطة البيع والمشتريات';
 
   @override
   String get activeProductLabel => 'متاح للبيع';
@@ -5025,7 +5204,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productTracksExpiryLabel => 'يتابع تاريخ الانتهاء';
 
   @override
-  String get productTracksExpiryHint => 'سيطلب تاريخ انتهاء عند شراء هذا المنتج ويظهر تنبيه قبل انتهائه.';
+  String get productTracksExpiryHint =>
+      'سيطلب تاريخ انتهاء عند شراء هذا المنتج ويظهر تنبيه قبل انتهائه.';
 
   @override
   String get activeVariantLabel => 'متاح للبيع';
@@ -5084,13 +5264,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productUpdatedMessage => 'تم حفظ المنتج';
 
   @override
-  String get productCreatedImageAttachError => 'تم إنشاء المنتج، لكن تعذر حفظ الصورة.';
+  String get productCreatedImageAttachError =>
+      'تم إنشاء المنتج، لكن تعذر حفظ الصورة.';
 
   @override
-  String get productCreateError => 'تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.';
+  String get productCreateError =>
+      'تعذر إنشاء المنتج. راجع البيانات وحاول مرة أخرى.';
 
   @override
-  String get productUpdateError => 'تعذر حفظ المنتج. راجع البيانات وحاول مرة أخرى.';
+  String get productUpdateError =>
+      'تعذر حفظ المنتج. راجع البيانات وحاول مرة أخرى.';
 
   @override
   String get catalogLoadError => 'تعذر تحميل المنتجات من الخادم.';
@@ -5143,16 +5326,20 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productDetailsTitle => 'تفاصيل المنتج';
 
   @override
-  String get catalogSelectProductPlaceholder => 'اختر منتجًا من القائمة لعرض تفاصيله.';
+  String get catalogSelectProductPlaceholder =>
+      'اختر منتجًا من القائمة لعرض تفاصيله.';
 
   @override
-  String get invoicesSelectInvoicePlaceholder => 'اختر فاتورة من القائمة لعرض تفاصيلها.';
+  String get invoicesSelectInvoicePlaceholder =>
+      'اختر فاتورة من القائمة لعرض تفاصيلها.';
 
   @override
-  String get contactsSelectContactPlaceholder => 'اختر جهة من القائمة لعرض تفاصيلها.';
+  String get contactsSelectContactPlaceholder =>
+      'اختر جهة من القائمة لعرض تفاصيلها.';
 
   @override
-  String get discountsSelectDiscountPlaceholder => 'اختر قاعدة خصم من القائمة لعرض تفاصيلها.';
+  String get discountsSelectDiscountPlaceholder =>
+      'اختر قاعدة خصم من القائمة لعرض تفاصيلها.';
 
   @override
   String reportLastCompletedMessage(String action, String report) {
@@ -5208,10 +5395,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get variantUpdatedMessage => 'تم حفظ الخيار';
 
   @override
-  String get variantCreateError => 'تعذر إنشاء الخيار. راجع البيانات وحاول مرة أخرى.';
+  String get variantCreateError =>
+      'تعذر إنشاء الخيار. راجع البيانات وحاول مرة أخرى.';
 
   @override
-  String get variantUpdateError => 'تعذر حفظ الخيار. راجع البيانات وحاول مرة أخرى.';
+  String get variantUpdateError =>
+      'تعذر حفظ الخيار. راجع البيانات وحاول مرة أخرى.';
 
   @override
   String get variantNameColumn => 'الخيار';
@@ -5244,10 +5433,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productCostHistoryTitle => 'تكلفة الشراء والهامش';
 
   @override
-  String get productCostHistoryLoadError => 'تعذر تحميل تاريخ تكلفة الشراء لهذا المنتج.';
+  String get productCostHistoryLoadError =>
+      'تعذر تحميل تاريخ تكلفة الشراء لهذا المنتج.';
 
   @override
-  String get productCostHistoryEmpty => 'لا توجد مشتريات مسجلة لهذا المنتج بعد.';
+  String get productCostHistoryEmpty =>
+      'لا توجد مشتريات مسجلة لهذا المنتج بعد.';
 
   @override
   String get productDocumentHistoryTitle => 'الفواتير المرتبطة';
@@ -5259,22 +5450,27 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productRecentPurchaseBillsTitle => 'فواتير الشراء الأخيرة';
 
   @override
-  String get productRecentInvoicesLoadError => 'تعذر تحميل فواتير البيع لهذا المنتج.';
+  String get productRecentInvoicesLoadError =>
+      'تعذر تحميل فواتير البيع لهذا المنتج.';
 
   @override
-  String get productRecentPurchaseBillsLoadError => 'تعذر تحميل فواتير الشراء لهذا المنتج.';
+  String get productRecentPurchaseBillsLoadError =>
+      'تعذر تحميل فواتير الشراء لهذا المنتج.';
 
   @override
-  String get productRecentInvoicesEmpty => 'لم يظهر هذا المنتج في أي فاتورة بيع بعد.';
+  String get productRecentInvoicesEmpty =>
+      'لم يظهر هذا المنتج في أي فاتورة بيع بعد.';
 
   @override
-  String get productRecentPurchaseBillsEmpty => 'لم يظهر هذا المنتج في أي فاتورة شراء بعد.';
+  String get productRecentPurchaseBillsEmpty =>
+      'لم يظهر هذا المنتج في أي فاتورة شراء بعد.';
 
   @override
   String get productBoughtTogetherTitle => 'يُشترى عادةً مع';
 
   @override
-  String get productBoughtTogetherSubtitle => 'منتجات يضيفها العملاء عادةً إلى الطلب نفسه.';
+  String get productBoughtTogetherSubtitle =>
+      'منتجات يضيفها العملاء عادةً إلى الطلب نفسه.';
 
   @override
   String productBoughtTogetherOrders(String count) {
@@ -5332,7 +5528,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get changePricesTitle => 'تغيير الأسعار';
 
   @override
-  String get changePricesSubtitle => 'راجع تكلفة كل خيار وحدّد سعر البيع الجديد بثقة.';
+  String get changePricesSubtitle =>
+      'راجع تكلفة كل خيار وحدّد سعر البيع الجديد بثقة.';
 
   @override
   String get changePricesNewPriceLabel => 'السعر الجديد';
@@ -5407,7 +5604,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get saveStockMovementButton => 'حفظ الحركة';
 
   @override
-  String get stockMovementCreateError => 'تعذر حفظ حركة المخزون. راجع الكمية وحاول مرة أخرى.';
+  String get stockMovementCreateError =>
+      'تعذر حفظ حركة المخزون. راجع الكمية وحاول مرة أخرى.';
 
   @override
   String get stockMovementIncrease => 'زيادة المخزون';
@@ -5433,7 +5631,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get barcodeLabelPrintInProgressButton => 'جار الطباعة...';
 
   @override
-  String get barcodeLabelPrintNoBarcode => 'أضف باركودًا للمنتج قبل طباعة الملصق.';
+  String get barcodeLabelPrintNoBarcode =>
+      'أضف باركودًا للمنتج قبل طباعة الملصق.';
 
   @override
   String get barcodeLabelPrintNoBarcodeShort => 'لا يوجد باركود للطباعة';
@@ -5460,7 +5659,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get barcodeLabelIncludeExpiryLabel => 'طباعة تاريخ الانتهاء';
 
   @override
-  String get barcodeLabelIncludeExpiryHint => 'إضافة تاريخ انتهاء الدفعة على الملصق.';
+  String get barcodeLabelIncludeExpiryHint =>
+      'إضافة تاريخ انتهاء الدفعة على الملصق.';
 
   @override
   String get barcodeLabelExpiryDateLabel => 'تاريخ الانتهاء';
@@ -5469,7 +5669,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get barcodeLabelExpiryDatePickerTooltip => 'اختيار تاريخ الانتهاء';
 
   @override
-  String get barcodeLabelExpiryDateRequired => 'اختر تاريخ الانتهاء أو أوقف طباعته.';
+  String get barcodeLabelExpiryDateRequired =>
+      'اختر تاريخ الانتهاء أو أوقف طباعته.';
 
   @override
   String get barcodeLabelPreviewTitle => 'معاينة الملصق';
@@ -5503,7 +5704,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get barcodeLabelPrintError => 'تعذرت طباعة ملصق الباركود. تحقق من إعدادات الطابعة.';
+  String get barcodeLabelPrintError =>
+      'تعذرت طباعة ملصق الباركود. تحقق من إعدادات الطابعة.';
 
   @override
   String get noBarcode => 'لا يوجد باركود';
@@ -5528,7 +5730,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get posProductHasNoActiveVariants => 'لا توجد خيارات نشطة لهذا المنتج.';
+  String get posProductHasNoActiveVariants =>
+      'لا توجد خيارات نشطة لهذا المنتج.';
 
   @override
   String get clearBarcodeStatusTooltip => 'إخفاء حالة الباركود';
@@ -5559,7 +5762,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cameraScannerStarting => 'جار تشغيل الكاميرا...';
 
   @override
-  String get cameraScannerPermissionError => 'تعذر تشغيل الكاميرا. تحقق من صلاحية الكاميرا وحاول مرة أخرى.';
+  String get cameraScannerPermissionError =>
+      'تعذر تشغيل الكاميرا. تحقق من صلاحية الكاميرا وحاول مرة أخرى.';
 
   @override
   String cameraScannerResolvingProduct(String barcode) {
@@ -5639,7 +5843,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get modifierGroupsSectionTitle => 'مجموعات الإضافات';
 
   @override
-  String get modifierGroupsSectionSubtitle => 'خيارات تُضاف للأصناف عند البيع (الحليب، الإضافات...).';
+  String get modifierGroupsSectionSubtitle =>
+      'خيارات تُضاف للأصناف عند البيع (الحليب، الإضافات...).';
 
   @override
   String get modifierGroupAddButton => 'إضافة مجموعة';
@@ -5764,7 +5969,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get newPurchaseOrderTitle => 'أمر شراء جديد';
 
   @override
-  String get searchPurchaseOrdersHint => 'ابحث برقم أمر الشراء أو فاتورة المورد أو المنتج';
+  String get searchPurchaseOrdersHint =>
+      'ابحث برقم أمر الشراء أو فاتورة المورد أو المنتج';
 
   @override
   String get purchaseOrderSupplierFilterTitle => 'المورد';
@@ -5836,7 +6042,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchasePayablesMore => 'والمزيد';
 
   @override
-  String get outstandingPurchasesLoadError => 'تعذر تحميل المشتريات المستلمة غير المدفوعة.';
+  String get outstandingPurchasesLoadError =>
+      'تعذر تحميل المشتريات المستلمة غير المدفوعة.';
 
   @override
   String outstandingPurchasesSummary(num count, String amount) {
@@ -5979,13 +6186,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseOrderDocumentMenuTooltip => 'طباعة ومشاركة';
 
   @override
-  String get purchaseOrderSubmitDescription => 'إرسال الأمر إلى المورد لبدء التوريد.';
+  String get purchaseOrderSubmitDescription =>
+      'إرسال الأمر إلى المورد لبدء التوريد.';
 
   @override
-  String get purchaseOrderReceiveDescription => 'تسجيل الكميات الواردة وإضافتها إلى المخزون.';
+  String get purchaseOrderReceiveDescription =>
+      'تسجيل الكميات الواردة وإضافتها إلى المخزون.';
 
   @override
-  String get purchaseOrderRecordPaymentDescription => 'تسجيل دفعة للمورد مقابل هذا الأمر.';
+  String get purchaseOrderRecordPaymentDescription =>
+      'تسجيل دفعة للمورد مقابل هذا الأمر.';
 
   @override
   String get purchaseOrderReturnDescription => 'إرجاع أصناف مستلمة إلى المورد.';
@@ -5997,25 +6207,29 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseOrderExchangeDescription => 'استبدال أصناف مستلمة بأخرى.';
 
   @override
-  String get purchaseOrderCancelActionDescription => 'إلغاء أمر الشراء نهائيًا.';
+  String get purchaseOrderCancelActionDescription =>
+      'إلغاء أمر الشراء نهائيًا.';
 
   @override
   String get purchaseOrderCalloutDraftTitle => 'جاهز للإرسال';
 
   @override
-  String get purchaseOrderCalloutDraftMessage => 'أرسل الأمر إلى المورد عندما تكون جاهزًا.';
+  String get purchaseOrderCalloutDraftMessage =>
+      'أرسل الأمر إلى المورد عندما تكون جاهزًا.';
 
   @override
   String get purchaseOrderCalloutAwaitingTitle => 'بانتظار الاستلام';
 
   @override
-  String get purchaseOrderCalloutAwaitingMessage => 'سجّل الكميات عند وصول البضاعة من المورد.';
+  String get purchaseOrderCalloutAwaitingMessage =>
+      'سجّل الكميات عند وصول البضاعة من المورد.';
 
   @override
   String get purchaseOrderCalloutPartialTitle => 'مستلم جزئيًا';
 
   @override
-  String get purchaseOrderCalloutPartialMessage => 'ما زالت بعض الأصناف بانتظار الاستلام.';
+  String get purchaseOrderCalloutPartialMessage =>
+      'ما زالت بعض الأصناف بانتظار الاستلام.';
 
   @override
   String get purchaseOrderCalloutReceivedDueTitle => 'تم الاستلام بالكامل';
@@ -6024,19 +6238,21 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseOrderCalloutCompleteTitle => 'مكتمل';
 
   @override
-  String get purchaseOrderCalloutCompleteMessage => 'تم الاستلام والسداد بالكامل.';
+  String get purchaseOrderCalloutCompleteMessage =>
+      'تم الاستلام والسداد بالكامل.';
 
   @override
   String get purchaseOrderCalloutCancelledTitle => 'أمر ملغى';
 
   @override
-  String get purchaseOrderCalloutCancelledMessage => 'تم إلغاء هذا الأمر ولا يمكن تعديله.';
+  String get purchaseOrderCalloutCancelledMessage =>
+      'تم إلغاء هذا الأمر ولا يمكن تعديله.';
 
   @override
   String get purchaseOrderReceivedProgressLabel => 'المستلم';
 
   @override
-  String purchaseOrderReceivedProgressValue(int received, int ordered) {
+  String purchaseOrderReceivedProgressValue(String received, String ordered) {
     return '$received من $ordered';
   }
 
@@ -6061,7 +6277,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get purchaseOrderPrintError => 'تعذرت طباعة أمر الشراء. راجع الطابعة وحاول مرة أخرى.';
+  String get purchaseOrderPrintError =>
+      'تعذرت طباعة أمر الشراء. راجع الطابعة وحاول مرة أخرى.';
 
   @override
   String purchaseOrderShareSuccess(String orderNumber) {
@@ -6093,22 +6310,28 @@ class AppLocalizationsAr extends AppLocalizations {
   String get exchangePurchaseItemsAction => 'استبدال';
 
   @override
-  String get purchaseOrderStatusChangeError => 'تعذر تغيير حالة أمر الشراء. حاول مرة أخرى.';
+  String get purchaseOrderStatusChangeError =>
+      'تعذر تغيير حالة أمر الشراء. حاول مرة أخرى.';
 
   @override
-  String get purchaseOrderAdjustmentError => 'تعذر تسجيل تعديل المشتريات. راجع الكميات والمخزون وحاول مرة أخرى.';
+  String get purchaseOrderAdjustmentError =>
+      'تعذر تسجيل تعديل المشتريات. راجع الكميات والمخزون وحاول مرة أخرى.';
 
   @override
-  String get purchaseOrderAdjustmentStockUnavailableError => 'لا يمكن تعديل أمر الشراء لأن الكمية المستلمة بيعت أو لم تعد متوفرة في المخزون.';
+  String get purchaseOrderAdjustmentStockUnavailableError =>
+      'لا يمكن تعديل أمر الشراء لأن الكمية المستلمة بيعت أو لم تعد متوفرة في المخزون.';
 
   @override
-  String get purchaseOrderPermissionError => 'لا يملك هذا المستخدم صلاحية تنفيذ هذا الإجراء على أمر الشراء.';
+  String get purchaseOrderPermissionError =>
+      'لا يملك هذا المستخدم صلاحية تنفيذ هذا الإجراء على أمر الشراء.';
 
   @override
-  String get purchaseOrderValidationError => 'تعذر تنفيذ الإجراء. راجع حالة أمر الشراء والكميات ثم حاول مرة أخرى.';
+  String get purchaseOrderValidationError =>
+      'تعذر تنفيذ الإجراء. راجع حالة أمر الشراء والكميات ثم حاول مرة أخرى.';
 
   @override
-  String get purchaseOrderPaymentError => 'تعذر تسجيل دفعة المورد. راجع المبلغ وطريقة الدفع وحاول مرة أخرى.';
+  String get purchaseOrderPaymentError =>
+      'تعذر تسجيل دفعة المورد. راجع المبلغ وطريقة الدفع وحاول مرة أخرى.';
 
   @override
   String get recordSupplierPaymentAction => 'تسجيل دفعة';
@@ -6129,7 +6352,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get supplierPaymentPrintProofLabel => 'طباعة سند صرف';
 
   @override
-  String get supplierPaymentPositiveAmountError => 'أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقي.';
+  String get supplierPaymentPositiveAmountError =>
+      'أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقي.';
 
   @override
   String supplierPaymentSuccess(String orderNumber) {
@@ -6152,16 +6376,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseAdjustmentReasonLabel => 'سبب التعديل';
 
   @override
-  String get purchaseAdjustmentReasonHint => 'مثال: تالف، خطأ في الفاتورة، استبدال مع المورد';
+  String get purchaseAdjustmentReasonHint =>
+      'مثال: تالف، خطأ في الفاتورة، استبدال مع المورد';
 
   @override
   String get purchaseNoAdjustableItems => 'لا توجد عناصر قابلة للتعديل.';
 
   @override
-  String get purchaseAdjustmentNoItemsSelected => 'اختر عنصرًا واحدًا على الأقل.';
+  String get purchaseAdjustmentNoItemsSelected =>
+      'اختر عنصرًا واحدًا على الأقل.';
 
   @override
-  String get purchaseExchangeNoItemsSelected => 'اختر عناصر صادرة وعناصر بديلة للاستبدال.';
+  String get purchaseExchangeNoItemsSelected =>
+      'اختر عناصر صادرة وعناصر بديلة للاستبدال.';
 
   @override
   String get purchaseExchangeOutboundSectionTitle => 'العناصر الصادرة';
@@ -6173,10 +6400,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseExchangeAddReplacementLine => 'إضافة بديل';
 
   @override
-  String get purchaseExchangeNoReplacementProducts => 'لا توجد منتجات متاحة للاختيار من هذا الأمر.';
+  String get purchaseExchangeNoReplacementProducts =>
+      'لا توجد منتجات متاحة للاختيار من هذا الأمر.';
 
   @override
-  String get purchaseExchangeInvalidLinesError => 'أدخل كمية صادرة واحدة على الأقل وبديلًا بكمية وتكلفة صحيحتين.';
+  String get purchaseExchangeInvalidLinesError =>
+      'أدخل كمية صادرة واحدة على الأقل وبديلًا بكمية وتكلفة صحيحتين.';
 
   @override
   String get purchaseExchangeReplacementProductLabel => 'المنتج البديل';
@@ -6203,12 +6432,13 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String purchaseAdjustmentLineRemaining(int remaining, int quantity) {
+  String purchaseAdjustmentLineRemaining(String remaining, String quantity) {
     return 'المتبقي $remaining من $quantity';
   }
 
   @override
-  String get purchaseAdjustmentHistoryEmpty => 'لا توجد مرتجعات أو استبدالات مسجلة.';
+  String get purchaseAdjustmentHistoryEmpty =>
+      'لا توجد مرتجعات أو استبدالات مسجلة.';
 
   @override
   String get purchaseAdjustmentTypeReturn => 'إرجاع';
@@ -6248,7 +6478,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String purchaseExchangeReplacementHistoryLine(String product, int quantity, String unitCost) {
+  String purchaseExchangeReplacementHistoryLine(
+      String product, String quantity, String unitCost) {
     return 'بديل: $product × $quantity بتكلفة $unitCost';
   }
 
@@ -6269,13 +6500,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseReceiveNoOpenLines => 'لا توجد كميات مفتوحة للاستلام.';
 
   @override
-  String get purchaseReceiveNoItemsSelected => 'أدخل كمية مستلمة أو تالفة أو مرفوضة لعنصر واحد على الأقل.';
+  String get purchaseReceiveNoItemsSelected =>
+      'أدخل كمية مستلمة أو تالفة أو مرفوضة لعنصر واحد على الأقل.';
 
   @override
-  String get purchaseReceiveInvalidQuantityError => 'أدخل كميات صحيحة لا تقل عن صفر.';
+  String get purchaseReceiveInvalidQuantityError =>
+      'أدخل كميات صحيحة لا تقل عن صفر.';
 
   @override
-  String get purchaseExpiryDatesRequired => 'أدخل تاريخ انتهاء لكل منتج يتابع الانتهاء.';
+  String get purchaseExpiryDatesRequired =>
+      'أدخل تاريخ انتهاء لكل منتج يتابع الانتهاء.';
 
   @override
   String get purchaseReceiveReceivedLabel => 'مستلم سليم';
@@ -6290,25 +6524,26 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseReceiveNoteLabel => 'ملاحظة الاستلام';
 
   @override
-  String get purchaseReceiveNoteHint => 'مثال: نقص في الصندوق أو زيادة من المورد';
+  String get purchaseReceiveNoteHint =>
+      'مثال: نقص في الصندوق أو زيادة من المورد';
 
   @override
-  String purchaseReceiveExpectedValue(int quantity) {
+  String purchaseReceiveExpectedValue(String quantity) {
     return 'المطلوب $quantity';
   }
 
   @override
-  String purchaseReceiveAlreadyValue(int quantity) {
+  String purchaseReceiveAlreadyValue(String quantity) {
     return 'استلم سابقًا $quantity';
   }
 
   @override
-  String purchaseReceiveOpenValue(int quantity) {
+  String purchaseReceiveOpenValue(String quantity) {
     return 'المفتوح $quantity';
   }
 
   @override
-  String purchaseReceiveOpenAfterValue(int quantity) {
+  String purchaseReceiveOpenAfterValue(String quantity) {
     return 'المفتوح بعد الإدخال $quantity';
   }
 
@@ -6329,27 +6564,27 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseOrderUnknownProduct => 'منتج غير محدد';
 
   @override
-  String purchaseOrderLineQuantity(int quantity) {
+  String purchaseOrderLineQuantity(String quantity) {
     return 'الكمية $quantity';
   }
 
   @override
-  String purchaseLineReceivedQuantity(int quantity) {
+  String purchaseLineReceivedQuantity(String quantity) {
     return 'مستلم $quantity';
   }
 
   @override
-  String purchaseLineOpenQuantity(int quantity) {
+  String purchaseLineOpenQuantity(String quantity) {
     return 'مفتوح/متأخر $quantity';
   }
 
   @override
-  String purchaseLineDamagedQuantity(int quantity) {
+  String purchaseLineDamagedQuantity(String quantity) {
     return 'تالف $quantity';
   }
 
   @override
-  String purchaseLineRejectedQuantity(int quantity) {
+  String purchaseLineRejectedQuantity(String quantity) {
     return 'مرفوض $quantity';
   }
 
@@ -6422,7 +6657,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get emptyPurchaseDraft => 'لا توجد عناصر في مسودة الشراء';
 
   @override
-  String get emptyPurchaseDraftMessage => 'أضف منتجات من الكتالوج لبناء أمر الشراء';
+  String get emptyPurchaseDraftMessage =>
+      'أضف منتجات من الكتالوج لبناء أمر الشراء';
 
   @override
   String get purchaseLineCostLabel => 'التكلفة';
@@ -6445,10 +6681,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseLineExpiryDatePickerTooltip => 'اختيار تاريخ الانتهاء';
 
   @override
-  String get purchaseLineExpiryDateInvalid => 'أدخل تاريخًا صحيحًا بصيغة سنة-شهر-يوم.';
+  String get purchaseLineExpiryDateInvalid =>
+      'أدخل تاريخًا صحيحًا بصيغة سنة-شهر-يوم.';
 
   @override
-  String get purchaseLineExpiryDateRequired => 'تاريخ الانتهاء مطلوب لهذا المنتج.';
+  String get purchaseLineExpiryDateRequired =>
+      'تاريخ الانتهاء مطلوب لهذا المنتج.';
 
   @override
   String get purchaseShippingCostLabel => 'الشحن';
@@ -6550,7 +6788,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get purchaseDraftSubmitError => 'تعذر إرسال أمر الشراء. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.';
+  String get purchaseDraftSubmitError =>
+      'تعذر إرسال أمر الشراء. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.';
 
   @override
   String get editPurchaseOrderTitle => 'تعديل أمر الشراء';
@@ -6559,7 +6798,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get editPurchaseOrderAction => 'تعديل';
 
   @override
-  String get purchaseOrderEditDescription => 'فتح المسودة في شاشة الشراء لتعديل أصنافها قبل الإرسال.';
+  String get purchaseOrderEditDescription =>
+      'فتح المسودة في شاشة الشراء لتعديل أصنافها قبل الإرسال.';
 
   @override
   String get savePurchaseDraftButton => 'حفظ التعديلات';
@@ -6573,7 +6813,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get purchaseDraftSaveError => 'تعذر حفظ المسودة. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.';
+  String get purchaseDraftSaveError =>
+      'تعذر حفظ المسودة. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.';
 
   @override
   String get editPurchaseOrderLoadError => 'تعذر فتح أمر الشراء للتعديل.';
@@ -6674,10 +6915,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get saveSupplierButton => 'حفظ المورد';
 
   @override
-  String get customerCreateError => 'تعذر حفظ العميل. راجع البيانات وحاول مرة أخرى.';
+  String get customerCreateError =>
+      'تعذر حفظ العميل. راجع البيانات وحاول مرة أخرى.';
 
   @override
-  String get supplierCreateError => 'تعذر حفظ المورد. راجع البيانات وحاول مرة أخرى.';
+  String get supplierCreateError =>
+      'تعذر حفظ المورد. راجع البيانات وحاول مرة أخرى.';
 
   @override
   String get customerNumberLabel => 'رقم العميل';
@@ -6731,19 +6974,23 @@ class AppLocalizationsAr extends AppLocalizations {
   String get supplierPurchaseHistoryTitle => 'سجل مشتريات المورد';
 
   @override
-  String get supplierPurchaseHistoryLoadError => 'تعذر تحميل سجل مشتريات المورد.';
+  String get supplierPurchaseHistoryLoadError =>
+      'تعذر تحميل سجل مشتريات المورد.';
 
   @override
-  String get supplierPurchaseHistoryEmpty => 'لا توجد مشتريات مسجلة لهذا المورد.';
+  String get supplierPurchaseHistoryEmpty =>
+      'لا توجد مشتريات مسجلة لهذا المورد.';
 
   @override
   String get supplierReturnRefundHistoryTitle => 'سجل الإرجاع والاسترداد';
 
   @override
-  String get supplierReturnRefundHistoryLoadError => 'تعذر تحميل سجل الإرجاع والاسترداد.';
+  String get supplierReturnRefundHistoryLoadError =>
+      'تعذر تحميل سجل الإرجاع والاسترداد.';
 
   @override
-  String get supplierReturnRefundHistoryEmpty => 'لا توجد عمليات إرجاع أو استرداد لهذا المورد.';
+  String get supplierReturnRefundHistoryEmpty =>
+      'لا توجد عمليات إرجاع أو استرداد لهذا المورد.';
 
   @override
   String supplierPayableBalanceValue(String amount) {
@@ -6804,7 +7051,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get unclaimedCardCustomerCalloutTitle => 'عميل بطاقة غير مُسمّى';
 
   @override
-  String get unclaimedCardCustomerCalloutBody => 'أُنشئ هذا العميل تلقائيًا من بطاقة دفع. ادمجه مع عميل موجود أو أعطه اسمًا ليصبح عميلًا مستقلًا.';
+  String get unclaimedCardCustomerCalloutBody =>
+      'أُنشئ هذا العميل تلقائيًا من بطاقة دفع. ادمجه مع عميل موجود أو أعطه اسمًا ليصبح عميلًا مستقلًا.';
 
   @override
   String get mergeIntoCustomerButton => 'دمج مع عميل';
@@ -6894,10 +7142,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get customerAdjustmentHistoryTitle => 'الإرجاع والاستبدال والاسترداد';
 
   @override
-  String get customerAdjustmentHistoryLoadError => 'تعذر تحميل سجل الإرجاع والاسترداد.';
+  String get customerAdjustmentHistoryLoadError =>
+      'تعذر تحميل سجل الإرجاع والاسترداد.';
 
   @override
-  String get customerAdjustmentHistoryEmpty => 'لا توجد عمليات إرجاع أو استبدال أو استرداد لهذا العميل.';
+  String get customerAdjustmentHistoryEmpty =>
+      'لا توجد عمليات إرجاع أو استبدال أو استرداد لهذا العميل.';
 
   @override
   String get customerEmptyValue => 'غير مسجل';
@@ -6929,7 +7179,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get customerOutstandingBalanceCalloutBody => 'تُوزَّع الدفعة تلقائيًا على أقدم الفواتير الآجلة أولًا.';
+  String get customerOutstandingBalanceCalloutBody =>
+      'تُوزَّع الدفعة تلقائيًا على أقدم الفواتير الآجلة أولًا.';
 
   @override
   String get customerAccountPaymentTitle => 'تسجيل دفعة على الحساب';
@@ -6943,13 +7194,16 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get customerAccountPaymentAmountError => 'أدخل مبلغًا أكبر من صفر ولا يتجاوز الرصيد المستحق.';
+  String get customerAccountPaymentAmountError =>
+      'أدخل مبلغًا أكبر من صفر ولا يتجاوز الرصيد المستحق.';
 
   @override
-  String get customerAccountPaymentSuccess => 'تم تسجيل الدفعة على حساب العميل.';
+  String get customerAccountPaymentSuccess =>
+      'تم تسجيل الدفعة على حساب العميل.';
 
   @override
-  String get customerAccountPaymentError => 'تعذّر تسجيل الدفعة. حاول مرة أخرى.';
+  String get customerAccountPaymentError =>
+      'تعذّر تسجيل الدفعة. حاول مرة أخرى.';
 
   @override
   String get customerInvoiceCountLabel => 'عدد الفواتير';
@@ -7109,7 +7363,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get noSupplierSelectedLabel => 'لا يوجد مورد محدد';
 
   @override
-  String get purchaseSupplierRequiredHint => 'اختر موردًا قبل إرسال أمر الشراء.';
+  String get purchaseSupplierRequiredHint =>
+      'اختر موردًا قبل إرسال أمر الشراء.';
 
   @override
   String get chooseCustomerTitle => 'اختيار العميل';
@@ -7191,7 +7446,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cardReceiptRequiredInline => 'هذه الدفعة تحتاج مسح إيصال البطاقة.';
 
   @override
-  String get cardReceiptRequiredError => 'يجب مطابقة كل دفعة بطاقة قبل تأكيد الدفع.';
+  String get cardReceiptRequiredError =>
+      'يجب مطابقة كل دفعة بطاقة قبل تأكيد الدفع.';
 
   @override
   String cardReceiptValidatedSummary(String amount, String maskedPan) {
@@ -7216,7 +7472,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cardReceiptCameraTitle => 'امسح QR إيصال البطاقة';
 
   @override
-  String cardReceiptAmountMismatch(String receiptAmount, String expectedAmount) {
+  String cardReceiptAmountMismatch(
+      String receiptAmount, String expectedAmount) {
     return 'مبلغ الإيصال $receiptAmount لا يطابق مبلغ الدفعة $expectedAmount.';
   }
 
@@ -7224,10 +7481,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cardReceiptUrlRequiredError => 'أدخل رابط الإيصال أو امسح رمز QR.';
 
   @override
-  String get cardReceiptInvalidUrlError => 'الرابط ليس رابط إيصال معاملات صالحًا.';
+  String get cardReceiptInvalidUrlError =>
+      'الرابط ليس رابط إيصال معاملات صالحًا.';
 
   @override
-  String get cardReceiptMissingQueryError => 'رابط الإيصال لا يحتوي على بيانات المطابقة.';
+  String get cardReceiptMissingQueryError =>
+      'رابط الإيصال لا يحتوي على بيانات المطابقة.';
 
   @override
   String get cardReceiptDecodeError => 'تعذر قراءة بيانات إيصال معاملات.';
@@ -7239,7 +7498,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cardReceiptUnsuccessfulError => 'الإيصال لا يشير إلى عملية ناجحة.';
 
   @override
-  String get cardReceiptMissingReferenceError => 'الإيصال لا يحتوي على بيانات البطاقة أو مرجع العملية.';
+  String get cardReceiptMissingReferenceError =>
+      'الإيصال لا يحتوي على بيانات البطاقة أو مرجع العملية.';
 
   @override
   String cardReceiptTerminalNotTrusted(String terminalId) {
@@ -7247,7 +7507,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get receiptToggleSubtitle => 'سيتم إرسال الفاتورة إلى الطابعة بعد إتمام الدفع.';
+  String get receiptToggleSubtitle =>
+      'سيتم إرسال الفاتورة إلى الطابعة بعد إتمام الدفع.';
 
   @override
   String get receiptToggleTooltip => 'تبديل طباعة الفاتورة';
@@ -7256,7 +7517,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shareInvoiceAfterPaymentLabel => 'مشاركة PDF بعد الدفع';
 
   @override
-  String get shareInvoiceToggleSubtitle => 'سيتم فتح ورقة المشاركة على الجوال أو نافذة الحفظ على سطح المكتب.';
+  String get shareInvoiceToggleSubtitle =>
+      'سيتم فتح ورقة المشاركة على الجوال أو نافذة الحفظ على سطح المكتب.';
 
   @override
   String get shareInvoiceToggleTooltip => 'تبديل مشاركة ملف PDF للفاتورة';
@@ -7271,7 +7533,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get changeDueLabel => 'الباقي للعميل';
 
   @override
-  String get paymentTotalTooLowError => 'يجب أن يغطي مجموع الدفعات إجمالي البيع.';
+  String get paymentTotalTooLowError =>
+      'يجب أن يغطي مجموع الدفعات إجمالي البيع.';
 
   @override
   String get confirmPaymentButton => 'تأكيد الدفع';
@@ -7289,19 +7552,23 @@ class AppLocalizationsAr extends AppLocalizations {
   String get saleTypeQuotationLabel => 'عرض سعر';
 
   @override
-  String get saleCustomerRequiredBanner => 'اختر عميلًا قبل إتمام بيع آجل أو عرض سعر.';
+  String get saleCustomerRequiredBanner =>
+      'اختر عميلًا قبل إتمام بيع آجل أو عرض سعر.';
 
   @override
   String get creditBalanceDueLabel => 'المتبقّي على العميل';
 
   @override
-  String get creditDownPaymentTooHighError => 'المبلغ المدفوع أكبر من الإجمالي.';
+  String get creditDownPaymentTooHighError =>
+      'المبلغ المدفوع أكبر من الإجمالي.';
 
   @override
-  String get creditFullyOnAccountHint => 'كامل المبلغ سيُسجَّل دَينًا على العميل. أضِف دفعة مقدّمة إن وُجدت.';
+  String get creditFullyOnAccountHint =>
+      'كامل المبلغ سيُسجَّل دَينًا على العميل. أضِف دفعة مقدّمة إن وُجدت.';
 
   @override
-  String get creditDownPaymentHint => 'المبلغ المُدخَل دفعة مقدّمة؛ والباقي يُسجَّل دَينًا على العميل.';
+  String get creditDownPaymentHint =>
+      'المبلغ المُدخَل دفعة مقدّمة؛ والباقي يُسجَّل دَينًا على العميل.';
 
   @override
   String get creditDueDateLabel => 'تاريخ الاستحقاق';
@@ -7331,7 +7598,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printDownPaymentProofLabel => 'طباعة سند قبض';
 
   @override
-  String get printDownPaymentProofSubtitle => 'طباعة إيصال بالدفعة المقدّمة على البيع الآجل.';
+  String get printDownPaymentProofSubtitle =>
+      'طباعة إيصال بالدفعة المقدّمة على البيع الآجل.';
 
   @override
   String get quotationTotalLabel => 'إجمالي العرض';
@@ -7340,7 +7608,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get quotationReserveStockLabel => 'حجز الكمية';
 
   @override
-  String get quotationReserveStockSubtitle => 'حجز الكميات المعروضة دون خصمها من المخزون حتى انتهاء صلاحية العرض.';
+  String get quotationReserveStockSubtitle =>
+      'حجز الكميات المعروضة دون خصمها من المخزون حتى انتهاء صلاحية العرض.';
 
   @override
   String get quotationValidUntilLabel => 'صالح حتى';
@@ -7349,10 +7618,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get quotationValidUntilUnset => 'اختر تاريخًا';
 
   @override
-  String get quotationNoPaymentHint => 'عرض السعر لا يتضمّن أي دفع ولا يخصم من المخزون.';
+  String get quotationNoPaymentHint =>
+      'عرض السعر لا يتضمّن أي دفع ولا يخصم من المخزون.';
 
   @override
-  String get noEnabledPaymentMethods => 'لا توجد طريقة دفع مفعلة. راجع إعدادات المتجر.';
+  String get noEnabledPaymentMethods =>
+      'لا توجد طريقة دفع مفعلة. راجع إعدادات المتجر.';
 
   @override
   String get printInvoiceAfterPaymentLabel => 'طباعة الفاتورة بعد الدفع';
@@ -7381,7 +7652,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get publicInvoiceDialogTitle => 'فاتورة العميل عبر الإنترنت';
 
   @override
-  String get publicInvoiceDialogSubtitle => 'اطلب من العميل مسح رمز QR لفتح الفاتورة.';
+  String get publicInvoiceDialogSubtitle =>
+      'اطلب من العميل مسح رمز QR لفتح الفاتورة.';
 
   @override
   String publicInvoiceDialogSubtitleWithReceipt(String receiptNumber) {
@@ -7414,19 +7686,23 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get saleCheckoutError => 'تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.';
+  String get saleCheckoutError =>
+      'تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.';
 
   @override
-  String get saleCheckoutSessionExpired => 'لم تعد جلسة الدرج مفتوحة. يرجى فتح جلسة درج جديدة ثم إعادة المحاولة.';
+  String get saleCheckoutSessionExpired =>
+      'لم تعد جلسة الدرج مفتوحة. يرجى فتح جلسة درج جديدة ثم إعادة المحاولة.';
 
   @override
   String get oversellWarningTitle => 'تنبيه المخزون';
 
   @override
-  String get oversellWarningMessage => 'تتجاوز بعض عناصر السلة الكمية المتاحة. هل تريد إتمام البيع رغم ذلك؟';
+  String get oversellWarningMessage =>
+      'تتجاوز بعض عناصر السلة الكمية المتاحة. هل تريد إتمام البيع رغم ذلك؟';
 
   @override
-  String get oversellBlockedMessage => 'لا يمكن إتمام البيع لأن الكمية المطلوبة تتجاوز المخزون المتاح.';
+  String get oversellBlockedMessage =>
+      'لا يمكن إتمام البيع لأن الكمية المطلوبة تتجاوز المخزون المتاح.';
 
   @override
   String oversellLine(String productName, String requested, String available) {
@@ -7437,10 +7713,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get lossSaleWarningTitle => 'تنبيه الخسارة';
 
   @override
-  String get lossSaleWarningMessage => 'نحن نبيع بعض عناصر السلة بخسارة. هل تريد إتمام البيع رغم ذلك؟';
+  String get lossSaleWarningMessage =>
+      'نحن نبيع بعض عناصر السلة بخسارة. هل تريد إتمام البيع رغم ذلك؟';
 
   @override
-  String get lossSaleBlockedMessage => 'لا يمكن إتمام البيع لأن إعدادات المتجر تمنع البيع بخسارة.';
+  String get lossSaleBlockedMessage =>
+      'لا يمكن إتمام البيع لأن إعدادات المتجر تمنع البيع بخسارة.';
 
   @override
   String lossSaleLine(String productName, String amount) {
@@ -7454,7 +7732,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get continueSaleButton => 'إتمام البيع';
 
   @override
-  String get paymentUnauthorizedMessage => 'لا يملك هذا المستخدم صلاحية إتمام الدفع.';
+  String get paymentUnauthorizedMessage =>
+      'لا يملك هذا المستخدم صلاحية إتمام الدفع.';
 
   @override
   String unitPriceEach(String amount) {
@@ -7480,10 +7759,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get checkingRegisterSession => 'جار فحص جلسة الدرج...';
 
   @override
-  String get noOpenRegisterSession => 'لا توجد جلسة درج مفتوحة. ابدأ جلسة جديدة قبل البيع.';
+  String get noOpenRegisterSession =>
+      'لا توجد جلسة درج مفتوحة. ابدأ جلسة جديدة قبل البيع.';
 
   @override
-  String get registerSessionLoadError => 'تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.';
+  String get registerSessionLoadError =>
+      'تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.';
 
   @override
   String get openingCashInputLabel => 'نقدية الافتتاح';
@@ -7531,13 +7812,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payOutRegisterSessionDescription => 'سحب مبلغ نقدي من الدرج';
 
   @override
-  String get collectDebtSessionDescription => 'استلام دفعة من عميل عليه رصيد آجل';
+  String get collectDebtSessionDescription =>
+      'استلام دفعة من عميل عليه رصيد آجل';
 
   @override
   String get refreshCatalogDescription => 'مزامنة قائمة المنتجات مع الخادم';
 
   @override
-  String get closeRegisterSessionDescription => 'إنهاء الجلسة وعدّ النقدية في الدرج';
+  String get closeRegisterSessionDescription =>
+      'إنهاء الجلسة وعدّ النقدية في الدرج';
 
   @override
   String get cashMovementMenuTooltip => 'حركات نقدية للدرج';
@@ -7567,7 +7850,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get positiveAmountRequiredError => 'أدخل مبلغًا أكبر من صفر.';
 
   @override
-  String get cashMovementCreateError => 'تعذر حفظ الحركة النقدية. راجع المبلغ والسبب وحاول مرة أخرى.';
+  String get cashMovementCreateError =>
+      'تعذر حفظ الحركة النقدية. راجع المبلغ والسبب وحاول مرة أخرى.';
 
   @override
   String get cashMovementCreatedMessage => 'تم حفظ الحركة النقدية.';
@@ -7608,7 +7892,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get closingRegisterSessionButton => 'جار الإغلاق...';
 
   @override
-  String get closeRegisterSessionError => 'تعذر إغلاق جلسة الدرج. راجع القيم وحاول مرة أخرى.';
+  String get closeRegisterSessionError =>
+      'تعذر إغلاق جلسة الدرج. راجع القيم وحاول مرة أخرى.';
 
   @override
   String get registerSessionHistoryTitle => 'سجل جلسات الدرج';
@@ -7757,7 +8042,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get sessionUncategorizedLabel => 'غير مصنف';
 
   @override
-  String get sessionNoCategorySales => 'لا توجد مبيعات حسب الفئة في هذه الجلسة.';
+  String get sessionNoCategorySales =>
+      'لا توجد مبيعات حسب الفئة في هذه الجلسة.';
 
   @override
   String sessionCategoryLineLabel(String category, String quantity) {
@@ -7786,7 +8072,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get sessionZReportFailedMessage => 'تعذّرت طباعة تقرير الوردية.';
 
   @override
-  String get sessionClosedPrintZReportPrompt => 'تم إغلاق الوردية. هل تريد طباعة تقرير الإغلاق (Z)؟';
+  String get sessionClosedPrintZReportPrompt =>
+      'تم إغلاق الوردية. هل تريد طباعة تقرير الإغلاق (Z)؟';
 
   @override
   String get sessionSalesLoadError => 'تعذر تحميل مبيعات هذه الجلسة.';
@@ -7798,10 +8085,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get clearCustomerFilterTooltip => 'مسح فلتر العميل';
 
   @override
-  String get sessionCashMovementsLoadError => 'تعذر تحميل حركات النقد لهذه الجلسة.';
+  String get sessionCashMovementsLoadError =>
+      'تعذر تحميل حركات النقد لهذه الجلسة.';
 
   @override
-  String get emptySessionCashMovements => 'لا توجد حركات نقد مسجلة في هذه الجلسة.';
+  String get emptySessionCashMovements =>
+      'لا توجد حركات نقد مسجلة في هذه الجلسة.';
 
   @override
   String get cashMovementPayInLabel => 'إضافة نقدية';
@@ -7816,7 +8105,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get refreshInvoicesTooltip => 'تحديث الفواتير';
 
   @override
-  String get searchInvoicesHint => 'ابحث برقم الفاتورة أو المنتج أو SKU أو الباركود';
+  String get searchInvoicesHint =>
+      'ابحث برقم الفاتورة أو المنتج أو SKU أو الباركود';
 
   @override
   String get invoicesLoadError => 'تعذر تحميل الفواتير.';
@@ -7908,7 +8198,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get invoiceCreditBalanceCalloutBody => 'فاتورة آجلة لم يُسدَّد منها شيء بعد.';
+  String get invoiceCreditBalanceCalloutBody =>
+      'فاتورة آجلة لم يُسدَّد منها شيء بعد.';
 
   @override
   String invoiceCreditBalancePaidValue(String amount) {
@@ -7933,7 +8224,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get invoicePaymentAmountError => 'أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقّي.';
+  String get invoicePaymentAmountError =>
+      'أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقّي.';
 
   @override
   String get invoicePaymentSuccess => 'تم تسجيل الدفعة على الفاتورة.';
@@ -7948,7 +8240,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get invoiceAssignCustomerSuccess => 'تم تعيين العميل على الفاتورة.';
 
   @override
-  String get invoiceAssignCustomerError => 'تعذّر تعيين العميل على الفاتورة. لا يمكن ذلك بعد تسجيل أي دفعة.';
+  String get invoiceAssignCustomerError =>
+      'تعذّر تعيين العميل على الفاتورة. لا يمكن ذلك بعد تسجيل أي دفعة.';
 
   @override
   String get invoiceTotalsTitle => 'الإجماليات';
@@ -8035,7 +8328,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get saleVoidTitle => 'إلغاء الفاتورة';
 
   @override
-  String get saleVoidMessage => 'سيتم عكس كامل المبلغ وإرجاع الكميات المتبقية إلى المخزون.';
+  String get saleVoidMessage =>
+      'سيتم عكس كامل المبلغ وإرجاع الكميات المتبقية إلى المخزون.';
 
   @override
   String get saleVoidSuccess => 'تم إلغاء الفاتورة.';
@@ -8092,7 +8386,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get saleExchangeNoResults => 'لا توجد نتائج مطابقة.';
 
   @override
-  String get saleExchangeInvalidError => 'اختر عنصرًا مُرتجعًا واحدًا على الأقل وعنصرًا بديلًا.';
+  String get saleExchangeInvalidError =>
+      'اختر عنصرًا مُرتجعًا واحدًا على الأقل وعنصرًا بديلًا.';
 
   @override
   String get saleExchangeSettlementLabel => 'طريقة تسوية الفرق';
@@ -8117,7 +8412,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get returnsLookupTitle => 'المرتجعات والاستبدال';
 
   @override
-  String get returnsLookupPrompt => 'أدخل رقم الفاتورة لإجراء إرجاع أو استبدال.';
+  String get returnsLookupPrompt =>
+      'أدخل رقم الفاتورة لإجراء إرجاع أو استبدال.';
 
   @override
   String get returnsLookupFieldLabel => 'رقم الفاتورة';
@@ -8251,7 +8547,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountWizardProductScopeToggle => 'تطبيقه على منتجات محددة';
 
   @override
-  String get discountWizardContactScopeToggle => 'تطبيقه على عملاء أو موردين محددين';
+  String get discountWizardContactScopeToggle =>
+      'تطبيقه على عملاء أو موردين محددين';
 
   @override
   String get discountWizardScheduleToggle => 'تحديد فترة للخصم';
@@ -8296,7 +8593,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountSectionAdvanced => 'خيارات متقدمة';
 
   @override
-  String get discountSectionAdvancedHint => 'الأولوية والتكديس مع الخصومات الأخرى';
+  String get discountSectionAdvancedHint =>
+      'الأولوية والتكديس مع الخصومات الأخرى';
 
   @override
   String get discountScopeAutoNote => 'ينطبق على كل صنف مطابق';
@@ -8311,25 +8609,29 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountValueTypeFixedUnitAmountHelp => 'مبلغ يُخصم عن كل وحدة';
 
   @override
-  String get discountValueTypeFixedPriceHelp => 'تثبيت سعر الصنف عند قيمة محددة';
+  String get discountValueTypeFixedPriceHelp =>
+      'تثبيت سعر الصنف عند قيمة محددة';
 
   @override
   String get discountValueTypeMultiBuy => 'اشترِ عدّة بسعر';
 
   @override
-  String get discountValueTypeMultiBuyHelp => 'حدّد عدد القطع في المجموعة وسعرها، مثل ٣ قطع بدينار.';
+  String get discountValueTypeMultiBuyHelp =>
+      'حدّد عدد القطع في المجموعة وسعرها، مثل ٣ قطع بدينار.';
 
   @override
   String get discountValueTypeTiered => 'سعر متدرّج بالكمية';
 
   @override
-  String get discountValueTypeTieredHelp => 'كلما زادت الكمية انخفض سعر الوحدة عبر شرائح.';
+  String get discountValueTypeTieredHelp =>
+      'كلما زادت الكمية انخفض سعر الوحدة عبر شرائح.';
 
   @override
   String get discountValueTypeBuyXGetY => 'اشترِ X واحصل على Y';
 
   @override
-  String get discountValueTypeBuyXGetYHelp => 'اشترِ كمية واحصل على قطع مجانية أو بخصم.';
+  String get discountValueTypeBuyXGetYHelp =>
+      'اشترِ كمية واحصل على قطع مجانية أو بخصم.';
 
   @override
   String get discountGroupSizeLabel => 'عدد قطع المجموعة';
@@ -8359,7 +8661,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountTiersLabel => 'شرائح السعر';
 
   @override
-  String get discountTiersHint => 'حدّد سعر الوحدة عند كل كمية. تُطبَّق أعلى شريحة مؤهَّلة.';
+  String get discountTiersHint =>
+      'حدّد سعر الوحدة عند كل كمية. تُطبَّق أعلى شريحة مؤهَّلة.';
 
   @override
   String get discountTierMinQuantityLabel => 'ابتداءً من كمية';
@@ -8418,7 +8721,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountWizardAdvancedToggle => 'إظهار خيارات متقدمة';
 
   @override
-  String get discountWizardFixStepError => 'راجع الخطوة المحددة وأكمل البيانات المطلوبة.';
+  String get discountWizardFixStepError =>
+      'راجع الخطوة المحددة وأكمل البيانات المطلوبة.';
 
   @override
   String get discountWizardNoExtraRules => 'بدون شروط إضافية';
@@ -8430,7 +8734,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountLoadError => 'تعذر تحميل الخصومات.';
 
   @override
-  String get discountSaveError => 'تعذر حفظ الخصم. راجع البيانات وحاول مرة أخرى.';
+  String get discountSaveError =>
+      'تعذر حفظ الخصم. راجع البيانات وحاول مرة أخرى.';
 
   @override
   String get discountEmptyRules => 'لا توجد خصومات مطابقة.';
@@ -8567,7 +8872,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountExclusiveLabel => 'يمنع الخصومات الأقل أولوية';
 
   @override
-  String get discountExclusiveHelper => 'عند تفعيله لا تطبق القواعد التالية بعد هذا الخصم.';
+  String get discountExclusiveHelper =>
+      'عند تفعيله لا تطبق القواعد التالية بعد هذا الخصم.';
 
   @override
   String get discountExclusiveShort => 'حصري';
@@ -8638,7 +8944,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountVariantPickerTitle => 'اختيار خيارات المنتجات';
 
   @override
-  String get discountVariantPickerSearchHint => 'ابحث باسم المنتج أو رمز SKU أو الباركود';
+  String get discountVariantPickerSearchHint =>
+      'ابحث باسم المنتج أو رمز SKU أو الباركود';
 
   @override
   String get discountVariantPickerEmpty => 'لا توجد خيارات مطابقة.';
@@ -8727,19 +9034,23 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountPercentError => 'النسبة لا يمكن أن تتجاوز 100%.';
 
   @override
-  String get discountLineOnlyValueTypeError => 'هذا النوع يعمل على مستوى السطر فقط.';
+  String get discountLineOnlyValueTypeError =>
+      'هذا النوع يعمل على مستوى السطر فقط.';
 
   @override
   String get discountIdListError => 'أدخل معرفات صحيحة مفصولة بفواصل.';
 
   @override
-  String get discountCustomerChannelError => 'شروط العملاء متاحة للمبيعات أو لكلا النطاقين فقط.';
+  String get discountCustomerChannelError =>
+      'شروط العملاء متاحة للمبيعات أو لكلا النطاقين فقط.';
 
   @override
-  String get discountSupplierChannelError => 'شروط الموردين متاحة للمشتريات أو لكلا النطاقين فقط.';
+  String get discountSupplierChannelError =>
+      'شروط الموردين متاحة للمشتريات أو لكلا النطاقين فقط.';
 
   @override
-  String get discountDateRangeError => 'تاريخ النهاية يجب أن يكون بعد تاريخ البداية.';
+  String get discountDateRangeError =>
+      'تاريخ النهاية يجب أن يكون بعد تاريخ البداية.';
 
   @override
   String discountValueSummary(String type, String value) {
@@ -8830,7 +9141,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountRankScopeToggle => 'حصره على تصنيفات عملاء معيّنة';
 
   @override
-  String get discountRankScopeHint => 'يُطبَّق تلقائيًا فقط على العملاء ضمن التصنيفات المختارة.';
+  String get discountRankScopeHint =>
+      'يُطبَّق تلقائيًا فقط على العملاء ضمن التصنيفات المختارة.';
 
   @override
   String get discountRankConstraintLabel => 'التصنيفات المستهدفة';
@@ -8950,10 +9262,12 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get discountDetailsImpactMethodNote => 'التقدير يقارن الاستخدام الفعلي بآخر 90 يومًا من المستندات التاريخية المطابقة لشروط الخصم، لذلك هو مؤشر عملي وليس تجربة عزل كاملة.';
+  String get discountDetailsImpactMethodNote =>
+      'التقدير يقارن الاستخدام الفعلي بآخر 90 يومًا من المستندات التاريخية المطابقة لشروط الخصم، لذلك هو مؤشر عملي وليس تجربة عزل كاملة.';
 
   @override
-  String get discountDetailsExpectedDocumentsLabel => 'مستندات متوقعة بدون الخصم';
+  String get discountDetailsExpectedDocumentsLabel =>
+      'مستندات متوقعة بدون الخصم';
 
   @override
   String get discountDetailsExpectedGrossLabel => 'قيمة متوقعة بدون الخصم';
@@ -8996,10 +9310,12 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get discountDetailsTrendEmpty => 'لا توجد استخدامات شهرية لهذا الخصم بعد.';
+  String get discountDetailsTrendEmpty =>
+      'لا توجد استخدامات شهرية لهذا الخصم بعد.';
 
   @override
-  String get discountDetailsTrendGrossHint => 'يعرض الشريط قيمة المستندات المتأثرة قبل الخصم.';
+  String get discountDetailsTrendGrossHint =>
+      'يعرض الشريط قيمة المستندات المتأثرة قبل الخصم.';
 
   @override
   String discountDetailsTrendValue(int count, String amount) {
@@ -9007,18 +9323,22 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get discountDetailsChannelBreakdownEmpty => 'لا توجد استخدامات موزعة حسب النطاق بعد.';
+  String get discountDetailsChannelBreakdownEmpty =>
+      'لا توجد استخدامات موزعة حسب النطاق بعد.';
 
   @override
-  String discountDetailsChannelBreakdownValue(int redemptions, int documents, String amount) {
+  String discountDetailsChannelBreakdownValue(
+      int redemptions, int documents, String amount) {
     return '$redemptions استخدام • $documents مستند • صافي $amount';
   }
 
   @override
-  String get discountDetailsBeneficiariesEmpty => 'لم يستخدم أي عميل أو مورد هذا الخصم بعد.';
+  String get discountDetailsBeneficiariesEmpty =>
+      'لم يستخدم أي عميل أو مورد هذا الخصم بعد.';
 
   @override
-  String get discountDetailsBeneficiariesLoadError => 'تعذر تحميل المستفيدين من الخصم.';
+  String get discountDetailsBeneficiariesLoadError =>
+      'تعذر تحميل المستفيدين من الخصم.';
 
   @override
   String discountDetailsUseCountValue(int count) {
@@ -9098,7 +9418,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printAuditEmptyTitle => 'لا توجد عمليات مسجلة';
 
   @override
-  String get printAuditEmptyMessage => 'ستظهر هنا عمليات الطباعة والمشاركة التي تمر عبر الخادم.';
+  String get printAuditEmptyMessage =>
+      'ستظهر هنا عمليات الطباعة والمشاركة التي تمر عبر الخادم.';
 
   @override
   String printAuditEventTitle(String action, String status) {
@@ -9197,7 +9518,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get employeePayrollOverviewTitle => 'إدارة الموظفين والرواتب';
 
   @override
-  String get employeePayrollOverviewSubtitle => 'سجلات الموظفين وخطط الأجر ومسيرات الرواتب';
+  String get employeePayrollOverviewSubtitle =>
+      'سجلات الموظفين وخطط الأجر ومسيرات الرواتب';
 
   @override
   String get payrollHomeTabLabel => 'الرواتب';
@@ -9217,19 +9539,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payrollMonthStepPay => 'دفع';
 
   @override
-  String get payrollMonthNoRunMessage => 'لم يتم تجهيز مسير رواتب هذا الشهر بعد.';
+  String get payrollMonthNoRunMessage =>
+      'لم يتم تجهيز مسير رواتب هذا الشهر بعد.';
 
   @override
   String get payrollMonthDraftMessage => 'المسير جاهز للمراجعة والاعتماد.';
 
   @override
-  String get payrollMonthApprovedMessage => 'المسير معتمد وبانتظار تسجيل الدفع.';
+  String get payrollMonthApprovedMessage =>
+      'المسير معتمد وبانتظار تسجيل الدفع.';
 
   @override
   String get payrollMonthPaidMessage => 'تم دفع رواتب هذا الشهر.';
 
   @override
-  String get payrollMonthOnboardingMessage => 'أضف موظفيك وحدد خطط رواتبهم لبدء تجهيز مسيرات الرواتب.';
+  String get payrollMonthOnboardingMessage =>
+      'أضف موظفيك وحدد خطط رواتبهم لبدء تجهيز مسيرات الرواتب.';
 
   @override
   String get preparePayrollMonthButton => 'تجهيز رواتب الشهر';
@@ -9318,7 +9643,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get overtimeMultiplierField => 'معامل الأجر الإضافي';
 
   @override
-  String get overtimeMultiplierHelper => 'مثال: 1.50 يعني أجر الساعة الإضافية = 1.5 ضعف الأجر العادي';
+  String get overtimeMultiplierHelper =>
+      'مثال: 1.50 يعني أجر الساعة الإضافية = 1.5 ضعف الأجر العادي';
 
   @override
   String get standardDailyHoursField => 'ساعات العمل اليومية';
@@ -9327,7 +9653,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get standardDailyHoursHelper => 'تُستخدم لاحتساب أجر الساعة الواحدة';
 
   @override
-  String get payrollLineTapToAdjustHint => 'اضغط على موظف لتعديل غيابه وعمله الإضافي وإضافاته وخصوماته.';
+  String get payrollLineTapToAdjustHint =>
+      'اضغط على موظف لتعديل غيابه وعمله الإضافي وإضافاته وخصوماته.';
 
   @override
   String get employeeNoPlanWarning => 'لا توجد خطة راتب';
@@ -9345,7 +9672,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get createPayrollRunButton => 'إنشاء مسير رواتب';
 
   @override
-  String get employeePayrollSaveError => 'تعذر حفظ التغيير. راجع البيانات والصلاحيات ثم حاول مرة أخرى.';
+  String get employeePayrollSaveError =>
+      'تعذر حفظ التغيير. راجع البيانات والصلاحيات ثم حاول مرة أخرى.';
 
   @override
   String get employeesTabLabel => 'الموظفون';
@@ -9388,12 +9716,14 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String employeeMonthlyFixedPlusCommissionPlanLabel(String amount, String percent) {
+  String employeeMonthlyFixedPlusCommissionPlanLabel(
+      String amount, String percent) {
     return 'راتب شهري ثابت $amount + $percent% مبيعات';
   }
 
   @override
-  String employeeUnitBasedPlanLabel(String salaryType, String amount, String units) {
+  String employeeUnitBasedPlanLabel(
+      String salaryType, String amount, String units) {
     return '$salaryType - $amount × $units';
   }
 
@@ -9529,13 +9859,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payrollBulkAdjustmentTitle => 'تعديل جماعي للرواتب';
 
   @override
-  String get payrollBulkAdjustmentSubtitle => 'اختر الموظفين وأدخل مبلغًا يطبق على كل موظف محدد.';
+  String get payrollBulkAdjustmentSubtitle =>
+      'اختر الموظفين وأدخل مبلغًا يطبق على كل موظف محدد.';
 
   @override
   String get payrollBulkAdjustmentAmountLabel => 'المبلغ لكل موظف';
 
   @override
-  String get payrollBulkAdjustmentAmountHelper => 'سيطبق نفس المبلغ على كل موظف محدد.';
+  String get payrollBulkAdjustmentAmountHelper =>
+      'سيطبق نفس المبلغ على كل موظف محدد.';
 
   @override
   String get payrollBulkAdjustmentNotesLabel => 'ملاحظات التعديل';
@@ -9587,7 +9919,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get payrollLineAdjustmentSubtitle => 'أدخل الغياب أو الزيادة أو أي إضافة وخصم يدوي لهذا المسير فقط.';
+  String get payrollLineAdjustmentSubtitle =>
+      'أدخل الغياب أو الزيادة أو أي إضافة وخصم يدوي لهذا المسير فقط.';
 
   @override
   String get absenceDaysField => 'أيام الغياب';
@@ -9606,19 +9939,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get raiseAmountField => 'زيادة هذا الشهر';
 
   @override
-  String get raiseAmountHelper => 'مبلغ إضافي مؤقت يُضاف لصافي هذا الموظف في هذا المسير.';
+  String get raiseAmountHelper =>
+      'مبلغ إضافي مؤقت يُضاف لصافي هذا الموظف في هذا المسير.';
 
   @override
   String get manualAdditionAmountField => 'إضافة يدوية';
 
   @override
-  String get manualAdditionAmountHelper => 'أي مبلغ إضافي يقرره المدير لهذا الموظف.';
+  String get manualAdditionAmountHelper =>
+      'أي مبلغ إضافي يقرره المدير لهذا الموظف.';
 
   @override
   String get manualDeductionAmountField => 'خصم يدوي';
 
   @override
-  String get manualDeductionAmountHelper => 'أي مبلغ خصم إضافي يقرره المدير لهذا الموظف.';
+  String get manualDeductionAmountHelper =>
+      'أي مبلغ خصم إضافي يقرره المدير لهذا الموظف.';
 
   @override
   String get payrollAdjustmentPreviewSection => 'المجموع المتوقع';
@@ -9633,7 +9969,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payrollLineAdjustmentSaveError => 'تعذر حفظ تعديل راتب الموظف.';
 
   @override
-  String get negativeNetPayrollLineError => 'الصافي المتوقع لا يمكن أن يكون أقل من صفر.';
+  String get negativeNetPayrollLineError =>
+      'الصافي المتوقع لا يمكن أن يكون أقل من صفر.';
 
   @override
   String payrollEmployeeFallbackLabel(int id) {
@@ -9755,7 +10092,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get employeeUserEmpty => 'غير مرتبط بمستخدم';
 
   @override
-  String get employeeUserHelper => 'اربط الموظف بمستخدم إذا كان يعمل على النظام مثل الكاشير.';
+  String get employeeUserHelper =>
+      'اربط الموظف بمستخدم إذا كان يعمل على النظام مثل الكاشير.';
 
   @override
   String get employeeUserClearTooltip => 'إزالة المستخدم المرتبط';
@@ -9855,7 +10193,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get salaryTypeSalesCommissionOnly => 'عمولة مبيعات فقط';
 
   @override
-  String get salaryTypeMonthlyFixedPlusSalesCommission => 'راتب شهري + عمولة مبيعات';
+  String get salaryTypeMonthlyFixedPlusSalesCommission =>
+      'راتب شهري + عمولة مبيعات';
 
   @override
   String get salaryTypeContractFixed => 'مبلغ عقد ثابت';
@@ -9864,37 +10203,47 @@ class AppLocalizationsAr extends AppLocalizations {
   String get salaryTypeCustomFixed => 'نوع مخصص';
 
   @override
-  String get salaryTypeMonthlyFixedHelper => 'يدفع مبلغًا ثابتًا كل شهر دون احتساب عمولة مبيعات.';
+  String get salaryTypeMonthlyFixedHelper =>
+      'يدفع مبلغًا ثابتًا كل شهر دون احتساب عمولة مبيعات.';
 
   @override
-  String get salaryTypeWeeklyFixedHelper => 'يدفع مبلغًا ثابتًا لكل أسبوع. أدخل عدد الأسابيع المتوقع في مسير الشهر.';
+  String get salaryTypeWeeklyFixedHelper =>
+      'يدفع مبلغًا ثابتًا لكل أسبوع. أدخل عدد الأسابيع المتوقع في مسير الشهر.';
 
   @override
-  String get salaryTypeDailyRateHelper => 'يدفع أجرًا لكل يوم عمل. أدخل عدد الأيام المتوقع في مسير الشهر.';
+  String get salaryTypeDailyRateHelper =>
+      'يدفع أجرًا لكل يوم عمل. أدخل عدد الأيام المتوقع في مسير الشهر.';
 
   @override
-  String get salaryTypeHourlyRateHelper => 'يدفع أجرًا لكل ساعة. أدخل عدد الساعات المتوقع في مسير الشهر.';
+  String get salaryTypeHourlyRateHelper =>
+      'يدفع أجرًا لكل ساعة. أدخل عدد الساعات المتوقع في مسير الشهر.';
 
   @override
-  String get salaryTypePerShiftHelper => 'يدفع أجرًا لكل وردية. أدخل عدد الورديات المتوقع في مسير الشهر.';
+  String get salaryTypePerShiftHelper =>
+      'يدفع أجرًا لكل وردية. أدخل عدد الورديات المتوقع في مسير الشهر.';
 
   @override
-  String get salaryTypeSalesCommissionOnlyHelper => 'يدفع نسبة من المبيعات المدفوعة للمستخدم المرتبط بالموظف فقط.';
+  String get salaryTypeSalesCommissionOnlyHelper =>
+      'يدفع نسبة من المبيعات المدفوعة للمستخدم المرتبط بالموظف فقط.';
 
   @override
-  String get salaryTypeMonthlyFixedPlusSalesCommissionHelper => 'يدفع الراتب الشهري الثابت ويضيف نسبة من مبيعات المستخدم المرتبط.';
+  String get salaryTypeMonthlyFixedPlusSalesCommissionHelper =>
+      'يدفع الراتب الشهري الثابت ويضيف نسبة من مبيعات المستخدم المرتبط.';
 
   @override
-  String get salaryTypeContractFixedHelper => 'يدفع مبلغ عقد ثابت في كل مسير رواتب إلى أن يتم تعطيل الخطة.';
+  String get salaryTypeContractFixedHelper =>
+      'يدفع مبلغ عقد ثابت في كل مسير رواتب إلى أن يتم تعطيل الخطة.';
 
   @override
-  String get salaryTypeCustomFixedHelper => 'استخدمه عندما لا يناسب الموظف أي نوع جاهز. أضف ملاحظة توضّح طريقة الدفع.';
+  String get salaryTypeCustomFixedHelper =>
+      'استخدمه عندما لا يناسب الموظف أي نوع جاهز. أضف ملاحظة توضّح طريقة الدفع.';
 
   @override
   String get monthlyBaseSalaryField => 'الراتب الشهري الثابت';
 
   @override
-  String get monthlyBaseSalaryHelper => 'المبلغ الأساسي الذي يستحقه الموظف كل شهر.';
+  String get monthlyBaseSalaryHelper =>
+      'المبلغ الأساسي الذي يستحقه الموظف كل شهر.';
 
   @override
   String get compensationAmountField => 'المبلغ';
@@ -9921,28 +10270,34 @@ class AppLocalizationsAr extends AppLocalizations {
   String get expectedUnitsPerPeriodField => 'الوحدات المتوقعة في الشهر';
 
   @override
-  String get expectedWeeksPerPeriodHelper => 'عدد الأسابيع التي تُحتسب عادة في مسير الشهر.';
+  String get expectedWeeksPerPeriodHelper =>
+      'عدد الأسابيع التي تُحتسب عادة في مسير الشهر.';
 
   @override
-  String get expectedDaysPerPeriodHelper => 'عدد أيام العمل المتوقع احتسابها في مسير الشهر.';
+  String get expectedDaysPerPeriodHelper =>
+      'عدد أيام العمل المتوقع احتسابها في مسير الشهر.';
 
   @override
-  String get expectedHoursPerPeriodHelper => 'عدد الساعات المتوقع احتسابها في مسير الشهر.';
+  String get expectedHoursPerPeriodHelper =>
+      'عدد الساعات المتوقع احتسابها في مسير الشهر.';
 
   @override
-  String get expectedShiftsPerPeriodHelper => 'عدد الورديات المتوقع احتسابها في مسير الشهر.';
+  String get expectedShiftsPerPeriodHelper =>
+      'عدد الورديات المتوقع احتسابها في مسير الشهر.';
 
   @override
   String get compensationNotesField => 'ملاحظات طريقة الدفع';
 
   @override
-  String get compensationNotesHelper => 'اختياري، لكنه مفيد للأنواع المخصصة أو العقود.';
+  String get compensationNotesHelper =>
+      'اختياري، لكنه مفيد للأنواع المخصصة أو العقود.';
 
   @override
   String get salesCommissionPercentField => 'نسبة عمولة المبيعات';
 
   @override
-  String get salesCommissionPercentHelper => 'تُحسب من المبيعات المدفوعة للمستخدم المرتبط بالموظف.';
+  String get salesCommissionPercentHelper =>
+      'تُحسب من المبيعات المدفوعة للمستخدم المرتبط بالموظف.';
 
   @override
   String get baseSalaryRequiredError => 'أدخل مبلغًا أكبر من صفر.';
@@ -9954,10 +10309,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get commissionRequiredError => 'أدخل نسبة عمولة أكبر من صفر.';
 
   @override
-  String get salesCommissionNeedsLinkedUserWarning => 'عمولة المبيعات تحتاج ربط الموظف بمستخدم نقطة بيع حتى تُحسب المبيعات تلقائيًا.';
+  String get salesCommissionNeedsLinkedUserWarning =>
+      'عمولة المبيعات تحتاج ربط الموظف بمستخدم نقطة بيع حتى تُحسب المبيعات تلقائيًا.';
 
   @override
-  String get compensationPlanActivationNote => 'ستصبح هذه الخطة هي الراتب الحالي للموظف، وسيتم تعطيل الخطط النشطة السابقة.';
+  String get compensationPlanActivationNote =>
+      'ستصبح هذه الخطة هي الراتب الحالي للموظف، وسيتم تعطيل الخطط النشطة السابقة.';
 
   @override
   String get payTypeMonthlySalary => 'راتب شهري';
@@ -9984,7 +10341,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payTypeOther => 'آخر';
 
   @override
-  String get noEmployeesWithPayPlan => 'أضف خطة أجر لموظف واحد على الأقل قبل إنشاء مسير رواتب.';
+  String get noEmployeesWithPayPlan =>
+      'أضف خطة أجر لموظف واحد على الأقل قبل إنشاء مسير رواتب.';
 
   @override
   String get payrollEmployeeField => 'الموظف';
@@ -10053,7 +10411,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardActionCenterTitle => 'يحتاج انتباهك';
 
   @override
-  String get dashboardAllClearMessage => 'كل شيء تحت السيطرة — لا يوجد ما يتطلب تدخلك الآن.';
+  String get dashboardAllClearMessage =>
+      'كل شيء تحت السيطرة — لا يوجد ما يتطلب تدخلك الآن.';
 
   @override
   String dashboardAlertOutOfStock(int count) {
@@ -10182,7 +10541,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get integrityMonitorSubtitle => 'محرك المراقبة يعمل بصمت في الخلفية: يتحقق من كل إلغاء وإرجاع وفرق نقدي، ويقارن كل كاشير بزملائه دون أن يشعر أحد.';
+  String get integrityMonitorSubtitle =>
+      'محرك المراقبة يعمل بصمت في الخلفية: يتحقق من كل إلغاء وإرجاع وفرق نقدي، ويقارن كل كاشير بزملائه دون أن يشعر أحد.';
 
   @override
   String get integrityMonitorActiveSection => 'حالات بانتظار قرارك';
@@ -10221,7 +10581,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get integrityNoteFieldLabel => 'ملاحظة القرار';
 
   @override
-  String get integrityNoteFieldHelper => 'وثّق ما وجدته بعد المراجعة — تُحفظ في سجل التدقيق.';
+  String get integrityNoteFieldHelper =>
+      'وثّق ما وجدته بعد المراجعة — تُحفظ في سجل التدقيق.';
 
   @override
   String get integrityReviewButton => 'تمت المراجعة';
@@ -10265,7 +10626,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardIntegritySectionTitle => 'النزاهة والمراقبة';
 
   @override
-  String get dashboardIntegrityAllClear => 'لا توجد حالات اشتباه نشطة — المراقبة تعمل بصمت.';
+  String get dashboardIntegrityAllClear =>
+      'لا توجد حالات اشتباه نشطة — المراقبة تعمل بصمت.';
 
   @override
   String get dashboardOpenIntegrityButton => 'فتح مركز النزاهة';
@@ -10285,13 +10647,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get attendanceSettingsSectionTitle => 'الحضور والانصراف (BioTime)';
 
   @override
-  String get attendanceSettingsSectionSubtitle => 'ربط جهاز البصمة ZKTeco ومزامنة الحضور تلقائيًا';
+  String get attendanceSettingsSectionSubtitle =>
+      'ربط جهاز البصمة ZKTeco ومزامنة الحضور تلقائيًا';
 
   @override
   String get attendanceConnectionSectionTitle => 'الاتصال بخادم BioTime';
 
   @override
-  String get attendanceConnectionSectionSubtitle => 'أدخل عنوان خادم BioTime المحلي وبيانات حساب لديه صلاحية قراءة الحضور.';
+  String get attendanceConnectionSectionSubtitle =>
+      'أدخل عنوان خادم BioTime المحلي وبيانات حساب لديه صلاحية قراءة الحضور.';
 
   @override
   String get attendanceServerUrlLabel => 'عنوان خادم BioTime';
@@ -10306,13 +10670,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get attendancePasswordLabel => 'كلمة المرور';
 
   @override
-  String get attendancePasswordKeepHint => 'اتركها فارغة للإبقاء على كلمة المرور المحفوظة';
+  String get attendancePasswordKeepHint =>
+      'اتركها فارغة للإبقاء على كلمة المرور المحفوظة';
 
   @override
   String get attendanceEnableLabel => 'تفعيل مزامنة الحضور';
 
   @override
-  String get attendanceEnableSubtitle => 'عند التفعيل يمكن سحب البصمات وتطبيقها على الرواتب';
+  String get attendanceEnableSubtitle =>
+      'عند التفعيل يمكن سحب البصمات وتطبيقها على الرواتب';
 
   @override
   String get attendanceTestConnectionButton => 'اختبار الاتصال';
@@ -10323,13 +10689,15 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get attendanceTestFailed => 'تعذر الاتصال بخادم BioTime. تحقق من العنوان وبيانات الدخول.';
+  String get attendanceTestFailed =>
+      'تعذر الاتصال بخادم BioTime. تحقق من العنوان وبيانات الدخول.';
 
   @override
   String get attendanceScheduleSectionTitle => 'جدول الدوام الافتراضي';
 
   @override
-  String get attendanceScheduleSectionSubtitle => 'يُستخدم لحساب التأخير والغياب والوقت الإضافي لكل الموظفين.';
+  String get attendanceScheduleSectionSubtitle =>
+      'يُستخدم لحساب التأخير والغياب والوقت الإضافي لكل الموظفين.';
 
   @override
   String get attendanceShiftStartLabel => 'بداية الدوام';
@@ -10355,7 +10723,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get attendanceSyncFailed => 'فشلت المزامنة مع BioTime. تحقق من الاتصال ثم أعد المحاولة.';
+  String get attendanceSyncFailed =>
+      'فشلت المزامنة مع BioTime. تحقق من الاتصال ثم أعد المحاولة.';
 
   @override
   String attendanceLastSyncLabel(String date) {
@@ -10374,13 +10743,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get attendanceMappingSectionTitle => 'ربط الموظفين بجهاز البصمة';
 
   @override
-  String get attendanceMappingSectionSubtitle => 'اربط كل موظف برقمه في BioTime. الموظفون الذين يحمل رقمهم نفس رقم الموظف يُربطون تلقائيًا عند المزامنة.';
+  String get attendanceMappingSectionSubtitle =>
+      'اربط كل موظف برقمه في BioTime. الموظفون الذين يحمل رقمهم نفس رقم الموظف يُربطون تلقائيًا عند المزامنة.';
 
   @override
   String get attendanceMappingCodeLabel => 'رقم BioTime';
 
   @override
-  String get attendanceMappingEmptyState => 'لا يوجد موظفون بعد. أضف الموظفين من شاشة الموظفين أولًا.';
+  String get attendanceMappingEmptyState =>
+      'لا يوجد موظفون بعد. أضف الموظفين من شاشة الموظفين أولًا.';
 
   @override
   String get attendanceTrackedLabel => 'متابعة الحضور';
@@ -10400,7 +10771,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get attendanceSettingsLoadError => 'تعذر تحميل إعدادات الحضور.';
 
   @override
-  String get attendanceDisabledNotice => 'مزامنة الحضور غير مفعلة. فعّلها من إعدادات المتجر ← الحضور والانصراف.';
+  String get attendanceDisabledNotice =>
+      'مزامنة الحضور غير مفعلة. فعّلها من إعدادات المتجر ← الحضور والانصراف.';
 
   @override
   String get attendanceTabLabel => 'الحضور';
@@ -10467,10 +10839,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get attendanceApplyCardTitle => 'احتساب الحضور من BioTime';
 
   @override
-  String get attendanceApplyCardSubtitle => 'يحدّث أيام الغياب والوقت الإضافي لكل موظف مرتبط بجهاز البصمة قبل اعتماد المسير. يمكنك تعديل القيم يدويًا بعد ذلك.';
+  String get attendanceApplyCardSubtitle =>
+      'يحدّث أيام الغياب والوقت الإضافي لكل موظف مرتبط بجهاز البصمة قبل اعتماد المسير. يمكنك تعديل القيم يدويًا بعد ذلك.';
 
   @override
-  String get attendanceApplySuccess => 'تم تحديث الغياب والوقت الإضافي من سجلات الحضور.';
+  String get attendanceApplySuccess =>
+      'تم تحديث الغياب والوقت الإضافي من سجلات الحضور.';
 
   @override
   String get attendanceApplyFailed => 'تعذر تطبيق الحضور على مسير الرواتب.';
@@ -10559,7 +10933,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get expenseLoadDetailsError => 'تعذّر تحميل تفاصيل المصروف.';
 
   @override
-  String get expenseNeedsCategoryMessage => 'أضِف فئة واحدة على الأقل قبل تسجيل مصروف.';
+  String get expenseNeedsCategoryMessage =>
+      'أضِف فئة واحدة على الأقل قبل تسجيل مصروف.';
 
   @override
   String get expenseSaveError => 'تعذّر حفظ المصروف.';
@@ -10601,7 +10976,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get expensePayFromRegisterLabel => 'الدفع من الصندوق';
 
   @override
-  String get expensePayFromRegisterHint => 'يُسجَّل سحبًا نقديًا من الوردية المفتوحة إن وُجدت.';
+  String get expensePayFromRegisterHint =>
+      'يُسجَّل سحبًا نقديًا من الوردية المفتوحة إن وُجدت.';
 
   @override
   String get expenseCategoriesSectionTitle => 'فئات المصروفات';
@@ -10643,7 +11019,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get jobAssignmentSection => 'الإسناد';
 
   @override
-  String get jobAssignedEmployeeHint => 'الموظف الذي تُحتسب له عمولة العمل على هذه المهمة.';
+  String get jobAssignedEmployeeHint =>
+      'الموظف الذي تُحتسب له عمولة العمل على هذه المهمة.';
 
   @override
   String get jobAssignButton => 'إسناد';
@@ -10670,40 +11047,48 @@ class AppLocalizationsAr extends AppLocalizations {
   String get salaryTypeOperationsCommissionOnly => 'عمولة على الأعمال فقط';
 
   @override
-  String get salaryTypeOperationsCommissionOnlyHelper => 'تُحتسب نسبة على قيمة الأعمال (مثل الإصلاحات) التي أنجزها الموظف، بدون راتب ثابت.';
+  String get salaryTypeOperationsCommissionOnlyHelper =>
+      'تُحتسب نسبة على قيمة الأعمال (مثل الإصلاحات) التي أنجزها الموظف، بدون راتب ثابت.';
 
   @override
-  String get salaryTypeMonthlyFixedPlusOperationsCommission => 'راتب شهري + عمولة على الأعمال';
+  String get salaryTypeMonthlyFixedPlusOperationsCommission =>
+      'راتب شهري + عمولة على الأعمال';
 
   @override
-  String get salaryTypeMonthlyFixedPlusOperationsCommissionHelper => 'راتب شهري ثابت بالإضافة إلى نسبة على قيمة الأعمال التي أنجزها الموظف.';
+  String get salaryTypeMonthlyFixedPlusOperationsCommissionHelper =>
+      'راتب شهري ثابت بالإضافة إلى نسبة على قيمة الأعمال التي أنجزها الموظف.';
 
   @override
   String get operationsCommissionPercentField => 'نسبة العمولة على الأعمال';
 
   @override
-  String get operationsCommissionPercentHelper => 'نسبة مئوية من قيمة الأعمال المنجزة (السعر المعتمد) تُضاف إلى المسير.';
+  String get operationsCommissionPercentHelper =>
+      'نسبة مئوية من قيمة الأعمال المنجزة (السعر المعتمد) تُضاف إلى المسير.';
 
   @override
   String get operationsCommissionBaseField => 'أساس احتساب العمولة';
 
   @override
-  String get operationsCommissionBaseApprovedPrice => 'السعر المعتمد (قطع + أجور)';
+  String get operationsCommissionBaseApprovedPrice =>
+      'السعر المعتمد (قطع + أجور)';
 
   @override
-  String get operationsCommissionBaseApprovedPriceHelper => 'تُحتسب العمولة على كامل السعر المعتمد للمهمة.';
+  String get operationsCommissionBaseApprovedPriceHelper =>
+      'تُحتسب العمولة على كامل السعر المعتمد للمهمة.';
 
   @override
   String get operationsCommissionBaseLabor => 'الأجور فقط';
 
   @override
-  String get operationsCommissionBaseLaborHelper => 'تُحتسب العمولة على السعر المعتمد بعد خصم قيمة القطع المستهلكة.';
+  String get operationsCommissionBaseLaborHelper =>
+      'تُحتسب العمولة على السعر المعتمد بعد خصم قيمة القطع المستهلكة.';
 
   @override
   String get operationsCommissionBaseOrderTotal => 'إجمالي الفاتورة';
 
   @override
-  String get operationsCommissionBaseOrderTotalHelper => 'تُحتسب العمولة على إجمالي فاتورة المهمة (للمهام التي صدرت لها فاتورة).';
+  String get operationsCommissionBaseOrderTotalHelper =>
+      'تُحتسب العمولة على إجمالي فاتورة المهمة (للمهام التي صدرت لها فاتورة).';
 
   @override
   String get stockCountDrawerLabel => 'جرد المخزون';
@@ -10853,7 +11238,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get stockCountApplyConfirmTitle => 'تطبيق الجرد؟';
 
   @override
-  String get stockCountApplyConfirmBody => 'سيتم تعديل المخزون بمقدار الفروقات المعدودة. لا يمكن التراجع عن هذا الإجراء.';
+  String get stockCountApplyConfirmBody =>
+      'سيتم تعديل المخزون بمقدار الفروقات المعدودة. لا يمكن التراجع عن هذا الإجراء.';
 
   @override
   String get stockCountApplyConfirm => 'تطبيق';
@@ -10877,7 +11263,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get stockCountCancelConfirmTitle => 'إلغاء الجرد؟';
 
   @override
-  String get stockCountCancelConfirmBody => 'سيتم تجاهل كل ما تم عدّه في هذه الجلسة.';
+  String get stockCountCancelConfirmBody =>
+      'سيتم تجاهل كل ما تم عدّه في هذه الجلسة.';
 
   @override
   String get stockCountCancelConfirm => 'إلغاء الجرد';
@@ -10936,13 +11323,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get stockCountReentryCurrentLabel => 'العدّة الحالية';
 
   @override
-  String get stockCountReentryQuestion => 'هل تضيف الكمية الجديدة إلى عدّتك أم تستبدلها؟';
+  String get stockCountReentryQuestion =>
+      'هل تضيف الكمية الجديدة إلى عدّتك أم تستبدلها؟';
 
   @override
   String get stockCountStartHeroTitle => 'ابدأ جردًا جديدًا';
 
   @override
-  String get stockCountStartHeroBody => 'عُدّ مخزونك الفعلي وقارنه بالنظام لرصد الفروقات وتصحيحها.';
+  String get stockCountStartHeroBody =>
+      'عُدّ مخزونك الفعلي وقارنه بالنظام لرصد الفروقات وتصحيحها.';
 
   @override
   String get stockCountHistoryEmptyHint => 'ستظهر عمليات الجرد السابقة هنا.';
@@ -10990,10 +11379,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckersSectionTitle => 'أجهزة فحص الأسعار';
 
   @override
-  String get priceCheckersSectionSubtitle => 'متابعة أجهزة فحص الأسعار المتصلة في المتجر وحالتها';
+  String get priceCheckersSectionSubtitle =>
+      'متابعة أجهزة فحص الأسعار المتصلة في المتجر وحالتها';
 
   @override
-  String get priceCheckersHeroDescription => 'نظرة سريعة على كل جهاز متصل وآخر نشاط له.';
+  String get priceCheckersHeroDescription =>
+      'نظرة سريعة على كل جهاز متصل وآخر نشاط له.';
 
   @override
   String get priceCheckerDevicesUnit => 'جهاز فحص أسعار';
@@ -11029,7 +11420,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckersEmptyTitle => 'لا توجد أجهزة بعد';
 
   @override
-  String get priceCheckersEmptyMessage => 'ابحث في الشبكة المحلية للعثور على أجهزة فحص الأسعار وتسجيلها تلقائيًا.';
+  String get priceCheckersEmptyMessage =>
+      'ابحث في الشبكة المحلية للعثور على أجهزة فحص الأسعار وتسجيلها تلقائيًا.';
 
   @override
   String get priceCheckersLoadError => 'تعذر تحميل أجهزة فحص الأسعار';
@@ -11043,7 +11435,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckerScanNone => 'لم يُعثر على أجهزة جديدة في الشبكة.';
 
   @override
-  String get priceCheckerScanError => 'تعذر إجراء البحث في الشبكة. حاول مرة أخرى.';
+  String get priceCheckerScanError =>
+      'تعذر إجراء البحث في الشبكة. حاول مرة أخرى.';
 
   @override
   String priceCheckerLastSeen(String value) {
@@ -11093,13 +11486,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckResultError => 'خطأ';
 
   @override
-  String get priceCheckerConnectionServing => 'هذا الجهاز قيد الخدمة ويستقبل عمليات الفحص';
+  String get priceCheckerConnectionServing =>
+      'هذا الجهاز قيد الخدمة ويستقبل عمليات الفحص';
 
   @override
-  String get priceCheckerConnectionDiscovered => 'تم اكتشاف هذا الجهاز وهو بانتظار التفعيل';
+  String get priceCheckerConnectionDiscovered =>
+      'تم اكتشاف هذا الجهاز وهو بانتظار التفعيل';
 
   @override
-  String get priceCheckerConnectionDisabled => 'هذا الجهاز مُعطّل ولا يستجيب لعمليات الفحص';
+  String get priceCheckerConnectionDisabled =>
+      'هذا الجهاز مُعطّل ولا يستجيب لعمليات الفحص';
 
   @override
   String get priceCheckerNetworkSection => 'الشبكة';
@@ -11203,7 +11599,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckerManualEntryTitle => 'أدخل الباركود';
 
   @override
-  String get priceCheckerCameraScanPrompt => 'قرّب الباركود من الكاميرا لعرض السعر';
+  String get priceCheckerCameraScanPrompt =>
+      'قرّب الباركود من الكاميرا لعرض السعر';
 
   @override
   String get priceCheckerCameraStarting => 'جارٍ تشغيل الكاميرا…';
@@ -11230,7 +11627,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckerSetupTitle => 'إعداد وضع كاشف الأسعار';
 
   @override
-  String get priceCheckerSetupSubtitle => 'سيعرض هذا الجهاز الأسعار للزبائن عند مسح الباركود. اختر رمزًا سريًا للخروج من هذا الوضع لاحقًا.';
+  String get priceCheckerSetupSubtitle =>
+      'سيعرض هذا الجهاز الأسعار للزبائن عند مسح الباركود. اختر رمزًا سريًا للخروج من هذا الوضع لاحقًا.';
 
   @override
   String get priceCheckerDeviceNameLabel => 'اسم الجهاز';
@@ -11251,7 +11649,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckerConfirmPinLabel => 'تأكيد الرمز السري';
 
   @override
-  String get priceCheckerPinTooShort => 'يجب أن يتكوّن الرمز من 4 أرقام على الأقل';
+  String get priceCheckerPinTooShort =>
+      'يجب أن يتكوّن الرمز من 4 أرقام على الأقل';
 
   @override
   String get priceCheckerPinMismatch => 'الرمزان غير متطابقين';
@@ -11260,19 +11659,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckerRunOnStartupLabel => 'التشغيل تلقائيًا عند بدء النظام';
 
   @override
-  String get priceCheckerRunOnStartupHint => 'يفتح التطبيق تلقائيًا عند تشغيل الجهاز';
+  String get priceCheckerRunOnStartupHint =>
+      'يفتح التطبيق تلقائيًا عند تشغيل الجهاز';
 
   @override
   String get priceCheckerStartButton => 'بدء الوضع';
 
   @override
-  String get priceCheckerModeButtonTooltip => 'تشغيل وضع كاشف الأسعار على هذا الجهاز';
+  String get priceCheckerModeButtonTooltip =>
+      'تشغيل وضع كاشف الأسعار على هذا الجهاز';
 
   @override
   String get priceCheckerSettingsTitle => 'وضع كاشف الأسعار';
 
   @override
-  String get priceCheckerSettingsDescription => 'حوّل هذا الجهاز إلى شاشة لعرض الأسعار للزبائن. يعمل دون تسجيل دخول، ويُحمى الخروج منه برمز سري.';
+  String get priceCheckerSettingsDescription =>
+      'حوّل هذا الجهاز إلى شاشة لعرض الأسعار للزبائن. يعمل دون تسجيل دخول، ويُحمى الخروج منه برمز سري.';
 
   @override
   String get priceCheckerSettingsSetupButton => 'إعداد كاشف الأسعار';
@@ -11302,7 +11704,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckerCameraToggleLabel => 'المسح بالكاميرا';
 
   @override
-  String get priceCheckerCameraToggleHint => 'قراءة الباركود بكاميرا الجهاز دون الحاجة إلى ماسح خارجي';
+  String get priceCheckerCameraToggleHint =>
+      'قراءة الباركود بكاميرا الجهاز دون الحاجة إلى ماسح خارجي';
 
   @override
   String get priceCheckerCameraFacingLabel => 'الكاميرا المستخدمة';
@@ -11323,10 +11726,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get editContactTooltip => 'تعديل البيانات';
 
   @override
-  String get customerUpdateError => 'تعذر حفظ بيانات الزبون. تحقق من الاتصال وحاول مجددًا.';
+  String get customerUpdateError =>
+      'تعذر حفظ بيانات الزبون. تحقق من الاتصال وحاول مجددًا.';
 
   @override
-  String get supplierUpdateError => 'تعذر حفظ بيانات المورد. تحقق من الاتصال وحاول مجددًا.';
+  String get supplierUpdateError =>
+      'تعذر حفظ بيانات المورد. تحقق من الاتصال وحاول مجددًا.';
 
   @override
   String get customerUpdatedMessage => 'تم حفظ بيانات الزبون.';
@@ -11341,7 +11746,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckerTorchToggleLabel => 'تشغيل الفلاش أثناء المسح';
 
   @override
-  String get priceCheckerTorchToggleHint => 'يحسّن قراءة الباركود في الإضاءة الضعيفة (يعمل مع الكاميرا الخلفية فقط)';
+  String get priceCheckerTorchToggleHint =>
+      'يحسّن قراءة الباركود في الإضاءة الضعيفة (يعمل مع الكاميرا الخلفية فقط)';
 
   @override
   String get priceCheckerTorchTooltip => 'الفلاش';
@@ -11350,7 +11756,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckerSpeakToggleLabel => 'نطق اسم المنتج والسعر';
 
   @override
-  String get priceCheckerSpeakToggleHint => 'يقرأ الجهاز اسم المنتج وسعره بصوت مسموع عند العثور عليه';
+  String get priceCheckerSpeakToggleHint =>
+      'يقرأ الجهاز اسم المنتج وسعره بصوت مسموع عند العثور عليه';
 
   @override
   String priceCheckerSpokenResult(String product, String price) {
@@ -11361,7 +11768,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckerDwellLabel => 'مدة عرض المنتج';
 
   @override
-  String get priceCheckerDwellHint => 'المدة قبل العودة تلقائيًا إلى شاشة المسح';
+  String get priceCheckerDwellHint =>
+      'المدة قبل العودة تلقائيًا إلى شاشة المسح';
 
   @override
   String priceCheckerDwellSecondsValue(int seconds) {
@@ -11381,7 +11789,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get priceCheckerRemoveConfirmTitle => 'إيقاف وضع كاشف الأسعار؟';
 
   @override
-  String get priceCheckerRemoveConfirmMessage => 'سيعود هذا الجهاز جهازًا عاديًا لنقطة البيع. يمكنك إعداده مجددًا في أي وقت.';
+  String get priceCheckerRemoveConfirmMessage =>
+      'سيعود هذا الجهاز جهازًا عاديًا لنقطة البيع. يمكنك إعداده مجددًا في أي وقت.';
 
   @override
   String get priceCheckerChangePinTitle => 'تغيير الرمز السري';
@@ -11390,19 +11799,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get startupSectionTitle => 'بدء التشغيل';
 
   @override
-  String get startupSectionSubtitle => 'اجعل التطبيق يفتح تلقائيًا عند تشغيل الجهاز — مفيد لأجهزة الكاشير والكاشف.';
+  String get startupSectionSubtitle =>
+      'اجعل التطبيق يفتح تلقائيًا عند تشغيل الجهاز — مفيد لأجهزة الكاشير والكاشف.';
 
   @override
   String get clearCartConfirmTitle => 'مسح السلة؟';
 
   @override
-  String get clearCartConfirmMessage => 'سيؤدي هذا إلى إزالة جميع العناصر من السلة الحالية، ولا يمكن التراجع عنه.';
+  String get clearCartConfirmMessage =>
+      'سيؤدي هذا إلى إزالة جميع العناصر من السلة الحالية، ولا يمكن التراجع عنه.';
 
   @override
   String get discardSaleConfirmTitle => 'تجاهل البيع المُعلّق؟';
 
   @override
-  String get discardSaleConfirmMessage => 'سيتم حذف هذا البيع المُعلّق وجميع عناصره، ولا يمكن التراجع عنه.';
+  String get discardSaleConfirmMessage =>
+      'سيتم حذف هذا البيع المُعلّق وجميع عناصره، ولا يمكن التراجع عنه.';
 
   @override
   String get discardSaleConfirmButton => 'تجاهل';
@@ -11417,25 +11829,29 @@ class AppLocalizationsAr extends AppLocalizations {
   String get clearPurchaseDraftConfirmTitle => 'مسح مسودة الشراء؟';
 
   @override
-  String get clearPurchaseDraftConfirmMessage => 'سيؤدي هذا إلى إزالة جميع العناصر من المسودة الحالية، ولا يمكن التراجع عنه.';
+  String get clearPurchaseDraftConfirmMessage =>
+      'سيؤدي هذا إلى إزالة جميع العناصر من المسودة الحالية، ولا يمكن التراجع عنه.';
 
   @override
   String get submitPurchaseOrderConfirmTitle => 'إرسال أمر الشراء؟';
 
   @override
-  String get submitPurchaseOrderConfirmMessage => 'سيتم إرسال أمر الشراء إلى المورّد للاعتماد.';
+  String get submitPurchaseOrderConfirmMessage =>
+      'سيتم إرسال أمر الشراء إلى المورّد للاعتماد.';
 
   @override
   String get cancelPurchaseOrderConfirmTitle => 'إلغاء أمر الشراء؟';
 
   @override
-  String get cancelPurchaseOrderConfirmMessage => 'سيؤدي إلغاء أمر الشراء إلى عكس أي مخزون تم استلامه منه، ولا يمكن التراجع عن هذا الإجراء.';
+  String get cancelPurchaseOrderConfirmMessage =>
+      'سيؤدي إلغاء أمر الشراء إلى عكس أي مخزون تم استلامه منه، ولا يمكن التراجع عن هذا الإجراء.';
 
   @override
   String get cancelPurchaseOrderConfirmButton => 'تأكيد الإلغاء';
 
   @override
-  String get unauthorizedAskManagerHint => 'اطلب من المدير منحك صلاحية الوصول إلى هذه الشاشة.';
+  String get unauthorizedAskManagerHint =>
+      'اطلب من المدير منحك صلاحية الوصول إلى هذه الشاشة.';
 
   @override
   String get backToHomeButton => 'العودة إلى الرئيسية';
@@ -11444,7 +11860,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get unsavedChangesTitle => 'تجاهل التغييرات؟';
 
   @override
-  String get unsavedChangesMessage => 'لديك تغييرات لم تُحفظ بعد. ستُفقد إذا غادرت الآن.';
+  String get unsavedChangesMessage =>
+      'لديك تغييرات لم تُحفظ بعد. ستُفقد إذا غادرت الآن.';
 
   @override
   String get discardChangesButton => 'تجاهل التغييرات';
@@ -11456,7 +11873,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardGetStartedTitle => 'لنبدأ';
 
   @override
-  String get dashboardGetStartedSubtitle => 'أكمل هذه الخطوات لتجهيز متجرك للعمل.';
+  String get dashboardGetStartedSubtitle =>
+      'أكمل هذه الخطوات لتجهيز متجرك للعمل.';
 
   @override
   String get dashboardGetStartedAddProduct => 'أضف أول منتج';
@@ -11528,16 +11946,20 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aiAssistantErrorNotEntitled => 'GPT غير مفعّل لهذا المتجر.';
 
   @override
-  String get aiAssistantErrorNetwork => 'تعذّر الاتصال بـ GPT. تحقق من الشبكة وحاول مجددًا.';
+  String get aiAssistantErrorNetwork =>
+      'تعذّر الاتصال بـ GPT. تحقق من الشبكة وحاول مجددًا.';
 
   @override
-  String get aiAssistantErrorGeneric => 'حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.';
+  String get aiAssistantErrorGeneric =>
+      'حدث خطأ أثناء معالجة طلبك. حاول مرة أخرى.';
 
   @override
-  String get aiAssistantErrorRateLimited => 'لقد بلغت حدّ الاستخدام. حاول مرة أخرى لاحقًا.';
+  String get aiAssistantErrorRateLimited =>
+      'لقد بلغت حدّ الاستخدام. حاول مرة أخرى لاحقًا.';
 
   @override
-  String get aiAssistantErrorTooManyImages => 'عدد الصور كبير جدًا. الحد الأقصى ٥ صور.';
+  String get aiAssistantErrorTooManyImages =>
+      'عدد الصور كبير جدًا. الحد الأقصى ٥ صور.';
 
   @override
   String get aiAssistantAttachTooltip => 'إرفاق';
@@ -11570,7 +11992,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aiAssistantRecording => 'جارٍ التسجيل…';
 
   @override
-  String get aiAssistantMicPermissionDenied => 'يلزم إذن الميكروفون لتسجيل الرسائل الصوتية. فعّله من إعدادات الجهاز.';
+  String get aiAssistantMicPermissionDenied =>
+      'يلزم إذن الميكروفون لتسجيل الرسائل الصوتية. فعّله من إعدادات الجهاز.';
 
   @override
   String aiAssistantImageLimit(int count) {
@@ -11732,7 +12155,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get aiAssistantAskUserPendingComposer => 'أجب عن السؤال أعلاه للمتابعة';
+  String get aiAssistantAskUserPendingComposer =>
+      'أجب عن السؤال أعلاه للمتابعة';
 
   @override
   String get migrationTitle => 'نقل البيانات';
@@ -11741,16 +12165,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get migrationSubtitle => 'استيراد بياناتك من نظام نقاط البيع القديم';
 
   @override
-  String get migrationHeroDescription => 'انقل منتجاتك وفئاتك وعملاءك ومورّديك ومخزونك من نظامك القديم إلى دفتر.';
+  String get migrationHeroDescription =>
+      'انقل منتجاتك وفئاتك وعملاءك ومورّديك ومخزونك من نظامك القديم إلى دفتر.';
 
   @override
   String get migrationLoadError => 'تعذّر تحميل أدوات النقل';
 
   @override
-  String get migrationConnectionSectionTitle => 'الاتصال بقاعدة البيانات القديمة';
+  String get migrationConnectionSectionTitle =>
+      'الاتصال بقاعدة البيانات القديمة';
 
   @override
-  String get migrationConnectionSectionSubtitle => 'اختر نظامك القديم وأدخل بيانات الاتصال بقاعدة بياناته.';
+  String get migrationConnectionSectionSubtitle =>
+      'اختر نظامك القديم وأدخل بيانات الاتصال بقاعدة بياناته.';
 
   @override
   String get migrationSourceNameLabel => 'اسم مصدر البيانات';
@@ -11759,7 +12186,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get migrationSystemLabel => 'النظام القديم';
 
   @override
-  String get migrationStubSystemNotice => 'هذا النظام متاح لفحص التوافق فقط حاليًا؛ سيُفعَّل الاستيراد لاحقًا.';
+  String get migrationStubSystemNotice =>
+      'هذا النظام متاح لفحص التوافق فقط حاليًا؛ سيُفعَّل الاستيراد لاحقًا.';
 
   @override
   String get migrationDatabaseFileLabel => 'مسار ملف قاعدة البيانات';
@@ -11780,19 +12208,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get migrationPasswordLabel => 'كلمة المرور';
 
   @override
-  String get migrationPasswordKeepHint => 'اتركها فارغة للإبقاء على كلمة المرور المحفوظة';
+  String get migrationPasswordKeepHint =>
+      'اتركها فارغة للإبقاء على كلمة المرور المحفوظة';
 
   @override
   String get migrationAdvancedSectionTitle => 'خيارات متقدمة (اختياري)';
 
   @override
-  String get migrationAdvancedSectionSubtitle => 'لازمة للأنظمة القديمة جدًا (مثل SQL Server 2000 الذي يحتاج مُشغّل FreeTDS).';
+  String get migrationAdvancedSectionSubtitle =>
+      'لازمة للأنظمة القديمة جدًا (مثل SQL Server 2000 الذي يحتاج مُشغّل FreeTDS).';
 
   @override
   String get migrationOdbcDriverLabel => 'مُشغّل ODBC';
 
   @override
-  String get migrationOdbcDriverHint => 'مثال: FreeTDS أو ODBC Driver 18 for SQL Server';
+  String get migrationOdbcDriverHint =>
+      'مثال: FreeTDS أو ODBC Driver 18 for SQL Server';
 
   @override
   String get migrationTdsVersionLabel => 'إصدار TDS';
@@ -11813,10 +12244,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get migrationScanTitle => 'خوادم SQL Server في الشبكة';
 
   @override
-  String get migrationScanSubtitle => 'اختر خادم نظام نقاط البيع الخاص بالعميل لتعبئة المضيف والمنفذ.';
+  String get migrationScanSubtitle =>
+      'اختر خادم نظام نقاط البيع الخاص بالعميل لتعبئة المضيف والمنفذ.';
 
   @override
-  String get migrationScanEmpty => 'لم يُعثر على أي خادم. تأكد من تشغيل الجهاز على نفس الشبكة، أو أدخل المضيف يدويًا.';
+  String get migrationScanEmpty =>
+      'لم يُعثر على أي خادم. تأكد من تشغيل الجهاز على نفس الشبكة، أو أدخل المضيف يدويًا.';
 
   @override
   String get migrationScanFailed => 'تعذّر البحث في الشبكة';
@@ -11850,10 +12283,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get migrationNotChecked => 'لم يتم فحص التوافق بعد';
 
   @override
-  String get migrationCompatibleMessage => 'قاعدة البيانات متوافقة وجاهزة للنقل.';
+  String get migrationCompatibleMessage =>
+      'قاعدة البيانات متوافقة وجاهزة للنقل.';
 
   @override
-  String get migrationIncompatibleMessage => 'قاعدة البيانات غير متوافقة مع هذا النظام.';
+  String get migrationIncompatibleMessage =>
+      'قاعدة البيانات غير متوافقة مع هذا النظام.';
 
   @override
   String migrationDetectedVersion(String version) {
@@ -11873,13 +12308,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get migrationEntitiesSectionTitle => 'البيانات المراد نقلها';
 
   @override
-  String get migrationEntitiesSectionSubtitle => 'اختر أنواع البيانات التي تريد نقلها.';
+  String get migrationEntitiesSectionSubtitle =>
+      'اختر أنواع البيانات التي تريد نقلها.';
 
   @override
   String get migrationWithoutQuantitiesLabel => 'نقل المنتجات بدون كميات';
 
   @override
-  String get migrationWithoutQuantitiesSubtitle => 'استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في دفتر.';
+  String get migrationWithoutQuantitiesSubtitle =>
+      'استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في دفتر.';
 
   @override
   String get migrationStockSourceSectionTitle => 'كميات المخزون';
@@ -11888,19 +12325,23 @@ class AppLocalizationsAr extends AppLocalizations {
   String get migrationStockSourceSnapshotLabel => 'نقل الكميات كما هي';
 
   @override
-  String get migrationStockSourceSnapshotSubtitle => 'تُنقل كميات المخزون الحالية من النظام القديم كما هي.';
+  String get migrationStockSourceSnapshotSubtitle =>
+      'تُنقل كميات المخزون الحالية من النظام القديم كما هي.';
 
   @override
-  String get migrationStockSourceReconstructLabel => 'احتساب الكميات من الفواتير';
+  String get migrationStockSourceReconstructLabel =>
+      'احتساب الكميات من الفواتير';
 
   @override
-  String get migrationStockSourceReconstructSubtitle => 'تُحتسب كمية كل صنف من فواتير الشراء ناقص فواتير البيع. مناسب عندما تكون كميات النظام القديم غير موثوقة لكن فواتيره سليمة. يتطلّب نقل فواتير الشراء والبيع، وسيُنبّهك إن بِيع صنف بكمية أكبر مما اشتُري.';
+  String get migrationStockSourceReconstructSubtitle =>
+      'تُحتسب كمية كل صنف من فواتير الشراء ناقص فواتير البيع. مناسب عندما تكون كميات النظام القديم غير موثوقة لكن فواتيره سليمة. يتطلّب نقل فواتير الشراء والبيع، وسيُنبّهك إن بِيع صنف بكمية أكبر مما اشتُري.';
 
   @override
   String get migrationStockSourceNoneLabel => 'بدون كميات';
 
   @override
-  String get migrationStockSourceNoneSubtitle => 'تُنقل المنتجات دون أي كميات، ويُبدأ الجرد من جديد في دفتر.';
+  String get migrationStockSourceNoneSubtitle =>
+      'تُنقل المنتجات دون أي كميات، ويُبدأ الجرد من جديد في دفتر.';
 
   @override
   String get migrationEntityUnit => 'وحدات القياس';
@@ -11954,7 +12395,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get migrationRunningLabel => 'جارٍ التنفيذ…';
 
   @override
-  String get migrationDryRunHint => 'نفّذ تشغيلًا تجريبيًا أولًا للتحقق من البيانات قبل النقل الفعلي.';
+  String get migrationDryRunHint =>
+      'نفّذ تشغيلًا تجريبيًا أولًا للتحقق من البيانات قبل النقل الفعلي.';
 
   @override
   String get migrationRunSucceeded => 'اكتمل بنجاح';
@@ -11978,7 +12420,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get migrationViewIssuesButton => 'عرض المشكلات';
 
   @override
-  String get migrationImportGatedHint => 'أكمِل تشغيلًا تجريبيًا ناجحًا بلا أخطاء لتفعيل النقل.';
+  String get migrationImportGatedHint =>
+      'أكمِل تشغيلًا تجريبيًا ناجحًا بلا أخطاء لتفعيل النقل.';
 
   @override
   String get migrationImportButton => 'بدء النقل';
@@ -12034,13 +12477,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get paymentsHubCustomerEmptyTitle => 'لا توجد مدفوعات عملاء';
 
   @override
-  String get paymentsHubCustomerEmptyMessage => 'ستظهر هنا المبالغ المحصّلة من العملاء.';
+  String get paymentsHubCustomerEmptyMessage =>
+      'ستظهر هنا المبالغ المحصّلة من العملاء.';
 
   @override
   String get paymentsHubSupplierEmptyTitle => 'لا توجد مدفوعات موردين';
 
   @override
-  String get paymentsHubSupplierEmptyMessage => 'ستظهر هنا المبالغ المدفوعة للموردين.';
+  String get paymentsHubSupplierEmptyMessage =>
+      'ستظهر هنا المبالغ المدفوعة للموردين.';
 
   @override
   String get paymentsHubLoadError => 'تعذّر تحميل المدفوعات';
@@ -12107,7 +12552,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get convertQuotationDownPaymentLabel => 'الدفعة المقدمة';
 
   @override
-  String get convertQuotationDownPaymentHelper => 'اختياري — المبلغ المحصّل عند التحويل.';
+  String get convertQuotationDownPaymentHelper =>
+      'اختياري — المبلغ المحصّل عند التحويل.';
 
   @override
   String convertQuotationStandardHint(String total) {
@@ -12136,7 +12582,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get subscriptionRefreshTooltip => 'تحديث من الخادم';
 
   @override
-  String get subscriptionSyncFailedMessage => 'تعذّر الاتصال بالخادم لتحديث الحالة. يتم عرض آخر حالة محفوظة.';
+  String get subscriptionSyncFailedMessage =>
+      'تعذّر الاتصال بالخادم لتحديث الحالة. يتم عرض آخر حالة محفوظة.';
 
   @override
   String get subscriptionSyncedMessage => 'تم تحديث حالة الاشتراك.';
@@ -12178,7 +12625,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get subscriptionInstallationIdTitle => 'معرّف التثبيت';
 
   @override
-  String get subscriptionInstallationIdHelper => 'أرسل هذا المعرّف للدعم لتفعيل اشتراكك أو تجديده.';
+  String get subscriptionInstallationIdHelper =>
+      'أرسل هذا المعرّف للدعم لتفعيل اشتراكك أو تجديده.';
 
   @override
   String get subscriptionInstallationIdCopy => 'نسخ';
@@ -12190,7 +12638,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get subscriptionNotConfiguredTitle => 'لم يتم الربط بالخادم بعد';
 
   @override
-  String get subscriptionNotConfiguredMessage => 'تواصل مع الدعم لتفعيل الوصول عن بُعد ومساعد الذكاء الاصطناعي.';
+  String get subscriptionNotConfiguredMessage =>
+      'تواصل مع الدعم لتفعيل الوصول عن بُعد ومساعد الذكاء الاصطناعي.';
 
   @override
   String get subscriptionRemoteAccessTitle => 'الوصول عن بُعد';
@@ -12199,13 +12648,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get subscriptionRemoteAccessActiveTitle => 'الوصول عن بُعد مُفعّل';
 
   @override
-  String get subscriptionRemoteAccessActiveMessage => 'يمكنك استخدام التطبيق خارج المتجر عبر خادم دفتر.';
+  String get subscriptionRemoteAccessActiveMessage =>
+      'يمكنك استخدام التطبيق خارج المتجر عبر خادم دفتر.';
 
   @override
-  String get subscriptionRemoteAccessInactiveTitle => 'الوصول عن بُعد غير مُفعّل';
+  String get subscriptionRemoteAccessInactiveTitle =>
+      'الوصول عن بُعد غير مُفعّل';
 
   @override
-  String get subscriptionRemoteAccessInactiveMessage => 'تتطلب هذه الميزة اشتراكًا فعّالًا. تواصل مع الدعم لتفعيلها.';
+  String get subscriptionRemoteAccessInactiveMessage =>
+      'تتطلب هذه الميزة اشتراكًا فعّالًا. تواصل مع الدعم لتفعيلها.';
 
   @override
   String get subscriptionFieldStatus => 'الحالة';
@@ -12240,16 +12692,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get subscriptionAiActiveTitle => 'مساعد الذكاء الاصطناعي مُفعّل';
 
   @override
-  String get subscriptionAiActiveMessage => 'اشتراكك يشمل GPT. هذا هو استهلاكك الحالي.';
+  String get subscriptionAiActiveMessage =>
+      'اشتراكك يشمل GPT. هذا هو استهلاكك الحالي.';
 
   @override
   String get subscriptionAiInactiveTitle => 'مساعد الذكاء الاصطناعي غير مُفعّل';
 
   @override
-  String get subscriptionAiInactiveMessage => 'أضِف GPT إلى اشتراكك للاستفادة منه. تواصل مع الدعم.';
+  String get subscriptionAiInactiveMessage =>
+      'أضِف GPT إلى اشتراكك للاستفادة منه. تواصل مع الدعم.';
 
   @override
-  String get subscriptionAiUsageUnavailable => 'تعذّر تحميل بيانات الاستهلاك حاليًا.';
+  String get subscriptionAiUsageUnavailable =>
+      'تعذّر تحميل بيانات الاستهلاك حاليًا.';
 
   @override
   String subscriptionLastSynced(String time) {
@@ -12293,7 +12748,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get appUpdatesFailed => 'تعذّر التحديث. حاول مرة أخرى.';
 
   @override
-  String get appUpdatesUnsupportedWeb => 'تتم إدارة تحديثات نسخة الويب من الخادم.';
+  String get appUpdatesUnsupportedWeb =>
+      'تتم إدارة تحديثات نسخة الويب من الخادم.';
 
   @override
   String get appUpdatesRecheck => 'إعادة التحقق';
@@ -12302,7 +12758,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get getAppsDialogTitle => 'تنزيل تطبيقات دفتر';
 
   @override
-  String get getAppsInstructions => 'امسح الرمز أو افتح الرابط على الجهاز الجديد (على نفس الشبكة) للتنزيل.';
+  String get getAppsInstructions =>
+      'امسح الرمز أو افتح الرابط على الجهاز الجديد (على نفس الشبكة) للتنزيل.';
 
   @override
   String get getAppsCopyLink => 'نسخ الرابط';
@@ -12314,7 +12771,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aiDailyBriefLabel => 'ملخص اليوم من GPT';
 
   @override
-  String get aiDailyBriefSeed => 'أعطني ملخصًا سريعًا لمتجري: كيف كان أداء المبيعات في الفترة، وما الذي يحتاج انتباهي اليوم، وأي شيء غير معتاد يجب أن أنتبه له.';
+  String get aiDailyBriefSeed =>
+      'أعطني ملخصًا سريعًا لمتجري: كيف كان أداء المبيعات في الفترة، وما الذي يحتاج انتباهي اليوم، وأي شيء غير معتاد يجب أن أنتبه له.';
 
   @override
   String aiDigestElaborate(String topic) {
@@ -12325,16 +12783,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get smartReorderButton => 'إعادة طلب ذكية';
 
   @override
-  String get smartReorderTooltip => 'اقتراح أوامر شراء ذكية للأصناف الناقصة بالذكاء الاصطناعي';
+  String get smartReorderTooltip =>
+      'اقتراح أوامر شراء ذكية للأصناف الناقصة بالذكاء الاصطناعي';
 
   @override
-  String get smartReorderSeed => 'راجع مخزوني وأنشئ أوامر شراء ذكية للأصناف التي تحتاج إعادة طلب. تجاهل الأصناف البطيئة والراكدة حتى لا أُجمّد رأس مالي، واحسب الكميات من سرعة البيع الفعلية مقرّبةً لوحدات الشراء. لكل صنف اختر المورّد الأنسب من سجلّ الشراء، وأنشئ أمر شراء منفصلًا لكل مورّد. اعرض لي ملخصًا بعدد الأوامر والموردين وإجمالي رأس المال المقدَّر وخُذ تأكيدي قبل الإنشاء.';
+  String get smartReorderSeed =>
+      'راجع مخزوني وأنشئ أوامر شراء ذكية للأصناف التي تحتاج إعادة طلب. تجاهل الأصناف البطيئة والراكدة حتى لا أُجمّد رأس مالي، واحسب الكميات من سرعة البيع الفعلية مقرّبةً لوحدات الشراء. لكل صنف اختر المورّد الأنسب من سجلّ الشراء، وأنشئ أمر شراء منفصلًا لكل مورّد. اعرض لي ملخصًا بعدد الأوامر والموردين وإجمالي رأس المال المقدَّر وخُذ تأكيدي قبل الإنشاء.';
 
   @override
   String get messagingSettingsTitle => 'إعدادات الرسائل';
 
   @override
-  String get messagingSettingsSubtitle => 'بوابة الإرسال (هاتف SMS Gate) وحدود الإرسال ورسالة اختبار';
+  String get messagingSettingsSubtitle =>
+      'بوابة الإرسال (هاتف SMS Gate) وحدود الإرسال ورسالة اختبار';
 
   @override
   String get messagingHeroTitle => 'بوابة الرسائل';
@@ -12352,7 +12813,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get messagingNotConfiguredTitle => 'لم تُهيّأ البوابة بعد';
 
   @override
-  String get messagingNotConfiguredMessage => 'أدخل عنوان هاتف SMS Gate على الشبكة واسم المستخدم وكلمة المرور، ثم احفظ.';
+  String get messagingNotConfiguredMessage =>
+      'أدخل عنوان هاتف SMS Gate على الشبكة واسم المستخدم وكلمة المرور، ثم احفظ.';
 
   @override
   String get messagingConnectionTitle => 'الاتصال بالجهاز';
@@ -12367,7 +12829,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get messagingPasswordLabel => 'كلمة المرور';
 
   @override
-  String get messagingPasswordKeepHint => 'اتركه فارغًا للإبقاء على كلمة المرور الحالية';
+  String get messagingPasswordKeepHint =>
+      'اتركه فارغًا للإبقاء على كلمة المرور الحالية';
 
   @override
   String get messagingRateLabel => 'رسائل/الدقيقة';
@@ -12394,7 +12857,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get messagingTestNeedsSaveTitle => 'احفظ البوابة أولًا';
 
   @override
-  String get messagingTestNeedsSaveMessage => 'أدخل إعدادات الاتصال واحفظها قبل إرسال رسالة اختبار.';
+  String get messagingTestNeedsSaveMessage =>
+      'أدخل إعدادات الاتصال واحفظها قبل إرسال رسالة اختبار.';
 
   @override
   String get messagingTestPhoneLabel => 'رقم الهاتف';
@@ -12412,16 +12876,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get messagingTestFailedTitle => 'فشل الإرسال';
 
   @override
-  String get messagingTestFailedMessage => 'تعذّر إرسال رسالة الاختبار. تأكد من عنوان الجهاز وبيانات الدخول.';
+  String get messagingTestFailedMessage =>
+      'تعذّر إرسال رسالة الاختبار. تأكد من عنوان الجهاز وبيانات الدخول.';
 
   @override
   String get messagingActivateButton => 'تفعيل تلقائي وضبط الروابط';
 
   @override
-  String get messagingActivateHint => 'يضبط الجهاز تلقائيًا لاستقبال الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي.';
+  String get messagingActivateHint =>
+      'يضبط الجهاز تلقائيًا لاستقبال الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي.';
 
   @override
-  String get messagingActivateError => 'تعذّر التفعيل التلقائي — تأكد من الاتصال بالجهاز.';
+  String get messagingActivateError =>
+      'تعذّر التفعيل التلقائي — تأكد من الاتصال بالجهاز.';
 
   @override
   String messagingActivatedMessage(int count) {
@@ -12470,7 +12937,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get newConversationSelectCustomer => 'اختر عميلاً';
 
   @override
-  String get newConversationNoPhoneWarning => 'هذا العميل لا يملك رقم هاتف. أضِف رقمًا لبدء المحادثة.';
+  String get newConversationNoPhoneWarning =>
+      'هذا العميل لا يملك رقم هاتف. أضِف رقمًا لبدء المحادثة.';
 
   @override
   String get newConversationStartButton => 'بدء المحادثة';
@@ -12485,13 +12953,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get customerMarketingAllowedLabel => 'السماح بالرسائل التسويقية';
 
   @override
-  String get customerMarketingAllowedHelp => 'إرسال العروض والحملات عبر SMS. يمكن للعميل الإيقاف بإرسال STOP.';
+  String get customerMarketingAllowedHelp =>
+      'إرسال العروض والحملات عبر SMS. يمكن للعميل الإيقاف بإرسال STOP.';
 
   @override
   String get customerDoNotContactLabel => 'عدم الإزعاج';
 
   @override
-  String get customerDoNotContactHelp => 'إيقاف كل الرسائل التسويقية لهذا العميل (تبقى الرسائل المتعلقة بالفواتير مسموحة).';
+  String get customerDoNotContactHelp =>
+      'إيقاف كل الرسائل التسويقية لهذا العميل (تبقى الرسائل المتعلقة بالفواتير مسموحة).';
 
   @override
   String get customerConsentError => 'تعذّر تحديث تفضيلات التواصل';
@@ -12559,7 +13029,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get campaignBodyLabel => 'نص الرسالة';
 
   @override
-  String get campaignBodyHelp => 'يمكن تضمين اسم العميل واسم المتجر في النص تلقائيًا.';
+  String get campaignBodyHelp =>
+      'يمكن تضمين اسم العميل واسم المتجر في النص تلقائيًا.';
 
   @override
   String campaignSegmentsCounter(int count) {
@@ -12582,7 +13053,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get campaignSaveFirstTitle => 'احفظ المسودة أولًا';
 
   @override
-  String get campaignSaveFirstHint => 'احفظ الحملة كمسودة لتتمكن من معاينتها وإرسالها.';
+  String get campaignSaveFirstHint =>
+      'احفظ الحملة كمسودة لتتمكن من معاينتها وإرسالها.';
 
   @override
   String get campaignPreviewTitle => 'المعاينة والإرسال';
@@ -12624,4 +13096,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get campaignNoSendPermission => 'ليس لديك صلاحية إرسال الحملات';
+
+  @override
+  String get purchaseLineQuantityLabel => 'الكمية';
 }

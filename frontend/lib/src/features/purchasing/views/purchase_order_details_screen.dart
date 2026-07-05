@@ -15,6 +15,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/quantity_adjustment_dialog.dart';
 import '../../../shared/order_totals.dart';
+import '../../../shared/units.dart';
 import '../../../shared/payment_labels.dart';
 import '../../../shared/payments/record_payment_dialog.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -305,8 +306,8 @@ class _PurchaseOrderMetrics extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
 
-    final ordered = order.lines.fold<int>(0, (sum, l) => sum + l.quantity);
-    final received = order.lines.fold<int>(
+    final ordered = order.lines.fold<double>(0, (sum, l) => sum + l.quantity);
+    final received = order.lines.fold<double>(
       0,
       (sum, l) => sum + l.receivedQuantity,
     );
@@ -342,7 +343,10 @@ class _PurchaseOrderMetrics extends StatelessWidget {
         if (showProgress)
           PointyMetricGridItem(
             label: l10n.purchaseOrderReceivedProgressLabel,
-            value: l10n.purchaseOrderReceivedProgressValue(received, ordered),
+            value: l10n.purchaseOrderReceivedProgressValue(
+              formatQuantity(received),
+              formatQuantity(ordered),
+            ),
             icon: Icons.inventory_2_outlined,
             accentColor: received >= ordered
                 ? colors.success
@@ -499,11 +503,17 @@ class _PurchaseOrderLines extends StatelessWidget {
               subtitle: [
                 if (line.variantSku != null && line.variantSku!.isNotEmpty)
                   line.variantSku!,
-                l10n.purchaseOrderLineQuantity(line.quantity),
-                l10n.purchaseLineReceivedQuantity(line.receivedQuantity),
-                l10n.purchaseLineOpenQuantity(line.receivableQuantity),
+                l10n.purchaseOrderLineQuantity(formatQuantity(line.quantity)),
+                l10n.purchaseLineReceivedQuantity(
+                  formatQuantity(line.receivedQuantity),
+                ),
+                l10n.purchaseLineOpenQuantity(
+                  formatQuantity(line.receivableQuantity),
+                ),
                 if (line.damagedQuantity > 0)
-                  l10n.purchaseLineDamagedQuantity(line.damagedQuantity),
+                  l10n.purchaseLineDamagedQuantity(
+                    formatQuantity(line.damagedQuantity),
+                  ),
                 l10n.purchaseLineVarianceValue(
                   _formatSignedQuantity(line.varianceQuantity),
                 ),
@@ -526,8 +536,8 @@ class _PurchaseOrderLines extends StatelessWidget {
                   ),
                 if (line.adjustedQuantity > 0)
                   l10n.purchaseAdjustmentLineRemaining(
-                    line.adjustableQuantity,
-                    line.quantity,
+                    formatQuantity(line.adjustableQuantity),
+                    formatQuantity(line.quantity),
                   ),
               ].join(' • '),
               trailing: Text(formatMoney(line.landedLineTotal ?? line.total)),
@@ -579,11 +589,9 @@ class _PurchaseOrderLines extends StatelessWidget {
     return amount;
   }
 
-  String _formatSignedQuantity(int value) {
-    if (value > 0) {
-      return '+$value';
-    }
-    return '$value';
+  String _formatSignedQuantity(double value) {
+    final text = formatQuantity(value.abs());
+    return value > 0 ? '+$text' : (value < 0 ? '-$text' : text);
   }
 }
 
@@ -618,15 +626,15 @@ class _PurchaseReceiptHistory extends StatelessWidget {
                               ? l10n.purchaseOrderUnknownProduct
                               : line.displayName,
                           l10n.purchaseLineReceivedQuantity(
-                            line.quantityReceived,
+                            formatQuantity(line.quantityReceived),
                           ),
                           if (line.quantityDamaged > 0)
                             l10n.purchaseLineDamagedQuantity(
-                              line.quantityDamaged,
+                              formatQuantity(line.quantityDamaged),
                             ),
                           if (line.quantityRejected > 0)
                             l10n.purchaseLineRejectedQuantity(
-                              line.quantityRejected,
+                              formatQuantity(line.quantityRejected),
                             ),
                         ].join('، '),
                       if (receipt.note.isNotEmpty) receipt.note,
@@ -674,7 +682,7 @@ class _PurchaseOrderAdjustmentHistory extends StatelessWidget {
                           line.displayName.isEmpty
                               ? l10n.purchaseOrderUnknownProduct
                               : line.displayName,
-                          line.quantity,
+                          formatQuantity(line.quantity),
                           formatMoney(line.unitCost),
                         ),
                       if (_adjustmentMethodLabel(l10n, adjustment) != null)
@@ -817,9 +825,7 @@ String _paymentStatusLabel(AppLocalizations l10n, String status) {
   };
 }
 
-String _formatSignedInt(int value) {
-  if (value > 0) {
-    return '+$value';
-  }
-  return '$value';
+String _formatSignedQuantityValue(double value) {
+  final text = formatQuantity(value.abs());
+  return value > 0 ? '+$text' : (value < 0 ? '-$text' : text);
 }

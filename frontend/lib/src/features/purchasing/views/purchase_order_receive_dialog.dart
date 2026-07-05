@@ -15,7 +15,9 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
       .toList(growable: false);
   late final Map<int, TextEditingController> _receivedControllers = {
     for (final line in _receivableLines)
-      line.id: TextEditingController(text: '${line.receivableQuantity}'),
+      line.id: TextEditingController(
+        text: formatQuantity(line.receivableQuantity),
+      ),
   };
   late final Map<int, TextEditingController> _damagedControllers = {
     for (final line in _receivableLines)
@@ -132,9 +134,15 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
   void _submit() {
     final lines = <PurchaseReceiveLineDraft>[];
     for (final line in _receivableLines) {
-      final received = int.tryParse(_receivedControllers[line.id]!.text.trim());
-      final damaged = int.tryParse(_damagedControllers[line.id]!.text.trim());
-      final rejected = int.tryParse(_rejectedControllers[line.id]!.text.trim());
+      final received = double.tryParse(
+        _receivedControllers[line.id]!.text.trim(),
+      );
+      final damaged = double.tryParse(
+        _damagedControllers[line.id]!.text.trim(),
+      );
+      final rejected = double.tryParse(
+        _rejectedControllers[line.id]!.text.trim(),
+      );
       if (received == null ||
           damaged == null ||
           rejected == null ||
@@ -200,9 +208,9 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final received = int.tryParse(receivedController.text.trim()) ?? 0;
-    final damaged = int.tryParse(damagedController.text.trim()) ?? 0;
-    final rejected = int.tryParse(rejectedController.text.trim()) ?? 0;
+    final received = double.tryParse(receivedController.text.trim()) ?? 0;
+    final damaged = double.tryParse(damagedController.text.trim()) ?? 0;
+    final rejected = double.tryParse(rejectedController.text.trim()) ?? 0;
     final afterDelivered =
         line.receivedQuantity + line.damagedQuantity + received + damaged;
     final afterOpen = line.receivableQuantity - received - damaged - rejected;
@@ -232,16 +240,26 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
             [
               if (line.variantSku != null && line.variantSku!.isNotEmpty)
                 line.variantSku!,
-              l10n.purchaseReceiveExpectedValue(line.quantity),
-              l10n.purchaseReceiveAlreadyValue(line.receivedQuantity),
-              l10n.purchaseReceiveOpenValue(line.receivableQuantity),
+              l10n.purchaseReceiveExpectedValue(formatQuantity(line.quantity)),
+              l10n.purchaseReceiveAlreadyValue(
+                formatQuantity(line.receivedQuantity),
+              ),
+              l10n.purchaseReceiveOpenValue(
+                formatQuantity(line.receivableQuantity),
+              ),
               if (line.damagedQuantity > 0)
-                l10n.purchaseLineDamagedQuantity(line.damagedQuantity),
+                l10n.purchaseLineDamagedQuantity(
+                  formatQuantity(line.damagedQuantity),
+                ),
               if (line.rejectedQuantity > 0)
-                l10n.purchaseLineRejectedQuantity(line.rejectedQuantity),
-              l10n.purchaseReceiveOpenAfterValue(afterOpen < 0 ? 0 : afterOpen),
+                l10n.purchaseLineRejectedQuantity(
+                  formatQuantity(line.rejectedQuantity),
+                ),
+              l10n.purchaseReceiveOpenAfterValue(
+                formatQuantity(afterOpen < 0 ? 0 : afterOpen),
+              ),
               l10n.purchaseReceiveAfterVarianceValue(
-                _formatSignedInt(afterVariance),
+                _formatSignedQuantityValue(afterVariance),
               ),
             ].join(' • '),
             style: Theme.of(context).textTheme.bodySmall,
@@ -252,7 +270,9 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: receivedController,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: InputDecoration(
                     labelText: l10n.purchaseReceiveReceivedLabel,
                     isDense: true,
@@ -264,7 +284,9 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: damagedController,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: InputDecoration(
                     labelText: l10n.purchaseReceiveDamagedLabel,
                     isDense: true,
@@ -276,7 +298,9 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: rejectedController,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: InputDecoration(
                     labelText: l10n.purchaseReceiveRejectedLabel,
                     isDense: true,

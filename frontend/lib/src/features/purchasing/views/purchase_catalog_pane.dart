@@ -171,7 +171,7 @@ class PurchaseCatalogPane extends StatelessWidget {
     for (final entry in entries) {
       await viewModel.addVariant(
         entry.variant,
-        quantity: entry.quantity,
+        quantity: entry.quantity.toDouble(),
         source: 'purchase_camera_scanner',
       );
     }

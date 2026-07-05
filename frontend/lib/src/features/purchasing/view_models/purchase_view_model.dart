@@ -18,6 +18,7 @@ import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
+import '../../../shared/units.dart';
 
 /// Add sources that arm the type-a-quantity shortcut, exactly like a hardware
 /// scan does: picking a product from the catalog then typing "12" sets the new
@@ -300,7 +301,7 @@ class PurchaseViewModel extends ChangeNotifier {
 
   Future<void> addVariant(
     ProductVariant variant, {
-    int quantity = 1,
+    double quantity = 1,
     double? unitCost,
     ProductUnit? unit,
     String source = 'purchase_catalog',
@@ -310,7 +311,7 @@ class PurchaseViewModel extends ChangeNotifier {
     }
 
     final index = _draft.indexWhere((line) => line.variant.id == variant.id);
-    final previousQuantity = index == -1 ? 0 : _draft[index].quantity;
+    final previousQuantity = index == -1 ? 0.0 : _draft[index].quantity;
     if (index == -1) {
       final cost = unitCost ?? await _lastCostForVariant(variant);
       if (_isSubmitting) {
@@ -324,11 +325,12 @@ class PurchaseViewModel extends ChangeNotifier {
       _draft.add(
         PurchaseDraftLine(
           variant: variant,
-          quantity: quantity.clamp(1, 999),
+          quantity: _clampQuantity(quantity),
           unitCost: cost,
           unitCode: lineUnit?.code ?? '',
           unitLabel: lineUnit?.label ?? '',
           unitFactor: lineUnit?.factorToBase ?? 1,
+          unitAllowsFractional: _unitAllowsFractional(variant, lineUnit),
         ),
       );
     } else {
@@ -337,7 +339,7 @@ class PurchaseViewModel extends ChangeNotifier {
       final line = _draft.removeAt(index);
       _draft.add(
         line.copyWith(
-          quantity: (line.quantity + quantity).clamp(1, 999),
+          quantity: _clampQuantity(line.quantity + quantity),
           unitCost: unitCost,
         ),
       );
@@ -376,11 +378,12 @@ class PurchaseViewModel extends ChangeNotifier {
     return _draft.where((line) => line.variant.id == variantId).firstOrNull;
   }
 
-  /// Sets a draft line's quantity outright (the scan-then-type flow; the
-  /// steppers keep using [addVariant]/[decrementVariant]).
+  /// Sets a draft line's quantity outright (the scan-then-type flow and the
+  /// quantity editor; the steppers keep using [addVariant]/[decrementVariant]).
+  /// Fractional values only stick when the line's unit allows them.
   void setLineQuantity(
     ProductVariant variant,
-    int quantity, {
+    double quantity, {
     String source = 'purchase_quantity_edit',
   }) {
     if (_isSubmitting || quantity <= 0) {
@@ -391,7 +394,10 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     final line = _draft[index];
-    final clamped = quantity.clamp(1, 999);
+    if (!line.unitAllowsFractional && quantity != quantity.roundToDouble()) {
+      return;
+    }
+    final clamped = _clampQuantity(quantity);
     if (line.quantity == clamped) {
       return;
     }
@@ -436,8 +442,27 @@ class PurchaseViewModel extends ChangeNotifier {
       // A leading "0": keep accumulating ("05" → 5) without touching the line.
       return true;
     }
-    setLineQuantity(line.variant, quantity, source: 'scan_quick_quantity');
+    setLineQuantity(
+      line.variant,
+      quantity.toDouble(),
+      source: 'scan_quick_quantity',
+    );
     return true;
+  }
+
+  /// Draft quantities live in 0.001–999999.999 (3dp, matching the backend).
+  static double _clampQuantity(double quantity) {
+    final clamped = quantity.clamp(0.001, 999999.999);
+    return (clamped * 1000).roundToDouble() / 1000;
+  }
+
+  /// Whether [unit] (or the base unit when null) transacts in fractions.
+  bool _unitAllowsFractional(ProductVariant variant, ProductUnit? unit) {
+    if (unit != null) {
+      return unit.allowsFractional;
+    }
+    final baseUnit = variant.productDetail?.unit ?? variant.unit;
+    return baseUnitAllowsFractional(baseUnit);
   }
 
   void decrementVariant(
@@ -495,6 +520,7 @@ class PurchaseViewModel extends ChangeNotifier {
     required String unitCode,
     required String unitLabel,
     required double unitFactor,
+    bool allowsFractional = false,
   }) {
     if (_isSubmitting) {
       return;
@@ -503,10 +529,18 @@ class PurchaseViewModel extends ChangeNotifier {
     if (index == -1) {
       return;
     }
-    _draft[index] = _draft[index].copyWith(
+    final line = _draft[index];
+    // A fractional leftover (2.5 trays) cannot survive a switch to a
+    // whole-number unit — round it up to the next whole quantity.
+    final quantity = (!allowsFractional && line.quantity != line.quantity.roundToDouble())
+        ? line.quantity.ceilToDouble()
+        : line.quantity;
+    _draft[index] = line.copyWith(
+      quantity: quantity,
       unitCode: unitCode,
       unitLabel: unitLabel,
       unitFactor: unitFactor,
+      unitAllowsFractional: allowsFractional,
     );
     _touchSubmissionIntent();
     notifyListeners();
@@ -1094,8 +1128,8 @@ class PurchaseViewModel extends ChangeNotifier {
 
   void _trackDraftLineAdded(
     PurchaseDraftLine line, {
-    required int addedQuantity,
-    required int previousQuantity,
+    required double addedQuantity,
+    required double previousQuantity,
     required String source,
   }) {
     _trackDraftLineAuditEvent(
@@ -1124,8 +1158,8 @@ class PurchaseViewModel extends ChangeNotifier {
 
   void _trackDraftLineQuantityChanged(
     PurchaseDraftLine line, {
-    required int previousQuantity,
-    required int newQuantity,
+    required double previousQuantity,
+    required double newQuantity,
     required String reason,
     required String source,
   }) {
@@ -1395,8 +1429,8 @@ class PurchaseViewModel extends ChangeNotifier {
     ];
   }
 
-  int _draftItemCount(List<PurchaseDraftLine> lines) {
-    return lines.fold(0, (sum, line) => sum + line.quantity);
+  double _draftItemCount(List<PurchaseDraftLine> lines) {
+    return lines.fold(0.0, (sum, line) => sum + line.quantity);
   }
 
   double _draftTotal(List<PurchaseDraftLine> lines) {

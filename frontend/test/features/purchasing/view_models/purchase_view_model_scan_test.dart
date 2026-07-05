@@ -65,10 +65,14 @@ void main() {
     await viewModel.addVariant(variant, unitCost: 2);
 
     viewModel.setLineQuantity(variant, 5000);
-    expect(viewModel.draft.single.quantity, 999);
+    expect(viewModel.draft.single.quantity, 5000);
 
     viewModel.setLineQuantity(variant, 0);
-    expect(viewModel.draft.single.quantity, 999); // rejected, unchanged
+    expect(viewModel.draft.single.quantity, 5000); // rejected, unchanged
+
+    // Fractions only stick for units that allow them (base piece does not).
+    viewModel.setLineQuantity(variant, 2.5);
+    expect(viewModel.draft.single.quantity, 5000); // rejected, unchanged
   });
 }
 

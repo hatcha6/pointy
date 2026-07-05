@@ -134,7 +134,7 @@ void main() {
 
     expect(line.toJson(), {
       'variant': 7,
-      'quantity': 2,
+      'quantity': '2.000',
       'unit_cost': '3.50',
       'expiry_date': '2026-12-31',
     });
@@ -145,7 +145,7 @@ void main() {
       'variant': 7,
       'tracks_expiry': true,
       'expiry_date': '2026-12-31',
-      'quantity': 2,
+      'quantity': '2.000',
       'adjusted_quantity': 0,
       'adjustable_quantity': 2,
       'unit_cost': '3.50',
@@ -172,8 +172,8 @@ void main() {
       'lines': [
         {
           'purchase_line': 9,
-          'quantity_received': 4,
-          'quantity_damaged': 0,
+          'quantity_received': '4.000',
+          'quantity_damaged': '0.000',
           'expiry_date': '2026-08-15',
         },
       ],
@@ -191,7 +191,7 @@ void main() {
           'id': 1,
           'product': 1,
           'variant': 7,
-          'quantity': 2,
+          'quantity': '2.000',
           'adjusted_quantity': 0,
           'adjustable_quantity': 2,
           'unit_cost': '3.50',
@@ -229,7 +229,7 @@ void main() {
         {
           'product': 1,
           'variant': 7,
-          'quantity': 2,
+          'quantity': '2.000',
           'unit_cost': '3.50',
           'line_total': '7.00',
           'discount_amount': '1.00',

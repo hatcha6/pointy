@@ -17,20 +17,20 @@ List<AdjustmentLineOption> _purchaseAdjustmentOptions(
               ? l10n.purchaseOrderUnknownProduct
               : line.displayName,
           subtitle: [
-            l10n.purchaseOrderLineQuantity(line.quantity),
+            l10n.purchaseOrderLineQuantity(formatQuantity(line.quantity)),
             l10n.unitPriceEach(formatMoney(line.unitCost)),
             l10n.purchaseAdjustmentLineRemaining(
-              line.adjustableQuantity,
-              line.quantity,
+              formatQuantity(line.adjustableQuantity),
+              formatQuantity(line.quantity),
             ),
           ].join(' • '),
-          maxQuantity: line.adjustableQuantity.toDouble(),
+          maxQuantity: line.adjustableQuantity,
         ),
   ];
 }
 
-/// Converts the shared dialog's selections back into purchasing's whole-unit
-/// draft model.
+/// Converts the shared dialog's selections back into purchasing's draft model
+/// (quantities may be fractional for fractional units).
 List<PurchaseAdjustmentLineDraft> _purchaseAdjustmentDrafts(
   List<AdjustmentLineSelection> selections,
 ) {
@@ -38,7 +38,7 @@ List<PurchaseAdjustmentLineDraft> _purchaseAdjustmentDrafts(
     for (final selection in selections)
       PurchaseAdjustmentLineDraft(
         lineId: selection.lineId,
-        quantity: selection.quantity.round(),
+        quantity: selection.quantity,
       ),
   ];
 }
@@ -192,7 +192,9 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
     ]);
     final replacementLines = <PurchaseReplacementLineDraft>[];
     for (final editor in _replacementEditors) {
-      final quantity = int.tryParse(editor.quantityController.text.trim());
+      final quantity = double.tryParse(
+        editor.quantityController.text.trim(),
+      );
       final unitCost = double.tryParse(editor.unitCostController.text.trim());
       if (quantity == null ||
           unitCost == null ||

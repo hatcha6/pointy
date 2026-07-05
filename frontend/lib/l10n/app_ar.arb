@@ -1782,7 +1782,9 @@
   "posUnitSheetAdd": "إضافة · {total}",
   "@posUnitSheetAdd": {
     "placeholders": {
-      "total": {"type": "String"}
+      "total": {
+        "type": "String"
+      }
     }
   },
   "posCartSwitchUnitTooltip": "تغيير الوحدة",
@@ -1825,7 +1827,9 @@
   "productUnitBaseOption": "{unit} (أساسية)",
   "@productUnitBaseOption": {
     "placeholders": {
-      "unit": {"type": "String"}
+      "unit": {
+        "type": "String"
+      }
     }
   },
   "productUnitsLoadError": "تعذّر تحميل الوحدات.",
@@ -1838,7 +1842,9 @@
   "unitsCountLabel": "{count} وحدة",
   "@unitsCountLabel": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "unitsLoadError": "تعذّر تحميل الوحدات.",
@@ -1853,14 +1859,20 @@
   "unitInUseBadge": "مستخدمة في {count}",
   "@unitInUseBadge": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "unitReferenceSummary": "تعادل {factor} {unit}",
   "@unitReferenceSummary": {
     "placeholders": {
-      "factor": {"type": "String"},
-      "unit": {"type": "String"}
+      "factor": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
     }
   },
   "unitEditTitle": "تعديل وحدة",
@@ -1882,7 +1894,9 @@
   "unitDeleteConfirm": "سيتم حذف الوحدة «{name}» نهائيًا.",
   "@unitDeleteConfirm": {
     "placeholders": {
-      "name": {"type": "String"}
+      "name": {
+        "type": "String"
+      }
     }
   },
   "unitCannotDeleteSystemTitle": "وحدة مضمّنة",
@@ -1891,7 +1905,9 @@
   "unitCannotDeleteInUseMessage": "هذه الوحدة مستخدمة في {count} منتج، لذا لا يمكن حذفها. عطّلها بدلاً من ذلك.",
   "@unitCannotDeleteInUseMessage": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "unitActivateAction": "تفعيل",
@@ -1927,8 +1943,12 @@
   "@jobStageProgress": {
     "description": "Compact 'stage N of M' workflow progress caption.",
     "placeholders": {
-      "current": { "type": "int" },
-      "total": { "type": "int" }
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "jobOverdueBadge": "متأخرة",
@@ -2523,7 +2543,9 @@
   "@collectDebtOutstanding": {
     "description": "Customer outstanding debt total shown in the collect-debt flow.",
     "placeholders": {
-      "amount": {"type": "String"}
+      "amount": {
+        "type": "String"
+      }
     }
   },
   "collectDebtNoDebt": "لا يوجد دين على هذا العميل.",
@@ -2885,7 +2907,11 @@
   "bulkSelectTooltip": "تحديد متعدد",
   "bulkSelectedCount": "{count} محدد",
   "@bulkSelectedCount": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "bulkSelectAllAction": "تحديد الكل",
   "bulkClearSelectionAction": "مسح التحديد",
@@ -2897,16 +2923,28 @@
   "bulkArchiveConfirmTitle": "أرشفة المنتجات المحددة؟",
   "bulkArchiveConfirmMessage": "سيتم أرشفة {count} منتج وإخفاؤها من القوائم ونقطة البيع. يمكن استعادتها لاحقًا.",
   "@bulkArchiveConfirmMessage": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "bulkRestoreConfirmTitle": "استعادة المنتجات المحددة؟",
   "bulkRestoreConfirmMessage": "سيتم إعادة {count} منتج إلى القوائم.",
   "@bulkRestoreConfirmMessage": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "bulkActionSuccess": "تم تحديث {count} منتج",
   "@bulkActionSuccess": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "bulkActionError": "تعذّر تنفيذ العملية، حاول مرة أخرى.",
   "bulkActionNoChanges": "لم يتغيّر أي منتج.",
@@ -2928,7 +2966,11 @@
   "bulkCategorizePickButton": "اختيار التصنيفات",
   "bulkCategorizePickedCount": "{count} تصنيف محدد",
   "@bulkCategorizePickedCount": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "bulkFlagsTitle": "تعديل خصائص المنتجات المحددة",
   "bulkFlagNoChange": "بدون تغيير",
@@ -3352,8 +3394,12 @@
   "@cartQuantityPendingLabel": {
     "description": "Live indicator while typing a quantity for the focused cart line.",
     "placeholders": {
-      "productName": { "type": "String" },
-      "quantity": { "type": "String" }
+      "productName": {
+        "type": "String"
+      },
+      "quantity": {
+        "type": "String"
+      }
     }
   },
   "cartQuantityPendingHint": "Enter للتأكيد",
@@ -3549,10 +3595,10 @@
     "description": "Received-vs-ordered quantity progress on a purchase order, e.g. 7 of 10.",
     "placeholders": {
       "received": {
-        "type": "int"
+        "type": "String"
       },
       "ordered": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -3659,10 +3705,10 @@
     "description": "Remaining adjustable purchase line quantity.",
     "placeholders": {
       "remaining": {
-        "type": "int"
+        "type": "String"
       },
       "quantity": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -3714,7 +3760,7 @@
         "type": "String"
       },
       "quantity": {
-        "type": "int"
+        "type": "String"
       },
       "unitCost": {
         "type": "String"
@@ -3754,7 +3800,7 @@
     "description": "Expected purchase line quantity in the receiving dialog.",
     "placeholders": {
       "quantity": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -3763,7 +3809,7 @@
     "description": "Already received quantity in the receiving dialog.",
     "placeholders": {
       "quantity": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -3772,7 +3818,7 @@
     "description": "Open/backordered quantity in the receiving dialog.",
     "placeholders": {
       "quantity": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -3781,7 +3827,7 @@
     "description": "Open or backordered quantity after receiving dialog values are applied.",
     "placeholders": {
       "quantity": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -3810,7 +3856,7 @@
     "description": "Purchase order line quantity label.",
     "placeholders": {
       "quantity": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -3819,7 +3865,7 @@
     "description": "Total received quantity shown on purchase order lines and receipts.",
     "placeholders": {
       "quantity": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -3828,7 +3874,7 @@
     "description": "Open or backordered quantity shown on purchase order lines.",
     "placeholders": {
       "quantity": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -3837,7 +3883,7 @@
     "description": "Damaged purchase quantity.",
     "placeholders": {
       "quantity": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -3846,7 +3892,7 @@
     "description": "Rejected purchase quantity.",
     "placeholders": {
       "quantity": {
-        "type": "int"
+        "type": "String"
       }
     }
   },
@@ -3908,8 +3954,12 @@
   "purchaseLineBaseEquivalent": "= {quantity} {unit}",
   "@purchaseLineBaseEquivalent": {
     "placeholders": {
-      "quantity": {"type": "String"},
-      "unit": {"type": "String"}
+      "quantity": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
     }
   },
   "purchaseLineExpiryDateLabel": "تاريخ الانتهاء",
@@ -4762,7 +4812,6 @@
   "sessionClosedPrintZReportPrompt": "تم إغلاق الوردية. هل تريد طباعة تقرير الإغلاق (Z)؟",
   "sessionSalesLoadError": "تعذر تحميل مبيعات هذه الجلسة.",
   "emptySessionSales": "لا توجد مبيعات مسجلة في هذه الجلسة.",
-  "allCustomersFilterLabel": "كل العملاء",
   "clearCustomerFilterTooltip": "مسح فلتر العميل",
   "sessionCashMovementsLoadError": "تعذر تحميل حركات النقد لهذه الجلسة.",
   "emptySessionCashMovements": "لا توجد حركات نقد مسجلة في هذه الجلسة.",
@@ -5111,38 +5160,54 @@
   "@discountMultiBuyValue": {
     "description": "Multi-buy headline: N units for a group price.",
     "placeholders": {
-      "count": {"type": "int"},
-      "price": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "price": {
+        "type": "String"
+      }
     }
   },
   "discountTieredValue": "من {price}",
   "@discountTieredValue": {
     "description": "Tiered discount headline showing the lowest tier unit price.",
     "placeholders": {
-      "price": {"type": "String"}
+      "price": {
+        "type": "String"
+      }
     }
   },
   "discountBuyGetValue": "اشترِ {buy} واحصل على {get}",
   "@discountBuyGetValue": {
     "description": "Buy X get Y headline.",
     "placeholders": {
-      "buy": {"type": "int"},
-      "get": {"type": "int"}
+      "buy": {
+        "type": "int"
+      },
+      "get": {
+        "type": "int"
+      }
     }
   },
   "discountMultiBuySummary": "{count} قطع بـ {price}",
   "@discountMultiBuySummary": {
     "description": "Live-summary chip for a multi-buy rule.",
     "placeholders": {
-      "count": {"type": "int"},
-      "price": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "price": {
+        "type": "String"
+      }
     }
   },
   "discountTierCountSummary": "{count} شرائح سعر",
   "@discountTierCountSummary": {
     "description": "Live-summary chip showing the number of price tiers.",
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "discountRewardSummaryFree": "القطعة المكافأة مجانًا",
@@ -5150,14 +5215,18 @@
   "@discountRewardSummaryPercentage": {
     "description": "Buy X get Y percentage reward summary.",
     "placeholders": {
-      "percent": {"type": "String"}
+      "percent": {
+        "type": "String"
+      }
     }
   },
   "discountRewardSummaryFixedPrice": "المكافأة بسعر {price}",
   "@discountRewardSummaryFixedPrice": {
     "description": "Buy X get Y fixed-price reward summary.",
     "placeholders": {
-      "price": {"type": "String"}
+      "price": {
+        "type": "String"
+      }
     }
   },
   "discountWizardAdvancedToggle": "إظهار خيارات متقدمة",
@@ -6715,8 +6784,12 @@
   "@stockCountProgress": {
     "description": "Counting progress, counted of total items.",
     "placeholders": {
-      "counted": { "type": "int" },
-      "total": { "type": "int" }
+      "counted": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "stockCountScanPrompt": "امسح باركود الصنف للبدء",
@@ -6734,7 +6807,9 @@
   "@stockCountItemUnit": {
     "description": "Unit label on the counting item card.",
     "placeholders": {
-      "unit": { "type": "String" }
+      "unit": {
+        "type": "String"
+      }
     }
   },
   "stockCountReentryTitle": "الصنف معدود مسبقًا",
@@ -6742,7 +6817,9 @@
   "@stockCountReentryBody": {
     "description": "Add-or-replace prompt body, current counted quantity.",
     "placeholders": {
-      "current": { "type": "String" }
+      "current": {
+        "type": "String"
+      }
     }
   },
   "stockCountReentryAdd": "أضف إلى العدّة",
@@ -6752,8 +6829,12 @@
   "@stockCountVarianceBody": {
     "description": "Variance prompt comparing expected and counted quantities.",
     "placeholders": {
-      "expected": { "type": "String" },
-      "counted": { "type": "String" }
+      "expected": {
+        "type": "String"
+      },
+      "counted": {
+        "type": "String"
+      }
     }
   },
   "stockCountRecount": "إعادة العدّ",
@@ -6762,7 +6843,9 @@
   "@stockCountMismatchCount": {
     "description": "Reconciliation summary of differing line count.",
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "stockCountColumnExpected": "النظام",
@@ -6790,21 +6873,27 @@
   "@stockCountScopeCategoryLabel": {
     "description": "Category-scoped count label.",
     "placeholders": {
-      "category": { "type": "String" }
+      "category": {
+        "type": "String"
+      }
     }
   },
   "stockCountOfTotal": "من {total}",
   "@stockCountOfTotal": {
     "description": "Trailing 'of N' for the counted/total progress label.",
     "placeholders": {
-      "total": { "type": "int" }
+      "total": {
+        "type": "int"
+      }
     }
   },
   "stockCountRemaining": "{count, plural, =0{اكتمل العدّ} =1{بقي صنف واحد} =2{بقي صنفان} other{بقي {count}}}",
   "@stockCountRemaining": {
     "description": "Remaining items still to count in the active session.",
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "stockCountActiveTitle": "جرد قيد التنفيذ",
@@ -6824,14 +6913,18 @@
   "@stockCountApplySummary": {
     "description": "Footer summary above the apply button.",
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "stockCountVarianceShort": "{count, plural, =1{فرق واحد} =2{فرقان} other{{count} فروق}}",
   "@stockCountVarianceShort": {
     "description": "Compact variance-count badge on a history row.",
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "priceCheckersSectionTitle": "أجهزة فحص الأسعار",
@@ -6842,14 +6935,18 @@
   "@priceCheckerServingPillLabel": {
     "description": "Hero pill: how many devices are actively serving lookups.",
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "priceCheckerDiscoveredPillLabel": "{count} بانتظار التفعيل",
   "@priceCheckerDiscoveredPillLabel": {
     "description": "Hero pill: how many discovered devices await activation.",
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "priceCheckerScanTooltip": "البحث عن أجهزة في الشبكة",
@@ -6860,7 +6957,9 @@
   "@priceCheckerDevicesCountSubtitle": {
     "description": "Device-list section subtitle showing the device count.",
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "priceCheckersEmptyTitle": "لا توجد أجهزة بعد",
@@ -6870,8 +6969,12 @@
   "@priceCheckerScanSuccess": {
     "description": "Snackbar after a network scan finds devices.",
     "placeholders": {
-      "found": { "type": "int" },
-      "registered": { "type": "int" }
+      "found": {
+        "type": "int"
+      },
+      "registered": {
+        "type": "int"
+      }
     }
   },
   "priceCheckerScanNone": "لم يُعثر على أجهزة جديدة في الشبكة.",
@@ -6880,7 +6983,9 @@
   "@priceCheckerLastSeen": {
     "description": "Last-activity timestamp line for a device.",
     "placeholders": {
-      "value": { "type": "String" }
+      "value": {
+        "type": "String"
+      }
     }
   },
   "priceCheckerNeverSeen": "لم يُسجَّل نشاط بعد",
@@ -6915,8 +7020,12 @@
   "@priceCheckerDisplaySizeValue": {
     "description": "Display grid dimensions, e.g. 5 × 20.",
     "placeholders": {
-      "rows": { "type": "int" },
-      "cols": { "type": "int" }
+      "rows": {
+        "type": "int"
+      },
+      "cols": {
+        "type": "int"
+      }
     }
   },
   "priceCheckerFieldArabic": "دعم العربية",
@@ -6933,7 +7042,9 @@
   "@priceCheckerScannedCode": {
     "description": "Shows the scanned barcode when a product isn't found.",
     "placeholders": {
-      "barcode": { "type": "String" }
+      "barcode": {
+        "type": "String"
+      }
     }
   },
   "priceCheckerDisconnectedTitle": "غير متصل بالخادم",
@@ -6944,14 +7055,18 @@
   "@priceCheckerSavePercent": {
     "description": "Discount badge by percentage, e.g. وفّر 10٪.",
     "placeholders": {
-      "value": { "type": "String" }
+      "value": {
+        "type": "String"
+      }
     }
   },
   "priceCheckerSaveAmount": "وفّر {value}",
   "@priceCheckerSaveAmount": {
     "description": "Discount badge by fixed amount, e.g. وفّر 2.00 د.ل.",
     "placeholders": {
-      "value": { "type": "String" }
+      "value": {
+        "type": "String"
+      }
     }
   },
   "priceCheckerManualEntry": "إدخال يدوي",
@@ -7010,8 +7125,12 @@
   "@priceCheckerSpokenResult": {
     "description": "Spoken aloud when a product is found on the kiosk: name then price in dinar.",
     "placeholders": {
-      "product": { "type": "String" },
-      "price": { "type": "String" }
+      "product": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
     }
   },
   "priceCheckerDwellLabel": "مدة عرض المنتج",
@@ -7020,7 +7139,9 @@
   "@priceCheckerDwellSecondsValue": {
     "description": "How long a found product stays on the kiosk screen, e.g. 8 ثوانٍ.",
     "placeholders": {
-      "seconds": { "type": "int" }
+      "seconds": {
+        "type": "int"
+      }
     }
   },
   "priceCheckerRemoveConfirmTitle": "إيقاف وضع كاشف الأسعار؟",
@@ -7090,7 +7211,11 @@
   "aiAssistantMicPermissionDenied": "يلزم إذن الميكروفون لتسجيل الرسائل الصوتية. فعّله من إعدادات الجهاز.",
   "aiAssistantImageLimit": "يمكنك إرفاق {count} صور كحد أقصى",
   "@aiAssistantImageLimit": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "aiAssistantUsageTitle": "حدود الاستخدام",
   "aiAssistantUsageFiveHour": "آخر ٥ ساعات",
@@ -7098,15 +7223,30 @@
   "aiAssistantUsageUnlimited": "غير محدود",
   "aiAssistantUsageRemaining": "متبقٍ {count}",
   "@aiAssistantUsageRemaining": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "aiAssistantUsageUsedOfLimit": "{used} من {limit}",
   "@aiAssistantUsageUsedOfLimit": {
-    "placeholders": { "used": { "type": "int" }, "limit": { "type": "int" } }
+    "placeholders": {
+      "used": {
+        "type": "int"
+      },
+      "limit": {
+        "type": "int"
+      }
+    }
   },
   "aiAssistantUsageResets": "يتجدد {time}",
   "@aiAssistantUsageResets": {
-    "placeholders": { "time": { "type": "String" } }
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
   },
   "aiAssistantActionEdit": "تعديل الرسالة",
   "aiAssistantActionRetry": "إعادة المحاولة",
@@ -7114,7 +7254,11 @@
   "aiAssistantCopied": "تم نسخ الرد",
   "aiAssistantToolQuerying": "يستعلم عن {label}",
   "@aiAssistantToolQuerying": {
-    "placeholders": { "label": { "type": "String" } }
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
   },
   "aiAssistantToolWorking": "يجمع البيانات",
   "aiAssistantToolDetailsTitle": "تفاصيل الأداة",
@@ -7148,19 +7292,38 @@
   "aiAssistantAskUserNumberInvalid": "أدخل رقمًا صحيحًا",
   "aiAssistantAskUserNumberMin": "الحد الأدنى {value}",
   "@aiAssistantAskUserNumberMin": {
-    "placeholders": { "value": { "type": "String" } }
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
   },
   "aiAssistantAskUserNumberMax": "الحد الأقصى {value}",
   "@aiAssistantAskUserNumberMax": {
-    "placeholders": { "value": { "type": "String" } }
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
   },
   "aiAssistantAskUserSelectRange": "اختر من {min} إلى {max}",
   "@aiAssistantAskUserSelectRange": {
-    "placeholders": { "min": { "type": "int" }, "max": { "type": "int" } }
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
   },
   "aiAssistantAskUserSelectAtLeast": "اختر {min} على الأقل",
   "@aiAssistantAskUserSelectAtLeast": {
-    "placeholders": { "min": { "type": "int" } }
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
   },
   "aiAssistantAskUserPendingComposer": "أجب عن السؤال أعلاه للمتابعة",
   "migrationTitle": "نقل البيانات",
@@ -7194,14 +7357,22 @@
   "migrationScanFailed": "تعذّر البحث في الشبكة",
   "migrationScanSelected": "تم اختيار {server}",
   "@migrationScanSelected": {
-    "placeholders": { "server": { "type": "String" } }
+    "placeholders": {
+      "server": {
+        "type": "String"
+      }
+    }
   },
   "migrationSaveSourceButton": "حفظ المصدر",
   "migrationTestButton": "اختبار الاتصال",
   "migrationCheckButton": "فحص التوافق",
   "migrationTestSuccess": "تم الاتصال — {count} جدول",
   "@migrationTestSuccess": {
-    "placeholders": { "count": { "type": "int" } }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "migrationTestFailed": "فشل الاتصال بقاعدة البيانات",
   "migrationCompatTitle": "التوافق",
@@ -7210,7 +7381,11 @@
   "migrationIncompatibleMessage": "قاعدة البيانات غير متوافقة مع هذا النظام.",
   "migrationDetectedVersion": "الإصدار المكتشف: {version}",
   "@migrationDetectedVersion": {
-    "placeholders": { "version": { "type": "String" } }
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
   },
   "migrationCompatible": "متوافق",
   "migrationIncompatible": "غير متوافق",
@@ -7270,8 +7445,12 @@
   "@paymentsHubFilterDateRangeValue": {
     "description": "Selected payments date-range chip label.",
     "placeholders": {
-      "start": {"type": "String"},
-      "end": {"type": "String"}
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
     }
   },
   "paymentsHubClearFilters": "مسح عوامل التصفية",
@@ -7286,35 +7465,45 @@
   "@paymentsHubInvoiceValue": {
     "description": "Linked customer invoice number on a payment row.",
     "placeholders": {
-      "number": {"type": "String"}
+      "number": {
+        "type": "String"
+      }
     }
   },
   "paymentsHubPurchaseOrderValue": "أمر شراء {number}",
   "@paymentsHubPurchaseOrderValue": {
     "description": "Linked purchase order number on a supplier payment row.",
     "placeholders": {
-      "number": {"type": "String"}
+      "number": {
+        "type": "String"
+      }
     }
   },
   "paymentsHubCommissionValue": "عمولة {amount}",
   "@paymentsHubCommissionValue": {
     "description": "Commission charged on a payment.",
     "placeholders": {
-      "amount": {"type": "String"}
+      "amount": {
+        "type": "String"
+      }
     }
   },
   "paymentsHubReferenceValue": "مرجع: {reference}",
   "@paymentsHubReferenceValue": {
     "description": "External reference on a payment row.",
     "placeholders": {
-      "reference": {"type": "String"}
+      "reference": {
+        "type": "String"
+      }
     }
   },
   "paymentsHubRecordedByValue": "سجّلها {username}",
   "@paymentsHubRecordedByValue": {
     "description": "Who recorded the payment.",
     "placeholders": {
-      "username": {"type": "String"}
+      "username": {
+        "type": "String"
+      }
     }
   },
   "paymentsHubReprintProofAction": "إعادة طباعة سند",
@@ -7332,7 +7521,9 @@
   "@convertQuotationStandardHint": {
     "description": "Hint shown when converting to a standard (paid-in-full) sale.",
     "placeholders": {
-      "total": {"type": "String"}
+      "total": {
+        "type": "String"
+      }
     }
   },
   "convertQuotationConfirm": "تحويل",
@@ -7390,21 +7581,27 @@
   "@subscriptionUntilDate": {
     "description": "Hero subtitle showing the subscription end date.",
     "placeholders": {
-      "date": {"type": "String"}
+      "date": {
+        "type": "String"
+      }
     }
   },
   "subscriptionRemoteAccessPill": "الوصول عن بُعد · {state}",
   "@subscriptionRemoteAccessPill": {
     "description": "Hero pill summarising remote-access state.",
     "placeholders": {
-      "state": {"type": "String"}
+      "state": {
+        "type": "String"
+      }
     }
   },
   "subscriptionAiPill": "الذكاء الاصطناعي · {state}",
   "@subscriptionAiPill": {
     "description": "Hero pill summarising AI-assistant state.",
     "placeholders": {
-      "state": {"type": "String"}
+      "state": {
+        "type": "String"
+      }
     }
   },
   "subscriptionInstallationIdTitle": "معرّف التثبيت",
@@ -7479,7 +7676,9 @@
   "@subscriptionDaysLeft": {
     "description": "Days remaining until the subscription lapses.",
     "placeholders": {
-      "days": {"type": "int"}
+      "days": {
+        "type": "int"
+      }
     }
   },
   "subscriptionNeverConnected": "لم يتصل بعد",
@@ -7514,7 +7713,9 @@
   "@subscriptionLastSynced": {
     "description": "Caption showing when the snapshot was last refreshed from the relay.",
     "placeholders": {
-      "time": {"type": "String"}
+      "time": {
+        "type": "String"
+      }
     }
   },
   "clientUpdatesTitle": "تحديثات التطبيق",
@@ -7598,7 +7799,9 @@
   "messagingActivatedMessage": "تم التفعيل — سُجّلت {count} روابط تلقائيًا.",
   "@messagingActivatedMessage": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "conversationsTitle": "المحادثات",
@@ -7608,7 +7811,9 @@
   "conversationsUnreadBadge": "{count} جديدة",
   "@conversationsUnreadBadge": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "conversationThreadEmpty": "لا توجد رسائل في هذه المحادثة",
@@ -7648,8 +7853,12 @@
   "campaignRecipientsSummary": "{sent} من {total} مُرسَلة",
   "@campaignRecipientsSummary": {
     "placeholders": {
-      "sent": { "type": "int" },
-      "total": { "type": "int" }
+      "sent": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
     }
   },
   "campaignNameLabel": "اسم الحملة",
@@ -7658,7 +7867,9 @@
   "campaignSegmentsCounter": "≈ {count} مقطع",
   "@campaignSegmentsCounter": {
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "campaignAudienceTitle": "الفئة المستهدفة",
@@ -7677,12 +7888,18 @@
   "campaignPreviewDuration": "≈ {minutes} دقيقة",
   "@campaignPreviewDuration": {
     "placeholders": {
-      "minutes": { "type": "int" }
+      "minutes": {
+        "type": "int"
+      }
     }
   },
   "campaignSampleTitle": "نموذج الرسالة",
   "campaignSendButton": "موافقة وإرسال",
   "campaignSentMessage": "بدأ إرسال الحملة",
   "campaignSendError": "تعذّر إرسال الحملة",
-  "campaignNoSendPermission": "ليس لديك صلاحية إرسال الحملات"
+  "campaignNoSendPermission": "ليس لديك صلاحية إرسال الحملات",
+  "purchaseLineQuantityLabel": "الكمية",
+  "@purchaseLineQuantityLabel": {
+    "description": "Label for the purchase draft line quantity entry dialog."
+  }
 }

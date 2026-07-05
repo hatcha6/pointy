@@ -200,7 +200,7 @@ class ProductCostHistoryEntry {
   final String? purchaseOrderNumber;
   final int? supplierId;
   final String? supplierName;
-  final int quantity;
+  final double quantity;
   final double unitCost;
   final double? effectiveUnitCost;
   final double? landedUnitCost;
@@ -216,7 +216,7 @@ class ProductCostHistoryEntry {
           json['landed_unit_cost'] ??
           json['unit_cost_with_landed_cost'],
     );
-    final quantity = _intFromJson(
+    final quantity = _quantityFromJson(
       json['quantity'] ?? json['received_quantity'],
     );
     return ProductCostHistoryEntry(
@@ -521,8 +521,8 @@ class PurchaseOrderDraft {
         'supplier_invoice_number': invoiceNumber,
       if (forUpdate)
         'supplier_invoice_date': invoiceDate
-      else
-        if (invoiceDate != null) 'supplier_invoice_date': invoiceDate,
+      else if (invoiceDate != null)
+        'supplier_invoice_date': invoiceDate,
       'landed_cost_entries': landedCostEntries
           .map((entry) => entry.toJson())
           .toList(growable: false),
@@ -656,7 +656,7 @@ class PurchaseDiscountPreviewLine {
   final String? productName;
   final String? variantName;
   final String? variantSku;
-  final int quantity;
+  final double quantity;
   final double unitCost;
   final double lineTotal;
   final double discountAmount;
@@ -676,7 +676,7 @@ class PurchaseDiscountPreviewLine {
       productName: json['product_name']?.toString(),
       variantName: json['variant_name']?.toString(),
       variantSku: json['variant_sku']?.toString(),
-      quantity: _intFromJson(json['quantity']),
+      quantity: _quantityFromJson(json['quantity']),
       unitCost: _moneyFromJson(json['unit_cost']),
       lineTotal: _moneyFromJson(json['line_total']),
       discountAmount: _moneyFromJson(json['discount_amount']),
@@ -708,11 +708,15 @@ class PurchaseDraftLine {
     this.unitCode = '',
     this.unitLabel = '',
     this.unitFactor = 1,
+    this.unitAllowsFractional = false,
     this.expiryDate,
   });
 
   final ProductVariant variant;
-  final int quantity;
+
+  /// In the purchase unit; fractional when [unitAllowsFractional] (2.5 kg,
+  /// half an egg tray).
+  final double quantity;
   final double unitCost;
 
   /// The purchase unit (a UnitOfMeasure.code); blank = the product's base unit.
@@ -721,6 +725,10 @@ class PurchaseDraftLine {
 
   /// Base units per one purchase unit, for showing the base equivalent.
   final double unitFactor;
+
+  /// Whether this line's unit sells/buys in fractions — snapshotted from the
+  /// unit so the quantity editor knows which keyboard to offer.
+  final bool unitAllowsFractional;
   final DateTime? expiryDate;
 
   double get subtotal => unitCost * quantity;
@@ -733,11 +741,12 @@ class PurchaseDraftLine {
   double get baseQuantity => quantity * unitFactor;
 
   PurchaseDraftLine copyWith({
-    int? quantity,
+    double? quantity,
     double? unitCost,
     String? unitCode,
     String? unitLabel,
     double? unitFactor,
+    bool? unitAllowsFractional,
     DateTime? expiryDate,
     bool clearExpiryDate = false,
   }) {
@@ -748,6 +757,7 @@ class PurchaseDraftLine {
       unitCode: unitCode ?? this.unitCode,
       unitLabel: unitLabel ?? this.unitLabel,
       unitFactor: unitFactor ?? this.unitFactor,
+      unitAllowsFractional: unitAllowsFractional ?? this.unitAllowsFractional,
       expiryDate: clearExpiryDate ? null : expiryDate ?? this.expiryDate,
     );
   }
@@ -760,6 +770,7 @@ class PurchaseDraftLine {
       'unit_code': unitCode,
       'unit_label': unitLabel,
       'unit_factor': unitFactor,
+      'unit_allows_fractional': unitAllowsFractional,
       'expiry_date': expiryDate?.toIso8601String(),
     };
   }
@@ -772,11 +783,12 @@ class PurchaseDraftLine {
     final expiry = json['expiry_date'];
     return PurchaseDraftLine(
       variant: ProductVariant.fromJson(variantJson),
-      quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+      quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
       unitCost: (json['unit_cost'] as num?)?.toDouble() ?? 0,
       unitCode: json['unit_code']?.toString() ?? '',
       unitLabel: json['unit_label']?.toString() ?? '',
       unitFactor: (json['unit_factor'] as num?)?.toDouble() ?? 1,
+      unitAllowsFractional: json['unit_allows_fractional'] == true,
       expiryDate: expiry == null ? null : DateTime.tryParse(expiry.toString()),
     );
   }
@@ -792,7 +804,7 @@ class PurchaseOrderLineDraft {
   });
 
   final int variantId;
-  final int quantity;
+  final double quantity;
   final double unitCost;
   final String unit;
   final DateTime? expiryDate;
@@ -801,7 +813,8 @@ class PurchaseOrderLineDraft {
     final normalizedUnit = unit.trim();
     return {
       'variant': variantId,
-      'quantity': quantity,
+      // Serialised as a 3dp string, matching the backend's decimal quantity.
+      'quantity': quantity.toStringAsFixed(3),
       if (normalizedUnit.isNotEmpty) 'unit': normalizedUnit,
       'unit_cost': unitCost.toStringAsFixed(2),
       if (expiryDate != null) 'expiry_date': _dateOnlyString(expiryDate!),

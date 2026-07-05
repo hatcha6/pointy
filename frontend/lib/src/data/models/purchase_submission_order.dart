@@ -272,13 +272,13 @@ class PurchaseOrderLine {
   final String? variantSku;
   final bool tracksExpiry;
   final DateTime? expiryDate;
-  final int quantity;
-  final int adjustedQuantity;
-  final int adjustableQuantity;
-  final int receivedQuantity;
-  final int damagedQuantity;
-  final int rejectedQuantity;
-  final int openQuantity;
+  final double quantity;
+  final double adjustedQuantity;
+  final double adjustableQuantity;
+  final double receivedQuantity;
+  final double damagedQuantity;
+  final double rejectedQuantity;
+  final double openQuantity;
   final bool hasReceivingTotals;
   final double unitCost;
 
@@ -297,9 +297,9 @@ class PurchaseOrderLine {
   final double? effectiveUnitCost;
   final double? landedLineTotal;
 
-  int get receivableQuantity => openQuantity < 0 ? 0 : openQuantity;
+  double get receivableQuantity => openQuantity < 0 ? 0 : openQuantity;
 
-  int get varianceQuantity => receivedQuantity + damagedQuantity - quantity;
+  double get varianceQuantity => receivedQuantity + damagedQuantity - quantity;
 
   String get displayName => _variantDisplayName(productName, variantName);
 
@@ -322,7 +322,7 @@ class PurchaseOrderLine {
           json['previous_cost'] ??
           json['last_cost'],
     );
-    final receivedQuantity = _nullableIntFromJson(
+    final receivedQuantity = _nullableQuantityFromJson(
       json['accepted_quantity'] ??
           json['quantity_accepted'] ??
           json['received_quantity'] ??
@@ -330,13 +330,13 @@ class PurchaseOrderLine {
           json['received_total'] ??
           json['total_received'],
     );
-    final damagedQuantity = _nullableIntFromJson(
+    final damagedQuantity = _nullableQuantityFromJson(
       json['damaged_quantity'] ??
           json['quantity_damaged'] ??
           json['damaged_total'] ??
           json['total_damaged'],
     );
-    final rejectedQuantity = _nullableIntFromJson(
+    final rejectedQuantity = _nullableQuantityFromJson(
       json['rejected_quantity'] ??
           json['cancelled_quantity'] ??
           json['quantity_rejected'] ??
@@ -345,14 +345,14 @@ class PurchaseOrderLine {
           json['cancelled_total'] ??
           json['total_rejected'],
     );
-    final openQuantity = _nullableIntFromJson(
+    final openQuantity = _nullableQuantityFromJson(
       json['open_quantity'] ??
           json['remaining_quantity'] ??
           json['backordered_quantity'] ??
           json['quantity_open'] ??
           json['quantity_remaining'],
     );
-    final quantity = _intFromJson(json['quantity']);
+    final quantity = _quantityFromJson(json['quantity']);
     return PurchaseOrderLine(
       id: _intFromJson(json['id']),
       productId: _intFromJson(json['product']),
@@ -365,8 +365,8 @@ class PurchaseOrderLine {
       tracksExpiry: _boolFromJson(json['tracks_expiry']),
       expiryDate: _dateTimeFromJson(json['expiry_date']),
       quantity: quantity,
-      adjustedQuantity: _intFromJson(json['adjusted_quantity']),
-      adjustableQuantity: _intFromJson(json['adjustable_quantity']),
+      adjustedQuantity: _quantityFromJson(json['adjusted_quantity']),
+      adjustableQuantity: _quantityFromJson(json['adjustable_quantity']),
       receivedQuantity: receivedQuantity ?? 0,
       damagedQuantity: damagedQuantity ?? 0,
       rejectedQuantity: rejectedQuantity ?? 0,
@@ -418,10 +418,10 @@ class PurchaseOrderLine {
   }
 
   PurchaseOrderLine copyWith({
-    int? receivedQuantity,
-    int? damagedQuantity,
-    int? rejectedQuantity,
-    int? openQuantity,
+    double? receivedQuantity,
+    double? damagedQuantity,
+    double? rejectedQuantity,
+    double? openQuantity,
     bool? hasReceivingTotals,
   }) {
     return PurchaseOrderLine(
@@ -483,17 +483,19 @@ class PurchaseReceiveLineDraft {
   });
 
   final int purchaseLineId;
-  final int quantityReceived;
-  final int quantityDamaged;
-  final int quantityRejected;
+  final double quantityReceived;
+  final double quantityDamaged;
+  final double quantityRejected;
   final DateTime? expiryDate;
 
   Map<String, Object?> toJson() {
     return {
       'purchase_line': purchaseLineId,
-      'quantity_received': quantityReceived,
-      'quantity_damaged': quantityDamaged,
-      if (quantityRejected > 0) 'quantity_rejected': quantityRejected,
+      // 3dp strings, matching the backend's decimal quantities.
+      'quantity_received': quantityReceived.toStringAsFixed(3),
+      'quantity_damaged': quantityDamaged.toStringAsFixed(3),
+      if (quantityRejected > 0)
+        'quantity_rejected': quantityRejected.toStringAsFixed(3),
       if (expiryDate != null) 'expiry_date': _dateOnlyString(expiryDate!),
     };
   }
@@ -548,9 +550,9 @@ class PurchaseReceiptLine {
   final int purchaseLineId;
   final int productId;
   final int variantId;
-  final int quantityReceived;
-  final int quantityDamaged;
-  final int quantityRejected;
+  final double quantityReceived;
+  final double quantityDamaged;
+  final double quantityRejected;
   final String? productName;
   final String? variantName;
   final String? variantSku;
@@ -565,16 +567,16 @@ class PurchaseReceiptLine {
       variantId: _intFromJson(
         json['variant'] ?? json['variant_id'] ?? json['product'],
       ),
-      quantityReceived: _intFromJson(
+      quantityReceived: _quantityFromJson(
         json['accepted_quantity'] ??
             json['quantity_accepted'] ??
             json['quantity_received'] ??
             json['received_quantity'],
       ),
-      quantityDamaged: _intFromJson(
+      quantityDamaged: _quantityFromJson(
         json['quantity_damaged'] ?? json['damaged_quantity'],
       ),
-      quantityRejected: _intFromJson(
+      quantityRejected: _quantityFromJson(
         json['quantity_rejected'] ??
             json['rejected_quantity'] ??
             json['cancelled_quantity'] ??
