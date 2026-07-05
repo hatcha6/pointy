@@ -3,7 +3,9 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/result.dart';
 import '../../../data/models/modifier_group.dart';
+import '../../../data/models/product_unit.dart';
 import '../../../data/models/product_update_draft.dart';
+import '../../../data/models/unit_of_measure.dart';
 import '../../../data/models/variant_option.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/design/design.dart';
@@ -13,6 +15,7 @@ import 'modifier_group_selector.dart';
 import 'product_form_fields.dart';
 import 'product_form_section.dart';
 import 'product_image_picker.dart';
+import 'product_units_editor.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
 
@@ -44,6 +47,12 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
   ProductImageSelection? _selectedImage;
   var _isLoadingVariantOptions = false;
   var _variantOptionsLoadFailed = false;
+  List<UnitOfMeasure> _availableUnits = [];
+  late List<ProductUnit> _units;
+  late String _defaultSaleUnit;
+  late String _defaultPurchaseUnit;
+  var _isLoadingUnits = false;
+  var _unitsLoadFailed = false;
   late bool _isActive;
   late bool _tracksExpiry;
   late String _unit;
@@ -82,9 +91,13 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
     _unit = product.unit;
     _isService = product.isService;
     _isPrepared = product.isPrepared;
+    _units = product.units;
+    _defaultSaleUnit = product.defaultSaleUnit;
+    _defaultPurchaseUnit = product.defaultPurchaseUnit;
     _nameController.addListener(_refreshImageSearchSeed);
     _loadVariantOptions();
     _loadModifierGroups();
+    _loadUnits();
   }
 
   @override
@@ -186,6 +199,33 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 12),
+                        // Same units section as the create flow — conversions,
+                        // per-unit prices, and defaults stay user-editable
+                        // after a product exists.
+                        ProductFormSection(
+                          icon: Icons.straighten_outlined,
+                          title: l10n.productUnitsSectionTitle,
+                          children: [
+                            ProductUnitsEditor(
+                              availableUnits: _availableUnits,
+                              baseUnitCode: _unit,
+                              units: _units,
+                              defaultSaleUnit: _defaultSaleUnit,
+                              defaultPurchaseUnit: _defaultPurchaseUnit,
+                              enabled: !widget.viewModel.isSavingProduct,
+                              isLoading: _isLoadingUnits,
+                              hasError: _unitsLoadFailed,
+                              onReload: _loadUnits,
+                              onUnitsChanged: (units) =>
+                                  setState(() => _units = units),
+                              onDefaultSaleChanged: (code) =>
+                                  setState(() => _defaultSaleUnit = code),
+                              onDefaultPurchaseChanged: (code) =>
+                                  setState(() => _defaultPurchaseUnit = code),
+                            ),
+                          ],
+                        ),
                         if (widget.viewModel.errorMessage ==
                             'product_update_error') ...[
                           const SizedBox(height: 8),
@@ -268,6 +308,9 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
         unit: _unit,
         isService: _isService,
         isPrepared: _isPrepared,
+        defaultSaleUnit: _defaultSaleUnit,
+        defaultPurchaseUnit: _defaultPurchaseUnit,
+        units: _units,
         categoryIds: [for (final category in _selectedCategories) category.id],
         variantOptionIds: [
           for (final optionId in _selectedVariantOptionIds) optionId,
@@ -356,6 +399,29 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
         setState(() {
           _isLoadingModifierGroups = false;
           _modifierGroupsLoadFailed = true;
+        });
+    }
+  }
+
+  Future<void> _loadUnits() async {
+    setState(() {
+      _isLoadingUnits = true;
+      _unitsLoadFailed = false;
+    });
+    final result = await widget.viewModel.catalogRepository.loadAllUnits();
+    if (!mounted) {
+      return;
+    }
+    switch (result) {
+      case Ok<List<UnitOfMeasure>>():
+        setState(() {
+          _availableUnits = result.value;
+          _isLoadingUnits = false;
+        });
+      case Error<List<UnitOfMeasure>>():
+        setState(() {
+          _isLoadingUnits = false;
+          _unitsLoadFailed = true;
         });
     }
   }
