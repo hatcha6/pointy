@@ -221,22 +221,44 @@ def restore_notifications_for_user(user, queryset):
 def acknowledge_notifications_for_user(user, queryset, now=None):
     now = now or timezone.now()
     notification_ids = list(queryset.values_list("id", flat=True))
-    states = []
-    for notification_id in notification_ids:
-        state, _ = BusinessNotificationUserState.objects.get_or_create(
-            notification_id=notification_id,
-            user=user,
+    if not notification_ids:
+        return 0
+    # A constant three statements — SELECT existing, UPDATE them, INSERT the
+    # rest — inside one transaction, rather than a get_or_create per
+    # notification plus a trailing bulk_update. The old loop issued O(N)
+    # round-trips and left the writes non-atomic: a "hide all" that lost its
+    # connection midway (e.g. the server restarting under it) could commit a
+    # partial dismissal. This keeps the whole batch all-or-nothing.
+    with transaction.atomic():
+        existing_ids = set(
+            BusinessNotificationUserState.objects.filter(
+                user=user,
+                notification_id__in=notification_ids,
+            ).values_list("notification_id", flat=True)
         )
-        state.acknowledged_at = now
-        state.snoozed_until = None
-        state.updated_at = now
-        states.append(state)
-    if states:
-        BusinessNotificationUserState.objects.bulk_update(
-            states,
-            ["acknowledged_at", "snoozed_until", "updated_at"],
-        )
-    return len(states)
+        if existing_ids:
+            BusinessNotificationUserState.objects.filter(
+                user=user,
+                notification_id__in=existing_ids,
+            ).update(acknowledged_at=now, snoozed_until=None, updated_at=now)
+        missing_states = [
+            BusinessNotificationUserState(
+                notification_id=notification_id,
+                user=user,
+                acknowledged_at=now,
+                snoozed_until=None,
+            )
+            for notification_id in notification_ids
+            if notification_id not in existing_ids
+        ]
+        if missing_states:
+            # ignore_conflicts covers the race where a concurrent read or the
+            # sync beat created the state between the SELECT above and here.
+            BusinessNotificationUserState.objects.bulk_create(
+                missing_states,
+                ignore_conflicts=True,
+            )
+    return len(notification_ids)
 
 
 def _inventory_notifications(now):

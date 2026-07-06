@@ -103,6 +103,71 @@ class BusinessNotificationApiTests(APITestCase):
         self.assertEqual(len(visible_response.data["results"]), 1)
         self.assertFalse(visible_response.data["results"][0]["is_hidden"])
 
+    def test_dismiss_all_hides_every_visible_alert(self):
+        # Three genuinely out-of-stock products -> three active alerts the feed
+        # keeps active across reads (hand-made rows get resolved by the inline
+        # sync, so seed real stock instead).
+        for index in range(3):
+            product = create_product_with_default_variant(
+                name=f"صنف التنبيه {index}",
+                sku=f"DISMISS-{index}",
+                unit_price=Decimal("5.00"),
+            )
+            StockItem.objects.create(
+                variant=product.default_variant,
+                quantity_on_hand=0,
+                reorder_level=5,
+            )
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        results = client.get(reverse("business-notification-list")).data["results"]
+        self.assertEqual(len(results), 3)
+        # Dismiss one first so "hide all" also has to update an existing state,
+        # not just create fresh ones.
+        client.post(
+            reverse("business-notification-dismiss", args=[results[0]["id"]])
+        )
+
+        response = client.post(reverse("business-notification-dismiss-all"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["dismissed"], 3)
+        self.assertEqual(
+            client.get(reverse("business-notification-list")).data["results"], []
+        )
+        included = client.get(
+            reverse("business-notification-list"), {"include_hidden": "true"}
+        )
+        self.assertEqual(len(included.data["results"]), 3)
+        self.assertTrue(all(row["is_hidden"] for row in included.data["results"]))
+
+    def test_dismiss_all_query_count_does_not_grow_with_alert_count(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from apps.notifications.services import (
+            acknowledge_notifications_for_user,
+            visible_notifications_for_user,
+        )
+
+        def _count_for(alert_count):
+            BusinessNotification.objects.all().delete()
+            for index in range(alert_count):
+                BusinessNotification.objects.create(
+                    code="inventory.out_of_stock",
+                    category=BusinessNotification.Category.INVENTORY,
+                    severity=BusinessNotification.Severity.CRITICAL,
+                    fingerprint=f"inventory.out_of_stock:count:{index}",
+                )
+            queryset = visible_notifications_for_user(self.manager)
+            with CaptureQueriesContext(connection) as ctx:
+                acknowledge_notifications_for_user(self.manager, queryset)
+            return len(ctx)
+
+        # The old code did a get_or_create per alert; the rewrite is set-based,
+        # so dismissing 20 alerts costs the same statements as dismissing 2.
+        self.assertEqual(_count_for(2), _count_for(20))
+
     def test_cashier_only_sees_alert_categories_allowed_by_permissions(self):
         product = create_product_with_default_variant(
             name="شاي الإدارة",
