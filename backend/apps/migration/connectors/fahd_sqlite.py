@@ -16,12 +16,18 @@ This connector reads that *prepared* file (the version spec requires the
 loudly). Differences from :class:`FahdMssqlConnector` beyond the transport:
 
 * **Sub-barcodes.** ``CAR_PART_D`` (sub-items — flavours/colours of a main
-  item) and ``CAR_PART_D2`` (pack/عبوة codes) hold extra barcodes for main
-  products; every row joins a parent through ``NO_N``. They are emitted as
-  additional :class:`CanonicalVariant` records so scanning any historical
-  barcode resolves, and so reconstructed invoice lines that reference a
-  sub-barcode land on the right product. Their price columns are always zero
-  in the wild, so they inherit the parent's retail price.
+  item) holds plain alias barcodes: emitted as additional
+  :class:`CanonicalVariant` records so scanning any historical barcode
+  resolves, and so reconstructed invoice lines that reference a sub-barcode
+  land on the right product. Their price columns are always zero in the wild,
+  so they inherit the parent's retail price.
+* **Pack codes become units.** ``CAR_PART_D2`` rows are the pack (عبوة/كرتون)
+  codes — ``TAK_ONE`` holds the pieces-per-pack count. They are emitted as
+  :class:`CanonicalProductUnit` records (one per parent × count) carrying the
+  code(s) as *unit barcodes*, so scanning a carton EAN rings up a carton, and
+  purchasing defaults to the pack the shop actually orders in. Codes whose
+  sale history shows they were really used to ring loose pieces stay alias
+  variants instead — see ``_unit_plan``.
 * **Active flags are forced on.** In MDB exports ``hideornot`` is ``1`` on
   every product/customer/supplier row (the flag means something different in
   the Access build), so honouring it would import the whole catalogue hidden.
@@ -40,15 +46,19 @@ from __future__ import annotations
 
 from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 
+from apps.catalog.unit_defaults import DEFAULT_UNITS
+
 from .. import canonical
 from ..entity_plan import (
     CATEGORY,
     CUSTOMER,
     PRODUCT,
+    PRODUCT_UNIT,
     PURCHASE_ORDER,
     SALE,
     STOCK,
     SUPPLIER,
+    UNIT,
     VARIANT,
 )
 from .base import ExtractContext, RequiredTable, VersionSpec
@@ -85,6 +95,22 @@ _OPENING_PARTY_TOKENS = ("جرد بداية المدة", "بضاعة اول ال
 
 _SUB_BARCODE_TABLES = ("CAR_PART_D", "CAR_PART_D2")
 
+# Per-product packaging unit codes, assigned largest factor first. All exist in
+# the seeded UnitOfMeasure registry (apps.catalog.unit_defaults).
+_PACKAGING_UNIT_CODES = ("carton", "box", "pack", "bag")
+
+# A D2 sale line at or above this share of the derived pack price
+# (piece price × pieces-per-pack) counts as a genuine pack-priced sale;
+# below it the code was ringing loose pieces (piece or wholesale price).
+_PACK_PRICE_FLOOR = Decimal("0.45")
+# Observed pack prices above the derived price are treated as noise (the pack
+# is never dearer than its pieces) — fall back to the derived price.
+_PACK_PRICE_CEILING = Decimal("1.05")
+# How many piece-priced sales it takes before a pack code is deemed a piece
+# alias, and how many same-priced pack sales it takes to trust that price.
+_ALIAS_MIN_SALES = 5
+_PACK_PRICE_MIN_SALES = 3
+
 
 def _is_placeholder(text: str) -> bool:
     return text.strip().lower() in _PLACEHOLDER_VALUES
@@ -105,9 +131,11 @@ class FahdSqliteConnector(FahdMssqlConnector):
     required_transport = "sqlite"
     recommended_options: dict = {}
     supported_entities = (
+        UNIT,
         CATEGORY,
         PRODUCT,
         VARIANT,
+        PRODUCT_UNIT,
         STOCK,
         CUSTOMER,
         SUPPLIER,
@@ -123,7 +151,7 @@ class FahdSqliteConnector(FahdMssqlConnector):
                     ("ser", "CAR_PART", "SER_KETAEE", "SER_GOMLA", "TAK_ONE", "TASNEEF"),
                 ),
                 RequiredTable("CAR_PART_D", ("ser", "NO_N")),
-                RequiredTable("CAR_PART_D2", ("ser", "NO_N")),
+                RequiredTable("CAR_PART_D2", ("ser", "NO_N", "TAK_ONE")),
                 RequiredTable("TASNEEF", ("NO", "TASNEEF")),
                 RequiredTable("COUSTMER", ("NO_SADER", "S_NAME")),
                 RequiredTable("WARED", ("NO_SADER", "S_NAME")),
@@ -141,10 +169,14 @@ class FahdSqliteConnector(FahdMssqlConnector):
     )
 
     def extract(self, entity_type: str, transport, ctx: ExtractContext):
-        if entity_type == VARIANT:
+        if entity_type == UNIT:
+            yield from self._units(transport, ctx)
+        elif entity_type == VARIANT:
             yield from self._variants(transport, ctx)
         elif entity_type == PRODUCT:
             yield from self._products_with_ghosts(transport, ctx)
+        elif entity_type == PRODUCT_UNIT:
+            yield from self._product_units(transport, ctx)
         elif entity_type == SALE:
             yield from self._reconstructed_sales(transport, ctx)
         elif entity_type == PURCHASE_ORDER:
@@ -196,6 +228,205 @@ class FahdSqliteConnector(FahdMssqlConnector):
             ctx.cache["fahd_sub_barcodes"] = cached
         return cached
 
+    # --- packaging units (CAR_PART_D2) -------------------------------------
+    def _unit_plan(self, transport, ctx: ExtractContext) -> dict:
+        """Classify the CAR_PART_D2 pack codes into real packaging units vs
+        plain alias barcodes, from their own columns *and* their sale history.
+
+        A D2 row is a pack (عبوة) code: ``TAK_ONE`` holds the pieces-per-pack
+        count and ``NO_N`` the parent item. In the wild the same code was also
+        used to ring **loose pieces** (when the piece EAN was missing), so:
+
+        * codes whose sales are predominantly piece-priced (below
+          ``_PACK_PRICE_FLOOR`` of piece price × count) stay alias variants —
+          scanning them must keep ringing one piece;
+        * everything else becomes a ``ProductUnit`` on the parent (one per
+          distinct count), carrying the code(s) as unit barcodes. The unit's own
+          price comes from the modal genuinely-pack-priced sale when there is
+          enough evidence, otherwise it stays derived (piece price × count).
+
+        Returns ``{"units": [unit spec, …], "pack_sers": {ser, …}}`` where
+        ``pack_sers`` are the codes retired from the variant table (emitted
+        inactive and barcode-less so historical invoice lines keep resolving).
+        """
+        cached = ctx.cache.get("fahd_unit_plan")
+        if cached is not None:
+            return cached
+
+        catalog = self._catalog(transport, ctx)
+
+        # Codes claimed by CAR_PART_D keep their original alias behaviour; a D2
+        # row reusing one is ignored, mirroring _sub_barcodes' first-seen rule.
+        claimed: set[str] = set()
+        if transport.has_table("CAR_PART_D"):
+            for row in transport.iter_records("CAR_PART_D", fields=["ser", "NO_N"]):
+                record = _lower(row)
+                ser = _clean(record.get("ser"))
+                parent = _clean(record.get("no_n"))
+                if not ser or _is_placeholder(ser) or ser in catalog or ser in claimed:
+                    continue
+                if not parent or parent not in catalog:
+                    continue
+                claimed.add(ser)
+
+        rows: list[tuple[str, str, Decimal]] = []  # (ser, parent, count)
+        if transport.has_table("CAR_PART_D2"):
+            for row in transport.iter_records(
+                "CAR_PART_D2", fields=["ser", "NO_N", "TAK_ONE"]
+            ):
+                record = _lower(row)
+                ser = _clean(record.get("ser"))
+                parent = _clean(record.get("no_n"))
+                if not ser or _is_placeholder(ser) or ser in catalog or ser in claimed:
+                    continue
+                if not parent or parent not in catalog:
+                    continue
+                claimed.add(ser)
+                count = _to_decimal(record.get("tak_one"))
+                rows.append((ser, parent, count))
+
+        price_stats = self._d2_price_stats(transport)
+
+        pack_sers: set[str] = set()
+        groups: dict[tuple[str, Decimal], dict] = {}
+        for ser, parent, count in rows:
+            # A pack of fewer than 2 whole pieces isn't a unit — those few rows
+            # keep behaving as plain alias barcodes.
+            if count < 2 or count != count.to_integral_value():
+                continue
+            piece_price, _cost, _name = catalog[parent]
+            derived = piece_price * count
+            stats = price_stats.get(ser, [])
+            total_sales = sum(n for _price, n, _at in stats)
+            piece_sales = 0
+            if piece_price > 0:
+                floor = derived * _PACK_PRICE_FLOOR
+                piece_sales = sum(n for price, n, _at in stats if price < floor)
+            # Predominantly rung as loose pieces → the code must keep ringing
+            # one piece: the alias variant keeps the barcode. The pack unit is
+            # still created (barcode-less) so purchasing can order in packs.
+            keeps_alias_barcode = (
+                total_sales >= _ALIAS_MIN_SALES and piece_sales * 2 > total_sales
+            )
+            if not keeps_alias_barcode:
+                pack_sers.add(ser)
+            group = groups.setdefault(
+                (parent, count),
+                {"barcodes": [], "price_votes": {}},
+            )
+            if not keeps_alias_barcode:
+                group["barcodes"].append(ser)
+            for price, n, last_at in stats:
+                if price <= 0:
+                    continue
+                if piece_price > 0:
+                    if not (
+                        derived * _PACK_PRICE_FLOOR
+                        <= price
+                        <= derived * _PACK_PRICE_CEILING
+                    ):
+                        continue
+                votes = group["price_votes"].setdefault(price, [0, ""])
+                votes[0] += n
+                votes[1] = max(votes[1], last_at)
+
+        units: list[dict] = []
+        by_parent: dict[str, list[tuple[Decimal, dict]]] = {}
+        for (parent, count), group in groups.items():
+            by_parent.setdefault(parent, []).append((count, group))
+        for parent, entries in by_parent.items():
+            entries.sort(key=lambda item: item[0], reverse=True)
+            for index, (count, group) in enumerate(entries):
+                if index >= len(_PACKAGING_UNIT_CODES):
+                    # Would need a fifth packaging unit — unseen in real data;
+                    # the extra codes stay alias variants.
+                    for ser in group["barcodes"]:
+                        pack_sers.discard(ser)
+                    continue
+                price = None
+                votes = group["price_votes"]
+                if votes:
+                    best_price, (best_n, _best_at) = max(
+                        votes.items(), key=lambda item: (item[1][0], item[1][1])
+                    )
+                    if best_n >= _PACK_PRICE_MIN_SALES:
+                        price = _money_ceil(best_price)
+                units.append(
+                    {
+                        "source_key": f"pu-{parent}-{count.to_integral_value()}",
+                        "parent": parent,
+                        "unit_code": _PACKAGING_UNIT_CODES[index],
+                        "factor": count.to_integral_value(),
+                        "price": price,
+                        "barcodes": sorted(group["barcodes"]),
+                        # Lines default to the piece; the pack is picked from
+                        # the unit chip (or by scanning its barcode). Shops
+                        # found a pack default too surprising when typing
+                        # quantities.
+                        "set_default_purchase": False,
+                        "display_order": index,
+                    }
+                )
+
+        cached = {"units": units, "pack_sers": pack_sers}
+        ctx.cache["fahd_unit_plan"] = cached
+        return cached
+
+    def _d2_price_stats(self, transport) -> dict:
+        """ser → [(unit_price, line count, last sold at), …] for D2 codes."""
+        stats: dict[str, list[tuple[Decimal, int, str]]] = {}
+        if not transport.has_table("fahd_sale_lines"):
+            return stats
+        for row in transport.raw_query(
+            "SELECT l.ser AS ser, l.unit_price AS price, COUNT(*) AS n, "
+            "MAX(s.occurred_at) AS last_at "
+            "FROM fahd_sale_lines l JOIN fahd_sales s ON s.invoice_no = l.invoice_no "
+            "WHERE EXISTS (SELECT 1 FROM CAR_PART_D2 d WHERE d.ser = l.ser) "
+            "GROUP BY l.ser, l.unit_price"
+        ):
+            ser = _clean(row.get("ser"))
+            if not ser:
+                continue
+            stats.setdefault(ser, []).append(
+                (
+                    _to_decimal(row.get("price")),
+                    int(row.get("n") or 0),
+                    str(row.get("last_at") or ""),
+                )
+            )
+        return stats
+
+    def _units(self, transport, ctx: ExtractContext):
+        plan = self._unit_plan(transport, ctx)
+        used_codes = {unit["unit_code"] for unit in plan["units"]}
+        for code, name, abbreviation, dimension, _factor, fractional, _order in DEFAULT_UNITS:
+            if code not in used_codes:
+                continue
+            yield canonical.CanonicalUnit(
+                source_key=code,
+                code=code,
+                name=name,
+                abbreviation=abbreviation,
+                dimension=dimension,
+                allows_fractional=fractional,
+            )
+
+    def _product_units(self, transport, ctx: ExtractContext):
+        plan = self._unit_plan(transport, ctx)
+        for unit in plan["units"]:
+            yield canonical.CanonicalProductUnit(
+                source_key=unit["source_key"],
+                product_source_key=unit["parent"],
+                unit_source_key=unit["unit_code"],
+                factor_to_base=unit["factor"],
+                price=unit["price"],
+                is_sellable=True,
+                is_purchasable=True,
+                display_order=unit["display_order"],
+                barcodes=unit["barcodes"],
+                set_default_purchase=unit["set_default_purchase"],
+            )
+
     # --- catalogue --------------------------------------------------------
     def _products_with_ghosts(self, transport, ctx: ExtractContext):
         catalog = self._catalog(transport, ctx)
@@ -245,6 +476,7 @@ class FahdSqliteConnector(FahdMssqlConnector):
 
     def _variants(self, transport, ctx: ExtractContext):
         catalog = self._catalog(transport, ctx)
+        pack_sers = self._unit_plan(transport, ctx)["pack_sers"]
         emitted: set[str] = set()
         for table in _SUB_BARCODE_TABLES:
             if not transport.has_table(table):
@@ -270,16 +502,21 @@ class FahdSqliteConnector(FahdMssqlConnector):
                         if row_name and not _is_placeholder(row_name) and row_name != parent_name
                         else ""
                     )
+                # Pack (عبوة) codes become ProductUnit barcodes instead of
+                # scannable variants — see _unit_plan. Their variant row is kept
+                # inactive and barcode-less purely so historical invoice lines
+                # that reference the code keep resolving.
+                is_pack = ser in pack_sers
                 yield canonical.CanonicalVariant(
                     source_key=ser,
                     product_source_key=parent,
                     sku=ser,
-                    barcode=ser,
+                    barcode="" if is_pack else ser,
                     name=label,
                     # Sub-barcode price columns are always 0 in the wild — the
                     # old system rang them at the parent's price too.
                     unit_price=parent_price,
-                    is_active=True,
+                    is_active=not is_pack,
                     is_default=False,
                 )
 

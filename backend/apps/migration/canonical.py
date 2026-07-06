@@ -94,6 +94,12 @@ class CanonicalProductUnit(CanonicalRecord):
     price: Decimal | None = None
     is_sellable: bool = True
     is_purchasable: bool = True
+    display_order: int = 0
+    #: Packaging barcodes (the carton EAN) that ring up this unit when scanned.
+    barcodes: list[str] = field(default_factory=list)
+    #: Make this unit the product's pre-selected purchasing unit (only applied
+    #: when the product has no default purchase unit yet).
+    set_default_purchase: bool = False
 
 
 @dataclass

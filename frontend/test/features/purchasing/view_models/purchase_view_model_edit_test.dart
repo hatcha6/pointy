@@ -196,6 +196,7 @@ class _FakePurchaseRepository extends PurchaseRepository {
     LandedCostAllocationMethod landedCostAllocationMethod =
         LandedCostAllocationMethod.byLineValue,
     String discountCode = '',
+    double extraDiscountAmount = 0,
   }) async {
     lastUpdateOrderId = purchaseOrderId;
     lastUpdateSupplierId = supplierId;

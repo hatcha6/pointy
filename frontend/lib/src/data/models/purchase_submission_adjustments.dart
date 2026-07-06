@@ -232,7 +232,7 @@ class PurchaseOrderAdjustmentLine {
   final String? productName;
   final String? variantName;
   final String? variantSku;
-  final int quantity;
+  final double quantity;
   final double unitCost;
   final double total;
 
@@ -249,7 +249,7 @@ class PurchaseOrderAdjustmentLine {
       productName: json['product_name']?.toString(),
       variantName: json['variant_name']?.toString(),
       variantSku: json['variant_sku']?.toString(),
-      quantity: _intFromJson(json['quantity']),
+      quantity: _quantityFromJson(json['quantity']),
       unitCost: _moneyFromJson(json['unit_cost']),
       total: _moneyFromJson(json['line_total']),
     );
@@ -271,7 +271,7 @@ class PurchaseOrderReplacementLine {
   final int variantId;
   final String? productName;
   final String? variantName;
-  final int quantity;
+  final double quantity;
   final double unitCost;
   final double total;
 
@@ -285,7 +285,7 @@ class PurchaseOrderReplacementLine {
       ),
       productName: json['product_name']?.toString(),
       variantName: json['variant_name']?.toString(),
-      quantity: _intFromJson(json['quantity']),
+      quantity: _quantityFromJson(json['quantity']),
       unitCost: _moneyFromJson(json['unit_cost']),
       total: _moneyFromJson(
         json['line_total'] ?? json['total'] ?? json['amount'],
@@ -324,10 +324,10 @@ class PurchaseAdjustmentLineDraft {
   });
 
   final int lineId;
-  final int quantity;
+  final double quantity;
 
   Map<String, Object?> toJson() {
-    return {'line': lineId, 'quantity': quantity};
+    return {'line': lineId, 'quantity': quantity.toStringAsFixed(3)};
   }
 }
 
@@ -339,13 +339,13 @@ class PurchaseReplacementLineDraft {
   });
 
   final int variantId;
-  final int quantity;
+  final double quantity;
   final double unitCost;
 
   Map<String, Object?> toJson() {
     return {
       'variant': variantId,
-      'quantity': quantity,
+      'quantity': quantity.toStringAsFixed(3),
       'unit_cost': unitCost.toStringAsFixed(2),
     };
   }
@@ -471,6 +471,25 @@ class SupplierPaymentPage {
 }
 
 const Object _unset = Object();
+
+/// Purchase quantities arrive as 3dp decimal strings ("2.500"); parse
+/// tolerantly like money.
+double _quantityFromJson(Object? value) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse((value ?? 0).toString()) ?? 0;
+}
+
+double? _nullableQuantityFromJson(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value.toString());
+}
 
 int _intFromJson(Object? value) {
   if (value is int) {

@@ -49,19 +49,27 @@ class ProductUnitsEditor extends StatefulWidget {
 }
 
 class _UnitRow {
-  _UnitRow({required this.unit, required double factor, double? price})
-    : factorController = TextEditingController(text: _trimNumber(factor)),
-      priceController = TextEditingController(
-        text: price == null ? '' : price.toStringAsFixed(2),
-      ),
-      isSellable = true,
-      isPurchasable = true;
+  _UnitRow({
+    required this.unit,
+    required double factor,
+    double? price,
+    this.barcodes = const [],
+  }) : factorController = TextEditingController(text: _trimNumber(factor)),
+       priceController = TextEditingController(
+         text: price == null ? '' : price.toStringAsFixed(2),
+       ),
+       isSellable = true,
+       isPurchasable = true;
 
   UnitOfMeasure unit;
   final TextEditingController factorController;
   final TextEditingController priceController;
   bool isSellable;
   bool isPurchasable;
+
+  /// Packaging barcodes attached to this unit (the carton EAN). Carried
+  /// through edits untouched so saving a product never wipes them.
+  List<String> barcodes;
 
   void dispose() {
     factorController.dispose();
@@ -107,6 +115,7 @@ class _ProductUnitsEditorState extends State<ProductUnitsEditor> {
               unit: unit.unit,
               factor: unit.factorToBase,
               price: unit.price,
+              barcodes: unit.barcodes,
             )
             ..isSellable = unit.isSellable
             ..isPurchasable = unit.isPurchasable),
@@ -144,6 +153,7 @@ class _ProductUnitsEditorState extends State<ProductUnitsEditor> {
           isSellable: _rows[index].isSellable,
           isPurchasable: _rows[index].isPurchasable,
           displayOrder: index,
+          barcodes: _rows[index].barcodes,
         ),
     ]);
   }
@@ -425,6 +435,24 @@ class _UnitRowCard extends StatelessWidget {
               ),
             ],
           ),
+          if (row.barcodes.isNotEmpty) ...[
+            SizedBox(height: spacing.xs),
+            // Packaging barcodes (the carton EAN) attached by the migration —
+            // shown so the manager can see which code rings this unit up.
+            Wrap(
+              spacing: spacing.xs,
+              runSpacing: spacing.xs,
+              children: [
+                for (final barcode in row.barcodes)
+                  Chip(
+                    avatar: const Icon(Icons.qr_code_2, size: 16),
+                    label: Text(barcode),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );

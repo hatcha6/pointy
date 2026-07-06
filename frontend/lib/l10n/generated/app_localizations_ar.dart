@@ -6289,7 +6289,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseOrderReceivedProgressLabel => 'المستلم';
 
   @override
-  String purchaseOrderReceivedProgressValue(int received, int ordered) {
+  String purchaseOrderReceivedProgressValue(String received, String ordered) {
     return '$received من $ordered';
   }
 
@@ -6469,7 +6469,7 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String purchaseAdjustmentLineRemaining(int remaining, int quantity) {
+  String purchaseAdjustmentLineRemaining(String remaining, String quantity) {
     return 'المتبقي $remaining من $quantity';
   }
 
@@ -6517,7 +6517,7 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String purchaseExchangeReplacementHistoryLine(
     String product,
-    int quantity,
+    String quantity,
     String unitCost,
   ) {
     return 'بديل: $product × $quantity بتكلفة $unitCost';
@@ -6568,22 +6568,22 @@ class AppLocalizationsAr extends AppLocalizations {
       'مثال: نقص في الصندوق أو زيادة من المورد';
 
   @override
-  String purchaseReceiveExpectedValue(int quantity) {
+  String purchaseReceiveExpectedValue(String quantity) {
     return 'المطلوب $quantity';
   }
 
   @override
-  String purchaseReceiveAlreadyValue(int quantity) {
+  String purchaseReceiveAlreadyValue(String quantity) {
     return 'استلم سابقًا $quantity';
   }
 
   @override
-  String purchaseReceiveOpenValue(int quantity) {
+  String purchaseReceiveOpenValue(String quantity) {
     return 'المفتوح $quantity';
   }
 
   @override
-  String purchaseReceiveOpenAfterValue(int quantity) {
+  String purchaseReceiveOpenAfterValue(String quantity) {
     return 'المفتوح بعد الإدخال $quantity';
   }
 
@@ -6604,27 +6604,27 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseOrderUnknownProduct => 'منتج غير محدد';
 
   @override
-  String purchaseOrderLineQuantity(int quantity) {
+  String purchaseOrderLineQuantity(String quantity) {
     return 'الكمية $quantity';
   }
 
   @override
-  String purchaseLineReceivedQuantity(int quantity) {
+  String purchaseLineReceivedQuantity(String quantity) {
     return 'مستلم $quantity';
   }
 
   @override
-  String purchaseLineOpenQuantity(int quantity) {
+  String purchaseLineOpenQuantity(String quantity) {
     return 'مفتوح/متأخر $quantity';
   }
 
   @override
-  String purchaseLineDamagedQuantity(int quantity) {
+  String purchaseLineDamagedQuantity(String quantity) {
     return 'تالف $quantity';
   }
 
   @override
-  String purchaseLineRejectedQuantity(int quantity) {
+  String purchaseLineRejectedQuantity(String quantity) {
     return 'مرفوض $quantity';
   }
 
@@ -13146,4 +13146,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get campaignNoSendPermission => 'ليس لديك صلاحية إرسال الحملات';
+
+  @override
+  String get purchaseLineQuantityLabel => 'الكمية';
+
+  @override
+  String get purchaseExtraDiscountLabel => 'خصم على أمر الشراء';
+
+  @override
+  String get purchaseExtraDiscountHint =>
+      'مبلغ يُخصم من إجمالي هذا الأمر (مثلاً لإزالة الكسور)';
 }

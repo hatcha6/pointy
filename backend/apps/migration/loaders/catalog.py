@@ -8,6 +8,7 @@ from apps.catalog.models import (
     Product,
     ProductCategory,
     ProductUnit,
+    ProductUnitBarcode,
     ProductVariant,
     UnitDimension,
     UnitOfMeasure,
@@ -223,6 +224,11 @@ class ProductUnitLoader(BaseLoader):
             )
         unit_pk = resolver.resolve(UNIT, record.unit_source_key)
         if unit_pk is None:
+            # Global registry units (box/carton seeds) exist without having been
+            # part of this run — resolve them by code before giving up.
+            unit = UnitOfMeasure.objects.filter(code=record.unit_source_key).first()
+            unit_pk = unit.pk if unit else None
+        if unit_pk is None:
             raise LoaderError(
                 f"Product unit references unknown unit {record.unit_source_key!r}.",
                 code="unresolved_unit",
@@ -238,6 +244,7 @@ class ProductUnitLoader(BaseLoader):
             "factor_to_base": factor,
             "is_sellable": to_bool(record.is_sellable),
             "is_purchasable": to_bool(record.is_purchasable),
+            "display_order": int(record.display_order or 0),
         }
         if record.price is not None:
             defaults["price"] = to_decimal(record.price)
@@ -247,5 +254,81 @@ class ProductUnitLoader(BaseLoader):
             unit_id=unit_pk,
             defaults=defaults,
         )
+        issues = self._sync_barcodes(instance, record)
+        self._apply_default_purchase(instance, record)
         resolver.remember(self.entity_type, record.source_key, instance)
-        return LoadOutcome(CREATED if created else UPDATED, instance.pk)
+        return LoadOutcome(CREATED if created else UPDATED, instance.pk, issues)
+
+    def _sync_barcodes(self, instance, record) -> list[Issue]:
+        """Attach the unit's packaging barcodes. A code held by a non-default
+        variant of the *same* product migrates onto the unit (the variant is a
+        pack pseudo-variant from an earlier import — retired in place, its sale
+        history untouched). Codes resolving anywhere else are skipped with a
+        warning — one code must never mean two things."""
+        issues: list[Issue] = []
+        wanted: list[str] = []
+        for code in record.barcodes or []:
+            code = clean_str(code)
+            if code and code not in wanted:
+                wanted.append(code)
+        existing = set(
+            ProductUnitBarcode.objects.filter(product_unit=instance).values_list(
+                "barcode", flat=True
+            )
+        )
+        for code in wanted:
+            if code in existing:
+                continue
+            clash_variant = (
+                ProductVariant.objects.filter(barcode=code)
+                .only("id", "product_id", "is_default", "barcode", "is_active")
+                .first()
+            )
+            if clash_variant is not None:
+                if (
+                    clash_variant.product_id == instance.product_id
+                    and not clash_variant.is_default
+                ):
+                    clash_variant.barcode = ""
+                    clash_variant.is_active = False
+                    clash_variant.save(
+                        update_fields=["barcode", "is_active", "updated_at"]
+                    )
+                else:
+                    issues.append(
+                        Issue(
+                            WARNING,
+                            "unit_barcode_conflict",
+                            f"Barcode {code!r} already resolves to another product; "
+                            "not attached.",
+                            source_key=str(record.source_key),
+                        )
+                    )
+                    continue
+            unit_clash = (
+                ProductUnitBarcode.objects.filter(barcode=code)
+                .exclude(product_unit=instance)
+                .exists()
+            )
+            if unit_clash:
+                issues.append(
+                    Issue(
+                        WARNING,
+                        "unit_barcode_conflict",
+                        f"Barcode {code!r} already resolves to another unit; "
+                        "not attached.",
+                        source_key=str(record.source_key),
+                    )
+                )
+                continue
+            ProductUnitBarcode.objects.create(product_unit=instance, barcode=code)
+        return issues
+
+    def _apply_default_purchase(self, instance, record) -> None:
+        if not record.set_default_purchase or not to_bool(record.is_purchasable):
+            return
+        product = instance.product
+        if product.default_purchase_unit:
+            return
+        product.default_purchase_unit = instance.unit.code
+        product.save(update_fields=["default_purchase_unit", "updated_at"])

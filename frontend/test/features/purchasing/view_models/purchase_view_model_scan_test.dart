@@ -34,13 +34,101 @@ void main() {
     expect(viewModel.draft.single.quantity, 25);
   });
 
-  test('catalog taps do not arm the quick adjust', () async {
+  test('catalog taps arm the quick adjust like a scan does', () async {
     final viewModel = makeViewModel();
 
-    await viewModel.addVariant(variant, unitCost: 2);
+    await viewModel.addVariant(
+      variant,
+      unitCost: 2,
+      source: 'purchase_catalog_tile',
+    );
+    expect(viewModel.lastScannedDraftLine, isNotNull);
+    expect(viewModel.applyQuickQuantityDigits('7'), isTrue);
+    expect(viewModel.draft.single.quantity, 7);
+  });
+
+  test('stepper adds do not arm the quick adjust', () async {
+    final viewModel = makeViewModel();
+
+    await viewModel.addVariant(
+      variant,
+      unitCost: 2,
+      source: 'purchase_draft_quantity_button',
+    );
     expect(viewModel.lastScannedDraftLine, isNull);
     expect(viewModel.applyQuickQuantityDigits('7'), isFalse);
     expect(viewModel.draft.single.quantity, 1);
+  });
+
+  test('unit switch rescales the line cost proportionally', () async {
+    final viewModel = makeViewModel();
+    // 0.45 per piece (per the line's base unit).
+    await viewModel.addVariant(variant, unitCost: 0.45);
+
+    // piece → tray of 30: 0.45 × 30 = 13.50 per tray.
+    viewModel.updateLineUnit(
+      variant,
+      unitCode: 'tray',
+      unitLabel: 'طبق',
+      unitFactor: 30,
+      allowsFractional: true,
+    );
+    expect(viewModel.draft.single.unitCost, 13.5);
+    expect(viewModel.draft.single.unitAllowsFractional, isTrue);
+
+    // tray → carton of 360: 13.50 / 30 × 360 = 162.00 per carton.
+    viewModel.updateLineUnit(
+      variant,
+      unitCode: 'carton',
+      unitLabel: 'كرتون',
+      unitFactor: 360,
+    );
+    expect(viewModel.draft.single.unitCost, 162.0);
+
+    // back to the base piece: 162 / 360 = 0.45.
+    viewModel.updateLineUnit(
+      variant,
+      unitCode: '',
+      unitLabel: '',
+      unitFactor: 1,
+    );
+    expect(viewModel.draft.single.unitCost, 0.45);
+  });
+
+  test('quick typing accepts decimals only for fractional units', () async {
+    final viewModel = makeViewModel();
+    await viewModel.addVariant(
+      variant,
+      unitCost: 15,
+      source: 'purchase_barcode_lookup',
+    );
+    viewModel.updateLineUnit(
+      variant,
+      unitCode: 'tray',
+      unitLabel: 'طبق',
+      unitFactor: 30,
+      allowsFractional: true,
+    );
+
+    // "2" then "." then "5" → 2.5 trays.
+    expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
+    expect(viewModel.applyQuickQuantityDigits('.'), isTrue);
+    expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
+    expect(viewModel.draft.single.quantity, 2.5);
+
+    // Whole-number unit: a decimal point drops the entry instead of
+    // silently reading "2.5" as 25.
+    viewModel.updateLineUnit(
+      variant,
+      unitCode: '',
+      unitLabel: '',
+      unitFactor: 1,
+    );
+    expect(viewModel.draft.single.quantity, 3); // 2.5 rounded up on switch
+    expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
+    expect(viewModel.applyQuickQuantityDigits('.'), isFalse);
+    expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
+    expect(viewModel.draft.single.quantity, 5);
   });
 
   test('setLineQuantity clamps into the draft range', () async {
@@ -48,10 +136,14 @@ void main() {
     await viewModel.addVariant(variant, unitCost: 2);
 
     viewModel.setLineQuantity(variant, 5000);
-    expect(viewModel.draft.single.quantity, 999);
+    expect(viewModel.draft.single.quantity, 5000);
 
     viewModel.setLineQuantity(variant, 0);
-    expect(viewModel.draft.single.quantity, 999); // rejected, unchanged
+    expect(viewModel.draft.single.quantity, 5000); // rejected, unchanged
+
+    // Fractions only stick for units that allow them (base piece does not).
+    viewModel.setLineQuantity(variant, 2.5);
+    expect(viewModel.draft.single.quantity, 5000); // rejected, unchanged
   });
 }
 

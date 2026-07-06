@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from apps.attachments.models import Attachment
 from apps.attachments.services import sign_attachment_content_token
-from apps.catalog.models import ProductVariant, normalize_barcode
+from apps.catalog.models import ProductUnitBarcode, ProductVariant, normalize_barcode
 from apps.discounts.models import DiscountRule
 from apps.discounts.services import (
     DiscountContext,
@@ -111,8 +111,40 @@ def lookup_price(
         )
         .first()
     )
+    matched_unit = None
+    if variant is None:
+        # Unit (carton/box) barcode: price one of that unit against the
+        # product's default variant.
+        unit_barcode = (
+            ProductUnitBarcode.objects.select_related(
+                "product_unit__unit",
+                "product_unit__product",
+            )
+            .filter(
+                barcode=code,
+                product_unit__product__is_active=True,
+                product_unit__product__archived_at__isnull=True,
+            )
+            .first()
+        )
+        if unit_barcode is not None:
+            matched_unit = unit_barcode.product_unit
+            variant = (
+                ProductVariant.objects.select_related("product")
+                .filter(product=matched_unit.product, is_active=True)
+                .order_by("-is_default", "id")
+                .first()
+            )
     if variant is None:
         return PriceResult.not_found(code)
+
+    unit_amount = variant.unit_price
+    if matched_unit is not None:
+        unit_amount = (
+            matched_unit.price
+            if matched_unit.price is not None
+            else variant.unit_price * matched_unit.factor_to_base
+        )
 
     product = variant.product
     category_ids = tuple(product.categories.values_list("id", flat=True))
@@ -121,7 +153,7 @@ def lookup_price(
         product_id=product.pk,
         variant_id=variant.pk,
         quantity=1,
-        unit_amount=variant.unit_price,
+        unit_amount=unit_amount,
         category_ids=category_ids,
     )
     result = DiscountEngine().calculate(
@@ -132,7 +164,7 @@ def lookup_price(
         )
     )
 
-    original = money(variant.unit_price)
+    original = money(unit_amount)
     percent = ZERO
     if result.discount_total > ZERO and original > ZERO:
         percent = (result.discount_total / original * Decimal("100")).quantize(
@@ -157,14 +189,21 @@ def lookup_price(
             image_attachment_id = attachment.pk
             image_token = sign_attachment_content_token(attachment)
 
+    unit_label = product.unit
+    variant_name = variant.display_name
+    if matched_unit is not None:
+        unit_label = matched_unit.unit.code
+        factor = matched_unit.factor_to_base.normalize()
+        variant_name = f"{matched_unit.unit.name} ×{factor:f}"
+
     return PriceResult(
         found=True,
         barcode=code,
         variant_id=variant.pk,
         sku=variant.sku,
         product_name=product.name,
-        variant_name=variant.display_name,
-        unit=product.unit,
+        variant_name=variant_name,
+        unit=unit_label,
         original_price=original,
         final_price=result.total,
         discount_total=result.discount_total,

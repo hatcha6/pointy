@@ -64,6 +64,18 @@ class Supplier(TimeStampedModel):
         return (self.payable_balance - self.credit_balance).quantize(Decimal("0.01"))
 
 
+def _quantity_field(**kwargs):
+    """A purchase-side quantity: decimal so fractional units (half an egg
+    tray, 2.5 kg) transact; whole-number units are enforced at the serializer
+    boundary via apps.catalog.units.validate_quantity, not the column type."""
+    return models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        validators=[MinValueValidator(Decimal("0"))],
+        **kwargs,
+    )
+
+
 class PurchaseOrder(TimeStampedModel):
     MONEY_PLACES = Decimal("0.01")
 
@@ -94,6 +106,15 @@ class PurchaseOrder(TimeStampedModel):
     supplier_invoice_number = models.CharField(max_length=120, blank=True)
     supplier_invoice_date = models.DateField(blank=True, null=True)
     notes = models.TextField(blank=True)
+    # One-off order-level discount entered by hand (independent of the
+    # discount engine's rules/coupons); folded into discount_total by
+    # recalculate(). Decimals welcome — its main job is killing fractions.
+    extra_discount_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
     discount_codes = models.JSONField(default=list, blank=True)
     # Snapshot of the special-day keys (apps.holidays) active on the shop-local
     # date this PO was created — an immutable feature signal for forecasting that
@@ -155,6 +176,17 @@ class PurchaseOrder(TimeStampedModel):
             )
         )
         discount_result = self.apply_discounts(lines)
+        # One-off manual discount for THIS order (typed under the landed
+        # costs; mostly a fraction eliminator). Folded into discount_total so
+        # balances, payments, and receipts all see one number; clamped so the
+        # combined discount never exceeds the subtotal.
+        extra = min(
+            self.extra_discount_amount or Decimal("0.00"),
+            max(self.subtotal - self.discount_total, Decimal("0.00")),
+        )
+        self.discount_total = (self.discount_total + extra).quantize(
+            self.MONEY_PLACES
+        )
         landed_cost_total = self.landed_cost_total
         self.total = (
             self.subtotal - self.discount_total + landed_cost_total
@@ -439,12 +471,20 @@ class PurchaseLine(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="purchase_lines",
     )
-    quantity = models.PositiveIntegerField(default=1)
+    # Fractional when the purchase unit allows it (half an egg tray, 2.5 kg);
+    # whole-number units are enforced at the serializer via the same
+    # apps.catalog.units.validate_quantity rule sales uses.
+    quantity = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        default=Decimal("1"),
+        validators=[MinValueValidator(Decimal("0.001"))],
+    )
     # The unit this line is purchased in (a UnitOfMeasure.code); blank = the
-    # product's base unit. Purchase quantities stay whole (you buy whole packs);
-    # ``unit_factor`` snapshots how many base units one purchase unit is worth and
-    # converts to base only at the stock boundary. ``unit_cost`` is per purchase
-    # unit (cost of one carton), normalised to per-base for the sales cost lookup.
+    # product's base unit. ``unit_factor`` snapshots how many base units one
+    # purchase unit is worth and converts to base only at the stock boundary.
+    # ``unit_cost`` is per purchase unit (cost of one carton), normalised to
+    # per-base for the sales cost lookup.
     unit = models.CharField(max_length=32, blank=True, default="")
     unit_factor = models.DecimalField(
         max_digits=18,
@@ -562,49 +602,49 @@ class PurchaseLine(TimeStampedModel):
         return manager.aggregate(total=Sum(field))["total"]
 
     @property
-    def adjusted_quantity(self) -> int:
-        return self._related_sum("adjustment_lines", "quantity") or 0
+    def adjusted_quantity(self) -> Decimal:
+        return self._related_sum("adjustment_lines", "quantity") or Decimal("0")
 
     @property
-    def accepted_quantity(self) -> int:
+    def accepted_quantity(self) -> Decimal:
         total = self._related_sum("receipt_lines", "accepted_quantity")
         if total is not None:
             return total
         if self.purchase_order.status == PurchaseOrder.Status.RECEIVED:
             return self.quantity
-        return 0
+        return Decimal("0")
 
     @property
-    def damaged_quantity(self) -> int:
-        return self._related_sum("receipt_lines", "damaged_quantity") or 0
+    def damaged_quantity(self) -> Decimal:
+        return self._related_sum("receipt_lines", "damaged_quantity") or Decimal("0")
 
     @property
-    def cancelled_quantity(self) -> int:
-        return self._related_sum("receipt_lines", "cancelled_quantity") or 0
+    def cancelled_quantity(self) -> Decimal:
+        return self._related_sum("receipt_lines", "cancelled_quantity") or Decimal("0")
 
     @property
-    def received_quantity(self) -> int:
+    def received_quantity(self) -> Decimal:
         return self.accepted_quantity + self.damaged_quantity
 
     @property
-    def closed_quantity(self) -> int:
+    def closed_quantity(self) -> Decimal:
         return self.received_quantity + self.cancelled_quantity
 
     @property
-    def outstanding_quantity(self) -> int:
-        return max(self.quantity - self.closed_quantity, 0)
+    def outstanding_quantity(self) -> Decimal:
+        return max(self.quantity - self.closed_quantity, Decimal("0"))
 
     @property
-    def backordered_quantity(self) -> int:
+    def backordered_quantity(self) -> Decimal:
         return self.outstanding_quantity
 
     @property
-    def over_received_quantity(self) -> int:
-        return max(self.received_quantity - self.quantity, 0)
+    def over_received_quantity(self) -> Decimal:
+        return max(self.received_quantity - self.quantity, Decimal("0"))
 
     @property
-    def adjustable_quantity(self) -> int:
-        return max(self.accepted_quantity - self.adjusted_quantity, 0)
+    def adjustable_quantity(self) -> Decimal:
+        return max(self.accepted_quantity - self.adjusted_quantity, Decimal("0"))
 
 
 class PurchaseOrderAuditEvent(TimeStampedModel):
@@ -682,14 +722,16 @@ class PurchaseReceiptLine(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="purchase_receipt_lines",
     )
-    ordered_quantity = models.PositiveIntegerField()
-    outstanding_before = models.PositiveIntegerField()
-    accepted_quantity = models.PositiveIntegerField(default=0)
-    damaged_quantity = models.PositiveIntegerField(default=0)
-    cancelled_quantity = models.PositiveIntegerField(default=0)
-    expected_reduction_quantity = models.PositiveIntegerField(default=0)
-    over_received_quantity = models.PositiveIntegerField(default=0)
-    outstanding_after = models.PositiveIntegerField(default=0)
+    # All quantities are in the purchase line's unit and may be fractional
+    # (receiving half an egg tray); non-negativity is enforced per field.
+    ordered_quantity = _quantity_field()
+    outstanding_before = _quantity_field()
+    accepted_quantity = _quantity_field(default=Decimal("0"))
+    damaged_quantity = _quantity_field(default=Decimal("0"))
+    cancelled_quantity = _quantity_field(default=Decimal("0"))
+    expected_reduction_quantity = _quantity_field(default=Decimal("0"))
+    over_received_quantity = _quantity_field(default=Decimal("0"))
+    outstanding_after = _quantity_field(default=Decimal("0"))
     expiry_date = models.DateField(null=True, blank=True, db_index=True)
     notes = models.TextField(blank=True)
 
@@ -697,11 +739,11 @@ class PurchaseReceiptLine(TimeStampedModel):
         ordering = ["created_at", "id"]
 
     @property
-    def received_quantity(self) -> int:
+    def received_quantity(self) -> Decimal:
         return self.accepted_quantity + self.damaged_quantity
 
     @property
-    def backordered_quantity(self) -> int:
+    def backordered_quantity(self) -> Decimal:
         return self.outstanding_after
 
 
@@ -855,7 +897,7 @@ class PurchaseOrderAdjustmentLine(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="purchase_adjustment_lines",
     )
-    quantity = models.PositiveIntegerField()
+    quantity = _quantity_field()
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
     line_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
@@ -888,7 +930,7 @@ class PurchaseOrderAdjustmentReplacementLine(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="purchase_adjustment_replacement_lines",
     )
-    quantity = models.PositiveIntegerField()
+    quantity = _quantity_field()
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2)
 
     class Meta:

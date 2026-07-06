@@ -273,9 +273,9 @@ PurchaseOrderLine _line({
   required int id,
   required String name,
   String? sku,
-  required int quantity,
-  int received = 0,
-  int damaged = 0,
+  required double quantity,
+  double received = 0,
+  double damaged = 0,
   required double unitCost,
 }) {
   final open = quantity - received - damaged;

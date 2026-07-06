@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
+import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/cart_line.dart';
 import '../../../data/models/modifier_group.dart';
 import '../../../shared/barcode/scale_barcode.dart';
@@ -33,6 +34,7 @@ import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/order_document_service.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
 import '../../../shared/unit_options.dart';
+import '../../../shared/units.dart';
 
 part 'pos_cart_actions.dart';
 part 'pos_catalog_actions.dart';

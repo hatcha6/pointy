@@ -14,9 +14,13 @@ class AnalyticsEngine {
     this._sink, {
     AnalyticsQueueStorage? storage,
     DateTime Function()? clock,
-    this.flushInterval = const Duration(seconds: 15),
-    this.maxBatchSize = 50,
+    // Batched ingestion: events queue locally (persisted, so nothing is lost
+    // across restarts) and ship every couple of minutes in as few requests as
+    // possible — a busy till must not turn every action into backend traffic.
+    this.flushInterval = const Duration(seconds: 120),
+    this.maxBatchSize = 100,
     this.maxQueueSize = 2000,
+    this.minImmediateFlushGap = const Duration(seconds: 30),
   }) : _storage = storage ?? const SharedPreferencesAnalyticsQueueStorage(),
        _clock = clock ?? (() => DateTime.now().toUtc());
 
@@ -24,14 +28,23 @@ class AnalyticsEngine {
   final AnalyticsQueueStorage _storage;
   final DateTime Function() _clock;
   final Duration flushInterval;
+
+  /// Events per ingest REQUEST (the backend accepts at most 100); a flush
+  /// drains the whole queue in consecutive chunks of this size.
   final int maxBatchSize;
   final int maxQueueSize;
+
+  /// Error captures ask for an immediate flush; this caps how often that can
+  /// short-circuit the batching (an error storm must not become a request
+  /// storm).
+  final Duration minImmediateFlushGap;
 
   final List<AnalyticsEventDraft> _queue = [];
   Timer? _flushTimer;
   Future<void>? _startFuture;
   bool _isStarted = false;
   bool _isFlushing = false;
+  DateTime? _lastImmediateFlushAt;
   String? _installationId;
   String? _sessionId;
   String? _currentScreen;
@@ -64,7 +77,10 @@ class AnalyticsEngine {
     _flushTimer = Timer.periodic(flushInterval, (_) {
       unawaited(flush());
     });
-    await trackUsage(AnalyticsEventName.appStarted, flushImmediately: true);
+    // Queued normally, then flushed explicitly: the startup flush must not
+    // consume the immediate-flush budget error captures rely on.
+    await trackUsage(AnalyticsEventName.appStarted);
+    await flush();
   }
 
   void setCurrentUser(int? userId) {
@@ -247,7 +263,6 @@ class AnalyticsEngine {
             'error_message': _truncate(performance.errorMessage, 512),
         },
         metrics: metrics,
-        flushImmediately: severity == AnalyticsEventSeverity.error,
       ),
     );
   }
@@ -311,7 +326,9 @@ class AnalyticsEngine {
       _queue.add(enrichedEvent);
       _trimQueue();
       await _persistQueue();
-      if (flushImmediately || _queue.length >= maxBatchSize) {
+      if (_queue.length >= maxBatchSize) {
+        await flush();
+      } else if (flushImmediately && _allowImmediateFlush()) {
         await flush();
       }
     } on Exception {
@@ -362,19 +379,24 @@ class AnalyticsEngine {
         return;
       }
       _isFlushing = true;
-      final batch = _queue.take(maxBatchSize).toList(growable: false);
-      final result = await _sink.ingestEvents(batch);
-      switch (result) {
-        case Ok<AnalyticsIngestResult>():
-          final submittedIds = batch
-              .map((event) => event.clientEventId)
-              .toSet();
-          _queue.removeWhere(
-            (event) => submittedIds.contains(event.clientEventId),
-          );
-          await _persistQueue();
-        case Error<AnalyticsIngestResult>():
-          await _persistQueue();
+      // Ship EVERYTHING collected so far in consecutive chunks (the backend
+      // caps each request); stop at the first failure so a down backend gets
+      // one attempt per cycle, not a hammering.
+      var madeProgress = false;
+      while (_queue.isNotEmpty) {
+        final batch = _queue.take(maxBatchSize).toList(growable: false);
+        final result = await _sink.ingestEvents(batch);
+        if (result is! Ok<AnalyticsIngestResult>) {
+          break;
+        }
+        madeProgress = true;
+        final submittedIds = batch.map((event) => event.clientEventId).toSet();
+        _queue.removeWhere(
+          (event) => submittedIds.contains(event.clientEventId),
+        );
+      }
+      if (madeProgress || _queue.isNotEmpty) {
+        await _persistQueue();
       }
     } on Exception {
       return;
@@ -389,6 +411,16 @@ class AnalyticsEngine {
     if (_isStarted) {
       unawaited(flush());
     }
+  }
+
+  bool _allowImmediateFlush() {
+    final last = _lastImmediateFlushAt;
+    final now = _clock();
+    if (last != null && now.difference(last) < minImmediateFlushGap) {
+      return false;
+    }
+    _lastImmediateFlushAt = now;
+    return true;
   }
 
   Future<void> _ensureStarted() async {

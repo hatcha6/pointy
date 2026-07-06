@@ -14,7 +14,9 @@ import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_page.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
+import 'package:pointy_frontend/src/data/models/product_unit.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
+import 'package:pointy_frontend/src/data/models/unit_of_measure.dart';
 import 'package:pointy_frontend/src/data/models/product_variant_page.dart';
 import 'package:pointy_frontend/src/data/models/query.dart';
 import 'package:pointy_frontend/src/data/models/register_session.dart';
@@ -418,20 +420,21 @@ void main() {
     },
   );
 
-  test('re-adding an existing cart line makes it the newest line', () async {
+  test('re-adding an existing cart line keeps its position', () async {
     final viewModel = _viewModel(_FakePosApiService());
     addTearDown(viewModel.dispose);
 
     viewModel.addVariant(_coffeeVariant);
     viewModel.addVariant(_teaVariant);
+    // A repeat add (or any quantity change) merges IN PLACE — the list order
+    // is fixed at first insertion so lines never jump under the cashier.
     viewModel.addVariant(_coffeeVariant);
 
     expect(viewModel.cart.map((line) => line.variant.id), [
-      _teaVariant.id,
       _coffeeVariant.id,
+      _teaVariant.id,
     ]);
-    expect(viewModel.cart.last.quantity, 2);
-    expect(viewModel.cart.reversed.first.variant.id, _coffeeVariant.id);
+    expect(viewModel.cart.first.quantity, 2);
     await _settle();
   });
 
@@ -723,7 +726,7 @@ void main() {
       expect(viewModel.cart.single.quantity, 3);
     });
 
-    test('digits do nothing when nothing was scanned', () {
+    test('digits do nothing after a plain cart-button add', () {
       final viewModel = _viewModel(_FakePosApiService());
       addTearDown(viewModel.dispose);
 
@@ -731,6 +734,73 @@ void main() {
       expect(viewModel.lastScannedCartLine, isNull);
       expect(viewModel.applyQuickQuantityDigits('7'), isFalse);
       expect(viewModel.cart.single.quantity, 1);
+    });
+
+    test('a catalog tile add arms the quick adjust like a scan does', () {
+      final viewModel = _viewModel(_FakePosApiService());
+      addTearDown(viewModel.dispose);
+
+      viewModel.addVariant(_coffeeVariant, source: 'product_tile');
+      expect(viewModel.lastScannedCartLine, isNotNull);
+      expect(viewModel.applyQuickQuantityDigits('1'), isTrue);
+      expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
+      expect(viewModel.cart.single.quantity, 12);
+    });
+
+    test('decimal quick typing sells half a tray after a unit scan', () async {
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_eggVariant],
+          },
+        ),
+      );
+      addTearDown(viewModel.dispose);
+
+      // Scanning the tray barcode arms the (fractional) tray line.
+      expect(await viewModel.addVariantByBarcode('4000002'), isTrue);
+      expect(viewModel.cart.single.unitCode, 'tray');
+
+      expect(viewModel.applyQuickQuantityDigits('0'), isTrue);
+      expect(viewModel.applyQuickQuantityDigits('.'), isTrue);
+      expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
+      expect(viewModel.cart.single.quantity, 0.5);
+
+      // A plain piece line refuses the decimal point outright.
+      await viewModel.addVariantByBarcode('4000001');
+      expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
+      expect(viewModel.applyQuickQuantityDigits('.'), isFalse);
+      expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
+      expect(
+        viewModel.cart
+            .firstWhere((line) => line.unitCode.isEmpty)
+            .quantity,
+        5,
+      );
+    });
+
+    test('scanning a packaging (unit) barcode rings up that unit', () async {
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_juiceVariant],
+          },
+        ),
+      );
+      addTearDown(viewModel.dispose);
+
+      final added = await viewModel.addVariantByBarcode('3000002');
+      expect(added, isTrue);
+      final line = viewModel.cart.single;
+      expect(line.variant.id, _juiceVariant.id);
+      expect(line.quantity, 1);
+      expect(line.unitCode, 'carton');
+      expect(line.unitFactor, 24);
+      // No custom carton price -> derived: 1.00 piece × 24.
+      expect(line.unitPriceOverride, 24.0);
+      // The scan armed the quick adjust on the carton line.
+      expect(viewModel.applyQuickQuantityDigits('3'), isTrue);
+      expect(viewModel.cart.single.quantity, 3);
     });
 
     test('applyQuickUnit switches the scanned line unit of measure', () async {
@@ -849,6 +919,66 @@ const _teaVariant = ProductVariant(
   quantityOnHand: 8,
   barcode: '1000002',
   isDefault: true,
+);
+
+// Eggs: a fractional tray unit with its own packaging barcode ('4000002') —
+// exercises decimal quick-typing after a unit-barcode scan.
+const _eggVariant = ProductVariant(
+  id: 105,
+  productId: 7,
+  productName: 'بيض مائدة',
+  displayName: 'بيض مائدة',
+  fullName: 'بيض مائدة',
+  sku: 'EGG-001',
+  unitPrice: 0.75,
+  quantityOnHand: 300,
+  barcode: '4000001',
+  isDefault: true,
+  productDetail: Product(
+    id: 7,
+    name: 'بيض مائدة',
+    quantityOnHand: 300,
+    units: [
+      ProductUnit(
+        unit: UnitOfMeasure(
+          id: 11,
+          code: 'tray',
+          name: 'طبق',
+          allowsFractional: true,
+        ),
+        factorToBase: 30,
+        price: 15,
+        barcodes: ['4000002'],
+      ),
+    ],
+  ),
+);
+
+// A product whose carton carries its own packaging barcode ('3000002'): the
+// unit-barcode scan flow resolves it through productDetail.units.
+const _juiceVariant = ProductVariant(
+  id: 104,
+  productId: 6,
+  productName: 'عصير صافي',
+  displayName: 'عصير صافي',
+  fullName: 'عصير صافي',
+  sku: 'JUICE-001',
+  unitPrice: 1.0,
+  quantityOnHand: 48,
+  barcode: '3000001',
+  isDefault: true,
+  productDetail: Product(
+    id: 6,
+    name: 'عصير صافي',
+    quantityOnHand: 48,
+    units: [
+      ProductUnit(
+        unit: UnitOfMeasure(id: 9, code: 'carton', name: 'كرتون'),
+        factorToBase: 24,
+        barcodes: ['3000002'],
+      ),
+    ],
+  ),
 );
 
 const _coffeeBeansVariant = ProductVariant(

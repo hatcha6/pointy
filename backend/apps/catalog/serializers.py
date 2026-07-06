@@ -13,10 +13,12 @@ from .models import (
     ProductCategory,
     ProductModifierGroup,
     ProductUnit,
+    ProductUnitBarcode,
     ProductVariant,
     UnitOfMeasure,
     VariantOption,
     VariantOptionValue,
+    normalize_barcode,
     variant_option_signature,
     validate_variant_option_values,
 )
@@ -318,6 +320,16 @@ class ProductUnitSerializer(serializers.ModelSerializer):
         queryset=UnitOfMeasure.objects.active(),
     )
     unit_detail = UnitOfMeasureSerializer(source="unit", read_only=True)
+    # Packaging barcodes for this unit (the carton EAN). Scanning one rings up
+    # this unit instead of one base unit. Omitting the key on write keeps the
+    # stored barcodes; sending a list replaces them. Write-only because the
+    # model field is a reverse relation — reads are filled in by
+    # ``to_representation`` as a plain list of strings.
+    barcodes = serializers.ListField(
+        child=serializers.CharField(max_length=64, allow_blank=False),
+        required=False,
+        write_only=True,
+    )
 
     class Meta:
         model = ProductUnit
@@ -330,7 +342,21 @@ class ProductUnitSerializer(serializers.ModelSerializer):
             "is_sellable",
             "is_purchasable",
             "display_order",
+            "barcodes",
         ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["barcodes"] = [entry.barcode for entry in instance.barcodes.all()]
+        return data
+
+    def validate_barcodes(self, value):
+        cleaned: list[str] = []
+        for code in value:
+            code = normalize_barcode(code)
+            if code and code not in cleaned:
+                cleaned.append(code)
+        return cleaned
 
 
 class ProductUnitListField(serializers.Field):
@@ -821,12 +847,20 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         # Rebuild the per-product unit list. Transaction lines snapshot the unit
         # code + factor, so dropping/recreating ProductUnit rows never rewrites
         # history. A row matching the base unit is dropped (the base is implicit).
+        # Packaging barcodes survive the rebuild: a payload that omits the
+        # "barcodes" key keeps the unit's stored codes (clients that predate unit
+        # barcodes must not wipe them); sending a list replaces them.
+        existing_barcodes = {
+            product_unit.unit_id: [entry.barcode for entry in product_unit.barcodes.all()]
+            for product_unit in product.units.all()
+        }
+        self._validate_unit_barcodes(product, units_data)
         product.units.all().delete()
         for index, data in enumerate(units_data):
             unit = data["unit"]
             if unit.code == product.unit:
                 continue
-            ProductUnit.objects.create(
+            product_unit = ProductUnit.objects.create(
                 product=product,
                 unit=unit,
                 factor_to_base=data["factor_to_base"],
@@ -834,6 +868,43 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                 is_sellable=data.get("is_sellable", True),
                 is_purchasable=data.get("is_purchasable", True),
                 display_order=data.get("display_order", index),
+            )
+            barcodes = data.get("barcodes")
+            if barcodes is None:
+                barcodes = existing_barcodes.get(unit.pk, [])
+            ProductUnitBarcode.objects.bulk_create(
+                ProductUnitBarcode(product_unit=product_unit, barcode=code)
+                for code in barcodes
+            )
+
+    def _validate_unit_barcodes(self, product, units_data):
+        # One code, one meaning: a unit barcode may not repeat across the payload,
+        # collide with another product's unit barcodes, or shadow a variant
+        # barcode (a code resolving to both a variant and a unit is ambiguous).
+        codes: list[str] = []
+        for data in units_data:
+            codes.extend(data.get("barcodes") or [])
+        duplicated = sorted({code for code in codes if codes.count(code) > 1})
+        if duplicated:
+            raise serializers.ValidationError(
+                {"units": f"Barcodes repeated across units: {', '.join(duplicated)}."}
+            )
+        if not codes:
+            return
+        variant_clash = list(
+            ProductVariant.objects.filter(barcode__in=codes).values_list("barcode", flat=True)
+        )
+        if variant_clash:
+            raise serializers.ValidationError(
+                {"units": f"Barcodes already used by products: {', '.join(sorted(variant_clash))}."}
+            )
+        unit_clash_query = ProductUnitBarcode.objects.filter(barcode__in=codes)
+        if product.pk:
+            unit_clash_query = unit_clash_query.exclude(product_unit__product=product)
+        unit_clash = list(unit_clash_query.values_list("barcode", flat=True))
+        if unit_clash:
+            raise serializers.ValidationError(
+                {"units": f"Barcodes already used by other units: {', '.join(sorted(unit_clash))}."}
             )
 
     def create(self, validated_data):

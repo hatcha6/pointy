@@ -136,6 +136,7 @@ class PurchaseRepository {
     LandedCostAllocationMethod landedCostAllocationMethod =
         LandedCostAllocationMethod.byLineValue,
     String discountCode = '',
+    double extraDiscountAmount = 0,
     String? idempotencyKey,
   }) async {
     if (lines.isEmpty) {
@@ -151,6 +152,7 @@ class PurchaseRepository {
         landedCostEntries: landedCostEntries,
         landedCostAllocationMethod: landedCostAllocationMethod,
         discountCode: discountCode,
+        extraDiscountAmount: extraDiscountAmount,
       );
       final order = await _service.createPurchaseOrder(
         draft,
@@ -198,6 +200,7 @@ class PurchaseRepository {
     LandedCostAllocationMethod landedCostAllocationMethod =
         LandedCostAllocationMethod.byLineValue,
     String discountCode = '',
+    double extraDiscountAmount = 0,
   }) async {
     if (lines.isEmpty) {
       return Error(Exception('purchase draft is empty'));
@@ -212,6 +215,7 @@ class PurchaseRepository {
         landedCostEntries: landedCostEntries,
         landedCostAllocationMethod: landedCostAllocationMethod,
         discountCode: discountCode,
+        extraDiscountAmount: extraDiscountAmount,
       );
       return _service.updatePurchaseOrder(purchaseOrderId, draft);
     });

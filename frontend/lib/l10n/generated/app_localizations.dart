@@ -11131,7 +11131,7 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'{received} من {ordered}'**
-  String purchaseOrderReceivedProgressValue(int received, int ordered);
+  String purchaseOrderReceivedProgressValue(String received, String ordered);
 
   /// No description provided for @purchaseOrderPrintAction.
   ///
@@ -11437,7 +11437,7 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'المتبقي {remaining} من {quantity}'**
-  String purchaseAdjustmentLineRemaining(int remaining, int quantity);
+  String purchaseAdjustmentLineRemaining(String remaining, String quantity);
 
   /// No description provided for @purchaseAdjustmentHistoryEmpty.
   ///
@@ -11493,7 +11493,7 @@ abstract class AppLocalizations {
   /// **'بديل: {product} × {quantity} بتكلفة {unitCost}'**
   String purchaseExchangeReplacementHistoryLine(
     String product,
-    int quantity,
+    String quantity,
     String unitCost,
   );
 
@@ -11573,25 +11573,25 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'المطلوب {quantity}'**
-  String purchaseReceiveExpectedValue(int quantity);
+  String purchaseReceiveExpectedValue(String quantity);
 
   /// Already received quantity in the receiving dialog.
   ///
   /// In ar, this message translates to:
   /// **'استلم سابقًا {quantity}'**
-  String purchaseReceiveAlreadyValue(int quantity);
+  String purchaseReceiveAlreadyValue(String quantity);
 
   /// Open/backordered quantity in the receiving dialog.
   ///
   /// In ar, this message translates to:
   /// **'المفتوح {quantity}'**
-  String purchaseReceiveOpenValue(int quantity);
+  String purchaseReceiveOpenValue(String quantity);
 
   /// Open or backordered quantity after receiving dialog values are applied.
   ///
   /// In ar, this message translates to:
   /// **'المفتوح بعد الإدخال {quantity}'**
-  String purchaseReceiveOpenAfterValue(int quantity);
+  String purchaseReceiveOpenAfterValue(String quantity);
 
   /// Receiving variance after entered quantities are applied.
   ///
@@ -11621,31 +11621,31 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'الكمية {quantity}'**
-  String purchaseOrderLineQuantity(int quantity);
+  String purchaseOrderLineQuantity(String quantity);
 
   /// Total received quantity shown on purchase order lines and receipts.
   ///
   /// In ar, this message translates to:
   /// **'مستلم {quantity}'**
-  String purchaseLineReceivedQuantity(int quantity);
+  String purchaseLineReceivedQuantity(String quantity);
 
   /// Open or backordered quantity shown on purchase order lines.
   ///
   /// In ar, this message translates to:
   /// **'مفتوح/متأخر {quantity}'**
-  String purchaseLineOpenQuantity(int quantity);
+  String purchaseLineOpenQuantity(String quantity);
 
   /// Damaged purchase quantity.
   ///
   /// In ar, this message translates to:
   /// **'تالف {quantity}'**
-  String purchaseLineDamagedQuantity(int quantity);
+  String purchaseLineDamagedQuantity(String quantity);
 
   /// Rejected purchase quantity.
   ///
   /// In ar, this message translates to:
   /// **'مرفوض {quantity}'**
-  String purchaseLineRejectedQuantity(int quantity);
+  String purchaseLineRejectedQuantity(String quantity);
 
   /// Purchase receiving variance quantity.
   ///
@@ -22883,6 +22883,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'ليس لديك صلاحية إرسال الحملات'**
   String get campaignNoSendPermission;
+
+  /// Label for the purchase draft line quantity entry dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية'**
+  String get purchaseLineQuantityLabel;
+
+  /// Label for the one-off manual discount amount on a purchase order.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم على أمر الشراء'**
+  String get purchaseExtraDiscountLabel;
+
+  /// Hint for the one-off purchase order discount field.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ يُخصم من إجمالي هذا الأمر (مثلاً لإزالة الكسور)'**
+  String get purchaseExtraDiscountHint;
 }
 
 class _AppLocalizationsDelegate

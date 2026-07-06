@@ -108,13 +108,21 @@ def web_command(extra_args):
         os.environ.get("POINTY_ASGI_KEEP_ALIVE", "5"),
         "--timeout-graceful-shutdown",
         os.environ.get("POINTY_ASGI_GRACEFUL_TIMEOUT", "30"),
-        "--limit-max-requests",
-        os.environ.get("POINTY_ASGI_MAX_REQUESTS", "1000"),
-        "--limit-max-requests-jitter",
-        os.environ.get("POINTY_ASGI_MAX_REQUESTS_JITTER", "100"),
         "--ws",
         "auto",
     ]
+    # Worker recycling is OFF by default: with steady POS polling all workers
+    # hit the request limit near-simultaneously (the small jitter cannot
+    # separate them), taking the whole API down for a Django cold start at
+    # fixed wall-clock intervals — observed in the field as the backend
+    # "going down every N minutes". Opt back in explicitly (with a LARGE
+    # jitter) only if a leak ever forces it.
+    max_requests = os.environ.get("POINTY_ASGI_MAX_REQUESTS", "")
+    if max_requests and max_requests != "0":
+        command.extend(["--limit-max-requests", max_requests])
+        jitter = os.environ.get("POINTY_ASGI_MAX_REQUESTS_JITTER", "")
+        if jitter and jitter != "0":
+            command.extend(["--limit-max-requests-jitter", jitter])
     limit_concurrency = os.environ.get("POINTY_ASGI_LIMIT_CONCURRENCY", "")
     if limit_concurrency:
         command.extend(["--limit-concurrency", limit_concurrency])

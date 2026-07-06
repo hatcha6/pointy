@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/cart_line.dart';
+import '../../../data/models/product.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
@@ -67,7 +68,13 @@ class CartLineTile extends StatelessWidget {
       onIncrement: onAdd,
       onDecrement: onRemove,
       onRemove: onDelete,
-      onQuantityTap: (line.variant.unit == 'piece' && line.isBaseUnit)
+      // Tap-to-type stays off only for plain whole-piece lines; weighted
+      // products and any multi-unit product (egg trays) open the quantity /
+      // unit sheet, where fractional entry follows the unit's own rule.
+      onQuantityTap:
+          (line.variant.unit == 'piece' &&
+              line.isBaseUnit &&
+              !Product.fromVariant(line.variant).hasSellableUnits)
           ? null
           : onEditQuantity,
     );

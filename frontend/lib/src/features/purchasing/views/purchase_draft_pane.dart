@@ -463,75 +463,285 @@ class _PurchaseDraftHeaderActions extends StatelessWidget {
   }
 }
 
-class _PurchaseDraftScrollContent extends StatelessWidget {
+class _PurchaseDraftScrollContent extends StatefulWidget {
   const _PurchaseDraftScrollContent({required this.viewModel});
 
   final PurchaseViewModel viewModel;
+
+  @override
+  State<_PurchaseDraftScrollContent> createState() =>
+      _PurchaseDraftScrollContentState();
+}
+
+/// Keyboard flow mirrors the POS cart exactly: tap a line to select it, type a
+/// quantity (previewed in the banner below), Enter applies it; +/- step,
+/// Backspace edits, Esc clears the entry then the selection.
+class _PurchaseDraftScrollContentState
+    extends State<_PurchaseDraftScrollContent> {
+  final FocusNode _focusNode = FocusNode(debugLabel: 'purchase_draft_keyboard');
+  int? _focusedVariantId;
+  String _pendingQuantity = '';
+  int _lastLineCount = -1;
+
+  PurchaseViewModel get _viewModel => widget.viewModel;
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  PurchaseDraftLine? _focusedLine(List<PurchaseDraftLine> lines) {
+    final id = _focusedVariantId;
+    if (id == null) {
+      return null;
+    }
+    for (final line in lines) {
+      if (line.variant.id == id) {
+        return line;
+      }
+    }
+    return null;
+  }
+
+  void _focusLine(PurchaseDraftLine line) {
+    setState(() {
+      _focusedVariantId = line.variant.id;
+      _pendingQuantity = '';
+    });
+    _focusNode.requestFocus();
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent || _viewModel.isSubmitting) {
+      return KeyEventResult.ignored;
+    }
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isAltPressed ||
+        HardwareKeyboard.instance.isMetaPressed) {
+      return KeyEventResult.ignored;
+    }
+    final line = _focusedLine(_viewModel.draft);
+    if (line == null) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+
+    final digit = _draftDigitKeys[key];
+    if (digit != null) {
+      if (_pendingQuantity.length < 7) {
+        setState(() => _pendingQuantity = '$_pendingQuantity$digit');
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.period ||
+        key == LogicalKeyboardKey.numpadDecimal) {
+      // Fractional entry (2.5 trays) — only for units that allow it, and at
+      // most one decimal point.
+      if (line.unitAllowsFractional &&
+          !_pendingQuantity.contains('.') &&
+          _pendingQuantity.length < 6) {
+        setState(
+          () => _pendingQuantity = _pendingQuantity.isEmpty
+              ? '0.'
+              : '$_pendingQuantity.',
+        );
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.backspace) {
+      if (_pendingQuantity.isEmpty) {
+        return KeyEventResult.ignored;
+      }
+      setState(
+        () => _pendingQuantity = _pendingQuantity.substring(
+          0,
+          _pendingQuantity.length - 1,
+        ),
+      );
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      _applyPendingQuantity(line);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.add ||
+        key == LogicalKeyboardKey.numpadAdd ||
+        key == LogicalKeyboardKey.equal) {
+      setState(() => _pendingQuantity = '');
+      unawaited(
+        _viewModel.addVariant(
+          line.variant,
+          source: 'purchase_draft_quantity_button',
+        ),
+      );
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.minus ||
+        key == LogicalKeyboardKey.numpadSubtract) {
+      setState(() => _pendingQuantity = '');
+      _viewModel.decrementVariant(
+        line.variant,
+        source: 'purchase_draft_quantity_button',
+      );
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      if (_pendingQuantity.isNotEmpty) {
+        setState(() => _pendingQuantity = '');
+      } else {
+        setState(() => _focusedVariantId = null);
+        _focusNode.unfocus();
+      }
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _applyPendingQuantity(PurchaseDraftLine line) {
+    final quantity = double.tryParse(_pendingQuantity);
+    setState(() => _pendingQuantity = '');
+    if (quantity != null && quantity > 0) {
+      _viewModel.setLineQuantity(
+        line.variant,
+        quantity,
+        source: 'purchase_quantity_edit',
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
+    final viewModel = _viewModel;
     final visibleDraft = viewModel.draft.reversed.toList(growable: false);
+    // A structural change (line added/removed) invalidates half-typed input.
+    if (visibleDraft.length != _lastLineCount) {
+      _lastLineCount = visibleDraft.length;
+      _pendingQuantity = '';
+    }
+    final focusedLine = _focusedLine(viewModel.draft);
+    final scopeFocused = _focusNode.hasFocus;
 
-    return ListView(
-      padding: EdgeInsetsDirectional.fromSTEB(
-        spacing.md,
-        spacing.sm,
-        spacing.md,
-        spacing.md,
+    return Focus(
+      focusNode: _focusNode,
+      onKeyEvent: _handleKey,
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: EdgeInsetsDirectional.fromSTEB(
+                spacing.md,
+                spacing.sm,
+                spacing.md,
+                spacing.md,
+              ),
+              children: [
+                if (viewModel.draft.isEmpty)
+                  SizedBox(
+                    height: 240,
+                    child: PointyEmptyState(
+                      icon: Icons.inventory_2_outlined,
+                      title: l10n.emptyPurchaseDraft,
+                      message: l10n.emptyPurchaseDraftMessage,
+                    ),
+                  )
+                else
+                  for (
+                    var index = 0;
+                    index < visibleDraft.length;
+                    index += 1
+                  ) ...[
+                    if (index > 0) Divider(height: 1, color: colors.line),
+                    PurchaseDraftLineTile(
+                      line: visibleDraft[index],
+                      previewLine: viewModel.discountPreviewLineForDraftIndex(
+                        viewModel.draft.length - index - 1,
+                      ),
+                      enabled: !viewModel.isSubmitting,
+                      selected:
+                          scopeFocused &&
+                          _focusedVariantId == visibleDraft[index].variant.id,
+                      onSelect: viewModel.isSubmitting
+                          ? null
+                          : () => _focusLine(visibleDraft[index]),
+                      onAdd: () => viewModel.addVariant(
+                        visibleDraft[index].variant,
+                        source: 'purchase_draft_quantity_button',
+                      ),
+                      onRemove: () => viewModel.decrementVariant(
+                        visibleDraft[index].variant,
+                        source: 'purchase_draft_quantity_button',
+                      ),
+                      onCostChanged: (unitCost) {
+                        viewModel.updateLineCost(
+                          visibleDraft[index].variant,
+                          unitCost,
+                        );
+                      },
+                      onExpiryDateChanged: (expiryDate) {
+                        viewModel.updateLineExpiryDate(
+                          visibleDraft[index].variant,
+                          expiryDate,
+                        );
+                      },
+                      onUnitChanged: (code, label, factor, allowsFractional) {
+                        viewModel.updateLineUnit(
+                          visibleDraft[index].variant,
+                          unitCode: code,
+                          unitLabel: label,
+                          unitFactor: factor,
+                          allowsFractional: allowsFractional,
+                        );
+                      },
+                      onQuantityChanged: (quantity) {
+                        viewModel.setLineQuantity(
+                          visibleDraft[index].variant,
+                          quantity,
+                          source: 'purchase_quantity_edit',
+                        );
+                      },
+                    ),
+                  ],
+              ],
+            ),
+          ),
+          if (_pendingQuantity.isNotEmpty && focusedLine != null)
+            PendingQuantityBanner(
+              quantity: _pendingQuantity,
+              productName: focusedLine.variant.productLabel,
+            ),
+        ],
       ),
-      children: [
-        if (viewModel.draft.isEmpty)
-          SizedBox(
-            height: 240,
-            child: PointyEmptyState(
-              icon: Icons.inventory_2_outlined,
-              title: l10n.emptyPurchaseDraft,
-              message: l10n.emptyPurchaseDraftMessage,
-            ),
-          )
-        else
-          for (var index = 0; index < visibleDraft.length; index += 1) ...[
-            if (index > 0) Divider(height: 1, color: colors.line),
-            PurchaseDraftLineTile(
-              line: visibleDraft[index],
-              previewLine: viewModel.discountPreviewLineForDraftIndex(
-                viewModel.draft.length - index - 1,
-              ),
-              enabled: !viewModel.isSubmitting,
-              onAdd: () => viewModel.addVariant(
-                visibleDraft[index].variant,
-                source: 'purchase_draft_quantity_button',
-              ),
-              onRemove: () => viewModel.decrementVariant(
-                visibleDraft[index].variant,
-                source: 'purchase_draft_quantity_button',
-              ),
-              onCostChanged: (unitCost) {
-                viewModel.updateLineCost(visibleDraft[index].variant, unitCost);
-              },
-              onExpiryDateChanged: (expiryDate) {
-                viewModel.updateLineExpiryDate(
-                  visibleDraft[index].variant,
-                  expiryDate,
-                );
-              },
-              onUnitChanged: (code, label, factor) {
-                viewModel.updateLineUnit(
-                  visibleDraft[index].variant,
-                  unitCode: code,
-                  unitLabel: label,
-                  unitFactor: factor,
-                );
-              },
-            ),
-          ],
-      ],
     );
   }
 }
+
+final Map<LogicalKeyboardKey, String> _draftDigitKeys = {
+  LogicalKeyboardKey.digit0: '0',
+  LogicalKeyboardKey.digit1: '1',
+  LogicalKeyboardKey.digit2: '2',
+  LogicalKeyboardKey.digit3: '3',
+  LogicalKeyboardKey.digit4: '4',
+  LogicalKeyboardKey.digit5: '5',
+  LogicalKeyboardKey.digit6: '6',
+  LogicalKeyboardKey.digit7: '7',
+  LogicalKeyboardKey.digit8: '8',
+  LogicalKeyboardKey.digit9: '9',
+  LogicalKeyboardKey.numpad0: '0',
+  LogicalKeyboardKey.numpad1: '1',
+  LogicalKeyboardKey.numpad2: '2',
+  LogicalKeyboardKey.numpad3: '3',
+  LogicalKeyboardKey.numpad4: '4',
+  LogicalKeyboardKey.numpad5: '5',
+  LogicalKeyboardKey.numpad6: '6',
+  LogicalKeyboardKey.numpad7: '7',
+  LogicalKeyboardKey.numpad8: '8',
+  LogicalKeyboardKey.numpad9: '9',
+};
 
 class _PurchaseDraftTotals extends StatelessWidget {
   const _PurchaseDraftTotals({required this.viewModel});
@@ -638,6 +848,12 @@ class _PurchaseDraftSettingsDialogState
           .toList(growable: true);
   late LandedCostAllocationMethod _landedCostAllocationMethod =
       widget.viewModel.landedCostAllocationMethod;
+  late final TextEditingController _extraDiscountController =
+      TextEditingController(
+        text: widget.viewModel.extraDiscount <= 0
+            ? ''
+            : formatQuantity(widget.viewModel.extraDiscount),
+      );
   late final String _initialNumber = widget.numberController.text;
   late final String _initialDate = widget.dateController.text;
   late final String _initialDiscountCode = widget.discountController.text;
@@ -647,6 +863,7 @@ class _PurchaseDraftSettingsDialogState
     for (final controllers in _landedCostControllers) {
       controllers.dispose();
     }
+    _extraDiscountController.dispose();
     super.dispose();
   }
 
@@ -842,6 +1059,25 @@ class _PurchaseDraftSettingsDialogState
                 ),
               ),
               const SizedBox(height: 12),
+              // One-off order discount — a quick flat amount for THIS order
+              // (decimals welcome: its main job is killing fraction totals).
+              TextField(
+                key: const ValueKey('purchase_extra_discount_field'),
+                controller: _extraDiscountController,
+                enabled: !widget.viewModel.isSubmitting,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [DecimalTextInputFormatter()],
+                decoration: InputDecoration(
+                  labelText: l10n.purchaseExtraDiscountLabel,
+                  hintText: l10n.purchaseExtraDiscountHint,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.discount_outlined),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 12),
               TextField(
                 key: const ValueKey('purchase_discount_code_field'),
                 controller: widget.discountController,
@@ -1006,6 +1242,11 @@ class _PurchaseDraftSettingsDialogState
     if (_currentDiscountCode != widget.viewModel.discountCode.trim()) {
       widget.viewModel.updateDiscountCode(_currentDiscountCode);
     }
+    final extraDiscount =
+        parseDecimal(_extraDiscountController.text.trim()) ?? 0;
+    if (extraDiscount != widget.viewModel.extraDiscount) {
+      widget.viewModel.updateExtraDiscount(extraDiscount < 0 ? 0 : extraDiscount);
+    }
   }
 
   void _cancel() {
@@ -1169,11 +1410,19 @@ class PurchaseDraftLineTile extends StatefulWidget {
     required this.onCostChanged,
     required this.onExpiryDateChanged,
     this.onUnitChanged,
+    this.onQuantityChanged,
+    this.selected = false,
+    this.onSelect,
   });
 
   final PurchaseDraftLine line;
   final PurchaseDiscountPreviewLine? previewLine;
   final bool enabled;
+
+  /// Keyboard-entry selection (tap-to-focus, like the POS cart): the selected
+  /// line renders highlighted and receives typed quantities.
+  final bool selected;
+  final VoidCallback? onSelect;
   final Future<void> Function() onAdd;
   final VoidCallback onRemove;
   final ValueChanged<double> onCostChanged;
@@ -1181,7 +1430,14 @@ class PurchaseDraftLineTile extends StatefulWidget {
 
   /// Selected purchase unit changed: (code, label, factorToBase). Base unit is
   /// reported with an empty code.
-  final void Function(String code, String label, double factor)? onUnitChanged;
+  final void Function(
+    String code,
+    String label,
+    double factor,
+    bool allowsFractional,
+  )?
+  onUnitChanged;
+  final ValueChanged<double>? onQuantityChanged;
 
   @override
   State<PurchaseDraftLineTile> createState() => _PurchaseDraftLineTileState();
@@ -1304,11 +1560,14 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
     );
 
     final stepper = PointyQuantityStepper(
-      quantity: line.quantity.toDouble(),
+      quantity: line.quantity,
       incrementTooltip: l10n.addOneTooltip,
       decrementTooltip: l10n.removeOneTooltip,
       onIncrement: widget.enabled ? () => widget.onAdd() : null,
       onDecrement: widget.enabled ? widget.onRemove : null,
+      onQuantityTap: widget.enabled && widget.onQuantityChanged != null
+          ? () => _promptQuantity(context)
+          : null,
     );
 
     final unitOptions = purchasableUnitOptions(
@@ -1342,6 +1601,7 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                       option.isBase ? '' : option.code,
                       option.label,
                       option.factorToBase,
+                      option.allowsFractional,
                     );
                   }
                 : null,
@@ -1401,60 +1661,83 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
           )
         : null;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              PointyProductImageFrame(
-                imageUrl: imageUrl,
-                fallbackText: line.variant.displayLabel,
-                width: 54,
-                height: 54,
-                padding: const EdgeInsets.all(6),
-              ),
-              const SizedBox(width: 12),
-              Expanded(child: info),
-              const SizedBox(width: 10),
-              totalText,
-            ],
+    final selectionColors = context.pointyColors;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: widget.onSelect,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsetsDirectional.only(start: 8),
+        decoration: BoxDecoration(
+          color: widget.selected ? selectionColors.primaryContainer : null,
+          border: BorderDirectional(
+            start: BorderSide(
+              color: widget.selected
+                  ? selectionColors.primaryStrong
+                  : Colors.transparent,
+              width: 3,
+            ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 190),
-                    child: costField,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  PointyProductImageFrame(
+                    imageUrl: imageUrl,
+                    fallbackText: line.variant.displayLabel,
+                    width: 54,
+                    height: 54,
+                    padding: const EdgeInsets.all(6),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(child: info),
+                  const SizedBox(width: 10),
+                  totalText,
+                ],
               ),
-              if (unitField != null) ...[
-                const SizedBox(width: 12),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 150),
-                  child: unitField,
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 190),
+                        child: costField,
+                      ),
+                    ),
+                  ),
+                  if (unitField != null) ...[
+                    const SizedBox(width: 12),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 150),
+                      child: unitField,
+                    ),
+                  ],
+                  const SizedBox(width: 12),
+                  stepper,
+                ],
+              ),
+              if (baseEquivalent != null) ...[
+                const SizedBox(height: 6),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: baseEquivalent,
                 ),
               ],
-              const SizedBox(width: 12),
-              stepper,
+              if (expiryField != null) ...[
+                const SizedBox(height: 12),
+                expiryField,
+              ],
             ],
           ),
-          if (baseEquivalent != null) ...[
-            const SizedBox(height: 6),
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: baseEquivalent,
-            ),
-          ],
-          if (expiryField != null) ...[const SizedBox(height: 12), expiryField],
-        ],
+        ),
       ),
     );
   }
@@ -1474,6 +1757,66 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
     }
     setState(() => _expiryInputInvalid = false);
     widget.onExpiryDateChanged(parsed);
+  }
+
+  /// Tap-to-type quantity entry on the stepper. Decimal input is offered only
+  /// when the line's unit transacts in fractions (half an egg tray, 2.5 kg) —
+  /// mirroring the backend's per-unit whole-number rule.
+  Future<void> _promptQuantity(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final line = widget.line;
+    final allowsFractional = line.unitAllowsFractional;
+    final controller = TextEditingController(
+      text: formatQuantity(line.quantity),
+    );
+    final submitted = await showDialog<double>(
+      context: context,
+      builder: (dialogContext) {
+        void submit() {
+          final parsed = double.tryParse(controller.text.trim());
+          if (parsed == null || parsed <= 0) {
+            return;
+          }
+          if (!allowsFractional && parsed != parsed.roundToDouble()) {
+            return;
+          }
+          Navigator.of(dialogContext).pop(parsed);
+        }
+
+        return AlertDialog(
+          title: Text(
+            line.unitLabel.isEmpty
+                ? l10n.purchaseLineQuantityLabel
+                : '${l10n.purchaseLineQuantityLabel} (${line.unitLabel})',
+          ),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: TextInputType.numberWithOptions(
+              decimal: allowsFractional,
+            ),
+            inputFormatters: [
+              if (allowsFractional)
+                DecimalTextInputFormatter()
+              else
+                FilteringTextInputFormatter.digitsOnly,
+            ],
+            onSubmitted: (_) => submit(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(l10n.cancelButton),
+            ),
+            FilledButton(onPressed: submit, child: Text(l10n.confirmButton)),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    if (submitted != null) {
+      widget.onQuantityChanged?.call(submitted);
+    }
   }
 
   Future<void> _pickExpiryDate() async {

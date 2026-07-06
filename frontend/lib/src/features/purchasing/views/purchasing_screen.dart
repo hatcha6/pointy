@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/product.dart';
-import '../../../data/models/product_variant.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
@@ -138,6 +138,7 @@ class _PurchasingWorkspace extends StatelessWidget {
       unitCode: next.isBase ? '' : next.code,
       unitLabel: next.label,
       unitFactor: next.factorToBase,
+      allowsFractional: next.allowsFractional,
     );
     return true;
   }
@@ -183,9 +184,9 @@ class _PurchasingWorkspace extends StatelessWidget {
   Future<void> _addBarcode(BuildContext context, String barcode) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
-    ProductVariant? variant;
+    BarcodeResolution? resolution;
     try {
-      variant = await resolveOrCreatePurchaseVariant(
+      resolution = await resolveOrCreatePurchaseBarcode(
         context,
         viewModel: viewModel,
         barcode: barcode,
@@ -199,10 +200,14 @@ class _PurchasingWorkspace extends StatelessWidget {
         ..showSnackBar(SnackBar(content: Text(l10n.barcodeScanError)));
       return;
     }
-    if (variant == null) {
+    if (resolution == null) {
       return;
     }
-    await viewModel.addVariant(variant, source: 'purchase_barcode_lookup');
+    await viewModel.addVariant(
+      resolution.variant,
+      unit: resolution.unit,
+      source: 'purchase_barcode_lookup',
+    );
   }
 }
 

@@ -1,5 +1,14 @@
 part of 'pos_view_model.dart';
 
+/// Add sources that arm the type-a-quantity shortcut, exactly like a hardware
+/// scan does: picking a product from the catalog then typing "12" sets the new
+/// line's quantity — no extra tap on the cart line.
+const _quickQuantityAddSources = {
+  'product_tile',
+  'variant_picker',
+  'camera_scanner',
+};
+
 extension PosCartActions on PosViewModel {
   void addVariant(
     ProductVariant variant, {
@@ -15,6 +24,15 @@ extension PosCartActions on PosViewModel {
       unit: unit,
       source: source,
     )) {
+      if (_quickQuantityAddSources.contains(source)) {
+        _lastScannedLineKey = _mergeableLineFor(
+          variant,
+          modifiers,
+          _unitCodeFor(unit),
+        )?.lineKey;
+        _quickQuantityBuffer = '';
+        _quickQuantityAt = null;
+      }
       _notifyChanged();
       unawaited(refreshDiscountPreview());
     }
@@ -330,8 +348,11 @@ extension PosCartActions on PosViewModel {
         ),
       );
     } else {
-      final line = _cart.removeAt(index);
-      _cart.add(line.copyWith(quantity: line.quantity + quantity));
+      // Merge in place: a line's position is set on first insertion and never
+      // changes afterwards — re-adds and quantity edits must not shuffle the
+      // list under the cashier's eyes.
+      final line = _cart[index];
+      _cart[index] = line.copyWith(quantity: line.quantity + quantity);
     }
     _touchActiveSaleSession();
     return true;

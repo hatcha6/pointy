@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
+import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_draft.dart';
@@ -17,6 +18,16 @@ import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
+import '../../../shared/units.dart';
+
+/// Add sources that arm the type-a-quantity shortcut, exactly like a hardware
+/// scan does: picking a product from the catalog then typing "12" sets the new
+/// line's quantity — no extra tap on the draft line.
+const _quickQuantityAddSources = {
+  'purchase_barcode_lookup',
+  'purchase_catalog_tile',
+  'purchase_catalog',
+};
 
 class PurchaseViewModel extends ChangeNotifier {
   PurchaseViewModel(
@@ -80,6 +91,7 @@ class PurchaseViewModel extends ChangeNotifier {
   String _supplierInvoiceDateInput = '';
   List<PurchaseLandedCostEntry> _landedCostEntries = [];
   String _discountCode = '';
+  double _extraDiscount = 0;
   String _submitIdempotencyKey = _newPurchaseIdempotencyKey('purchase-draft');
   PurchaseDiscountPreview? _discountPreview;
   bool _isLoadingDiscountPreview = false;
@@ -112,6 +124,9 @@ class PurchaseViewModel extends ChangeNotifier {
   List<PurchaseLandedCostEntry> get landedCostEntries =>
       List.unmodifiable(_landedCostEntries);
   String get discountCode => _discountCode;
+
+  /// One-off order discount typed by hand (mostly a fraction eliminator).
+  double get extraDiscount => _extraDiscount;
   PurchaseDiscountPreview? get discountPreview => _discountPreview;
   bool get isLoadingDiscountPreview => _isLoadingDiscountPreview;
   bool get hasDiscountPreviewError => _hasDiscountPreviewError;
@@ -240,20 +255,29 @@ class PurchaseViewModel extends ChangeNotifier {
   }
 
   Future<ProductVariant?> findVariantByBarcode(String barcode) async {
+    final resolution = await resolveBarcode(barcode);
+    // Packaging (unit) barcodes land on the product's default variant here —
+    // the draft line then opens in the product's default purchase unit.
+    return resolution?.variant;
+  }
+
+  /// Resolves a scanned code to its variant and, for packaging barcodes (the
+  /// carton EAN), the matched unit — so the draft line is created in cartons.
+  Future<BarcodeResolution?> resolveBarcode(String barcode) async {
     final normalizedBarcode = barcode.trim();
     if (normalizedBarcode.isEmpty) {
       return null;
     }
 
-    final result = await _catalogRepository.findProductVariantByBarcode(
+    final result = await _catalogRepository.resolveBarcode(
       normalizedBarcode,
       activeOnly: true,
     );
     return switch (result) {
-      Ok<ProductVariant?>(:final value) => value,
+      Ok<BarcodeResolution?>(:final value) => value,
       // A lookup failure (network/server) degrades to "not found" instead of
       // throwing into the scan handler; the nullable return already signals it.
-      Error<ProductVariant?>() => null,
+      Error<BarcodeResolution?>() => null,
     };
   }
 
@@ -281,8 +305,9 @@ class PurchaseViewModel extends ChangeNotifier {
 
   Future<void> addVariant(
     ProductVariant variant, {
-    int quantity = 1,
+    double quantity = 1,
     double? unitCost,
+    ProductUnit? unit,
     String source = 'purchase_catalog',
   }) async {
     if (_isSubmitting) {
@@ -290,30 +315,42 @@ class PurchaseViewModel extends ChangeNotifier {
     }
 
     final index = _draft.indexWhere((line) => line.variant.id == variant.id);
-    final previousQuantity = index == -1 ? 0 : _draft[index].quantity;
+    final previousQuantity = index == -1 ? 0.0 : _draft[index].quantity;
     if (index == -1) {
-      final cost = unitCost ?? await _lastCostForVariant(variant);
+      // A scanned packaging barcode dictates the line's unit; otherwise the
+      // product's configured default purchase unit applies.
+      final lineUnit = (unit != null && unit.isPurchasable)
+          ? unit
+          : _defaultPurchaseUnit(variant);
+      final lineFactor = lineUnit?.factorToBase ?? 1;
+      // The fetched cost is per BASE unit; the line's cost is per its own
+      // unit, so a carton line starts at base × pieces-per-carton. An
+      // explicitly passed cost is already in the line's unit.
+      final cost =
+          unitCost ?? (await _lastCostForVariant(variant)) * lineFactor;
       if (_isSubmitting) {
         return;
       }
-      final defaultUnit = _defaultPurchaseUnit(variant);
       _draft.add(
         PurchaseDraftLine(
           variant: variant,
-          quantity: quantity.clamp(1, 999),
+          quantity: _clampQuantity(quantity),
           unitCost: cost,
-          unitCode: defaultUnit?.code ?? '',
-          unitLabel: defaultUnit?.label ?? '',
-          unitFactor: defaultUnit?.factorToBase ?? 1,
+          unitCode: lineUnit?.code ?? '',
+          unitLabel: lineUnit?.label ?? '',
+          unitFactor: lineFactor,
+          unitAllowsFractional: _unitAllowsFractional(variant, lineUnit),
         ),
       );
     } else {
-      final line = _draft.removeAt(index);
-      _draft.add(
-        line.copyWith(
-          quantity: (line.quantity + quantity).clamp(1, 999),
-          unitCost: unitCost,
-        ),
+      // The draft keeps one line per variant: repeat adds bump the quantity in
+      // the line's existing unit (switch units from the line's unit chip).
+      // Updated in place — a line's position is set on first insertion and
+      // never changes afterwards.
+      final line = _draft[index];
+      _draft[index] = line.copyWith(
+        quantity: _clampQuantity(line.quantity + quantity),
+        unitCost: unitCost,
       );
     }
     final updatedLine = _draft
@@ -327,8 +364,10 @@ class PurchaseViewModel extends ChangeNotifier {
         source: source,
       );
     }
-    if (source == 'purchase_barcode_lookup') {
-      // Arm the scan-then-type quick adjust on the line the scan landed on.
+    if (_quickQuantityAddSources.contains(source)) {
+      // Arm the scan-then-type quick adjust on the line the add landed on —
+      // scanning and picking from the catalog behave the same: type a number
+      // right after to set the quantity.
       _lastScannedVariantId = variant.id;
       _quickQuantityBuffer = '';
       _quickQuantityAt = null;
@@ -348,11 +387,12 @@ class PurchaseViewModel extends ChangeNotifier {
     return _draft.where((line) => line.variant.id == variantId).firstOrNull;
   }
 
-  /// Sets a draft line's quantity outright (the scan-then-type flow; the
-  /// steppers keep using [addVariant]/[decrementVariant]).
+  /// Sets a draft line's quantity outright (the scan-then-type flow and the
+  /// quantity editor; the steppers keep using [addVariant]/[decrementVariant]).
+  /// Fractional values only stick when the line's unit allows them.
   void setLineQuantity(
     ProductVariant variant,
-    int quantity, {
+    double quantity, {
     String source = 'purchase_quantity_edit',
   }) {
     if (_isSubmitting || quantity <= 0) {
@@ -363,7 +403,10 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     final line = _draft[index];
-    final clamped = quantity.clamp(1, 999);
+    if (!line.unitAllowsFractional && quantity != quantity.roundToDouble()) {
+      return;
+    }
+    final clamped = _clampQuantity(quantity);
     if (line.quantity == clamped) {
       return;
     }
@@ -381,9 +424,10 @@ class PurchaseViewModel extends ChangeNotifier {
     unawaited(refreshDiscountPreview());
   }
 
-  /// Scan-then-type quantity: digits typed right after a scan REPLACE the last
+  /// Scan-then-type quantity: keys typed right after a scan REPLACE the last
   /// scanned line's quantity, accumulating across keystrokes ("1" then "2" →
-  /// 12) until the idle window passes or another scan re-arms the flow.
+  /// 12; "2","." ,"5" → 2.5 for fractional units) until the idle window passes
+  /// or another scan re-arms the flow.
   bool applyQuickQuantityDigits(String digits) {
     if (_isSubmitting || digits.isEmpty) {
       return false;
@@ -398,18 +442,45 @@ class PurchaseViewModel extends ChangeNotifier {
       _quickQuantityBuffer = '';
     }
     final accumulated = _quickQuantityBuffer + digits;
-    final quantity = int.tryParse(accumulated);
-    if (quantity == null || accumulated.length > 4) {
+    if (accumulated.contains('.') &&
+        (!line.unitAllowsFractional ||
+            '.'.allMatches(accumulated).length > 1)) {
+      // A decimal point the unit cannot honour: drop the whole entry rather
+      // than silently reading "2.5" as 25.
+      _quickQuantityBuffer = '';
+      return false;
+    }
+    final quantity = double.tryParse(accumulated);
+    if (quantity == null && accumulated != '.' && !accumulated.endsWith('.')) {
+      return false;
+    }
+    if (accumulated.length > 7) {
       return false;
     }
     _quickQuantityBuffer = accumulated;
     _quickQuantityAt = now;
-    if (quantity <= 0) {
-      // A leading "0": keep accumulating ("05" → 5) without touching the line.
+    if (quantity == null || quantity <= 0) {
+      // A leading "0" or a trailing "." — keep accumulating ("0.5", "2.5")
+      // without touching the line yet.
       return true;
     }
     setLineQuantity(line.variant, quantity, source: 'scan_quick_quantity');
     return true;
+  }
+
+  /// Draft quantities live in 0.001–999999.999 (3dp, matching the backend).
+  static double _clampQuantity(double quantity) {
+    final clamped = quantity.clamp(0.001, 999999.999);
+    return (clamped * 1000).roundToDouble() / 1000;
+  }
+
+  /// Whether [unit] (or the base unit when null) transacts in fractions.
+  bool _unitAllowsFractional(ProductVariant variant, ProductUnit? unit) {
+    if (unit != null) {
+      return unit.allowsFractional;
+    }
+    final baseUnit = variant.productDetail?.unit ?? variant.unit;
+    return baseUnitAllowsFractional(baseUnit);
   }
 
   void decrementVariant(
@@ -467,6 +538,7 @@ class PurchaseViewModel extends ChangeNotifier {
     required String unitCode,
     required String unitLabel,
     required double unitFactor,
+    bool allowsFractional = false,
   }) {
     if (_isSubmitting) {
       return;
@@ -475,11 +547,31 @@ class PurchaseViewModel extends ChangeNotifier {
     if (index == -1) {
       return;
     }
-    _draft[index] = _draft[index].copyWith(
+    final line = _draft[index];
+    // A fractional leftover (2.5 trays) cannot survive a switch to a
+    // whole-number unit — round it up to the next whole quantity.
+    final quantity = (!allowsFractional && line.quantity != line.quantity.roundToDouble())
+        ? line.quantity.ceilToDouble()
+        : line.quantity;
+    // The cost is per the line's unit: switching carton → tray rescales it
+    // proportionally (162 per carton of 12 trays → 13.50 per tray), keeping
+    // hand-entered costs meaningful across unit changes.
+    final previousFactor = line.unitFactor <= 0 ? 1.0 : line.unitFactor;
+    final newFactor = unitFactor <= 0 ? 1.0 : unitFactor;
+    final rescaledCost = double.parse(
+      (line.unitCost / previousFactor * newFactor).toStringAsFixed(2),
+    );
+    _draft[index] = line.copyWith(
+      quantity: quantity,
+      unitCost: rescaledCost,
       unitCode: unitCode,
       unitLabel: unitLabel,
       unitFactor: unitFactor,
+      unitAllowsFractional: allowsFractional,
     );
+    // A half-typed quick quantity belongs to the previous unit — drop it.
+    _quickQuantityBuffer = '';
+    _quickQuantityAt = null;
     _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
@@ -590,6 +682,16 @@ class PurchaseViewModel extends ChangeNotifier {
     unawaited(refreshDiscountPreview());
   }
 
+  void updateExtraDiscount(double value) {
+    if (_isSubmitting || value < 0) {
+      return;
+    }
+    _extraDiscount = value;
+    _touchSubmissionIntent();
+    notifyListeners();
+    unawaited(refreshDiscountPreview());
+  }
+
   void updateLandedCostAllocationMethod(LandedCostAllocationMethod method) {
     if (_isSubmitting) {
       return;
@@ -636,6 +738,7 @@ class PurchaseViewModel extends ChangeNotifier {
         landedCostEntries: _landedCostEntries,
         landedCostAllocationMethod: _landedCostAllocationMethod,
         discountCode: _discountCode,
+        extraDiscountAmount: _extraDiscount,
       ),
     );
     if (requestVersion != _discountPreviewRequestVersion) {
@@ -675,6 +778,7 @@ class PurchaseViewModel extends ChangeNotifier {
       landedCostEntries: _landedCostEntries,
       landedCostAllocationMethod: _landedCostAllocationMethod,
       discountCode: _discountCode,
+      extraDiscountAmount: _extraDiscount,
       idempotencyKey: _submitIdempotencyKey,
     );
     switch (result) {
@@ -731,6 +835,7 @@ class PurchaseViewModel extends ChangeNotifier {
         : order.discountCodes.first;
     _landedCostEntries = _normalizedLandedCostEntries(order.landedCostEntries);
     _landedCostAllocationMethod = order.landedCostAllocationMethod;
+    _extraDiscount = order.extraDiscountAmount;
     // Receiving-on-submit is a submit-time concern; editing only saves a draft.
     _receiveImmediately = false;
     _submitIdempotencyKey = _newPurchaseIdempotencyKey('purchase-edit');
@@ -769,6 +874,7 @@ class PurchaseViewModel extends ChangeNotifier {
       landedCostEntries: _landedCostEntries,
       landedCostAllocationMethod: _landedCostAllocationMethod,
       discountCode: _discountCode,
+      extraDiscountAmount: _extraDiscount,
     );
     switch (result) {
       case Ok<PurchaseOrder>():
@@ -914,6 +1020,7 @@ class PurchaseViewModel extends ChangeNotifier {
   void _resetLandedCosts() {
     _landedCostEntries = [];
     _discountCode = '';
+    _extraDiscount = 0;
     _landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue;
   }
 
@@ -1066,8 +1173,8 @@ class PurchaseViewModel extends ChangeNotifier {
 
   void _trackDraftLineAdded(
     PurchaseDraftLine line, {
-    required int addedQuantity,
-    required int previousQuantity,
+    required double addedQuantity,
+    required double previousQuantity,
     required String source,
   }) {
     _trackDraftLineAuditEvent(
@@ -1096,8 +1203,8 @@ class PurchaseViewModel extends ChangeNotifier {
 
   void _trackDraftLineQuantityChanged(
     PurchaseDraftLine line, {
-    required int previousQuantity,
-    required int newQuantity,
+    required double previousQuantity,
+    required double newQuantity,
     required String reason,
     required String source,
   }) {
@@ -1367,8 +1474,8 @@ class PurchaseViewModel extends ChangeNotifier {
     ];
   }
 
-  int _draftItemCount(List<PurchaseDraftLine> lines) {
-    return lines.fold(0, (sum, line) => sum + line.quantity);
+  double _draftItemCount(List<PurchaseDraftLine> lines) {
+    return lines.fold(0.0, (sum, line) => sum + line.quantity);
   }
 
   double _draftTotal(List<PurchaseDraftLine> lines) {

@@ -19,37 +19,63 @@ extension PosBarcodeActions on PosViewModel {
     _barcodeScanStatus = BarcodeScanStatus.resolving;
     _notifyChanged();
 
-    final result = await _catalogRepository.findProductVariantByBarcode(
+    final result = await _catalogRepository.resolveBarcode(
       normalizedBarcode,
       activeOnly: true,
     );
 
     switch (result) {
-      case Ok<ProductVariant?>(:final value):
+      case Ok<BarcodeResolution?>(:final value):
         if (value == null) {
           _barcodeScanStatus = BarcodeScanStatus.notFound;
         } else {
+          final variant = value.variant;
+          final matchedUnit = value.unit;
+          // A packaging (unit) barcode — the carton EAN — rings up that unit:
+          // one carton at the carton price, deducting its pieces from stock.
+          final unitOption =
+              matchedUnit != null && matchedUnit.isSellable
+              ? UnitOption(
+                  code: matchedUnit.code,
+                  label: matchedUnit.label,
+                  unitPrice: matchedUnit.resolvedPrice(variant.unitPrice),
+                  factorToBase: matchedUnit.factorToBase,
+                  allowsFractional: matchedUnit.allowsFractional,
+                  isBase: false,
+                )
+              : null;
           // Digital-scale labels carry the weight inside the barcode; for
           // metric products that weight IS the sold quantity.
-          final scaleBarcode = parseScaleBarcode(normalizedBarcode);
-          final resolvedQuantity = scaleBarcode != null && value.unit != 'piece'
+          final scaleBarcode = unitOption == null
+              ? parseScaleBarcode(normalizedBarcode)
+              : null;
+          final resolvedQuantity =
+              scaleBarcode != null && variant.unit != 'piece'
               ? scaleBarcode.weightKg
               : quantity;
           _addVariantToCartAndTrack(
-            value,
+            variant,
             quantity: resolvedQuantity,
+            unit: unitOption,
             source: source,
           );
           // Arm the scan-then-type quick adjust on the line the scan landed on
-          // (plain add: no modifiers, base unit — same merge key as the add).
-          _lastScannedLineKey = _mergeableLineFor(value, const [], '')?.lineKey;
+          // (plain add: no modifiers, the scanned unit — same merge key as the
+          // add).
+          _lastScannedLineKey = _mergeableLineFor(
+            variant,
+            const [],
+            _unitCodeFor(unitOption),
+          )?.lineKey;
           _quickQuantityBuffer = '';
           _quickQuantityAt = null;
-          _lastScannedProductName = value.displayLabel;
+          _lastScannedProductName = unitOption == null
+              ? variant.displayLabel
+              : '${variant.displayLabel} — ${unitOption.label}';
           _barcodeScanStatus = BarcodeScanStatus.found;
           unawaited(refreshDiscountPreview());
         }
-      case Error<ProductVariant?>():
+      case Error<BarcodeResolution?>():
         _barcodeScanStatus = BarcodeScanStatus.error;
     }
 
@@ -80,10 +106,11 @@ extension PosBarcodeActions on PosViewModel {
     return _cart.where((line) => line.lineKey == lineKey).firstOrNull;
   }
 
-  /// Scan-then-type quantity: digits typed right after a scan REPLACE the last
+  /// Scan-then-type quantity: keys typed right after a scan REPLACE the last
   /// scanned line's quantity, accumulating across keystrokes ("1" then "2" →
-  /// 12) until [_quickQuantityIdle] passes or another scan re-arms the flow.
-  /// Returns false when there is nothing armed to adjust.
+  /// 12; "2","." ,"5" → 2.5 for fractional units) until [_quickQuantityIdle]
+  /// passes or another scan re-arms the flow. Returns false when there is
+  /// nothing armed to adjust.
   bool applyQuickQuantityDigits(String digits) {
     if (_isCheckingOut || digits.isEmpty) {
       return false;
@@ -98,22 +125,46 @@ extension PosBarcodeActions on PosViewModel {
       _quickQuantityBuffer = '';
     }
     final accumulated = _quickQuantityBuffer + digits;
-    final quantity = int.tryParse(accumulated);
-    if (quantity == null || accumulated.length > 4) {
+    if (accumulated.contains('.') &&
+        (!cartLineAllowsFractional(line) ||
+            '.'.allMatches(accumulated).length > 1)) {
+      // A decimal point the unit cannot honour: drop the whole entry rather
+      // than silently reading "2.5" as 25.
+      _quickQuantityBuffer = '';
+      return false;
+    }
+    final quantity = double.tryParse(accumulated);
+    if (quantity == null && accumulated != '.' && !accumulated.endsWith('.')) {
+      return false;
+    }
+    if (accumulated.length > 7) {
       return false;
     }
     _quickQuantityBuffer = accumulated;
     _quickQuantityAt = now;
-    if (quantity <= 0) {
-      // A leading "0": keep accumulating ("05" → 5) without touching the line.
+    if (quantity == null || quantity <= 0) {
+      // A leading "0" or a trailing "." — keep accumulating ("0.5", "2.5")
+      // without touching the line yet.
       return true;
     }
-    setCartLineQuantity(
-      line.lineKey,
-      quantity.toDouble(),
-      source: 'scan_quick_quantity',
-    );
+    setCartLineQuantity(line.lineKey, quantity, source: 'scan_quick_quantity');
     return true;
+  }
+
+  /// Whether [line]'s effective unit transacts in fractions: the selected
+  /// ProductUnit's flag, or the base unit's own rule for plain lines.
+  bool cartLineAllowsFractional(CartLine line) {
+    if (line.unitCode.isEmpty) {
+      return baseUnitAllowsFractional(
+        line.variant.productDetail?.unit ?? line.variant.unit,
+      );
+    }
+    for (final unit in line.variant.productDetail?.units ?? const []) {
+      if (unit.code == line.unitCode) {
+        return unit.allowsFractional;
+      }
+    }
+    return false;
   }
 
   /// Scan-then-arrow unit switch: replaces the last scanned line's unit with

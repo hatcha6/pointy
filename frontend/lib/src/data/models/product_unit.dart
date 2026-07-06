@@ -13,6 +13,7 @@ class ProductUnit {
     this.isSellable = true,
     this.isPurchasable = true,
     this.displayOrder = 0,
+    this.barcodes = const [],
   });
 
   final int? id;
@@ -26,6 +27,9 @@ class ProductUnit {
   final bool isSellable;
   final bool isPurchasable;
   final int displayOrder;
+
+  /// Packaging barcodes (the carton EAN); scanning one rings up this unit.
+  final List<String> barcodes;
 
   String get code => unit.code;
   String get label => unit.label;
@@ -42,6 +46,7 @@ class ProductUnit {
     bool? isSellable,
     bool? isPurchasable,
     int? displayOrder,
+    List<String>? barcodes,
   }) {
     return ProductUnit(
       id: id,
@@ -51,6 +56,7 @@ class ProductUnit {
       isSellable: isSellable ?? this.isSellable,
       isPurchasable: isPurchasable ?? this.isPurchasable,
       displayOrder: displayOrder ?? this.displayOrder,
+      barcodes: barcodes ?? this.barcodes,
     );
   }
 
@@ -73,6 +79,7 @@ class ProductUnit {
       displayOrder: json['display_order'] is num
           ? (json['display_order'] as num).toInt()
           : 0,
+      barcodes: _barcodesFromJson(json['barcodes']),
     );
   }
 
@@ -84,6 +91,8 @@ class ProductUnit {
       'is_sellable': isSellable,
       'is_purchasable': isPurchasable,
       'display_order': displayOrder,
+      // Round-tripped so a product edit never wipes the packaging barcodes.
+      'barcodes': barcodes,
     };
   }
 }
@@ -99,4 +108,15 @@ double? _doubleOrNull(Object? value) {
   if (value == null) return null;
   if (value is num) return value.toDouble();
   return double.tryParse(value.toString());
+}
+
+List<String> _barcodesFromJson(Object? value) {
+  if (value is List<Object?>) {
+    return [
+      for (final code in value)
+        if (code != null && code.toString().trim().isNotEmpty)
+          code.toString().trim(),
+    ];
+  }
+  return const [];
 }

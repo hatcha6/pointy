@@ -67,6 +67,67 @@ void main() {
     },
   );
 
+  test('a flush drains the whole queue in backend-sized chunks', () async {
+    final sink = _FakeAnalyticsSink();
+    final engine = AnalyticsEngine(
+      sink,
+      storage: MemoryAnalyticsQueueStorage(installationId: 'install-3'),
+      flushInterval: const Duration(hours: 1),
+      maxBatchSize: 100,
+    );
+    await engine.start();
+    sink.submittedBatches.clear();
+
+    for (var i = 0; i < 250; i += 1) {
+      await engine.track(
+        AnalyticsEventDraft.usage(
+          AnalyticsEventName.frontendInteraction,
+          occurredAt: DateTime.now().toUtc(),
+        ),
+      );
+    }
+    // Two full chunks auto-flushed at the 100-event threshold; the remainder
+    // ships in ONE further flush cycle — never one request per timer tick.
+    await engine.flush();
+
+    expect(engine.pendingEventCount, 0);
+    expect(sink.submittedBatches.length, 3);
+    expect(sink.submittedBatches[0], hasLength(100));
+    expect(sink.submittedBatches[1], hasLength(100));
+    expect(sink.submittedBatches[2], hasLength(50));
+    engine.dispose();
+  });
+
+  test('immediate flushes are rate-limited so error storms stay batched', () async {
+    final sink = _FakeAnalyticsSink();
+    var now = DateTime.utc(2026, 7, 6, 12);
+    final engine = AnalyticsEngine(
+      sink,
+      storage: MemoryAnalyticsQueueStorage(installationId: 'install-4'),
+      flushInterval: const Duration(hours: 1),
+      clock: () => now,
+      minImmediateFlushGap: const Duration(seconds: 30),
+    );
+    await engine.start();
+    sink.submittedBatches.clear();
+
+    await engine.captureError(Exception('first'), null);
+    expect(sink.submittedBatches, hasLength(1));
+
+    // A second error 5 seconds later queues instead of flushing.
+    now = now.add(const Duration(seconds: 5));
+    await engine.captureError(Exception('second'), null);
+    expect(sink.submittedBatches, hasLength(1));
+    expect(engine.pendingEventCount, 1);
+
+    // Past the gap, the immediate path opens again.
+    now = now.add(const Duration(seconds: 31));
+    await engine.captureError(Exception('third'), null);
+    expect(sink.submittedBatches, hasLength(2));
+    expect(engine.pendingEventCount, 0);
+    engine.dispose();
+  });
+
   test('analytics engine records interactions with session context', () async {
     final sink = _FakeAnalyticsSink();
     final engine = AnalyticsEngine(

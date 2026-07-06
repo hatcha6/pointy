@@ -161,6 +161,137 @@ class ProductUnitSerializerTests(TestCase):
         self.assertIn("unit", serializer.errors)
 
 
+class ProductUnitBarcodeTests(TestCase):
+    """Packaging (unit) barcodes: the carton EAN attached to a ProductUnit."""
+
+    def _create_soda(self, *, barcodes):
+        data = {
+            "name": "Soda",
+            "unit": "piece",
+            "units": [
+                {"unit": "box", "factor_to_base": "6", "barcodes": barcodes}
+            ],
+            "default_variant": {
+                "sku": "SODA-BC",
+                "barcode": "100200300",
+                "unit_price": "1.00",
+            },
+        }
+        serializer = ProductCatalogSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        return serializer.save()
+
+    def test_create_and_read_unit_barcodes(self):
+        product = self._create_soda(barcodes=["600100200", "600100201"])
+        unit = product.units.get()
+        self.assertEqual(
+            sorted(entry.barcode for entry in unit.barcodes.all()),
+            ["600100200", "600100201"],
+        )
+        payload = ProductCatalogSerializer(product).data
+        self.assertEqual(
+            sorted(payload["units"][0]["barcodes"]), ["600100200", "600100201"]
+        )
+
+    def test_omitting_barcodes_on_update_preserves_them(self):
+        # Clients that predate unit barcodes resend the units list without the
+        # key — the stored codes must survive the rebuild.
+        product = self._create_soda(barcodes=["600100200"])
+        serializer = ProductCatalogSerializer(
+            product,
+            data={"units": [{"unit": "box", "factor_to_base": "12"}]},
+            partial=True,
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+        unit = product.units.get()
+        self.assertEqual(unit.factor_to_base, Decimal("12"))
+        self.assertEqual(
+            [entry.barcode for entry in unit.barcodes.all()], ["600100200"]
+        )
+
+    def test_sending_barcodes_replaces_them(self):
+        product = self._create_soda(barcodes=["600100200"])
+        serializer = ProductCatalogSerializer(
+            product,
+            data={
+                "units": [
+                    {"unit": "box", "factor_to_base": "6", "barcodes": ["700100200"]}
+                ]
+            },
+            partial=True,
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+        self.assertEqual(
+            [entry.barcode for entry in product.units.get().barcodes.all()],
+            ["700100200"],
+        )
+
+    def test_unit_barcode_may_not_shadow_a_variant_barcode(self):
+        self._create_soda(barcodes=["600100200"])
+        data = {
+            "name": "Cola",
+            "unit": "piece",
+            # Collides with the soda default variant's barcode.
+            "units": [
+                {"unit": "box", "factor_to_base": "6", "barcodes": ["100200300"]}
+            ],
+            "default_variant": {"sku": "COLA-BC", "unit_price": "1.00"},
+        }
+        serializer = ProductCatalogSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        with self.assertRaises(Exception):
+            serializer.save()
+
+    def test_unit_barcode_unique_across_products(self):
+        self._create_soda(barcodes=["600100200"])
+        data = {
+            "name": "Cola",
+            "unit": "piece",
+            "units": [
+                {"unit": "box", "factor_to_base": "6", "barcodes": ["600100200"]}
+            ],
+            "default_variant": {"sku": "COLA-BC2", "unit_price": "1.00"},
+        }
+        serializer = ProductCatalogSerializer(data=data)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        with self.assertRaises(Exception):
+            serializer.save()
+
+    def test_product_and_variant_lookup_resolve_unit_barcodes(self):
+        from django.db.models import Q
+
+        from apps.catalog.models import Product, ProductVariant
+        from apps.catalog.views import ProductVariantFilter
+
+        product = self._create_soda(barcodes=["600100200"])
+        found = Product.objects.filter(
+            Q(variants__barcode="600100200")
+            | Q(units__barcodes__barcode="600100200")
+        ).distinct()
+        self.assertEqual(list(found), [product])
+
+        filtered = ProductVariantFilter(
+            data={"barcode": "600100200"},
+            queryset=ProductVariant.objects.all(),
+        ).qs
+        self.assertEqual(
+            list(filtered), [product.default_variant]
+        )
+
+    def test_price_checker_resolves_unit_barcode_at_unit_price(self):
+        from apps.price_checker.pricing import lookup_price
+
+        product = self._create_soda(barcodes=["600100200"])
+        result = lookup_price("600100200")
+        self.assertTrue(result.found)
+        self.assertEqual(result.product_name, product.name)
+        # No custom unit price -> derived: 1.00 piece × 6.
+        self.assertEqual(result.final_price, Decimal("6.00"))
+        self.assertEqual(result.unit, "box")
+
+
 class UnitsManagementApiTests(TestCase):
     def setUp(self):
         ensure_role_groups()

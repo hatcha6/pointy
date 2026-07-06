@@ -333,7 +333,14 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                 "product_id": variant.product_id,
                 "variant": variant.pk,
                 "variant_id": variant.pk,
+                # unit_cost is in the historical line's own purchase unit (162
+                # for a carton bought by the carton); base_unit_cost normalises
+                # it per base unit so the client can price whichever unit the
+                # new line is about to buy in (carton, tray, piece).
                 "unit_cost": None if line is None else line.unit_cost,
+                "base_unit_cost": None if line is None else line.base_unit_cost,
+                "unit": "" if line is None else line.unit,
+                "unit_factor": None if line is None else line.unit_factor,
             }
         )
 

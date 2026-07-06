@@ -12,6 +12,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/units.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_status_pill.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -264,7 +265,7 @@ class _ProductCostHistorySection extends StatelessWidget {
                         l10n.purchaseOrderNumberValue(
                           entry.purchaseOrderNumber!,
                         ),
-                      l10n.purchaseOrderLineQuantity(entry.quantity),
+                      l10n.purchaseOrderLineQuantity(formatQuantity(entry.quantity)),
                       if (entry.recordedAt != null)
                         formatDate(entry.recordedAt!),
                     ].join(' • '),

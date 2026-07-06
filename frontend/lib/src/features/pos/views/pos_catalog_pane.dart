@@ -199,6 +199,10 @@ class _PosCatalogGrid extends StatelessWidget {
   Future<void> _selectProduct(BuildContext context, Product product) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
+    // Release the search field's focus so the keys typed next reach the
+    // workspace-level scan listener: pick a product, type "12", and the new
+    // line's quantity is set — same flow as scan-then-type.
+    FocusManager.instance.primaryFocus?.unfocus();
     final result = await viewModel.selectProductForSale(product);
     if (!context.mounted) {
       return;

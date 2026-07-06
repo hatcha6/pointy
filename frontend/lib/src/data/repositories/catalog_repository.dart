@@ -1,6 +1,7 @@
 import '../../core/result.dart';
 import '../../shared/barcode/scale_barcode.dart';
 import '../models/attachment_summary.dart';
+import '../models/barcode_resolution.dart';
 import '../models/bought_together_product.dart';
 import '../models/modifier_group.dart';
 import '../models/product.dart';
@@ -13,6 +14,7 @@ import '../models/product_image_search_result.dart';
 import '../models/product_image_upload.dart';
 import '../models/product_page.dart';
 import '../models/product_query.dart';
+import '../models/product_unit.dart';
 import '../models/product_update_draft.dart';
 import '../models/product_variant.dart';
 import '../models/product_variant_draft.dart';
@@ -414,7 +416,10 @@ class CatalogRepository {
     });
   }
 
-  Future<Result<ProductVariant?>> findProductVariantByBarcode(
+  /// Resolves a scanned code to the variant it rings up — and, when the code
+  /// is a packaging (unit) barcode, to the matched [ProductUnit] so the caller
+  /// adds a carton line instead of a piece.
+  Future<Result<BarcodeResolution?>> resolveBarcode(
     String barcode, {
     bool activeOnly = true,
   }) async {
@@ -424,7 +429,7 @@ class CatalogRepository {
     }
 
     return Result.guard(() async {
-      final direct = await _findVariantByExactBarcode(
+      final direct = await _resolveByExactBarcode(
         normalizedBarcode,
         activeOnly: activeOnly,
       );
@@ -438,19 +443,36 @@ class CatalogRepository {
         return null;
       }
       for (final candidate in scaleBarcode.candidateBarcodes) {
-        final variant = await _findVariantByExactBarcode(
+        final resolution = await _resolveByExactBarcode(
           candidate,
           activeOnly: activeOnly,
         );
-        if (variant != null) {
-          return variant;
+        if (resolution != null) {
+          return resolution;
         }
       }
       return null;
     });
   }
 
-  Future<ProductVariant?> _findVariantByExactBarcode(
+  /// Legacy shape of [resolveBarcode] for flows that only handle plain variant
+  /// barcodes (stock count, catalog jump). A packaging barcode resolves to
+  /// null here — counting or editing "one piece" for a carton scan would be
+  /// silently wrong.
+  Future<Result<ProductVariant?>> findProductVariantByBarcode(
+    String barcode, {
+    bool activeOnly = true,
+  }) async {
+    final result = await resolveBarcode(barcode, activeOnly: activeOnly);
+    return switch (result) {
+      Ok<BarcodeResolution?>(:final value) => Ok(
+        value == null || value.isUnitBarcode ? null : value.variant,
+      ),
+      Error<BarcodeResolution?>(:final exception) => Error(exception),
+    };
+  }
+
+  Future<BarcodeResolution?> _resolveByExactBarcode(
     String barcode, {
     required bool activeOnly,
   }) async {
@@ -465,7 +487,26 @@ class CatalogRepository {
     );
     for (final variant in page.variants) {
       if (variant.barcode.trim() == barcode) {
-        return variant;
+        return BarcodeResolution(variant: variant);
+      }
+    }
+    // No variant owns the code, but the endpoint also matches packaging (unit)
+    // barcodes — find the unit carrying it and ring it up against the
+    // product's default variant.
+    for (final variant in page.variants) {
+      final units = variant.productDetail?.units ?? const <ProductUnit>[];
+      for (final unit in units) {
+        if (!unit.barcodes.contains(barcode)) {
+          continue;
+        }
+        final siblings = page.variants.where(
+          (candidate) => candidate.productId == variant.productId,
+        );
+        final target = siblings.firstWhere(
+          (candidate) => candidate.isDefault,
+          orElse: () => variant,
+        );
+        return BarcodeResolution(variant: target, unit: unit);
       }
     }
     return null;

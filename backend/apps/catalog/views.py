@@ -83,10 +83,11 @@ def requested_category_ids(query_params):
 class ProductVariantFilter(django_filters.FilterSet):
     category = django_filters.CharFilter(method="filter_category")
     categories = django_filters.CharFilter(method="filter_category")
+    barcode = django_filters.CharFilter(method="filter_barcode")
 
     class Meta:
         model = ProductVariant
-        fields = ("product", "is_active", "is_default", "barcode", "sku")
+        fields = ("product", "is_active", "is_default", "sku")
 
     def filter_category(self, queryset, name, value):
         category_ids = requested_category_ids(self.request.query_params)
@@ -95,6 +96,14 @@ class ProductVariantFilter(django_filters.FilterSet):
         category_ids = category_ids_with_descendants(category_ids)
         return queryset.filter(
             product__categories__id__in=category_ids,
+        ).distinct()
+
+    def filter_barcode(self, queryset, name, value):
+        # A scan may carry a *unit* barcode (the carton EAN): resolve it to the
+        # product's variants too, so the POS/purchasing lookup lands on the
+        # product and the client picks the matched unit from the payload.
+        return queryset.filter(
+            Q(barcode=value) | Q(product__units__barcodes__barcode=value)
         ).distinct()
 
 
@@ -169,6 +178,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         "attachments",
         "categories",
         "units__unit",
+        "units__barcodes",
         "variants",
         "variants__attachments",
         "variants__option_values",
@@ -180,6 +190,9 @@ class ProductViewSet(viewsets.ModelViewSet):
     search_fields = (
         "variants__sku",
         "variants__barcode",
+        # Unit (carton/box) barcodes — typing/scanning a carton EAN into the
+        # search box must find the product just like a variant barcode does.
+        "units__barcodes__barcode",
         "variants__name",
         "name",
         # Learned alternate names (e.g. a supplier's wording on an invoice), so a
@@ -274,7 +287,10 @@ class ProductViewSet(viewsets.ModelViewSet):
         barcode = self.request.query_params.get("barcode")
         if not barcode:
             return queryset
-        return queryset.filter(variants__barcode=barcode).distinct()
+        # Unit (carton/box) barcodes resolve to their product too.
+        return queryset.filter(
+            Q(variants__barcode=barcode) | Q(units__barcodes__barcode=barcode)
+        ).distinct()
 
     def _filter_by_supplier(self, queryset):
         # "Products from supplier X" is resolved through that supplier's purchase
@@ -735,6 +751,7 @@ class ProductVariantViewSet(viewsets.ModelViewSet):
         "attachments",
         "product__attachments",
         "product__units__unit",
+        "product__units__barcodes",
         "option_values",
         "option_values__option",
     )

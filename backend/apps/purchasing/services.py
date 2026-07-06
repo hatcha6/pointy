@@ -259,6 +259,67 @@ def decrement_expected(stock_item, quantity):
     return expected_reduction
 
 
+def _submitted_order_is_editable(purchase_order) -> bool:
+    """A submitted PO stays editable until anything downstream hangs off it:
+    the first receipt flips the status, so ``submitted`` already implies
+    nothing was received — payments/credits are the remaining blockers."""
+    return (
+        purchase_order.status == PurchaseOrder.Status.SUBMITTED
+        and not purchase_order.supplier_payments.exists()
+        and not purchase_order.supplier_credits.exists()
+    )
+
+
+def _release_expected_stock(purchase_order, *, created_by):
+    """Reverse the expected-stock counters a submit added, line by line.
+    Used when a still-untouched submitted order is edited: the old lines are
+    about to be replaced, so their expectation must not linger."""
+    for line in purchase_order.lines.select_related(
+        "variant",
+        "variant__product",
+    ).order_by("variant_id"):
+        stock_item = lock_stock_item(variant=line.variant)
+        before = stock_snapshot(stock_item)
+        expected_reduction = decrement_expected(
+            stock_item, line.to_base_quantity(line.quantity)
+        )
+        if expected_reduction <= 0:
+            continue
+        save_stock_item_quantities(stock_item)
+        create_stock_movement(
+            stock_item=stock_item,
+            variant=line.variant,
+            movement_type=StockMovement.Type.CANCEL_EXPECTED,
+            quantity=expected_reduction,
+            note=f"تعديل أمر شراء {purchase_order.order_number}",
+            created_by=created_by,
+            before=before,
+        )
+
+
+def _add_expected_stock(purchase_order, *, created_by):
+    """Register the expected-stock counters for the order's current lines —
+    the second half of an edit-while-submitted (mirrors submit)."""
+    for line in purchase_order.lines.select_related(
+        "variant",
+        "variant__product",
+    ).order_by("variant_id"):
+        stock_item = lock_stock_item(variant=line.variant)
+        before = stock_snapshot(stock_item)
+        expected_base = line.to_base_quantity(line.quantity)
+        stock_item.quantity_expected += expected_base
+        save_stock_item_quantities(stock_item)
+        create_stock_movement(
+            stock_item=stock_item,
+            variant=line.variant,
+            movement_type=StockMovement.Type.EXPECTED,
+            quantity=expected_base,
+            note=f"شراء متوقع {purchase_order.order_number}",
+            created_by=created_by,
+            before=before,
+        )
+
+
 @transaction.atomic
 def save_purchase_order_with_lines(
     *,
@@ -269,6 +330,7 @@ def save_purchase_order_with_lines(
     **order_fields,
 ):
     is_create = purchase_order is None
+    rebuild_expected = False
     if purchase_order is None:
         # Tag the PO with the special day(s) active on its creation date (the
         # user's "when ordered" choice) — a stable forecasting signal. Defensive:
@@ -277,9 +339,21 @@ def save_purchase_order_with_lines(
             order_fields["special_day_keys"] = special_day_keys_for()
         purchase_order = PurchaseOrder.objects.create(**order_fields)
     else:
+        purchase_order = PurchaseOrder.objects.select_for_update().get(
+            pk=purchase_order.pk
+        )
         if purchase_order.status != PurchaseOrder.Status.DRAFT:
-            raise serializers.ValidationError(
-                {"detail": "Only draft purchase orders can be changed."}
+            # A submitted-but-untouched order (nothing received, nothing paid)
+            # can still be corrected; its expected-stock counters are rebuilt
+            # around the line replacement below.
+            if not _submitted_order_is_editable(purchase_order):
+                raise serializers.ValidationError(
+                    {"detail": "Only draft purchase orders can be changed."}
+                )
+            rebuild_expected = lines_data is not None
+        if rebuild_expected:
+            _release_expected_stock(
+                purchase_order, created_by=purchase_created_by(request)
             )
         for field, value in order_fields.items():
             setattr(purchase_order, field, value)
@@ -290,6 +364,23 @@ def save_purchase_order_with_lines(
     if lines_data is not None:
         for line_data in lines_data:
             PurchaseLine.objects.create(purchase_order=purchase_order, **line_data)
+
+    if rebuild_expected:
+        # The order is already submitted, so the new lines take effect as
+        # expected stock immediately — hold them to the same bar submit does.
+        missing_expiry = purchase_order.lines.filter(
+            variant__product__tracks_expiry=True,
+            expiry_date__isnull=True,
+        ).exists()
+        if missing_expiry:
+            raise serializers.ValidationError(
+                {"lines": "Expiry date is required for products that track expiry."}
+            )
+        if not purchase_order.lines.exists():
+            raise serializers.ValidationError(
+                {"detail": "Purchase order must include at least one line."}
+            )
+        _add_expected_stock(purchase_order, created_by=purchase_created_by(request))
 
     if landed_cost_entries_data is not None:
         replace_purchase_order_landed_cost_entries(

@@ -405,6 +405,35 @@ class ProductUnit(TimeStampedModel):
         return f"{self.product_id}: {self.unit_id} ×{self.factor_to_base}"
 
 
+class ProductUnitBarcode(TimeStampedModel):
+    """A barcode printed on the packaging of one product unit (the carton/box
+    EAN). Scanning it rings up that unit — one carton, at the carton price —
+    instead of one base unit. A unit may carry several codes (regional EANs,
+    multi-flavour cartons that share a product), so this is a child table
+    rather than a column on :class:`ProductUnit`.
+
+    Uniqueness is global across unit barcodes; collisions with *variant*
+    barcodes cannot be a DB constraint (different table) and are enforced in
+    the serializers and importers instead."""
+
+    product_unit = models.ForeignKey(
+        ProductUnit,
+        on_delete=models.CASCADE,
+        related_name="barcodes",
+    )
+    barcode = models.CharField(max_length=64, unique=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def save(self, *args, **kwargs):
+        self.barcode = normalize_barcode(self.barcode)
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return self.barcode
+
+
 class ProductCategory(TimeStampedModel):
     name = models.CharField(max_length=160)
     description = models.TextField(blank=True)

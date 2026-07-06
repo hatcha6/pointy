@@ -7,7 +7,12 @@ from rest_framework import serializers
 from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
 from apps.catalog.models import ProductVariant
-from apps.catalog.units import UnitConversionError, resolve_unit, unit_label_for
+from apps.catalog.units import (
+    UnitConversionError,
+    resolve_unit,
+    unit_label_for,
+    validate_quantity as validate_unit_quantity,
+)
 from apps.discounts.models import AppliedDiscount, DiscountRule, normalize_coupon_code
 from apps.discounts.services import (
     DiscountContext,
@@ -38,6 +43,17 @@ from .services import (
     save_purchase_order_with_lines,
     validate_purchase_order_adjustment_allowed,
 )
+
+
+def _quantity_read_field():
+    """A read-only purchase quantity: decimal (fractional units transact in
+    fractions), 3dp like stock quantities."""
+    return serializers.DecimalField(max_digits=12, decimal_places=3, read_only=True)
+
+
+def _quantity_input_field(**kwargs):
+    """A writable purchase quantity (line entry, receiving, adjustments)."""
+    return serializers.DecimalField(max_digits=12, decimal_places=3, **kwargs)
 
 
 class SupplierSerializer(serializers.ModelSerializer):
@@ -160,15 +176,18 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         decimal_places=2,
         read_only=True,
     )
-    adjusted_quantity = serializers.IntegerField(read_only=True)
-    accepted_quantity = serializers.IntegerField(read_only=True)
-    damaged_quantity = serializers.IntegerField(read_only=True)
-    cancelled_quantity = serializers.IntegerField(read_only=True)
-    received_quantity = serializers.IntegerField(read_only=True)
-    adjustable_quantity = serializers.IntegerField(read_only=True)
-    outstanding_quantity = serializers.IntegerField(read_only=True)
-    backordered_quantity = serializers.IntegerField(read_only=True)
-    over_received_quantity = serializers.IntegerField(read_only=True)
+    # Quantities are decimals: fractional units (half an egg tray, 2.5 kg)
+    # purchase and receive in fractions; whole-number units are enforced by
+    # validate() against the unit's allows_fractional flag.
+    adjusted_quantity = _quantity_read_field()
+    accepted_quantity = _quantity_read_field()
+    damaged_quantity = _quantity_read_field()
+    cancelled_quantity = _quantity_read_field()
+    received_quantity = _quantity_read_field()
+    adjustable_quantity = _quantity_read_field()
+    outstanding_quantity = _quantity_read_field()
+    backordered_quantity = _quantity_read_field()
+    over_received_quantity = _quantity_read_field()
     # The purchase unit is sent as a code; its base-conversion factor and the
     # base-unit equivalents are resolved/derived server-side and read-only.
     unit = serializers.CharField(
@@ -312,7 +331,7 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         return unit_label_for(line.unit or line.variant.product.unit, self.context)
 
     def validate_quantity(self, value):
-        if value < 1:
+        if value <= 0:
             raise serializers.ValidationError("Quantity must be positive.")
         return value
 
@@ -338,16 +357,20 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
                 }
             )
         attrs["variant"] = variant
-        # Resolve the purchase unit + snapshot its base-conversion factor. Purchase
-        # quantities stay whole (you buy whole packs); the factor only converts to
-        # base units when stock is touched at submit/receive time.
+        # Resolve the purchase unit + snapshot its base-conversion factor. The
+        # factor only converts to base units when stock is touched at
+        # submit/receive time. Quantities may be fractional when the unit
+        # allows it (half an egg tray) — same rule sales lines follow.
         requested_unit = attrs.get("unit")
         if requested_unit is None:
             requested_unit = getattr(self.instance, "unit", "") or ""
+        quantity = attrs.get("quantity", getattr(self.instance, "quantity", None))
         try:
             resolved = resolve_unit(
                 variant.product, requested_unit, field="unit", for_purchase=True
             )
+            if quantity is not None:
+                validate_unit_quantity(Decimal(quantity), resolved)
         except UnitConversionError as error:
             raise serializers.ValidationError({error.field: error.message})
         attrs["unit"] = resolved.code
@@ -386,8 +409,8 @@ class PurchaseReceiptLineSerializer(serializers.ModelSerializer):
         source="variant.product.tracks_expiry",
         read_only=True,
     )
-    received_quantity = serializers.IntegerField(read_only=True)
-    backordered_quantity = serializers.IntegerField(read_only=True)
+    received_quantity = _quantity_read_field()
+    backordered_quantity = _quantity_read_field()
 
     class Meta:
         model = PurchaseReceiptLine
@@ -703,7 +726,7 @@ class PurchaseDiscountPreviewLineSerializer(serializers.Serializer):
     variant = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariant.objects.all(),
     )
-    quantity = serializers.IntegerField(min_value=1)
+    quantity = _quantity_input_field(min_value=Decimal('0.001'))
     unit_cost = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -742,6 +765,13 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
         choices=PurchaseOrder.LandedCostAllocationMethod.choices,
         required=False,
         default=PurchaseOrder.LandedCostAllocationMethod.LINE_VALUE,
+    )
+    extra_discount_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        default=Decimal("0.00"),
+        min_value=Decimal("0.00"),
     )
 
     def to_internal_value(self, data):
@@ -783,11 +813,21 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
             self.validated_data
         )
         coupon_codes = self.validated_data.get("coupon_codes", ())
+        # The one-off manual discount, clamped exactly like recalculate().
+        extra_discount = min(
+            self.validated_data.get("extra_discount_amount") or Decimal("0.00"),
+            max(
+                discount_result.subtotal - discount_result.discount_total,
+                Decimal("0.00"),
+            ),
+        )
+        discount_total = discount_result.discount_total + extra_discount
         return {
             "subtotal": f"{discount_result.subtotal:.2f}",
-            "discount_total": f"{discount_result.discount_total:.2f}",
+            "discount_total": f"{discount_total:.2f}",
+            "extra_discount_amount": f"{extra_discount:.2f}",
             "landed_cost_total": f"{landed_cost_total:.2f}",
-            "total": f"{(discount_result.total + landed_cost_total):.2f}",
+            "total": f"{(discount_result.total - extra_discount + landed_cost_total):.2f}",
             "lines": purchase_preview_line_payloads(
                 lines=self.validated_data["lines"],
                 discount_result=discount_result,
@@ -1015,6 +1055,7 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
             "lines",
             "subtotal",
             "discount_total",
+            "extra_discount_amount",
             "total",
             "balance_due",
             "payment_status",
@@ -1110,6 +1151,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "subtotal",
             "discount_codes",
             "discount_total",
+            "extra_discount_amount",
             "applied_discounts",
             "landed_cost_entries",
             "landed_cost_allocation_method",
@@ -1338,13 +1380,13 @@ class PurchaseReceiptLineInputSerializer(serializers.Serializer):
         queryset=PurchaseLine.objects.all(),
         required=False,
     )
-    quantity = serializers.IntegerField(min_value=0, required=False)
-    accepted_quantity = serializers.IntegerField(min_value=0, required=False)
-    quantity_received = serializers.IntegerField(min_value=0, required=False)
-    damaged_quantity = serializers.IntegerField(min_value=0, required=False)
-    quantity_damaged = serializers.IntegerField(min_value=0, required=False)
-    cancelled_quantity = serializers.IntegerField(min_value=0, required=False)
-    quantity_rejected = serializers.IntegerField(min_value=0, required=False)
+    quantity = _quantity_input_field(min_value=Decimal('0'), required=False)
+    accepted_quantity = _quantity_input_field(min_value=Decimal('0'), required=False)
+    quantity_received = _quantity_input_field(min_value=Decimal('0'), required=False)
+    damaged_quantity = _quantity_input_field(min_value=Decimal('0'), required=False)
+    quantity_damaged = _quantity_input_field(min_value=Decimal('0'), required=False)
+    cancelled_quantity = _quantity_input_field(min_value=Decimal('0'), required=False)
+    quantity_rejected = _quantity_input_field(min_value=Decimal('0'), required=False)
     expiry_date = serializers.DateField(required=False, allow_null=True)
     expiration_date = serializers.DateField(required=False, allow_null=True)
     expires_on = serializers.DateField(required=False, allow_null=True)
@@ -1530,14 +1572,14 @@ class PurchaseReceiptInputSerializer(serializers.Serializer):
 
 class PurchaseOrderAdjustmentLineInputSerializer(serializers.Serializer):
     line = serializers.PrimaryKeyRelatedField(queryset=PurchaseLine.objects.all())
-    quantity = serializers.IntegerField(min_value=1)
+    quantity = _quantity_input_field(min_value=Decimal('0.001'))
 
 
 class PurchaseOrderReplacementLineInputSerializer(serializers.Serializer):
     variant = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariant.objects.all(),
     )
-    quantity = serializers.IntegerField(min_value=1)
+    quantity = _quantity_input_field(min_value=Decimal('0.001'))
     unit_cost = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,

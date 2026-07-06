@@ -12,7 +12,13 @@ from pathlib import Path
 
 from django.test import TestCase
 
-from apps.catalog.models import Product, ProductCategory, ProductVariant
+from apps.catalog.models import (
+    Product,
+    ProductCategory,
+    ProductUnit,
+    ProductUnitBarcode,
+    ProductVariant,
+)
 from apps.customers.models import Customer
 from apps.inventory.models import StockItem
 from apps.purchasing.models import Supplier
@@ -1083,7 +1089,9 @@ def build_fahd_database(path):
             TAK_ONE REAL, COUNT_ORG REAL, TASNEEF TEXT
         );
         CREATE TABLE CAR_PART_D (ser TEXT, NO_N TEXT, CAR_PART TEXT, PLACE TEXT);
-        CREATE TABLE CAR_PART_D2 (ser TEXT, NO_N TEXT, CAR_PART TEXT, PLACE TEXT);
+        CREATE TABLE CAR_PART_D2 (
+            ser TEXT, NO_N TEXT, CAR_PART TEXT, PLACE TEXT, TAK_ONE REAL
+        );
         CREATE TABLE COUSTMER (NO_SADER REAL, S_NAME TEXT, S_ADDRESS TEXT, S_PHONE TEXT);
         CREATE TABLE WARED (NO_SADER REAL, S_NAME TEXT, S_ADDRESS TEXT, S_PHONE TEXT);
         CREATE TABLE fahd_sales (
@@ -1125,10 +1133,16 @@ def build_fahd_database(path):
         ],
     )
     connection.executemany(
-        "INSERT INTO CAR_PART_D2 VALUES (?, ?, ?, ?)",
+        "INSERT INTO CAR_PART_D2 VALUES (?, ?, ?, ?, ?)",
         [
-            ("SUB222", "2002", "حليب مجفف", "0"),  # pack barcode
-            ("SUB111", "2002", "0", "0"),  # duplicate of the D row -> skipped
+            # Pack barcode (6-pack): barely sold -> becomes a unit barcode.
+            ("SUB222", "2002", "حليب مجفف", "0", 6.0),
+            ("SUB111", "2002", "0", "0", 12.0),  # duplicate of the D row -> skipped
+            # Pack code that the shop really used to ring loose pieces (its
+            # sale history below is predominantly piece-priced): the barcode
+            # stays on the alias variant, but the pack unit is still created
+            # (barcode-less) with the observed pack price.
+            ("SUB333", "1001", "عصير برتقال", "0", 12.0),
         ],
     )
     connection.executemany(
@@ -1158,6 +1172,10 @@ def build_fahd_database(path):
             # 3dp unit price typed as a line total in Fahd (1.4 / 3)
             (103, "2024-03-05 12:00:00", "2024-03-05", "سالم", 1.4, 0.0, 1.4,
              1, 3, None, None, None, None, None, "no_print"),
+            # SUB333's history: mostly loose pieces at the piece price, with a
+            # few genuine pack-priced sales that establish the pack's price.
+            (104, "2024-04-01 09:00:00", "2024-04-01", "عصام", 96.0, 0.0, 96.0,
+             9, 9, None, None, None, None, None, "no_print"),
         ],
     )
     connection.executemany(
@@ -1167,6 +1185,16 @@ def build_fahd_database(path):
             (101, "SUB222", 1, 10.0, 10.0),
             (102, "9999", 1, 3.0, 3.0),
             (103, "1001", 3, 0.466666666666667, 1.4),
+            # 6 piece-priced lines (majority) + 3 pack-priced lines at 27.
+            (104, "SUB333", 1, 2.5, 2.5),
+            (104, "SUB333", 1, 2.5, 2.5),
+            (104, "SUB333", 1, 2.5, 2.5),
+            (104, "SUB333", 1, 2.5, 2.5),
+            (104, "SUB333", 1, 2.5, 2.5),
+            (104, "SUB333", 1, 2.5, 2.5),
+            (104, "SUB333", 1, 27.0, 27.0),
+            (104, "SUB333", 1, 27.0, 27.0),
+            (104, "SUB333", 1, 27.0, 27.0),
         ],
     )
     connection.executemany(
@@ -1224,8 +1252,8 @@ class FahdSqliteTests(MigrationTestBase):
 
         # 3 catalogue products + 1 ghost for the deleted item in invoice 102.
         self.assertCreated(Product, 4)
-        # A default variant per product + the two sub-barcode variants.
-        self.assertCreated(ProductVariant, 6)
+        # A default variant per product + the three sub-barcode variants.
+        self.assertCreated(ProductVariant, 7)
 
         # Sub-barcodes scan straight to their parent product.
         sub = ProductVariant.objects.get(barcode="SUB111")
@@ -1233,9 +1261,32 @@ class FahdSqliteTests(MigrationTestBase):
         self.assertFalse(sub.is_default)
         self.assertEqual(sub.name, "برتقالي")
         self.assertEqual(sub.unit_price, Decimal("2.50"))
-        pack = ProductVariant.objects.get(barcode="SUB222")
-        self.assertEqual(pack.product.name, "حليب مجفف")
-        self.assertEqual(pack.unit_price, Decimal("10.00"))
+        # The pack (D2) code became a ProductUnit barcode on the parent, and
+        # its pseudo-variant was retired: inactive, barcode-less, history-only.
+        pack_variant = ProductVariant.objects.get(sku="SUB222")
+        self.assertEqual(pack_variant.product.name, "حليب مجفف")
+        self.assertEqual(pack_variant.barcode, "")
+        self.assertFalse(pack_variant.is_active)
+        pack_unit = ProductUnit.objects.get(product__name="حليب مجفف")
+        self.assertEqual(pack_unit.unit.code, "carton")
+        self.assertEqual(pack_unit.factor_to_base, Decimal("6"))
+        self.assertIsNone(pack_unit.price)  # derived: piece price × 6
+        self.assertEqual(
+            [entry.barcode for entry in pack_unit.barcodes.all()], ["SUB222"]
+        )
+        # Lines still default to the piece — the pack is an option, never the
+        # default (a pack default proved too surprising when typing quantities).
+        self.assertEqual(pack_unit.product.default_purchase_unit, "")
+        # A pack code that really rang loose pieces keeps its alias variant
+        # (scanning must keep selling one piece), while the pack unit is still
+        # created barcode-less with the observed pack price.
+        alias = ProductVariant.objects.get(barcode="SUB333")
+        self.assertTrue(alias.is_active)
+        self.assertEqual(alias.unit_price, Decimal("2.50"))
+        juice_unit = ProductUnit.objects.get(product__name="عصير برتقال")
+        self.assertEqual(juice_unit.factor_to_base, Decimal("12"))
+        self.assertEqual(juice_unit.price, Decimal("27.00"))
+        self.assertEqual(juice_unit.barcodes.count(), 0)
         # The colliding rows were deduplicated: the main product kept its code.
         self.assertEqual(
             ProductVariant.objects.filter(barcode="2002").count(), 1
@@ -1249,12 +1300,14 @@ class FahdSqliteTests(MigrationTestBase):
         # No stock was carried over.
         self.assertCreated(StockItem, 0)
 
-        # Sales: all three invoices, exact totals, original dates, cash walk-in.
+        # Sales: all four invoices, exact totals, original dates, cash walk-in.
         orders = {
             identity.source_key: identity.target
             for identity in MigrationIdentityMap.objects.filter(entity_type="sale")
         }
-        self.assertEqual(len(orders), 3)
+        self.assertEqual(len(orders), 4)
+        # The mixed piece/pack history behind SUB333 keeps its exact total.
+        self.assertEqual(orders["sale-104"].total, Decimal("96.00"))
         sale_101 = orders["sale-101"]
         self.assertEqual(sale_101.total, Decimal("14.50"))
         self.assertEqual(sale_101.discount_total, Decimal("0.50"))
@@ -1262,8 +1315,10 @@ class FahdSqliteTests(MigrationTestBase):
         self.assertIsNone(sale_101.customer_id)
         self.assertEqual(sale_101.created_at.date().isoformat(), "2024-01-15")
         self.assertEqual(sale_101.payments.get().amount, Decimal("14.50"))
+        # The pack line still resolves through the retired pseudo-variant, so
+        # historical invoices keep their totals after the code moved to a unit.
         self.assertEqual(
-            set(sale_101.lines.values_list("variant__barcode", flat=True)),
+            set(sale_101.lines.values_list("variant__sku", flat=True)),
             {"1001", "SUB222"},
         )
         self.assertEqual(sale_101.status, Order.Status.PAID)
@@ -1304,6 +1359,8 @@ class FahdSqliteTests(MigrationTestBase):
         first = (
             Product.objects.count(),
             ProductVariant.objects.count(),
+            ProductUnit.objects.count(),
+            ProductUnitBarcode.objects.count(),
             Order.objects.count(),
             OrderLine.objects.count(),
         )
@@ -1311,10 +1368,50 @@ class FahdSqliteTests(MigrationTestBase):
         second = (
             Product.objects.count(),
             ProductVariant.objects.count(),
+            ProductUnit.objects.count(),
+            ProductUnitBarcode.objects.count(),
             Order.objects.count(),
             OrderLine.objects.count(),
         )
         self.assertEqual(first, second)
+
+    def test_unit_backfill_upgrades_prior_import(self):
+        """A shop migrated before pack codes became units (D2 rows imported as
+        plain active variants) is repaired in place by re-running just the
+        unit entities — the exact flow of deploy/onprem/backfill-fahd-units.sh."""
+        source = self.make_fahd_source()
+        self.run_sync(source, IMPORT, options={"stock_source": "none"})
+
+        # Rewind to the pre-units state the old importer left behind: the pack
+        # code lives on an active variant, no units, no purchasing default.
+        MigrationIdentityMap.objects.filter(entity_type="product_unit").delete()
+        ProductUnit.objects.all().delete()
+        ProductVariant.objects.filter(sku="SUB222").update(
+            barcode="SUB222", is_active=True
+        )
+        Product.objects.all().update(default_purchase_unit="")
+
+        run = self.run_sync(
+            source,
+            IMPORT,
+            entities=["unit", "product_unit"],
+            options={"stock_source": "none"},
+        )
+        self.assertEqual(run.status, MigrationRun.Status.SUCCEEDED)
+
+        # The barcode moved from the pseudo-variant onto the pack unit, and the
+        # variant was retired in place (history untouched).
+        pack_variant = ProductVariant.objects.get(sku="SUB222")
+        self.assertEqual(pack_variant.barcode, "")
+        self.assertFalse(pack_variant.is_active)
+        pack_unit = ProductUnit.objects.get(product__name="حليب مجفف")
+        self.assertEqual(
+            [entry.barcode for entry in pack_unit.barcodes.all()], ["SUB222"]
+        )
+        self.assertEqual(pack_unit.product.default_purchase_unit, "")
+        # The piece-alias code was left alone: still an active scannable variant.
+        alias = ProductVariant.objects.get(barcode="SUB333")
+        self.assertTrue(alias.is_active)
 
     def test_stock_snapshot_mode_still_available(self):
         source = self.make_fahd_source()

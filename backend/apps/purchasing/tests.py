@@ -148,6 +148,145 @@ class PurchaseOrderApiTests(TestCase):
         self.client.force_authenticate(user=user)
         return user
 
+    def _add_fractional_tray_unit(self, product):
+        from apps.catalog.models import ProductUnit, UnitDimension, UnitOfMeasure
+
+        tray, _ = UnitOfMeasure.objects.get_or_create(
+            code="tray",
+            defaults={
+                "name": "طبق",
+                "abbreviation": "طبق",
+                "dimension": UnitDimension.COUNT,
+                "allows_fractional": True,
+            },
+        )
+        return ProductUnit.objects.create(
+            product=product,
+            unit=tray,
+            factor_to_base=Decimal("30"),
+            price=Decimal("15.00"),
+        )
+
+    def test_fractional_quantity_purchases_and_receives_in_fractional_units(self):
+        # Half an egg tray: ordered, submitted, and received as 2.5 trays →
+        # 75 base units of expected/on-hand stock.
+        self._add_fractional_tray_unit(self.product)
+        create_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(
+                lines=[
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": "2.5",
+                        "unit": "tray",
+                        "unit_cost": "13.50",
+                    }
+                ]
+            ),
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        line = create_response.data["lines"][0]
+        self.assertEqual(Decimal(line["quantity"]), Decimal("2.5"))
+        self.assertEqual(Decimal(line["base_quantity"]), Decimal("75"))
+        self.assertEqual(create_response.data["total"], "33.75")
+
+        order = PurchaseOrder.objects.get(pk=create_response.data["id"])
+        submit_purchase_order(order)
+        stock_item = StockItem.objects.get(variant=self.variant)
+        self.assertEqual(stock_item.quantity_expected, Decimal("75"))
+
+        receive_response = self.client.post(
+            reverse("purchaseorder-receive", args=[order.pk]),
+            {
+                "lines": [
+                    {
+                        "line": order.lines.get().pk,
+                        "accepted_quantity": "0.5",
+                    }
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(receive_response.status_code, status.HTTP_200_OK)
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.quantity_on_hand, Decimal("15"))
+        self.assertEqual(stock_item.quantity_expected, Decimal("60"))
+        order.refresh_from_db()
+        self.assertEqual(order.status, PurchaseOrder.Status.PARTIALLY_RECEIVED)
+        self.assertEqual(order.lines.get().outstanding_quantity, Decimal("2"))
+
+    def test_last_cost_reports_base_unit_cost_for_pack_purchases(self):
+        # Last purchase was 2.5 trays at 13.50/tray → the endpoint reports the
+        # raw unit cost AND the per-base cost (0.45/egg) so the client can
+        # price a line in any unit.
+        self._add_fractional_tray_unit(self.product)
+        create_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(
+                lines=[
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": "2.5",
+                        "unit": "tray",
+                        "unit_cost": "13.50",
+                    }
+                ]
+            ),
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+
+        response = self.client.get(
+            reverse("purchaseorder-last-cost"),
+            {"product": self.product.pk, "variant": self.variant.pk},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(Decimal(response.data["unit_cost"]), Decimal("13.50"))
+        self.assertEqual(
+            Decimal(response.data["base_unit_cost"]), Decimal("0.45")
+        )
+        self.assertEqual(response.data["unit"], "tray")
+
+    def test_fractional_quantity_rejected_for_whole_number_units(self):
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(
+                lines=[
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": "2.5",
+                        "unit_cost": "2.00",
+                    }
+                ]
+            ),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_extra_discount_amount_reduces_the_total(self):
+        # The one-off manual discount (the "fraction eliminator") folds into
+        # discount_total and survives the round trip.
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(extra_discount_amount="0.50"),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["subtotal"], "7.50")  # 3 × 2.50
+        self.assertEqual(response.data["discount_total"], "0.50")
+        self.assertEqual(response.data["extra_discount_amount"], "0.50")
+        self.assertEqual(response.data["total"], "7.00")
+
+        # Clamped: a discount larger than the subtotal never goes negative.
+        response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(extra_discount_amount="999"),
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["total"], "0.00")
+
     def test_purchase_lines_reject_product_aliases(self):
         order = PurchaseOrder.objects.create(supplier=self.supplier)
 
@@ -1070,11 +1209,83 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(line["unit_cost_change_percent"], "25.00")
         self.assertTrue(line["unit_cost_changed"])
 
-    def test_update_is_limited_to_draft_purchase_orders(self):
-        order = PurchaseOrder.objects.create(
-            supplier=self.supplier,
-            status=PurchaseOrder.Status.SUBMITTED,
+    def _submitted_order(self, quantity=3):
+        """A PO taken through the real create+submit flow (expected stock set)."""
+        create_response = self.client.post(
+            reverse("purchaseorder-list"),
+            self.purchase_order_payload(
+                lines=[
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": quantity,
+                        "unit_cost": "2.50",
+                    }
+                ]
+            ),
+            format="json",
         )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        order = PurchaseOrder.objects.get(pk=create_response.data["id"])
+        return submit_purchase_order(order)
+
+    def test_submitted_untouched_order_can_be_edited_and_expected_stock_follows(
+        self,
+    ):
+        # Nothing received, nothing paid: the order is still correctable — the
+        # expected-stock counters must follow the replaced lines.
+        order = self._submitted_order(quantity=3)
+        stock_item = StockItem.objects.get(variant=self.variant)
+        self.assertEqual(stock_item.quantity_expected, 3)
+
+        response = self.client.patch(
+            reverse("purchaseorder-detail", args=[order.pk]),
+            {
+                "lines": [
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": 5,
+                        "unit_cost": "2.00",
+                    },
+                    {
+                        "variant": self.other_variant.pk,
+                        "quantity": 2,
+                        "unit_cost": "1.00",
+                    },
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        order.refresh_from_db()
+        self.assertEqual(order.status, PurchaseOrder.Status.SUBMITTED)
+        self.assertEqual(order.total, Decimal("12.00"))
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.quantity_expected, 5)
+        other_item = StockItem.objects.get(variant=self.other_variant)
+        self.assertEqual(other_item.quantity_expected, 2)
+
+    def test_update_is_blocked_once_a_payment_exists(self):
+        order = self._submitted_order()
+        SupplierPayment.objects.create(
+            supplier=self.supplier,
+            purchase_order=order,
+            amount=Decimal("1.00"),
+            method=SupplierPayment.Method.CASH,
+        )
+
+        response = self.client.patch(
+            reverse("purchaseorder-detail", args=[order.pk]),
+            {"notes": "Too late"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("detail", response.data)
+
+    def test_update_is_blocked_once_receiving_started(self):
+        order = self._submitted_order()
+        receive_purchase_order(order)
 
         response = self.client.patch(
             reverse("purchaseorder-detail", args=[order.pk]),
@@ -1331,8 +1542,8 @@ class PurchaseOrderApiTests(TestCase):
 
         self.assertEqual(receive_response.status_code, status.HTTP_200_OK)
         self.assertEqual(receive_response.data["status"], PurchaseOrder.Status.RECEIVED)
-        self.assertEqual(receive_response.data["lines"][0]["accepted_quantity"], 4)
-        self.assertEqual(receive_response.data["lines"][0]["outstanding_quantity"], 0)
+        self.assertEqual(Decimal(receive_response.data["lines"][0]["accepted_quantity"]), Decimal("4"))
+        self.assertEqual(Decimal(receive_response.data["lines"][0]["outstanding_quantity"]), Decimal("0"))
         self.assertEqual(len(receive_response.data["receipts"]), 1)
 
         stock_item = StockItem.objects.get(variant=self.variant)
@@ -1426,16 +1637,16 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], PurchaseOrder.Status.PARTIALLY_RECEIVED)
         line_data = response.data["lines"][0]
-        self.assertEqual(line_data["accepted_quantity"], 4)
-        self.assertEqual(line_data["damaged_quantity"], 2)
-        self.assertEqual(line_data["backordered_quantity"], 4)
-        self.assertEqual(line_data["outstanding_quantity"], 4)
-        self.assertEqual(line_data["adjustable_quantity"], 4)
+        self.assertEqual(Decimal(line_data["accepted_quantity"]), Decimal("4"))
+        self.assertEqual(Decimal(line_data["damaged_quantity"]), Decimal("2"))
+        self.assertEqual(Decimal(line_data["backordered_quantity"]), Decimal("4"))
+        self.assertEqual(Decimal(line_data["outstanding_quantity"]), Decimal("4"))
+        self.assertEqual(Decimal(line_data["adjustable_quantity"]), Decimal("4"))
 
         receipt_line = response.data["receipts"][0]["lines"][0]
-        self.assertEqual(receipt_line["expected_reduction_quantity"], 6)
-        self.assertEqual(receipt_line["outstanding_after"], 4)
-        self.assertEqual(receipt_line["backordered_quantity"], 4)
+        self.assertEqual(Decimal(receipt_line["expected_reduction_quantity"]), Decimal("6"))
+        self.assertEqual(Decimal(receipt_line["outstanding_after"]), Decimal("4"))
+        self.assertEqual(Decimal(receipt_line["backordered_quantity"]), Decimal("4"))
 
         stock_item = StockItem.objects.get(variant=self.variant)
         self.assertEqual(stock_item.quantity_on_hand, 9)
@@ -1600,9 +1811,9 @@ class PurchaseOrderApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], PurchaseOrder.Status.RECEIVED)
-        self.assertEqual(response.data["lines"][0]["accepted_quantity"], 5)
-        self.assertEqual(response.data["lines"][0]["over_received_quantity"], 2)
-        self.assertEqual(response.data["receipts"][0]["lines"][0]["over_received_quantity"], 2)
+        self.assertEqual(Decimal(response.data["lines"][0]["accepted_quantity"]), Decimal("5"))
+        self.assertEqual(Decimal(response.data["lines"][0]["over_received_quantity"]), Decimal("2"))
+        self.assertEqual(Decimal(response.data["receipts"][0]["lines"][0]["over_received_quantity"]), Decimal("2"))
 
         stock_item = StockItem.objects.get(variant=self.variant)
         self.assertEqual(stock_item.quantity_on_hand, 5)
@@ -1643,7 +1854,7 @@ class PurchaseOrderApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], PurchaseOrder.Status.RECEIVED)
-        self.assertEqual(response.data["lines"][0]["cancelled_quantity"], 3)
+        self.assertEqual(Decimal(response.data["lines"][0]["cancelled_quantity"]), Decimal("3"))
         stock_item = StockItem.objects.get(variant=self.variant)
         self.assertEqual(stock_item.quantity_on_hand, 2)
         self.assertEqual(stock_item.quantity_expected, 0)
@@ -1687,9 +1898,9 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.data["status"], PurchaseOrder.Status.RECEIVED)
         self.assertEqual(response.data["receipts"][0]["notes"], "Frontend payload")
         line_data = response.data["lines"][0]
-        self.assertEqual(line_data["accepted_quantity"], 2)
-        self.assertEqual(line_data["damaged_quantity"], 1)
-        self.assertEqual(line_data["cancelled_quantity"], 2)
+        self.assertEqual(Decimal(line_data["accepted_quantity"]), Decimal("2"))
+        self.assertEqual(Decimal(line_data["damaged_quantity"]), Decimal("1"))
+        self.assertEqual(Decimal(line_data["cancelled_quantity"]), Decimal("2"))
         stock_item = StockItem.objects.get(variant=self.variant)
         self.assertEqual(stock_item.quantity_on_hand, 2)
         self.assertEqual(stock_item.quantity_expected, 0)
@@ -1716,8 +1927,8 @@ class PurchaseOrderApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["lines"][0]["adjusted_quantity"], 2)
-        self.assertEqual(response.data["lines"][0]["adjustable_quantity"], 2)
+        self.assertEqual(Decimal(response.data["lines"][0]["adjusted_quantity"]), Decimal("2"))
+        self.assertEqual(Decimal(response.data["lines"][0]["adjustable_quantity"]), Decimal("2"))
         self.assertTrue(response.data["can_return"])
         self.assertEqual(len(response.data["adjustments"]), 1)
         self.assertEqual(
@@ -1968,7 +2179,7 @@ class PurchaseOrderApiTests(TestCase):
             ),
         )
         self.assertIn("stock", response.data)
-        self.assertEqual(response.data["stock"][0]["requested"], "2")
+        self.assertEqual(Decimal(response.data["stock"][0]["requested"]), Decimal("2"))
         self.assertEqual(float(response.data["stock"][0]["available"]), 1.0)
         self.assertEqual(StockItem.objects.get(variant=self.variant).quantity_on_hand, 1)
 
@@ -2014,10 +2225,10 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(adjustment["settlement_method"], "")
         self.assertIsNone(adjustment["supplier_credit"])
         self.assertEqual(adjustment["credits"], [])
-        self.assertEqual(adjustment["lines"][0]["quantity"], 2)
+        self.assertEqual(Decimal(adjustment["lines"][0]["quantity"]), Decimal("2"))
         self.assertEqual(adjustment["lines"][0]["unit_cost"], "1.25")
         self.assertEqual(adjustment["replacement_lines"][0]["product"], self.other_product.pk)
-        self.assertEqual(adjustment["replacement_lines"][0]["quantity"], 3)
+        self.assertEqual(Decimal(adjustment["replacement_lines"][0]["quantity"]), Decimal("3"))
         self.assertEqual(adjustment["replacement_lines"][0]["unit_cost"], "2.00")
         self.assertEqual(SupplierCredit.objects.count(), 0)
         self.assertEqual(SupplierPayment.objects.count(), 0)
@@ -2204,7 +2415,7 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(adjustment["replacement_amount"], "2.50")
         self.assertEqual(adjustment["net_amount"], "0.00")
         self.assertEqual(adjustment["replacement_lines"][0]["product"], self.product.pk)
-        self.assertEqual(adjustment["replacement_lines"][0]["quantity"], 2)
+        self.assertEqual(Decimal(adjustment["replacement_lines"][0]["quantity"]), Decimal("2"))
         self.assertEqual(adjustment["replacement_lines"][0]["unit_cost"], "1.25")
         self.assertEqual(StockItem.objects.get(variant=self.variant).quantity_on_hand, 5)
         self.assertEqual(
@@ -2575,7 +2786,7 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(row["order_number"], latest.order_number)
         self.assertEqual(row["supplier"], other_supplier.pk)
         self.assertEqual(row["supplier_name"], other_supplier.name)
-        self.assertEqual(row["quantity"], 3)
+        self.assertEqual(Decimal(row["quantity"]), Decimal("3"))
         self.assertEqual(row["unit_cost"], "2.50")
         self.assertEqual(row["landed_unit_cost"], "0.25")
         self.assertEqual(row["effective_unit_cost"], "2.75")
@@ -2976,7 +3187,7 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(row["supplier_name"], self.supplier.name)
         self.assertEqual(row["product"], self.product.pk)
         self.assertEqual(row["product_name"], self.product.name)
-        self.assertEqual(row["quantity"], 2)
+        self.assertEqual(Decimal(row["quantity"]), Decimal("2"))
         self.assertEqual(row["unit_cost"], "1.25")
         self.assertEqual(row["line_total"], "2.50")
 
