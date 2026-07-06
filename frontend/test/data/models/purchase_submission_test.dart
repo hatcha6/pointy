@@ -252,4 +252,51 @@ void main() {
     expect(preview.lines.single.effectiveUnitCost, 3.3);
     expect(preview.lines.single.effectiveLineTotal, 6.6);
   });
+
+  test('isEditable allows drafts and untouched submitted orders only', () {
+    PurchaseOrder order({required String status, String paymentStatus = ''}) {
+      return PurchaseOrder(
+        id: 1,
+        orderNumber: 'P-1',
+        status: status,
+        lineCount: 0,
+        total: 0,
+        subtotal: 0,
+        lines: const [],
+        adjustments: const [],
+        receipts: const [],
+        canReturn: false,
+        canRefund: false,
+        canExchange: false,
+        paymentStatus: paymentStatus,
+      );
+    }
+
+    // The rule behind every Edit entry point (list tile, details footer, and
+    // the edit screen's own fresh-fetch guard) — mirrors the backend's
+    // save_purchase_order_with_lines: drafts always; submitted orders until
+    // the first receipt (which flips the status) or payment.
+    expect(order(status: 'draft').isEditable, isTrue);
+    expect(
+      order(status: 'submitted', paymentStatus: 'unpaid').isEditable,
+      isTrue,
+    );
+    expect(
+      order(status: 'submitted', paymentStatus: 'partial').isEditable,
+      isFalse,
+    );
+    expect(
+      order(status: 'submitted', paymentStatus: 'paid').isEditable,
+      isFalse,
+    );
+    expect(
+      order(status: 'partially_received', paymentStatus: 'unpaid').isEditable,
+      isFalse,
+    );
+    expect(
+      order(status: 'received', paymentStatus: 'paid').isEditable,
+      isFalse,
+    );
+    expect(order(status: 'cancelled').isEditable, isFalse);
+  });
 }
