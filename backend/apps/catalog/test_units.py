@@ -372,3 +372,75 @@ class UnitsManagementApiTests(TestCase):
         response = self.client.delete(self._detail(unit))
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(UnitOfMeasure.objects.filter(code="crate").exists())
+
+
+class SetProductUnitCommandTests(TestCase):
+    """The post-migration fixup command — especially the ``--take-over`` path
+    (rename a mislabeled pack in place without stranding history)."""
+
+    def setUp(self):
+        self.product = create_product_with_default_variant(
+            name="Table eggs", sku="EGGS", unit_price="0.75"
+        )
+        self.variant = self.product.default_variant
+        carton, _ = UnitOfMeasure.objects.get_or_create(
+            code="carton", defaults={"name": "كرتون", "dimension": "count"}
+        )
+        self.old_unit = ProductUnit.objects.create(
+            product=self.product, unit=carton, factor_to_base=Decimal("30")
+        )
+
+    def _run_take_over(self):
+        from django.core.management import call_command
+
+        call_command(
+            "set_product_unit",
+            "--product=EGGS",
+            "--unit=tray",
+            "--unit-name=طبق",
+            "--factor=30",
+            "--price=15",
+            "--fractional",
+            "--take-over=carton",
+        )
+
+    def test_take_over_retags_historical_purchase_lines(self):
+        from apps.purchasing.models import PurchaseLine, PurchaseOrder, Supplier
+
+        order = PurchaseOrder.objects.create(
+            supplier=Supplier.objects.create(name="Egg farm")
+        )
+        line = PurchaseLine.objects.create(
+            purchase_order=order,
+            variant=self.variant,
+            quantity=Decimal("2"),
+            unit="carton",
+            unit_factor=Decimal("30"),
+            unit_cost=Decimal("13.50"),
+        )
+
+        self._run_take_over()
+
+        line.refresh_from_db()
+        self.assertEqual(line.unit, "tray")
+        # The snapshot is a rename, not a repack: factor and cost untouched.
+        self.assertEqual(line.unit_factor, Decimal("30"))
+        self.assertEqual(line.unit_cost, Decimal("13.50"))
+        self.assertEqual(line.base_unit_cost, Decimal("0.45"))
+        self.assertFalse(
+            ProductUnit.objects.filter(product=self.product, unit__code="carton").exists()
+        )
+
+    def test_take_over_moves_packaging_barcodes(self):
+        from apps.catalog.models import ProductUnitBarcode
+
+        ProductUnitBarcode.objects.create(
+            product_unit=self.old_unit, barcode="6210000000017"
+        )
+
+        self._run_take_over()
+
+        tray = ProductUnit.objects.get(product=self.product, unit__code="tray")
+        self.assertEqual(
+            [entry.barcode for entry in tray.barcodes.all()], ["6210000000017"]
+        )

@@ -8,10 +8,11 @@ really an egg tray (طبق), sold fractionally, at its own price:
         --unit=tray --unit-name=طبق --factor=30 --price=15 --fractional \
         --take-over=carton
 
-``--take-over`` retires the product's existing unit of that code and moves its
-packaging barcodes onto the new unit (the tray keeps scanning). Re-running is
-idempotent. ``--product`` resolves a variant barcode, then a SKU, then a unit
-barcode.
+``--take-over`` retires the product's existing unit of that code, moves its
+packaging barcodes onto the new unit (the tray keeps scanning), and retags
+historical purchase lines to the new code so the last-cost lookup keeps
+working. Re-running is idempotent. ``--product`` resolves a variant barcode,
+then a SKU, then a unit barcode.
 """
 
 from __future__ import annotations
@@ -148,7 +149,10 @@ class Command(BaseCommand):
 
     def _retire_unit(self, product: Product, code: str, *, into: UnitOfMeasure) -> list[str]:
         """Delete the product's unit of ``code``, returning its barcodes so they
-        can be re-attached to the replacement unit."""
+        can be re-attached to the replacement unit. Historical purchase lines
+        entered against the retired code are retagged to the new code (their
+        snapshotted factor and cost are untouched — same pack, new name), so
+        they keep resolving and keep feeding the last-cost lookup correctly."""
         old = (
             ProductUnit.objects.filter(product=product, unit__code=code)
             .prefetch_related("barcodes")
@@ -163,6 +167,11 @@ class Command(BaseCommand):
         if product.default_sale_unit == code:
             product.default_sale_unit = ""
             product.save(update_fields=["default_sale_unit", "updated_at"])
+        retagged = self._retag_purchase_lines(product, code, into.code)
+        if retagged:
+            self.stdout.write(
+                f"Retagged {retagged} purchase line(s) {code!r} -> {into.code!r}"
+            )
         # Barcode rows go with the unit (CASCADE); recreated on the new one.
         old.delete()
         self.stdout.write(
@@ -170,6 +179,14 @@ class Command(BaseCommand):
             + (f", moving barcodes {barcodes}" if barcodes else "")
         )
         return barcodes
+
+    @staticmethod
+    def _retag_purchase_lines(product: Product, old_code: str, new_code: str) -> int:
+        from apps.purchasing.models import PurchaseLine
+
+        return PurchaseLine.objects.filter(
+            variant__product=product, unit=old_code
+        ).update(unit=new_code)
 
     @staticmethod
     def _decimal(raw: str, label: str) -> Decimal:

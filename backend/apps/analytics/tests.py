@@ -634,7 +634,12 @@ class AnalyticsEventApiTests(TestCase):
         self.assertEqual(event.attributes["status_family"], "2xx")
         self.assertEqual(event.metrics["status_code"], 200)
         self.assertIn("duration_ms", event.metrics)
-        self.assertIn("db_query_count", event.metrics)
+        # Counted via execute_wrapper, not the DEBUG query log — so it must be
+        # a real count even here (DEBUG=False), and it never touches
+        # ``connection.queries`` (whose 9000-entry cap used to raise
+        # "Limit for query logging exceeded" on batched ingests).
+        self.assertGreater(event.metrics["db_query_count"], 0)
+        self.assertGreaterEqual(event.metrics["db_time_ms"], 0)
 
     def test_domain_event_records_after_commit_with_json_safe_payload(self):
         occurred_at = timezone.now()

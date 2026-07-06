@@ -1,3 +1,4 @@
+import contextlib
 import time
 
 from django.conf import settings
@@ -16,17 +17,16 @@ class BackendPerformanceAnalyticsMiddleware:
             return self.get_response(request)
 
         started_at = time.perf_counter()
-        query_counts = _query_counts()
-        query_times = _query_times()
+        recorder = _QueryRecorder()
         try:
-            response = self.get_response(request)
+            with _instrumented_connections(recorder):
+                response = self.get_response(request)
         except Exception as exc:
             elapsed_ms = _elapsed_ms(started_at)
             metrics = _request_metrics(
                 elapsed_ms=elapsed_ms,
                 status_code=500,
-                query_counts=query_counts,
-                query_times=query_times,
+                recorder=recorder,
             )
             attributes = _request_attributes(request, status_code=500)
             attributes.update(
@@ -51,8 +51,7 @@ class BackendPerformanceAnalyticsMiddleware:
         metrics = _request_metrics(
             elapsed_ms=elapsed_ms,
             status_code=status_code,
-            query_counts=query_counts,
-            query_times=query_times,
+            recorder=recorder,
             response=response,
         )
         attributes = _request_attributes(request, status_code=status_code)
@@ -87,32 +86,39 @@ def _is_enabled_for_request(request):
     return any(path.startswith(prefix) for prefix in prefixes)
 
 
-def _query_counts():
-    return {
-        alias: len(connection.queries)
-        for alias, connection in _connection_items()
-    }
+class _QueryRecorder:
+    """Counts and times this request's queries via ``execute_wrapper``.
 
+    Unlike diffing ``connection.queries``, this needs no DEBUG query log —
+    so it works in production, costs no memory, and never trips Django's
+    9000-entry logging cap (whose overflow warning it used to raise on
+    query-heavy requests such as batched analytics ingests).
+    """
 
-def _query_times():
-    return {
-        alias: _connection_query_time_ms(connection)
-        for alias, connection in _connection_items()
-    }
+    __slots__ = ("count", "time_ms")
 
+    def __init__(self):
+        self.count = 0
+        self.time_ms = 0.0
 
-def _connection_items():
-    return ((alias, connections[alias]) for alias in connections)
-
-
-def _connection_query_time_ms(connection):
-    total = 0.0
-    for query in connection.queries:
+    def __call__(self, execute, sql, params, many, context):
+        started_at = time.perf_counter()
         try:
-            total += float(query.get("time", 0)) * 1000
-        except (TypeError, ValueError):
-            continue
-    return total
+            return execute(sql, params, many, context)
+        finally:
+            self.count += 1
+            self.time_ms += (time.perf_counter() - started_at) * 1000
+
+
+@contextlib.contextmanager
+def _instrumented_connections(recorder):
+    with contextlib.ExitStack() as stack:
+        for alias in connections:
+            try:
+                stack.enter_context(connections[alias].execute_wrapper(recorder))
+            except Exception:
+                continue
+        yield
 
 
 def _elapsed_ms(started_at):
@@ -123,24 +129,14 @@ def _request_metrics(
     *,
     elapsed_ms,
     status_code,
-    query_counts,
-    query_times,
+    recorder,
     response=None,
 ):
-    db_query_count = 0
-    db_time_ms = 0.0
-    for alias, connection in _connection_items():
-        db_query_count += max(len(connection.queries) - query_counts.get(alias, 0), 0)
-        db_time_ms += max(
-            _connection_query_time_ms(connection) - query_times.get(alias, 0),
-            0,
-        )
-
     metrics = {
         "duration_ms": elapsed_ms,
         "status_code": status_code,
-        "db_query_count": db_query_count,
-        "db_time_ms": round(db_time_ms, 3),
+        "db_query_count": recorder.count,
+        "db_time_ms": round(recorder.time_ms, 3),
     }
     response_size = _response_size(response)
     if response_size is not None:

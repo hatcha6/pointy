@@ -138,6 +138,82 @@ if [ "$MODE" = "import" ] && [ "$status" -eq 0 ]; then
   if [ "$fixup_failures" -gt 0 ]; then
     echo "WARN: $fixup_failures fixup(s) failed — check the messages above." >&2
   fi
+
+  # --- Mis-entered pack purchase lines ---------------------------------------
+  # A PO line entered against the old ×30 «كرتون» at the REAL carton price
+  # stays wrong after the rename above (tray @ 162 ⇒ last-cost then prices a
+  # piece at 5.40 and a carton PO line at 1944). Retag such lines to the true
+  # carton and top stock up by the already-received difference. Idempotent:
+  # a retagged line no longer matches the signature.
+  echo "==> Repairing mis-entered pack purchase lines…"
+  docker compose exec -T backend python manage.py shell <<'PYEOF'
+from decimal import Decimal
+
+from django.db import transaction
+
+from apps.catalog.models import Product, ProductUnit
+from apps.inventory.models import StockMovement
+from apps.inventory.services import (
+    create_stock_movement,
+    lock_stock_item,
+    save_stock_item_quantities,
+    stock_snapshot,
+)
+from apps.purchasing.models import PurchaseLine
+
+# (product, wrong_factor, true_unit_code, true_factor, min_unit_cost)
+# Eggs: a 30-egg tray never costs 60+, the 360-egg carton always does.
+REPAIRS = [
+    ("6930358682129", Decimal("30"), "carton", Decimal("360"), Decimal("60")),
+]
+
+for barcode, wrong_factor, true_code, true_factor, min_cost in REPAIRS:
+    product = Product.objects.filter(variants__barcode=barcode).first()
+    if product is None:
+        print(f"repair: product {barcode} not found - skipped")
+        continue
+    if not ProductUnit.objects.filter(
+        product=product, unit__code=true_code, factor_to_base=true_factor
+    ).exists():
+        print(f"repair: {barcode} has no {true_code} x{true_factor} unit - skipped")
+        continue
+    lines = PurchaseLine.objects.filter(
+        variant__product=product,
+        unit_factor=wrong_factor,
+        unit_cost__gte=min_cost,
+    ).select_related("purchase_order", "variant")
+    for line in lines:
+        with transaction.atomic():
+            note = (
+                f"unit repair: PO {line.purchase_order.order_number} line entered as "
+                f"x{wrong_factor.normalize():f}, actually {true_code} x{true_factor.normalize():f}"
+            )
+            line.unit = true_code
+            line.unit_factor = true_factor
+            line.save(update_fields=["unit", "unit_factor", "updated_at"])
+            print(
+                f"repair: line {line.pk} ({line.purchase_order.order_number}) -> "
+                f"{true_code} x{true_factor.normalize():f}, base cost {line.base_unit_cost}"
+            )
+            received = line.received_quantity or Decimal("0")
+            already = StockMovement.objects.filter(variant=line.variant, note=note).exists()
+            if received > 0 and not already:
+                delta = (true_factor - wrong_factor) * received
+                stock = lock_stock_item(variant=line.variant)
+                before = stock_snapshot(stock)
+                stock.quantity_on_hand += delta
+                save_stock_item_quantities(stock)
+                create_stock_movement(
+                    stock_item=stock,
+                    movement_type=StockMovement.Type.INCREASE,
+                    quantity=delta,
+                    note=note,
+                    created_by=None,
+                    before=before,
+                )
+                print(f"repair: stock +{delta.normalize():f} (received portion)")
+print("repair: done")
+PYEOF
 elif [ "$MODE" = "dry_run" ]; then
   echo "    (dry run: the ${#FIXUPS[@]} per-product fixups are applied only with --import)"
 fi
