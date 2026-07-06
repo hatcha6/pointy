@@ -12019,11 +12019,11 @@ abstract class AppLocalizations {
   /// **'تعذر فتح أمر الشراء للتعديل.'**
   String get editPurchaseOrderLoadError;
 
-  /// Error shown when trying to edit a purchase order that is no longer a draft.
+  /// Error shown when trying to edit a purchase order that already has a receipt or payment recorded.
   ///
   /// In ar, this message translates to:
-  /// **'لا يمكن تعديل سوى المسودات.'**
-  String get editPurchaseOrderNotDraftError;
+  /// **'لا يمكن التعديل بعد استلام بضاعة أو تسجيل دفعة على أمر الشراء.'**
+  String get editPurchaseOrderNotEditableError;
 
   /// Warning shown when some lines of an edited draft could not be resolved from the catalog.
   ///

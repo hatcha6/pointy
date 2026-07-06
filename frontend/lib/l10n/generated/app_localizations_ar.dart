@@ -6820,7 +6820,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get editPurchaseOrderLoadError => 'تعذر فتح أمر الشراء للتعديل.';
 
   @override
-  String get editPurchaseOrderNotDraftError => 'لا يمكن تعديل سوى المسودات.';
+  String get editPurchaseOrderNotEditableError =>
+      'لا يمكن التعديل بعد استلام بضاعة أو تسجيل دفعة على أمر الشراء.';
 
   @override
   String purchaseEditUnresolvedLines(int count) {

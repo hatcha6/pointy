@@ -84,6 +84,13 @@ class PurchaseOrder {
   bool get hasOpenReceiving =>
       lines.any((line) => line.openQuantity > 0 || line.receivableQuantity > 0);
 
+  /// An order can be reopened and edited while nothing downstream hangs off
+  /// it: drafts always, and submitted orders until the first receipt (which
+  /// flips the status) or payment. Mirrors the backend rule in
+  /// purchasing.services.save_purchase_order_with_lines.
+  bool get isEditable =>
+      status == 'draft' || (status == 'submitted' && paymentStatus == 'unpaid');
+
   factory PurchaseOrder.fromJson(Map<String, Object?> json) {
     final rawLines = json['lines'] is List<Object?>
         ? json['lines'] as List<Object?>

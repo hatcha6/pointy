@@ -46,7 +46,7 @@ class PurchaseOrderEditScreen extends StatefulWidget {
       _PurchaseOrderEditScreenState();
 }
 
-enum _EditLoadState { loading, ready, loadError, notDraft }
+enum _EditLoadState { loading, ready, loadError, notEditable }
 
 class _PurchaseOrderEditScreenState extends State<PurchaseOrderEditScreen> {
   // A dedicated, non-persisted workspace just for this edit session — disposed
@@ -82,8 +82,11 @@ class _PurchaseOrderEditScreenState extends State<PurchaseOrderEditScreen> {
     }
     switch (result) {
       case Ok<PurchaseOrder>(:final value):
-        if (value.status != 'draft') {
-          setState(() => _state = _EditLoadState.notDraft);
+        // Same rule as the Edit buttons that lead here (and the backend):
+        // the fresh fetch can still refuse when the order was received or
+        // paid since the button was drawn.
+        if (!value.isEditable) {
+          setState(() => _state = _EditLoadState.notEditable);
           return;
         }
         await _viewModel.loadOrderForEditing(value);
@@ -122,8 +125,8 @@ class _PurchaseOrderEditScreenState extends State<PurchaseOrderEditScreen> {
       body: Center(
         child: switch (_state) {
           _EditLoadState.loading => const CircularProgressIndicator(),
-          _EditLoadState.notDraft => _EditLoadMessage(
-            message: l10n.editPurchaseOrderNotDraftError,
+          _EditLoadState.notEditable => _EditLoadMessage(
+            message: l10n.editPurchaseOrderNotEditableError,
           ),
           _EditLoadState.loadError => _EditLoadMessage(
             message: l10n.editPurchaseOrderLoadError,

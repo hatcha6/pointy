@@ -4082,9 +4082,9 @@
   "@editPurchaseOrderLoadError": {
     "description": "Error shown when a draft purchase order cannot be loaded for editing."
   },
-  "editPurchaseOrderNotDraftError": "لا يمكن تعديل سوى المسودات.",
-  "@editPurchaseOrderNotDraftError": {
-    "description": "Error shown when trying to edit a purchase order that is no longer a draft."
+  "editPurchaseOrderNotEditableError": "لا يمكن التعديل بعد استلام بضاعة أو تسجيل دفعة على أمر الشراء.",
+  "@editPurchaseOrderNotEditableError": {
+    "description": "Error shown when trying to edit a purchase order that already has a receipt or payment recorded."
   },
   "purchaseEditUnresolvedLines": "تعذّر تحميل {count} من الأصناف لأنها لم تعد متوفرة في الكتالوج.",
   "@purchaseEditUnresolvedLines": {

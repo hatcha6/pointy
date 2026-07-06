@@ -75,14 +75,8 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
   bool get canSubmit =>
       _capabilities.canEditDraftPurchaseOrder && _order.status == 'draft';
 
-  /// An order can be reopened in the purchasing screen and edited while
-  /// nothing downstream hangs off it: drafts always, and submitted orders
-  /// until the first receipt (which flips the status) or payment. Mirrors the
-  /// backend rule in purchasing.services.save_purchase_order_with_lines.
   bool get canEdit =>
-      _capabilities.canEditDraftPurchaseOrder &&
-      (_order.status == 'draft' ||
-          (_order.status == 'submitted' && _order.paymentStatus == 'unpaid'));
+      _capabilities.canEditDraftPurchaseOrder && _order.isEditable;
   bool get canReceive =>
       _capabilities.canReceivePurchaseOrder &&
       (_order.status == 'submitted' ||
