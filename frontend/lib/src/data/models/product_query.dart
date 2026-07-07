@@ -56,6 +56,9 @@ enum ProductStockFilter implements QueryFilterSet {
 
 enum ProductOrdering implements QueryOrdering {
   name('name'),
+  // "Most bought": sorts by the server's denormalized popularity score (highest
+  // first). The default for POS/catalog browsing so fast-movers surface first.
+  mostBought('-popularity'),
   priceAsc('unit_price'),
   priceDesc('-unit_price'),
   newest('-created_at');
@@ -76,6 +79,7 @@ class ProductQuery extends ModelQuery {
     this.stock = ProductStockFilter.all,
     this.supplierId,
     this.supplierName,
+    this.preferredSupplierId,
     this.ordering = ProductOrdering.name,
   });
 
@@ -91,6 +95,11 @@ class ProductQuery extends ModelQuery {
   // the active-filter chip can label the selection.
   final int? supplierId;
   final String? supplierName;
+  // Soft supplier boost (purchasing PO catalog): unlike [supplierId] this does
+  // NOT filter — it floats that supplier's products to the top while keeping the
+  // rest searchable, so a buyer can still add a product the supplier hasn't
+  // stocked before. Maps to the server's ?preferred_supplier=.
+  final int? preferredSupplierId;
   @override
   final ProductOrdering ordering;
 
@@ -108,6 +117,8 @@ class ProductQuery extends ModelQuery {
       ),
     if (supplierId != null)
       QueryFilter(parameter: 'supplier', value: '$supplierId'),
+    if (preferredSupplierId != null)
+      QueryFilter(parameter: 'preferred_supplier', value: '$preferredSupplierId'),
   ];
 
   ProductQuery copyWith({
@@ -128,6 +139,7 @@ class ProductQuery extends ModelQuery {
       stock: stock ?? this.stock,
       supplierId: supplierId,
       supplierName: supplierName,
+      preferredSupplierId: preferredSupplierId,
       ordering: ordering ?? this.ordering,
     );
   }
@@ -144,6 +156,24 @@ class ProductQuery extends ModelQuery {
       stock: stock,
       supplierId: supplierId,
       supplierName: supplierName,
+      preferredSupplierId: preferredSupplierId,
+      ordering: ordering,
+    );
+  }
+
+  /// Set or clear the soft supplier boost (purchasing PO catalog). Passing null
+  /// clears it (which [copyWith] can't express, since it preserves the value).
+  ProductQuery withPreferredSupplier(int? preferredSupplierId) {
+    return ProductQuery(
+      search: search,
+      barcode: barcode,
+      categories: categories,
+      availability: availability,
+      archived: archived,
+      stock: stock,
+      supplierId: supplierId,
+      supplierName: supplierName,
+      preferredSupplierId: preferredSupplierId,
       ordering: ordering,
     );
   }
@@ -158,6 +188,7 @@ class ProductQuery extends ModelQuery {
         other.archived == archived &&
         other.stock == stock &&
         other.supplierId == supplierId &&
+        other.preferredSupplierId == preferredSupplierId &&
         other.ordering == ordering;
   }
 
@@ -170,6 +201,7 @@ class ProductQuery extends ModelQuery {
     archived,
     stock,
     supplierId,
+    preferredSupplierId,
     ordering,
   );
 

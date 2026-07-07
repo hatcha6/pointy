@@ -129,6 +129,12 @@ class Product(TimeStampedModel):
     # without stock of their own; the kitchen job consumes their recipe
     # ingredients instead.
     is_prepared = models.BooleanField(default=False)
+    # Denormalized "most bought" score: the count of paid sale lines this product's
+    # variants appear on within a rolling 90-day window, recomputed nightly by
+    # ``catalog.recompute_product_popularity``. It is the catalog's default sort key
+    # (most bought first) and the tiebreak for search relevance — read straight off
+    # this indexed column so ordering by demand costs zero extra queries.
+    popularity = models.PositiveIntegerField(default=0, db_index=True)
     # Base (stock-keeping) unit the product is counted in. Stock, recipes, and
     # job materials all use this unit. Its value is a ``UnitOfMeasure.code``; the
     # built-in codes below stay the defaults, but the unit list is now editable so
@@ -205,6 +211,16 @@ class Product(TimeStampedModel):
     def default_variant(self):
         if self.pk is None:
             return None
+        # Reuse the prefetched variant set when the caller prefetched "variants"
+        # (list serializers do) so we don't fire a query per product — and the
+        # returned variant carries its already-prefetched option_values/attachments
+        # instead of re-fetching them (which is what made the catalog list N+1).
+        # Falls back to a direct query for un-prefetched single instances.
+        if "variants" in getattr(self, "_prefetched_objects_cache", {}):
+            defaults = [
+                variant for variant in self.variants.all() if variant.is_default
+            ]
+            return min(defaults, key=lambda variant: variant.id) if defaults else None
         return self.variants.filter(is_default=True).order_by("id").first()
 
     @property

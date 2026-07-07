@@ -639,6 +639,14 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     _selectedSupplier = supplier;
+    // Soft-boost this supplier's products to the top of the catalog (it does not
+    // hide the rest) so the buyer's usual items surface first. Reload only when
+    // the boost actually changed.
+    final boosted = _query.withPreferredSupplier(supplier?.id);
+    if (boosted != _query) {
+      _query = boosted;
+      unawaited(loadCatalog());
+    }
     _trackSupplierSelected(supplier);
     _touchSubmissionIntent();
     notifyListeners();

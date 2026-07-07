@@ -3,8 +3,20 @@ from django.core.cache import cache
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
-from django.db.models import DecimalField, Count, F, ProtectedError, Q, Sum, Value
+from django.db.models import (
+    BooleanField,
+    Count,
+    DecimalField,
+    Exists,
+    F,
+    OuterRef,
+    ProtectedError,
+    Q,
+    Sum,
+    Value,
+)
 from django.db.models.functions import Coalesce
+from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from rest_framework import parsers, status, viewsets
 from rest_framework.decorators import action
@@ -53,6 +65,7 @@ from .serializers import (
     VariantOptionSerializer,
     VariantOptionValueSerializer,
 )
+from .search_filters import CatalogRelevanceFilter
 from .services import category_ids_with_descendants
 
 
@@ -183,23 +196,28 @@ class ProductViewSet(viewsets.ModelViewSet):
         "variants__attachments",
         "variants__option_values",
         "variants__option_values__option",
+        # Each variant serializes its on-hand quantity (variant.stock is a 1:1);
+        # prefetch it so quantity_on_hand doesn't query once per variant.
+        "variants__stock",
         "variant_options",
         "variant_options__values",
+        # Modifier groups are serialized for every product in the catalog list
+        # twice: the modifier_groups id list (the M2M) and modifier_group_details
+        # (link -> group -> options). Prefetch both chains so neither fires a
+        # query per product (product_modifier_group_details reuses the links).
+        "modifier_groups",
+        "modifier_group_links__group__options",
     )
     filterset_fields = ("is_active",)
-    search_fields = (
-        "variants__sku",
-        "variants__barcode",
-        # Unit (carton/box) barcodes — typing/scanning a carton EAN into the
-        # search box must find the product just like a variant barcode does.
-        "units__barcodes__barcode",
-        "variants__name",
-        "name",
-        # Learned alternate names (e.g. a supplier's wording on an invoice), so a
-        # search by that wording finds the product it was confirmed to mean.
-        "aliases__alias",
-    )
-    ordering_fields = ("name", "created_at", "updated_at")
+    # CatalogRelevanceFilter owns search + ordering for this viewset (it replaces
+    # the stock SearchFilter/OrderingFilter): it ranks matches by relevance, keeps
+    # numeric queries on codes, and emits a stable ORDER BY. DjangoFilterBackend
+    # still handles ?is_active=. The fields it searches (variant sku/barcode, unit
+    # barcode, variant/product name, aliases) live in that backend.
+    filter_backends = (DjangoFilterBackend, CatalogRelevanceFilter)
+    # Ordering values the client may request (mapped to stable orderings inside
+    # CatalogRelevanceFilter). ``popularity`` is the "most bought" sort.
+    ordering_fields = ("name", "created_at", "updated_at", "popularity")
 
     def get_required_permissions(self, request):
         if self.action == "variants":
@@ -223,7 +241,10 @@ class ProductViewSet(viewsets.ModelViewSet):
         queryset = self._filter_by_archived(queryset)
         queryset = self._filter_by_stock(queryset)
         queryset = self._filter_by_supplier(queryset)
-        queryset = queryset.order_by("name", "id")
+        queryset = self._annotate_supplier_boost(queryset)
+        # Default ("most bought" first) for any no-ordering API caller; the client
+        # normally sends ?ordering= and CatalogRelevanceFilter finalises the sort.
+        queryset = queryset.order_by("-popularity", "name", "id")
         if self.request.query_params.get("is_active") == "true":
             if self._has_selective_list_filter():
                 return queryset.filter(
@@ -312,6 +333,30 @@ class ProductViewSet(viewsets.ModelViewSet):
             .values_list("variant__product_id", flat=True)
         )
         return queryset.filter(id__in=supplied_product_ids)
+
+    def _annotate_supplier_boost(self, queryset):
+        # Soft supplier boost for the purchasing PO catalog: ?preferred_supplier=<id>
+        # does NOT filter (unlike ?supplier=) — it floats that supplier's products to
+        # the top while keeping everything else searchable, so a buyer can still add a
+        # product the supplier hasn't stocked before. Applied in the ORDER BY by
+        # CatalogRelevanceFilter. Always annotate (a constant False when no supplier)
+        # so the annotation is present whenever the filter wants to order by it. The
+        # Exists() is a scalar subquery — zero extra queries, no join fan-out.
+        supplier_id = self.request.query_params.get("preferred_supplier")
+        if not supplier_id or not str(supplier_id).isdigit():
+            return queryset.annotate(
+                is_supplier_product=Value(False, output_field=BooleanField())
+            )
+        from apps.purchasing.models import PurchaseLine
+
+        supplied = (
+            PurchaseLine.objects.filter(
+                purchase_order__supplier_id=supplier_id,
+                variant__product_id=OuterRef("pk"),
+            )
+            .exclude(purchase_order__status="cancelled")
+        )
+        return queryset.annotate(is_supplier_product=Exists(supplied))
 
     def _requested_category_ids(self):
         return requested_category_ids(self.request.query_params)

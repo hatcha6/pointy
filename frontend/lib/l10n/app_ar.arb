@@ -163,6 +163,7 @@
   "availabilityInactive": "المتوقفة فقط",
   "orderingTitle": "ترتيب النتائج",
   "orderingName": "الاسم",
+  "orderingMostBought": "الأكثر مبيعًا",
   "orderingPriceAsc": "السعر: من الأقل إلى الأعلى",
   "orderingPriceDesc": "السعر: من الأعلى إلى الأقل",
   "orderingNewest": "الأحدث أولًا",
