@@ -7818,6 +7818,48 @@ abstract class AppLocalizations {
   /// **'إخراج PDF بحجم A4'**
   String get printerOutputA4Pdf;
 
+  /// Selected-printer summary line for a document/PDF printer set to a receipt roll width.
+  ///
+  /// In ar, this message translates to:
+  /// **'إخراج إيصال PDF بعرض {width} مم'**
+  String printerOutputPdfReceipt(int width);
+
+  /// No description provided for @printerPdfPageSizeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حجم صفحة PDF'**
+  String get printerPdfPageSizeLabel;
+
+  /// No description provided for @printerPdfPageSizeHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'A4 لطباعة فاتورة كاملة، أو اختر عرض إيصال (58 أو 70 أو 80 مم) لطباعة إيصال مضغوط عبر تعريف الطابعة (مثل Xprinter) بدل أوامر ESC/POS غير المدعومة.'**
+  String get printerPdfPageSizeHelper;
+
+  /// No description provided for @printerPdfPageSizeA4.
+  ///
+  /// In ar, this message translates to:
+  /// **'A4 (فاتورة كاملة)'**
+  String get printerPdfPageSizeA4;
+
+  /// No description provided for @printerPdfPageSizeRoll58.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال 58 مم'**
+  String get printerPdfPageSizeRoll58;
+
+  /// No description provided for @printerPdfPageSizeRoll70.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال 70 مم'**
+  String get printerPdfPageSizeRoll70;
+
+  /// No description provided for @printerPdfPageSizeRoll80.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال 80 مم'**
+  String get printerPdfPageSizeRoll80;
+
   /// No description provided for @systemDefaultPrinterLabel.
   ///
   /// In ar, this message translates to:

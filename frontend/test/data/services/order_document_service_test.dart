@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/data/models/shop_settings.dart';
@@ -283,6 +286,141 @@ void main() {
 
     expect(bytes, isNotEmpty);
   });
+
+  group('receipt-width PDF output', () {
+    const service = OrderDocumentService(fontLoader: _TestFontLoader());
+
+    // 1 mm in PDF points (1 pt = 1/72 inch).
+    double mm(num value) => value * 72 / 25.4;
+
+    test('the default A4 page size renders a full 210mm-wide page', () async {
+      final bytes = await service.buildSaleInvoiceBytes(
+        order: _saleOrder(receiptNumber: 'R-A4'),
+        shopSettings: _settings,
+      );
+      final widths = _mediaBoxWidths(bytes);
+      expect(widths, isNotEmpty);
+      expect(widths.every((w) => (w - mm(210)).abs() < 1), isTrue);
+    });
+
+    test('each receipt roll size renders a narrow page at that width',
+        () async {
+      const cases = <(PdfPageSize, int)>[
+        (PdfPageSize.roll58, 58),
+        (PdfPageSize.roll70, 70),
+        (PdfPageSize.roll80, 80),
+      ];
+      for (final (size, widthMm) in cases) {
+        final bytes = await service.buildSaleInvoiceBytes(
+          order: _saleOrder(receiptNumber: 'R-$widthMm'),
+          shopSettings: _settings,
+          pageSize: size,
+        );
+        final widths = _mediaBoxWidths(bytes);
+        expect(widths, isNotEmpty, reason: 'no page rendered for $size');
+        expect(
+          widths.every((w) => (w - mm(widthMm)).abs() < 1),
+          isTrue,
+          reason: '$size should be ${widthMm}mm wide, got $widths',
+        );
+      }
+    });
+
+    test('a receipt roll is a single content-height page, not A4', () async {
+      final bytes = await service.buildSaleInvoiceBytes(
+        order: _saleOrder(
+          receiptNumber: 'R-1',
+          subtotal: 10,
+          total: 10,
+          payments: const [
+            SalePayment(
+              id: 1,
+              method: PaymentMethod.cash,
+              amount: 10,
+              commissionPercent: 0,
+              commissionAmount: 0,
+            ),
+          ],
+          createdAt: DateTime(2026, 5, 20, 9),
+        ),
+        shopSettings: _settings,
+        pageSize: PdfPageSize.roll80,
+      );
+      final heights = _mediaBoxHeights(bytes);
+      expect(heights.length, 1);
+      // Content-driven height, comfortably under A4's 841.9pt.
+      expect(heights.single, lessThan(mm(297)));
+    });
+
+    test('a sale with line items renders on the receipt roll', () async {
+      final bytes = await service.buildSaleInvoiceBytes(
+        order: _saleOrder(
+          receiptNumber: 'R-lines',
+          lines: const [
+            SaleOrderLine(
+              id: 1,
+              productId: 10,
+              variantId: 0,
+              quantity: 2,
+              returnedQuantity: 0,
+              returnableQuantity: 2,
+              unitLabel: 'قطعة',
+              unitPrice: 5,
+              total: 10,
+              productName: 'شاي',
+            ),
+          ],
+        ),
+        shopSettings: _settings,
+        pageSize: PdfPageSize.roll80,
+      );
+      final widths = _mediaBoxWidths(bytes);
+      expect(widths, isNotEmpty);
+      expect(widths.every((w) => (w - mm(80)).abs() < 1), isTrue);
+    });
+
+    test('purchase orders and proofs honor the receipt width too', () async {
+      final poBytes = await service.buildPurchaseOrderBytes(
+        order: _purchaseOrder(orderNumber: 'PO-1'),
+        shopSettings: _settings,
+        pageSize: PdfPageSize.roll58,
+      );
+      final proofBytes = await service.buildProofOfPaymentBytes(
+        proof: const PaymentProof(
+          kind: PaymentProofKind.receipt,
+          reference: 'P-1',
+          partyName: 'سارة',
+          amount: 25,
+          method: 'نقدًا',
+        ),
+        shopSettings: _settings,
+        pageSize: PdfPageSize.roll58,
+      );
+      for (final widths in [
+        _mediaBoxWidths(poBytes),
+        _mediaBoxWidths(proofBytes),
+      ]) {
+        expect(widths, isNotEmpty);
+        expect(widths.every((w) => (w - mm(58)).abs() < 1), isTrue);
+      }
+    });
+  });
+}
+
+/// Widths (x1) of every `/MediaBox [x0 y0 x1 y1]` in the PDF bytes. The page
+/// dictionary is written inline (not object-streamed) by the `pdf` package, so
+/// the media box is greppable — enough to assert the rendered page geometry
+/// without a full PDF parser.
+List<double> _mediaBoxWidths(Uint8List bytes) => _mediaBox(bytes, 3);
+
+List<double> _mediaBoxHeights(Uint8List bytes) => _mediaBox(bytes, 4);
+
+List<double> _mediaBox(Uint8List bytes, int group) {
+  final text = String.fromCharCodes(bytes);
+  final re = RegExp(
+    r'MediaBox\s*\[\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)',
+  );
+  return re.allMatches(text).map((m) => double.parse(m.group(group)!)).toList();
 }
 
 class _TestFontLoader extends PointyPdfFontLoader {
@@ -299,6 +437,7 @@ SaleOrder _saleOrder({
   String? customerPhone,
   String? customerEmail,
   List<SalePayment> payments = const [],
+  List<SaleOrderLine> lines = const [],
   double subtotal = 0,
   double total = 0,
   DateTime? createdAt,
@@ -311,7 +450,7 @@ SaleOrder _saleOrder({
     id: 1,
     receiptNumber: receiptNumber,
     status: 'paid',
-    lines: const [],
+    lines: lines,
     payments: payments,
     subtotal: subtotal,
     total: total,

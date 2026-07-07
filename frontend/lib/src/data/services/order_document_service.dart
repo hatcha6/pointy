@@ -107,7 +107,7 @@ class OrderDocumentService {
   Future<PrintTransportResult> printTest(PrinterEndpoint endpoint) async {
     try {
       final printed = await _printPdf(
-        bytesBuilder: () => _buildTestPdf(),
+        bytesBuilder: () => _buildTestPdf(pageSize: endpoint.pdfPageSize),
         jobName: labels.testPrintTitle,
         endpoint: endpoint,
       );
@@ -125,11 +125,13 @@ class OrderDocumentService {
     Uint8List? shopLogoBytes,
     PrinterEndpoint? endpoint,
   }) {
+    final pageSize = endpoint?.pdfPageSize ?? PdfPageSize.a4;
     return _printPdf(
       bytesBuilder: () => buildSaleInvoiceBytes(
         order: order,
         shopSettings: shopSettings,
         shopLogoBytes: shopLogoBytes,
+        pageSize: pageSize,
       ),
       jobName: saleInvoiceFileName(order),
       endpoint: endpoint,
@@ -142,11 +144,13 @@ class OrderDocumentService {
     Uint8List? shopLogoBytes,
     PrinterEndpoint? endpoint,
   }) {
+    final pageSize = endpoint?.pdfPageSize ?? PdfPageSize.a4;
     return _printPdf(
       bytesBuilder: () => buildPurchaseOrderBytes(
         order: order,
         shopSettings: shopSettings,
         shopLogoBytes: shopLogoBytes,
+        pageSize: pageSize,
       ),
       jobName: purchaseOrderFileName(order),
       endpoint: endpoint,
@@ -159,11 +163,13 @@ class OrderDocumentService {
     Uint8List? shopLogoBytes,
     PrinterEndpoint? endpoint,
   }) {
+    final pageSize = endpoint?.pdfPageSize ?? PdfPageSize.a4;
     return _printPdf(
       bytesBuilder: () => buildProofOfPaymentBytes(
         proof: proof,
         shopSettings: shopSettings,
         shopLogoBytes: shopLogoBytes,
+        pageSize: pageSize,
       ),
       jobName: proofOfPaymentFileName(proof),
       endpoint: endpoint,
@@ -220,55 +226,61 @@ class OrderDocumentService {
     required SaleOrder order,
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
+    PdfPageSize pageSize = PdfPageSize.a4,
   }) async {
     final fontData = await fontLoader.loadData();
     final template = saleInvoiceTemplate(
       order: order,
       shopSettings: shopSettings,
     );
-    return _renderDocument(template, shopLogoBytes, fontData);
+    return _renderDocument(template, shopLogoBytes, fontData, pageSize);
   }
 
   Future<Uint8List> buildPurchaseOrderBytes({
     required PurchaseOrder order,
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
+    PdfPageSize pageSize = PdfPageSize.a4,
   }) async {
     final fontData = await fontLoader.loadData();
     final template = purchaseOrderTemplate(
       order: order,
       shopSettings: shopSettings,
     );
-    return _renderDocument(template, shopLogoBytes, fontData);
+    return _renderDocument(template, shopLogoBytes, fontData, pageSize);
   }
 
   Future<Uint8List> buildProofOfPaymentBytes({
     required PaymentProof proof,
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
+    PdfPageSize pageSize = PdfPageSize.a4,
   }) async {
     final fontData = await fontLoader.loadData();
     final template = proofOfPaymentTemplate(
       proof: proof,
       shopSettings: shopSettings,
     );
-    return _renderDocument(template, shopLogoBytes, fontData);
+    return _renderDocument(template, shopLogoBytes, fontData, pageSize);
   }
 
   /// Renders [template] to PDF bytes. On native platforms the heavy synchronous
   /// `pw.Document.save()` runs in a background isolate so a checkout (or a
   /// share/print) never blocks the UI thread; the web target has no isolates,
-  /// so it renders inline.
+  /// so it renders inline. [pageSize] picks the full A4 document or a compact
+  /// receipt-width roll.
   Future<Uint8List> _renderDocument(
     OrderDocumentTemplate template,
     Uint8List? logoBytes,
     PointyPdfFontData fontData,
+    PdfPageSize pageSize,
   ) {
     final request = _OrderDocumentBuildRequest(
       template: template,
       logoBytes: logoBytes,
       labels: labels,
       fontData: fontData,
+      pageSize: pageSize,
     );
     if (kIsWeb) {
       return _buildOrderDocumentBytes(request);
@@ -490,9 +502,8 @@ class OrderDocumentService {
   }) {
     final isReceipt = proof.kind == PaymentProofKind.receipt;
     return OrderDocumentTemplate(
-      title: isReceipt
-          ? labels.proofOfReceiptTitle
-          : labels.proofOfPaymentTitle,
+      title:
+          isReceipt ? labels.proofOfReceiptTitle : labels.proofOfPaymentTitle,
       reference: proof.reference.trim().isEmpty
           ? labels.emptyValue
           : proof.reference.trim(),
@@ -559,9 +570,8 @@ class OrderDocumentService {
   }
 
   String proofOfPaymentFileName(PaymentProof proof) {
-    final prefix = proof.kind == PaymentProofKind.receipt
-        ? 'سند-قبض'
-        : 'سند-صرف';
+    final prefix =
+        proof.kind == PaymentProofKind.receipt ? 'سند-قبض' : 'سند-صرف';
     return '$prefix-${_safeReference(proof.reference)}.pdf';
   }
 
@@ -571,21 +581,21 @@ class OrderDocumentService {
     PrinterEndpoint? endpoint,
   }) async {
     final bytes = await bytesBuilder();
-    final selectedPrinter = endpoint == null
-        ? null
-        : await _resolvePrinter(endpoint);
+    final format = _platformPageFormat(endpoint?.pdfPageSize ?? PdfPageSize.a4);
+    final selectedPrinter =
+        endpoint == null ? null : await _resolvePrinter(endpoint);
     if (selectedPrinter != null) {
       return Printing.directPrintPdf(
         printer: selectedPrinter,
         name: jobName,
-        format: PdfPageFormat.a4,
+        format: format,
         onLayout: (_) async => bytes,
         usePrinterSettings: true,
       );
     }
     return Printing.layoutPdf(
       name: jobName,
-      format: PdfPageFormat.a4,
+      format: format,
       usePrinterSettings: true,
       onLayout: (_) async => bytes,
     );
@@ -651,44 +661,71 @@ class OrderDocumentService {
     return switch (defaultTargetPlatform) {
       TargetPlatform.macOS ||
       TargetPlatform.windows ||
-      TargetPlatform.linux => true,
+      TargetPlatform.linux =>
+        true,
       TargetPlatform.android ||
       TargetPlatform.iOS ||
-      TargetPlatform.fuchsia => false,
+      TargetPlatform.fuchsia =>
+        false,
     };
   }
 
-  Future<Uint8List> _buildTestPdf() async {
+  Future<Uint8List> _buildTestPdf({
+    PdfPageSize pageSize = PdfPageSize.a4,
+  }) async {
     final fonts = await fontLoader.load();
-    return _DocumentFrame(
-      template: OrderDocumentTemplate(
-        title: labels.testPrintTitle,
-        reference: labels.testPrintReference,
-        shopName: _shopName(null),
-        shopHeaderLines: const [],
-        recipientTitle: labels.billTo,
-        recipientLines: const [],
-        details: [
-          OrderDocumentField(labels.issueDate, _formatDateTime(DateTime.now())),
+    final template = OrderDocumentTemplate(
+      title: labels.testPrintTitle,
+      reference: labels.testPrintReference,
+      shopName: _shopName(null),
+      shopHeaderLines: const [],
+      recipientTitle: labels.billTo,
+      recipientLines: const [],
+      details: [
+        OrderDocumentField(labels.issueDate, _formatDateTime(DateTime.now())),
+      ],
+      itemsTable: OrderDocumentTable(
+        columns: [
+          labels.product,
+          labels.quantity,
+          labels.unitPrice,
+          labels.lineTotal,
         ],
-        itemsTable: OrderDocumentTable(
-          columns: [
-            labels.product,
-            labels.quantity,
-            labels.unitPrice,
-            labels.lineTotal,
-          ],
-          rows: const [],
-          columnFlex: const [2.8, 0.8, 1.1, 1.1],
-        ),
-        totals: [
-          OrderDocumentField(labels.total, _formatMoney(0), strong: true),
-        ],
+        rows: const [],
+        columnFlex: const [2.8, 0.8, 1.1, 1.1],
       ),
+      totals: [OrderDocumentField(labels.total, _formatMoney(0), strong: true)],
+    );
+    final receiptWidthMm = pdfPageSizeReceiptWidthMm(pageSize);
+    if (receiptWidthMm != null) {
+      return _ReceiptFrame(
+        template: template,
+        labels: labels,
+        fonts: fonts,
+        widthMm: receiptWidthMm,
+      ).build();
+    }
+    return _DocumentFrame(
+      template: template,
       labels: labels,
       fonts: fonts,
     ).build();
   }
+}
+
+/// Page format handed to the platform print channel. The true page geometry is
+/// baked into the rendered PDF bytes (a content-height roll for receipt widths),
+/// so this only seeds the platform's custom-paper fallback. The height must stay
+/// finite — the method channel cannot carry `double.infinity` — and because the
+/// print calls pass `usePrinterSettings: true` the driver's own roll config
+/// governs the real feed/cut anyway.
+PdfPageFormat _platformPageFormat(PdfPageSize size) {
+  final widthMm = pdfPageSizeReceiptWidthMm(size);
+  if (widthMm == null) {
+    return PdfPageFormat.a4;
+  }
+  final width = widthMm * PdfPageFormat.mm;
+  return PdfPageFormat(width, width * 6);
 }
 
 /// Sendable bundle for [_buildOrderDocumentBytes] so PDF rendering can run in a
@@ -700,22 +737,36 @@ class _OrderDocumentBuildRequest {
     required this.logoBytes,
     required this.labels,
     required this.fontData,
+    required this.pageSize,
   });
 
   final OrderDocumentTemplate template;
   final Uint8List? logoBytes;
   final OrderDocumentLabels labels;
   final PointyPdfFontData fontData;
+  final PdfPageSize pageSize;
 }
 
 /// Top-level so it can serve as an isolate entry point: parses the font bytes
-/// and performs the heavy synchronous PDF encoding.
+/// and performs the heavy synchronous PDF encoding. Renders the full A4
+/// document or, for a receipt-roll [PdfPageSize], the compact receipt frame.
 Future<Uint8List> _buildOrderDocumentBytes(_OrderDocumentBuildRequest request) {
+  final receiptWidthMm = pdfPageSizeReceiptWidthMm(request.pageSize);
+  final fonts = request.fontData.toFonts();
+  if (receiptWidthMm != null) {
+    return _ReceiptFrame(
+      template: request.template,
+      shopLogoBytes: request.logoBytes,
+      labels: request.labels,
+      fonts: fonts,
+      widthMm: receiptWidthMm,
+    ).build();
+  }
   return _DocumentFrame(
     template: request.template,
     shopLogoBytes: request.logoBytes,
     labels: request.labels,
-    fonts: request.fontData.toFonts(),
+    fonts: fonts,
   ).build();
 }
 
@@ -793,76 +844,76 @@ class OrderDocumentLabels {
   });
 
   const OrderDocumentLabels.arabic()
-    : saleInvoiceTitle = 'فاتورة بيع',
-      purchaseOrderTitle = 'فاتورة مشتريات',
-      testPrintTitle = 'اختبار طباعة الفواتير',
-      testPrintReference = 'اختبار',
-      savePdfDialogTitle = 'حفظ ملف PDF',
-      summary = 'الملخص',
-      items = 'العناصر',
-      payments = 'المدفوعات',
-      totals = 'الإجماليات',
-      invoiceNumber = 'رقم الفاتورة',
-      purchaseOrderNumber = 'رقم أمر الشراء',
-      supplierInvoiceNumber = 'رقم فاتورة المورد',
-      supplierInvoiceDate = 'تاريخ فاتورة المورد',
-      billTo = 'فاتورة إلى:',
-      billFrom = 'فاتورة من:',
-      customer = 'العميل',
-      supplier = 'المورد',
-      registerSession = 'جلسة الدرج',
-      status = 'الحالة',
-      issueDate = 'تاريخ الإصدار',
-      createdAt = 'تاريخ الإنشاء',
-      submittedAt = 'تاريخ الإرسال',
-      receivedAt = 'تاريخ الاستلام',
-      dueDate = 'تاريخ الاستحقاق',
-      product = 'الصنف',
-      quantity = 'الكمية',
-      received = 'المستلم',
-      unitPrice = 'السعر',
-      unitCost = 'السعر',
-      lineTotal = 'الإجمالي',
-      paymentMethod = 'طريقة الدفع',
-      amount = 'المبلغ',
-      subtotal = 'المجموع الفرعي',
-      discount = 'الخصم',
-      landedCost = 'تكاليف الشحن والتوريد',
-      total = 'الإجمالي',
-      paid = 'المدفوع',
-      balanceDue = 'المتبقي',
-      notes = 'ملاحظات',
-      terms = 'الشروط',
-      unknownProduct = 'منتج غير معروف',
-      walkInCustomer = 'عميل نقدي',
-      emptyValue = '-',
-      page = 'صفحة',
-      ofPages = 'من',
-      onlineInvoice = 'الفاتورة عبر الإنترنت',
-      scanOnlineInvoice = 'امسح الرمز لعرض الفاتورة',
-      paymentStatusLabel = 'حالة الدفع',
-      paymentStatusPaid = 'مدفوعة بالكامل',
-      paymentStatusPartial = 'مدفوعة جزئيًا',
-      paymentStatusUnpaid = 'آجل — غير مدفوعة',
-      paymentStatusQuotation = 'عرض سعر',
-      quotationTitle = 'فاتورة عرض',
-      quotationValidUntil = 'صالح حتى',
-      quotationNotice =
-          'هذا عرض سعر وليس فاتورة بيع أو فاتورة ضريبية، ولا يُلزم بأي دفع.',
-      proofOfReceiptTitle = 'سند قبض',
-      proofOfPaymentTitle = 'سند صرف',
-      proofReceivedFrom = 'استلمنا من',
-      proofPaidTo = 'صرفنا إلى',
-      proofRelatedInvoice = 'بخصوص الفاتورة',
-      proofRelatedPurchaseOrder = 'بخصوص أمر الشراء',
-      proofAmount = 'المبلغ',
-      proofCommission = 'العمولة',
-      proofReference = 'المرجع',
-      proofParticular = 'البيان',
-      proofParticularValue = 'التفاصيل',
-      proofCollectedBy = 'حصّلها',
-      proofPaidBy = 'صرفها',
-      proofBalanceAfter = 'الرصيد بعد الدفع';
+      : saleInvoiceTitle = 'فاتورة بيع',
+        purchaseOrderTitle = 'فاتورة مشتريات',
+        testPrintTitle = 'اختبار طباعة الفواتير',
+        testPrintReference = 'اختبار',
+        savePdfDialogTitle = 'حفظ ملف PDF',
+        summary = 'الملخص',
+        items = 'العناصر',
+        payments = 'المدفوعات',
+        totals = 'الإجماليات',
+        invoiceNumber = 'رقم الفاتورة',
+        purchaseOrderNumber = 'رقم أمر الشراء',
+        supplierInvoiceNumber = 'رقم فاتورة المورد',
+        supplierInvoiceDate = 'تاريخ فاتورة المورد',
+        billTo = 'فاتورة إلى:',
+        billFrom = 'فاتورة من:',
+        customer = 'العميل',
+        supplier = 'المورد',
+        registerSession = 'جلسة الدرج',
+        status = 'الحالة',
+        issueDate = 'تاريخ الإصدار',
+        createdAt = 'تاريخ الإنشاء',
+        submittedAt = 'تاريخ الإرسال',
+        receivedAt = 'تاريخ الاستلام',
+        dueDate = 'تاريخ الاستحقاق',
+        product = 'الصنف',
+        quantity = 'الكمية',
+        received = 'المستلم',
+        unitPrice = 'السعر',
+        unitCost = 'السعر',
+        lineTotal = 'الإجمالي',
+        paymentMethod = 'طريقة الدفع',
+        amount = 'المبلغ',
+        subtotal = 'المجموع الفرعي',
+        discount = 'الخصم',
+        landedCost = 'تكاليف الشحن والتوريد',
+        total = 'الإجمالي',
+        paid = 'المدفوع',
+        balanceDue = 'المتبقي',
+        notes = 'ملاحظات',
+        terms = 'الشروط',
+        unknownProduct = 'منتج غير معروف',
+        walkInCustomer = 'عميل نقدي',
+        emptyValue = '-',
+        page = 'صفحة',
+        ofPages = 'من',
+        onlineInvoice = 'الفاتورة عبر الإنترنت',
+        scanOnlineInvoice = 'امسح الرمز لعرض الفاتورة',
+        paymentStatusLabel = 'حالة الدفع',
+        paymentStatusPaid = 'مدفوعة بالكامل',
+        paymentStatusPartial = 'مدفوعة جزئيًا',
+        paymentStatusUnpaid = 'آجل — غير مدفوعة',
+        paymentStatusQuotation = 'عرض سعر',
+        quotationTitle = 'فاتورة عرض',
+        quotationValidUntil = 'صالح حتى',
+        quotationNotice =
+            'هذا عرض سعر وليس فاتورة بيع أو فاتورة ضريبية، ولا يُلزم بأي دفع.',
+        proofOfReceiptTitle = 'سند قبض',
+        proofOfPaymentTitle = 'سند صرف',
+        proofReceivedFrom = 'استلمنا من',
+        proofPaidTo = 'صرفنا إلى',
+        proofRelatedInvoice = 'بخصوص الفاتورة',
+        proofRelatedPurchaseOrder = 'بخصوص أمر الشراء',
+        proofAmount = 'المبلغ',
+        proofCommission = 'العمولة',
+        proofReference = 'المرجع',
+        proofParticular = 'البيان',
+        proofParticularValue = 'التفاصيل',
+        proofCollectedBy = 'حصّلها',
+        proofPaidBy = 'صرفها',
+        proofBalanceAfter = 'الرصيد بعد الدفع';
 
   final String saleInvoiceTitle;
   final String purchaseOrderTitle;
@@ -1308,6 +1359,370 @@ class _DocumentFrame {
       pageLabel:
           '${labels.page} ${context.pageNumber} ${labels.ofPages} ${context.pagesCount}',
       shopFooter: compactPdfText(template.notes, maxCharacters: 150),
+    );
+  }
+}
+
+/// A compact, single-column receipt rendering of an [OrderDocumentTemplate],
+/// used by the PDF/document path when the printer is set to a receipt roll
+/// width. Built as one continuous roll page — a fixed millimetre width and a
+/// content-driven (infinite) height — so a receipt printer driven through its
+/// own PDF/Windows driver (e.g. the Xprinter N160II) prints a real receipt
+/// instead of a shrunken A4 page or ESC/POS gibberish. Reuses the shared PDF
+/// palette/fonts so it stays on-brand; money stays RTL so the currency renders
+/// correctly (forcing LTR mangles "د.ل").
+class _ReceiptFrame {
+  const _ReceiptFrame({
+    required this.template,
+    required this.labels,
+    required this.fonts,
+    required this.widthMm,
+    this.shopLogoBytes,
+  });
+
+  final OrderDocumentTemplate template;
+  final Uint8List? shopLogoBytes;
+  final OrderDocumentLabels labels;
+  final PointyPdfFonts fonts;
+  final int widthMm;
+
+  static const double _horizontalMarginMm = 4;
+  static const double _verticalMarginMm = 6;
+
+  double get _contentWidth =>
+      widthMm * PdfPageFormat.mm - 2 * _horizontalMarginMm * PdfPageFormat.mm;
+
+  Future<Uint8List> build() {
+    final pdf = pw.Document(
+      title: '${template.title} ${template.reference}',
+      author: template.shopName,
+      creator: 'دفتر',
+      subject: template.title,
+    );
+
+    pdf.addPage(
+      pw.Page(
+        // Finite width, infinite height → one continuous roll page whose height
+        // is measured from the content (no wasted blank tail on the roll).
+        pageFormat: PdfPageFormat(widthMm * PdfPageFormat.mm, double.infinity),
+        margin: const pw.EdgeInsets.symmetric(
+          horizontal: _horizontalMarginMm * PdfPageFormat.mm,
+          vertical: _verticalMarginMm * PdfPageFormat.mm,
+        ),
+        theme: fonts.toThemeData(),
+        textDirection: pw.TextDirection.rtl,
+        build: (context) => _body(),
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  pw.Widget _body() {
+    final children = <pw.Widget>[..._header(), _divider(), ..._titleBlock()];
+
+    if (template.details.isNotEmpty) {
+      children.add(pw.SizedBox(height: 3));
+      for (final field in template.details) {
+        children.add(_fieldRow(field));
+      }
+    }
+
+    if (template.recipientLines.isNotEmpty) {
+      children.add(_divider());
+      children.addAll(_recipient());
+    }
+
+    final items = _items();
+    if (items != null) {
+      children.add(_divider());
+      children.add(items);
+    }
+
+    if (template.totals.isNotEmpty) {
+      children.add(_divider());
+      for (final field in template.totals) {
+        children.add(_fieldRow(field));
+      }
+    }
+
+    final terms = template.terms?.trim();
+    if (terms != null && terms.isNotEmpty) {
+      children.add(_divider());
+      children.add(
+        pw.Text(
+          terms,
+          style: const pw.TextStyle(fontSize: 8, color: PointyPdfPalette.ink),
+          textAlign: pw.TextAlign.center,
+        ),
+      );
+    }
+
+    final note = compactPdfText(template.notes, maxCharacters: 160);
+    if (note != null) {
+      children.add(pw.SizedBox(height: 6));
+      children.add(
+        pw.Text(
+          note,
+          style: const pw.TextStyle(
+            fontSize: 7.5,
+            color: PointyPdfPalette.muted,
+          ),
+          textAlign: pw.TextAlign.center,
+        ),
+      );
+    }
+
+    final qr = _qr();
+    if (qr != null) {
+      children.add(pw.SizedBox(height: 8));
+      children.add(qr);
+    }
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      mainAxisSize: pw.MainAxisSize.min,
+      children: children,
+    );
+  }
+
+  List<pw.Widget> _header() {
+    final widgets = <pw.Widget>[];
+    final logo = pdfLogoProvider(shopLogoBytes);
+    if (logo != null) {
+      widgets.add(
+        pw.Center(
+          child: pw.Container(
+            height: 40,
+            constraints: pw.BoxConstraints(maxWidth: _contentWidth * 0.7),
+            child: pw.Image(logo, fit: pw.BoxFit.contain),
+          ),
+        ),
+      );
+      widgets.add(pw.SizedBox(height: 6));
+    }
+    widgets.add(
+      pw.Text(
+        template.shopName,
+        style: pw.TextStyle(
+          fontSize: 12,
+          fontWeight: pw.FontWeight.bold,
+          color: PointyPdfPalette.ink,
+        ),
+        textAlign: pw.TextAlign.center,
+      ),
+    );
+    for (final line in template.shopHeaderLines) {
+      widgets.add(pw.SizedBox(height: 2));
+      widgets.add(
+        pw.Text(
+          line,
+          style: const pw.TextStyle(fontSize: 8, color: PointyPdfPalette.muted),
+          textAlign: pw.TextAlign.center,
+        ),
+      );
+    }
+    return widgets;
+  }
+
+  List<pw.Widget> _titleBlock() {
+    return [
+      pw.Text(
+        template.title,
+        style: pw.TextStyle(
+          fontSize: 11,
+          fontWeight: pw.FontWeight.bold,
+          color: PointyPdfPalette.ink,
+        ),
+        textAlign: pw.TextAlign.center,
+      ),
+      pw.SizedBox(height: 1),
+      pw.Text(
+        '#${template.reference}',
+        style: const pw.TextStyle(fontSize: 8, color: PointyPdfPalette.muted),
+        textAlign: pw.TextAlign.center,
+      ),
+    ];
+  }
+
+  List<pw.Widget> _recipient() {
+    final widgets = <pw.Widget>[
+      pw.Text(
+        template.recipientTitle,
+        style: const pw.TextStyle(fontSize: 8, color: PointyPdfPalette.muted),
+      ),
+      pw.SizedBox(height: 2),
+      pw.Text(
+        template.recipientLines.first,
+        style: pw.TextStyle(
+          fontSize: 9,
+          fontWeight: pw.FontWeight.bold,
+          color: PointyPdfPalette.ink,
+        ),
+      ),
+    ];
+    for (final line in template.recipientLines.skip(1)) {
+      widgets.add(pw.SizedBox(height: 1));
+      widgets.add(
+        pw.Text(
+          line,
+          style: const pw.TextStyle(fontSize: 8, color: PointyPdfPalette.ink),
+        ),
+      );
+    }
+    return widgets;
+  }
+
+  pw.Widget? _items() {
+    final table = template.itemsTable;
+    if (table == null || table.rows.isEmpty) {
+      return null;
+    }
+    final twoColumn = table.columns.length <= 2;
+    final rows = <pw.Widget>[];
+    for (var i = 0; i < table.rows.length; i++) {
+      if (i > 0) {
+        rows.add(pw.SizedBox(height: 4));
+      }
+      rows.add(_itemRow(table.rows[i], twoColumn: twoColumn));
+    }
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: rows,
+    );
+  }
+
+  pw.Widget _itemRow(List<String> row, {required bool twoColumn}) {
+    final cells = [
+      for (final cell in row) cell.replaceAll(RegExp(r'\s+'), ' ').trim(),
+    ];
+    if (twoColumn) {
+      return _labelValueRow(
+        cells.isNotEmpty ? cells.first : '',
+        cells.length > 1 ? cells.last : '',
+      );
+    }
+    final name = cells.isNotEmpty && cells.first.isNotEmpty
+        ? cells.first
+        : labels.emptyValue;
+    final total = cells.length > 1 ? cells.last : '';
+    final middle = cells.length > 2
+        ? cells
+            .sublist(1, cells.length - 1)
+            .where((cell) => cell.isNotEmpty)
+            .join(' × ')
+        : '';
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Text(
+          name,
+          style: const pw.TextStyle(fontSize: 9, color: PointyPdfPalette.ink),
+        ),
+        pw.SizedBox(height: 1),
+        pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Expanded(
+              child: pw.Text(
+                middle,
+                style: const pw.TextStyle(
+                  fontSize: 8,
+                  color: PointyPdfPalette.muted,
+                ),
+              ),
+            ),
+            pw.SizedBox(width: 6),
+            pw.Text(
+              total,
+              style: const pw.TextStyle(
+                fontSize: 9,
+                color: PointyPdfPalette.ink,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _fieldRow(OrderDocumentField field) {
+    return _labelValueRow(
+      field.label,
+      field.value,
+      emphasised: field.strong || field.highlight,
+    );
+  }
+
+  pw.Widget _labelValueRow(
+    String label,
+    String value, {
+    bool emphasised = false,
+  }) {
+    final style = pw.TextStyle(
+      fontSize: emphasised ? 10 : 9,
+      fontWeight: emphasised ? pw.FontWeight.bold : pw.FontWeight.normal,
+      color: PointyPdfPalette.ink,
+    );
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Expanded(child: pw.Text('$label:', style: style)),
+          pw.SizedBox(width: 8),
+          pw.Text(value, style: style),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _divider() {
+    return pw.Container(
+      margin: const pw.EdgeInsets.symmetric(vertical: 5),
+      height: 0.6,
+      color: PointyPdfPalette.border,
+    );
+  }
+
+  pw.Widget? _qr() {
+    final url = template.publicInvoiceUrl?.trim() ?? '';
+    if (url.isEmpty) {
+      return null;
+    }
+    final size = _contentWidth * 0.5;
+    return pw.Center(
+      child: pw.Column(
+        mainAxisSize: pw.MainAxisSize.min,
+        children: [
+          pw.Text(
+            labels.onlineInvoice,
+            style: pw.TextStyle(
+              fontSize: 8,
+              fontWeight: pw.FontWeight.bold,
+              color: PointyPdfPalette.ink,
+            ),
+            textAlign: pw.TextAlign.center,
+          ),
+          pw.SizedBox(height: 3),
+          pw.BarcodeWidget(
+            barcode: pw.Barcode.qrCode(),
+            data: url,
+            width: size,
+            height: size,
+            drawText: false,
+          ),
+          pw.SizedBox(height: 2),
+          pw.Text(
+            labels.scanOnlineInvoice,
+            style: const pw.TextStyle(
+              fontSize: 7,
+              color: PointyPdfPalette.muted,
+            ),
+            textAlign: pw.TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 }

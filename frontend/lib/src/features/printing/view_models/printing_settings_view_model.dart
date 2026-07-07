@@ -44,10 +44,10 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     bool autoLoad = true,
     PrinterRole role = PrinterRole.posReceipt,
     int? stationId,
-  }) : _analyticsEngine = analyticsEngine,
-       _statusCheckInterval = statusCheckInterval,
-       _role = role,
-       _stationId = stationId {
+  })  : _analyticsEngine = analyticsEngine,
+        _statusCheckInterval = statusCheckInterval,
+        _role = role,
+        _stationId = stationId {
     if (autoLoad) {
       loadDefaultConfig();
     }
@@ -101,8 +101,8 @@ class PrintingSettingsViewModel extends ChangeNotifier {
   List<PrinterEndpoint> get discoveredPrinters => _discoveredPrinters;
   PrinterTestOutcome get testOutcome => _testOutcome;
   BarcodeLabelLanguageDetectionOutcome
-  get barcodeLabelLanguageDetectionOutcome =>
-      _barcodeLabelLanguageDetectionOutcome;
+      get barcodeLabelLanguageDetectionOutcome =>
+          _barcodeLabelLanguageDetectionOutcome;
   PrinterConnectionState get connectionState => _connectionState;
   String get connectionMessage => _connectionMessage;
   String get barcodeLabelLanguageDetectionMessage =>
@@ -136,32 +136,32 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     final current = _config.endpoint;
     final endpoint = switch (kind) {
       PrintTransportKind.serial => current.copyWith(
-        kind: kind,
-        address: current.address.isEmpty
-            ? '/dev/tty.usbserial'
-            : current.address,
-      ),
+          kind: kind,
+          address:
+              current.address.isEmpty ? '/dev/tty.usbserial' : current.address,
+        ),
       PrintTransportKind.bluetooth => current.copyWith(
-        kind: kind,
-        address: current.address.startsWith('/dev/') ? '' : current.address,
-      ),
+          kind: kind,
+          address: current.address.startsWith('/dev/') ? '' : current.address,
+        ),
       PrintTransportKind.wifi => current.copyWith(
-        kind: kind,
-        address: _looksLikeNetworkHost(current.address) ? current.address : '',
-        port: current.port == 0 ? 9100 : current.port,
-        outputMode: PrinterOutputMode.escPos,
-      ),
+          kind: kind,
+          address:
+              _looksLikeNetworkHost(current.address) ? current.address : '',
+          port: current.port == 0 ? 9100 : current.port,
+          outputMode: PrinterOutputMode.escPos,
+        ),
       PrintTransportKind.system => current.copyWith(
-        kind: kind,
-        name: '',
-        address: '',
-        outputMode: PrinterOutputMode.pdfA4,
-      ),
+          kind: kind,
+          name: '',
+          address: '',
+          outputMode: PrinterOutputMode.pdfA4,
+        ),
       PrintTransportKind.usb => current.copyWith(
-        kind: kind,
-        address: current.address.startsWith('/dev/') ? '' : current.address,
-        outputMode: PrinterOutputMode.escPos,
-      ),
+          kind: kind,
+          address: current.address.startsWith('/dev/') ? '' : current.address,
+          outputMode: PrinterOutputMode.escPos,
+        ),
       PrintTransportKind.fake => current.copyWith(kind: kind),
     };
     _updateConfig(_config.copyWith(endpoint: endpoint), checkConnection: true);
@@ -210,6 +210,12 @@ class PrintingSettingsViewModel extends ChangeNotifier {
           paperWidthMm: int.tryParse(value) ?? _config.endpoint.paperWidthMm,
         ),
       ),
+    );
+  }
+
+  void updatePdfPageSize(PdfPageSize size) {
+    _updateConfig(
+      _config.copyWith(endpoint: _config.endpoint.copyWith(pdfPageSize: size)),
     );
   }
 

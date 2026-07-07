@@ -2,6 +2,36 @@ enum PrintTransportKind { serial, bluetooth, wifi, system, usb, fake }
 
 enum PrinterOutputMode { escPos, pdfA4 }
 
+/// Page geometry for the PDF/document output path (the [PrinterOutputMode.pdfA4]
+/// mode used by system / Windows-driver printers). [a4] renders the full-page
+/// invoice; the roll widths render a compact, thermal-style receipt at that
+/// width so a receipt printer driven through its own PDF driver (e.g. the
+/// Xprinter N160II) prints a proper receipt instead of gibberish from the
+/// ESC/POS commands its driver doesn't understand.
+enum PdfPageSize { a4, roll58, roll70, roll80 }
+
+/// Receipt roll width in millimetres for a [PdfPageSize], or null for [a4]
+/// (the full-page document has no fixed narrow width).
+int? pdfPageSizeReceiptWidthMm(PdfPageSize size) {
+  return switch (size) {
+    PdfPageSize.a4 => null,
+    PdfPageSize.roll58 => 58,
+    PdfPageSize.roll70 => 70,
+    PdfPageSize.roll80 => 80,
+  };
+}
+
+PdfPageSize pdfPageSizeFromJson(Object? value) {
+  return switch (value?.toString()) {
+    'roll58' || 'mm58' || '58' => PdfPageSize.roll58,
+    'roll70' || 'mm70' || '70' => PdfPageSize.roll70,
+    'roll80' || 'mm80' || '80' => PdfPageSize.roll80,
+    _ => PdfPageSize.a4,
+  };
+}
+
+String pdfPageSizeToJson(PdfPageSize size) => size.name;
+
 enum BarcodeLabelPrinterLanguage { auto, zpl, tspl, epl, cpcl }
 
 /// How the receipt should be terminated. Cheap printers without a cutter
@@ -44,6 +74,7 @@ class PrinterEndpoint {
     this.codeTable = 'CP864',
     this.timeoutMs = 5000,
     this.outputMode = PrinterOutputMode.escPos,
+    this.pdfPageSize = PdfPageSize.a4,
     this.capabilityProfile = 'default',
     this.cutMode = ReceiptCutMode.partial,
     this.feedLines = 2,
@@ -64,6 +95,10 @@ class PrinterEndpoint {
   final int timeoutMs;
   final PrinterOutputMode outputMode;
 
+  /// PDF page geometry for the document output path. Ignored by the thermal
+  /// (ESC/POS) path, which sizes itself from [paperWidthMm].
+  final PdfPageSize pdfPageSize;
+
   /// ESC/POS capability profile name (esc_pos_utils_plus), so quirky printer
   /// models can use their vendor profile instead of the generic one.
   final String capabilityProfile;
@@ -80,6 +115,11 @@ class PrinterEndpoint {
   bool get usesThermalReceipt => outputMode == PrinterOutputMode.escPos;
 
   bool get usesDocumentInvoice => outputMode == PrinterOutputMode.pdfA4;
+
+  /// A document-mode printer set to a receipt roll width — the PDF is rendered
+  /// as a compact receipt at [pdfPageSize] rather than a full A4 page.
+  bool get usesReceiptStylePdf =>
+      outputMode == PrinterOutputMode.pdfA4 && pdfPageSize != PdfPageSize.a4;
 
   factory PrinterEndpoint.fromJson(Map<String, Object?> json) {
     return PrinterEndpoint(
@@ -100,10 +140,13 @@ class PrinterEndpoint {
           _transportKindFromJson(json['kind'] ?? json['transport']),
         ),
       ),
+      pdfPageSize: pdfPageSizeFromJson(
+        json['pdf_page_size'] ?? json['pdf_page_format'],
+      ),
       capabilityProfile:
           json['capability_profile']?.toString().trim().isNotEmpty == true
-          ? json['capability_profile']!.toString().trim()
-          : 'default',
+              ? json['capability_profile']!.toString().trim()
+              : 'default',
       cutMode: receiptCutModeFromJson(json['cut_mode']),
       feedLines: _intFromJson(json['feed_lines'], fallback: 2),
       barcodeLabelLanguage: barcodeLabelPrinterLanguageFromJson(
@@ -139,6 +182,7 @@ class PrinterEndpoint {
       'code_table': codeTable,
       'timeout_ms': timeoutMs,
       'output_mode': outputMode.name,
+      'pdf_page_size': pdfPageSizeToJson(pdfPageSize),
       'capability_profile': capabilityProfile,
       'cut_mode': cutMode.name,
       'feed_lines': feedLines,
@@ -162,6 +206,7 @@ class PrinterEndpoint {
     String? codeTable,
     int? timeoutMs,
     PrinterOutputMode? outputMode,
+    PdfPageSize? pdfPageSize,
     String? capabilityProfile,
     ReceiptCutMode? cutMode,
     int? feedLines,
@@ -181,6 +226,7 @@ class PrinterEndpoint {
       codeTable: codeTable ?? this.codeTable,
       timeoutMs: timeoutMs ?? this.timeoutMs,
       outputMode: outputMode ?? this.outputMode,
+      pdfPageSize: pdfPageSize ?? this.pdfPageSize,
       capabilityProfile: capabilityProfile ?? this.capabilityProfile,
       cutMode: cutMode ?? this.cutMode,
       feedLines: feedLines ?? this.feedLines,
@@ -203,7 +249,8 @@ BarcodeLabelPrinterLanguage barcodeLabelPrinterLanguageFromJson(Object? value) {
     'esc_pos' ||
     'escPos' ||
     'thermal' ||
-    'receipt' => BarcodeLabelPrinterLanguage.auto,
+    'receipt' =>
+      BarcodeLabelPrinterLanguage.auto,
     _ => BarcodeLabelPrinterLanguage.auto,
   };
 }
@@ -297,7 +344,8 @@ PrinterOutputMode _outputModeFromJson(
     'pdf_a4' ||
     'a4' ||
     'document' ||
-    'normal' => PrinterOutputMode.pdfA4,
+    'normal' =>
+      PrinterOutputMode.pdfA4,
     'escPos' || 'esc_pos' || 'thermal' || 'receipt' => PrinterOutputMode.escPos,
     _ => fallback,
   };
@@ -310,7 +358,8 @@ PrinterOutputMode _defaultOutputModeForKind(PrintTransportKind kind) {
     PrintTransportKind.bluetooth ||
     PrintTransportKind.wifi ||
     PrintTransportKind.usb ||
-    PrintTransportKind.fake => PrinterOutputMode.escPos,
+    PrintTransportKind.fake =>
+      PrinterOutputMode.escPos,
   };
 }
 

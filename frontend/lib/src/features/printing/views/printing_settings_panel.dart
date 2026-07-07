@@ -30,8 +30,7 @@ class PrintingSettingsPanel extends StatelessWidget {
       listenable: viewModel,
       builder: (context, _) {
         final endpoint = viewModel.config.endpoint;
-        final busy =
-            viewModel.isTesting ||
+        final busy = viewModel.isTesting ||
             viewModel.isDiscovering ||
             viewModel.isDetectingBarcodeLabelLanguage ||
             viewModel.isSavingConfig;
@@ -64,8 +63,7 @@ class PrintingSettingsPanel extends StatelessWidget {
                   label: Text(l10n.configurePrinterRoleButton),
                 ),
                 OutlinedButton.icon(
-                  onPressed:
-                      busy ||
+                  onPressed: busy ||
                           viewModel.isCheckingConnection ||
                           !viewModel.hasConfiguredPrinter
                       ? null
@@ -82,8 +80,7 @@ class PrintingSettingsPanel extends StatelessWidget {
                   onPressed: busy || !viewModel.hasConfiguredPrinter
                       ? null
                       : viewModel.testPrinter,
-                  icon:
-                      viewModel.isTesting &&
+                  icon: viewModel.isTesting &&
                           !viewModel.isTestingBarcodeLabelPrinter
                       ? const SizedBox.square(
                           dimension: 18,
@@ -431,217 +428,254 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
                           },
                   ),
                   SizedBox(height: spacing.md),
-                  ResponsiveFormGrid(
-                    maxColumns: 2,
-                    children: [
-                      TextFormField(
-                        controller: _paperWidthController,
-                        enabled: !widget.viewModel.isTesting,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        onChanged: widget.viewModel.updatePaperWidth,
-                        decoration: InputDecoration(
-                          labelText: l10n.paperWidthLabel,
-                          prefixIcon: const Icon(Icons.receipt_outlined),
-                        ),
+                  if (endpoint.usesDocumentInvoice)
+                    DropdownButtonFormField<PdfPageSize>(
+                      key: ValueKey(endpoint.pdfPageSize),
+                      value: endpoint.pdfPageSize,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: l10n.printerPdfPageSizeLabel,
+                        helperText: l10n.printerPdfPageSizeHelper,
+                        helperMaxLines: 3,
+                        prefixIcon: const Icon(Icons.picture_as_pdf_outlined),
                       ),
-                      TextFormField(
-                        controller: _codeTableController,
-                        enabled: !widget.viewModel.isTesting,
-                        onChanged: widget.viewModel.updateCodeTable,
-                        decoration: InputDecoration(
-                          labelText: l10n.printerCodeTableLabel,
-                          prefixIcon: const Icon(Icons.translate_outlined),
+                      items: [
+                        DropdownMenuItem(
+                          value: PdfPageSize.a4,
+                          child: Text(l10n.printerPdfPageSizeA4),
                         ),
-                      ),
-                      TextFormField(
-                        controller: _capabilityProfileController,
-                        enabled: !widget.viewModel.isTesting,
-                        onChanged: widget.viewModel.updateCapabilityProfile,
-                        decoration: InputDecoration(
-                          labelText: l10n.printerCapabilityProfileLabel,
-                          helperText: l10n.printerCapabilityProfileHelper,
-                          prefixIcon: const Icon(Icons.tune_outlined),
+                        DropdownMenuItem(
+                          value: PdfPageSize.roll58,
+                          child: Text(l10n.printerPdfPageSizeRoll58),
                         ),
-                      ),
-                      DropdownButtonFormField<ReceiptCutMode>(
-                        key: ValueKey(endpoint.cutMode),
-                        value: endpoint.cutMode,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          labelText: l10n.printerCutModeLabel,
-                          prefixIcon: const Icon(Icons.content_cut_outlined),
+                        DropdownMenuItem(
+                          value: PdfPageSize.roll70,
+                          child: Text(l10n.printerPdfPageSizeRoll70),
                         ),
-                        items: [
-                          DropdownMenuItem(
-                            value: ReceiptCutMode.partial,
-                            child: Text(l10n.printerCutModePartial),
+                        DropdownMenuItem(
+                          value: PdfPageSize.roll80,
+                          child: Text(l10n.printerPdfPageSizeRoll80),
+                        ),
+                      ],
+                      onChanged: widget.viewModel.isTesting
+                          ? null
+                          : (size) {
+                              if (size != null) {
+                                widget.viewModel.updatePdfPageSize(size);
+                              }
+                            },
+                    ),
+                  // ESC/POS thermal settings — irrelevant to the PDF/document
+                  // path, so they're hidden for a system/PDF printer.
+                  if (!endpoint.usesDocumentInvoice) ...[
+                    ResponsiveFormGrid(
+                      maxColumns: 2,
+                      children: [
+                        TextFormField(
+                          controller: _paperWidthController,
+                          enabled: !widget.viewModel.isTesting,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          onChanged: widget.viewModel.updatePaperWidth,
+                          decoration: InputDecoration(
+                            labelText: l10n.paperWidthLabel,
+                            prefixIcon: const Icon(Icons.receipt_outlined),
                           ),
-                          DropdownMenuItem(
-                            value: ReceiptCutMode.full,
-                            child: Text(l10n.printerCutModeFull),
-                          ),
-                          DropdownMenuItem(
-                            value: ReceiptCutMode.none,
-                            child: Text(l10n.printerCutModeNone),
-                          ),
-                        ],
-                        onChanged: widget.viewModel.isTesting
-                            ? null
-                            : (mode) {
-                                if (mode != null) {
-                                  widget.viewModel.updateCutMode(mode);
-                                }
-                              },
-                      ),
-                      TextFormField(
-                        controller: _feedLinesController,
-                        enabled: !widget.viewModel.isTesting,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        onChanged: widget.viewModel.updateFeedLines,
-                        decoration: InputDecoration(
-                          labelText: l10n.printerFeedLinesLabel,
-                          helperText: l10n.printerFeedLinesHelper,
-                          prefixIcon: const Icon(Icons.density_medium_outlined),
                         ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: spacing.md),
-                  Text(
-                    l10n.barcodeLabelPrinterSettingsTitle,
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  SizedBox(height: spacing.sm),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child:
-                            DropdownButtonFormField<
-                              BarcodeLabelPrinterLanguage
-                            >(
-                              key: ValueKey(endpoint.barcodeLabelLanguage),
-                              value: endpoint.barcodeLabelLanguage,
-                              isExpanded: true,
-                              decoration: InputDecoration(
-                                labelText:
-                                    l10n.printerBarcodeLabelLanguageLabel,
-                                prefixIcon: const Icon(Icons.label_outline),
-                              ),
-                              items: [
-                                for (final language
-                                    in BarcodeLabelPrinterLanguage.values)
-                                  DropdownMenuItem(
-                                    value: language,
-                                    child: Text(
-                                      _barcodeLabelLanguageLabel(
-                                        l10n,
-                                        language,
-                                      ),
+                        TextFormField(
+                          controller: _codeTableController,
+                          enabled: !widget.viewModel.isTesting,
+                          onChanged: widget.viewModel.updateCodeTable,
+                          decoration: InputDecoration(
+                            labelText: l10n.printerCodeTableLabel,
+                            prefixIcon: const Icon(Icons.translate_outlined),
+                          ),
+                        ),
+                        TextFormField(
+                          controller: _capabilityProfileController,
+                          enabled: !widget.viewModel.isTesting,
+                          onChanged: widget.viewModel.updateCapabilityProfile,
+                          decoration: InputDecoration(
+                            labelText: l10n.printerCapabilityProfileLabel,
+                            helperText: l10n.printerCapabilityProfileHelper,
+                            prefixIcon: const Icon(Icons.tune_outlined),
+                          ),
+                        ),
+                        DropdownButtonFormField<ReceiptCutMode>(
+                          key: ValueKey(endpoint.cutMode),
+                          value: endpoint.cutMode,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            labelText: l10n.printerCutModeLabel,
+                            prefixIcon: const Icon(Icons.content_cut_outlined),
+                          ),
+                          items: [
+                            DropdownMenuItem(
+                              value: ReceiptCutMode.partial,
+                              child: Text(l10n.printerCutModePartial),
+                            ),
+                            DropdownMenuItem(
+                              value: ReceiptCutMode.full,
+                              child: Text(l10n.printerCutModeFull),
+                            ),
+                            DropdownMenuItem(
+                              value: ReceiptCutMode.none,
+                              child: Text(l10n.printerCutModeNone),
+                            ),
+                          ],
+                          onChanged: widget.viewModel.isTesting
+                              ? null
+                              : (mode) {
+                                  if (mode != null) {
+                                    widget.viewModel.updateCutMode(mode);
+                                  }
+                                },
+                        ),
+                        TextFormField(
+                          controller: _feedLinesController,
+                          enabled: !widget.viewModel.isTesting,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          onChanged: widget.viewModel.updateFeedLines,
+                          decoration: InputDecoration(
+                            labelText: l10n.printerFeedLinesLabel,
+                            helperText: l10n.printerFeedLinesHelper,
+                            prefixIcon:
+                                const Icon(Icons.density_medium_outlined),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: spacing.md),
+                    Text(
+                      l10n.barcodeLabelPrinterSettingsTitle,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    SizedBox(height: spacing.sm),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<
+                              BarcodeLabelPrinterLanguage>(
+                            key: ValueKey(endpoint.barcodeLabelLanguage),
+                            value: endpoint.barcodeLabelLanguage,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: l10n.printerBarcodeLabelLanguageLabel,
+                              prefixIcon: const Icon(Icons.label_outline),
+                            ),
+                            items: [
+                              for (final language
+                                  in BarcodeLabelPrinterLanguage.values)
+                                DropdownMenuItem(
+                                  value: language,
+                                  child: Text(
+                                    _barcodeLabelLanguageLabel(
+                                      l10n,
+                                      language,
                                     ),
                                   ),
-                              ],
-                              onChanged: widget.viewModel.isTesting
-                                  ? null
-                                  : (language) {
-                                      if (language != null) {
-                                        widget.viewModel
-                                            .updateBarcodeLabelLanguage(
-                                              language,
-                                            );
-                                      }
-                                    },
-                            ),
-                      ),
-                      SizedBox(width: spacing.sm),
-                      IconButton.filledTonal(
-                        tooltip: l10n.detectBarcodeLabelLanguageButton,
-                        onPressed:
-                            widget.viewModel.isTesting ||
-                                widget
-                                    .viewModel
-                                    .isDetectingBarcodeLabelLanguage ||
-                                !widget.viewModel.hasConfiguredPrinter
-                            ? null
-                            : widget.viewModel.detectBarcodeLabelLanguage,
-                        icon: widget.viewModel.isDetectingBarcodeLabelLanguage
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
                                 ),
-                              )
-                            : const Icon(Icons.auto_fix_high_outlined),
-                      ),
-                    ],
-                  ),
-                  _BarcodeLabelLanguageDetectionMessage(
-                    viewModel: widget.viewModel,
-                  ),
-                  SizedBox(height: spacing.md),
-                  ResponsiveFormGrid(
-                    maxColumns: 4,
-                    children: [
-                      TextFormField(
-                        controller: _labelWidthController,
-                        enabled: !widget.viewModel.isTesting,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        onChanged: widget.viewModel.updateLabelWidth,
-                        decoration: InputDecoration(
-                          labelText: l10n.printerLabelWidthLabel,
-                          prefixIcon: const Icon(Icons.width_normal_outlined),
+                            ],
+                            onChanged: widget.viewModel.isTesting
+                                ? null
+                                : (language) {
+                                    if (language != null) {
+                                      widget.viewModel
+                                          .updateBarcodeLabelLanguage(
+                                        language,
+                                      );
+                                    }
+                                  },
+                          ),
                         ),
-                      ),
-                      TextFormField(
-                        controller: _labelHeightController,
-                        enabled: !widget.viewModel.isTesting,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        onChanged: widget.viewModel.updateLabelHeight,
-                        decoration: InputDecoration(
-                          labelText: l10n.printerLabelHeightLabel,
-                          prefixIcon: const Icon(Icons.height_outlined),
+                        SizedBox(width: spacing.sm),
+                        IconButton.filledTonal(
+                          tooltip: l10n.detectBarcodeLabelLanguageButton,
+                          onPressed: widget.viewModel.isTesting ||
+                                  widget.viewModel
+                                      .isDetectingBarcodeLabelLanguage ||
+                                  !widget.viewModel.hasConfiguredPrinter
+                              ? null
+                              : widget.viewModel.detectBarcodeLabelLanguage,
+                          icon: widget.viewModel.isDetectingBarcodeLabelLanguage
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.auto_fix_high_outlined),
                         ),
-                      ),
-                      TextFormField(
-                        controller: _labelGapController,
-                        enabled: !widget.viewModel.isTesting,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        onChanged: widget.viewModel.updateLabelGap,
-                        decoration: InputDecoration(
-                          labelText: l10n.printerLabelGapLabel,
-                          prefixIcon: const Icon(Icons.space_bar_outlined),
+                      ],
+                    ),
+                    _BarcodeLabelLanguageDetectionMessage(
+                      viewModel: widget.viewModel,
+                    ),
+                    SizedBox(height: spacing.md),
+                    ResponsiveFormGrid(
+                      maxColumns: 4,
+                      children: [
+                        TextFormField(
+                          controller: _labelWidthController,
+                          enabled: !widget.viewModel.isTesting,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          onChanged: widget.viewModel.updateLabelWidth,
+                          decoration: InputDecoration(
+                            labelText: l10n.printerLabelWidthLabel,
+                            prefixIcon: const Icon(Icons.width_normal_outlined),
+                          ),
                         ),
-                      ),
-                      TextFormField(
-                        controller: _labelDpiController,
-                        enabled: !widget.viewModel.isTesting,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                        ],
-                        onChanged: widget.viewModel.updateLabelDpi,
-                        decoration: InputDecoration(
-                          labelText: l10n.printerLabelDpiLabel,
-                          prefixIcon: const Icon(Icons.grid_4x4_outlined),
+                        TextFormField(
+                          controller: _labelHeightController,
+                          enabled: !widget.viewModel.isTesting,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          onChanged: widget.viewModel.updateLabelHeight,
+                          decoration: InputDecoration(
+                            labelText: l10n.printerLabelHeightLabel,
+                            prefixIcon: const Icon(Icons.height_outlined),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                        TextFormField(
+                          controller: _labelGapController,
+                          enabled: !widget.viewModel.isTesting,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          onChanged: widget.viewModel.updateLabelGap,
+                          decoration: InputDecoration(
+                            labelText: l10n.printerLabelGapLabel,
+                            prefixIcon: const Icon(Icons.space_bar_outlined),
+                          ),
+                        ),
+                        TextFormField(
+                          controller: _labelDpiController,
+                          enabled: !widget.viewModel.isTesting,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          onChanged: widget.viewModel.updateLabelDpi,
+                          decoration: InputDecoration(
+                            labelText: l10n.printerLabelDpiLabel,
+                            prefixIcon: const Icon(Icons.grid_4x4_outlined),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   SizedBox(height: spacing.md),
                   _SelectedPrinterSummary(
                     endpoint: endpoint,
@@ -835,25 +869,27 @@ class _SelectedPrinterSummary extends StatelessWidget {
         '${l10n.printerTransportSerial} - ${endpoint.address}',
       PrintTransportKind.bluetooth =>
         '${l10n.printerTransportBluetooth} - ${endpoint.address}',
-      PrintTransportKind.wifi =>
-        endpoint.address.isEmpty
-            ? l10n.printerTransportWifi
-            : '${l10n.printerTransportWifi} - ${endpoint.address}:${endpoint.port}',
-      PrintTransportKind.system =>
-        endpoint.address.isEmpty
-            ? l10n.printerTransportSystem
-            : '${l10n.printerTransportSystem} - ${endpoint.address}',
-      PrintTransportKind.usb =>
-        endpoint.address.isEmpty
-            ? l10n.printerTransportUsb
-            : '${l10n.printerTransportUsb} - ${endpoint.address}',
+      PrintTransportKind.wifi => endpoint.address.isEmpty
+          ? l10n.printerTransportWifi
+          : '${l10n.printerTransportWifi} - ${endpoint.address}:${endpoint.port}',
+      PrintTransportKind.system => endpoint.address.isEmpty
+          ? l10n.printerTransportSystem
+          : '${l10n.printerTransportSystem} - ${endpoint.address}',
+      PrintTransportKind.usb => endpoint.address.isEmpty
+          ? l10n.printerTransportUsb
+          : '${l10n.printerTransportUsb} - ${endpoint.address}',
       PrintTransportKind.fake => l10n.printerTransportFake,
     };
     final outputMode = endpoint.usesDocumentInvoice
         ? l10n.printerOutputA4Pdf
         : l10n.printerOutputThermalReceipt;
     if (endpoint.usesDocumentInvoice) {
-      return '$transport\n$outputMode';
+      final pdfSummary = endpoint.usesReceiptStylePdf
+          ? l10n.printerOutputPdfReceipt(
+              pdfPageSizeReceiptWidthMm(endpoint.pdfPageSize) ?? 0,
+            )
+          : outputMode;
+      return '$transport\n$pdfSummary';
     }
     final barcodeLanguage = l10n.printerBarcodeLanguageSummary(
       _barcodeLabelLanguageLabel(l10n, endpoint.barcodeLabelLanguage),
@@ -883,30 +919,30 @@ class _BarcodeLabelLanguageDetectionMessage extends StatelessWidget {
     }
     final (message, icon, isError) = switch (outcome) {
       BarcodeLabelLanguageDetectionOutcome.detected => (
-        l10n.barcodeLabelLanguageDetected,
-        Icons.check_circle_outline,
-        false,
-      ),
+          l10n.barcodeLabelLanguageDetected,
+          Icons.check_circle_outline,
+          false,
+        ),
       BarcodeLabelLanguageDetectionOutcome.inferred => (
-        l10n.barcodeLabelLanguageInferred,
-        Icons.manage_search_outlined,
-        false,
-      ),
+          l10n.barcodeLabelLanguageInferred,
+          Icons.manage_search_outlined,
+          false,
+        ),
       BarcodeLabelLanguageDetectionOutcome.unavailable => (
-        l10n.barcodeLabelLanguageDetectionUnavailable,
-        Icons.info_outline,
-        false,
-      ),
+          l10n.barcodeLabelLanguageDetectionUnavailable,
+          Icons.info_outline,
+          false,
+        ),
       BarcodeLabelLanguageDetectionOutcome.failed => (
-        l10n.barcodeLabelLanguageDetectionFailed,
-        Icons.error_outline,
-        true,
-      ),
+          l10n.barcodeLabelLanguageDetectionFailed,
+          Icons.error_outline,
+          true,
+        ),
       BarcodeLabelLanguageDetectionOutcome.none => (
-        '',
-        Icons.info_outline,
-        false,
-      ),
+          '',
+          Icons.info_outline,
+          false,
+        ),
     };
     return Padding(
       padding: EdgeInsets.only(top: spacing.sm),
@@ -927,28 +963,28 @@ class _PrinterConnectionMessage extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return switch (viewModel.connectionState) {
       PrinterConnectionState.connected => PointyInlineMessage.success(
-        message: l10n.printerStatusConnected,
-        compact: true,
-      ),
+          message: l10n.printerStatusConnected,
+          compact: true,
+        ),
       PrinterConnectionState.disconnected => PointyInlineMessage.warning(
-        message: l10n.printerStatusDisconnected,
-        compact: true,
-      ),
+          message: l10n.printerStatusDisconnected,
+          compact: true,
+        ),
       PrinterConnectionState.checking => PointyInlineMessage(
-        message: l10n.printerStatusChecking,
-        icon: Icons.sensors_outlined,
-        compact: true,
-      ),
+          message: l10n.printerStatusChecking,
+          icon: Icons.sensors_outlined,
+          compact: true,
+        ),
       PrinterConnectionState.notConfigured => PointyInlineMessage(
-        message: l10n.printerStatusNotConfigured,
-        icon: Icons.info_outline,
-        compact: true,
-      ),
+          message: l10n.printerStatusNotConfigured,
+          icon: Icons.info_outline,
+          compact: true,
+        ),
       PrinterConnectionState.unknown => PointyInlineMessage(
-        message: l10n.printerStatusUnknown,
-        icon: Icons.info_outline,
-        compact: true,
-      ),
+          message: l10n.printerStatusUnknown,
+          icon: Icons.info_outline,
+          compact: true,
+        ),
     };
   }
 }
@@ -965,22 +1001,22 @@ class _PrinterTestMessage extends StatelessWidget {
     final (message, color) = switch (outcome) {
       PrinterTestOutcome.none => (null, null),
       PrinterTestOutcome.success => (
-        l10n.printerTestSuccess,
-        colors.primaryStrong,
-      ),
+          l10n.printerTestSuccess,
+          colors.primaryStrong,
+        ),
       PrinterTestOutcome.failed => (l10n.printerTestFailure, colors.danger),
       PrinterTestOutcome.barcodeLabelSuccess => (
-        l10n.barcodeLabelTestSuccess,
-        colors.primaryStrong,
-      ),
+          l10n.barcodeLabelTestSuccess,
+          colors.primaryStrong,
+        ),
       PrinterTestOutcome.barcodeLabelFailed => (
-        l10n.barcodeLabelTestFailure,
-        colors.danger,
-      ),
+          l10n.barcodeLabelTestFailure,
+          colors.danger,
+        ),
       PrinterTestOutcome.fakeSuccess => (
-        l10n.fakePrintSuccess,
-        colors.primaryStrong,
-      ),
+          l10n.fakePrintSuccess,
+          colors.primaryStrong,
+        ),
       PrinterTestOutcome.fakeFailed => (l10n.fakePrintFailure, colors.danger),
     };
 
@@ -1005,8 +1041,8 @@ String _endpointKey(PrinterEndpoint endpoint) {
 String _printerLabel(PrinterEndpoint printer, AppLocalizations l10n) {
   final name = printer.name.trim().isEmpty
       ? printer.kind == PrintTransportKind.system
-            ? l10n.systemDefaultPrinterLabel
-            : printer.address
+          ? l10n.systemDefaultPrinterLabel
+          : printer.address
       : printer.name;
   final details = switch (printer.kind) {
     PrintTransportKind.serial => printer.address,
