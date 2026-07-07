@@ -26,10 +26,13 @@ x-backend-environment: &backend-environment
   # migrate takes a session-scoped advisory lock that transaction-pooled
   # PgBouncer cannot carry). Optional: if blank, migrations run over DATABASE_URL.
   POINTY_DATABASE_DIRECT_URL: "${POINTY_DATABASE_DIRECT_URL:-}"
-  # 0 by default now: PgBouncer owns connection reuse, and even without the pooler
-  # closing per request bounds the total. The old value (60) kept every
-  # worker/thread's Postgres connection open for a minute — how they piled to 100.
-  DATABASE_CONN_MAX_AGE: "${DATABASE_CONN_MAX_AGE:-0}"
+  # Keep the client->PgBouncer connection warm. With PgBouncer in TRANSACTION
+  # mode an idle client connection does NOT hold a Postgres backend (the server
+  # conn returns to the pool after each transaction), so this is safe AND avoids a
+  # reconnect + SCRAM-auth handshake on every request (0 here made search crawl).
+  # It was Postgres-direct + CONN_MAX_AGE that piled connections to 100 — the
+  # pooler, not this value, is what caps real backends now.
+  DATABASE_CONN_MAX_AGE: "${DATABASE_CONN_MAX_AGE:-120}"
   REDIS_URL: "${POINTY_REDIS_URL:-redis://redis:6379/0}"
   POINTY_ATTACHMENT_STORAGE_ROOT: /var/lib/pointy/media
   POINTY_BACKUP_ALLOWED_ROOTS: /var/lib/pointy/backups,/mnt/pointy-external
@@ -128,7 +131,14 @@ services:
       DB_NAME: pointy
       DB_USER: pointy
       DB_PASSWORD: "${POINTY_POSTGRES_PASSWORD:?Set POINTY_POSTGRES_PASSWORD in deploy/onprem/.env}"
-      AUTH_TYPE: scram-sha-256
+      # MUST be scram-sha-256 (or trust/plain), NOT md5: Postgres 17 stores the
+      # role password as a SCRAM verifier, so PgBouncer cannot authenticate TO
+      # Postgres with an md5 secret ("server login failed: wrong password type").
+      # SCRAM's handshake cost is a non-issue because DATABASE_CONN_MAX_AGE keeps
+      # client connections warm (the reconnect storm that made it costly was the
+      # CONN_MAX_AGE=0 bug). Set POINTY_PGBOUNCER_AUTH_TYPE=trust to drop client
+      # auth entirely (safe: internal Docker network, no published port).
+      AUTH_TYPE: "${POINTY_PGBOUNCER_AUTH_TYPE:-scram-sha-256}"
       POOL_MODE: transaction
       MAX_CLIENT_CONN: "${POINTY_PGBOUNCER_MAX_CLIENT_CONN:-300}"
       DEFAULT_POOL_SIZE: "${POINTY_PGBOUNCER_DEFAULT_POOL_SIZE:-25}"
@@ -144,7 +154,7 @@ services:
       # Transaction mode resets state per-transaction; no session reset query.
       SERVER_RESET_QUERY: ""
     mem_limit: "${POINTY_PGBOUNCER_MEM_LIMIT:-96m}"
-    cpus: "${POINTY_PGBOUNCER_CPUS:-0.5}"
+    cpus: "${POINTY_PGBOUNCER_CPUS:-2}"
     security_opt:
       - no-new-privileges:true
     pids_limit: 64

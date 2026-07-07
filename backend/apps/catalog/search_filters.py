@@ -184,11 +184,35 @@ class CatalogRelevanceFilter(BaseFilterBackend):
                 (code_contains, 1),
             )
 
-        membership = Q()
-        for condition, _score in tiers:
-            membership |= condition
+        # Restrict to matches with NON-correlated subqueries so the pg_trgm indexes
+        # are actually used. The tier annotations above are *correlated* Exists —
+        # great for RANKING the matched set, but using an OR of them as the WHERE
+        # clause forces Postgres to evaluate all ten against every product in the
+        # catalogue (no index can serve a correlated-Exists OR), which is what made
+        # search crawl on a real-shop catalogue. Each id__in below is an independent
+        # indexable subquery; the tier Case then runs only over the matched rows.
+        match_q = (
+            Q(name__icontains=term)
+            | Q(
+                id__in=ProductVariant.objects.filter(
+                    Q(sku__icontains=term)
+                    | Q(barcode__icontains=term)
+                    | Q(name__icontains=term)
+                ).values("product_id")
+            )
+            | Q(
+                id__in=ProductUnitBarcode.objects.filter(
+                    barcode__icontains=term
+                ).values("product_unit__product_id")
+            )
+            | Q(
+                id__in=ProductAlias.objects.filter(alias__icontains=term).values(
+                    "product_id"
+                )
+            )
+        )
 
-        queryset = queryset.filter(membership).annotate(
+        queryset = queryset.filter(match_q).annotate(
             **{
                 self.RELEVANCE_ALIAS: Case(
                     *[When(condition, then=Value(score)) for condition, score in tiers],
