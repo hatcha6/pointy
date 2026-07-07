@@ -116,7 +116,7 @@ services:
   # (docker/wait_for_services.py) already proves the pooled path serves queries
   # before the app boots, which is the real readiness gate.
   pgbouncer:
-    image: "${POINTY_PGBOUNCER_IMAGE:-edoburu/pgbouncer:1.23.1-p2}"
+    image: "${POINTY_PGBOUNCER_IMAGE:-edoburu/pgbouncer:v1.23.1-p2}"
     restart: always
     init: true
     depends_on:

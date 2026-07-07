@@ -32,7 +32,7 @@ env:
   POSTGRES_IMAGE: "postgres:17-alpine"
   REDIS_IMAGE: "redis:7-alpine"
   # Keep in lockstep with the pgbouncer service default in deploy/onprem/docker-compose.yml.
-  PGBOUNCER_IMAGE: "edoburu/pgbouncer:1.23.1-p2"
+  PGBOUNCER_IMAGE: "edoburu/pgbouncer:v1.23.1-p2"
 
 jobs:
   # ---------------------------------------------------------------------------
