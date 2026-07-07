@@ -62,7 +62,8 @@ class CatalogViewModel extends ChangeNotifier {
   bool _hasMoreProducts = true;
   int _nextProductPage = 1;
   String? _errorMessage;
-  ProductQuery _query = const ProductQuery();
+  // Browse "most bought" first by default (A–Z stays available in the filters).
+  ProductQuery _query = const ProductQuery(ordering: ProductOrdering.mostBought);
 
   final Set<int> _selectedIds = {};
   bool _selectionMode = false;

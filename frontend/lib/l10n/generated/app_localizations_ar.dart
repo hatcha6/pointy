@@ -177,6 +177,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get orderingName => 'الاسم';
 
   @override
+  String get orderingMostBought => 'الأكثر مبيعًا';
+
+  @override
   String get orderingPriceAsc => 'السعر: من الأقل إلى الأعلى';
 
   @override

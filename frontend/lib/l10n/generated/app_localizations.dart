@@ -400,6 +400,12 @@ abstract class AppLocalizations {
   /// **'الاسم'**
   String get orderingName;
 
+  /// No description provided for @orderingMostBought.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأكثر مبيعًا'**
+  String get orderingMostBought;
+
   /// No description provided for @orderingPriceAsc.
   ///
   /// In ar, this message translates to:

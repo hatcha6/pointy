@@ -204,6 +204,8 @@ class PosViewModel extends ChangeNotifier {
     // products; this is reconciled against the real shop setting once the
     // checkout settings load.
     stock: ProductStockFilter.inStockOnly,
+    // Cashiers browse "most bought" first so the fast-movers are one tap away.
+    ordering: ProductOrdering.mostBought,
   );
 
   _PosSaleSession get _activeSaleSession {
