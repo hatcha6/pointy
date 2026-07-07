@@ -1823,6 +1823,22 @@
   "productUnitPriceHelper": "اتركه فارغًا ليُحتسب من سعر الوحدة الأساسية × المعامل.",
   "productUnitSellable": "متاح للبيع",
   "productUnitPurchasable": "متاح للشراء",
+  "productUnitBarcodesLabel": "باركود الوحدة",
+  "productUnitBarcodesHelper": "امسح أو اكتب باركود العبوة (الكرتون/الصندوق) ليُباع المنتج بهذه الوحدة وسعرها عند مسحه في نقطة البيع.",
+  "productUnitBarcodeAddHint": "امسح أو اكتب الباركود",
+  "productUnitBarcodeAddTooltip": "إضافة الباركود",
+  "productUnitBarcodeScanTooltip": "مسح بالكاميرا",
+  "productUnitBarcodeScanTitle": "مسح باركود الوحدة",
+  "productUnitBarcodeRemoveTooltip": "حذف الباركود",
+  "productUnitBarcodeDuplicate": "هذا الباركود مُضاف بالفعل لهذه الوحدة.",
+  "productUnitBarcodeConflict": "الباركود مُسجّل بالفعل للوحدة {unit}.",
+  "@productUnitBarcodeConflict": {
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
   "productDefaultSaleUnitLabel": "وحدة البيع الافتراضية",
   "productDefaultPurchaseUnitLabel": "وحدة الشراء الافتراضية",
   "productUnitBaseOption": "{unit} (أساسية)",

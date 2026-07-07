@@ -285,6 +285,9 @@ frontend-pos-preview: frontend-install ## Run the POS/purchasing catalog UI prev
 frontend-units-preview: frontend-install ## Run the units-of-measure management UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/units_preview.dart
 
+frontend-product-units-editor-preview: frontend-install ## Run the product-form units + packaging-barcode editor preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/product_units_editor_preview.dart
+
 frontend-command-palette-preview: frontend-install ## Run the global command palette UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/command_palette_preview.dart
 

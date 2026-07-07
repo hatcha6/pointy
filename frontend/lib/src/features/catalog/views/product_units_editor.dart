@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/product_unit.dart';
 import '../../../data/models/unit_of_measure.dart';
+import '../../../shared/barcode/camera_text_barcode_scanner_sheet.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
@@ -67,15 +68,28 @@ class _UnitRow {
   bool isSellable;
   bool isPurchasable;
 
-  /// Packaging barcodes attached to this unit (the carton EAN). Carried
-  /// through edits untouched so saving a product never wipes them.
+  /// Packaging barcodes attached to this unit (the carton EAN). Scanning one
+  /// rings the product up as this unit at this unit's price. Editable in the
+  /// card below; carried through edits so saving never wipes existing codes.
   List<String> barcodes;
+
+  /// Ephemeral input + focus for the "add barcode" field. Kept on the row (not
+  /// in the card widget) so typed text and focus survive parent rebuilds and
+  /// follow the row when others are added or removed.
+  final TextEditingController barcodeInputController = TextEditingController();
+  final FocusNode barcodeInputFocusNode = FocusNode();
 
   void dispose() {
     factorController.dispose();
     priceController.dispose();
+    barcodeInputController.dispose();
+    barcodeInputFocusNode.dispose();
   }
 }
+
+/// Result of trying to add a barcode to a unit, so the input can clear/refocus
+/// on success and conflicts across units can be surfaced.
+enum _BarcodeAddOutcome { added, alreadyOnThisUnit, usedByAnotherUnit }
 
 String _trimNumber(double value) {
   if (value == value.roundToDouble()) return value.toInt().toString();
@@ -187,6 +201,46 @@ class _ProductUnitsEditorState extends State<ProductUnitsEditor> {
     _emitUnits();
   }
 
+  /// Append a (trimmed, non-empty) barcode to the row at [index], rejecting a
+  /// code already on another unit — the backend enforces one-code-one-meaning,
+  /// so we catch the same-product case here for instant feedback. Same-unit
+  /// re-adds are a no-op. Mirrors the server's strip-only normalization.
+  _BarcodeAddOutcome _addBarcode(int index, String code) {
+    if (!mounted) return _BarcodeAddOutcome.alreadyOnThisUnit;
+    final l10n = AppLocalizations.of(context)!;
+    for (var i = 0; i < _rows.length; i += 1) {
+      if (_rows[i].barcodes.contains(code)) {
+        if (i == index) {
+          _showBarcodeSnack(l10n.productUnitBarcodeDuplicate);
+          return _BarcodeAddOutcome.alreadyOnThisUnit;
+        }
+        _showBarcodeSnack(l10n.productUnitBarcodeConflict(_rows[i].unit.name));
+        return _BarcodeAddOutcome.usedByAnotherUnit;
+      }
+    }
+    setState(() {
+      _rows[index].barcodes = [..._rows[index].barcodes, code];
+    });
+    _emitUnits();
+    return _BarcodeAddOutcome.added;
+  }
+
+  void _removeBarcode(int index, String code) {
+    setState(() {
+      _rows[index].barcodes = [
+        for (final existing in _rows[index].barcodes)
+          if (existing != code) existing,
+      ];
+    });
+    _emitUnits();
+  }
+
+  void _showBarcodeSnack(String message) {
+    ScaffoldMessenger.maybeOf(context)
+      ?..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   /// Suggested per-product factor when a unit shares the base unit's dimension
   /// (kg→1000 g). Null for packaging units, which the manager must set.
   double? _suggestedFactor(UnitOfMeasure unit) {
@@ -264,6 +318,8 @@ class _ProductUnitsEditorState extends State<ProductUnitsEditor> {
             },
             onChanged: _emitUnits,
             onRemove: () => _removeRow(index),
+            onAddBarcode: (code) => _addBarcode(index, code),
+            onRemoveBarcode: (code) => _removeBarcode(index, code),
           ),
         ],
         SizedBox(height: spacing.sm),
@@ -303,6 +359,8 @@ class _UnitRowCard extends StatelessWidget {
     required this.onUnitChanged,
     required this.onChanged,
     required this.onRemove,
+    required this.onAddBarcode,
+    required this.onRemoveBarcode,
   });
 
   final AppLocalizations l10n;
@@ -313,6 +371,8 @@ class _UnitRowCard extends StatelessWidget {
   final ValueChanged<UnitOfMeasure> onUnitChanged;
   final VoidCallback onChanged;
   final VoidCallback onRemove;
+  final _BarcodeAddOutcome Function(String code) onAddBarcode;
+  final ValueChanged<String> onRemoveBarcode;
 
   @override
   Widget build(BuildContext context) {
@@ -435,26 +495,131 @@ class _UnitRowCard extends StatelessWidget {
               ),
             ],
           ),
-          if (row.barcodes.isNotEmpty) ...[
-            SizedBox(height: spacing.xs),
-            // Packaging barcodes (the carton EAN) attached by the migration —
-            // shown so the manager can see which code rings this unit up.
-            Wrap(
-              spacing: spacing.xs,
-              runSpacing: spacing.xs,
-              children: [
-                for (final barcode in row.barcodes)
-                  Chip(
-                    avatar: const Icon(Icons.qr_code_2, size: 16),
-                    label: Text(barcode),
-                    visualDensity: VisualDensity.compact,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-              ],
-            ),
-          ],
+          SizedBox(height: spacing.sm),
+          _UnitBarcodesField(
+            l10n: l10n,
+            row: row,
+            enabled: enabled,
+            onAddBarcode: onAddBarcode,
+            onRemoveBarcode: onRemoveBarcode,
+          ),
         ],
       ),
+    );
+  }
+}
+
+/// The per-unit packaging-barcode editor: deletable chips for the codes already
+/// on the unit, plus a field to add more by typing (or a hardware wedge scanner)
+/// and a camera-scan button. Scanning one of these codes at the POS rings the
+/// product up as this unit at this unit's price.
+class _UnitBarcodesField extends StatelessWidget {
+  const _UnitBarcodesField({
+    required this.l10n,
+    required this.row,
+    required this.enabled,
+    required this.onAddBarcode,
+    required this.onRemoveBarcode,
+  });
+
+  final AppLocalizations l10n;
+  final _UnitRow row;
+  final bool enabled;
+  final _BarcodeAddOutcome Function(String code) onAddBarcode;
+  final ValueChanged<String> onRemoveBarcode;
+
+  void _submit(String raw) {
+    final code = raw.trim();
+    if (code.isNotEmpty) {
+      final outcome = onAddBarcode(code);
+      // Keep a rejected cross-unit code visible so the manager can retarget it;
+      // otherwise clear so the field is ready for the next scan.
+      if (outcome != _BarcodeAddOutcome.usedByAnotherUnit) {
+        row.barcodeInputController.clear();
+      }
+    }
+    // Re-focus so a wedge scanner (or repeated manual entry) can keep going.
+    row.barcodeInputFocusNode.requestFocus();
+  }
+
+  Future<void> _scan(BuildContext context) async {
+    final code = await showCameraTextBarcodeScannerSheet(
+      context,
+      title: l10n.productUnitBarcodeScanTitle,
+    );
+    final trimmed = code?.trim() ?? '';
+    if (trimmed.isNotEmpty) onAddBarcode(trimmed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(l10n.productUnitBarcodesLabel, style: theme.textTheme.labelLarge),
+        SizedBox(height: spacing.xs),
+        Text(
+          l10n.productUnitBarcodesHelper,
+          style: theme.textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+        ),
+        if (row.barcodes.isNotEmpty) ...[
+          SizedBox(height: spacing.xs),
+          Wrap(
+            spacing: spacing.xs,
+            runSpacing: spacing.xs,
+            children: [
+              for (final barcode in row.barcodes)
+                InputChip(
+                  avatar: const Icon(Icons.qr_code_2, size: 16),
+                  label: Text(barcode),
+                  isEnabled: enabled,
+                  onDeleted: enabled ? () => onRemoveBarcode(barcode) : null,
+                  deleteButtonTooltipMessage:
+                      l10n.productUnitBarcodeRemoveTooltip,
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+            ],
+          ),
+        ],
+        SizedBox(height: spacing.xs),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: row.barcodeInputController,
+                focusNode: row.barcodeInputFocusNode,
+                enabled: enabled,
+                textInputAction: TextInputAction.done,
+                onSubmitted: enabled ? _submit : null,
+                decoration: InputDecoration(
+                  labelText: l10n.productUnitBarcodeAddHint,
+                  isDense: true,
+                  prefixIcon: const Icon(Icons.qr_code_2),
+                ),
+              ),
+            ),
+            SizedBox(width: spacing.xs),
+            IconButton(
+              tooltip: l10n.productUnitBarcodeScanTooltip,
+              onPressed: enabled ? () => _scan(context) : null,
+              icon: const Icon(Icons.photo_camera_outlined),
+            ),
+            IconButton(
+              tooltip: l10n.productUnitBarcodeAddTooltip,
+              onPressed: enabled
+                  ? () => _submit(row.barcodeInputController.text)
+                  : null,
+              icon: const Icon(Icons.add_circle_outline),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
