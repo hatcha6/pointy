@@ -269,9 +269,21 @@ class ModifierGroupSerializer(serializers.ModelSerializer):
 
 def product_modifier_group_details(product, context=None):
     """Resolved modifier groups for a product, in the per-product order."""
-    links = product.modifier_group_links.select_related("group").prefetch_related(
-        "group__options",
-    ).order_by("display_order", "id")
+    # Reuse the prefetched links when the caller prefetched
+    # "modifier_group_links__group__options" (list serializers do) so the catalog
+    # list doesn't fire a modifier query per product; sort in Python to match the
+    # stored order. Fall back to a scoped query for un-prefetched single instances.
+    if "modifier_group_links" in getattr(product, "_prefetched_objects_cache", {}):
+        links = sorted(
+            product.modifier_group_links.all(),
+            key=lambda link: (link.display_order, link.id),
+        )
+    else:
+        links = (
+            product.modifier_group_links.select_related("group")
+            .prefetch_related("group__options")
+            .order_by("display_order", "id")
+        )
     return ModifierGroupSerializer(
         [link.group for link in links],
         many=True,
@@ -773,10 +785,13 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "primary_image",
             "image_attachments",
             "quantity_on_hand",
+            # Denormalized "most bought" score (recomputed nightly). Exposed so the
+            # client can sort/label by demand; it never accepts a written value.
+            "popularity",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ("created_at", "updated_at", "archived_at")
+        read_only_fields = ("created_at", "updated_at", "archived_at", "popularity")
 
     def validate_unit(self, value):
         value = (value or "").strip()

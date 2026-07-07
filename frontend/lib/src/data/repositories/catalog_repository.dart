@@ -607,6 +607,9 @@ class CatalogRepository {
     sorted.sort((a, b) {
       return switch (query.ordering) {
         ProductOrdering.name => a.displayLabel.compareTo(b.displayLabel),
+        // Sample data carries no popularity signal; fall back to A–Z. The live
+        // path sorts server-side, so real "most bought" ordering is unaffected.
+        ProductOrdering.mostBought => a.displayLabel.compareTo(b.displayLabel),
         ProductOrdering.priceAsc => a.unitPrice.compareTo(b.unitPrice),
         ProductOrdering.priceDesc => b.unitPrice.compareTo(a.unitPrice),
         ProductOrdering.newest => b.id.compareTo(a.id),

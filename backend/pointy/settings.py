@@ -348,6 +348,13 @@ CELERY_BEAT_SCHEDULE = {
         "task": "customers.recompute_customer_segments",
         "schedule": crontab(minute=45, hour=2),
     },
+    # Re-score every product's rolling-90-day "most bought" popularity overnight,
+    # after the day's sales settle. Daily granularity is enough (the window moves
+    # one day at a time) and read-time sorting uses the denormalized column.
+    "catalog.recompute-product-popularity": {
+        "task": "catalog.recompute_product_popularity",
+        "schedule": crontab(minute=50, hour=2),
+    },
     # Pace the outbound message queue: drain due messages up to each gateway's
     # per-minute throttle / daily cap, holding marketing during quiet hours.
     "messaging.dispatch-outbound": {

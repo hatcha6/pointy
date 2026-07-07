@@ -97,6 +97,12 @@ class _ProductFilterSheetState extends State<ProductFilterSheet> {
           title: l10n.orderingTitle,
           children: [
             QueryFilterOptionTile(
+              label: l10n.orderingMostBought,
+              icon: Icons.local_fire_department,
+              isSelected: _ordering == ProductOrdering.mostBought,
+              onTap: () => _selectOrdering(ProductOrdering.mostBought),
+            ),
+            QueryFilterOptionTile(
               label: l10n.orderingName,
               icon: Icons.sort_by_alpha,
               isSelected: _ordering == ProductOrdering.name,
@@ -197,7 +203,10 @@ class _ProductFilterSheetState extends State<ProductFilterSheet> {
           ? ProductAvailabilityFilter.all
           : widget.query.availability;
       _selectedCategories = [];
-      _ordering = ProductOrdering.name;
+      // Reset to the surface's own default sort (most-bought on POS/catalog,
+      // A–Z elsewhere) rather than hard-coding A–Z, which would drop the
+      // most-bought default whenever a cashier taps Reset.
+      _ordering = widget.query.ordering;
       _supplierId = null;
       _supplierName = null;
     });

@@ -10,6 +10,7 @@ class Product {
     required this.id,
     required this.name,
     required this.quantityOnHand,
+    this.popularity = 0,
     this.description = '',
     this.isActive = true,
     this.isArchived = false,
@@ -33,6 +34,10 @@ class Product {
   final int id;
   final String name;
   final double quantityOnHand;
+
+  /// Denormalized "most bought" score from the server (recomputed nightly). Used
+  /// to sort by demand; 0 when the payload predates the field.
+  final int popularity;
   final String description;
   final bool isActive;
   final bool isArchived;
@@ -115,6 +120,7 @@ class Product {
       quantityOnHand: _stockQtyFromJson(
         json['quantity_on_hand'] ?? defaultVariant?.quantityOnHand,
       ),
+      popularity: (json['popularity'] as num?)?.toInt() ?? 0,
       description: (json['description'] as String?) ?? '',
       isActive: (json['is_active'] as bool?) ?? true,
       isArchived: (json['is_archived'] as bool?) ?? false,
