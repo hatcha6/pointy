@@ -531,6 +531,26 @@ class ShopSettingsApiTests(TestCase):
         self.assertEqual(update_response.data["card_commission_percent"], "1.50")
         self.assertEqual(update_response.data["transfer_commission_percent"], "0.25")
 
+    def test_warn_low_stock_before_sale_defaults_on_and_can_be_disabled(self):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+
+        read_response = client.get(reverse("shop-settings"))
+        self.assertEqual(read_response.status_code, status.HTTP_200_OK)
+        # On by default so the pre-sale low-stock confirmation is opt-out.
+        self.assertTrue(read_response.data["warn_low_stock_before_sale"])
+
+        update_response = client.patch(
+            reverse("shop-settings"),
+            {"warn_low_stock_before_sale": False},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(update_response.data["warn_low_stock_before_sale"])
+
+        reread_response = client.get(reverse("shop-settings"))
+        self.assertFalse(reread_response.data["warn_low_stock_before_sale"])
+
     def test_shop_settings_requires_at_least_one_payment_method(self):
         client = APIClient()
         client.force_authenticate(user=self.manager)

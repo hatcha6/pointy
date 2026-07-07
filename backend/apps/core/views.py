@@ -364,6 +364,7 @@ class ShopSettingsView(views.APIView):
                 "require_opening_cash": settings.require_opening_cash,
                 "cashier_return_window_hours": settings.cashier_return_window_hours,
                 "low_stock_threshold": settings.low_stock_threshold,
+                "warn_low_stock_before_sale": settings.warn_low_stock_before_sale,
                 "enable_cash_payments": settings.enable_cash_payments,
                 "enable_card_payments": settings.enable_card_payments,
                 "enable_transfer_payments": settings.enable_transfer_payments,

@@ -2542,6 +2542,8 @@
   "enableOnlineInvoicesLabel": "إظهار رابط وQR للفاتورة عبر الإنترنت",
   "enableOnlineInvoicesSubtitle": "بعد الدفع يظهر رابط الفاتورة الحقيقي عبر الريلاي ليتمكن العميل من حفظها كملف PDF.",
   "allowOversellingLabel": "السماح بالبيع فوق المخزون",
+  "warnLowStockBeforeSaleLabel": "تنبيه المخزون قبل البيع",
+  "warnLowStockBeforeSaleSubtitle": "عند إيقافه يكتمل البيع فوق المخزون دون طلب تأكيد (يتطلب تفعيل «السماح بالبيع فوق المخزون»).",
   "preventSellingAtLossLabel": "منع البيع بخسارة",
   "preventSellingAtLossSubtitle": "عند إيقافه سيظهر تحذير للكاشير قبل إتمام بيع بخسارة.",
   "paymentMethodCash": "نقد",

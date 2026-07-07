@@ -7542,6 +7542,18 @@ abstract class AppLocalizations {
   /// **'السماح بالبيع فوق المخزون'**
   String get allowOversellingLabel;
 
+  /// No description provided for @warnLowStockBeforeSaleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنبيه المخزون قبل البيع'**
+  String get warnLowStockBeforeSaleLabel;
+
+  /// No description provided for @warnLowStockBeforeSaleSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند إيقافه يكتمل البيع فوق المخزون دون طلب تأكيد (يتطلب تفعيل «السماح بالبيع فوق المخزون»).'**
+  String get warnLowStockBeforeSaleSubtitle;
+
   /// No description provided for @preventSellingAtLossLabel.
   ///
   /// In ar, this message translates to:

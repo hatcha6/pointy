@@ -353,6 +353,7 @@ class ShopSettingsViewModel extends ChangeNotifier {
         'require_opening_cash': settings.requireOpeningCash,
         'auto_print_receipts': settings.autoPrintReceipts,
         'allow_overselling': settings.allowOverselling,
+        'warn_low_stock_before_sale': settings.warnLowStockBeforeSale,
         'prevent_selling_at_loss': settings.preventSellingAtLoss,
         'enable_cash_payments': settings.enableCashPayments,
         'enable_card_payments': settings.enableCardPayments,

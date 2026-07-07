@@ -4239,6 +4239,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get allowOversellingLabel => 'السماح بالبيع فوق المخزون';
 
   @override
+  String get warnLowStockBeforeSaleLabel => 'تنبيه المخزون قبل البيع';
+
+  @override
+  String get warnLowStockBeforeSaleSubtitle =>
+      'عند إيقافه يكتمل البيع فوق المخزون دون طلب تأكيد (يتطلب تفعيل «السماح بالبيع فوق المخزون»).';
+
+  @override
   String get preventSellingAtLossLabel => 'منع البيع بخسارة';
 
   @override
