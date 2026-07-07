@@ -288,6 +288,7 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
         autoPrintKitchenTickets:
             autoPrintKitchenTickets ?? settings.autoPrintKitchenTickets,
         allowOverselling: settings.allowOverselling,
+        warnLowStockBeforeSale: settings.warnLowStockBeforeSale,
         preventSellingAtLoss: settings.preventSellingAtLoss,
         lowStockThreshold: settings.lowStockThreshold,
         cashierReturnWindowHours: settings.cashierReturnWindowHours,

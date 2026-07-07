@@ -113,16 +113,24 @@ class PosCartPane extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     final shortages = viewModel.checkoutStockShortages();
     if (shortages.isNotEmpty) {
-      final shouldContinue = await _showStockWarningDialog(
-        context,
-        shortages: shortages,
-        canOversell: viewModel.allowOverselling,
-      );
-      if (shouldContinue != true) {
-        return;
-      }
-      if (!context.mounted) {
-        return;
+      final canOversell = viewModel.allowOverselling;
+      // Shops that routinely sell into negative stock can silence this per-sale
+      // confirmation from Settings. Only skip it when overselling is allowed —
+      // otherwise the dialog is a hard stop and skipping it would just bounce
+      // off the server's stock rejection a round-trip later.
+      final skipConfirmation = canOversell && !viewModel.warnLowStockBeforeSale;
+      if (!skipConfirmation) {
+        final shouldContinue = await _showStockWarningDialog(
+          context,
+          shortages: shortages,
+          canOversell: canOversell,
+        );
+        if (shouldContinue != true) {
+          return;
+        }
+        if (!context.mounted) {
+          return;
+        }
       }
     }
 
