@@ -465,7 +465,8 @@ class DefaultProductVariantField(serializers.Field):
     def to_representation(self, value):
         if value is None:
             return None
-        return ProductVariantSerializer(value, context=self.context).data
+        # Nested in a product -> omit the redundant product_detail.
+        return NestedProductVariantSerializer(value, context=self.context).data
 
     def to_internal_value(self, data):
         if not isinstance(data, dict):
@@ -628,6 +629,29 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             raise_serializer_validation(error)
 
 
+class NestedProductVariantSerializer(ProductVariantSerializer):
+    """ProductVariantSerializer for variants embedded in a product (``variants`` /
+    ``default_variant`` on the catalog list). Drops ``product_detail``.
+
+    Nested inside a product, the parent product IS the payload — repeating its full
+    summary (units, categories, modifiers, images) on every variant AND the default
+    variant duplicated it 2-4x per product (~55% of the POS catalog response) and
+    spiked JSON-parse/allocation CPU on weak (Win7/8) tills. Not just hidden on
+    output — the field is removed, so the redundant sub-serialization never runs.
+    The POS client re-attaches the parent product to catalog-tapped variants, and
+    the standalone ``/product-variants/`` endpoint (purchasing, barcode resolve)
+    still returns ``product_detail`` for variants fetched without their product."""
+
+    product_detail = None  # drop the inherited nested product summary
+
+    class Meta(ProductVariantSerializer.Meta):
+        fields = [
+            field
+            for field in ProductVariantSerializer.Meta.fields
+            if field != "product_detail"
+        ]
+
+
 class ProductVariantInputSerializer(serializers.Serializer):
     id = serializers.IntegerField(required=False)
     name = serializers.CharField(
@@ -667,7 +691,8 @@ class ProductVariantInputSerializer(serializers.Serializer):
 class ProductVariantListField(serializers.Field):
     def to_representation(self, value):
         queryset = value.all() if hasattr(value, "all") else value
-        return ProductVariantSerializer(
+        # Nested in a product -> omit the redundant per-variant product_detail.
+        return NestedProductVariantSerializer(
             queryset,
             many=True,
             context=self.context,

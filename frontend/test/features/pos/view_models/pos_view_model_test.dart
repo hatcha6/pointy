@@ -420,6 +420,56 @@ void main() {
     },
   );
 
+  test(
+    'catalog-tapped variant without embedded product_detail still resolves its '
+    'sale units from the parent product',
+    () async {
+      final viewModel = _viewModel(_FakePosApiService());
+      addTearDown(viewModel.dispose);
+
+      // The slim catalog payload no longer embeds product_detail on a product's
+      // nested variants (the parent product already carries the units/modifiers).
+      // POS must re-attach the product so a cart line built from the variant can
+      // still resolve them via Product.fromVariant.
+      const bareVariant = ProductVariant(
+        id: 501,
+        productId: 50,
+        productName: 'شاي',
+        displayName: 'شاي',
+        fullName: 'شاي',
+        sku: 'TEA-1',
+        unitPrice: 2,
+        quantityOnHand: 40,
+        isDefault: true,
+        // productDetail intentionally omitted — as the slim payload now sends it.
+      );
+      const product = Product(
+        id: 50,
+        name: 'شاي',
+        quantityOnHand: 40,
+        defaultVariant: bareVariant,
+        variants: [bareVariant],
+        units: [
+          ProductUnit(
+            unit: UnitOfMeasure(id: 20, code: 'carton', name: 'كرتون'),
+            factorToBase: 12,
+          ),
+        ],
+      );
+
+      final result = await viewModel.selectProductForSale(product);
+
+      expect(result.status, PosProductSelectionStatus.added);
+      final line = viewModel.cart.single;
+      // The bare variant picked up the parent product's context...
+      expect(line.variant.productDetail, isNotNull);
+      // ...so the cart line's unit switcher still sees the carton unit.
+      expect(Product.fromVariant(line.variant).hasSellableUnits, isTrue);
+
+      await _settle();
+    },
+  );
+
   test('re-adding an existing cart line keeps its position', () async {
     final viewModel = _viewModel(_FakePosApiService());
     addTearDown(viewModel.dispose);

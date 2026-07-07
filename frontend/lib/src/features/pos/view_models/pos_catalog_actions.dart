@@ -202,7 +202,7 @@ extension PosCatalogActions on PosViewModel {
   ) async {
     final localVariants = product.activeVariants;
     if (localVariants.isNotEmpty) {
-      return Ok(localVariants);
+      return Ok(_withProductContext(localVariants, product));
     }
 
     final result = await _catalogRepository.loadVariantsForProduct(product.id);
@@ -216,5 +216,24 @@ extension PosCatalogActions on PosViewModel {
       case Error<ProductVariantPage>(:final exception):
         return Error(exception);
     }
+  }
+
+  /// Variants that come from the catalog list no longer embed their own
+  /// `product_detail` — the parent product already carries it, and dropping that
+  /// per-variant duplication roughly halved the catalog payload (and the tills'
+  /// JSON-parse cost). Re-attach the product here so a cart line built from one of
+  /// these variants can still resolve its units and modifiers via
+  /// [Product.fromVariant]. Only fills a missing detail; variants fetched
+  /// standalone (barcode scan, per-product endpoint) already carry theirs.
+  List<ProductVariant> _withProductContext(
+    List<ProductVariant> variants,
+    Product product,
+  ) {
+    return [
+      for (final variant in variants)
+        variant.productDetail == null
+            ? variant.copyWith(productDetail: product)
+            : variant,
+    ];
   }
 }
