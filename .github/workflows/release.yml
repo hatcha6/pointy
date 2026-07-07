@@ -31,6 +31,8 @@ env:
   JAVA_VERSION: "17"
   POSTGRES_IMAGE: "postgres:17-alpine"
   REDIS_IMAGE: "redis:7-alpine"
+  # Keep in lockstep with the pgbouncer service default in deploy/onprem/docker-compose.yml.
+  PGBOUNCER_IMAGE: "edoburu/pgbouncer:1.23.1-p2"
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -466,6 +468,7 @@ jobs:
         run: |
           docker pull "${POSTGRES_IMAGE}"
           docker pull "${REDIS_IMAGE}"
+          docker pull "${PGBOUNCER_IMAGE}"
 
       - name: Stage on-prem bundle
         shell: bash
@@ -482,6 +485,7 @@ jobs:
           docker save "pointy-web:${VERSION}"      -o "${BUNDLE}/images/pointy-web-${VERSION}.tar"
           docker save "${POSTGRES_IMAGE}"          -o "${BUNDLE}/images/postgres.tar"
           docker save "${REDIS_IMAGE}"             -o "${BUNDLE}/images/redis.tar"
+          docker save "${PGBOUNCER_IMAGE}"         -o "${BUNDLE}/images/pgbouncer.tar"
 
           echo "==> Staging client installers (Android APK + Windows installer + Linux tar.gz)…"
           mkdir -p "${BUNDLE}/clients"

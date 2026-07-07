@@ -22,7 +22,14 @@ x-backend-environment: &backend-environment
   DJANGO_MEDIA_ROOT: /var/lib/pointy/media
   DJANGO_CLIENTS_ROOT: /var/lib/pointy/clients
   DATABASE_URL: "${POINTY_DATABASE_URL:?Set POINTY_DATABASE_URL in deploy/onprem/.env}"
-  DATABASE_CONN_MAX_AGE: "60"
+  # Pooler-bypassing URL used ONLY for schema migrations at startup (Django's
+  # migrate takes a session-scoped advisory lock that transaction-pooled
+  # PgBouncer cannot carry). Optional: if blank, migrations run over DATABASE_URL.
+  POINTY_DATABASE_DIRECT_URL: "${POINTY_DATABASE_DIRECT_URL:-}"
+  # 0 by default now: PgBouncer owns connection reuse, and even without the pooler
+  # closing per request bounds the total. The old value (60) kept every
+  # worker/thread's Postgres connection open for a minute — how they piled to 100.
+  DATABASE_CONN_MAX_AGE: "${DATABASE_CONN_MAX_AGE:-0}"
   REDIS_URL: "${POINTY_REDIS_URL:-redis://redis:6379/0}"
   POINTY_ATTACHMENT_STORAGE_ROOT: /var/lib/pointy/media
   POINTY_BACKUP_ALLOWED_ROOTS: /var/lib/pointy/backups,/mnt/pointy-external
@@ -64,16 +71,29 @@ services:
       POSTGRES_DB: pointy
       POSTGRES_USER: pointy
       POSTGRES_PASSWORD: "${POINTY_POSTGRES_PASSWORD:?Set POINTY_POSTGRES_PASSWORD in deploy/onprem/.env}"
+    # Internals are env-tunable (defaults safe for a 1g Postgres; raise via .env on
+    # a bigger host). max_connections is 60 now, not 100 — with PgBouncer in front
+    # Postgres only ever sees the pool (~25-50 backends), so 60 is ample headroom
+    # and 60 x ~9MB stays well inside a 1-2g limit (100 was the ceiling they hit).
     command:
       - postgres
       - -c
-      - max_connections=100
+      - max_connections=${POINTY_PG_MAX_CONNECTIONS:-60}
       - -c
-      - shared_buffers=256MB
+      - shared_buffers=${POINTY_PG_SHARED_BUFFERS:-256MB}
+      - -c
+      - effective_cache_size=${POINTY_PG_EFFECTIVE_CACHE_SIZE:-768MB}
+      - -c
+      - work_mem=${POINTY_PG_WORK_MEM:-8MB}
+      - -c
+      - maintenance_work_mem=${POINTY_PG_MAINTENANCE_WORK_MEM:-64MB}
       - -c
       - wal_compression=on
       - -c
       - log_min_duration_statement=1000
+    # Docker's default /dev/shm is 64MB; parallel queries under the bigger config
+    # can exhaust it ("No space left on device"). Give it room.
+    shm_size: "${POINTY_POSTGRES_SHM_SIZE:-256mb}"
     volumes:
       - pointy-postgres-data:/var/lib/postgresql/data
     mem_limit: "${POINTY_POSTGRES_MEM_LIMIT:-1g}"
@@ -85,6 +105,50 @@ services:
       retries: 10
       start_period: 20s
     stop_grace_period: 60s
+    logging: *pointy-logging
+
+  # Connection pooler (transaction mode). Multiplexes every app/worker/thread
+  # connection onto a small fixed set of real Postgres backends, so the Postgres
+  # connection count no longer scales with ASGI workers x threads x requests.
+  # THIS is what prevents Postgres from ever hitting max_connections again.
+  # No healthcheck on purpose: the image may lack pg_isready, and a failing check
+  # would flap -> watchdog restart. The backend's own startup waiter
+  # (docker/wait_for_services.py) already proves the pooled path serves queries
+  # before the app boots, which is the real readiness gate.
+  pgbouncer:
+    image: "${POINTY_PGBOUNCER_IMAGE:-edoburu/pgbouncer:1.23.1-p2}"
+    restart: always
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: pointy
+      DB_USER: pointy
+      DB_PASSWORD: "${POINTY_POSTGRES_PASSWORD:?Set POINTY_POSTGRES_PASSWORD in deploy/onprem/.env}"
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "${POINTY_PGBOUNCER_MAX_CLIENT_CONN:-300}"
+      DEFAULT_POOL_SIZE: "${POINTY_PGBOUNCER_DEFAULT_POOL_SIZE:-25}"
+      MIN_POOL_SIZE: "${POINTY_PGBOUNCER_MIN_POOL_SIZE:-5}"
+      RESERVE_POOL_SIZE: "${POINTY_PGBOUNCER_RESERVE_POOL_SIZE:-5}"
+      RESERVE_POOL_TIMEOUT: "3"
+      # Hard ceiling on real Postgres backends — keep below Postgres max_connections.
+      MAX_DB_CONNECTIONS: "${POINTY_PGBOUNCER_MAX_DB_CONNECTIONS:-50}"
+      SERVER_IDLE_TIMEOUT: "60"
+      QUERY_WAIT_TIMEOUT: "30"
+      # psycopg3 sends these startup params; PgBouncer must not reject them.
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,options
+      # Transaction mode resets state per-transaction; no session reset query.
+      SERVER_RESET_QUERY: ""
+    mem_limit: "${POINTY_PGBOUNCER_MEM_LIMIT:-96m}"
+    cpus: "${POINTY_PGBOUNCER_CPUS:-0.5}"
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    stop_grace_period: 20s
     logging: *pointy-logging
 
   redis:
@@ -126,8 +190,13 @@ services:
     mem_limit: "${POINTY_BACKEND_MEM_LIMIT:-2g}"
     cpus: "${POINTY_BACKEND_CPUS:-2}"
     depends_on:
+      # postgres kept explicit so the direct-URL migration step has it healthy;
+      # pgbouncer only needs to have started (the app's own waiter confirms it
+      # actually serves before proceeding).
       postgres:
         condition: service_healthy
+      pgbouncer:
+        condition: service_started
       redis:
         condition: service_healthy
     environment:

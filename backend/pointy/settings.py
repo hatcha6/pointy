@@ -41,7 +41,11 @@ env = environ.Env(
     POINTY_PRICE_CHECKER_SCAN_TIMEOUT=(float, 0.4),
     POINTY_CURRENCY_SUFFIX=(str, "د.ل"),
     POINTY_CURRENCY_LATIN=(str, "LYD"),
-    DATABASE_CONN_MAX_AGE=(int, 60),
+    # 0 = close the DB connection after each request/task instead of holding it
+    # open. On-prem runs behind PgBouncer (transaction pooling), which owns
+    # reuse; a non-zero value here would defeat pooling and let connections pile
+    # up (the root cause of the max_connections exhaustion).
+    DATABASE_CONN_MAX_AGE=(int, 0),
     DJANGO_SECURE_SSL_REDIRECT=(bool, False),
     DJANGO_SESSION_COOKIE_SECURE=(bool, False),
     DJANGO_CSRF_COOKIE_SECURE=(bool, False),
@@ -167,6 +171,12 @@ DATABASES = {
     "default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
 }
 DATABASES["default"]["CONN_MAX_AGE"] = env("DATABASE_CONN_MAX_AGE")
+# On-prem serves through PgBouncer in transaction-pooling mode, where server-side
+# prepared statements cannot be shared across pooled backends. Turn off psycopg3's
+# auto-prepare so pooled connections never hit "prepared statement ... does not
+# exist". Harmless (tiny per-query cost) when connecting straight to Postgres.
+if str(DATABASES["default"].get("ENGINE", "")).endswith("postgresql"):
+    DATABASES["default"].setdefault("OPTIONS", {}).setdefault("prepare_threshold", None)
 
 SECURE_SSL_REDIRECT = env("DJANGO_SECURE_SSL_REDIRECT")
 SESSION_COOKIE_SECURE = env("DJANGO_SESSION_COOKIE_SECURE")

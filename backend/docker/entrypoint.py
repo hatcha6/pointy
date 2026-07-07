@@ -56,7 +56,16 @@ def wait_for_dependencies():
 
 
 def run_migrations():
-    subprocess.check_call(["python", "manage.py", "migrate", "--noinput"])
+    # Run schema migrations straight against Postgres, bypassing PgBouncer: Django's
+    # migrate holds a session-scoped advisory lock (and issues SET statements) that a
+    # transaction-pooled PgBouncer would break across pooled backends. App traffic
+    # still flows through the pooler via DATABASE_URL; only this step uses the direct
+    # URL, and only when one is provided (blank -> migrate over DATABASE_URL as before).
+    child_env = os.environ.copy()
+    direct_url = os.environ.get("POINTY_DATABASE_DIRECT_URL", "").strip()
+    if direct_url:
+        child_env["DATABASE_URL"] = direct_url
+    subprocess.check_call(["python", "manage.py", "migrate", "--noinput"], env=child_env)
 
 
 def ensure_license():
