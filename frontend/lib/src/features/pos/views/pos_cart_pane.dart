@@ -502,6 +502,13 @@ class _CartScrollContentState extends State<_CartScrollContent> {
         HardwareKeyboard.instance.isMetaPressed) {
       return KeyEventResult.ignored;
     }
+    // Only treat keystrokes as line-quantity entry when this scope itself holds
+    // the primary focus. Tapping into a text field inside the pane moves the
+    // primary focus to that field; its digits must reach the field, not be
+    // hijacked as quantity.
+    if (!node.hasPrimaryFocus) {
+      return KeyEventResult.ignored;
+    }
     final line = _focusedLine(_visibleLines);
     if (line == null) {
       return KeyEventResult.ignored;
