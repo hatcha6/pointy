@@ -390,8 +390,8 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
                   ),
               ].join(' • '),
               maxQuantity: line.returnableQuantity,
-              allowDecimal: line.unit != 'piece',
-              decimalEntryTitle: l10n.posWeightDialogTitle,
+              allowDecimal: true,
+              decimalEntryTitle: l10n.posUnitQuantityLabel,
               decimalEntryHint: l10n.saleReturnQuantityHint(
                 formatSaleQuantity(line.returnableQuantity),
               ),
@@ -981,8 +981,8 @@ class _SaleExchangeDialogState extends State<_SaleExchangeDialog> {
                         formatMoney(line.unitPrice),
                       ),
                       maxQuantity: line.returnableQuantity,
-                      allowDecimal: line.unit != 'piece',
-                      decimalEntryTitle: l10n.posWeightDialogTitle,
+                      allowDecimal: true,
+                      decimalEntryTitle: l10n.posUnitQuantityLabel,
                       decimalEntryHint: l10n.saleReturnQuantityHint(
                         formatSaleQuantity(line.returnableQuantity),
                       ),

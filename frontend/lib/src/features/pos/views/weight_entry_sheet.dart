@@ -58,9 +58,12 @@ class _WeightEntryDialogState extends State<_WeightEntryDialog> {
     final l10n = AppLocalizations.of(context)!;
     final quantity = _quantity;
     final total = quantity == null ? null : widget.variant.unitPrice * quantity;
+    // Weighed/measured products (kg, l, m) keep weight wording and a scale; every
+    // other product still accepts a fractional quantity, just labelled generically.
+    final isWeighed = baseUnitAllowsFractional(widget.variant.unit);
 
     return AlertDialog(
-      icon: const Icon(Icons.scale_outlined),
+      icon: Icon(isWeighed ? Icons.scale_outlined : Icons.numbers_outlined),
       title: Text(widget.variant.displayLabel),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -72,9 +75,13 @@ class _WeightEntryDialogState extends State<_WeightEntryDialog> {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [DecimalTextInputFormatter()],
             decoration: InputDecoration(
-              labelText: l10n.posWeightDialogTitle,
+              labelText: isWeighed
+                  ? l10n.posWeightDialogTitle
+                  : l10n.posUnitQuantityLabel,
               suffixText: unitLabel(l10n, widget.variant.unit),
-              errorText: _showError ? l10n.posWeightInvalid : null,
+              errorText: _showError
+                  ? (isWeighed ? l10n.posWeightInvalid : l10n.posQuantityInvalid)
+                  : null,
             ),
             onChanged: (_) => setState(() => _showError = false),
             onSubmitted: (_) => _submit(),

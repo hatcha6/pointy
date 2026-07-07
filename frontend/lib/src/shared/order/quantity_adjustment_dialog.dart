@@ -29,9 +29,10 @@ class AdjustmentLineOption {
   /// amount remaining on the line).
   final double maxQuantity;
 
-  /// When true the stepper offers tap-to-type fractional entry (weighed
-  /// goods). Whole-unit flows such as purchasing leave this false so the
-  /// quantity can only move in steps of one.
+  /// When true the stepper offers tap-to-type fractional entry, so any line can
+  /// be adjusted by a fraction (the operator's choice — returns, refunds, and
+  /// exchanges all opt in). Left false only where a flow is deliberately
+  /// whole-unit.
   final bool allowDecimal;
 
   /// Title and helper text for the tap-to-type entry dialog. Only consulted
@@ -228,42 +229,79 @@ class AdjustmentLineStepper extends StatelessWidget {
   }
 
   Future<void> _editDecimal(BuildContext context) async {
-    final l10n = AppLocalizations.of(context)!;
-    final controller = TextEditingController(
-      text: value > 0 ? formatSaleQuantity(value) : '',
-    );
     final entered = await showDialog<double>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(option.decimalEntryTitle!),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            labelText: option.decimalEntryTitle!,
-            helperText: option.decimalEntryHint,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(l10n.cancelButton),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(
-              dialogContext,
-            ).pop(double.tryParse(controller.text.trim())),
-            child: Text(l10n.confirmButton),
-          ),
-        ],
+      builder: (dialogContext) => _DecimalEntryDialog(
+        title: option.decimalEntryTitle!,
+        hint: option.decimalEntryHint,
+        initialValue: value,
       ),
     );
-    controller.dispose();
     if (entered == null || entered < 0) {
       return;
     }
     onChanged(entered.clamp(0, option.maxQuantity).toDouble());
+  }
+}
+
+/// The tap-to-type quantity entry for a decimal-capable adjustment line. Owns
+/// its own controller (disposed with the route, not mid-dismiss) so any line can
+/// be adjusted by a fraction without racing the dialog's exit animation.
+class _DecimalEntryDialog extends StatefulWidget {
+  const _DecimalEntryDialog({
+    required this.title,
+    required this.hint,
+    required this.initialValue,
+  });
+
+  final String title;
+  final String? hint;
+  final double initialValue;
+
+  @override
+  State<_DecimalEntryDialog> createState() => _DecimalEntryDialogState();
+}
+
+class _DecimalEntryDialogState extends State<_DecimalEntryDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialValue > 0
+        ? formatSaleQuantity(widget.initialValue)
+        : '',
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(double.tryParse(_controller.text.trim()));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(
+          labelText: widget.title,
+          helperText: widget.hint,
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.cancelButton),
+        ),
+        FilledButton(onPressed: _submit, child: Text(l10n.confirmButton)),
+      ],
+    );
   }
 }
 

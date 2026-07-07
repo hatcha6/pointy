@@ -524,11 +524,9 @@ class _CartScrollContentState extends State<_CartScrollContent> {
     }
     if (key == LogicalKeyboardKey.period ||
         key == LogicalKeyboardKey.numpadDecimal) {
-      // Fractional entry (2.5 trays) — only for units that allow it, and at
-      // most one decimal point.
-      if (_viewModel.cartLineAllowsFractional(line) &&
-          !_pendingQuantity.contains('.') &&
-          _pendingQuantity.length < 6) {
+      // Fractional entry (2.5 of anything) is the cashier's choice — allowed for
+      // every product; at most one decimal point.
+      if (!_pendingQuantity.contains('.') && _pendingQuantity.length < 6) {
         setState(
           () => _pendingQuantity = _pendingQuantity.isEmpty
               ? '0.'

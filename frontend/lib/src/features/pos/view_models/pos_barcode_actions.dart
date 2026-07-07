@@ -125,11 +125,9 @@ extension PosBarcodeActions on PosViewModel {
       _quickQuantityBuffer = '';
     }
     final accumulated = _quickQuantityBuffer + digits;
-    if (accumulated.contains('.') &&
-        (!cartLineAllowsFractional(line) ||
-            '.'.allMatches(accumulated).length > 1)) {
-      // A decimal point the unit cannot honour: drop the whole entry rather
-      // than silently reading "2.5" as 25.
+    if ('.'.allMatches(accumulated).length > 1) {
+      // A second decimal point can't be honoured: drop the whole entry rather
+      // than silently misreading it.
       _quickQuantityBuffer = '';
       return false;
     }
@@ -149,22 +147,6 @@ extension PosBarcodeActions on PosViewModel {
     }
     setCartLineQuantity(line.lineKey, quantity, source: 'scan_quick_quantity');
     return true;
-  }
-
-  /// Whether [line]'s effective unit transacts in fractions: the selected
-  /// ProductUnit's flag, or the base unit's own rule for plain lines.
-  bool cartLineAllowsFractional(CartLine line) {
-    if (line.unitCode.isEmpty) {
-      return baseUnitAllowsFractional(
-        line.variant.productDetail?.unit ?? line.variant.unit,
-      );
-    }
-    for (final unit in line.variant.productDetail?.units ?? const []) {
-      if (unit.code == line.unitCode) {
-        return unit.allowsFractional;
-      }
-    }
-    return false;
   }
 
   /// Scan-then-arrow unit switch: replaces the last scanned line's unit with

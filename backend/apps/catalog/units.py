@@ -124,11 +124,16 @@ def resolve_unit(
 
 
 def validate_quantity(quantity: Decimal, resolved: ResolvedUnit, *, field: str = "quantity") -> None:
-    """Whole-number guard keyed off the *selected* unit (boxes are whole even when
-    the base unit is fractional kg)."""
+    """Quantity-acceptability seam for a transaction line.
 
-    if not resolved.allows_fractional and quantity != quantity.to_integral_value():
-        raise UnitConversionError(field, "This unit is sold in whole amounts.")
+    Fractional quantities are allowed for **every** unit: a cashier or buyer may
+    ring up 2.5 of any product — whole-number unit or not — and that is their
+    choice. Every quantity column is decimal, so nothing downstream needs a whole
+    number. This used to reject fractions when ``resolved.allows_fractional`` was
+    false; that guard was intentionally dropped. The function is kept as the one
+    seam both sales and purchasing funnel through, so per-unit (or per-shop)
+    whole-number enforcement can be reintroduced in a single place if ever asked
+    for. ``quantity``/``resolved`` are retained in the signature for that seam."""
 
 
 def to_base_quantity(quantity, resolved: ResolvedUnit) -> Decimal:

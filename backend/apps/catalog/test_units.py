@@ -77,10 +77,11 @@ class UnitEngineTests(TestCase):
         resolved = resolve_unit(self.product, "box")
         self.assertEqual(to_base_quantity(2, resolved), Decimal("24.000"))
 
-    def test_count_unit_rejects_fractional_quantity(self):
+    def test_any_unit_allows_fractional_quantity(self):
+        # Fractional quantities are the cashier/buyer's choice — a whole-number
+        # unit (box) no longer rejects them.
         resolved = resolve_unit(self.product, "box")
-        with self.assertRaises(UnitConversionError):
-            validate_quantity(Decimal("1.5"), resolved)
+        validate_quantity(Decimal("1.5"), resolved)  # must not raise
 
     def test_weight_base_unit_allows_fractional_quantity(self):
         rice = create_product_with_default_variant(

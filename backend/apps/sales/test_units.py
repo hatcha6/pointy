@@ -81,11 +81,18 @@ class CheckoutUnitTests(TestCase):
         stock = StockItem.objects.get(variant=self.variant)
         self.assertEqual(stock.quantity_on_hand, Decimal("97.000"))
 
-    def test_fractional_box_rejected(self):
+    def test_fractional_box_accepted(self):
+        # A whole-number unit (box) now accepts a fractional quantity — the
+        # cashier's choice. 1.5 boxes × 12 = 18 base units off stock.
         response = self._checkout(
             [{"variant": self.variant.pk, "quantity": "1.5", "unit": "box"}]
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        line = OrderLine.objects.get()
+        self.assertEqual(line.quantity, Decimal("1.5"))
+        self.assertEqual(line.base_quantity, Decimal("18.000"))
+        stock = StockItem.objects.get(variant=self.variant)
+        self.assertEqual(stock.quantity_on_hand, Decimal("82.000"))
 
     def test_unknown_unit_rejected(self):
         response = self._checkout(
