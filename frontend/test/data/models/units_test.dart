@@ -151,6 +151,26 @@ void main() {
       expect(json['factor_to_base'], '6.0');
       expect(json['price'], '5.00');
     });
+
+    test('product unit round-trips packaging barcodes', () {
+      const unit = ProductUnit(
+        unit: UnitOfMeasure(id: 1, code: 'box', name: 'صندوق'),
+        factorToBase: 6,
+        barcodes: ['600100200', '600100201'],
+      );
+      // Sent verbatim so the server replaces the unit's stored codes.
+      expect(unit.toJson()['barcodes'], ['600100200', '600100201']);
+
+      final parsed = ProductUnit.fromJson({
+        'id': 3,
+        'unit': 'box',
+        'factor_to_base': '6',
+        // The server may echo padded or blank entries; parsing trims and drops
+        // the blanks so the editor never shows an empty chip.
+        'barcodes': ['600100200', ' 600100201 ', '', null],
+      });
+      expect(parsed.barcodes, ['600100200', '600100201']);
+    });
   });
 
   group('UnitOfMeasure management', () {

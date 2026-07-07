@@ -3035,6 +3035,37 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productUnitPurchasable => 'متاح للشراء';
 
   @override
+  String get productUnitBarcodesLabel => 'باركود الوحدة';
+
+  @override
+  String get productUnitBarcodesHelper =>
+      'امسح أو اكتب باركود العبوة (الكرتون/الصندوق) ليُباع المنتج بهذه الوحدة وسعرها عند مسحه في نقطة البيع.';
+
+  @override
+  String get productUnitBarcodeAddHint => 'امسح أو اكتب الباركود';
+
+  @override
+  String get productUnitBarcodeAddTooltip => 'إضافة الباركود';
+
+  @override
+  String get productUnitBarcodeScanTooltip => 'مسح بالكاميرا';
+
+  @override
+  String get productUnitBarcodeScanTitle => 'مسح باركود الوحدة';
+
+  @override
+  String get productUnitBarcodeRemoveTooltip => 'حذف الباركود';
+
+  @override
+  String get productUnitBarcodeDuplicate =>
+      'هذا الباركود مُضاف بالفعل لهذه الوحدة.';
+
+  @override
+  String productUnitBarcodeConflict(String unit) {
+    return 'الباركود مُسجّل بالفعل للوحدة $unit.';
+  }
+
+  @override
   String get productDefaultSaleUnitLabel => 'وحدة البيع الافتراضية';
 
   @override

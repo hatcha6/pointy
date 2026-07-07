@@ -5361,6 +5361,60 @@ abstract class AppLocalizations {
   /// **'متاح للشراء'**
   String get productUnitPurchasable;
 
+  /// No description provided for @productUnitBarcodesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'باركود الوحدة'**
+  String get productUnitBarcodesLabel;
+
+  /// No description provided for @productUnitBarcodesHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح أو اكتب باركود العبوة (الكرتون/الصندوق) ليُباع المنتج بهذه الوحدة وسعرها عند مسحه في نقطة البيع.'**
+  String get productUnitBarcodesHelper;
+
+  /// No description provided for @productUnitBarcodeAddHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح أو اكتب الباركود'**
+  String get productUnitBarcodeAddHint;
+
+  /// No description provided for @productUnitBarcodeAddTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة الباركود'**
+  String get productUnitBarcodeAddTooltip;
+
+  /// No description provided for @productUnitBarcodeScanTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح بالكاميرا'**
+  String get productUnitBarcodeScanTooltip;
+
+  /// No description provided for @productUnitBarcodeScanTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح باركود الوحدة'**
+  String get productUnitBarcodeScanTitle;
+
+  /// No description provided for @productUnitBarcodeRemoveTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الباركود'**
+  String get productUnitBarcodeRemoveTooltip;
+
+  /// No description provided for @productUnitBarcodeDuplicate.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الباركود مُضاف بالفعل لهذه الوحدة.'**
+  String get productUnitBarcodeDuplicate;
+
+  /// No description provided for @productUnitBarcodeConflict.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباركود مُسجّل بالفعل للوحدة {unit}.'**
+  String productUnitBarcodeConflict(String unit);
+
   /// No description provided for @productDefaultSaleUnitLabel.
   ///
   /// In ar, this message translates to:
