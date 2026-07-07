@@ -2611,6 +2611,21 @@
   "printerTransportFake": "محاكاة",
   "printerOutputThermalReceipt": "إخراج حراري ESC/POS",
   "printerOutputA4Pdf": "إخراج PDF بحجم A4",
+  "printerOutputPdfReceipt": "إخراج إيصال PDF بعرض {width} مم",
+  "@printerOutputPdfReceipt": {
+    "description": "Selected-printer summary line for a document/PDF printer set to a receipt roll width.",
+    "placeholders": {
+      "width": {
+        "type": "int"
+      }
+    }
+  },
+  "printerPdfPageSizeLabel": "حجم صفحة PDF",
+  "printerPdfPageSizeHelper": "A4 لطباعة فاتورة كاملة، أو اختر عرض إيصال (58 أو 70 أو 80 مم) لطباعة إيصال مضغوط عبر تعريف الطابعة (مثل Xprinter) بدل أوامر ESC/POS غير المدعومة.",
+  "printerPdfPageSizeA4": "A4 (فاتورة كاملة)",
+  "printerPdfPageSizeRoll58": "إيصال 58 مم",
+  "printerPdfPageSizeRoll70": "إيصال 70 مم",
+  "printerPdfPageSizeRoll80": "إيصال 80 مم",
   "systemDefaultPrinterLabel": "طابعة النظام الافتراضية",
   "posReceiptPrinterRoleTitle": "إيصال نقطة البيع",
   "posReceiptPrinterRoleDescription": "الطابعة الافتراضية لفواتير البيع وإعادة الطباعة من شاشة نقطة البيع.",

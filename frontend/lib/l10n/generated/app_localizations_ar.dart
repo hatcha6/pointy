@@ -4436,6 +4436,30 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerOutputA4Pdf => 'إخراج PDF بحجم A4';
 
   @override
+  String printerOutputPdfReceipt(int width) {
+    return 'إخراج إيصال PDF بعرض $width مم';
+  }
+
+  @override
+  String get printerPdfPageSizeLabel => 'حجم صفحة PDF';
+
+  @override
+  String get printerPdfPageSizeHelper =>
+      'A4 لطباعة فاتورة كاملة، أو اختر عرض إيصال (58 أو 70 أو 80 مم) لطباعة إيصال مضغوط عبر تعريف الطابعة (مثل Xprinter) بدل أوامر ESC/POS غير المدعومة.';
+
+  @override
+  String get printerPdfPageSizeA4 => 'A4 (فاتورة كاملة)';
+
+  @override
+  String get printerPdfPageSizeRoll58 => 'إيصال 58 مم';
+
+  @override
+  String get printerPdfPageSizeRoll70 => 'إيصال 70 مم';
+
+  @override
+  String get printerPdfPageSizeRoll80 => 'إيصال 80 مم';
+
+  @override
   String get systemDefaultPrinterLabel => 'طابعة النظام الافتراضية';
 
   @override

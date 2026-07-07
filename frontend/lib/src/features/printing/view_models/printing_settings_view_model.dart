@@ -213,6 +213,12 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     );
   }
 
+  void updatePdfPageSize(PdfPageSize size) {
+    _updateConfig(
+      _config.copyWith(endpoint: _config.endpoint.copyWith(pdfPageSize: size)),
+    );
+  }
+
   void updateCodeTable(String value) {
     _updateConfig(
       _config.copyWith(
