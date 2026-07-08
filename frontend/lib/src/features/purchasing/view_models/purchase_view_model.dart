@@ -87,6 +87,9 @@ class PurchaseViewModel extends ChangeNotifier {
   bool _receiveImmediately = true;
   bool _hasMoreProducts = true;
   int _nextVariantPage = 1;
+  // Monotonic token so a fast typist's superseded catalog request can't land its
+  // (stale, out-of-order) results over a newer one — matches the POS guard.
+  int _catalogRequestVersion = 0;
   String _supplierInvoiceNumber = '';
   String _supplierInvoiceDateInput = '';
   List<PurchaseLandedCostEntry> _landedCostEntries = [];
@@ -192,12 +195,17 @@ class PurchaseViewModel extends ChangeNotifier {
     _errorMessage = null;
     _nextVariantPage = 1;
     _hasMoreProducts = true;
+    final requestVersion = ++_catalogRequestVersion;
     notifyListeners();
 
     final result = await _catalogRepository.loadProductVariants(
       query: _query,
       page: _nextVariantPage,
     );
+    if (requestVersion != _catalogRequestVersion) {
+      // A newer search started while this was in flight; drop the stale result.
+      return;
+    }
     switch (result) {
       case Ok<ProductVariantPage>():
         _variants = result.value.variants;
@@ -219,12 +227,17 @@ class PurchaseViewModel extends ChangeNotifier {
     }
 
     _isLoadingMore = true;
+    final requestVersion = _catalogRequestVersion;
     notifyListeners();
 
     final result = await _catalogRepository.loadProductVariants(
       query: _query,
       page: _nextVariantPage,
     );
+    if (requestVersion != _catalogRequestVersion) {
+      // A new search replaced this catalog while the page was loading.
+      return;
+    }
     switch (result) {
       case Ok<ProductVariantPage>():
         _variants = [..._variants, ...result.value.variants];

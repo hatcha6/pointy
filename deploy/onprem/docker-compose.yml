@@ -70,6 +70,11 @@ services:
       - max_connections=100
       - -c
       - shared_buffers=256MB
+      # JIT off: a complex catalog query can trip PostgreSQL's JIT threshold and
+      # then spend most of the query COMPILING the plan on a small on-prem box.
+      # The query is cheap once JIT is out of the way.
+      - -c
+      - jit=off
       - -c
       - wal_compression=on
       - -c
