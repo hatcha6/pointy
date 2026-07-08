@@ -1389,6 +1389,13 @@ class _ReceiptFrame {
   static const double _horizontalMarginMm = 4;
   static const double _verticalMarginMm = 6;
 
+  // Thermal receipt heads are 1-bit: a dot is either full black or blank, so any
+  // grey (the shared A4 palette's muted labels / hairline rules) prints faint or
+  // not at all. The receipt draws EVERYTHING in pure black; _thermalTheme pairs
+  // it with a heavier (bold) base so thin glyphs don't fade either. The A4
+  // document keeps the palette's greys (via _DocumentFrame) untouched.
+  static const _ink = PdfColor.fromInt(0xff000000);
+
   double get _contentWidth =>
       widthMm * PdfPageFormat.mm - 2 * _horizontalMarginMm * PdfPageFormat.mm;
 
@@ -1409,13 +1416,24 @@ class _ReceiptFrame {
           horizontal: _horizontalMarginMm * PdfPageFormat.mm,
           vertical: _verticalMarginMm * PdfPageFormat.mm,
         ),
-        theme: fonts.toThemeData(),
+        theme: _thermalTheme(),
         textDirection: pw.TextDirection.rtl,
         build: (context) => _body(),
       ),
     );
 
     return pdf.save();
+  }
+
+  /// A heavier base so small Arabic survives the ~203-dpi thermal head — old
+  /// tills print a uniformly bold, black receipt. Latin/number glyphs fall back
+  /// to the same digit font.
+  pw.ThemeData _thermalTheme() {
+    return pw.ThemeData.withFont(
+      base: fonts.bold,
+      bold: fonts.bold,
+      fontFallback: fonts.fallback,
+    );
   }
 
   pw.Widget _body() {
@@ -1452,7 +1470,7 @@ class _ReceiptFrame {
       children.add(
         pw.Text(
           terms,
-          style: const pw.TextStyle(fontSize: 8, color: PointyPdfPalette.ink),
+          style: const pw.TextStyle(fontSize: 8, color: _ink),
           textAlign: pw.TextAlign.center,
         ),
       );
@@ -1465,8 +1483,8 @@ class _ReceiptFrame {
         pw.Text(
           note,
           style: const pw.TextStyle(
-            fontSize: 7.5,
-            color: PointyPdfPalette.muted,
+            fontSize: 8,
+            color: _ink,
           ),
           textAlign: pw.TextAlign.center,
         ),
@@ -1507,7 +1525,7 @@ class _ReceiptFrame {
         style: pw.TextStyle(
           fontSize: 12,
           fontWeight: pw.FontWeight.bold,
-          color: PointyPdfPalette.ink,
+          color: _ink,
         ),
         textAlign: pw.TextAlign.center,
       ),
@@ -1517,7 +1535,7 @@ class _ReceiptFrame {
       widgets.add(
         pw.Text(
           line,
-          style: const pw.TextStyle(fontSize: 8, color: PointyPdfPalette.muted),
+          style: const pw.TextStyle(fontSize: 8, color: _ink),
           textAlign: pw.TextAlign.center,
         ),
       );
@@ -1532,14 +1550,14 @@ class _ReceiptFrame {
         style: pw.TextStyle(
           fontSize: 11,
           fontWeight: pw.FontWeight.bold,
-          color: PointyPdfPalette.ink,
+          color: _ink,
         ),
         textAlign: pw.TextAlign.center,
       ),
       pw.SizedBox(height: 1),
       pw.Text(
         '#${template.reference}',
-        style: const pw.TextStyle(fontSize: 8, color: PointyPdfPalette.muted),
+        style: const pw.TextStyle(fontSize: 8, color: _ink),
         textAlign: pw.TextAlign.center,
       ),
     ];
@@ -1549,7 +1567,7 @@ class _ReceiptFrame {
     final widgets = <pw.Widget>[
       pw.Text(
         template.recipientTitle,
-        style: const pw.TextStyle(fontSize: 8, color: PointyPdfPalette.muted),
+        style: const pw.TextStyle(fontSize: 8, color: _ink),
       ),
       pw.SizedBox(height: 2),
       pw.Text(
@@ -1557,7 +1575,7 @@ class _ReceiptFrame {
         style: pw.TextStyle(
           fontSize: 9,
           fontWeight: pw.FontWeight.bold,
-          color: PointyPdfPalette.ink,
+          color: _ink,
         ),
       ),
     ];
@@ -1566,7 +1584,7 @@ class _ReceiptFrame {
       widgets.add(
         pw.Text(
           line,
-          style: const pw.TextStyle(fontSize: 8, color: PointyPdfPalette.ink),
+          style: const pw.TextStyle(fontSize: 8, color: _ink),
         ),
       );
     }
@@ -1617,7 +1635,7 @@ class _ReceiptFrame {
       children: [
         pw.Text(
           name,
-          style: const pw.TextStyle(fontSize: 9, color: PointyPdfPalette.ink),
+          style: const pw.TextStyle(fontSize: 9, color: _ink),
         ),
         pw.SizedBox(height: 1),
         pw.Row(
@@ -1628,7 +1646,7 @@ class _ReceiptFrame {
                 middle,
                 style: const pw.TextStyle(
                   fontSize: 8,
-                  color: PointyPdfPalette.muted,
+                  color: _ink,
                 ),
               ),
             ),
@@ -1637,7 +1655,7 @@ class _ReceiptFrame {
               total,
               style: const pw.TextStyle(
                 fontSize: 9,
-                color: PointyPdfPalette.ink,
+                color: _ink,
               ),
             ),
           ],
@@ -1662,7 +1680,7 @@ class _ReceiptFrame {
     final style = pw.TextStyle(
       fontSize: emphasised ? 10 : 9,
       fontWeight: emphasised ? pw.FontWeight.bold : pw.FontWeight.normal,
-      color: PointyPdfPalette.ink,
+      color: _ink,
     );
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 2),
@@ -1681,7 +1699,7 @@ class _ReceiptFrame {
     return pw.Container(
       margin: const pw.EdgeInsets.symmetric(vertical: 5),
       height: 0.6,
-      color: PointyPdfPalette.border,
+      color: _ink,
     );
   }
 
@@ -1700,7 +1718,7 @@ class _ReceiptFrame {
             style: pw.TextStyle(
               fontSize: 8,
               fontWeight: pw.FontWeight.bold,
-              color: PointyPdfPalette.ink,
+              color: _ink,
             ),
             textAlign: pw.TextAlign.center,
           ),
@@ -1716,8 +1734,8 @@ class _ReceiptFrame {
           pw.Text(
             labels.scanOnlineInvoice,
             style: const pw.TextStyle(
-              fontSize: 7,
-              color: PointyPdfPalette.muted,
+              fontSize: 8,
+              color: _ink,
             ),
             textAlign: pw.TextAlign.center,
           ),
