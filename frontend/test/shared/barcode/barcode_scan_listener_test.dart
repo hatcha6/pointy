@@ -4,16 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/src/shared/barcode/barcode_scan_listener.dart';
 
 void main() {
-  Future<({List<String> scanned, List<String> typed, List<LogicalKeyboardKey> arrows})>
-  pumpListener(WidgetTester tester) async {
+  Future<({List<String> scanned, List<LogicalKeyboardKey> arrows})> pumpListener(
+    WidgetTester tester,
+  ) async {
     final scanned = <String>[];
-    final typed = <String>[];
     final arrows = <LogicalKeyboardKey>[];
     await tester.pumpWidget(
       MaterialApp(
         home: BarcodeScanListener(
           onBarcodeScanned: scanned.add,
-          onDigitsTyped: typed.add,
           onArrowKey: (key) {
             arrows.add(key);
             return true;
@@ -22,25 +21,10 @@ void main() {
         ),
       ),
     );
-    return (scanned: scanned, typed: typed, arrows: arrows);
+    return (scanned: scanned, arrows: arrows);
   }
 
-  testWidgets('a slowly typed digit fires onDigitsTyped, not a scan', (
-    tester,
-  ) async {
-    final events = await pumpListener(tester);
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.digit5);
-    // Past the human-digit delay with no further keys → human typing.
-    await tester.pump(const Duration(milliseconds: 250));
-
-    expect(events.typed, ['5']);
-    expect(events.scanned, isEmpty);
-  });
-
-  testWidgets('a scanner burst submits the barcode and never fires digits', (
-    tester,
-  ) async {
+  testWidgets('a scanner burst submits the barcode', (tester) async {
     final events = await pumpListener(tester);
 
     for (final key in [
@@ -59,26 +43,21 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(events.scanned, ['12345678']);
-    expect(events.typed, isEmpty);
   });
 
-  testWidgets('a terminator-less digit string longer than a quantity is '
-      'neither scanned nor typed', (tester) async {
+  testWidgets('typed digits never fire anything but a terminated scan — a '
+      'scan can never signal a quantity', (tester) async {
     final events = await pumpListener(tester);
 
-    for (final key in [
-      LogicalKeyboardKey.digit1,
-      LogicalKeyboardKey.digit2,
-      LogicalKeyboardKey.digit3,
-      LogicalKeyboardKey.digit4,
-      LogicalKeyboardKey.digit5,
-    ]) {
-      await tester.sendKeyEvent(key);
-    }
+    // Digits typed slowly, without a terminator, produce no callback at all:
+    // there is no digit → quantity path a scanner could ever trip.
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit5);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit0);
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(events.scanned, isEmpty);
-    expect(events.typed, isEmpty);
+    expect(events.arrows, isEmpty);
   });
 
   testWidgets('arrow keys reach onArrowKey', (tester) async {
@@ -93,15 +72,15 @@ void main() {
     ]);
   });
 
-  testWidgets('typing into a focused text field never triggers the quick '
-      'shortcuts', (tester) async {
-    final typed = <String>[];
+  testWidgets('typing into a focused text field never triggers the shortcuts', (
+    tester,
+  ) async {
+    final scanned = <String>[];
     final arrows = <LogicalKeyboardKey>[];
     await tester.pumpWidget(
       MaterialApp(
         home: BarcodeScanListener(
-          onBarcodeScanned: (_) {},
-          onDigitsTyped: typed.add,
+          onBarcodeScanned: scanned.add,
           onArrowKey: (key) {
             arrows.add(key);
             return true;
@@ -116,7 +95,6 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(typed, isEmpty);
     expect(arrows, isEmpty);
   });
 }

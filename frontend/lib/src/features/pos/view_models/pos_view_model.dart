@@ -179,12 +179,11 @@ class PosViewModel extends ChangeNotifier {
   String? _errorMessage;
   String? _lastScannedBarcode;
   String? _lastScannedProductName;
-  // Scan-then-type quick adjust: the cart line the last barcode scan landed on
-  // (digits retype its quantity, arrows cycle its unit) and the digit buffer
-  // being accumulated ("1" then "2" → 12).
-  String? _lastScannedLineKey;
-  String _quickQuantityBuffer = '';
-  DateTime? _quickQuantityAt;
+  // The cart line the shortcuts (F2 cycle-unit / F4 delete / arrow cycle-unit)
+  // act on: the last line a scan or catalog tap landed on, or the last line the
+  // cashier tapped to select. A hardware scan never touches a line's quantity —
+  // it only ever adds/increments its own product.
+  String? _activeCartLineKey;
   bool _hasRegisterSessionError = false;
   bool _hasCheckoutSettingsError = false;
   RegisterSession? _availableRegisterSession;

@@ -454,11 +454,17 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
 
   void _requestCheckout() => _checkoutController.onCheckout?.call();
 
-  /// Scan-then-arrow: cycle the last scanned line through the product's
-  /// sellable units. Up/Right = next, Down/Left = previous, wrapping.
-  bool _cycleLastScannedUnit(LogicalKeyboardKey key) {
+  /// F1 — hold the current invoice and open a fresh one (the multi-invoice
+  /// flow). No-op when the cart is empty (the active session is already blank)
+  /// or a checkout is in progress, matching the on-screen switcher button.
+  void _newInvoice() => widget.viewModel.startNewSaleSession();
+
+  /// F2 / arrow keys — cycle the active line (last scanned, catalog-tapped, or
+  /// tapped-to-select) through the product's sellable units. Arrow Up/Right =
+  /// next, Down/Left = previous; F2 (no [key]) advances forward. Wraps around.
+  bool _cycleActiveLineUnit([LogicalKeyboardKey? key]) {
     final viewModel = widget.viewModel;
-    final line = viewModel.lastScannedCartLine;
+    final line = viewModel.activeCartLine;
     if (line == null) {
       return false;
     }
@@ -478,11 +484,43 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
       index = 0;
     }
     final forward =
+        key == null ||
         key == LogicalKeyboardKey.arrowUp ||
         key == LogicalKeyboardKey.arrowRight;
     final next =
         options[(index + (forward ? 1 : -1) + options.length) % options.length];
-    return viewModel.applyQuickUnit(next);
+    return viewModel.setActiveCartLineUnit(next);
+  }
+
+  /// F4 — delete the active line, surfacing an Undo so a mis-fire on a
+  /// customer's in-progress order is one tap to recover.
+  void _deleteActiveLine() {
+    final viewModel = widget.viewModel;
+    final line = viewModel.activeCartLine;
+    if (line == null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
+    final removed = viewModel.removeCartLine(
+      line.lineKey,
+      source: 'keyboard_delete_line',
+    );
+    if (removed == null) {
+      return;
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(l10n.cartLineRemovedMessage),
+          action: SnackBarAction(
+            label: l10n.undoButton,
+            onPressed: () =>
+                viewModel.restoreCartLine(removed.line, removed.index),
+          ),
+        ),
+      );
   }
 
   @override
@@ -497,10 +535,10 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
           !viewModel.isResolvingBarcode,
       onBarcodeScanned: (barcode) =>
           viewModel.addVariantByBarcode(barcode, source: 'hardware_scanner'),
-      // Fast cashier flow after a scan: type a number to set the scanned
-      // line's quantity, tap an arrow to flip its unit of measure.
-      onDigitsTyped: viewModel.applyQuickQuantityDigits,
-      onArrowKey: _cycleLastScannedUnit,
+      // A scan only ever adds its own product; it never touches a line's
+      // quantity. Arrow keys flip the active line's unit of measure (the
+      // legacy shortcut, kept alongside the F-keys below).
+      onArrowKey: (key) => _cycleActiveLineUnit(key),
       child: CallbackShortcuts(
         bindings: {
           const SingleActivator(LogicalKeyboardKey.enter, control: true):
@@ -511,6 +549,13 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
               _requestCheckout,
           const SingleActivator(LogicalKeyboardKey.numpadEnter, meta: true):
               _requestCheckout,
+          // Legacy till function keys (muscle memory from older POS systems):
+          // F1 hold-and-open-new-invoice, F2 cycle the active line's unit,
+          // F4 delete the active line.
+          const SingleActivator(LogicalKeyboardKey.f1): _newInvoice,
+          const SingleActivator(LogicalKeyboardKey.f2): () =>
+              _cycleActiveLineUnit(),
+          const SingleActivator(LogicalKeyboardKey.f4): _deleteActiveLine,
         },
         child: LayoutBuilder(
           builder: (context, constraints) {

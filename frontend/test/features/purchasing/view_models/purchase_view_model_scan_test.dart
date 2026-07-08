@@ -17,7 +17,7 @@ void main() {
     return PurchaseViewModel(_FakeCatalogRepository(), _FakePurchaseRepository());
   }
 
-  test('a scan arms the quick adjust and digits set the line quantity', () async {
+  test('a scan marks the draft line as the active one', () async {
     final viewModel = makeViewModel();
 
     await viewModel.addVariant(
@@ -26,15 +26,12 @@ void main() {
       source: 'purchase_barcode_lookup',
     );
     expect(viewModel.lastScannedDraftLine, isNotNull);
-
-    expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
-    expect(viewModel.draft.single.quantity, 2);
-    // A second digit within the idle window appends: 2 → 25.
-    expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
-    expect(viewModel.draft.single.quantity, 25);
+    // A scan only ever adds/increments its own product — never a typed
+    // quantity — so the line stays at 1.
+    expect(viewModel.draft.single.quantity, 1);
   });
 
-  test('catalog taps arm the quick adjust like a scan does', () async {
+  test('catalog taps mark the active line like a scan does', () async {
     final viewModel = makeViewModel();
 
     await viewModel.addVariant(
@@ -43,11 +40,9 @@ void main() {
       source: 'purchase_catalog_tile',
     );
     expect(viewModel.lastScannedDraftLine, isNotNull);
-    expect(viewModel.applyQuickQuantityDigits('7'), isTrue);
-    expect(viewModel.draft.single.quantity, 7);
   });
 
-  test('stepper adds do not arm the quick adjust', () async {
+  test('stepper adds do not mark an active line', () async {
     final viewModel = makeViewModel();
 
     await viewModel.addVariant(
@@ -56,7 +51,6 @@ void main() {
       source: 'purchase_draft_quantity_button',
     );
     expect(viewModel.lastScannedDraftLine, isNull);
-    expect(viewModel.applyQuickQuantityDigits('7'), isFalse);
     expect(viewModel.draft.single.quantity, 1);
   });
 
@@ -95,7 +89,7 @@ void main() {
     expect(viewModel.draft.single.unitCost, 0.45);
   });
 
-  test('quick typing accepts decimals for any unit', () async {
+  test('a typed fraction survives a unit switch', () async {
     final viewModel = makeViewModel();
     await viewModel.addVariant(
       variant,
@@ -110,24 +104,18 @@ void main() {
       allowsFractional: true,
     );
 
-    // "2" then "." then "5" → 2.5 trays.
-    expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
-    expect(viewModel.applyQuickQuantityDigits('.'), isTrue);
-    expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
+    // A fraction sticks for any unit.
+    viewModel.setLineQuantity(variant, 2.5);
     expect(viewModel.draft.single.quantity, 2.5);
 
-    // Switching to the whole-number base unit keeps the fraction (any unit may
-    // transact in fractions now), and the base unit accepts a decimal too.
+    // Switching to the whole-number base unit keeps the fraction untouched
+    // (any unit may transact in fractions now).
     viewModel.updateLineUnit(
       variant,
       unitCode: '',
       unitLabel: '',
       unitFactor: 1,
     );
-    expect(viewModel.draft.single.quantity, 2.5); // carried over untouched
-    expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
-    expect(viewModel.applyQuickQuantityDigits('.'), isTrue);
-    expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
     expect(viewModel.draft.single.quantity, 2.5);
   });
 

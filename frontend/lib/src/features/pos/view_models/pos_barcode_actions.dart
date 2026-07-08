@@ -59,16 +59,15 @@ extension PosBarcodeActions on PosViewModel {
             unit: unitOption,
             source: source,
           );
-          // Arm the scan-then-type quick adjust on the line the scan landed on
-          // (plain add: no modifiers, the scanned unit — same merge key as the
-          // add).
-          _lastScannedLineKey = _mergeableLineFor(
+          // Track the line the scan landed on as the active line for the
+          // F2 (cycle unit) / F4 (delete) / arrow (cycle unit) shortcuts — a
+          // plain add (no modifiers, the scanned unit) shares the add's merge
+          // key. The scan changes only its own line's quantity, never another's.
+          _activeCartLineKey = _mergeableLineFor(
             variant,
             const [],
             _unitCodeFor(unitOption),
           )?.lineKey;
-          _quickQuantityBuffer = '';
-          _quickQuantityAt = null;
           _lastScannedProductName = unitOption == null
               ? variant.displayLabel
               : '${variant.displayLabel} — ${unitOption.label}';
@@ -90,72 +89,36 @@ extension PosBarcodeActions on PosViewModel {
     _barcodeScanStatus = BarcodeScanStatus.idle;
     _lastScannedBarcode = null;
     _lastScannedProductName = null;
-    _lastScannedLineKey = null;
-    _quickQuantityBuffer = '';
-    _quickQuantityAt = null;
     _notifyChanged();
   }
 
-  /// The cart line the last hardware scan landed on, if it is still in the
-  /// cart — the target of the scan-then-type quantity/unit shortcuts.
-  CartLine? get lastScannedCartLine {
-    final lineKey = _lastScannedLineKey;
+  /// The cart line the shortcuts act on: the last line a scan or catalog tap
+  /// landed on, or the last line the cashier tapped to select — whichever came
+  /// most recently — provided it is still in the cart. Target of F2 (cycle
+  /// unit), F4 (delete), and the arrow-key unit cycle.
+  CartLine? get activeCartLine {
+    final lineKey = _activeCartLineKey;
     if (lineKey == null) {
       return null;
     }
     return _cart.where((line) => line.lineKey == lineKey).firstOrNull;
   }
 
-  /// Scan-then-type quantity: keys typed right after a scan REPLACE the last
-  /// scanned line's quantity, accumulating across keystrokes ("1" then "2" →
-  /// 12; "2","." ,"5" → 2.5 for fractional units) until [_quickQuantityIdle]
-  /// passes or another scan re-arms the flow. Returns false when there is
-  /// nothing armed to adjust.
-  bool applyQuickQuantityDigits(String digits) {
-    if (_isCheckingOut || digits.isEmpty) {
-      return false;
-    }
-    final line = lastScannedCartLine;
-    if (line == null) {
-      return false;
-    }
-    final now = DateTime.now();
-    final startedAt = _quickQuantityAt;
-    if (startedAt == null || now.difference(startedAt) > _quickQuantityIdle) {
-      _quickQuantityBuffer = '';
-    }
-    final accumulated = _quickQuantityBuffer + digits;
-    if ('.'.allMatches(accumulated).length > 1) {
-      // A second decimal point can't be honoured: drop the whole entry rather
-      // than silently misreading it.
-      _quickQuantityBuffer = '';
-      return false;
-    }
-    final quantity = double.tryParse(accumulated);
-    if (quantity == null && accumulated != '.' && !accumulated.endsWith('.')) {
-      return false;
-    }
-    if (accumulated.length > 7) {
-      return false;
-    }
-    _quickQuantityBuffer = accumulated;
-    _quickQuantityAt = now;
-    if (quantity == null || quantity <= 0) {
-      // A leading "0" or a trailing "." — keep accumulating ("0.5", "2.5")
-      // without touching the line yet.
-      return true;
-    }
-    setCartLineQuantity(line.lineKey, quantity, source: 'scan_quick_quantity');
-    return true;
+  /// Marks the tapped cart line as the active one so the keyboard shortcuts
+  /// (F2 / F4 / arrows) target it. No rebuild is needed — the shortcuts read
+  /// [activeCartLine] on demand — so this intentionally does not notify.
+  void focusCartLine(String lineKey) {
+    _activeCartLineKey = lineKey;
   }
 
-  /// Scan-then-arrow unit switch: replaces the last scanned line's unit with
-  /// [unit] (resolved by the caller, which owns localisation of unit labels).
-  bool applyQuickUnit(UnitOption unit) {
+  /// Switches the active cart line's unit of measure to [unit] (resolved by the
+  /// caller, which owns localisation of unit labels). Backs the F2 and arrow-key
+  /// cycle. Returns false when there is no active line.
+  bool setActiveCartLineUnit(UnitOption unit) {
     if (_isCheckingOut) {
       return false;
     }
-    final line = lastScannedCartLine;
+    final line = activeCartLine;
     if (line == null) {
       return false;
     }
@@ -163,5 +126,3 @@ extension PosBarcodeActions on PosViewModel {
     return true;
   }
 }
-
-const _quickQuantityIdle = Duration(seconds: 4);
