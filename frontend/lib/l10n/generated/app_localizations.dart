@@ -10002,6 +10002,30 @@ abstract class AppLocalizations {
   /// **'تعذر تحديث الأسعار. حاول مرة أخرى.'**
   String get changePricesError;
 
+  /// No description provided for @repriceSiblingsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير أسعار البيع'**
+  String get repriceSiblingsTitle;
+
+  /// No description provided for @repriceSiblingsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير أسعار بيع متغيّرات المنتج'**
+  String get repriceSiblingsTooltip;
+
+  /// Reprice-siblings dialog subtitle; shows the line's new cost.
+  ///
+  /// In ar, this message translates to:
+  /// **'بسعر تكلفة {cost} — عدّل سعر بيع كل متغيّرات هذا المنتج.'**
+  String repriceSiblingsSubtitle(String cost);
+
+  /// Hint that the pre-filled prices use the shop's typical markup.
+  ///
+  /// In ar, this message translates to:
+  /// **'مقترح بهامش ربح {percent}٪'**
+  String repriceSiblingsMarkupHint(String percent);
+
   /// No description provided for @changePricesLoadError.
   ///
   /// In ar, this message translates to:

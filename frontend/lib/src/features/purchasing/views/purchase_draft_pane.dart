@@ -20,6 +20,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../../../shared/unit_options.dart';
 import '../../../shared/units.dart';
 import '../view_models/purchase_view_model.dart';
+import 'reprice_siblings_dialog.dart';
 
 class PurchaseDraftPane extends StatefulWidget {
   const PurchaseDraftPane({
@@ -711,6 +712,13 @@ class _PurchaseDraftScrollContentState
                           source: 'purchase_quantity_edit',
                         );
                       },
+                      onChangePrices: () => unawaited(
+                        showRepriceSiblingsDialog(
+                          context,
+                          viewModel: viewModel,
+                          line: visibleDraft[index],
+                        ),
+                      ),
                     ),
                   ],
               ],
@@ -1420,6 +1428,7 @@ class PurchaseDraftLineTile extends StatefulWidget {
     this.onQuantityChanged,
     this.selected = false,
     this.onSelect,
+    this.onChangePrices,
   });
 
   final PurchaseDraftLine line;
@@ -1445,6 +1454,10 @@ class PurchaseDraftLineTile extends StatefulWidget {
   )?
   onUnitChanged;
   final ValueChanged<double>? onQuantityChanged;
+
+  /// Opens the reprice-siblings dialog — change the selling price of all the
+  /// product's variants when its purchase cost changes. Null hides the button.
+  final VoidCallback? onChangePrices;
 
   @override
   State<PurchaseDraftLineTile> createState() => _PurchaseDraftLineTileState();
@@ -1705,6 +1718,15 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                   Expanded(child: info),
                   const SizedBox(width: 10),
                   totalText,
+                  if (widget.onChangePrices != null) ...[
+                    const SizedBox(width: 4),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: l10n.repriceSiblingsTooltip,
+                      icon: const Icon(Icons.sell_outlined, size: 20),
+                      onPressed: widget.enabled ? widget.onChangePrices : null,
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 12),

@@ -979,6 +979,47 @@ class PurchaseViewModel extends ChangeNotifier {
     return cost;
   }
 
+  /// The sibling variants of a purchase line's product — the reprice dialog
+  /// lists them all so a cost change can update every variant's selling price.
+  Future<List<ProductVariant>> loadSiblingVariants(int productId) async {
+    final result = await _catalogRepository.loadVariantsForProduct(productId);
+    return switch (result) {
+      Ok<ProductVariantPage>(:final value) => value.variants,
+      Error<ProductVariantPage>() => const <ProductVariant>[],
+    };
+  }
+
+  /// Suggested sale price for [unitCost] (the shop's typical markup), used to
+  /// pre-fill the reprice dialog when a line's cost changes.
+  Future<({double? suggestedPrice, double? markupPercent})> loadPricingSuggestion(
+    double unitCost,
+  ) async {
+    final result = await _purchaseRepository.loadPricingSuggestion(unitCost);
+    return switch (result) {
+      Ok<({double? suggestedPrice, double? markupPercent})>(:final value) => value,
+      Error<({double? suggestedPrice, double? markupPercent})>() => (
+        suggestedPrice: null,
+        markupPercent: null,
+      ),
+    };
+  }
+
+  /// Writes new selling prices for a product's variants (the reprice dialog).
+  /// Only the entries in [pricesByVariant] are changed. Returns success.
+  Future<bool> repriceProductVariants(
+    int productId,
+    Map<int, double> pricesByVariant,
+  ) async {
+    if (pricesByVariant.isEmpty) {
+      return true;
+    }
+    final result = await _catalogRepository.setVariantPrices(
+      productId: productId,
+      pricesByVariant: pricesByVariant,
+    );
+    return result is Ok<Product>;
+  }
+
   void _resetLandedCosts() {
     _landedCostEntries = [];
     _discountCode = '';

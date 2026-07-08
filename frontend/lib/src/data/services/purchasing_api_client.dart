@@ -319,6 +319,33 @@ class PurchasingApiClient {
     return double.tryParse(cost.toString());
   }
 
+  /// Suggested sale price for [unitCost], using the shop's typical markup — used
+  /// to pre-fill the reprice-siblings dialog. `suggestedPrice` is null when the
+  /// cost is zero/unpriceable.
+  Future<({double? suggestedPrice, double? markupPercent})> fetchPricingSuggestion(
+    double unitCost,
+  ) async {
+    final response = await _session.get(
+      'purchase-orders/pricing-suggestion/',
+      query: {'unit_cost': unitCost.toStringAsFixed(2)},
+    );
+    _session.throwApiException(response, 'Pricing suggestion failed with status');
+    final decoded = _session.decodedBody(response);
+    if (decoded is! Map<String, Object?>) {
+      return (suggestedPrice: null, markupPercent: null);
+    }
+    double? asDouble(Object? value) {
+      if (value == null) return null;
+      if (value is num) return value.toDouble();
+      return double.tryParse(value.toString());
+    }
+
+    return (
+      suggestedPrice: asDouble(decoded['suggested_price']),
+      markupPercent: asDouble(decoded['markup_percent']),
+    );
+  }
+
   Future<PurchaseOrder> submitPurchaseOrder(
     int purchaseOrderId, {
     String? idempotencyKey,

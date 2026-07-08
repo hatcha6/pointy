@@ -1667,6 +1667,12 @@ class PosApiService {
     return _purchasing.fetchLastProductCost(productId, variantId: variantId);
   }
 
+  Future<({double? suggestedPrice, double? markupPercent})> fetchPricingSuggestion(
+    double unitCost,
+  ) {
+    return _purchasing.fetchPricingSuggestion(unitCost);
+  }
+
   Future<PurchaseOrderPage> fetchPurchaseOrders({
     required PurchaseOrderQuery query,
     int page = 1,

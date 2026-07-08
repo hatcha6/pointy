@@ -3213,6 +3213,26 @@
   "changePricesSaveButton": "حفظ الأسعار",
   "changePricesSuccess": "تم تحديث الأسعار.",
   "changePricesError": "تعذر تحديث الأسعار. حاول مرة أخرى.",
+  "repriceSiblingsTitle": "تغيير أسعار البيع",
+  "repriceSiblingsTooltip": "تغيير أسعار بيع متغيّرات المنتج",
+  "repriceSiblingsSubtitle": "بسعر تكلفة {cost} — عدّل سعر بيع كل متغيّرات هذا المنتج.",
+  "@repriceSiblingsSubtitle": {
+    "description": "Reprice-siblings dialog subtitle; shows the line's new cost.",
+    "placeholders": {
+      "cost": {
+        "type": "String"
+      }
+    }
+  },
+  "repriceSiblingsMarkupHint": "مقترح بهامش ربح {percent}٪",
+  "@repriceSiblingsMarkupHint": {
+    "description": "Hint that the pre-filled prices use the shop's typical markup.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
   "changePricesLoadError": "تعذر تحميل بيانات التكلفة.",
   "changePricesNoVariants": "لا توجد خيارات لتسعيرها.",
   "productIdentifierTitle": "بيانات التعريف",
