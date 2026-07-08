@@ -89,7 +89,7 @@ void main() {
     expect(viewModel.draft.single.unitCost, 0.45);
   });
 
-  test('a fractional quantity rounds up when switching to a whole-number unit', () async {
+  test('a typed fraction survives a unit switch', () async {
     final viewModel = makeViewModel();
     await viewModel.addVariant(
       variant,
@@ -108,14 +108,15 @@ void main() {
     viewModel.setLineQuantity(variant, 2.5);
     expect(viewModel.draft.single.quantity, 2.5);
 
-    // Switching to the whole-number base unit rounds the fraction up.
+    // Switching to the whole-number base unit keeps the fraction untouched
+    // (any unit may transact in fractions now).
     viewModel.updateLineUnit(
       variant,
       unitCode: '',
       unitLabel: '',
       unitFactor: 1,
     );
-    expect(viewModel.draft.single.quantity, 3);
+    expect(viewModel.draft.single.quantity, 2.5);
   });
 
   test('setLineQuantity clamps into the draft range', () async {
@@ -128,9 +129,9 @@ void main() {
     viewModel.setLineQuantity(variant, 0);
     expect(viewModel.draft.single.quantity, 5000); // rejected, unchanged
 
-    // Fractions only stick for units that allow them (base piece does not).
+    // A fraction now sticks for any unit (whole-number or not).
     viewModel.setLineQuantity(variant, 2.5);
-    expect(viewModel.draft.single.quantity, 5000); // rejected, unchanged
+    expect(viewModel.draft.single.quantity, 2.5);
   });
 }
 

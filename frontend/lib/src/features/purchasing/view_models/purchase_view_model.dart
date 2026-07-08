@@ -410,9 +410,6 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     final line = _draft[index];
-    if (!line.unitAllowsFractional && quantity != quantity.roundToDouble()) {
-      return;
-    }
     final clamped = _clampQuantity(quantity);
     if (line.quantity == clamped) {
       return;
@@ -511,11 +508,8 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     final line = _draft[index];
-    // A fractional leftover (2.5 trays) cannot survive a switch to a
-    // whole-number unit — round it up to the next whole quantity.
-    final quantity = (!allowsFractional && line.quantity != line.quantity.roundToDouble())
-        ? line.quantity.ceilToDouble()
-        : line.quantity;
+    // A typed fraction survives a unit switch — any unit may transact in
+    // fractions now, so the quantity carries over untouched.
     // The cost is per the line's unit: switching carton → tray rescales it
     // proportionally (162 per carton of 12 trays → 13.50 per tray), keeping
     // hand-entered costs meaningful across unit changes.
@@ -525,7 +519,7 @@ class PurchaseViewModel extends ChangeNotifier {
       (line.unitCost / previousFactor * newFactor).toStringAsFixed(2),
     );
     _draft[index] = line.copyWith(
-      quantity: quantity,
+      quantity: line.quantity,
       unitCost: rescaledCost,
       unitCode: unitCode,
       unitLabel: unitLabel,
