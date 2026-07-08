@@ -365,10 +365,16 @@ jobs:
           path = sys.argv[1]
           src = open(path).read()
           out, n = re.subn(r'(?m)^[ \t]+linux:\n[ \t]+pluginClass:[^\n]*\n', '', src)
-          if n != 1:
-              sys.exit(f"expected exactly 1 linux platform block, found {n} in {path}")
-          open(path, 'w').write(out)
-          print(f"Stripped Linux platform from {path}")
+          if n:
+              open(path, 'w').write(out)
+          # Idempotent: the pub cache is restored across CI runs (flutter-action
+          # cache: true), so an earlier run may already have stripped this
+          # (n == 0). "Already gone" is the desired end state -- only a
+          # still-present linux platform block is a real error, which would mean
+          # the package's pubspec layout changed and this regex no longer matches.
+          if re.search(r'(?m)^[ \t]+linux:[ \t]*\n', out):
+              sys.exit(f"linux platform block still present in {path}; package layout changed -- update this workaround")
+          print(f"Linux platform stripped or already absent (removed {n}) from {path}")
           EOF
           done
           [ "$found" = "1" ] || { echo "flutter_bluetooth_classic_serial not found in the pub cache" >&2; exit 1; }
