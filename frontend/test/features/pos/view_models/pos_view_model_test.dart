@@ -766,16 +766,16 @@ void main() {
       expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
       expect(viewModel.cart.single.quantity, 0.5);
 
-      // A plain piece line refuses the decimal point outright.
+      // A plain piece line now also accepts a fraction — the cashier's choice.
       await viewModel.addVariantByBarcode('4000001');
       expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
-      expect(viewModel.applyQuickQuantityDigits('.'), isFalse);
+      expect(viewModel.applyQuickQuantityDigits('.'), isTrue);
       expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
       expect(
         viewModel.cart
             .firstWhere((line) => line.unitCode.isEmpty)
             .quantity,
-        5,
+        2.5,
       );
     });
 

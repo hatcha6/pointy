@@ -359,8 +359,8 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         attrs["variant"] = variant
         # Resolve the purchase unit + snapshot its base-conversion factor. The
         # factor only converts to base units when stock is touched at
-        # submit/receive time. Quantities may be fractional when the unit
-        # allows it (half an egg tray) — same rule sales lines follow.
+        # submit/receive time. Quantities may be fractional for any unit (the
+        # buyer's choice) — same rule sales lines follow.
         requested_unit = attrs.get("unit")
         if requested_unit is None:
             requested_unit = getattr(self.instance, "unit", "") or ""

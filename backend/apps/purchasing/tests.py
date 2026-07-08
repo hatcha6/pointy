@@ -248,7 +248,9 @@ class PurchaseOrderApiTests(TestCase):
         )
         self.assertEqual(response.data["unit"], "tray")
 
-    def test_fractional_quantity_rejected_for_whole_number_units(self):
+    def test_fractional_quantity_accepted_for_whole_number_units(self):
+        # A whole-number (base piece) unit now accepts a fractional quantity —
+        # the buyer's choice; 2.5 pieces post and store as-is.
         response = self.client.post(
             reverse("purchaseorder-list"),
             self.purchase_order_payload(
@@ -262,7 +264,10 @@ class PurchaseOrderApiTests(TestCase):
             ),
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        line = response.data["lines"][0]
+        self.assertEqual(Decimal(line["quantity"]), Decimal("2.5"))
+        self.assertEqual(Decimal(line["base_quantity"]), Decimal("2.5"))
 
     def test_extra_discount_amount_reduces_the_total(self):
         # The one-off manual discount (the "fraction eliminator") folds into

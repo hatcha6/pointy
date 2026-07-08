@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/product.dart';
@@ -94,25 +93,17 @@ class _UnitQuantitySheetState extends State<_UnitQuantitySheet> {
   double? get _quantity => double.tryParse(_controller.text.trim());
 
   void _selectUnit(UnitOption unit) {
+    // A typed fraction is kept across a unit switch — any product may transact
+    // in fractions now, so there is nothing to truncate.
     setState(() {
       _unit = unit;
       _showError = false;
-      // Drop any fraction when moving to a whole-only unit.
-      if (!unit.allowsFractional) {
-        final quantity = _quantity;
-        if (quantity != null && quantity != quantity.roundToDouble()) {
-          _controller.text = quantity.floor().clamp(1, 1 << 31).toString();
-        }
-      }
     });
   }
 
   void _nudge(int delta) {
     final current = _quantity ?? 0;
-    final next = (current + delta).clamp(
-      _unit.allowsFractional ? 0.0 : 1.0,
-      1e9,
-    );
+    final next = (current + delta).clamp(0.0, 1e9);
     _controller.text = formatQuantity(next.toDouble());
     setState(() => _showError = false);
   }
@@ -120,10 +111,6 @@ class _UnitQuantitySheetState extends State<_UnitQuantitySheet> {
   void _submit() {
     final quantity = _quantity;
     if (quantity == null || quantity <= 0) {
-      setState(() => _showError = true);
-      return;
-    }
-    if (!_unit.allowsFractional && quantity != quantity.roundToDouble()) {
       setState(() => _showError = true);
       return;
     }
@@ -200,12 +187,10 @@ class _UnitQuantitySheetState extends State<_UnitQuantitySheet> {
                         controller: _controller,
                         autofocus: true,
                         textAlign: TextAlign.center,
-                        keyboardType: TextInputType.numberWithOptions(
-                          decimal: _unit.allowsFractional,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
                         ),
-                        inputFormatters: _unit.allowsFractional
-                            ? [DecimalTextInputFormatter()]
-                            : [FilteringTextInputFormatter.digitsOnly],
+                        inputFormatters: [DecimalTextInputFormatter()],
                         decoration: InputDecoration(
                           suffixText: _unit.label,
                           errorText: _showError ? l10n.posWeightInvalid : null,

@@ -710,9 +710,9 @@ class CheckoutLineSerializer(serializers.Serializer):
             raise serializers.ValidationError({error.field: error.message})
 
         quantity = attrs.get("quantity")
-        # Whole-number guard is keyed off the *selected* unit: a box is whole even
-        # for a kg-based product, a weighed kg may be fractional. A scanner glitch
-        # can still never ring up 0.5 of a piece.
+        # Fractional quantities are allowed for every unit — ringing up 2.5 of any
+        # product is the cashier's choice. validate_quantity is the shared seam
+        # that could re-enable per-unit whole-number rules if a shop wants them.
         if quantity is not None:
             try:
                 validate_quantity(quantity, resolved, field="quantity")

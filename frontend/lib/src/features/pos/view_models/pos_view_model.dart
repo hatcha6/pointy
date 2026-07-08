@@ -34,7 +34,6 @@ import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/order_document_service.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
 import '../../../shared/unit_options.dart';
-import '../../../shared/units.dart';
 
 part 'pos_cart_actions.dart';
 part 'pos_catalog_actions.dart';

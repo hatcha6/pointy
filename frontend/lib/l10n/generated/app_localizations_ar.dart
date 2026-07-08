@@ -2939,6 +2939,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posWeightInvalid => 'أدخل وزنًا أكبر من صفر.';
 
   @override
+  String get posQuantityInvalid => 'أدخل كمية أكبر من صفر.';
+
+  @override
   String get posUnitSelectLabel => 'الوحدة';
 
   @override

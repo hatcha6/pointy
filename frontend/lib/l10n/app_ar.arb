@@ -1778,6 +1778,7 @@
   "operationsActionError": "تعذر تنفيذ العملية. حاول مرة أخرى.",
   "posWeightDialogTitle": "أدخل الوزن",
   "posWeightInvalid": "أدخل وزنًا أكبر من صفر.",
+  "posQuantityInvalid": "أدخل كمية أكبر من صفر.",
   "posUnitSelectLabel": "الوحدة",
   "posUnitQuantityLabel": "الكمية",
   "posUnitSheetAdd": "إضافة · {total}",

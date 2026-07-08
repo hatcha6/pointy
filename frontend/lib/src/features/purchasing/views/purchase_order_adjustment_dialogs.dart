@@ -2,8 +2,8 @@ part of 'purchase_order_details_screen.dart';
 
 /// Maps a purchase order's adjustable lines onto the shared
 /// [AdjustmentLineOption] shape used by [showQuantityAdjustmentDialog] and the
-/// exchange dialog's outbound section. Purchasing deals in whole units, so the
-/// options never allow decimal entry.
+/// exchange dialog's outbound section. A purchase quantity may be fractional
+/// (the buyer's choice), so the options allow tap-to-type decimal entry.
 List<AdjustmentLineOption> _purchaseAdjustmentOptions(
   AppLocalizations l10n,
   PurchaseOrder order,
@@ -25,6 +25,8 @@ List<AdjustmentLineOption> _purchaseAdjustmentOptions(
             ),
           ].join(' • '),
           maxQuantity: line.adjustableQuantity,
+          allowDecimal: true,
+          decimalEntryTitle: l10n.posUnitQuantityLabel,
         ),
   ];
 }

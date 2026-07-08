@@ -543,11 +543,9 @@ class _PurchaseDraftScrollContentState
     }
     if (key == LogicalKeyboardKey.period ||
         key == LogicalKeyboardKey.numpadDecimal) {
-      // Fractional entry (2.5 trays) — only for units that allow it, and at
-      // most one decimal point.
-      if (line.unitAllowsFractional &&
-          !_pendingQuantity.contains('.') &&
-          _pendingQuantity.length < 6) {
+      // Fractional entry (2.5 of anything) is the buyer's choice — allowed for
+      // every product; at most one decimal point.
+      if (!_pendingQuantity.contains('.') && _pendingQuantity.length < 6) {
         setState(
           () => _pendingQuantity = _pendingQuantity.isEmpty
               ? '0.'
@@ -1766,13 +1764,12 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
     widget.onExpiryDateChanged(parsed);
   }
 
-  /// Tap-to-type quantity entry on the stepper. Decimal input is offered only
-  /// when the line's unit transacts in fractions (half an egg tray, 2.5 kg) —
-  /// mirroring the backend's per-unit whole-number rule.
+  /// Tap-to-type quantity entry on the stepper. Any product may be purchased in
+  /// a fractional quantity (half an egg tray, 2.5 kg, 1.5 of a plain item) — the
+  /// buyer decides, so decimal input is always offered.
   Future<void> _promptQuantity(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     final line = widget.line;
-    final allowsFractional = line.unitAllowsFractional;
     final controller = TextEditingController(
       text: formatQuantity(line.quantity),
     );
@@ -1782,9 +1779,6 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
         void submit() {
           final parsed = double.tryParse(controller.text.trim());
           if (parsed == null || parsed <= 0) {
-            return;
-          }
-          if (!allowsFractional && parsed != parsed.roundToDouble()) {
             return;
           }
           Navigator.of(dialogContext).pop(parsed);
@@ -1799,15 +1793,8 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
           content: TextField(
             controller: controller,
             autofocus: true,
-            keyboardType: TextInputType.numberWithOptions(
-              decimal: allowsFractional,
-            ),
-            inputFormatters: [
-              if (allowsFractional)
-                DecimalTextInputFormatter()
-              else
-                FilteringTextInputFormatter.digitsOnly,
-            ],
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [DecimalTextInputFormatter()],
             onSubmitted: (_) => submit(),
           ),
           actions: [

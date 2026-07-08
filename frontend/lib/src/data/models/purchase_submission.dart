@@ -728,8 +728,8 @@ class PurchaseDraftLine {
 
   final ProductVariant variant;
 
-  /// In the purchase unit; fractional when [unitAllowsFractional] (2.5 kg,
-  /// half an egg tray).
+  /// In the purchase unit; may be fractional for any product (2.5 kg, half an
+  /// egg tray, 1.5 of a plain item) — fractional entry is the buyer's choice.
   final double quantity;
   final double unitCost;
 
@@ -740,8 +740,10 @@ class PurchaseDraftLine {
   /// Base units per one purchase unit, for showing the base equivalent.
   final double unitFactor;
 
-  /// Whether this line's unit sells/buys in fractions — snapshotted from the
-  /// unit so the quantity editor knows which keyboard to offer.
+  /// Whether this line's unit is a naturally fractional/weighed unit (kg, l,
+  /// egg tray), snapshotted from the unit. Informational and round-tripped only:
+  /// fractional entry is now offered for every product, so this no longer gates
+  /// the quantity keyboard.
   final bool unitAllowsFractional;
   final DateTime? expiryDate;
 

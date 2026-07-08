@@ -85,6 +85,10 @@ USER_PERMISSION_CODES = (
 CASHIER_PERMISSION_CODES = (
     "catalog.view_product",
     "catalog.view_productcategory",
+    # Required to resolve a scanned barcode at checkout: the POS looks the code up
+    # on the product-variants endpoint, which gates on view_productvariant — with
+    # only view_product a cashier's scan 403s (browsing/invoicing still work).
+    "catalog.view_productvariant",
     "catalog.view_unitofmeasure",
     # Floor staff can run/record stock counts; only managers may apply them
     # (apply_stockcount is granted to managers via MANAGER_PERMISSION_DOMAINS).

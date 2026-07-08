@@ -5181,6 +5181,12 @@ abstract class AppLocalizations {
   /// **'أدخل وزنًا أكبر من صفر.'**
   String get posWeightInvalid;
 
+  /// No description provided for @posQuantityInvalid.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل كمية أكبر من صفر.'**
+  String get posQuantityInvalid;
+
   /// No description provided for @posUnitSelectLabel.
   ///
   /// In ar, this message translates to:

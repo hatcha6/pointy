@@ -95,7 +95,7 @@ void main() {
     expect(viewModel.draft.single.unitCost, 0.45);
   });
 
-  test('quick typing accepts decimals only for fractional units', () async {
+  test('quick typing accepts decimals for any unit', () async {
     final viewModel = makeViewModel();
     await viewModel.addVariant(
       variant,
@@ -116,19 +116,19 @@ void main() {
     expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
     expect(viewModel.draft.single.quantity, 2.5);
 
-    // Whole-number unit: a decimal point drops the entry instead of
-    // silently reading "2.5" as 25.
+    // Switching to the whole-number base unit keeps the fraction (any unit may
+    // transact in fractions now), and the base unit accepts a decimal too.
     viewModel.updateLineUnit(
       variant,
       unitCode: '',
       unitLabel: '',
       unitFactor: 1,
     );
-    expect(viewModel.draft.single.quantity, 3); // 2.5 rounded up on switch
+    expect(viewModel.draft.single.quantity, 2.5); // carried over untouched
     expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
-    expect(viewModel.applyQuickQuantityDigits('.'), isFalse);
+    expect(viewModel.applyQuickQuantityDigits('.'), isTrue);
     expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
-    expect(viewModel.draft.single.quantity, 5);
+    expect(viewModel.draft.single.quantity, 2.5);
   });
 
   test('setLineQuantity clamps into the draft range', () async {
@@ -141,9 +141,9 @@ void main() {
     viewModel.setLineQuantity(variant, 0);
     expect(viewModel.draft.single.quantity, 5000); // rejected, unchanged
 
-    // Fractions only stick for units that allow them (base piece does not).
+    // A fraction sticks for any unit now — even the base piece unit.
     viewModel.setLineQuantity(variant, 2.5);
-    expect(viewModel.draft.single.quantity, 5000); // rejected, unchanged
+    expect(viewModel.draft.single.quantity, 2.5);
   });
 }
 

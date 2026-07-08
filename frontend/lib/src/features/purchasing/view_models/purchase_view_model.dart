@@ -389,7 +389,7 @@ class PurchaseViewModel extends ChangeNotifier {
 
   /// Sets a draft line's quantity outright (the scan-then-type flow and the
   /// quantity editor; the steppers keep using [addVariant]/[decrementVariant]).
-  /// Fractional values only stick when the line's unit allows them.
+  /// Any product may be purchased in a fractional quantity — the buyer's choice.
   void setLineQuantity(
     ProductVariant variant,
     double quantity, {
@@ -403,9 +403,6 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     final line = _draft[index];
-    if (!line.unitAllowsFractional && quantity != quantity.roundToDouble()) {
-      return;
-    }
     final clamped = _clampQuantity(quantity);
     if (line.quantity == clamped) {
       return;
@@ -426,8 +423,8 @@ class PurchaseViewModel extends ChangeNotifier {
 
   /// Scan-then-type quantity: keys typed right after a scan REPLACE the last
   /// scanned line's quantity, accumulating across keystrokes ("1" then "2" →
-  /// 12; "2","." ,"5" → 2.5 for fractional units) until the idle window passes
-  /// or another scan re-arms the flow.
+  /// 12; "2","." ,"5" → 2.5 — a fraction of any product) until the idle window
+  /// passes or another scan re-arms the flow.
   bool applyQuickQuantityDigits(String digits) {
     if (_isSubmitting || digits.isEmpty) {
       return false;
@@ -442,11 +439,9 @@ class PurchaseViewModel extends ChangeNotifier {
       _quickQuantityBuffer = '';
     }
     final accumulated = _quickQuantityBuffer + digits;
-    if (accumulated.contains('.') &&
-        (!line.unitAllowsFractional ||
-            '.'.allMatches(accumulated).length > 1)) {
-      // A decimal point the unit cannot honour: drop the whole entry rather
-      // than silently reading "2.5" as 25.
+    if ('.'.allMatches(accumulated).length > 1) {
+      // A second decimal point can't be honoured: drop the whole entry rather
+      // than silently misreading it.
       _quickQuantityBuffer = '';
       return false;
     }
@@ -548,11 +543,8 @@ class PurchaseViewModel extends ChangeNotifier {
       return;
     }
     final line = _draft[index];
-    // A fractional leftover (2.5 trays) cannot survive a switch to a
-    // whole-number unit — round it up to the next whole quantity.
-    final quantity = (!allowsFractional && line.quantity != line.quantity.roundToDouble())
-        ? line.quantity.ceilToDouble()
-        : line.quantity;
+    // A typed fraction survives a unit switch — any unit may transact in
+    // fractions now, so the quantity carries over untouched.
     // The cost is per the line's unit: switching carton → tray rescales it
     // proportionally (162 per carton of 12 trays → 13.50 per tray), keeping
     // hand-entered costs meaningful across unit changes.
@@ -562,7 +554,7 @@ class PurchaseViewModel extends ChangeNotifier {
       (line.unitCost / previousFactor * newFactor).toStringAsFixed(2),
     );
     _draft[index] = line.copyWith(
-      quantity: quantity,
+      quantity: line.quantity,
       unitCost: rescaledCost,
       unitCode: unitCode,
       unitLabel: unitLabel,
