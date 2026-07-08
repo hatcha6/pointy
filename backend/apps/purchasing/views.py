@@ -169,6 +169,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "product_margin_impact": ("purchasing.view_purchaseorder",),
         "variant_margin_impact": ("purchasing.view_purchaseorder",),
         "product_cost_summary": ("purchasing.view_purchaseorder",),
+        "pricing_suggestion": ("purchasing.view_purchaseorder",),
         "outstanding_received_not_paid": ("purchasing.view_purchaseorder",),
         "adjustment_history": ("purchasing.view_purchaseorder",),
         "attachments": ("purchasing.view_purchaseorder", "attachments.view_attachment"),
@@ -244,6 +245,18 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="last-cost")
     def last_cost(self, request):
         return self._last_cost_response(request)
+
+    @action(detail=False, methods=["get"], url_path="pricing-suggestion")
+    def pricing_suggestion(self, request):
+        """Suggested sale price for ``?unit_cost=`` using the shop's typical
+        markup. Powers the purchasing reprice-siblings dialog's pre-filled
+        prices; a zero/blank/unparseable cost yields a null suggested_price."""
+        from .pricing import pricing_suggestion as build_pricing_suggestion
+
+        unit_cost = request.query_params.get("unit_cost")
+        if unit_cost in (None, ""):
+            raise serializers.ValidationError({"unit_cost": "unit_cost is required."})
+        return Response(build_pricing_suggestion(unit_cost))
 
     def get_required_permissions(self, request):
         if self.action == "attachments" and request.method == "POST":

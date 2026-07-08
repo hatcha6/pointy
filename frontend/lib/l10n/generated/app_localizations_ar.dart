@@ -5649,6 +5649,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get changePricesError => 'تعذر تحديث الأسعار. حاول مرة أخرى.';
 
   @override
+  String get repriceSiblingsTitle => 'تغيير أسعار البيع';
+
+  @override
+  String get repriceSiblingsTooltip => 'تغيير أسعار بيع متغيّرات المنتج';
+
+  @override
+  String repriceSiblingsSubtitle(String cost) {
+    return 'بسعر تكلفة $cost — عدّل سعر بيع كل متغيّرات هذا المنتج.';
+  }
+
+  @override
+  String repriceSiblingsMarkupHint(String percent) {
+    return 'مقترح بهامش ربح $percent٪';
+  }
+
+  @override
   String get changePricesLoadError => 'تعذر تحميل بيانات التكلفة.';
 
   @override

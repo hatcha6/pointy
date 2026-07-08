@@ -248,6 +248,23 @@ class PurchaseOrderApiTests(TestCase):
         )
         self.assertEqual(response.data["unit"], "tray")
 
+    def test_pricing_suggestion_prices_a_cost_at_the_shop_markup(self):
+        # Suggested sale price = cost * (1 + markup/100), rounded to the cent.
+        # Robust to whether the markup was inferred from the shop or the default.
+        response = self.client.get(
+            reverse("purchaseorder-pricing-suggestion"),
+            {"unit_cost": "10.00"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        markup = Decimal(response.data["markup_percent"])
+        expected = (Decimal("10.00") * (1 + markup / 100)).quantize(Decimal("0.01"))
+        self.assertEqual(Decimal(response.data["suggested_price"]), expected)
+        self.assertIn(response.data["markup_source"], ("shop", "default"))
+
+    def test_pricing_suggestion_requires_unit_cost(self):
+        response = self.client.get(reverse("purchaseorder-pricing-suggestion"))
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_fractional_quantity_accepted_for_whole_number_units(self):
         # A whole-number (base piece) unit now accepts a fractional quantity —
         # the buyer's choice; 2.5 pieces post and store as-is.
