@@ -852,9 +852,11 @@ class _InventorySettingsFields extends StatelessWidget {
     required this.enabled,
     required this.errorText,
     required this.allowOverselling,
+    required this.warnLowStockBeforeSale,
     required this.preventSellingAtLoss,
     required this.onThresholdChanged,
     required this.onAllowOversellingChanged,
+    required this.onWarnLowStockBeforeSaleChanged,
     required this.onPreventSellingAtLossChanged,
   });
 
@@ -862,9 +864,11 @@ class _InventorySettingsFields extends StatelessWidget {
   final bool enabled;
   final String? errorText;
   final bool allowOverselling;
+  final bool warnLowStockBeforeSale;
   final bool preventSellingAtLoss;
   final VoidCallback onThresholdChanged;
   final ValueChanged<bool> onAllowOversellingChanged;
+  final ValueChanged<bool> onWarnLowStockBeforeSaleChanged;
   final ValueChanged<bool> onPreventSellingAtLossChanged;
 
   @override
@@ -891,6 +895,13 @@ class _InventorySettingsFields extends StatelessWidget {
           value: allowOverselling,
           title: Text(l10n.allowOversellingLabel),
           onChanged: enabled ? onAllowOversellingChanged : null,
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: warnLowStockBeforeSale,
+          title: Text(l10n.warnLowStockBeforeSaleLabel),
+          subtitle: Text(l10n.warnLowStockBeforeSaleSubtitle),
+          onChanged: enabled ? onWarnLowStockBeforeSaleChanged : null,
         ),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,

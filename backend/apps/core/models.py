@@ -85,6 +85,11 @@ class ShopSettings(TimeStampedModel):
     allow_overselling = models.BooleanField(default=False)
     prevent_selling_at_loss = models.BooleanField(default=True)
     low_stock_threshold = models.PositiveIntegerField(default=5)
+    # The POS pops a confirmation dialog when a cart line's quantity exceeds the
+    # available stock. Shops that routinely sell into negative stock (with
+    # ``allow_overselling`` on) can switch this off so checkout completes without
+    # the per-sale prompt. On by default, so the warning is opt-out.
+    warn_low_stock_before_sale = models.BooleanField(default=True)
     # Stock-count variance review thresholds. A counted line is flagged for
     # review only when the gap is at least ``min_units`` AND at least
     # ``percent`` of the expected quantity (see apps.inventory.services).

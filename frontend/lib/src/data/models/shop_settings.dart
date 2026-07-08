@@ -23,6 +23,7 @@ class ShopSettings {
     required this.transferCommissionPercent,
     this.requireCustomerForCredit = true,
     this.allowCashierCustomerAccess = true,
+    this.warnLowStockBeforeSale = true,
     this.autoPrintKitchenTickets = false,
     this.enableRepairOperations = false,
     this.enableProductionOperations = false,
@@ -55,6 +56,11 @@ class ShopSettings {
   /// When true a credit (آجل) or quotation (عرض سعر) sale must name a customer.
   final bool requireCustomerForCredit;
   final bool allowCashierCustomerAccess;
+
+  /// When true the POS asks the cashier to confirm before completing a sale
+  /// whose cart quantity exceeds the available stock. Turn it off (with
+  /// overselling enabled) to skip that per-sale prompt.
+  final bool warnLowStockBeforeSale;
   final bool enableRepairOperations;
   final bool enableProductionOperations;
   final bool enableKitchenOperations;
@@ -119,6 +125,10 @@ class ShopSettings {
         json['allow_cashier_customer_access'],
         true,
       ),
+      warnLowStockBeforeSale: _boolFromJson(
+        json['warn_low_stock_before_sale'],
+        true,
+      ),
       enableRepairOperations: _boolFromJson(
         json['enable_repair_operations'],
         false,
@@ -174,6 +184,7 @@ class ShopSettingsDraft {
     required this.transferCommissionPercent,
     this.requireCustomerForCredit = true,
     this.allowCashierCustomerAccess = true,
+    this.warnLowStockBeforeSale = true,
     this.autoPrintKitchenTickets = false,
     this.enableRepairOperations = false,
     this.enableProductionOperations = false,
@@ -201,6 +212,7 @@ class ShopSettingsDraft {
   final double transferCommissionPercent;
   final bool requireCustomerForCredit;
   final bool allowCashierCustomerAccess;
+  final bool warnLowStockBeforeSale;
   final bool enableRepairOperations;
   final bool enableProductionOperations;
   final bool enableKitchenOperations;
@@ -230,6 +242,7 @@ class ShopSettingsDraft {
       ),
       'require_customer_for_credit': requireCustomerForCredit,
       'allow_cashier_customer_access': allowCashierCustomerAccess,
+      'warn_low_stock_before_sale': warnLowStockBeforeSale,
       'enable_repair_operations': enableRepairOperations,
       'enable_production_operations': enableProductionOperations,
       'enable_kitchen_operations': enableKitchenOperations,

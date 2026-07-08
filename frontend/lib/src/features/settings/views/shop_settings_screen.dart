@@ -273,6 +273,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late bool _autoPrintReceipts;
   late bool _enableOnlineInvoices;
   late bool _allowOverselling;
+  late bool _warnLowStockBeforeSale;
   late bool _preventSellingAtLoss;
   late bool _enableCashPayments;
   late bool _enableCardPayments;
@@ -328,6 +329,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       _autoPrintReceipts = widget.settings.autoPrintReceipts;
       _enableOnlineInvoices = widget.settings.enableOnlineInvoices;
       _allowOverselling = widget.settings.allowOverselling;
+      _warnLowStockBeforeSale = widget.settings.warnLowStockBeforeSale;
       _preventSellingAtLoss = widget.settings.preventSellingAtLoss;
       _enableCashPayments = widget.settings.enableCashPayments;
       _enableCardPayments = widget.settings.enableCardPayments;
@@ -385,6 +387,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _autoPrintReceipts = settings.autoPrintReceipts;
     _enableOnlineInvoices = settings.enableOnlineInvoices;
     _allowOverselling = settings.allowOverselling;
+    _warnLowStockBeforeSale = settings.warnLowStockBeforeSale;
     _preventSellingAtLoss = settings.preventSellingAtLoss;
     _enableCashPayments = settings.enableCashPayments;
     _enableCardPayments = settings.enableCardPayments;
@@ -918,10 +921,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         enabled: !widget.viewModel.isSaving,
         errorText: _lowStockThresholdError(l10n),
         allowOverselling: _allowOverselling,
+        warnLowStockBeforeSale: _warnLowStockBeforeSale,
         preventSellingAtLoss: _preventSellingAtLoss,
         onThresholdChanged: () => _refreshSettingsGroup(refresh),
         onAllowOversellingChanged: (value) {
           setState(() => _allowOverselling = value);
+          refresh();
+        },
+        onWarnLowStockBeforeSaleChanged: (value) {
+          setState(() => _warnLowStockBeforeSale = value);
           refresh();
         },
         onPreventSellingAtLossChanged: (value) {
@@ -1427,6 +1435,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         requireOpeningCash: _requireOpeningCash,
         autoPrintReceipts: _autoPrintReceipts,
         allowOverselling: _allowOverselling,
+        warnLowStockBeforeSale: _warnLowStockBeforeSale,
         preventSellingAtLoss: _preventSellingAtLoss,
         lowStockThreshold:
             int.tryParse(_lowStockThresholdController.text.trim()) ?? 0,

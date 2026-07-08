@@ -330,6 +330,11 @@ class PosViewModel extends ChangeNotifier {
       : ProductStockFilter.inStockOnly;
   bool get preventSellingAtLoss =>
       _checkoutSettings?.preventSellingAtLoss ?? true;
+
+  /// Whether the POS should confirm before completing an over-stock sale.
+  /// On by default; shops can silence the prompt from Settings.
+  bool get warnLowStockBeforeSale =>
+      _checkoutSettings?.warnLowStockBeforeSale ?? true;
   bool get shouldShowPrintInvoiceCheckbox =>
       _checkoutSettings != null && !_checkoutSettings!.autoPrintReceipts;
   bool get shouldShowShareInvoiceCheckbox => shouldShowPrintInvoiceCheckbox;
