@@ -65,7 +65,7 @@ from .serializers import (
     VariantOptionSerializer,
     VariantOptionValueSerializer,
 )
-from .search_filters import CatalogRelevanceFilter
+from .search_filters import CatalogRelevanceFilter, VariantRelevanceFilter
 from .services import category_ids_with_descendants
 
 
@@ -800,7 +800,13 @@ class ProductVariantViewSet(viewsets.ModelViewSet):
         "option_values",
         "option_values__option",
     )
+    # Same relevance search as the POS catalog: VariantRelevanceFilter replaces
+    # the stock SearchFilter/OrderingFilter so purchasing and the stock-count
+    # item picker get ranked, trigram-accelerated results instead of a plain
+    # ILIKE OR. DjangoFilterBackend still applies ProductVariantFilter params.
+    filter_backends = (DjangoFilterBackend, VariantRelevanceFilter)
     filterset_class = ProductVariantFilter
+    # Consumed by VariantRelevanceFilter now (kept for reference / discoverability).
     search_fields = ("sku", "barcode", "name", "product__name")
     ordering_fields = ("product__name", "name", "sku", "unit_price", "created_at")
 

@@ -340,3 +340,65 @@ class ProductListQueryBudgetTests(_AuthedCatalogTest):
             msg=f"browse used {len(ctx)} queries:\n"
             + "\n".join(q["sql"] for q in ctx.captured_queries),
         )
+
+
+class CatalogListPayloadTests(_AuthedCatalogTest):
+    """The catalog list must not re-embed the parent product on every variant."""
+
+    def test_list_variants_omit_redundant_product_detail(self):
+        product = create_product_with_default_variant(
+            name="Slim Payload", sku="SLIM-1", unit_price="1"
+        )
+
+        response = self._list(search="Slim")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        row = next(r for r in response.data["results"] if r["id"] == product.id)
+        for variant in row["variants"]:
+            self.assertNotIn("product_detail", variant)
+        if row.get("default_variant"):
+            self.assertNotIn("product_detail", row["default_variant"])
+
+    def test_standalone_variant_endpoint_keeps_product_detail(self):
+        create_product_with_default_variant(
+            name="Keep Detail", sku="KEEP-1", unit_price="1"
+        )
+
+        response = self.client.get(
+            reverse("product-variant-list"), {"search": "KEEP-1"}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["results"])
+        self.assertIn("product_detail", response.data["results"][0])
+
+
+class VariantSearchRelevanceTests(_AuthedCatalogTest):
+    """The variant endpoint (purchasing / stock-count) reuses relevance ranking."""
+
+    def _variants(self, **params):
+        return self.client.get(reverse("product-variant-list"), params)
+
+    def test_numeric_query_ranks_exact_code_first(self):
+        create_product_with_default_variant(
+            name="Thing 5005", sku="THING", unit_price="1"
+        )
+        create_product_with_default_variant(name="Other", sku="5005", unit_price="1")
+
+        response = self._variants(search="5005")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        skus = [row["sku"] for row in response.data["results"]]
+        self.assertTrue(skus, msg="variant search returned no rows")
+        # The exact code hit ranks above the incidental name substring.
+        self.assertEqual(skus[0], "5005")
+
+    def test_search_matches_parent_product_name(self):
+        create_product_with_default_variant(
+            name="Zebra Cheese", sku="ZC-1", unit_price="1"
+        )
+
+        response = self._variants(search="Zebra")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(any(row["sku"] == "ZC-1" for row in response.data["results"]))

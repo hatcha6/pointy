@@ -114,7 +114,7 @@ class Product {
         ? ProductVariant.fromJson(defaultVariantJson)
         : null;
     final variants = _variantsFromJson(json);
-    return Product(
+    final product = Product(
       id: _intFromJson(json['id']),
       name: json['name']?.toString() ?? '',
       quantityOnHand: _stockQtyFromJson(
@@ -139,6 +139,57 @@ class Product {
       variants: variants,
       primaryImage: _primaryImageFromJson(json),
       imageAttachments: _imageAttachmentsFromJson(json),
+    );
+    // The catalog list drops the redundant per-variant `product_detail` (the
+    // parent product is this list item). Re-attach it so a catalog-tapped
+    // variant still resolves its product context via [Product.fromVariant].
+    return product._withParentAttachedToVariants();
+  }
+
+  /// Re-attaches this product as the `productDetail` of any variant that arrived
+  /// without one (the backend omits it in the catalog list to avoid shipping the
+  /// parent N+1× per row). No-op when the payload already carried it.
+  Product _withParentAttachedToVariants() {
+    final default_ = defaultVariant;
+    final needsAttach =
+        (default_ != null && default_.productDetail == null) ||
+        variants.any((variant) => variant.productDetail == null);
+    if (!needsAttach) {
+      return this;
+    }
+    return Product(
+      id: id,
+      name: name,
+      quantityOnHand: quantityOnHand,
+      popularity: popularity,
+      description: description,
+      isActive: isActive,
+      isArchived: isArchived,
+      archivedAt: archivedAt,
+      tracksExpiry: tracksExpiry,
+      isService: isService,
+      isPrepared: isPrepared,
+      unit: unit,
+      defaultSaleUnit: defaultSaleUnit,
+      defaultPurchaseUnit: defaultPurchaseUnit,
+      units: units,
+      categories: categories,
+      variantOptions: variantOptions,
+      modifierGroups: modifierGroups,
+      defaultVariant: default_ == null
+          ? null
+          : (default_.productDetail == null
+                ? default_.copyWith(productDetail: this)
+                : default_),
+      variants: variants
+          .map(
+            (variant) => variant.productDetail == null
+                ? variant.copyWith(productDetail: this)
+                : variant,
+          )
+          .toList(growable: false),
+      primaryImage: primaryImage,
+      imageAttachments: imageAttachments,
     );
   }
 

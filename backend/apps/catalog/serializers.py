@@ -503,7 +503,10 @@ class DefaultProductVariantField(serializers.Field):
     def to_representation(self, value):
         if value is None:
             return None
-        return ProductVariantSerializer(value, context=self.context).data
+        # catalog_list drops the redundant per-variant product_detail (the parent
+        # product is the list item itself). See ProductVariantSerializer.__init__.
+        context = {**self.context, "catalog_list": True}
+        return ProductVariantSerializer(value, context=context).data
 
     def to_internal_value(self, data):
         if not isinstance(data, dict):
@@ -548,6 +551,16 @@ class ProductVariantSerializer(serializers.ModelSerializer):
     )
     primary_image = serializers.SerializerMethodField()
     image_attachments = serializers.SerializerMethodField()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Inside the catalog list/detail the parent product IS the surrounding
+        # object, so serializing a full product_detail copy onto every variant is
+        # pure redundancy — a product with N variants ships its data N+1×, which
+        # dominated the response size. Drop it there; the client re-attaches the
+        # parent. The standalone /product-variants/ endpoint keeps product_detail.
+        if self.context.get("catalog_list"):
+            self.fields.pop("product_detail", None)
 
     class Meta:
         model = ProductVariant
@@ -705,10 +718,14 @@ class ProductVariantInputSerializer(serializers.Serializer):
 class ProductVariantListField(serializers.Field):
     def to_representation(self, value):
         queryset = value.all() if hasattr(value, "all") else value
+        # catalog_list drops the redundant per-variant product_detail (a product
+        # with N variants would otherwise ship its full data N+1×). The client
+        # re-attaches the parent it was listed under.
+        context = {**self.context, "catalog_list": True}
         return ProductVariantSerializer(
             queryset,
             many=True,
-            context=self.context,
+            context=context,
         ).data
 
     def to_internal_value(self, data):

@@ -225,3 +225,117 @@ class CatalogRelevanceFilter(BaseFilterBackend):
         order = [f"-{_SUPPLIER_BOOST}"] if boost else []
         order += [f"-{self.RELEVANCE_ALIAS}", "-popularity", "name", "id"]
         return queryset.order_by(*order)
+
+
+# Browse (no search) orderings for the variant list. Every tuple ends in ``id``
+# for stable pagination; popularity/name come from the parent product.
+_VARIANT_DEFAULT_ORDERING = ("-product__popularity", "product__name", "name", "id")
+_VARIANT_ORDERING_MAP = {
+    "": _VARIANT_DEFAULT_ORDERING,
+    "product__name": ("product__name", "name", "id"),
+    "-product__name": ("-product__name", "name", "id"),
+    "name": ("name", "id"),
+    "-name": ("-name", "id"),
+    "sku": ("sku", "id"),
+    "-sku": ("-sku", "id"),
+    "created_at": ("created_at", "id"),
+    "-created_at": ("-created_at", "id"),
+    "popularity": ("product__popularity", "product__name", "id"),
+    "-popularity": _VARIANT_DEFAULT_ORDERING,
+}
+
+
+class VariantRelevanceFilter(BaseFilterBackend):
+    """Relevance search + stable ordering for ``/api/product-variants/``.
+
+    The purchasing picker and the stock-count item search both hit that endpoint;
+    this gives them the *same* ranking, Arabic normalization and code-vs-name
+    logic as :class:`CatalogRelevanceFilter`, replacing the stock ILIKE
+    ``SearchFilter``. It is deliberately leaner than the product filter: a
+    variant's ``sku`` / ``barcode`` / ``name`` are its own columns, so the code
+    and name tiers are direct field lookups — only the product-level unit
+    (carton) barcode still needs an ``Exists`` subquery. ``product__name`` joins
+    the parent 1:1 (no fan-out). This keeps the plan small enough to stay under
+    the JIT threshold on the client's on-prem Postgres.
+    """
+
+    RELEVANCE_ALIAS = "search_relevance"
+
+    def filter_queryset(self, request, queryset, view):
+        term = _normalize_query(request.query_params.get("search", ""))
+        if not term:
+            base = _VARIANT_ORDERING_MAP.get(
+                request.query_params.get("ordering", ""), _VARIANT_DEFAULT_ORDERING
+            )
+            return queryset.order_by(*base)
+        return self._order_by_relevance(queryset, term)
+
+    def _order_by_relevance(self, queryset, term):
+        is_code = bool(_CODE_QUERY_RE.match(term))
+
+        unit_barcodes = ProductUnitBarcode.objects.filter(
+            product_unit__product=OuterRef("product_id")
+        )
+        queryset = queryset.annotate(
+            _ubar_exact=Exists(unit_barcodes.filter(barcode__iexact=term)),
+            _ubar_prefix=Exists(unit_barcodes.filter(barcode__istartswith=term)),
+            _ubar_contains=Exists(unit_barcodes.filter(barcode__icontains=term)),
+        )
+
+        code_exact = Q(sku__iexact=term) | Q(barcode__iexact=term) | Q(_ubar_exact=True)
+        code_prefix = (
+            Q(sku__istartswith=term) | Q(barcode__istartswith=term) | Q(_ubar_prefix=True)
+        )
+        code_contains = (
+            Q(sku__icontains=term) | Q(barcode__icontains=term) | Q(_ubar_contains=True)
+        )
+        name_exact = Q(name__iexact=term) | Q(product__name__iexact=term)
+        name_prefix = Q(name__istartswith=term) | Q(product__name__istartswith=term)
+        name_contains = Q(name__icontains=term) | Q(product__name__icontains=term)
+
+        if is_code:
+            tiers = (
+                (code_exact, 6),
+                (code_prefix, 5),
+                (code_contains, 4),
+                (name_exact, 3),
+                (name_prefix, 2),
+                (name_contains, 1),
+            )
+        else:
+            tiers = (
+                (name_exact, 6),
+                (name_prefix, 5),
+                (name_contains, 4),
+                (code_exact, 3),
+                (code_prefix, 2),
+                (code_contains, 1),
+            )
+
+        # Match with indexable predicates: variant columns are direct (trigram
+        # UPPER indexes serve them); product name joins 1:1; the unit barcode is a
+        # non-correlated id__in over the parent product.
+        match_q = (
+            Q(sku__icontains=term)
+            | Q(barcode__icontains=term)
+            | Q(name__icontains=term)
+            | Q(product__name__icontains=term)
+            | Q(
+                product_id__in=ProductUnitBarcode.objects.filter(
+                    barcode__icontains=term
+                ).values("product_unit__product_id")
+            )
+        )
+
+        queryset = queryset.filter(match_q).annotate(
+            **{
+                self.RELEVANCE_ALIAS: Case(
+                    *[When(condition, then=Value(score)) for condition, score in tiers],
+                    default=Value(0),
+                    output_field=IntegerField(),
+                )
+            }
+        )
+        return queryset.order_by(
+            f"-{self.RELEVANCE_ALIAS}", "-product__popularity", "product__name", "name", "id"
+        )

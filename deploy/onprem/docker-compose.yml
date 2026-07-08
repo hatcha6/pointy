@@ -90,6 +90,13 @@ services:
       - work_mem=${POINTY_PG_WORK_MEM:-8MB}
       - -c
       - maintenance_work_mem=${POINTY_PG_MAINTENANCE_WORK_MEM:-64MB}
+      # JIT off by default. Catalog search builds a large plan (many ranking
+      # sub-queries) that trips PostgreSQL's JIT threshold; on a small on-prem box
+      # JIT then spends ~90% of the query COMPILING the plan on every keystroke
+      # (measured: 675ms JIT vs ~50ms of actual work). The query is cheap once JIT
+      # is out of the way. Re-enable per host with POINTY_PG_JIT=on if ever needed.
+      - -c
+      - jit=${POINTY_PG_JIT:-off}
       - -c
       - wal_compression=on
       - -c
