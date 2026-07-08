@@ -496,6 +496,9 @@ class _CartScrollContentState extends State<_CartScrollContent> {
       _focusedLineKey = line.lineKey;
       _pendingQuantity = '';
     });
+    // Mirror the selection into the view model so the workspace F2/F4 shortcuts
+    // (which read activeCartLine) act on the line the cashier just tapped.
+    _viewModel.focusCartLine(line.lineKey);
     _focusNode.requestFocus();
   }
 

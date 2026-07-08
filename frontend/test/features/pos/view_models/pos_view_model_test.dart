@@ -731,9 +731,8 @@ void main() {
     },
   );
 
-  group('scan quick adjust', () {
-    test('digits after a scan replace the line quantity and accumulate '
-        'across keystrokes', () async {
+  group('active cart line (scan / tap shortcuts)', () {
+    test('a hardware scan marks the line it landed on as the active line', () async {
       final viewModel = _viewModel(
         _FakePosApiService(
           catalogPages: const {
@@ -745,88 +744,97 @@ void main() {
 
       await viewModel.addVariantByBarcode('1000001');
       expect(viewModel.cart.single.quantity, 1);
-      expect(viewModel.lastScannedCartLine, isNotNull);
-
-      expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
-      expect(viewModel.cart.single.quantity, 5);
-      // A second digit within the idle window appends: 5 → 50.
-      expect(viewModel.applyQuickQuantityDigits('0'), isTrue);
-      expect(viewModel.cart.single.quantity, 50);
+      expect(viewModel.activeCartLine, isNotNull);
+      expect(viewModel.activeCartLine!.variant.id, _coffeeVariant.id);
     });
 
-    test('a fresh scan re-arms the digit buffer', () async {
+    test('scanning only ever adds its own product — it never touches another '
+        "line's quantity", () async {
       final viewModel = _viewModel(
         _FakePosApiService(
           catalogPages: const {
-            1: [_coffeeVariant],
+            1: [_coffeeVariant, _eggVariant],
           },
         ),
       );
       addTearDown(viewModel.dispose);
 
+      // Scan coffee twice: its own line increments, as expected.
       await viewModel.addVariantByBarcode('1000001');
-      viewModel.applyQuickQuantityDigits('5');
-      expect(viewModel.cart.single.quantity, 5);
+      await viewModel.addVariantByBarcode('1000001');
+      expect(
+        viewModel.cart
+            .firstWhere((line) => line.variant.id == _coffeeVariant.id)
+            .quantity,
+        2,
+      );
 
-      // Re-scanning the same product increments its line (5 → 6) and starts a
-      // fresh buffer, so the next digit replaces rather than appending.
-      await viewModel.addVariantByBarcode('1000001');
-      expect(viewModel.cart.single.quantity, 6);
-      expect(viewModel.applyQuickQuantityDigits('3'), isTrue);
-      expect(viewModel.cart.single.quantity, 3);
+      // Scanning a different product adds it at quantity 1 and leaves the
+      // coffee line exactly where it was — a scan can never overwrite a
+      // quantity the way the old scan-then-type flow could.
+      await viewModel.addVariantByBarcode('4000001');
+      expect(
+        viewModel.cart
+            .firstWhere((line) => line.variant.id == _coffeeVariant.id)
+            .quantity,
+        2,
+      );
+      expect(
+        viewModel.cart
+            .firstWhere((line) => line.variant.id == _eggVariant.id)
+            .quantity,
+        1,
+      );
     });
 
-    test('digits do nothing after a plain cart-button add', () {
+    test('a plain cart-button add does not mark an active line', () {
       final viewModel = _viewModel(_FakePosApiService());
       addTearDown(viewModel.dispose);
 
       viewModel.addVariant(_coffeeVariant);
-      expect(viewModel.lastScannedCartLine, isNull);
-      expect(viewModel.applyQuickQuantityDigits('7'), isFalse);
-      expect(viewModel.cart.single.quantity, 1);
+      expect(viewModel.activeCartLine, isNull);
     });
 
-    test('a catalog tile add arms the quick adjust like a scan does', () {
+    test('a catalog tile add marks the active line like a scan does', () {
       final viewModel = _viewModel(_FakePosApiService());
       addTearDown(viewModel.dispose);
 
       viewModel.addVariant(_coffeeVariant, source: 'product_tile');
-      expect(viewModel.lastScannedCartLine, isNotNull);
-      expect(viewModel.applyQuickQuantityDigits('1'), isTrue);
-      expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
-      expect(viewModel.cart.single.quantity, 12);
+      expect(viewModel.activeCartLine, isNotNull);
+      expect(viewModel.activeCartLine!.variant.id, _coffeeVariant.id);
     });
 
-    test('decimal quick typing sells half a tray after a unit scan', () async {
+    test('focusCartLine retargets the active line to a tapped line', () {
+      final viewModel = _viewModel(_FakePosApiService());
+      addTearDown(viewModel.dispose);
+
+      viewModel.addVariant(_coffeeVariant, source: 'product_tile');
+      viewModel.addVariant(_teaVariant, source: 'product_tile');
+      // The most recent add (tea) is active; tapping the coffee line retargets.
+      expect(viewModel.activeCartLine!.variant.id, _teaVariant.id);
+      final coffeeLine = viewModel.cart.firstWhere(
+        (line) => line.variant.id == _coffeeVariant.id,
+      );
+      viewModel.focusCartLine(coffeeLine.lineKey);
+      expect(viewModel.activeCartLine!.variant.id, _coffeeVariant.id);
+    });
+
+    test('the active line clears once its line leaves the cart (F4 delete)',
+        () async {
       final viewModel = _viewModel(
         _FakePosApiService(
           catalogPages: const {
-            1: [_eggVariant],
+            1: [_coffeeVariant],
           },
         ),
       );
       addTearDown(viewModel.dispose);
 
-      // Scanning the tray barcode arms the (fractional) tray line.
-      expect(await viewModel.addVariantByBarcode('4000002'), isTrue);
-      expect(viewModel.cart.single.unitCode, 'tray');
-
-      expect(viewModel.applyQuickQuantityDigits('0'), isTrue);
-      expect(viewModel.applyQuickQuantityDigits('.'), isTrue);
-      expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
-      expect(viewModel.cart.single.quantity, 0.5);
-
-      // A plain piece line now also accepts a fraction — the cashier's choice.
-      await viewModel.addVariantByBarcode('4000001');
-      expect(viewModel.applyQuickQuantityDigits('2'), isTrue);
-      expect(viewModel.applyQuickQuantityDigits('.'), isTrue);
-      expect(viewModel.applyQuickQuantityDigits('5'), isTrue);
-      expect(
-        viewModel.cart
-            .firstWhere((line) => line.unitCode.isEmpty)
-            .quantity,
-        2.5,
-      );
+      await viewModel.addVariantByBarcode('1000001');
+      final lineKey = viewModel.activeCartLine!.lineKey;
+      viewModel.removeCartLine(lineKey, source: 'keyboard_delete_line');
+      expect(viewModel.cart, isEmpty);
+      expect(viewModel.activeCartLine, isNull);
     });
 
     test('scanning a packaging (unit) barcode rings up that unit', () async {
@@ -848,12 +856,13 @@ void main() {
       expect(line.unitFactor, 24);
       // No custom carton price -> derived: 1.00 piece × 24.
       expect(line.unitPriceOverride, 24.0);
-      // The scan armed the quick adjust on the carton line.
-      expect(viewModel.applyQuickQuantityDigits('3'), isTrue);
-      expect(viewModel.cart.single.quantity, 3);
+      // The scan marked the carton line as the active one (F2/F4 target).
+      expect(viewModel.activeCartLine, isNotNull);
+      expect(viewModel.activeCartLine!.unitCode, 'carton');
     });
 
-    test('applyQuickUnit switches the scanned line unit of measure', () async {
+    test('setActiveCartLineUnit switches the active line unit of measure',
+        () async {
       final viewModel = _viewModel(
         _FakePosApiService(
           catalogPages: const {
@@ -872,7 +881,7 @@ void main() {
         allowsFractional: false,
         isBase: false,
       );
-      expect(viewModel.applyQuickUnit(box), isTrue);
+      expect(viewModel.setActiveCartLineUnit(box), isTrue);
       final line = viewModel.cart.single;
       expect(line.unitCode, 'box');
       expect(line.unitFactor, 12);
@@ -887,7 +896,7 @@ void main() {
         allowsFractional: false,
         isBase: true,
       );
-      expect(viewModel.applyQuickUnit(base), isTrue);
+      expect(viewModel.setActiveCartLineUnit(base), isTrue);
       expect(viewModel.cart.single.unitCode, '');
       expect(viewModel.cart.single.unitPriceOverride, isNull);
     });

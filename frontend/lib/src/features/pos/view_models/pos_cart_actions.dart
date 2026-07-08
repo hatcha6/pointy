@@ -1,9 +1,10 @@
 part of 'pos_view_model.dart';
 
-/// Add sources that arm the type-a-quantity shortcut, exactly like a hardware
-/// scan does: picking a product from the catalog then typing "12" sets the new
-/// line's quantity — no extra tap on the cart line.
-const _quickQuantityAddSources = {
+/// Add sources that mark the new line as the active line for the keyboard
+/// shortcuts (F2 cycle-unit / F4 delete / arrow cycle-unit), exactly like a
+/// hardware scan does — so picking a product from the catalog then pressing F2
+/// cycles that line's unit with no extra tap.
+const _activeLineAddSources = {
   'product_tile',
   'variant_picker',
   'camera_scanner',
@@ -24,14 +25,12 @@ extension PosCartActions on PosViewModel {
       unit: unit,
       source: source,
     )) {
-      if (_quickQuantityAddSources.contains(source)) {
-        _lastScannedLineKey = _mergeableLineFor(
+      if (_activeLineAddSources.contains(source)) {
+        _activeCartLineKey = _mergeableLineFor(
           variant,
           modifiers,
           _unitCodeFor(unit),
         )?.lineKey;
-        _quickQuantityBuffer = '';
-        _quickQuantityAt = null;
       }
       _notifyChanged();
       unawaited(refreshDiscountPreview());

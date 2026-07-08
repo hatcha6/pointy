@@ -150,9 +150,9 @@ class _PurchasingWorkspace extends StatelessWidget {
       onBarcodeScanned: (barcode) {
         unawaited(_addBarcode(context, barcode));
       },
-      // Fast receiving flow after a scan: type a number to set the scanned
-      // line's quantity, tap an arrow to flip its unit of measure.
-      onDigitsTyped: viewModel.applyQuickQuantityDigits,
+      // A scan only ever adds its own product; it never touches a line's
+      // quantity. Arrow keys flip the last scanned/tapped line's unit of
+      // measure — the deliberate quantity edit lives behind a line tap.
       onArrowKey: (key) => _cycleLastScannedUnit(context, key),
       child: LayoutBuilder(
         builder: (context, constraints) {

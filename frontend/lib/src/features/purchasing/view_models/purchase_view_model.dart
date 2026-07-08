@@ -20,10 +20,10 @@ import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
 import '../../../shared/units.dart';
 
-/// Add sources that arm the type-a-quantity shortcut, exactly like a hardware
-/// scan does: picking a product from the catalog then typing "12" sets the new
-/// line's quantity — no extra tap on the draft line.
-const _quickQuantityAddSources = {
+/// Add sources that mark the new line as the active line for the arrow-key
+/// unit cycle, exactly like a hardware scan does — so picking a product from
+/// the catalog then tapping an arrow cycles that line's unit with no extra tap.
+const _activeLineAddSources = {
   'purchase_barcode_lookup',
   'purchase_catalog_tile',
   'purchase_catalog',
@@ -62,13 +62,10 @@ class PurchaseViewModel extends ChangeNotifier {
   final List<PurchaseDraftLine> _draft = [];
   final Map<int, double> _lastCostByVariantId = {};
 
-  // Scan-then-type quick adjust: the draft line the last barcode scan landed
-  // on (digits retype its quantity, arrows cycle its unit) and the digit
-  // buffer being accumulated ("1" then "2" → 12).
+  // The draft line the arrow-key unit cycle acts on: the last line a scan or
+  // catalog tap landed on. A hardware scan never touches a line's quantity — it
+  // only ever adds/increments its own product.
   int? _lastScannedVariantId;
-  String _quickQuantityBuffer = '';
-  DateTime? _quickQuantityAt;
-  static const _quickQuantityIdle = Duration(seconds: 4);
 
   /// Non-null when this workspace is editing an existing draft purchase order
   /// (its id) rather than building a brand-new one. Drives "save" vs "submit"
@@ -377,21 +374,18 @@ class PurchaseViewModel extends ChangeNotifier {
         source: source,
       );
     }
-    if (_quickQuantityAddSources.contains(source)) {
-      // Arm the scan-then-type quick adjust on the line the add landed on —
-      // scanning and picking from the catalog behave the same: type a number
-      // right after to set the quantity.
+    if (_activeLineAddSources.contains(source)) {
+      // Mark the line the add landed on as the active line for the arrow-key
+      // unit cycle — scanning and picking from the catalog behave the same.
       _lastScannedVariantId = variant.id;
-      _quickQuantityBuffer = '';
-      _quickQuantityAt = null;
     }
     _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
   }
 
-  /// The draft line the last hardware scan landed on, if it is still in the
-  /// draft — the target of the scan-then-type quantity/unit shortcuts.
+  /// The draft line the last scan or catalog tap landed on, if it is still in
+  /// the draft — the target of the arrow-key unit cycle.
   PurchaseDraftLine? get lastScannedDraftLine {
     final variantId = _lastScannedVariantId;
     if (variantId == null) {
@@ -435,50 +429,6 @@ class PurchaseViewModel extends ChangeNotifier {
     _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
-  }
-
-  /// Scan-then-type quantity: keys typed right after a scan REPLACE the last
-  /// scanned line's quantity, accumulating across keystrokes ("1" then "2" →
-  /// 12; "2","." ,"5" → 2.5 for fractional units) until the idle window passes
-  /// or another scan re-arms the flow.
-  bool applyQuickQuantityDigits(String digits) {
-    if (_isSubmitting || digits.isEmpty) {
-      return false;
-    }
-    final line = lastScannedDraftLine;
-    if (line == null) {
-      return false;
-    }
-    final now = DateTime.now();
-    final startedAt = _quickQuantityAt;
-    if (startedAt == null || now.difference(startedAt) > _quickQuantityIdle) {
-      _quickQuantityBuffer = '';
-    }
-    final accumulated = _quickQuantityBuffer + digits;
-    if (accumulated.contains('.') &&
-        (!line.unitAllowsFractional ||
-            '.'.allMatches(accumulated).length > 1)) {
-      // A decimal point the unit cannot honour: drop the whole entry rather
-      // than silently reading "2.5" as 25.
-      _quickQuantityBuffer = '';
-      return false;
-    }
-    final quantity = double.tryParse(accumulated);
-    if (quantity == null && accumulated != '.' && !accumulated.endsWith('.')) {
-      return false;
-    }
-    if (accumulated.length > 7) {
-      return false;
-    }
-    _quickQuantityBuffer = accumulated;
-    _quickQuantityAt = now;
-    if (quantity == null || quantity <= 0) {
-      // A leading "0" or a trailing "." — keep accumulating ("0.5", "2.5")
-      // without touching the line yet.
-      return true;
-    }
-    setLineQuantity(line.variant, quantity, source: 'scan_quick_quantity');
-    return true;
   }
 
   /// Draft quantities live in 0.001–999999.999 (3dp, matching the backend).
@@ -582,9 +532,6 @@ class PurchaseViewModel extends ChangeNotifier {
       unitFactor: unitFactor,
       unitAllowsFractional: allowsFractional,
     );
-    // A half-typed quick quantity belongs to the previous unit — drop it.
-    _quickQuantityBuffer = '';
-    _quickQuantityAt = null;
     _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
