@@ -1,3 +1,5 @@
+import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -6,6 +8,11 @@ from corsheaders.defaults import default_headers
 import environ
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# True under `manage.py test` / pytest. Cross-request caches of DB state key off
+# this: test transactions roll back without firing signals, so a cache warmed in
+# one test would leak stale rows into the next (worst on pk=1 singletons).
+TESTING = "test" in sys.argv or "PYTEST_CURRENT_TEST" in os.environ
 
 env = environ.Env(
     DJANGO_DEBUG=(bool, False),
@@ -224,6 +231,20 @@ CACHES = {
         "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
     }
 }
+
+# Sessions: read from Redis, write through to Postgres — a Redis restart never
+# logs anyone out, but steady-state requests skip the session-table SELECT.
+# apps.core.sessions is cached_db with the cache side made fail-open (stock
+# cached_db 500s on save if Redis is down).
+SESSION_ENGINE = "apps.core.sessions"
+
+# ModelBackend with the resolved permission set memoised in Redis (fail-open,
+# invalidated by the perm-version signals in apps.core.signals). Deliberately
+# the ONLY backend: a second one would make every DENIED permission check fall
+# through to live queries and break login()'s single-backend inference. The
+# trade-off is one-time: sessions minted before this backend existed store the
+# old dotted path and get logged out on update — devices just re-login once.
+AUTHENTICATION_BACKENDS = ["apps.core.auth_backends.CachedPermissionsBackend"]
 
 CELERY_BROKER_URL = REDIS_URL
 CELERY_RESULT_BACKEND = REDIS_URL
@@ -514,6 +535,15 @@ POINTY_PRICE_CHECKER_SCAN_TIMEOUT = env("POINTY_PRICE_CHECKER_SCAN_TIMEOUT")
 # How long (seconds) a POS discount-preview result is cached in Redis. Bounds how
 # stale a preview can be vs a just-edited/expired rule; checkout is always live.
 POINTY_DISCOUNT_PREVIEW_CACHE_TTL = env.int("POINTY_DISCOUNT_PREVIEW_CACHE_TTL", default=15)
+# Cross-request Redis caches of DB state (apps.core.caching). Invalidation is
+# signal-driven, so the TTLs only bound out-of-band edits (raw SQL). 0 disables;
+# forced off under tests — rollbacks don't fire signals (see TESTING above).
+POINTY_SHOP_SETTINGS_CACHE_TTL = (
+    0 if TESTING else env.int("POINTY_SHOP_SETTINGS_CACHE_TTL", default=60)
+)
+POINTY_PERMISSION_CACHE_TTL = (
+    0 if TESTING else env.int("POINTY_PERMISSION_CACHE_TTL", default=300)
+)
 POINTY_CURRENCY_SUFFIX = env("POINTY_CURRENCY_SUFFIX")
 POINTY_CURRENCY_LATIN = env("POINTY_CURRENCY_LATIN")
 
