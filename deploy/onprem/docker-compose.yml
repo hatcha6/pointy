@@ -24,6 +24,11 @@ x-backend-environment: &backend-environment
   DATABASE_URL: "${POINTY_DATABASE_URL:?Set POINTY_DATABASE_URL in deploy/onprem/.env}"
   DATABASE_CONN_MAX_AGE: "60"
   REDIS_URL: "${POINTY_REDIS_URL:-redis://redis:6379/0}"
+  # Redis caches of near-static DB state (seconds; 0 disables). Signal-driven
+  # invalidation; TTLs only bound out-of-band edits (raw SQL in psql).
+  POINTY_SHOP_SETTINGS_CACHE_TTL: "${POINTY_SHOP_SETTINGS_CACHE_TTL:-60}"
+  POINTY_PERMISSION_CACHE_TTL: "${POINTY_PERMISSION_CACHE_TTL:-300}"
+  POINTY_DISCOUNT_PREVIEW_CACHE_TTL: "${POINTY_DISCOUNT_PREVIEW_CACHE_TTL:-15}"
   POINTY_ATTACHMENT_STORAGE_ROOT: /var/lib/pointy/media
   POINTY_BACKUP_ALLOWED_ROOTS: /var/lib/pointy/backups,/mnt/pointy-external
   POINTY_BACKUP_STAGING_ROOT: /tmp/pointy-backup-staging

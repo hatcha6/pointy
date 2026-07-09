@@ -44,6 +44,17 @@ class IdempotencyRecord(TimeStampedModel):
         return f"{self.owner_key} {self.method} {self.path} {self.key}"
 
 
+class ShopSettingsQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        # ``.filter(pk=1).update(...)`` skips post_save, so it must drop the
+        # cached singleton itself or a stale copy survives until the TTL.
+        rows = super().update(**kwargs)
+        from apps.core import caching
+
+        caching.invalidate_shop_settings()
+        return rows
+
+
 class ShopSettings(TimeStampedModel):
     class ShopType(models.TextChoices):
         GENERAL = "general", "General retail"
@@ -133,6 +144,8 @@ class ShopSettings(TimeStampedModel):
     # customer lookup + debt collection stay manager/accountant only.
     allow_cashier_customer_access = models.BooleanField(default=True)
 
+    objects = ShopSettingsQuerySet.as_manager()
+
     class Meta:
         verbose_name = "shop settings"
         verbose_name_plural = "shop settings"
@@ -142,8 +155,14 @@ class ShopSettings(TimeStampedModel):
 
     @classmethod
     def load(cls):
-        settings, _ = cls.objects.get_or_create(pk=1)
-        return settings
+        # Hot: called by checkout, catalog, discounts — often several times per
+        # request. Served from Redis (fail-open); invalidated by post_save (see
+        # signals.py) and by the queryset ``update()`` override above.
+        from apps.core import caching
+
+        return caching.get_shop_settings(
+            lambda: cls.objects.get_or_create(pk=1)[0]
+        )
 
     def payment_method_enabled(self, method: str) -> bool:
         return {
