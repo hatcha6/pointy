@@ -26,6 +26,7 @@ from .services import (
     cashier_window_expired,
     can_adjust_order,
     calculate_sales_discounts,
+    preview_sales_discounts,
     checkout_line_key,
     checkout_loss_lines,
     checkout_order,
@@ -1117,7 +1118,9 @@ class DiscountPreviewSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         coupon_codes = normalized_checkout_coupon_codes(attrs)
-        discount_result = calculate_sales_discounts(
+        # Preview runs on every cart edit -> use the Redis-guarded path. Checkout
+        # (above) stays on the live calculate_sales_discounts.
+        discount_result = preview_sales_discounts(
             lines_data=attrs["lines"],
             customer=attrs.get("customer"),
             coupon_codes=coupon_codes,
