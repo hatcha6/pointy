@@ -7,7 +7,7 @@ from typing import Iterable
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from apps.catalog.models import ProductCategory
@@ -137,29 +137,71 @@ def discount_rule_usage_available(
     # Counts live redemption rows rather than a denormalised counter on the
     # rule. That keeps the check correct when redemptions are removed (e.g. the
     # purchasing revise flow clears and re-applies a PO's discounts), which a
-    # cached counter would silently drift away from. When called from the
-    # locked persist path the rule row is held FOR UPDATE, so these counts are
-    # the authoritative, serialised view of usage.
+    # cached counter would silently drift away from.
+    #
+    # The eligibility pass (eligible_rules) folds these counts into the single
+    # rules query as annotations (``_usage_redemptions`` etc.), so a basket with
+    # 50 rules costs one query, not 50. When called from the locked persist path
+    # the rule is re-fetched WITHOUT annotations under ``SELECT ... FOR UPDATE``,
+    # so ``_redemption_count`` falls back to a live COUNT — the authoritative,
+    # serialised view that actually enforces the limit.
     if (
         rule.usage_limit is not None
-        and rule.redemptions.count() >= rule.usage_limit
+        and _redemption_count(rule, "_usage_redemptions") >= rule.usage_limit
     ):
         return False
     if (
         rule.per_customer_usage_limit is not None
         and customer_id is not None
-        and rule.redemptions.filter(customer_id=customer_id).count()
+        and _redemption_count(rule, "_customer_redemptions", customer_id=customer_id)
         >= rule.per_customer_usage_limit
     ):
         return False
     if (
         rule.per_supplier_usage_limit is not None
         and supplier_id is not None
-        and rule.redemptions.filter(supplier_id=supplier_id).count()
+        and _redemption_count(rule, "_supplier_redemptions", supplier_id=supplier_id)
         >= rule.per_supplier_usage_limit
     ):
         return False
     return True
+
+
+def _redemption_count(rule: DiscountRule, cached_attr: str, **filter_kwargs) -> int:
+    """Redemption count for the usage check, preferring a query annotation.
+
+    ``eligible_rules`` annotates the count (scoped to the same customer/supplier
+    it will be checked against). Absent the annotation — the locked persist path
+    — this issues a live COUNT so the FOR UPDATE re-check stays exact.
+    """
+    cached = getattr(rule, cached_attr, None)
+    if cached is not None:
+        return cached
+    queryset = rule.redemptions.filter(**filter_kwargs) if filter_kwargs else rule.redemptions
+    return queryset.count()
+
+
+def _usage_count_annotations(context: "DiscountContext") -> dict:
+    """Filtered redemption-count annotations for the eligibility rules query.
+
+    Only annotates the per-customer / per-supplier variants when the context
+    actually carries that id, so ``_redemption_count`` reads a value scoped to
+    the same id it checks the limit against.
+    """
+    annotations = {"_usage_redemptions": Count("redemptions", distinct=True)}
+    if context.customer_id is not None:
+        annotations["_customer_redemptions"] = Count(
+            "redemptions",
+            filter=Q(redemptions__customer_id=context.customer_id),
+            distinct=True,
+        )
+    if context.supplier_id is not None:
+        annotations["_supplier_redemptions"] = Count(
+            "redemptions",
+            filter=Q(redemptions__supplier_id=context.supplier_id),
+            distinct=True,
+        )
+    return annotations
 
 
 class DiscountEngine:
@@ -225,6 +267,7 @@ class DiscountEngine:
                 "tiers",
             )
             .order_by("priority", "id")
+            .annotate(**_usage_count_annotations(context))
         )
         rules = list(rules)
         customer_rank = self._resolve_customer_rank(context, rules)
@@ -332,7 +375,16 @@ class DiscountEngine:
         return normalized_ids
 
     def _category_ids_with_descendants(self, category_ids: Iterable[int]) -> set[int]:
-        all_category_ids = set(category_ids)
+        # Memoised per engine instance (one instance per calculate() call): the
+        # same rule's categories are resolved twice — once to test eligibility,
+        # once to allocate — and many rules share the same category set, so
+        # without this the descendant recursion runs O(rules x depth) queries.
+        cache = self.__dict__.setdefault("_descendant_cache", {})
+        key = frozenset(category_ids)
+        cached = cache.get(key)
+        if cached is not None:
+            return cached
+        all_category_ids = set(key)
         pending_ids = set(all_category_ids)
         while pending_ids:
             child_ids = set(
@@ -343,6 +395,7 @@ class DiscountEngine:
             )
             pending_ids = child_ids - all_category_ids
             all_category_ids.update(child_ids)
+        cache[key] = all_category_ids
         return all_category_ids
 
     def _calculate_rule_application(

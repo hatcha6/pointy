@@ -35,6 +35,28 @@ def _drop(index):
     return f"DROP INDEX CONCURRENTLY IF EXISTS {index};"
 
 
+def _create_trigram_indexes(apps, schema_editor):
+    # pg_trgm / gin_trgm_ops are PostgreSQL-only. On sqlite (the fast/parallel
+    # test path) this is a no-op — ILIKE falls back to a scan there, which is
+    # fine for the tiny test datasets.
+    connection = schema_editor.connection
+    if connection.vendor != "postgresql":
+        return
+    with connection.cursor() as cursor:
+        cursor.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
+        for index, table, column in _INDEXES:
+            cursor.execute(_create(index, table, column))
+
+
+def _drop_trigram_indexes(apps, schema_editor):
+    connection = schema_editor.connection
+    if connection.vendor != "postgresql":
+        return
+    with connection.cursor() as cursor:
+        for index, _table, _column in _INDEXES:
+            cursor.execute(_drop(index))
+
+
 class Migration(migrations.Migration):
     # CONCURRENTLY cannot run inside a transaction.
     atomic = False
@@ -44,12 +66,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunSQL(
-            "CREATE EXTENSION IF NOT EXISTS pg_trgm;",
-            reverse_sql=migrations.RunSQL.noop,
-        ),
-        *[
-            migrations.RunSQL(_create(index, table, column), reverse_sql=_drop(index))
-            for index, table, column in _INDEXES
-        ],
+        migrations.RunPython(_create_trigram_indexes, _drop_trigram_indexes),
     ]

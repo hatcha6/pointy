@@ -75,6 +75,28 @@ def latest_variant_unit_cost(variant_id):
     return None if line is None else line.base_unit_cost
 
 
+def latest_variant_unit_costs(variant_ids):
+    """Batched ``latest_variant_unit_cost`` — ``{variant_id: base_unit_cost}`` for
+    the given variants in ONE query (no N+1). Variants with no non-cancelled
+    purchase are absent from the result. Backend-agnostic: rows come back
+    newest-first per variant and the first seen wins (no Postgres-only DISTINCT ON).
+    """
+    ids = {variant_id for variant_id in variant_ids if variant_id is not None}
+    if not ids:
+        return {}
+    costs = {}
+    lines = (
+        PurchaseLine.objects.filter(variant_id__in=ids)
+        .exclude(purchase_order__status=PurchaseOrder.Status.CANCELLED)
+        .order_by("variant_id", "-created_at", "-id")
+        .only("variant_id", "unit_cost", "unit_factor", "created_at", "id")
+    )
+    for line in lines.iterator():
+        if line.variant_id not in costs:
+            costs[line.variant_id] = line.base_unit_cost
+    return costs
+
+
 def latest_product_unit_cost(product_id, *, variant_id=None):
     if variant_id is not None:
         return latest_variant_unit_cost(variant_id)

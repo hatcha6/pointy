@@ -521,6 +521,29 @@ def latest_production_unit_cost(variant_id):
     return None if job is None else job.output_unit_cost
 
 
+def latest_production_unit_costs(variant_ids):
+    """Batched ``latest_production_unit_cost`` — ``{variant_id: output_unit_cost}``
+    for the given produced-good variants in ONE query (no N+1). Newest received
+    job per variant wins; uncosted/never-produced variants are absent."""
+    ids = {variant_id for variant_id in variant_ids if variant_id is not None}
+    if not ids:
+        return {}
+    costs = {}
+    jobs = (
+        Job.objects.filter(
+            output_variant_id__in=ids,
+            output_received_at__isnull=False,
+            output_unit_cost__isnull=False,
+        )
+        .order_by("output_variant_id", "-output_received_at")
+        .only("output_variant_id", "output_unit_cost", "output_received_at")
+    )
+    for job in jobs.iterator():
+        if job.output_variant_id not in costs:
+            costs[job.output_variant_id] = job.output_unit_cost
+    return costs
+
+
 def _complete_job_at_terminal(job, *, request=None, note=""):
     """Mark a job finished: move it onto its terminal stage and set COMPLETED.
 

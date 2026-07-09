@@ -190,13 +190,30 @@ def sales_discount_context(*, lines_data, customer=None, coupon_codes=()):
 
 
 def calculate_sales_discounts(*, lines_data, customer=None, coupon_codes=()):
-    return DiscountEngine().calculate(
-        sales_discount_context(
-            lines_data=lines_data,
-            customer=customer,
-            coupon_codes=coupon_codes,
-        )
+    context = sales_discount_context(
+        lines_data=lines_data,
+        customer=customer,
+        coupon_codes=coupon_codes,
     )
+    return DiscountEngine().calculate(context)
+
+
+def preview_sales_discounts(*, lines_data, customer=None, coupon_codes=()):
+    """Preview-only, Redis-guarded discount calculation (see apps.discounts.cache).
+
+    The POS calls this on every cart edit, so it short-circuits when no rules are
+    active and memoises the result per cart for a few seconds. Checkout keeps
+    using calculate_sales_discounts — always live, with usage limits re-validated
+    under a row lock at persist time — so nothing money-critical trusts the cache.
+    """
+    from apps.discounts.cache import preview_with_cache
+
+    context = sales_discount_context(
+        lines_data=lines_data,
+        customer=customer,
+        coupon_codes=coupon_codes,
+    )
+    return preview_with_cache(context, lambda: DiscountEngine().calculate(context))
 
 
 def discount_allocations_by_line_key(discount_result):
@@ -247,11 +264,32 @@ def latest_sale_unit_cost(variant):
     return cost or Decimal("0.00")
 
 
+def latest_sale_unit_costs(variants):
+    """Batched ``latest_sale_unit_cost`` keyed by variant pk (per BASE unit):
+    purchase cost first, production cost as the fallback for produced goods —
+    one query per source instead of N per cart line. A purchase at cost 0 wins
+    over the production fallback, exactly like the single-variant path."""
+    from apps.operations.services import latest_production_unit_costs
+    from apps.purchasing.services import latest_variant_unit_costs
+
+    variant_ids = [variant.pk for variant in variants]
+    costs = latest_variant_unit_costs(variant_ids)
+    missing = [variant_id for variant_id in variant_ids if variant_id not in costs]
+    if missing:
+        costs.update(latest_production_unit_costs(missing))
+    return costs
+
+
 def checkout_loss_lines(lines_data, discount_result=None):
     discount_by_line_key = (
         discount_allocations_by_line_key(discount_result)
         if discount_result is not None
         else {}
+    )
+    # Batch the cost lookup across every cart line (was one query per line, on the
+    # preview that fires on every keystroke).
+    cost_by_variant = latest_sale_unit_costs(
+        [line_data["variant"] for line_data in lines_data]
     )
     loss_lines = []
     for line_data in lines_data:
@@ -260,7 +298,8 @@ def checkout_loss_lines(lines_data, discount_result=None):
         # Cost is per base unit; scale it to the transacted unit so it lines up
         # with the per-unit price (a box costs 12x a piece).
         unit_factor = Decimal(line_data.get("unit_factor", 1))
-        unit_cost = money(latest_sale_unit_cost(variant) * unit_factor)
+        base_cost = cost_by_variant.get(variant.pk) or Decimal("0.00")
+        unit_cost = money(base_cost * unit_factor)
         if quantity <= 0 or unit_cost <= 0:
             continue
 
