@@ -34,6 +34,9 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
+  # Disk-cached product images: honors the backend's Cache-Control/ETag so a
+  # catalog scroll-back or app restart doesn't re-download every thumbnail.
+  cached_network_image: ^3.4.1
   http: ^1.2.2
   intl: any
   archive: ^4.0.9

@@ -320,6 +320,45 @@ class AttachmentApiTests(TestCase):
             b"authenticated preview",
         )
 
+    def test_content_response_carries_cache_validators(self):
+        upload_response = self.upload_attachment(self.pdf_payload(b"E"), "etag.pdf")
+        self.assertEqual(upload_response.status_code, status.HTTP_201_CREATED)
+
+        content_response = self.client.get(
+            reverse("attachment-content", args=[upload_response.data["id"]])
+        )
+
+        self.assertEqual(content_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            content_response["ETag"],
+            f'"{upload_response.data["checksum_sha256"]}"',
+        )
+        self.assertIn("max-age=86400", content_response["Cache-Control"])
+        self.assertIn("private", content_response["Cache-Control"])
+        self.assertTrue(content_response["Last-Modified"])
+
+    def test_matching_if_none_match_returns_304_without_a_body(self):
+        upload_response = self.upload_attachment(self.pdf_payload(b"F"), "cond.pdf")
+        url = reverse("attachment-content", args=[upload_response.data["id"]])
+        etag = self.client.get(url)["ETag"]
+
+        revalidation = self.client.get(url, HTTP_IF_NONE_MATCH=etag)
+
+        self.assertEqual(revalidation.status_code, status.HTTP_304_NOT_MODIFIED)
+        self.assertFalse(revalidation.content)
+        # The 304 must re-state the validators so clients extend their cache.
+        self.assertEqual(revalidation["ETag"], etag)
+        self.assertIn("max-age=86400", revalidation["Cache-Control"])
+
+    def test_stale_if_none_match_serves_the_full_body(self):
+        upload_response = self.upload_attachment(self.pdf_payload(b"G"), "stale.pdf")
+        url = reverse("attachment-content", args=[upload_response.data["id"]])
+
+        response = self.client.get(url, HTTP_IF_NONE_MATCH='"different-etag"')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(b"".join(response.streaming_content))
+
     def test_unsigned_content_url_still_requires_authentication(self):
         upload_response = self.client.post(
             reverse("product-attachments", args=[self.product.pk]),

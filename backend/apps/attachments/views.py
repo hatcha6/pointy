@@ -1,5 +1,6 @@
 from django.http import FileResponse, Http404
-from django.utils.http import content_disposition_header
+from django.utils.cache import get_conditional_response
+from django.utils.http import content_disposition_header, http_date, quote_etag
 from rest_framework import parsers, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -101,19 +102,39 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         attachment = self.get_object()
         if token and not is_valid_attachment_content_token(attachment, token):
             raise PermissionDenied("Attachment content token is invalid or expired.")
-        try:
-            file_obj = open_attachment(attachment)
-        except AttachmentStorageError as exc:
-            raise Http404(str(exc)) from exc
-        response = FileResponse(
-            file_obj,
-            as_attachment=as_attachment,
-            filename=attachment.original_filename,
-            content_type=attachment.content_type or "application/octet-stream",
+
+        # Attachment bytes are content-addressed by checksum, so the ETag lets
+        # every product-image render after the first be a 304 (or, within
+        # max-age, no request at all) instead of a full DB + file read.
+        etag = quote_etag(
+            attachment.checksum_sha256
+            or f"{attachment.pk}:{attachment.updated_at.isoformat() if attachment.updated_at else ''}"
         )
-        if not as_attachment:
-            response["Content-Disposition"] = content_disposition_header(
-                as_attachment=False,
+        last_modified = (
+            int(attachment.updated_at.timestamp()) if attachment.updated_at else None
+        )
+        response = get_conditional_response(
+            self.request, etag=etag, last_modified=last_modified
+        )
+        if response is None:
+            try:
+                file_obj = open_attachment(attachment)
+            except AttachmentStorageError as exc:
+                raise Http404(str(exc)) from exc
+            response = FileResponse(
+                file_obj,
+                as_attachment=as_attachment,
                 filename=attachment.original_filename,
+                content_type=attachment.content_type or "application/octet-stream",
             )
+            if not as_attachment:
+                response["Content-Disposition"] = content_disposition_header(
+                    as_attachment=False,
+                    filename=attachment.original_filename,
+                )
+        # On the 304 too, so clients extend their cache lifetime.
+        response["ETag"] = etag
+        if last_modified is not None:
+            response["Last-Modified"] = http_date(last_modified)
+        response["Cache-Control"] = "private, max-age=86400"
         return response
