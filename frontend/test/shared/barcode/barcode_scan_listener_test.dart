@@ -17,6 +17,8 @@ void main() {
     ({
       List<String> scanned,
       List<LogicalKeyboardKey> arrows,
+      List<LogicalKeyboardKey> functionKeys,
+      List<int> commandEnters,
       _FakeClock clock,
     })
   >
@@ -27,6 +29,8 @@ void main() {
   }) async {
     final scanned = <String>[];
     final arrows = <LogicalKeyboardKey>[];
+    final functionKeys = <LogicalKeyboardKey>[];
+    final commandEnters = <int>[];
     final clock = _FakeClock();
     await tester.pumpWidget(
       MaterialApp(
@@ -37,13 +41,24 @@ void main() {
             arrows.add(key);
             return true;
           },
+          onFunctionKey: (key) {
+            functionKeys.add(key);
+            return true;
+          },
+          onCommandEnter: () => commandEnters.add(1),
           clock: () => clock.now,
           child: child,
         ),
       ),
     );
     await tester.pump();
-    return (scanned: scanned, arrows: arrows, clock: clock);
+    return (
+      scanned: scanned,
+      arrows: arrows,
+      functionKeys: functionKeys,
+      commandEnters: commandEnters,
+      clock: clock,
+    );
   }
 
   final digits12345678 = [
@@ -272,5 +287,67 @@ void main() {
 
     expect(events.scanned, isEmpty);
     expect(controller.text, '12345678', reason: 'exempt fields keep the wedge input');
+  });
+
+  testWidgets('function keys fire globally — with or without a focused text '
+      'field', (tester) async {
+    final events = await pumpListener(
+      tester,
+      child: const Material(child: TextField(autofocus: true)),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    events.clock.advance(const Duration(milliseconds: 500));
+    await tester.sendKeyEvent(LogicalKeyboardKey.f2);
+    await tester.pump();
+
+    expect(events.functionKeys, [
+      LogicalKeyboardKey.f1,
+      LogicalKeyboardKey.f2,
+    ]);
+    expect(events.scanned, isEmpty);
+  });
+
+  testWidgets('a function key ends a scan burst in flight', (tester) async {
+    final events = await pumpListener(tester);
+
+    await sendBurst(tester, events.clock, digits12345678, terminate: false);
+    events.clock.advance(const Duration(milliseconds: 20));
+    await tester.sendKeyEvent(LogicalKeyboardKey.f4);
+    events.clock.advance(const Duration(milliseconds: 20));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    expect(events.functionKeys, [LogicalKeyboardKey.f4]);
+    expect(events.scanned, isEmpty,
+        reason: 'the buffer died with the function key');
+  });
+
+  testWidgets('Ctrl+Enter fires the checkout chord instead of a scan submit', (
+    tester,
+  ) async {
+    final events = await pumpListener(tester);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    expect(events.commandEnters, hasLength(1));
+    expect(events.scanned, isEmpty);
+  });
+
+  testWidgets('while disabled, function keys and the checkout chord are '
+      'dropped', (tester) async {
+    final events = await pumpListener(tester, enabled: false);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.f1);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    expect(events.functionKeys, isEmpty);
+    expect(events.commandEnters, isEmpty);
   });
 }

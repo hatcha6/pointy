@@ -50,6 +50,8 @@ class BarcodeScanListener extends StatefulWidget {
     this.ignoreTextInputFocus = true,
     this.requireCurrentRoute = true,
     this.onArrowKey,
+    this.onFunctionKey,
+    this.onCommandEnter,
     @visibleForTesting this.clock = DateTime.now,
   });
 
@@ -69,6 +71,18 @@ class BarcodeScanListener extends StatefulWidget {
   /// true to consume the event — e.g. cycling the last scanned line's unit —
   /// or false to let focus traversal proceed.
   final bool Function(LogicalKeyboardKey key)? onArrowKey;
+
+  /// Unmodified function keys (F1–F12), fired through the same global
+  /// hardware-keyboard handler as scans — NOT the focus tree — so legacy till
+  /// shortcuts work no matter where focus sits (or whether anything is
+  /// focused at all; focus-tree Shortcuts silently die when focus parks
+  /// outside their subtree). Fires even while a text field is focused:
+  /// function keys never type. Return true to consume. Gated on [enabled].
+  final bool Function(LogicalKeyboardKey key)? onFunctionKey;
+
+  /// Ctrl/Cmd+Enter — the checkout chord, global for the same reason as
+  /// [onFunctionKey]. Gated on [enabled].
+  final VoidCallback? onCommandEnter;
 
   /// Injectable time source so tests can drive the burst timing.
   final DateTime Function() clock;
@@ -97,6 +111,21 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
     LogicalKeyboardKey.arrowDown,
     LogicalKeyboardKey.arrowLeft,
     LogicalKeyboardKey.arrowRight,
+  };
+
+  static final _functionKeys = {
+    LogicalKeyboardKey.f1,
+    LogicalKeyboardKey.f2,
+    LogicalKeyboardKey.f3,
+    LogicalKeyboardKey.f4,
+    LogicalKeyboardKey.f5,
+    LogicalKeyboardKey.f6,
+    LogicalKeyboardKey.f7,
+    LogicalKeyboardKey.f8,
+    LogicalKeyboardKey.f9,
+    LogicalKeyboardKey.f10,
+    LogicalKeyboardKey.f11,
+    LogicalKeyboardKey.f12,
   };
 
   @override
@@ -137,6 +166,33 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
     }
 
     final now = widget.clock();
+    final hardware = HardwareKeyboard.instance;
+    final hasCommandModifier =
+        hardware.isControlPressed || hardware.isMetaPressed;
+
+    // Legacy till shortcuts, dispatched here (not via focus-tree Shortcuts)
+    // so they work regardless of what has focus. A function key also ends any
+    // scan burst in flight.
+    if (_functionKeys.contains(event.logicalKey) &&
+        !hasCommandModifier &&
+        !hardware.isAltPressed) {
+      _clearBuffer();
+      final onFunctionKey = widget.onFunctionKey;
+      return widget.enabled &&
+          onFunctionKey != null &&
+          onFunctionKey(event.logicalKey);
+    }
+    if (hasCommandModifier &&
+        (event.logicalKey == LogicalKeyboardKey.enter ||
+            event.logicalKey == LogicalKeyboardKey.numpadEnter)) {
+      _clearBuffer();
+      final onCommandEnter = widget.onCommandEnter;
+      if (widget.enabled && onCommandEnter != null) {
+        onCommandEnter();
+        return true;
+      }
+      return false;
+    }
 
     if (_terminatorKeys.contains(event.logicalKey)) {
       return _submitBuffer(now);
