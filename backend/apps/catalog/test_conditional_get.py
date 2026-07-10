@@ -99,3 +99,39 @@ class CatalogConditionalGetTests(TestCase):
             response = self._get()
             self.assertEqual(response.status_code, status.HTTP_200_OK)
             self.assertNotIn("ETag", response)
+
+
+@CACHED
+class CatalogVersionHeaderTests(TestCase):
+    """The version-push header (middleware + mixin) POS clients key caches on."""
+
+    def setUp(self):
+        cache.clear()
+        user = get_user_model().objects.create_user(username="manager", password="x")
+        user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client_api = APIClient()
+        self.client_api.force_authenticate(user=user)
+        self.product = create_product_with_default_variant(
+            name="Widget", sku="W-1", unit_price="10.00", barcode="123456"
+        )
+
+    def test_catalog_list_carries_the_version(self):
+        response = self.client_api.get("/api/products/")
+        self.assertTrue(response["X-Pointy-Catalog-Version"])
+
+    def test_non_catalog_responses_carry_it_via_middleware(self):
+        response = self.client_api.get("/api/orders/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response["X-Pointy-Catalog-Version"])
+
+    def test_version_advances_after_a_catalog_change(self):
+        before = self.client_api.get("/api/orders/")["X-Pointy-Catalog-Version"]
+        self.product.name = "Widget v2"
+        self.product.save()
+        after = self.client_api.get("/api/orders/")["X-Pointy-Catalog-Version"]
+        self.assertNotEqual(after, before)
+
+    def test_absent_when_disabled(self):
+        with override_settings(POINTY_CATALOG_CACHE_ENABLED=False):
+            response = self.client_api.get("/api/orders/")
+            self.assertFalse(response.has_header("X-Pointy-Catalog-Version"))

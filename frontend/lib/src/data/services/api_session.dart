@@ -108,6 +108,15 @@ class PosApiSession {
   final LinkedHashMap<String, _ConditionalCacheEntry> _conditionalCache =
       LinkedHashMap();
 
+  /// The backend's catalog version, pushed on catalog/preview/checkout
+  /// responses (X-Pointy-Catalog-Version). Client-side catalog caches key
+  /// their entries on this token: any product/price/stock/discount change
+  /// server-side advances it, instantly orphaning stale entries — the till
+  /// learns within one interaction, no polling. Null until first seen (or on
+  /// old backends), in which case caches fall back to their TTLs alone.
+  String? get catalogVersionToken => _catalogVersionToken;
+  String? _catalogVersionToken;
+
   String get baseUrl => _baseUrl;
   bool get usesRelay => _relayToken.isNotEmpty;
 
@@ -146,6 +155,7 @@ class PosApiSession {
     _relayToken = relayToken.trim();
     _fallbackTarget = fallbackTarget;
     _conditionalCache.clear();
+    _catalogVersionToken = null;
   }
 
   Future<http.Response> get(
@@ -394,6 +404,11 @@ class PosApiSession {
   }
 
   void captureResponseState(http.Response response) {
+    final catalogVersion = response.headers['x-pointy-catalog-version'];
+    if (catalogVersion != null && catalogVersion.isNotEmpty) {
+      _catalogVersionToken = catalogVersion;
+    }
+
     final setCookie = response.headers['set-cookie'];
     if (setCookie == null || setCookie.isEmpty) {
       return;
@@ -424,6 +439,7 @@ class PosApiSession {
     _cookies.clear();
     _csrfToken = null;
     _conditionalCache.clear();
+    _catalogVersionToken = null;
   }
 
   Future<http.Response> _send({
