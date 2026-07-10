@@ -1,4 +1,5 @@
 import django_filters
+from django.conf import settings
 from django.core.cache import cache
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -790,14 +791,19 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             pass
 
     def _get_active_product_ids(self):
+        if not settings.POINTY_ACTIVE_PRODUCT_CACHE_TTL:
+            return None
         try:
             return cache.get(self.active_cache_key)
         except Exception:
             return None
 
     def _set_active_product_ids(self, product_ids):
+        ttl = settings.POINTY_ACTIVE_PRODUCT_CACHE_TTL
+        if not ttl:
+            return
         try:
-            cache.set(self.active_cache_key, product_ids, timeout=60)
+            cache.set(self.active_cache_key, product_ids, timeout=ttl)
         except Exception:
             pass
 

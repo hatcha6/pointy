@@ -840,7 +840,9 @@ class WeightedCheckoutTests(OperationsTestCase):
             Decimal("8.750"),
         )
 
-    def test_piece_products_reject_fractional_quantities(self):
+    def test_piece_products_accept_fractional_quantities(self):
+        # Piece (non-weighted) products sell in fractions too — ringing up 0.5
+        # of anything is the cashier's choice since 0b970001.
         response = self.client_api.post(
             reverse("order-checkout"),
             {
@@ -851,7 +853,13 @@ class WeightedCheckoutTests(OperationsTestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["total"], "60.00")
+        self.assertEqual(float(response.data["lines"][0]["quantity"]), 0.5)
+        self.assertEqual(
+            StockItem.objects.get(variant=self.part_variant).quantity_on_hand,
+            Decimal("9.500"),
+        )
 
     def test_partial_weight_return_restores_stock(self):
         checkout = self.client_api.post(

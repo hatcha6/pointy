@@ -59,6 +59,30 @@ def _drop(index):
     return f"DROP INDEX CONCURRENTLY IF EXISTS {index};"
 
 
+def _swap_to_upper_indexes(apps, schema_editor):
+    # pg_trgm / gin_trgm_ops are PostgreSQL-only. On sqlite (the fast/parallel
+    # test path) this is a no-op — same guard as 0020.
+    connection = schema_editor.connection
+    if connection.vendor != "postgresql":
+        return
+    with connection.cursor() as cursor:
+        for index, table, column in _INDEXES:
+            cursor.execute(_create_upper(index, table, column))
+        for old in _OLD_INDEXES:
+            cursor.execute(_drop(old))
+
+
+def _swap_back_to_raw_indexes(apps, schema_editor):
+    connection = schema_editor.connection
+    if connection.vendor != "postgresql":
+        return
+    with connection.cursor() as cursor:
+        for old, (_, table, column) in zip(_OLD_INDEXES, _INDEXES):
+            cursor.execute(_create_raw(old, table, column))
+        for index, _table, _column in _INDEXES:
+            cursor.execute(_drop(index))
+
+
 class Migration(migrations.Migration):
     # CONCURRENTLY cannot run inside a transaction.
     atomic = False
@@ -68,12 +92,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        *[
-            migrations.RunSQL(_create_upper(index, table, column), reverse_sql=_drop(index))
-            for index, table, column in _INDEXES
-        ],
-        *[
-            migrations.RunSQL(_drop(old), reverse_sql=_create_raw(old, table, column))
-            for old, (_, table, column) in zip(_OLD_INDEXES, _INDEXES)
-        ],
+        migrations.RunPython(_swap_to_upper_indexes, _swap_back_to_raw_indexes),
     ]

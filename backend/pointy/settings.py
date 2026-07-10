@@ -544,6 +544,13 @@ POINTY_SHOP_SETTINGS_CACHE_TTL = (
 POINTY_PERMISSION_CACHE_TTL = (
     0 if TESTING else env.int("POINTY_PERMISSION_CACHE_TTL", default=300)
 )
+# Active-product-id list for the unfiltered POS catalog (ProductViewSet).
+# Invalidated by the viewset's own writes, so the TTL bounds staleness from
+# direct-ORM writes (imports, admin) — and must be 0 under tests, where DB
+# rollbacks leave stale ids in Redis while Postgres sequences keep advancing.
+POINTY_ACTIVE_PRODUCT_CACHE_TTL = (
+    0 if TESTING else env.int("POINTY_ACTIVE_PRODUCT_CACHE_TTL", default=60)
+)
 # Catalog version stamp (apps.catalog.cache): drives the list-endpoint ETags
 # (304 on unchanged polls) and invalidates the price-checker lookup cache.
 POINTY_CATALOG_CACHE_ENABLED = (
