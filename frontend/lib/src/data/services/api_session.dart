@@ -117,6 +117,12 @@ class PosApiSession {
   String? get catalogVersionToken => _catalogVersionToken;
   String? _catalogVersionToken;
 
+  /// Discounts twin of [catalogVersionToken] (X-Pointy-Discounts-Version):
+  /// advances on any discount-rule edit. The POS latches "no active rules" at
+  /// a specific value and skips preview requests while it still matches.
+  String? get discountsVersionToken => _discountsVersionToken;
+  String? _discountsVersionToken;
+
   String get baseUrl => _baseUrl;
   bool get usesRelay => _relayToken.isNotEmpty;
 
@@ -156,6 +162,7 @@ class PosApiSession {
     _fallbackTarget = fallbackTarget;
     _conditionalCache.clear();
     _catalogVersionToken = null;
+    _discountsVersionToken = null;
   }
 
   Future<http.Response> get(
@@ -408,6 +415,10 @@ class PosApiSession {
     if (catalogVersion != null && catalogVersion.isNotEmpty) {
       _catalogVersionToken = catalogVersion;
     }
+    final discountsVersion = response.headers['x-pointy-discounts-version'];
+    if (discountsVersion != null && discountsVersion.isNotEmpty) {
+      _discountsVersionToken = discountsVersion;
+    }
 
     final setCookie = response.headers['set-cookie'];
     if (setCookie == null || setCookie.isEmpty) {
@@ -440,6 +451,7 @@ class PosApiSession {
     _csrfToken = null;
     _conditionalCache.clear();
     _catalogVersionToken = null;
+    _discountsVersionToken = null;
   }
 
   Future<http.Response> _send({

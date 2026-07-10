@@ -40,6 +40,10 @@ class SaleRepository {
 
   final PosApiService _service;
 
+  /// The backend's pushed discounts version (see PosApiSession) — the POS
+  /// latches "no active rules" against it to skip preview requests.
+  String? get discountsVersionToken => _service.discountsVersionToken;
+
   Future<Result<void>> sendInvoiceSms(int saleOrderId) {
     return Result.guard(() => _service.sendInvoiceSms(saleOrderId));
   }

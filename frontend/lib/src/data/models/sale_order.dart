@@ -155,6 +155,8 @@ class SaleDiscountPreview {
     this.appliedDiscounts = const [],
     this.unappliedCouponCodes = const [],
     this.lossLines = const [],
+    this.rulesActive = true,
+    this.rulesVersion = '',
   });
 
   final double subtotal;
@@ -164,11 +166,23 @@ class SaleDiscountPreview {
   final List<String> unappliedCouponCodes;
   final List<SaleLossLine> lossLines;
 
+  /// Whether ANY sale discount rule is active shop-wide, and the discounts
+  /// version that was true at. When false, the POS latches the version and
+  /// computes previews locally until the server pushes a newer one — no
+  /// request, no possible "تعذر تحديث الخصومات". The defaults keep old
+  /// backends (which don't send these) on the live-preview path.
+  final bool rulesActive;
+  final String rulesVersion;
+
   factory SaleDiscountPreview.fromJson(Map<String, Object?> json) {
     return SaleDiscountPreview(
       subtotal: _moneyFromJson(json['subtotal']),
       discountTotal: _moneyFromJson(json['discount_total']),
       total: _moneyFromJson(json['total']),
+      rulesActive: json['rules_active'] is bool
+          ? json['rules_active'] as bool
+          : true,
+      rulesVersion: json['rules_version']?.toString() ?? '',
       appliedDiscounts: _listFromJson(json['applied_discounts'])
           .whereType<Map<String, Object?>>()
           .map(AppliedDiscountInfo.fromJson)

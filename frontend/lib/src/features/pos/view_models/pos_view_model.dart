@@ -161,6 +161,12 @@ class PosViewModel extends ChangeNotifier {
     _PosSaleSession(id: 1, number: 1),
   ];
   int _activeSaleSessionId = 1;
+
+  // Latched when a live preview reports the shop has NO active sale discount
+  // rules, keyed to the exact discounts version the server pushes on every
+  // response. While it still matches, previews are computed locally — no
+  // request, so the preview cannot fail. Cleared the moment rules appear.
+  String? _noActiveDiscountRulesVersion;
   int _nextSaleSessionId = 2;
   int _nextSaleSessionNumber = 2;
   ShopSettings? _checkoutSettings;
