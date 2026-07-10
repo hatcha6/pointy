@@ -117,6 +117,8 @@ class RegisterSessionTile extends StatelessWidget {
       leading: Icon(statusIcon, color: colors.primaryStrong),
       title: l10n.resumeRegisterSessionTitle(session.sessionNumber),
       subtitle: [
+        // Accountability first: whose drawer this was.
+        if (session.ownerName.isNotEmpty) session.ownerName,
         if (session.openedAt != null) formatDateTime(session.openedAt!),
         l10n.registerSessionOpeningCash(formatMoney(session.openingCash)),
       ].join(' • '),

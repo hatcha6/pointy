@@ -130,6 +130,25 @@ class RegisterSessionApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(RegisterSession.objects.count(), 0)
 
+    def test_sessions_carry_the_opener_name(self):
+        self.client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "100.00"},
+            format="json",
+        )
+        listed = self.client.get(reverse("register-session-list"))
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertEqual(listed.data["results"][0]["owner_name"], "register-user")
+
+        # A real first/last name wins over the username.
+        self.user.first_name = "سالم"
+        self.user.last_name = "الفيتوري"
+        self.user.save()
+        listed = self.client.get(reverse("register-session-list"))
+        self.assertEqual(
+            listed.data["results"][0]["owner_name"], "سالم الفيتوري"
+        )
+
     def test_start_requires_opening_cash_when_setting_is_enabled(self):
         response = self.client.post(reverse("register-session-start"), format="json")
 

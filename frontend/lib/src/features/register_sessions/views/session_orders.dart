@@ -43,7 +43,10 @@ class SessionOrders extends StatelessWidget {
           PointySectionHeader(
             title: session == null
                 ? l10n.sessionSalesPlaceholderTitle
-                : l10n.sessionSalesTitle(session.sessionNumber),
+                : session.ownerName.isEmpty
+                ? l10n.sessionSalesTitle(session.sessionNumber)
+                : '${l10n.sessionSalesTitle(session.sessionNumber)} — '
+                      '${session.ownerName}',
           ),
           SizedBox(height: spacing.sm),
           Expanded(
