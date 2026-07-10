@@ -3,6 +3,7 @@ class RegisterSession {
     required this.id,
     required this.sessionNumber,
     required this.status,
+    this.ownerName = '',
     required this.openingCash,
     this.closingCash,
     this.count025 = 0,
@@ -26,6 +27,10 @@ class RegisterSession {
   final int id;
   final String sessionNumber;
   final String status;
+
+  /// Who opened the session (falls back to the owner key server-side when the
+  /// account was deleted) — the till accountability line.
+  final String ownerName;
   final double openingCash;
   final double? closingCash;
   final int count025;
@@ -50,6 +55,7 @@ class RegisterSession {
       id: json['id'] as int,
       sessionNumber: json['session_number'].toString(),
       status: json['status'] as String,
+      ownerName: json['owner_name']?.toString() ?? '',
       openingCash: _moneyFromJson(json['opening_cash']),
       closingCash: _nullableMoneyFromJson(json['closing_cash']),
       count025: _intFromJson(json['count_025']),

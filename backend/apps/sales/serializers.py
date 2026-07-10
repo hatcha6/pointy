@@ -91,6 +91,7 @@ class RegisterSessionSerializer(serializers.ModelSerializer):
         read_only=True,
         allow_null=True,
     )
+    owner_name = serializers.SerializerMethodField()
 
     class Meta:
         model = RegisterSession
@@ -98,6 +99,7 @@ class RegisterSessionSerializer(serializers.ModelSerializer):
             "id",
             "session_number",
             "status",
+            "owner_name",
             "opening_cash",
             "closing_cash",
             "count_025",
@@ -121,6 +123,7 @@ class RegisterSessionSerializer(serializers.ModelSerializer):
             "id",
             "session_number",
             "status",
+            "owner_name",
             "closing_cash",
             "count_025",
             "count_050",
@@ -139,6 +142,15 @@ class RegisterSessionSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def get_owner_name(self, session):
+        """Who opened the session — the till accountability line. Falls back to
+        the immutable owner_key when the user account was since deleted."""
+        owner = session.owner
+        if owner is None:
+            return session.owner_key
+        full_name = owner.get_full_name().strip()
+        return full_name or owner.username
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
