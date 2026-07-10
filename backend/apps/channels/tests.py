@@ -2,7 +2,8 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser, Group
-from django.test import RequestFactory, TestCase
+from django.core.cache import cache
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
@@ -147,6 +148,37 @@ class SalesChannelMiddlewareTests(TestCase):
         response = self.client.get("/healthz/")
 
         self.assertEqual(response.status_code, 200)
+
+    @override_settings(
+        CACHES={
+            "default": {
+                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                "LOCATION": "channels-throttle-tests",
+            },
+        },
+        POINTY_CHANNEL_LAST_USED_WRITE_SECONDS=60,
+    )
+    def test_last_used_write_is_throttled_to_one_per_window(self):
+        cache.clear()
+        channel, raw_key = create_delivery_channel()
+
+        self.client.get("/healthz/", headers={"X-Channel-Api-Key": raw_key})
+        channel.refresh_from_db()
+        self.assertIsNotNone(channel.api_key_last_used_at)
+
+        # Clear the stamp out-of-band: a second request inside the window must
+        # NOT write it back.
+        SalesChannel.objects.filter(pk=channel.pk).update(api_key_last_used_at=None)
+        self.client.get("/healthz/", headers={"X-Channel-Api-Key": raw_key})
+        channel.refresh_from_db()
+        self.assertIsNone(channel.api_key_last_used_at)
+
+        # Once the window lapses (simulated by clearing the guard key), the
+        # next request writes again.
+        cache.clear()
+        self.client.get("/healthz/", headers={"X-Channel-Api-Key": raw_key})
+        channel.refresh_from_db()
+        self.assertIsNotNone(channel.api_key_last_used_at)
 
 
 class SalesChannelApiTests(TestCase):

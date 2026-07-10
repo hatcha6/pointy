@@ -220,7 +220,7 @@ def filter_events_for_export(queryset, filters):
     return queryset.order_by("occurred_at", "id")
 
 
-def record_event(
+def build_event(
     *,
     name,
     event_type=AnalyticsEvent.EventType.USAGE,
@@ -232,7 +232,7 @@ def record_event(
     metrics=None,
     **kwargs,
 ) -> AnalyticsEvent:
-    return AnalyticsEvent.objects.create(
+    return AnalyticsEvent(
         name=name,
         event_type=event_type,
         severity=severity,
@@ -243,6 +243,22 @@ def record_event(
         metrics=metrics or {},
         **kwargs,
     )
+
+
+def record_event(**kwargs) -> AnalyticsEvent:
+    event = build_event(**kwargs)
+    event.save(force_insert=True)
+    return event
+
+
+def record_event_buffered(**kwargs) -> None:
+    """``record_event`` for high-volume telemetry: rows are batched into one
+    bulk INSERT per buffer window (see ``buffer.py``) and nothing is returned.
+    Only for events nobody reads back synchronously — audit trails and
+    anything whose pk matters must use ``record_event``."""
+    from . import buffer
+
+    buffer.enqueue(build_event(**kwargs))
 
 
 def record_domain_event(

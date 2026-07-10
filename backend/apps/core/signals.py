@@ -52,3 +52,12 @@ def bump_perm_version_on_user_save(sender, instance, update_fields=None, **kwarg
 @receiver(post_delete, sender=Group)
 def bump_perm_version_on_delete(sender, **kwargs):
     caching.bump_perm_version()
+
+
+# --- cached auth user row -------------------------------------------------------
+# Unlike the permission version above, this one must fire on EVERY user save —
+# a last_login-only save still changes the row the auth middleware serves.
+@receiver(post_save, sender=User)
+@receiver(post_delete, sender=User)
+def invalidate_user_row_cache(sender, instance, **kwargs):
+    caching.invalidate_user(instance.pk)

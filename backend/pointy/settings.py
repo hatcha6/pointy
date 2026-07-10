@@ -21,6 +21,8 @@ env = environ.Env(
     CSRF_TRUSTED_ORIGINS=(list, ["http://localhost:8080", "http://127.0.0.1:8080"]),
     POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED=(bool, True),
     POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS=(int, 750),
+    POINTY_ANALYTICS_BUFFER_SIZE=(int, 50),
+    POINTY_ANALYTICS_BUFFER_MAX_AGE_SECONDS=(int, 5),
     POINTY_ATTACHMENT_MAX_UPLOAD_BYTES=(int, 100 * 1024 * 1024),
     POINTY_ATTACHMENT_CONTENT_TOKEN_MAX_AGE_SECONDS=(int, 60 * 60 * 6),
     POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYTES=(int, 10 * 1024 * 1024),
@@ -426,6 +428,11 @@ CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
 POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED = env("POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED")
 POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS = env("POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS")
 POINTY_ANALYTICS_BACKEND_PERFORMANCE_PATHS = ("/api/",)
+# backend.request telemetry rows are bulk-inserted in batches of this size
+# instead of one INSERT per request (see analytics/buffer.py). 0 = synchronous;
+# forced synchronous under tests so assertions can see the row immediately.
+POINTY_ANALYTICS_BUFFER_SIZE = 0 if TESTING else env("POINTY_ANALYTICS_BUFFER_SIZE")
+POINTY_ANALYTICS_BUFFER_MAX_AGE_SECONDS = env("POINTY_ANALYTICS_BUFFER_MAX_AGE_SECONDS")
 POINTY_ATTACHMENT_STORAGE_ROOT = env(
     "POINTY_ATTACHMENT_STORAGE_ROOT",
     default=str(MEDIA_ROOT),
@@ -546,6 +553,16 @@ POINTY_SHOP_SETTINGS_CACHE_TTL = (
 )
 POINTY_PERMISSION_CACHE_TTL = (
     0 if TESTING else env.int("POINTY_PERMISSION_CACHE_TTL", default=300)
+)
+# The auth-middleware User row (apps.core.auth_backends.get_user) — the last
+# per-request SELECT once sessions + permissions are cached. Short TTL: it
+# bounds how long a raw-SQL password change/deactivation could lag (signalled
+# saves invalidate instantly).
+POINTY_USER_CACHE_TTL = 0 if TESTING else env.int("POINTY_USER_CACHE_TTL", default=60)
+# SalesChannel.api_key_last_used_at is written at most once per window instead
+# of on every keyed request (0 = every request, forced under tests).
+POINTY_CHANNEL_LAST_USED_WRITE_SECONDS = (
+    0 if TESTING else env.int("POINTY_CHANNEL_LAST_USED_WRITE_SECONDS", default=60)
 )
 # Active-product-id list for the unfiltered POS catalog (ProductViewSet).
 # Invalidated by the viewset's own writes, so the TTL bounds staleness from

@@ -1,5 +1,5 @@
 """Redis-backed caches for the fixed per-request overhead: the ShopSettings
-singleton and the resolved per-user permission set.
+singleton, the auth User row, and the resolved per-user permission set.
 
 Both are **fail-open** (any Redis hiccup falls straight through to a live DB
 read — a cache must never break a request) and both are invalidated the moment
@@ -99,6 +99,43 @@ def invalidate_shop_settings():
     if _shop_settings_ttl() <= 0:
         return  # nothing is ever cached; skip the Redis round-trip (tests/CI)
     _safe_delete(_shop_settings_key())
+
+
+# --- the auth user row ----------------------------------------------------------
+def _user_ttl() -> int:
+    return int(getattr(settings, "POINTY_USER_CACHE_TTL", 0))
+
+
+def _user_key(user_id) -> str:
+    # Same schema-fingerprint trick as ShopSettings: a pickle cached by the
+    # previous release can never be unpickled into a migrated User model.
+    from django.contrib.auth import get_user_model
+
+    fields = ",".join(
+        sorted(f.attname for f in get_user_model()._meta.concrete_fields)
+    )
+    digest = hashlib.md5(fields.encode()).hexdigest()[:10]
+    return f"pointy:auth:user:{user_id}:{digest}"
+
+
+def get_cached_user(user_id):
+    """Return the cached User row for the auth middleware, or None on miss."""
+    if _user_ttl() <= 0:
+        return None
+    return _safe_get(_user_key(user_id))
+
+
+def set_cached_user(user) -> None:
+    ttl = _user_ttl()
+    if ttl <= 0:
+        return
+    _safe_set(_user_key(user.pk), user, ttl)
+
+
+def invalidate_user(user_id) -> None:
+    if _user_ttl() <= 0:
+        return  # nothing is ever cached; skip the Redis round-trip (tests/CI)
+    _safe_delete(_user_key(user_id))
 
 
 # --- per-user permission sets -------------------------------------------------

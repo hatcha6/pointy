@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.core.cache import cache
 from django.http import JsonResponse
 from django.utils import timezone
 
@@ -36,10 +38,28 @@ class SalesChannelMiddleware:
                     status=403,
                 )
             request.sales_channel = channel
-            SalesChannel.objects.filter(pk=channel.pk).update(
-                api_key_last_used_at=timezone.now(),
-            )
+            if self._should_touch_last_used(channel):
+                SalesChannel.objects.filter(pk=channel.pk).update(
+                    api_key_last_used_at=timezone.now(),
+                )
         return self.get_response(request)
+
+    @staticmethod
+    def _should_touch_last_used(channel):
+        # last_used_at is display bookkeeping; writing it once per window
+        # instead of once per request keeps a chatty integration from turning
+        # every call into a DB write. Fail-open: no Redis → write as before.
+        window = int(
+            getattr(settings, "POINTY_CHANNEL_LAST_USED_WRITE_SECONDS", 0)
+        )
+        if window <= 0:
+            return True
+        try:
+            return bool(
+                cache.add(f"pointy:channels:key-used:{channel.pk}", 1, window)
+            )
+        except Exception:  # noqa: BLE001 — cache down: keep the old behavior
+            return True
 
     def _record_rejection(self, request, *, reason, channel=None):
         from apps.analytics.models import AnalyticsEvent

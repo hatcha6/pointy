@@ -1,4 +1,5 @@
-"""Tests for the ShopSettings singleton cache and the per-user permission cache.
+"""Tests for the ShopSettings singleton cache, the auth User-row cache, and the
+per-user permission cache.
 
 The caches are globally disabled under the test runner (their TTLs are forced to
 0 — see ``TESTING`` in settings), so every test here opts back in explicitly
@@ -12,6 +13,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 
 from apps.core import caching
+from apps.core.auth_backends import CachedPermissionsBackend
 from apps.core.models import ShopSettings
 from apps.core.roles import CASHIER_GROUP
 
@@ -24,6 +26,7 @@ CACHED = override_settings(
     },
     POINTY_SHOP_SETTINGS_CACHE_TTL=60,
     POINTY_PERMISSION_CACHE_TTL=300,
+    POINTY_USER_CACHE_TTL=60,
 )
 
 
@@ -126,3 +129,62 @@ class PermissionCacheTests(TestCase):
             caching.cache, "set", boom
         ):
             self.assertTrue(self._fresh_user().has_perm("sales.add_order"))
+
+
+@CACHED
+class UserRowCacheTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(
+            username="cashier", password="x", first_name="Amal"
+        )
+        self.backend = CachedPermissionsBackend()
+
+    def test_get_user_is_served_from_cache_after_first_read(self):
+        self.backend.get_user(self.user.pk)  # warm
+        with self.assertNumQueries(0):
+            user = self.backend.get_user(self.user.pk)
+        self.assertEqual(user.pk, self.user.pk)
+        self.assertEqual(user.first_name, "Amal")
+
+    def test_user_save_invalidates(self):
+        self.backend.get_user(self.user.pk)  # warm
+        self.user.first_name = "Basma"
+        self.user.save()
+        self.assertEqual(self.backend.get_user(self.user.pk).first_name, "Basma")
+
+    def test_last_login_only_save_still_invalidates_the_row(self):
+        from django.utils import timezone
+
+        self.backend.get_user(self.user.pk)  # warm (last_login is None)
+        self.user.last_login = timezone.now()
+        self.user.save(update_fields=["last_login"])
+        self.assertIsNotNone(self.backend.get_user(self.user.pk).last_login)
+
+    def test_deactivation_takes_effect_immediately(self):
+        self.backend.get_user(self.user.pk)  # warm
+        self.user.is_active = False
+        self.user.save()  # post_save invalidates the cached row
+        self.assertIsNone(self.backend.get_user(self.user.pk))
+
+    def test_stale_inactive_copy_is_refused_on_hit(self):
+        # Even if an inactive row somehow survives in the cache (e.g. a raw-SQL
+        # deactivation inside the TTL), the hit path re-checks
+        # user_can_authenticate and refuses it.
+        self.user.is_active = False
+        caching.set_cached_user(self.user)
+        self.assertIsNone(self.backend.get_user(self.user.pk))
+
+    def test_delete_invalidates(self):
+        self.backend.get_user(self.user.pk)  # warm
+        user_id = self.user.pk
+        self.user.delete()
+        self.assertIsNone(self.backend.get_user(user_id))
+
+    def test_fails_open_when_redis_is_down(self):
+        boom = mock.Mock(side_effect=ConnectionError("redis down"))
+        with mock.patch.object(caching.cache, "get", boom), mock.patch.object(
+            caching.cache, "set", boom
+        ):
+            user = self.backend.get_user(self.user.pk)
+        self.assertEqual(user.pk, self.user.pk)

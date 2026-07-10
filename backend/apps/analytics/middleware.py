@@ -5,7 +5,7 @@ from django.conf import settings
 from django.db import connections
 
 from .models import AnalyticsEvent
-from .services import record_event
+from .services import record_event, record_event_buffered
 
 
 class BackendPerformanceAnalyticsMiddleware:
@@ -48,6 +48,7 @@ class BackendPerformanceAnalyticsMiddleware:
 
         elapsed_ms = _elapsed_ms(started_at)
         status_code = getattr(response, "status_code", 0)
+        severity = _severity_for(status_code=status_code, elapsed_ms=elapsed_ms)
         metrics = _request_metrics(
             elapsed_ms=elapsed_ms,
             status_code=status_code,
@@ -55,16 +56,19 @@ class BackendPerformanceAnalyticsMiddleware:
             response=response,
         )
         attributes = _request_attributes(request, status_code=status_code)
-        severity = _severity_for(status_code=status_code, elapsed_ms=elapsed_ms)
-        _safe_record_event(
-            name="backend.request",
-            event_type=AnalyticsEvent.EventType.PERFORMANCE,
-            severity=severity,
-            user=getattr(request, "user", None),
-            request=request,
-            attributes=attributes,
-            metrics=metrics,
-        )
+        if _should_record_request_event(
+            request, status_code=status_code, severity=severity
+        ):
+            _safe_record_event(
+                name="backend.request",
+                event_type=AnalyticsEvent.EventType.PERFORMANCE,
+                severity=severity,
+                user=getattr(request, "user", None),
+                request=request,
+                attributes=attributes,
+                metrics=metrics,
+                buffered=True,
+            )
         if status_code >= 500:
             _safe_record_event(
                 name="backend.response_error",
@@ -177,6 +181,29 @@ def _severity_for(*, status_code, elapsed_ms):
     return AnalyticsEvent.Severity.INFO
 
 
+def _should_record_request_event(request, *, status_code, severity):
+    """Drop perf rows that carry no signal but arrive in floods.
+
+    A 304 is a conditional-GET hit — the whole point of the ETag layer is that
+    those cost nothing, so they must not each buy a DB write. Attachment
+    *content* serves (product images) are the highest-volume 2xx endpoint once
+    a catalog screen scrolls; keep only the slow/error ones.
+    """
+    if status_code == 304:
+        return False
+    if severity == AnalyticsEvent.Severity.INFO and _is_attachment_content_path(
+        getattr(request, "path", "")
+    ):
+        return False
+    return True
+
+
+def _is_attachment_content_path(path):
+    return path.startswith("/api/attachments/") and (
+        path.endswith("/content/") or path.endswith("/content")
+    )
+
+
 def _safe_record_event(
     *,
     name,
@@ -186,9 +213,11 @@ def _safe_record_event(
     request,
     attributes,
     metrics,
+    buffered=False,
 ):
+    record = record_event_buffered if buffered else record_event
     try:
-        record_event(
+        record(
             name=name,
             event_type=event_type,
             severity=severity,
