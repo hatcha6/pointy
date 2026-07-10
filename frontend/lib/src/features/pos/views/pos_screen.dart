@@ -539,52 +539,54 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
       // quantity. Arrow keys flip the active line's unit of measure (the
       // legacy shortcut, kept alongside the F-keys below).
       onArrowKey: (key) => _cycleActiveLineUnit(key),
-      child: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.enter, control: true):
-              _requestCheckout,
-          const SingleActivator(LogicalKeyboardKey.enter, meta: true):
-              _requestCheckout,
-          const SingleActivator(LogicalKeyboardKey.numpadEnter, control: true):
-              _requestCheckout,
-          const SingleActivator(LogicalKeyboardKey.numpadEnter, meta: true):
-              _requestCheckout,
-          // Legacy till function keys (muscle memory from older POS systems):
-          // F1 hold-and-open-new-invoice, F2 cycle the active line's unit,
-          // F4 delete the active line.
-          const SingleActivator(LogicalKeyboardKey.f1): _newInvoice,
-          const SingleActivator(LogicalKeyboardKey.f2): () =>
-              _cycleActiveLineUnit(),
-          const SingleActivator(LogicalKeyboardKey.f4): _deleteActiveLine,
-        },
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.hasBoundedWidth
-                ? constraints.maxWidth
-                : MediaQuery.sizeOf(context).width;
-            if (AppBreakpoints.usesTwoPane(width)) {
-              return TwoPaneLayout(
-                minPrimaryWidth: 390,
-                primaryPane: PosCatalogPane(
-                  viewModel: viewModel,
-                  capabilities: capabilities,
-                ),
-                secondaryPane: PosCartPane(
-                  viewModel: viewModel,
-                  contactRepository: widget.contactRepository,
-                  capabilities: capabilities,
-                  checkoutController: _checkoutController,
-                ),
-              );
-            }
-
-            return _CompactPosWorkspace(
-              viewModel: viewModel,
-              contactRepository: widget.contactRepository,
-              capabilities: capabilities,
+      // Legacy till function keys (muscle memory from older POS systems):
+      // F1 hold-and-open-new-invoice, F2 cycle the active line's unit,
+      // F4 delete the active line. Dispatched through the global key handler
+      // above — NOT focus-tree Shortcuts, which silently die whenever focus
+      // parks outside the workspace (an app-bar tap, a closed dialog, or
+      // nothing focused at all). Same for the Ctrl/Cmd+Enter checkout chord.
+      onFunctionKey: (key) {
+        if (key == LogicalKeyboardKey.f1) {
+          _newInvoice();
+          return true;
+        }
+        if (key == LogicalKeyboardKey.f2) {
+          return _cycleActiveLineUnit();
+        }
+        if (key == LogicalKeyboardKey.f4) {
+          _deleteActiveLine();
+          return true;
+        }
+        return false;
+      },
+      onCommandEnter: _requestCheckout,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.hasBoundedWidth
+              ? constraints.maxWidth
+              : MediaQuery.sizeOf(context).width;
+          if (AppBreakpoints.usesTwoPane(width)) {
+            return TwoPaneLayout(
+              minPrimaryWidth: 390,
+              primaryPane: PosCatalogPane(
+                viewModel: viewModel,
+                capabilities: capabilities,
+              ),
+              secondaryPane: PosCartPane(
+                viewModel: viewModel,
+                contactRepository: widget.contactRepository,
+                capabilities: capabilities,
+                checkoutController: _checkoutController,
+              ),
             );
-          },
-        ),
+          }
+
+          return _CompactPosWorkspace(
+            viewModel: viewModel,
+            contactRepository: widget.contactRepository,
+            capabilities: capabilities,
+          );
+        },
       ),
     );
   }
