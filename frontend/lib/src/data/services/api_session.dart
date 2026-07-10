@@ -102,9 +102,11 @@ class PosApiSession {
   ApiConnectionTarget? _fallbackTarget;
 
   /// LRU of (etag, body) per request URL for opt-in conditional GETs — the
-  /// catalog list endpoints send ETags so unchanged polls come back as an
-  /// empty 304 and the stored body is replayed as a normal 200.
-  static const int _conditionalCacheMaxEntries = 64;
+  /// catalog/category/unit/modifier/notification list endpoints send ETags so
+  /// unchanged polls come back as an empty 304 and the stored body is replayed
+  /// as a normal 200. Sized for several paginated lists' worth of distinct
+  /// URLs (each page/filter combination is one entry).
+  static const int _conditionalCacheMaxEntries = 256;
   final LinkedHashMap<String, _ConditionalCacheEntry> _conditionalCache =
       LinkedHashMap();
 
