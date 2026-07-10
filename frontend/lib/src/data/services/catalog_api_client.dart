@@ -32,6 +32,10 @@ class CatalogApiClient {
     final response = await _session.get(
       'products/',
       query: query.toQueryParameters(page: page),
+      // The heaviest payload in the app, re-fetched on every POS screen visit:
+      // revalidate with If-None-Match so an unchanged catalog is a wire-cheap
+      // 304 replayed from the session cache.
+      conditionalCache: true,
     );
     _session.ensureSuccess(response, 'Product request failed with status');
     return ProductPage.fromJson(
@@ -269,6 +273,7 @@ class CatalogApiClient {
     final response = await _session.get(
       'product-variants/',
       query: query.toQueryParameters(page: page),
+      conditionalCache: true,
     );
     _session.ensureSuccess(
       response,

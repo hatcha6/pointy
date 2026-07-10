@@ -81,6 +81,14 @@ def recompute_product_popularity(*, reference_time=None, window_days=WINDOW_DAYS
         Product.objects.bulk_update(batch, _FIELDS, batch_size=batch_size)
         updated += len(batch)
 
+    if updated:
+        # bulk_update skips post_save, so the catalog version (which drives the
+        # list-endpoint ETags) must be advanced by hand or clients would keep
+        # 304-ing on yesterday's popularity ordering.
+        from .cache import bump_catalog_version
+
+        bump_catalog_version()
+
     return {
         "products_updated": updated,
         "products_with_sales": len(counts),
