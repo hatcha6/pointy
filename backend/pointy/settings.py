@@ -129,6 +129,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "apps.channels.middleware.SalesChannelMiddleware",
     "apps.analytics.middleware.BackendPerformanceAnalyticsMiddleware",
+    # Pushes the catalog version to clients on every API response so POS-side
+    # scan/search caches invalidate deterministically (apps.catalog.cache).
+    "apps.catalog.middleware.CatalogVersionHeaderMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]

@@ -159,6 +159,7 @@ class PosApiService {
   }
 
   String get baseUrl => _session.baseUrl;
+  String? get catalogVersionToken => _session.catalogVersionToken;
   bool get usesRelay => _session.usesRelay;
 
   late final PosApiSession _session;

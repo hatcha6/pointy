@@ -29,7 +29,7 @@ from apps.attachments.serializers import (
     ProductImageSearchResultSerializer,
 )
 from apps.core.permissions import HasPointyPermission
-from .cache import catalog_etag
+from .cache import attach_catalog_version, catalog_etag, catalog_version
 from .models import (
     ModifierGroup,
     Product,
@@ -156,12 +156,17 @@ class ConditionalListMixin:
     """
 
     def list(self, request, *args, **kwargs):
-        etag = catalog_etag(request)
+        version = catalog_version()
+        etag = catalog_etag(request, version)
         if etag is not None and request.headers.get("If-None-Match") == etag:
-            return Response(status=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+            response = Response(
+                status=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag}
+            )
+            return attach_catalog_version(response, version)
         response = super().list(request, *args, **kwargs)
         if etag is not None and response.status_code == status.HTTP_200_OK:
             response["ETag"] = etag
+            attach_catalog_version(response, version)
         return response
 
 

@@ -62,14 +62,29 @@ def bump_catalog_version() -> None:
             pass
 
 
-def catalog_etag(request) -> str | None:
+def catalog_etag(request, version=None) -> str | None:
     """Weak ETag for catalog list responses, or None to skip conditional GET.
 
     The user id is embedded so a response serialized for one role can never be
     304-validated against another user's cached copy.
     """
-    version = catalog_version()
+    version = catalog_version() if version is None else version
     if version is None:
         return None
     user_id = getattr(getattr(request, "user", None), "pk", None) or 0
     return f'W/"catalog-v{version}-u{user_id}"'
+
+
+# Version-push header: stamped on the responses the POS receives constantly
+# (catalog lists, discount preview — which fires on every cart edit — and
+# checkout), so tills learn "the catalog changed" within one interaction and
+# flush their local scan/search caches deterministically instead of trusting
+# TTLs. Absent when caching is disabled or Redis is down — clients no-op.
+CATALOG_VERSION_HEADER = "X-Pointy-Catalog-Version"
+
+
+def attach_catalog_version(response, version=None):
+    version = catalog_version() if version is None else version
+    if version is not None:
+        response[CATALOG_VERSION_HEADER] = str(version)
+    return response

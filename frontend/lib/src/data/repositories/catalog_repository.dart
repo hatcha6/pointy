@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../../core/token_lru_cache.dart';
 import '../../shared/barcode/scale_barcode.dart';
 import '../models/attachment_summary.dart';
 import '../models/barcode_resolution.dart';
@@ -34,11 +35,48 @@ class CatalogRepository {
 
   final PosApiService _service;
 
+  // Client-side caches for the POS hot paths, keyed on the backend's catalog
+  // version token (pushed on every API response), so any product/price/stock
+  // change server-side orphans them within one interaction. Money stays
+  // correct regardless: checkout re-prices everything server-side — these
+  // only ever affect what is displayed, bounded by the token + a short TTL.
+  final TokenLruCache<BarcodeResolutionHit> _barcodeCache = TokenLruCache(
+    capacity: 128,
+    ttl: const Duration(minutes: 2),
+  );
+  final TokenLruCache<ProductPage> _productPageCache = TokenLruCache(
+    capacity: 32,
+    ttl: const Duration(seconds: 45),
+  );
+
   Future<Result<ProductPage>> loadProducts({
     required ProductQuery query,
     int page = 1,
   }) async {
-    return Result.guard(() => _service.fetchProducts(query: query, page: page));
+    final cacheKey = _productPageCacheKey(query, page);
+    final cached = _productPageCache.read(cacheKey, _service.catalogVersionToken);
+    if (cached != null) {
+      return Ok(cached);
+    }
+    final result = await Result.guard(
+      () => _service.fetchProducts(query: query, page: page),
+    );
+    if (result is Ok<ProductPage>) {
+      // Store under the token the response itself carried — the version this
+      // payload is true for.
+      _productPageCache.write(
+        cacheKey,
+        result.value,
+        _service.catalogVersionToken,
+      );
+    }
+    return result;
+  }
+
+  String _productPageCacheKey(ProductQuery query, int page) {
+    final parameters = query.toQueryParameters(page: page);
+    final keys = parameters.keys.toList()..sort();
+    return keys.map((key) => '$key=${parameters[key]}').join('&');
   }
 
   Future<Result<Product>> createProduct(ProductDraft draft) async {
@@ -428,7 +466,16 @@ class CatalogRepository {
       return const Ok(null);
     }
 
-    return Result.guard(() async {
+    // Burst scans of the same item (multi-quantity rings, rescans) skip the
+    // network entirely. Not-found is cached too — a mistyped code rescanned
+    // in frustration is the hottest lookup of all. Never caches errors.
+    final cacheKey = '${activeOnly ? 'active' : 'all'}:$normalizedBarcode';
+    final cached = _barcodeCache.read(cacheKey, _service.catalogVersionToken);
+    if (cached != null) {
+      return Ok(cached.resolution);
+    }
+
+    final result = await Result.guard(() async {
       final direct = await _resolveByExactBarcode(
         normalizedBarcode,
         activeOnly: activeOnly,
@@ -453,6 +500,14 @@ class CatalogRepository {
       }
       return null;
     });
+    if (result is Ok<BarcodeResolution?>) {
+      _barcodeCache.write(
+        cacheKey,
+        BarcodeResolutionHit(result.value),
+        _service.catalogVersionToken,
+      );
+    }
+    return result;
   }
 
   /// Legacy shape of [resolveBarcode] for flows that only handle plain variant
@@ -626,4 +681,12 @@ class CatalogRepository {
     }
     return const [];
   }
+}
+
+/// Wraps a barcode resolution so a cached "not found" (null resolution) stays
+/// distinguishable from a cache miss.
+class BarcodeResolutionHit {
+  const BarcodeResolutionHit(this.resolution);
+
+  final BarcodeResolution? resolution;
 }
