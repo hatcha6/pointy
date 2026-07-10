@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import '../../../shared/barcode/scan_burst_guard.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
@@ -448,6 +450,9 @@ class _CartScrollContentState extends State<_CartScrollContent> {
   final FocusNode _focusNode = FocusNode(debugLabel: 'pos_cart_keyboard');
   String? _focusedLineKey;
   String _pendingQuantity = '';
+  // Rejects scanner-speed keystrokes so a wedge burst can never become a
+  // line quantity (the scan itself is BarcodeScanListener's job).
+  final ScanBurstGuard _scanBurstGuard = ScanBurstGuard();
   int _lastLineCount = -1;
 
   PosViewModel get _viewModel => widget.viewModel;
@@ -528,6 +533,16 @@ class _CartScrollContentState extends State<_CartScrollContent> {
 
     final digit = _digitFor(key);
     if (digit != null) {
+      final rollback = _scanBurstGuard.onDigit(_pendingQuantity, DateTime.now());
+      if (rollback != null) {
+        // A wedge is typing, not the cashier — roll the pending entry back to
+        // its pre-burst value and swallow the keystroke. The scan itself is
+        // recognized (or safely dropped) by BarcodeScanListener.
+        if (_pendingQuantity != rollback) {
+          setState(() => _pendingQuantity = rollback);
+        }
+        return KeyEventResult.handled;
+      }
       if (_pendingQuantity.length < 7) {
         setState(() => _pendingQuantity = '$_pendingQuantity$digit');
       }
@@ -537,6 +552,13 @@ class _CartScrollContentState extends State<_CartScrollContent> {
         key == LogicalKeyboardKey.numpadDecimal) {
       // Fractional entry (2.5 of anything) is the cashier's choice — allowed for
       // every product; at most one decimal point.
+      final rollback = _scanBurstGuard.onDigit(_pendingQuantity, DateTime.now());
+      if (rollback != null) {
+        if (_pendingQuantity != rollback) {
+          setState(() => _pendingQuantity = rollback);
+        }
+        return KeyEventResult.handled;
+      }
       if (!_pendingQuantity.contains('.') && _pendingQuantity.length < 6) {
         setState(
           () => _pendingQuantity = _pendingQuantity.isEmpty
@@ -560,6 +582,11 @@ class _CartScrollContentState extends State<_CartScrollContent> {
     }
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter) {
+      if (_scanBurstGuard.shouldSwallowCommit(DateTime.now())) {
+        // Tail of a scanner burst (reaches here only when the listener is
+        // disabled or the code was too short) — never commit it as quantity.
+        return KeyEventResult.handled;
+      }
       _applyPendingQuantity(line);
       return KeyEventResult.handled;
     }
