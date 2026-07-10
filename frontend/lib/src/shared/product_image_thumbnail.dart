@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import 'design/design.dart';
+import 'network_image_caching.dart';
 
 class ProductImageThumbnail extends StatelessWidget {
   const ProductImageThumbnail({
@@ -32,24 +34,20 @@ class ProductImageThumbnail extends StatelessWidget {
           ),
           child: url.isEmpty
               ? _FallbackLabel(text: fallbackText)
-              : Image.network(
-                  url,
+              : CachedNetworkImage(
+                  imageUrl: url,
+                  cacheKey: stableImageCacheKey(url),
                   fit: BoxFit.cover,
-                  cacheWidth: cacheEdge,
-                  cacheHeight: cacheEdge,
-                  errorBuilder: (context, error, stackTrace) =>
+                  memCacheWidth: cacheEdge,
+                  memCacheHeight: cacheEdge,
+                  errorWidget: (context, imageUrl, error) =>
                       _FallbackLabel(text: fallbackText),
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) {
-                      return child;
-                    }
-                    return Center(
-                      child: SizedBox.square(
-                        dimension: size * 0.28,
-                        child: const CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    );
-                  },
+                  placeholder: (context, imageUrl) => Center(
+                    child: SizedBox.square(
+                      dimension: size * 0.28,
+                      child: const CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
                 ),
         ),
       ),

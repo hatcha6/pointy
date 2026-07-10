@@ -1,10 +1,12 @@
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/price_lookup_result.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/network_image_caching.dart';
 
 /// The lifecycle of a single scan, from the customer's point of view.
 enum PriceCheckerKioskStatus { idle, loading, found, notFound, disconnected }
@@ -820,24 +822,22 @@ class _ProductPhoto extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: AspectRatio(
         aspectRatio: 1,
-        child: Image.network(
-          url,
+        child: CachedNetworkImage(
+          imageUrl: url,
+          cacheKey: stableImageCacheKey(url),
           fit: BoxFit.contain,
           filterQuality: FilterQuality.medium,
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
-            return Center(
-              child: SizedBox(
-                width: 32,
-                height: 32,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: colors.primary,
-                ),
+          placeholder: (context, imageUrl) => Center(
+            child: SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: colors.primary,
               ),
-            );
-          },
-          errorBuilder: (context, _, __) => Icon(
+            ),
+          ),
+          errorWidget: (context, imageUrl, error) => Icon(
             Icons.inventory_2_outlined,
             size: side * 0.4,
             color: colors.mutedInk.withOpacity(0.5),

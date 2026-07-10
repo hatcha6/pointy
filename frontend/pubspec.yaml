@@ -36,6 +36,21 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
+  # compat/win8: disk-cached product images (honors the backend's
+  # Cache-Control/ETag). 3.4.x line unverified on Flutter 3.19 — cap at the
+  # 3.3.x line (Flutter-3.7-era floor). BEST-EFFORT like the pins below —
+  # confirm with the compat CI's Flutter 3.19 pub get.
+  cached_network_image: '>=3.3.1 <3.4.0'
+  # compat/win8: cached_network_image's storage stack. sqflite 2.4+ splits into
+  # federated packages flooring at Dart 3.5-3.10; 2.3.x is the last
+  # single-package, Dart-3.3-safe line (Windows never registers it anyway —
+  # flutter_cache_manager uses its JSON store there). synchronized 3.2+ and
+  # sqflite_common 2.5.5+ floor above Dart 3.3.
+  # (patch releases inside these lines retro-raised the floor to Dart 3.5 —
+  # 2.3.3+1 / 2.5.4 are the newest that still say >=3.3.0.)
+  sqflite: '>=2.3.0 <2.3.3+2'
+  sqflite_common: '>=2.5.0 <2.5.4+1'
+  synchronized: '>=3.1.0 <3.2.0'
   http: ^1.2.2
   intl: any
   archive: ^4.0.9

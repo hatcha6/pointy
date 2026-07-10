@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../design/design.dart';
+import '../network_image_caching.dart';
 
 class PointyProductImageFrame extends StatelessWidget {
   const PointyProductImageFrame({
@@ -61,17 +63,15 @@ class PointyProductImageFrame extends StatelessWidget {
                       final cacheWidth = logical > 0
                           ? (logical * dpr).round()
                           : null;
-                      return Image.network(
-                        url,
+                      return CachedNetworkImage(
+                        imageUrl: url,
+                        cacheKey: stableImageCacheKey(url),
                         fit: fit,
-                        cacheWidth: cacheWidth,
-                        errorBuilder: (context, error, stackTrace) {
+                        memCacheWidth: cacheWidth,
+                        errorWidget: (context, imageUrl, error) {
                           return _FallbackLabel(text: fallbackText);
                         },
-                        loadingBuilder: (context, child, progress) {
-                          if (progress == null) {
-                            return child;
-                          }
+                        placeholder: (context, imageUrl) {
                           return _FallbackLabel(text: fallbackText);
                         },
                       );
