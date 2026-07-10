@@ -18,7 +18,6 @@ from .models import (
     Product,
     ProductCategory,
     ProductUnit,
-    ProductUnitBarcode,
     ProductVariant,
 )
 
@@ -29,8 +28,6 @@ from .models import (
 @receiver(post_delete, sender=ProductVariant)
 @receiver(post_save, sender=ProductUnit)
 @receiver(post_delete, sender=ProductUnit)
-@receiver(post_save, sender=ProductUnitBarcode)
-@receiver(post_delete, sender=ProductUnitBarcode)
 @receiver(post_save, sender=ProductCategory)
 @receiver(post_delete, sender=ProductCategory)
 @receiver(post_save, sender=StockItem)
