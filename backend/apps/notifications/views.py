@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
 
+from .cache import notifications_etag
 from .serializers import (
     BusinessNotificationSerializer,
     SnoozeBusinessNotificationSerializer,
@@ -31,12 +32,29 @@ class BusinessNotificationViewSet(
     search_fields = ("code", "entity_type", "entity_id")
     ordering_fields = ("last_seen_at", "severity", "category", "created_at")
 
+    def list(self, request, *args, **kwargs):
+        # The bell/badge poll from every signed-in device. Order matters: the
+        # (throttled) inline sync runs first because it may materially change
+        # the feed and bump the version; only then is the ETag trustworthy.
+        maybe_sync_business_notifications()
+        etag = notifications_etag(request)
+        if etag is not None and request.headers.get("If-None-Match") == etag:
+            return Response(
+                status=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag}
+            )
+        response = super().list(request, *args, **kwargs)
+        if etag is not None and response.status_code == status.HTTP_200_OK:
+            response["ETag"] = etag
+        return response
+
     def get_queryset(self):
         # Reads top up the feed inline, but throttled (see the service): the
         # Celery beat is the primary refresher, so the bell/badge polled by every
         # device no longer triggers a full recompute per request. The explicit
         # POST /refresh below still forces an immediate, unthrottled recompute.
-        if self.action in ("list", "retrieve"):
+        # (list() runs the same top-up before its ETag check, so only retrieve
+        # needs it here.)
+        if self.action == "retrieve":
             maybe_sync_business_notifications()
         queryset = visible_notifications_for_user(self.request.user)
         include_hidden = self.action in {

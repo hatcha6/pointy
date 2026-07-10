@@ -100,6 +100,46 @@ class CatalogConditionalGetTests(TestCase):
             self.assertEqual(response.status_code, status.HTTP_200_OK)
             self.assertNotIn("ETag", response)
 
+    def test_catalog_adjacent_lists_support_conditional_get(self):
+        # Categories (the POS quick-access strip), units, and modifier groups
+        # ride the same catalog version as the product list.
+        for path in (
+            "/api/product-categories/",
+            "/api/units-of-measure/",
+            "/api/modifier-groups/",
+        ):
+            with self.subTest(path=path):
+                etag = self._get(path=path)["ETag"]
+                revalidated = self._get(etag=etag, path=path)
+                self.assertEqual(
+                    revalidated.status_code, status.HTTP_304_NOT_MODIFIED
+                )
+
+    def test_modifier_group_edit_invalidates_catalog_etags(self):
+        # Modifier sets embed in the product payload (modifier_group_details)
+        # without touching Product rows — their edits must orphan product-list
+        # ETags too.
+        from apps.catalog.models import ModifierGroup
+
+        etag = self._get()["ETag"]
+        ModifierGroup.objects.create(name="Extras")
+        response = self._get(etag=etag)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(response["ETag"], etag)
+
+    def test_unit_of_measure_edit_invalidates_catalog_etags(self):
+        from apps.catalog.models import UnitDimension, UnitOfMeasure
+
+        etag = self._get()["ETag"]
+        UnitOfMeasure.objects.create(
+            code="crate6",
+            name="Crate of 6",
+            dimension=UnitDimension.COUNT,
+        )
+        response = self._get(etag=etag)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(response["ETag"], etag)
+
 
 @CACHED
 class CatalogVersionHeaderTests(TestCase):

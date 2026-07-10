@@ -12,6 +12,9 @@ class BusinessNotificationApiClient {
     final response = await _session.get(
       'business-notifications/',
       query: {'include_hidden': includeHidden.toString()},
+      // The bell/badge poll: the server 304s on its notifications-version
+      // ETag, so an unchanged feed costs no body and no queryset.
+      conditionalCache: true,
     );
     _session.ensureSuccess(
       response,

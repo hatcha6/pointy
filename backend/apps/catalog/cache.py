@@ -2,8 +2,9 @@
 
 One monotonically increasing integer that changes whenever anything the catalog
 payload is built from changes: products, variants, units, unit barcodes,
-categories, attachments (product images), and stock levels (every sale funnels
-through ``StockItem.save``, so quantities are covered). Two consumers:
+categories, modifier sets, units of measure, attachments (product images), and
+stock levels (every sale funnels through ``StockItem.save``, so quantities are
+covered). Two consumers:
 
 - **Conditional GET** on the catalog list endpoints (``ConditionalListMixin`` in
   views.py): the ETag embeds the version, so unchanged catalogs answer polls

@@ -15,11 +15,15 @@ from apps.inventory.models import StockItem
 
 from .cache import bump_catalog_version
 from .models import (
+    ModifierGroup,
+    ModifierOption,
     Product,
     ProductCategory,
+    ProductModifierGroup,
     ProductUnit,
     ProductUnitBarcode,
     ProductVariant,
+    UnitOfMeasure,
 )
 
 
@@ -39,6 +43,18 @@ from .models import (
 # touching the Product row itself.
 @receiver(post_save, sender=Attachment)
 @receiver(post_delete, sender=Attachment)
+# Modifier sets and unit-of-measure labels embed in the catalog payload
+# (modifier_group_details, per-line unit labels) without touching Product rows;
+# their edits must orphan catalog ETags too — and they let the modifier-group /
+# unit list endpoints ride the same version.
+@receiver(post_save, sender=ModifierGroup)
+@receiver(post_delete, sender=ModifierGroup)
+@receiver(post_save, sender=ModifierOption)
+@receiver(post_delete, sender=ModifierOption)
+@receiver(post_save, sender=ProductModifierGroup)
+@receiver(post_delete, sender=ProductModifierGroup)
+@receiver(post_save, sender=UnitOfMeasure)
+@receiver(post_delete, sender=UnitOfMeasure)
 def bump_on_catalog_change(sender, **kwargs):
     bump_catalog_version()
 

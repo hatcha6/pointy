@@ -10,6 +10,7 @@ class ModifierGroupApiClient {
     final response = await _session.get(
       'modifier-groups/',
       query: {'page': '$page'},
+      conditionalCache: true, // rides the catalog-version ETag
     );
     _session.ensureSuccess(
       response,

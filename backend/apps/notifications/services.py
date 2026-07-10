@@ -15,6 +15,7 @@ from apps.printing.models import PrintAgent, PrintJob
 from apps.purchasing.models import PurchaseOrder, SupplierPayment
 from apps.sales.models import Order, OrderLine, RegisterSession
 
+from .cache import bump_notifications_version, bump_user_notifications_version
 from .models import BusinessNotification, BusinessNotificationUserState
 
 MANAGED_CODES = (
@@ -93,19 +94,29 @@ def sync_business_notifications(now=None):
     desired.extend(_payroll_notifications(now))
 
     fingerprints = set()
+    changed = 0
     with transaction.atomic():
         for spec in desired:
             fingerprints.add(spec["fingerprint"])
-            _upsert_notification(spec, now)
+            if _upsert_notification(spec, now):
+                changed += 1
 
-        BusinessNotification.objects.filter(
-            code__in=MANAGED_CODES,
-            status=BusinessNotification.Status.ACTIVE,
-        ).exclude(fingerprint__in=fingerprints).update(
-            status=BusinessNotification.Status.RESOLVED,
-            resolved_at=now,
-            last_seen_at=now,
+        changed += (
+            BusinessNotification.objects.filter(
+                code__in=MANAGED_CODES,
+                status=BusinessNotification.Status.ACTIVE,
+            )
+            .exclude(fingerprint__in=fingerprints)
+            .update(
+                status=BusinessNotification.Status.RESOLVED,
+                resolved_at=now,
+                last_seen_at=now,
+            )
         )
+    if changed:
+        # Only a material change orphans feed ETags — the last_seen_at-only
+        # refresh above must keep every device 304ing.
+        bump_notifications_version()
 
     return {
         "active": BusinessNotification.objects.filter(
@@ -185,6 +196,7 @@ def acknowledge_notification(notification, user, now=None):
     state.acknowledged_at = now
     state.snoozed_until = None
     state.save(update_fields=["acknowledged_at", "snoozed_until", "updated_at"])
+    bump_user_notifications_version(user.pk)
     return state
 
 
@@ -197,6 +209,7 @@ def snooze_notification(notification, user, *, duration, now=None):
     state.acknowledged_at = None
     state.snoozed_until = now + duration
     state.save(update_fields=["acknowledged_at", "snoozed_until", "updated_at"])
+    bump_user_notifications_version(user.pk)
     return state
 
 
@@ -205,6 +218,7 @@ def restore_notification(notification, user):
         notification=notification,
         user=user,
     ).delete()
+    bump_user_notifications_version(user.pk)
 
 
 def restore_notifications_for_user(user, queryset):
@@ -215,6 +229,7 @@ def restore_notifications_for_user(user, queryset):
         user=user,
         notification_id__in=notification_ids,
     ).delete()
+    bump_user_notifications_version(user.pk)
     return deleted
 
 
@@ -258,6 +273,7 @@ def acknowledge_notifications_for_user(user, queryset, now=None):
                 missing_states,
                 ignore_conflicts=True,
             )
+    bump_user_notifications_version(user.pk)
     return len(notification_ids)
 
 
@@ -626,6 +642,10 @@ def _json_safe_payload(value):
 
 
 def _upsert_notification(spec, now):
+    """Create or refresh one notification; returns True when the upsert
+    changed anything a client can see (new row, reactivation, or a field
+    diff) — the ``last_seen_at``-only refresh of a persisting notification
+    returns False so it never orphans feed ETags."""
     # Stock quantities are Decimals since weighted-product support; the
     # payload column is JSON, so coerce them at the boundary.
     if "payload" in spec:
@@ -640,9 +660,13 @@ def _upsert_notification(spec, now):
         defaults={**defaults, "first_seen_at": now, "last_seen_at": now},
     )
     if created:
-        return
+        return True
 
     was_resolved = notification.status == BusinessNotification.Status.RESOLVED
+    materially_changed = was_resolved or any(
+        getattr(notification, field) != spec[field]
+        for field in ("code", "category", "severity", "entity_type", "entity_id", "payload")
+    )
     notification.code = spec["code"]
     notification.category = spec["category"]
     notification.severity = spec["severity"]
@@ -671,6 +695,7 @@ def _upsert_notification(spec, now):
     )
     if was_resolved:
         BusinessNotificationUserState.objects.filter(notification=notification).delete()
+    return materially_changed
 
 
 def _spec(

@@ -364,6 +364,9 @@ class CatalogApiClient {
     final response = await _session.get(
       'product-categories/',
       query: query.toQueryParameters(page: page),
+      // Rides the catalog-version ETag: the quick-access strip re-fetches on
+      // every POS open and categories almost never change.
+      conditionalCache: true,
     );
     _session.ensureSuccess(
       response,

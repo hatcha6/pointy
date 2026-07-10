@@ -581,6 +581,15 @@ POINTY_CATALOG_CACHE_ENABLED = (
 POINTY_PRICE_LOOKUP_CACHE_TTL = (
     0 if TESTING else env.int("POINTY_PRICE_LOOKUP_CACHE_TTL", default=30)
 )
+# Notifications feed version stamps (apps.notifications.cache): drive the
+# bell/badge list ETag. The max-age bucket bounds every indirect staleness
+# path (snooze expiry, admin edits) without per-poll DB work.
+POINTY_NOTIFICATIONS_CACHE_ENABLED = (
+    False if TESTING else env.bool("POINTY_NOTIFICATIONS_CACHE_ENABLED", default=True)
+)
+POINTY_NOTIFICATIONS_ETAG_MAX_AGE_SECONDS = env.int(
+    "POINTY_NOTIFICATIONS_ETAG_MAX_AGE_SECONDS", default=300
+)
 POINTY_CURRENCY_SUFFIX = env("POINTY_CURRENCY_SUFFIX")
 POINTY_CURRENCY_LATIN = env("POINTY_CURRENCY_LATIN")
 

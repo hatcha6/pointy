@@ -20,6 +20,7 @@ class UnitOfMeasureApiClient {
         'page': '$page',
         if (active != null) 'is_active': active ? 'true' : 'false',
       },
+      conditionalCache: true, // rides the catalog-version ETag
     );
     _session.ensureSuccess(response, 'Units request failed with status');
     final body = _session.decodedBody(response) as Map<String, Object?>;

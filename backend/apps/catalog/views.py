@@ -122,7 +122,33 @@ class ProductVariantFilter(django_filters.FilterSet):
         ).distinct()
 
 
-class ProductCategoryViewSet(viewsets.ModelViewSet):
+class ConditionalListMixin:
+    """304 Not Modified for catalog list polls.
+
+    The ETag embeds the Redis catalog version (bumped by signals on any
+    product/stock/image change — see cache.py), so an unchanged catalog answers
+    a repeat poll before the queryset or serializer ever runs, and the LAN
+    carries an empty body instead of the largest payload in the app. When the
+    version is unavailable (Redis down, caching disabled) responses simply skip
+    the ETag and clients fall back to plain 200s.
+    """
+
+    def list(self, request, *args, **kwargs):
+        version = catalog_version()
+        etag = catalog_etag(request, version)
+        if etag is not None and request.headers.get("If-None-Match") == etag:
+            response = Response(
+                status=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag}
+            )
+            return attach_catalog_version(response, version)
+        response = super().list(request, *args, **kwargs)
+        if etag is not None and response.status_code == status.HTTP_200_OK:
+            response["ETag"] = etag
+            attach_catalog_version(response, version)
+        return response
+
+
+class ProductCategoryViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     serializer_class = ProductCategorySerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
     permission_map = {
@@ -165,32 +191,6 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
                     "code": "has_children",
                 }
             )
-
-
-class ConditionalListMixin:
-    """304 Not Modified for catalog list polls.
-
-    The ETag embeds the Redis catalog version (bumped by signals on any
-    product/stock/image change — see cache.py), so an unchanged catalog answers
-    a repeat poll before the queryset or serializer ever runs, and the LAN
-    carries an empty body instead of the largest payload in the app. When the
-    version is unavailable (Redis down, caching disabled) responses simply skip
-    the ETag and clients fall back to plain 200s.
-    """
-
-    def list(self, request, *args, **kwargs):
-        version = catalog_version()
-        etag = catalog_etag(request, version)
-        if etag is not None and request.headers.get("If-None-Match") == etag:
-            response = Response(
-                status=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag}
-            )
-            return attach_catalog_version(response, version)
-        response = super().list(request, *args, **kwargs)
-        if etag is not None and response.status_code == status.HTTP_200_OK:
-            response["ETag"] = etag
-            attach_catalog_version(response, version)
-        return response
 
 
 class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
@@ -903,7 +903,7 @@ class VariantOptionValueViewSet(viewsets.ModelViewSet):
     ordering_fields = ("option__display_order", "display_order", "name", "created_at")
 
 
-class ModifierGroupViewSet(viewsets.ModelViewSet):
+class ModifierGroupViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     serializer_class = ModifierGroupSerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
     permission_map = {
@@ -920,7 +920,7 @@ class ModifierGroupViewSet(viewsets.ModelViewSet):
     ordering_fields = ("display_order", "name", "created_at")
 
 
-class UnitOfMeasureViewSet(viewsets.ModelViewSet):
+class UnitOfMeasureViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     """The global, editable unit registry. Seeded (``is_system``) units can be
     deactivated or relabelled but never deleted, and their ``code`` is locked so
     existing products keep resolving."""
@@ -937,7 +937,7 @@ class UnitOfMeasureViewSet(viewsets.ModelViewSet):
     }
     queryset = UnitOfMeasure.objects.annotate(
         product_count=Count("product_units", distinct=True),
-    )
+    ).order_by("display_order", "name", "id")
     filterset_fields = ("is_active", "dimension", "is_system")
     search_fields = ("code", "name", "abbreviation")
     ordering_fields = ("display_order", "name", "dimension", "created_at")
