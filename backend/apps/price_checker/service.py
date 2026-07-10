@@ -16,7 +16,7 @@ from django.conf import settings
 from . import discovery, drivers
 from .formatting import profile_from_device
 from .models import PriceCheckerDevice, PriceCheckEvent
-from .pricing import PriceResult, lookup_price
+from .pricing import PriceResult
 
 
 def _currency() -> str:
@@ -72,8 +72,12 @@ def perform_lookup(
     text) never pay for the extra attachment query — only HTTP/web kiosks do.
     """
     started = time.perf_counter()
+    # Cached behind the catalog + discount versions (see cache.py); the audit
+    # event below is still written for every scan.
+    from .cache import lookup_price_cached
+
     result = (
-        lookup_price(barcode, with_image=with_image)
+        lookup_price_cached(barcode, with_image=with_image)
         if barcode
         else PriceResult.not_found("")
     )

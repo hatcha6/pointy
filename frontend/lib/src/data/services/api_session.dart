@@ -1,4 +1,6 @@
+import 'dart:collection';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -73,6 +75,20 @@ class SseEvent {
   final String data;
 }
 
+/// A previously seen response body paired with its ETag, replayed when the
+/// server answers a revalidation with 304 Not Modified.
+class _ConditionalCacheEntry {
+  const _ConditionalCacheEntry({
+    required this.etag,
+    required this.bodyBytes,
+    required this.headers,
+  });
+
+  final String etag;
+  final Uint8List bodyBytes;
+  final Map<String, String> headers;
+}
+
 class PosApiSession {
   PosApiSession({required this.client, required String baseUrl})
     : _baseUrl = _normalizeBaseUrl(baseUrl);
@@ -84,6 +100,13 @@ class PosApiSession {
   String _baseUrl;
   String _relayToken = '';
   ApiConnectionTarget? _fallbackTarget;
+
+  /// LRU of (etag, body) per request URL for opt-in conditional GETs — the
+  /// catalog list endpoints send ETags so unchanged polls come back as an
+  /// empty 304 and the stored body is replayed as a normal 200.
+  static const int _conditionalCacheMaxEntries = 64;
+  final LinkedHashMap<String, _ConditionalCacheEntry> _conditionalCache =
+      LinkedHashMap();
 
   String get baseUrl => _baseUrl;
   bool get usesRelay => _relayToken.isNotEmpty;
@@ -122,15 +145,76 @@ class PosApiSession {
     _baseUrl = _normalizeBaseUrl(baseUrl);
     _relayToken = relayToken.trim();
     _fallbackTarget = fallbackTarget;
+    _conditionalCache.clear();
   }
 
-  Future<http.Response> get(String path, {Map<String, String>? query}) async {
-    return _send(
+  Future<http.Response> get(
+    String path, {
+    Map<String, String>? query,
+    bool conditionalCache = false,
+  }) async {
+    if (!conditionalCache) {
+      return _send(
+        method: 'GET',
+        path: path,
+        request: () =>
+            client.get(uri(path, queryParameters: query), headers: headers()),
+      );
+    }
+
+    // Look the entry up once and hold the reference: eviction by a concurrent
+    // request must not turn a 304 into an empty response.
+    final cached = _conditionalCache[uri(path, queryParameters: query).toString()];
+    final response = await _send(
       method: 'GET',
       path: path,
-      request: () =>
-          client.get(uri(path, queryParameters: query), headers: headers()),
+      request: () {
+        final requestHeaders = headers();
+        if (cached != null) {
+          requestHeaders['If-None-Match'] = cached.etag;
+        }
+        // uri() is re-resolved per attempt so the relay-fallback retry inside
+        // _send targets the switched base URL, same as the plain path above.
+        return client.get(uri(path, queryParameters: query),
+            headers: requestHeaders);
+      },
     );
+
+    final cacheKey = uri(path, queryParameters: query).toString();
+    if (response.statusCode == 304 && cached != null) {
+      _touchConditionalEntry(cacheKey, cached);
+      return http.Response.bytes(
+        cached.bodyBytes,
+        200,
+        headers: cached.headers,
+        request: response.request,
+      );
+    }
+    final etag = response.headers['etag'] ?? '';
+    if (response.statusCode == 200 && etag.isNotEmpty) {
+      _storeConditionalEntry(
+        cacheKey,
+        _ConditionalCacheEntry(
+          etag: etag,
+          bodyBytes: response.bodyBytes,
+          headers: response.headers,
+        ),
+      );
+    }
+    return response;
+  }
+
+  void _touchConditionalEntry(String key, _ConditionalCacheEntry entry) {
+    _conditionalCache.remove(key);
+    _conditionalCache[key] = entry;
+  }
+
+  void _storeConditionalEntry(String key, _ConditionalCacheEntry entry) {
+    _conditionalCache.remove(key);
+    _conditionalCache[key] = entry;
+    while (_conditionalCache.length > _conditionalCacheMaxEntries) {
+      _conditionalCache.remove(_conditionalCache.keys.first);
+    }
   }
 
   Future<http.Response> getUri(Uri uri, {String performancePath = 'resource'}) {
@@ -339,6 +423,7 @@ class PosApiSession {
   void clearAuthState() {
     _cookies.clear();
     _csrfToken = null;
+    _conditionalCache.clear();
   }
 
   Future<http.Response> _send({

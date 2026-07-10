@@ -527,6 +527,16 @@ POINTY_SHOP_SETTINGS_CACHE_TTL = (
 POINTY_PERMISSION_CACHE_TTL = (
     0 if TESTING else env.int("POINTY_PERMISSION_CACHE_TTL", default=300)
 )
+# Catalog version stamp (apps.catalog.cache): drives the list-endpoint ETags
+# (304 on unchanged polls) and invalidates the price-checker lookup cache.
+POINTY_CATALOG_CACHE_ENABLED = (
+    False if TESTING else env.bool("POINTY_CATALOG_CACHE_ENABLED", default=True)
+)
+# Price-checker barcode lookups (seconds; 0 disables). Version-keyed against
+# catalog + discount edits; the TTL only bounds discount time-window boundaries.
+POINTY_PRICE_LOOKUP_CACHE_TTL = (
+    0 if TESTING else env.int("POINTY_PRICE_LOOKUP_CACHE_TTL", default=30)
+)
 POINTY_CURRENCY_SUFFIX = env("POINTY_CURRENCY_SUFFIX")
 POINTY_CURRENCY_LATIN = env("POINTY_CURRENCY_LATIN")
 

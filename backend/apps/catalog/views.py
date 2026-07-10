@@ -29,6 +29,7 @@ from apps.attachments.serializers import (
     ProductImageSearchResultSerializer,
 )
 from apps.core.permissions import HasPointyPermission
+from .cache import catalog_etag
 from .models import (
     ModifierGroup,
     Product,
@@ -143,7 +144,28 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
             )
 
 
-class ProductViewSet(viewsets.ModelViewSet):
+class ConditionalListMixin:
+    """304 Not Modified for catalog list polls.
+
+    The ETag embeds the Redis catalog version (bumped by signals on any
+    product/stock/image change — see cache.py), so an unchanged catalog answers
+    a repeat poll before the queryset or serializer ever runs, and the LAN
+    carries an empty body instead of the largest payload in the app. When the
+    version is unavailable (Redis down, caching disabled) responses simply skip
+    the ETag and clients fall back to plain 200s.
+    """
+
+    def list(self, request, *args, **kwargs):
+        etag = catalog_etag(request)
+        if etag is not None and request.headers.get("If-None-Match") == etag:
+            return Response(status=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+        response = super().list(request, *args, **kwargs)
+        if etag is not None and response.status_code == status.HTTP_200_OK:
+            response["ETag"] = etag
+        return response
+
+
+class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     active_cache_key = "catalog:active_product_ids"
     serializer_class = ProductCatalogSerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
@@ -719,7 +741,7 @@ class ProductViewSet(viewsets.ModelViewSet):
             pass
 
 
-class ProductVariantViewSet(viewsets.ModelViewSet):
+class ProductVariantViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     product_cache_key = ProductViewSet.active_cache_key
     serializer_class = ProductVariantSerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
