@@ -851,6 +851,113 @@ void main() {
       expect(viewModel.cart.single.unitPriceOverride, isNull);
     });
   });
+
+  group('discount preview gate', () {
+    test('a no-rules preview latches: later cart edits preview locally, '
+        'with zero requests', () async {
+      final apiService = _FakePosApiService(
+        discountsVersion: '7',
+        onPreviewDiscounts: (draft) async => const SaleDiscountPreview(
+          subtotal: 3.5,
+          discountTotal: 0,
+          total: 3.5,
+          rulesActive: false,
+          rulesVersion: '7',
+        ),
+      );
+      final viewModel = _viewModel(apiService);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      expect(apiService.previewRequests, 1, reason: 'first preview is live');
+      expect(viewModel.discountRulesKnownInactive, isTrue);
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      expect(apiService.previewRequests, 1, reason: 'latched: no request');
+      expect(viewModel.hasDiscountPreviewError, isFalse);
+      expect(viewModel.total, viewModel.subtotal);
+      expect(viewModel.discountTotal, 0);
+    });
+
+    test('after the latch, a failing server preview degrades to local totals '
+        'instead of an error', () async {
+      var failing = false;
+      final apiService = _FakePosApiService(
+        discountsVersion: '7',
+        onPreviewDiscounts: (draft) async {
+          if (failing) {
+            throw Exception('network down');
+          }
+          return const SaleDiscountPreview(
+            subtotal: 3.5,
+            discountTotal: 0,
+            total: 3.5,
+            rulesActive: false,
+            rulesVersion: '7',
+          );
+        },
+      );
+      final viewModel = _viewModel(apiService);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      expect(viewModel.discountRulesKnownInactive, isTrue);
+
+      failing = true;
+      await viewModel.refreshDiscountPreview(forceServer: true);
+      expect(viewModel.hasDiscountPreviewError, isFalse,
+          reason: 'no coupon + no rules: nothing depends on the server');
+      expect(viewModel.total, viewModel.subtotal);
+    });
+
+    test('active rules clear the latch and previews stay live', () async {
+      final apiService = _FakePosApiService(
+        discountsVersion: '7',
+        onPreviewDiscounts: (draft) async => const SaleDiscountPreview(
+          subtotal: 3.5,
+          discountTotal: 0.5,
+          total: 3.0,
+          rulesActive: true,
+          rulesVersion: '7',
+        ),
+      );
+      final viewModel = _viewModel(apiService);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      expect(viewModel.discountRulesKnownInactive, isFalse);
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      expect(apiService.previewRequests, 2, reason: 'rules active: stay live');
+    });
+
+    test('a failure with no latch still reports the preview error', () async {
+      final apiService = _FakePosApiService(
+        discountsVersion: '7',
+        onPreviewDiscounts: (draft) async => throw Exception('network down'),
+      );
+      final viewModel = _viewModel(apiService);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      expect(viewModel.hasDiscountPreviewError, isTrue,
+          reason: 'rules unknown: the error must surface');
+    });
+  });
 }
 
 PosViewModel _viewModel(
@@ -1069,11 +1176,35 @@ class _FakePosApiService extends PosApiService {
     this.checkoutCompleter,
     this.onCheckout,
     this.onFetchProducts,
+    this.onPreviewDiscounts,
+    this.discountsVersion,
     this.catalogPages = const {},
   }) : super(
          client: MockClient((_) async => http.Response('{}', 500)),
          baseUrl: 'http://pointy.test/api',
        );
+
+  /// Overrides the discounts version the real session learns from response
+  /// headers, so the no-rules latch can be exercised without HTTP plumbing.
+  final String? discountsVersion;
+  final Future<SaleDiscountPreview> Function(SaleDiscountPreviewDraft draft)?
+  onPreviewDiscounts;
+  int previewRequests = 0;
+
+  @override
+  String? get discountsVersionToken => discountsVersion;
+
+  @override
+  Future<SaleDiscountPreview> previewSaleDiscounts(
+    SaleDiscountPreviewDraft draft,
+  ) {
+    previewRequests += 1;
+    final handler = onPreviewDiscounts;
+    if (handler != null) {
+      return handler(draft);
+    }
+    return super.previewSaleDiscounts(draft);
+  }
 
   final Completer<SaleOrder>? checkoutCompleter;
   final Future<SaleOrder> Function(

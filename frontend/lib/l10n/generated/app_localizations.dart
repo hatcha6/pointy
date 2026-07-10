@@ -15043,6 +15043,24 @@ abstract class AppLocalizations {
   /// **'تعذر تحديث الخصومات الآن.'**
   String get discountPreviewUnavailable;
 
+  /// No description provided for @discountPreviewFailedCheckoutTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحديث الخصومات'**
+  String get discountPreviewFailedCheckoutTitle;
+
+  /// No description provided for @discountPreviewFailedCheckoutBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'قد توجد تخفيضات لا يمكن التحقق منها الآن. عند إتمام البيع سيحتسب النظام الخصومات الفعلية تلقائيًا، وقد يختلف الإجمالي النهائي عن المعروض.'**
+  String get discountPreviewFailedCheckoutBody;
+
+  /// No description provided for @discountPreviewFailedCheckoutConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة البيع'**
+  String get discountPreviewFailedCheckoutConfirm;
+
   /// Shown when a coupon code was not applied.
   ///
   /// In ar, this message translates to:

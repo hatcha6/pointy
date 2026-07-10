@@ -1,11 +1,32 @@
 part of 'pos_view_model.dart';
 
 extension PosCheckoutActions on PosViewModel {
-  Future<void> refreshDiscountPreview() async {
+  /// True when a live preview confirmed the shop has no active sale discount
+  /// rules AND the server's pushed discounts version still matches — i.e. the
+  /// preview is pure arithmetic the client can do itself.
+  bool get discountRulesKnownInactive {
+    final latched = _noActiveDiscountRulesVersion;
+    final current = _saleRepository.discountsVersionToken;
+    return latched != null && current != null && latched == current;
+  }
+
+  Future<void> refreshDiscountPreview({bool forceServer = false}) async {
     final session = _activeSaleSession;
     final requestVersion = ++session.discountPreviewRequestVersion;
     if (session.cart.isEmpty) {
       session.discountPreview = null;
+      session.hasDiscountPreviewError = false;
+      session.isLoadingDiscountPreview = false;
+      _notifyChanged();
+      return;
+    }
+
+    final couponCode = session.couponCode.trim();
+    if (!forceServer && couponCode.isEmpty && discountRulesKnownInactive) {
+      // No rules exist (confirmed at the pushed discounts version): totals
+      // are plain sums, so skip the network entirely. No request means the
+      // preview can never fail on a shop that runs no promotions.
+      session.discountPreview = _localNoRulesPreview(session);
       session.hasDiscountPreviewError = false;
       session.isLoadingDiscountPreview = false;
       _notifyChanged();
@@ -31,12 +52,43 @@ extension PosCheckoutActions on PosViewModel {
       case Ok<SaleDiscountPreview>():
         session.discountPreview = result.value;
         session.hasDiscountPreviewError = false;
+        _latchDiscountRulesGate(result.value);
       case Error<SaleDiscountPreview>():
-        session.discountPreview = null;
-        session.hasDiscountPreviewError = true;
+        if (couponCode.isEmpty && discountRulesKnownInactive) {
+          // Transient failure, but nothing depends on the server: no coupon
+          // to validate and no rules that could change the totals. Fail soft
+          // with the local arithmetic instead of nagging the cashier.
+          session.discountPreview = _localNoRulesPreview(session);
+          session.hasDiscountPreviewError = false;
+        } else {
+          session.discountPreview = null;
+          session.hasDiscountPreviewError = true;
+        }
     }
     session.isLoadingDiscountPreview = false;
     _notifyChanged();
+  }
+
+  void _latchDiscountRulesGate(SaleDiscountPreview preview) {
+    if (!preview.rulesActive && preview.rulesVersion.isNotEmpty) {
+      _noActiveDiscountRulesVersion = preview.rulesVersion;
+    } else if (preview.rulesActive) {
+      _noActiveDiscountRulesVersion = null;
+    }
+  }
+
+  SaleDiscountPreview _localNoRulesPreview(_PosSaleSession session) {
+    final subtotal = session.cart.fold<double>(
+      0,
+      (sum, line) => sum + line.total,
+    );
+    return SaleDiscountPreview(
+      subtotal: subtotal,
+      discountTotal: 0,
+      total: subtotal,
+      rulesActive: false,
+      rulesVersion: _noActiveDiscountRulesVersion ?? '',
+    );
   }
 
   List<SaleStockShortage> checkoutStockShortages() {

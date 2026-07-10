@@ -8595,6 +8595,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get discountPreviewUnavailable => 'تعذر تحديث الخصومات الآن.';
 
   @override
+  String get discountPreviewFailedCheckoutTitle => 'تعذر تحديث الخصومات';
+
+  @override
+  String get discountPreviewFailedCheckoutBody =>
+      'قد توجد تخفيضات لا يمكن التحقق منها الآن. عند إتمام البيع سيحتسب النظام الخصومات الفعلية تلقائيًا، وقد يختلف الإجمالي النهائي عن المعروض.';
+
+  @override
+  String get discountPreviewFailedCheckoutConfirm => 'متابعة البيع';
+
+  @override
   String discountCouponUnavailable(String code) {
     return 'الكود غير متاح: $code';
   }

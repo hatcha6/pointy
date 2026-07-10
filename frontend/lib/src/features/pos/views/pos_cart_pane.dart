@@ -136,17 +136,51 @@ class PosCartPane extends StatelessWidget {
       }
     }
 
-    await viewModel.refreshDiscountPreview();
+    // Force one live preview so loss warnings and coupon validation are as
+    // fresh as the network allows — but its failure must never dead-end the
+    // sale: the checkout itself recomputes discounts server-side.
+    await viewModel.refreshDiscountPreview(forceServer: true);
     if (!context.mounted) {
       return;
     }
     if (viewModel.hasDiscountPreviewError) {
-      messenger
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(content: Text(l10n.discountPreviewUnavailable)),
-        );
-      return;
+      if (viewModel.couponCode.trim().isNotEmpty) {
+        // A typed coupon must be validated before payment — this is the one
+        // case the preview genuinely gates.
+        messenger
+          ..clearSnackBars()
+          ..showSnackBar(
+            SnackBar(content: Text(l10n.discountPreviewUnavailable)),
+          );
+        return;
+      }
+      // Rules may exist but can't be verified right now. The server applies
+      // the real discounts at checkout either way — let the cashier decide
+      // instead of forcing them to abandon (and hand-write) the sale.
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          icon: const Icon(Icons.sync_problem_outlined),
+          title: Text(l10n.discountPreviewFailedCheckoutTitle),
+          content: Text(l10n.discountPreviewFailedCheckoutBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.cancelButton),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.discountPreviewFailedCheckoutConfirm),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true) {
+        return;
+      }
+      if (!context.mounted) {
+        return;
+      }
     }
     if (viewModel.unappliedCouponCodes.isNotEmpty) {
       messenger

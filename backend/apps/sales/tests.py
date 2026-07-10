@@ -1142,6 +1142,38 @@ class OrderCheckoutApiTests(TestCase):
         self.assertEqual(loss_line["line_cost"], "6.00")
         self.assertEqual(loss_line["loss_amount"], "1.00")
 
+    def test_discount_preview_reports_the_rules_gate_state(self):
+        from apps.discounts.cache import bump_rules_version
+
+        # The Redis gate is deliberately NOT transaction-aware (production
+        # invalidation is signal-driven; test rollbacks fire no signals), so
+        # force a recompute against THIS test's database before asserting.
+        bump_rules_version()
+
+        # No rules: the POS latches this and stops previewing until the pushed
+        # discounts version changes.
+        response = self.client.post(
+            reverse("order-discount-preview"),
+            {"lines": [{"variant": self.variant.pk, "quantity": 1}]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["rules_active"])
+        self.assertTrue(str(response.data["rules_version"]))
+
+        DiscountRule.objects.create(
+            name="Any sale rule",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("5.00"),
+        )
+        response = self.client.post(
+            reverse("order-discount-preview"),
+            {"lines": [{"variant": self.variant.pk, "quantity": 1}]},
+            format="json",
+        )
+        self.assertTrue(response.data["rules_active"])
+
     def test_checkout_prices_costs_and_stocks_the_exact_variant(self):
         variant = ProductVariant.objects.create(
             product=self.product,

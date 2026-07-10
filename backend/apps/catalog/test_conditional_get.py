@@ -135,3 +135,19 @@ class CatalogVersionHeaderTests(TestCase):
         with override_settings(POINTY_CATALOG_CACHE_ENABLED=False):
             response = self.client_api.get("/api/orders/")
             self.assertFalse(response.has_header("X-Pointy-Catalog-Version"))
+            self.assertFalse(response.has_header("X-Pointy-Discounts-Version"))
+
+    def test_discounts_version_is_pushed_and_advances_on_rule_changes(self):
+        from decimal import Decimal
+
+        from apps.discounts.models import DiscountRule
+
+        before = self.client_api.get("/api/orders/")["X-Pointy-Discounts-Version"]
+        DiscountRule.objects.create(
+            name="Any rule",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("5.00"),
+        )
+        after = self.client_api.get("/api/orders/")["X-Pointy-Discounts-Version"]
+        self.assertNotEqual(after, before)

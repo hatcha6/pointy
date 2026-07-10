@@ -239,7 +239,12 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     if (!context.mounted) {
       return;
     }
-    if (viewModel.hasDiscountPreviewError) {
+    // A preview failure only gates the submit when a supplier discount code
+    // is typed (it must validate first). Otherwise the server recomputes the
+    // PO's totals on submit anyway — blocking here would just dead-end the
+    // buyer on a transient network blip.
+    if (viewModel.hasDiscountPreviewError &&
+        viewModel.discountCode.trim().isNotEmpty) {
       messenger
         ..clearSnackBars()
         ..showSnackBar(
@@ -307,7 +312,10 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     if (!context.mounted) {
       return;
     }
-    if (viewModel.hasDiscountPreviewError) {
+    // Same rule as _submitDraft: only a typed discount code makes the preview
+    // a hard requirement; a draft save never dead-ends on a network blip.
+    if (viewModel.hasDiscountPreviewError &&
+        viewModel.discountCode.trim().isNotEmpty) {
       messenger
         ..clearSnackBars()
         ..showSnackBar(

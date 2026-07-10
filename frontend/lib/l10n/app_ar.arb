@@ -5103,6 +5103,9 @@
   "refreshDiscountPreviewTooltip": "تحديث الخصومات",
   "applyDiscountCodeButton": "تطبيق الخصم",
   "discountPreviewUnavailable": "تعذر تحديث الخصومات الآن.",
+  "discountPreviewFailedCheckoutTitle": "تعذر تحديث الخصومات",
+  "discountPreviewFailedCheckoutBody": "قد توجد تخفيضات لا يمكن التحقق منها الآن. عند إتمام البيع سيحتسب النظام الخصومات الفعلية تلقائيًا، وقد يختلف الإجمالي النهائي عن المعروض.",
+  "discountPreviewFailedCheckoutConfirm": "متابعة البيع",
   "discountCouponUnavailable": "الكود غير متاح: {code}",
   "@discountCouponUnavailable": {
     "description": "Shown when a coupon code was not applied.",

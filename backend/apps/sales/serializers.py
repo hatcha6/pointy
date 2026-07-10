@@ -13,6 +13,11 @@ from apps.catalog.units import (
 from apps.core.models import RelayInstallation, ShopSettings
 from apps.core.roles import user_has_full_visibility, user_is_manager
 from apps.customers.models import Customer
+from apps.discounts.cache import (
+    active_rules_exist as _active_discount_rules_exist,
+    rules_version as discount_rules_version,
+)
+from apps.discounts.models import DiscountRule
 from apps.discounts.services import rounding_metadata_payload
 from .models import (
     Order,
@@ -41,6 +46,10 @@ from .services import (
     void_order,
 )
 from .public_invoices import public_invoice_url_for_order
+
+
+def sales_discount_rules_active() -> bool:
+    return _active_discount_rules_exist(DiscountRule.Channel.SALES)
 
 
 class RegisterSessionSerializer(serializers.ModelSerializer):
@@ -1179,6 +1188,14 @@ class DiscountPreviewSerializer(serializers.Serializer):
                 self.validated_data["lines"],
                 discount_result,
             ),
+            # Gate state for the POS: when no active rule targets sales, the
+            # client latches "no rules @ this version" and stops previewing on
+            # every cart edit until the pushed X-Pointy-Discounts-Version
+            # changes — the preview becomes local arithmetic, so its failure
+            # mode (تعذر تحديث الخصومات) can no longer occur for shops that
+            # run no promotions. Fail-open: Redis trouble reports active=True.
+            "rules_active": sales_discount_rules_active(),
+            "rules_version": discount_rules_version(),
         }
 
 
