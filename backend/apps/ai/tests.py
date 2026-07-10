@@ -1,11 +1,13 @@
+import asyncio
 import json
+import warnings
 from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import AsyncRequestFactory, TestCase, TransactionTestCase
 from django.urls import reverse
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, force_authenticate
 
 from apps.core.models import RelayInstallation
 from apps.core.relay import RelayControlError, relay_ai_available
@@ -1470,3 +1472,87 @@ class AiChatActionToolTests(TestCase):
 
         self.assertTrue(Expense.objects.filter(description="أول").exists())
         self.assertFalse(Expense.objects.filter(description="ثانٍ").exists())
+
+
+class AiChatAsgiStreamingTests(TransactionTestCase):
+    """The chat SSE body must be an async iterator when served over ASGI.
+
+    Django only *buffers* a sync iterator under ASGI — it warns
+    ("StreamingHttpResponse must consume synchronous iterators … Use an
+    asynchronous iterator instead.") and collects the whole body via
+    ``sync_to_async(list)`` before sending byte one, so in production (uvicorn)
+    the client saw nothing until the entire agentic turn finished and every
+    chat request appeared to hang/fail. TransactionTestCase because the bridge
+    runs the turn on a worker thread whose DB connection can't see an open
+    test transaction.
+    """
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username="asgi-cashier", password="pw-12345!")
+        RelayInstallation.objects.create(
+            installation_id="inst-asgi",
+            access_token="ptr1.inst-asgi.secret",
+            relay_enabled=False,
+            subscription_active=True,
+            ai_enabled=True,
+        )
+
+    def _post_chat_over_asgi(self):
+        request = AsyncRequestFactory().post(
+            "/api/ai/chat/",
+            data=json.dumps({"message": "مرحبا"}),
+            content_type="application/json",
+        )
+        force_authenticate(request, user=self.user)
+        return AiChatView.as_view()(request)
+
+    def test_streams_an_async_body_and_persists_the_turn(self):
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["Hel", "lo"])
+            )
+            response = self._post_chat_over_asgi()
+            self.assertEqual(response.status_code, 200)
+            # The load-bearing assertion: an async body streams event-by-event;
+            # a sync one would be silently buffered wholesale (after a warning).
+            self.assertTrue(response.is_async)
+
+            async def consume():
+                # Iterate the response exactly like Django's ASGI handler does.
+                collected = []
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    async for part in response:
+                        collected.append(part)
+                return collected, caught
+
+            parts, caught = asyncio.run(consume())
+
+        body = b"".join(parts).decode("utf-8")
+        self.assertIn("event: delta", body)
+        self.assertIn('"text": "Hel"', body)
+        self.assertIn("event: done", body)
+        self.assertEqual([w for w in caught if "StreamingHttpResponse" in str(w.message)], [])
+
+        # The worker thread persisted the turn like the WSGI path does.
+        conversation = AiConversation.objects.get(user=self.user)
+        roles = list(conversation.messages.values_list("role", flat=True))
+        self.assertEqual(roles, [AiMessage.ROLE_USER, AiMessage.ROLE_ASSISTANT])
+        self.assertEqual(
+            conversation.messages.get(role=AiMessage.ROLE_ASSISTANT).content, "Hello"
+        )
+
+    def test_wsgi_requests_keep_a_sync_body(self):
+        # runserver/tests serve WSGI, where a sync generator streams natively —
+        # the async bridge must stay out of that path.
+        client = APIClient()
+        client.force_authenticate(self.user)
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["hi"])
+            )
+            response = client.post(reverse("ai-chat"), {"message": "مرحبا"}, format="json")
+            self.assertFalse(response.is_async)
+            body = b"".join(response.streaming_content).decode("utf-8")
+        self.assertIn("event: done", body)

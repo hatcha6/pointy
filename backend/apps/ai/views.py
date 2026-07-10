@@ -8,6 +8,7 @@ from datetime import timedelta
 from uuid import uuid4
 
 from django.core.cache import cache
+from django.core.handlers.asgi import ASGIRequest
 from django.http import HttpResponse, StreamingHttpResponse
 from django.urls import reverse
 from django.utils import timezone
@@ -18,6 +19,7 @@ from rest_framework.views import APIView
 from apps.core.dashboard import build_dashboard_snapshot
 from apps.core.models import RelayInstallation
 from apps.core.relay import RelayControlClient, RelayControlError, relay_ai_available
+from apps.core.streaming import aiter_in_thread
 
 from .dashboard_digest import generate_dashboard_digest
 from .models import AiConversation, AiMessage
@@ -244,7 +246,8 @@ class AiChatView(APIView):
         except RelayControlError as exc:
             return _relay_error_response(exc)
 
-        streaming = StreamingHttpResponse(
+        return self._sse_response(
+            request,
             self._agentic_stream(
                 client=client,
                 installation=installation,
@@ -257,8 +260,21 @@ class AiChatView(APIView):
                 apply_title=wants_title,
                 favicon_base=request.build_absolute_uri(reverse("ai-favicon")),
             ),
-            content_type="text/event-stream",
         )
+
+    def _sse_response(self, request, stream):
+        """Wrap a turn generator in the SSE StreamingHttpResponse.
+
+        Served over ASGI (uvicorn in production), Django would buffer a sync
+        generator wholesale — after warning that it needs an asynchronous
+        iterator — so the client would see nothing until the whole agentic turn
+        finished. Bridge the generator to a chunk-by-chunk async iterator
+        there; under WSGI (runserver, tests) sync generators stream natively.
+        """
+        django_request = getattr(request, "_request", request)
+        if isinstance(django_request, ASGIRequest):
+            stream = aiter_in_thread(stream)
+        streaming = StreamingHttpResponse(stream, content_type="text/event-stream")
         streaming["Cache-Control"] = "no-cache"
         streaming["X-Accel-Buffering"] = "no"
         return streaming
@@ -853,7 +869,8 @@ class AiChatResumeView(AiChatView):
         except RelayControlError as exc:
             return _relay_error_response(exc)
 
-        streaming = StreamingHttpResponse(
+        return self._sse_response(
+            request,
             self._agentic_stream(
                 client=client,
                 installation=installation,
@@ -865,11 +882,7 @@ class AiChatResumeView(AiChatView):
                 first_response=first_response,
                 favicon_base=request.build_absolute_uri(reverse("ai-favicon")),
             ),
-            content_type="text/event-stream",
         )
-        streaming["Cache-Control"] = "no-cache"
-        streaming["X-Accel-Buffering"] = "no"
-        return streaming
 
 
 # Favicons are tiny; cap the proxied bytes and validate the host to a plain name.
