@@ -63,6 +63,7 @@ import 'features/purchasing/view_models/purchase_order_list_view_model.dart';
 import 'features/purchasing/view_models/purchase_view_model.dart';
 import 'features/stock_count/view_models/stock_count_sessions_view_model.dart';
 import 'features/user_settings/view_models/user_settings_view_model.dart';
+import 'shared/barcode/scan_feedback_sounds.dart';
 import 'shared/price_checker/price_checker_mode_controller.dart';
 import 'shared/theme/theme_controller.dart';
 
@@ -147,6 +148,7 @@ class PointyAppDependencies {
       shopSettingsRepository,
       printingRepository,
       analyticsEngine: analyticsEngine,
+      scanFeedback: ScanFeedbackSounds.instance.play,
     );
   }
 

@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../core/parsing.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/result.dart';
 import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/product_draft.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
+import '../../../shared/barcode/scan_feedback_sounds.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
@@ -14,15 +16,25 @@ import '../../../shared/responsive/responsive.dart';
 import '../view_models/purchase_view_model.dart';
 
 /// Resolves a scanned code — variant barcode or packaging (unit) barcode — or
-/// walks the user through creating the product when nothing matches.
+/// walks the user through creating the product when nothing matches. A failed
+/// lookup (unreadable/rejected code, request error) chimes and throws instead
+/// of offering to create a product that may well exist.
 Future<BarcodeResolution?> resolveOrCreatePurchaseBarcode(
   BuildContext context, {
   required PurchaseViewModel viewModel,
   required String barcode,
 }) async {
-  final resolution = await viewModel.resolveBarcode(barcode);
-  if (resolution != null) {
-    return resolution;
+  final result = await viewModel.resolveBarcode(barcode);
+  switch (result) {
+    case Ok<BarcodeResolution?>(:final value):
+      if (value != null) {
+        ScanFeedbackSounds.instance.play(ScanFeedback.success);
+        return value;
+      }
+      ScanFeedbackSounds.instance.play(ScanFeedback.notFound);
+    case Error<BarcodeResolution?>():
+      ScanFeedbackSounds.instance.play(ScanFeedback.error);
+      throw Exception('barcode lookup failed');
   }
   if (!context.mounted) {
     return null;

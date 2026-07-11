@@ -6,6 +6,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
+import '../../../shared/barcode/scan_feedback_sounds.dart';
 import '../../../shared/catalog/catalog.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/infinite_scroll_grid.dart';
@@ -155,7 +156,7 @@ class PurchaseCatalogPane extends StatelessWidget {
     final entries = await showCameraBarcodeScannerSheet(
       context,
       mode: CameraBarcodeScannerMode.multiple,
-      lookupVariant: viewModel.findVariantByBarcode,
+      lookupVariant: _lookupVariantByBarcode,
       createMissingVariant: (barcode) {
         return showPurchaseQuickProductSheet(
           context,
@@ -175,5 +176,21 @@ class PurchaseCatalogPane extends StatelessWidget {
         source: 'purchase_camera_scanner',
       );
     }
+  }
+
+  Future<ProductVariant?> _lookupVariantByBarcode(String barcode) async {
+    // Camera scans resolve inside the sheet, bypassing the wedge path —
+    // chime here so every scan still gets audible feedback.
+    ProductVariant? variant;
+    try {
+      variant = await viewModel.findVariantByBarcode(barcode);
+    } on Exception {
+      ScanFeedbackSounds.instance.play(ScanFeedback.error);
+      rethrow;
+    }
+    ScanFeedbackSounds.instance.play(
+      variant == null ? ScanFeedback.notFound : ScanFeedback.success,
+    );
+    return variant;
   }
 }

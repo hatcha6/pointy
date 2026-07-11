@@ -8,6 +8,7 @@ import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
+import '../../../shared/barcode/scan_feedback_sounds.dart';
 import '../../../shared/catalog/catalog.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
@@ -356,10 +357,18 @@ class _PosProductLookupControls extends StatelessWidget {
   Future<ProductVariant?> _lookupVariantByBarcode(String barcode) async {
     final result = await viewModel.catalogRepository
         .findProductVariantByBarcode(barcode, activeOnly: true);
-    return switch (result) {
-      Ok<ProductVariant?>(:final value) => value,
-      Error<ProductVariant?>() => throw Exception('barcode lookup failed'),
-    };
+    // Camera scans resolve inside the sheet, bypassing the view model's
+    // barcode path — chime here so every scan still gets audible feedback.
+    switch (result) {
+      case Ok<ProductVariant?>(:final value):
+        ScanFeedbackSounds.instance.play(
+          value == null ? ScanFeedback.notFound : ScanFeedback.success,
+        );
+        return value;
+      case Error<ProductVariant?>():
+        ScanFeedbackSounds.instance.play(ScanFeedback.error);
+        throw Exception('barcode lookup failed');
+    }
   }
 }
 

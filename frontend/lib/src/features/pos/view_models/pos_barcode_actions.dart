@@ -33,8 +33,7 @@ extension PosBarcodeActions on PosViewModel {
           final matchedUnit = value.unit;
           // A packaging (unit) barcode — the carton EAN — rings up that unit:
           // one carton at the carton price, deducting its pieces from stock.
-          final unitOption =
-              matchedUnit != null && matchedUnit.isSellable
+          final unitOption = matchedUnit != null && matchedUnit.isSellable
               ? UnitOption(
                   code: matchedUnit.code,
                   label: matchedUnit.label,
@@ -77,6 +76,13 @@ extension PosBarcodeActions on PosViewModel {
       case Error<BarcodeResolution?>():
         _barcodeScanStatus = BarcodeScanStatus.error;
     }
+
+    // One chime per scan outcome, mirroring the status line the cashier sees.
+    _scanFeedback?.call(switch (_barcodeScanStatus) {
+      BarcodeScanStatus.found => ScanFeedback.success,
+      BarcodeScanStatus.notFound => ScanFeedback.notFound,
+      _ => ScanFeedback.error,
+    });
 
     _notifyChanged();
     return _barcodeScanStatus == BarcodeScanStatus.found;

@@ -33,6 +33,7 @@ import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/local_scoped_json_storage.dart';
 import 'package:pointy_frontend/src/data/services/print_transport.dart';
 import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart';
+import 'package:pointy_frontend/src/shared/barcode/scan_feedback_sounds.dart';
 import 'package:pointy_frontend/src/shared/unit_options.dart';
 
 void main() {
@@ -682,21 +683,24 @@ void main() {
   );
 
   group('active cart line (scan / tap shortcuts)', () {
-    test('a hardware scan marks the line it landed on as the active line', () async {
-      final viewModel = _viewModel(
-        _FakePosApiService(
-          catalogPages: const {
-            1: [_coffeeVariant],
-          },
-        ),
-      );
-      addTearDown(viewModel.dispose);
+    test(
+      'a hardware scan marks the line it landed on as the active line',
+      () async {
+        final viewModel = _viewModel(
+          _FakePosApiService(
+            catalogPages: const {
+              1: [_coffeeVariant],
+            },
+          ),
+        );
+        addTearDown(viewModel.dispose);
 
-      await viewModel.addVariantByBarcode('1000001');
-      expect(viewModel.cart.single.quantity, 1);
-      expect(viewModel.activeCartLine, isNotNull);
-      expect(viewModel.activeCartLine!.variant.id, _coffeeVariant.id);
-    });
+        await viewModel.addVariantByBarcode('1000001');
+        expect(viewModel.cart.single.quantity, 1);
+        expect(viewModel.activeCartLine, isNotNull);
+        expect(viewModel.activeCartLine!.variant.id, _coffeeVariant.id);
+      },
+    );
 
     test('scanning only ever adds its own product — it never touches another '
         "line's quantity", () async {
@@ -769,23 +773,25 @@ void main() {
       expect(viewModel.activeCartLine!.variant.id, _coffeeVariant.id);
     });
 
-    test('the active line clears once its line leaves the cart (F4 delete)',
-        () async {
-      final viewModel = _viewModel(
-        _FakePosApiService(
-          catalogPages: const {
-            1: [_coffeeVariant],
-          },
-        ),
-      );
-      addTearDown(viewModel.dispose);
+    test(
+      'the active line clears once its line leaves the cart (F4 delete)',
+      () async {
+        final viewModel = _viewModel(
+          _FakePosApiService(
+            catalogPages: const {
+              1: [_coffeeVariant],
+            },
+          ),
+        );
+        addTearDown(viewModel.dispose);
 
-      await viewModel.addVariantByBarcode('1000001');
-      final lineKey = viewModel.activeCartLine!.lineKey;
-      viewModel.removeCartLine(lineKey, source: 'keyboard_delete_line');
-      expect(viewModel.cart, isEmpty);
-      expect(viewModel.activeCartLine, isNull);
-    });
+        await viewModel.addVariantByBarcode('1000001');
+        final lineKey = viewModel.activeCartLine!.lineKey;
+        viewModel.removeCartLine(lineKey, source: 'keyboard_delete_line');
+        expect(viewModel.cart, isEmpty);
+        expect(viewModel.activeCartLine, isNull);
+      },
+    );
 
     test('scanning a packaging (unit) barcode rings up that unit', () async {
       final viewModel = _viewModel(
@@ -811,45 +817,100 @@ void main() {
       expect(viewModel.activeCartLine!.unitCode, 'carton');
     });
 
-    test('setActiveCartLineUnit switches the active line unit of measure',
-        () async {
+    test('barcode scans chime by outcome: success then not-found', () async {
+      final feedback = <ScanFeedback>[];
       final viewModel = _viewModel(
         _FakePosApiService(
           catalogPages: const {
             1: [_coffeeVariant],
           },
         ),
+        scanFeedback: feedback.add,
       );
       addTearDown(viewModel.dispose);
 
-      await viewModel.addVariantByBarcode('1000001');
-      const box = UnitOption(
-        code: 'box',
-        label: 'صندوق',
-        unitPrice: 40,
-        factorToBase: 12,
-        allowsFractional: false,
-        isBase: false,
-      );
-      expect(viewModel.setActiveCartLineUnit(box), isTrue);
-      final line = viewModel.cart.single;
-      expect(line.unitCode, 'box');
-      expect(line.unitFactor, 12);
-      expect(line.unitPriceOverride, 40);
+      expect(await viewModel.addVariantByBarcode('1000001'), isTrue);
+      expect(feedback, [ScanFeedback.success]);
 
-      // Cycling back to the base unit clears the override.
-      const base = UnitOption(
-        code: 'piece',
-        label: 'قطعة',
-        unitPrice: 3.5,
-        factorToBase: 1,
-        allowsFractional: false,
-        isBase: true,
-      );
-      expect(viewModel.setActiveCartLineUnit(base), isTrue);
-      expect(viewModel.cart.single.unitCode, '');
-      expect(viewModel.cart.single.unitPriceOverride, isNull);
+      expect(await viewModel.addVariantByBarcode('5000009'), isFalse);
+      expect(viewModel.barcodeScanStatus, BarcodeScanStatus.notFound);
+      expect(feedback, [ScanFeedback.success, ScanFeedback.notFound]);
     });
+
+    test('a failed barcode lookup chimes the error sound', () async {
+      final feedback = <ScanFeedback>[];
+      final viewModel = _viewModel(
+        _BarcodeErrorPosApiService(),
+        scanFeedback: feedback.add,
+      );
+      addTearDown(viewModel.dispose);
+
+      expect(await viewModel.addVariantByBarcode('1000001'), isFalse);
+      expect(viewModel.barcodeScanStatus, BarcodeScanStatus.error);
+      expect(feedback, [ScanFeedback.error]);
+    });
+
+    test('a swallowed rescan (mid-resolve) does not chime', () async {
+      final feedback = <ScanFeedback>[];
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_coffeeVariant],
+          },
+        ),
+        scanFeedback: feedback.add,
+      );
+      addTearDown(viewModel.dispose);
+
+      final first = viewModel.addVariantByBarcode('1000001');
+      // Fired while the first scan is still resolving: dropped silently.
+      final second = viewModel.addVariantByBarcode('1000001');
+      expect(await second, isFalse);
+      expect(await first, isTrue);
+      expect(feedback, [ScanFeedback.success]);
+    });
+
+    test(
+      'setActiveCartLineUnit switches the active line unit of measure',
+      () async {
+        final viewModel = _viewModel(
+          _FakePosApiService(
+            catalogPages: const {
+              1: [_coffeeVariant],
+            },
+          ),
+        );
+        addTearDown(viewModel.dispose);
+
+        await viewModel.addVariantByBarcode('1000001');
+        const box = UnitOption(
+          code: 'box',
+          label: 'صندوق',
+          unitPrice: 40,
+          factorToBase: 12,
+          allowsFractional: false,
+          isBase: false,
+        );
+        expect(viewModel.setActiveCartLineUnit(box), isTrue);
+        final line = viewModel.cart.single;
+        expect(line.unitCode, 'box');
+        expect(line.unitFactor, 12);
+        expect(line.unitPriceOverride, 40);
+
+        // Cycling back to the base unit clears the override.
+        const base = UnitOption(
+          code: 'piece',
+          label: 'قطعة',
+          unitPrice: 3.5,
+          factorToBase: 1,
+          allowsFractional: false,
+          isBase: true,
+        );
+        expect(viewModel.setActiveCartLineUnit(base), isTrue);
+        expect(viewModel.cart.single.unitCode, '');
+        expect(viewModel.cart.single.unitPriceOverride, isNull);
+      },
+    );
   });
 
   group('discount preview gate', () {
@@ -912,8 +973,11 @@ void main() {
 
       failing = true;
       await viewModel.refreshDiscountPreview(forceServer: true);
-      expect(viewModel.hasDiscountPreviewError, isFalse,
-          reason: 'no coupon + no rules: nothing depends on the server');
+      expect(
+        viewModel.hasDiscountPreviewError,
+        isFalse,
+        reason: 'no coupon + no rules: nothing depends on the server',
+      );
       expect(viewModel.total, viewModel.subtotal);
     });
 
@@ -954,8 +1018,11 @@ void main() {
 
       viewModel.addVariant(_coffeeVariant);
       await _settle();
-      expect(viewModel.hasDiscountPreviewError, isTrue,
-          reason: 'rules unknown: the error must surface');
+      expect(
+        viewModel.hasDiscountPreviewError,
+        isTrue,
+        reason: 'rules unknown: the error must surface',
+      );
     });
   });
 }
@@ -964,6 +1031,7 @@ PosViewModel _viewModel(
   _FakePosApiService apiService, {
   AnalyticsEngine? analyticsEngine,
   ScopedJsonStorage? sessionStorage,
+  ScanFeedbackPlayer? scanFeedback,
 }) {
   return PosViewModel(
     CatalogRepository(apiService),
@@ -979,7 +1047,21 @@ PosViewModel _viewModel(
     ),
     analyticsEngine: analyticsEngine,
     sessionStorage: sessionStorage ?? MemoryScopedJsonStorage(),
+    scanFeedback: scanFeedback,
   );
+}
+
+/// Fails every catalog lookup, driving the barcode path into its error status.
+class _BarcodeErrorPosApiService extends _FakePosApiService {
+  _BarcodeErrorPosApiService();
+
+  @override
+  Future<ProductVariantPage> fetchProductVariants({
+    required ModelQuery query,
+    int page = 1,
+  }) async {
+    throw Exception('catalog lookup unavailable');
+  }
 }
 
 Future<void> _settle() async {

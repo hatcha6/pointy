@@ -17,6 +17,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/barcode_resolution.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_category.dart';
@@ -40,6 +41,7 @@ import 'package:pointy_frontend/src/features/pos/views/pos_cart_pane.dart';
 import 'package:pointy_frontend/src/features/pos/views/payment/payment_sheet.dart';
 import 'package:pointy_frontend/src/features/pos/views/pos_catalog_pane.dart';
 import 'package:pointy_frontend/src/features/pos/views/unit_quantity_sheet.dart';
+import 'package:pointy_frontend/src/shared/barcode/scan_feedback_sounds.dart';
 import 'package:pointy_frontend/src/shared/unit_options.dart';
 import 'package:pointy_frontend/src/features/purchasing/view_models/purchase_view_model.dart';
 import 'package:pointy_frontend/src/features/purchasing/views/purchase_catalog_pane.dart';
@@ -145,6 +147,8 @@ class _PosSurfaceState extends State<_PosSurface> {
       _FakeSaleRepository(),
       _FakeShopSettingsRepository(),
       PrintingRepository(PosApiService()),
+      // Real chimes so the preview exercises the scan sounds end to end.
+      scanFeedback: ScanFeedbackSounds.instance.play,
     );
     _viewModel.loadCatalog();
     if (!widget.empty) {
@@ -764,6 +768,25 @@ class _FakeCatalogRepository extends CatalogRepository {
     for (final item in _items) {
       if (item.barcode == barcode.trim()) {
         return Ok(_variantFor(item));
+      }
+    }
+    return const Ok(null);
+  }
+
+  // The scan path (and its chimes): known code adds + success, unknown code
+  // is a not-found, and the magic '500' demos a failed lookup (error chime).
+  @override
+  Future<Result<BarcodeResolution?>> resolveBarcode(
+    String barcode, {
+    bool activeOnly = true,
+  }) async {
+    final code = barcode.trim();
+    if (code == '500') {
+      return Error(Exception('barcode lookup failed (preview)'));
+    }
+    for (final item in _items) {
+      if (item.barcode == code) {
+        return Ok(BarcodeResolution(variant: _variantFor(item)));
       }
     }
     return const Ok(null);
