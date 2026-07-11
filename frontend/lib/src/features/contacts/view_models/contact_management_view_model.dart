@@ -24,6 +24,7 @@ class ContactManagementViewModel extends ChangeNotifier {
   bool _hasMoreSuppliers = true;
   int _nextCustomerPage = 1;
   int _nextSupplierPage = 1;
+  int _loadRevision = 0;
 
   ContactQuery get query => _query;
   List<Customer> get customers => List.unmodifiable(_customers);
@@ -37,6 +38,9 @@ class ContactManagementViewModel extends ChangeNotifier {
   bool get hasMoreSuppliers => _hasMoreSuppliers;
 
   Future<void> loadContacts() async {
+    // Drop stale responses: a newer load (fresher search text) supersedes
+    // this one even while its requests are still in flight.
+    final revision = ++_loadRevision;
     _isLoading = true;
     _hasError = false;
     _hasMoreCustomers = true;
@@ -45,14 +49,19 @@ class ContactManagementViewModel extends ChangeNotifier {
     _nextSupplierPage = 1;
     notifyListeners();
 
-    final customerResult = await _repository.loadCustomers(
+    final customerFuture = _repository.loadCustomers(
       query: _query,
       page: _nextCustomerPage,
     );
-    final supplierResult = await _repository.loadSuppliers(
+    final supplierFuture = _repository.loadSuppliers(
       query: _query,
       page: _nextSupplierPage,
     );
+    final customerResult = await customerFuture;
+    final supplierResult = await supplierFuture;
+    if (revision != _loadRevision) {
+      return;
+    }
 
     switch (customerResult) {
       case Ok<CustomerPage>():

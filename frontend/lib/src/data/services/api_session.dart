@@ -163,11 +163,45 @@ class PosApiSession {
     _relayToken = relayToken.trim();
     _fallbackTarget = fallbackTarget;
     _conditionalCache.clear();
+    // New callers must not join requests still in flight to the old target.
+    _inFlightGets.clear();
     _catalogVersionToken = null;
     _discountsVersionToken = null;
   }
 
+  /// In-flight GET coalescing: two widgets asking for the same URL at the same
+  /// moment (the login fan-out, POS + purchasing sharing the catalog) share one
+  /// request instead of hitting the server twice. Entries evict on completion
+  /// and the whole map clears on every mutating request, so a GET issued after
+  /// a write can never join a pre-write response (read-after-write stays
+  /// honest) — coalescing only ever merges genuinely concurrent reads.
+  final Map<String, Future<http.Response>> _inFlightGets = {};
+
   Future<http.Response> get(
+    String path, {
+    Map<String, String>? query,
+    bool conditionalCache = false,
+  }) {
+    final key =
+        '${conditionalCache ? 'c' : 'p'}:${uri(path, queryParameters: query)}';
+    final pending = _inFlightGets[key];
+    if (pending != null) {
+      return pending;
+    }
+    late final Future<http.Response> future;
+    future = _getOnce(path, query: query, conditionalCache: conditionalCache)
+        .whenComplete(() {
+          // Evict only our own entry: a mutation may have cleared the map and
+          // a fresh identical GET may already be registered under this key.
+          if (identical(_inFlightGets[key], future)) {
+            _inFlightGets.remove(key);
+          }
+        });
+    _inFlightGets[key] = future;
+    return future;
+  }
+
+  Future<http.Response> _getOnce(
     String path, {
     Map<String, String>? query,
     bool conditionalCache = false,
@@ -452,6 +486,7 @@ class PosApiSession {
     _cookies.clear();
     _csrfToken = null;
     _conditionalCache.clear();
+    _inFlightGets.clear();
     _catalogVersionToken = null;
     _discountsVersionToken = null;
   }
@@ -462,6 +497,11 @@ class PosApiSession {
     required Future<http.Response> Function() request,
     int requestSizeBytes = 0,
   }) async {
+    if (method != 'GET') {
+      // A write is about to change server state: GETs issued from here on
+      // must not join responses computed before it.
+      _inFlightGets.clear();
+    }
     final stopwatch = Stopwatch()..start();
     try {
       final response = await request();

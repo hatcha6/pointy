@@ -6,6 +6,7 @@ import '../data/models/contact.dart';
 import '../data/repositories/contact_repository.dart';
 import 'components/components.dart';
 import 'design/design.dart';
+import 'query_controls/debounced_search_field.dart';
 import 'responsive/responsive.dart';
 
 class ContactSelectionTile extends StatelessWidget {
@@ -265,6 +266,7 @@ class _CustomerPickerState extends State<_CustomerPicker> {
       title: l10n.chooseCustomerTitle,
       searchHint: l10n.contactSearchHint,
       createLabel: l10n.createNewCustomerAction,
+      searchValue: _query.search,
       onSearchChanged: (search) {
         _query = _query.copyWith(search: search);
         _load(reset: true);
@@ -390,6 +392,7 @@ class _SupplierPickerState extends State<_SupplierPicker> {
       title: l10n.chooseSupplierTitle,
       searchHint: l10n.contactSearchHint,
       createLabel: l10n.createNewSupplierAction,
+      searchValue: _query.search,
       onSearchChanged: (search) {
         _query = _query.copyWith(search: search);
         _load(reset: true);
@@ -489,6 +492,7 @@ class _PickerShell extends StatelessWidget {
     required this.title,
     required this.searchHint,
     required this.createLabel,
+    required this.searchValue,
     required this.onSearchChanged,
     required this.onCreate,
     required this.child,
@@ -497,6 +501,7 @@ class _PickerShell extends StatelessWidget {
   final String title;
   final String searchHint;
   final String createLabel;
+  final String searchValue;
   final ValueChanged<String> onSearchChanged;
   final VoidCallback onCreate;
   final Widget child;
@@ -533,12 +538,12 @@ class _PickerShell extends StatelessWidget {
               ],
             ),
             SizedBox(height: spacing.md),
-            TextField(
-              decoration: InputDecoration(
-                hintText: searchHint,
-                prefixIcon: const Icon(Icons.search),
-                isDense: true,
-              ),
+            // Debounced: a raw onChanged used to fire one server-paginated
+            // contacts query per keystroke, mid-checkout.
+            DebouncedSearchField(
+              value: searchValue,
+              hintText: searchHint,
+              clearTooltip: AppLocalizations.of(context)!.clearSearchTooltip,
               onChanged: onSearchChanged,
             ),
             SizedBox(height: spacing.sm),
