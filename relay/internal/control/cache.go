@@ -55,7 +55,19 @@ func (s *CachedInstallationStore) GetInstallation(
 	ctx context.Context,
 	id string,
 ) (Installation, error) {
-	return s.store.GetInstallation(ctx, id)
+	// Cache-first like validateToken: ticket refreshes and AI tunnel setup
+	// look installations up by id microseconds after the same row was cached,
+	// so plain reads must not each pay a Postgres round-trip.
+	installation, ok, err := s.cache.GetInstallation(ctx, id)
+	if err == nil && ok {
+		return installation, nil
+	}
+	installation, err = s.store.GetInstallation(ctx, id)
+	if err != nil {
+		return Installation{}, err
+	}
+	_ = s.cacheInstallation(ctx, installation)
+	return installation, nil
 }
 
 func (s *CachedInstallationStore) UpdateSubscription(

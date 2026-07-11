@@ -763,6 +763,27 @@ func runServer(args []string) error {
 		}
 	}
 
+	// All AI traffic (chat stream, router, titles, web-search classifier) and
+	// image search each fan out to ONE host; the default Transport keeps only
+	// 2 idle connections per host, so overlapping calls paid a fresh TCP+TLS
+	// handshake (~100-300ms) to openrouter.ai on nearly every request. One
+	// shared, tuned transport lets the whole fleet's AI traffic reuse
+	// connections. Timeouts mirror the handlers' own zero-value fallbacks.
+	outboundTransport := &http.Transport{
+		MaxIdleConns:        200,
+		MaxIdleConnsPerHost: 100,
+		IdleConnTimeout:     90 * time.Second,
+		ForceAttemptHTTP2:   true,
+	}
+	aiClientTimeout := *aiRequestTimeout
+	if aiClientTimeout <= 0 {
+		aiClientTimeout = 120 * time.Second
+	}
+	imageSearchClientTimeout := *imageSearchRequestTimeout
+	if imageSearchClientTimeout <= 0 {
+		imageSearchClientTimeout = 8 * time.Second
+	}
+
 	baseHTTPHandler := relayserver.HTTPServer{
 		Store:                         store,
 		Hub:                           hub,
@@ -809,6 +830,8 @@ func runServer(args []string) error {
 		AIMaxImagesPerPrompt:      *aiMaxImages,
 		AIMaxRequestBytes:         *aiMaxRequestBytes,
 		AIRequestTimeout:          *aiRequestTimeout,
+		AIHTTPClient:              &http.Client{Timeout: aiClientTimeout, Transport: outboundTransport},
+		ImageSearchHTTPClient:     &http.Client{Timeout: imageSearchClientTimeout, Transport: outboundTransport},
 		AIChatRateLimit:           ratelimit.Policy{Limit: *aiChatRateLimit, Window: *rateLimitWindow},
 		SerperAPIKey:              strings.TrimSpace(*serperAPIKey),
 		SerperBaseURL:             strings.TrimSpace(*serperBaseURL),
