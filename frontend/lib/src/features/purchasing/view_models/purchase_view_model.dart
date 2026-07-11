@@ -265,30 +265,29 @@ class PurchaseViewModel extends ChangeNotifier {
   }
 
   Future<ProductVariant?> findVariantByBarcode(String barcode) async {
-    final resolution = await resolveBarcode(barcode);
+    final result = await resolveBarcode(barcode);
     // Packaging (unit) barcodes land on the product's default variant here —
     // the draft line then opens in the product's default purchase unit.
-    return resolution?.variant;
+    return switch (result) {
+      Ok<BarcodeResolution?>(:final value) => value?.variant,
+      Error<BarcodeResolution?>(:final exception) => throw exception,
+    };
   }
 
   /// Resolves a scanned code to its variant and, for packaging barcodes (the
   /// carton EAN), the matched unit — so the draft line is created in cartons.
-  Future<BarcodeResolution?> resolveBarcode(String barcode) async {
+  /// A lookup failure surfaces as [Error] so callers can tell an unreadable
+  /// code from a genuinely missing product (the quick-create offer).
+  Future<Result<BarcodeResolution?>> resolveBarcode(String barcode) async {
     final normalizedBarcode = barcode.trim();
     if (normalizedBarcode.isEmpty) {
-      return null;
+      return const Ok(null);
     }
 
-    final result = await _catalogRepository.resolveBarcode(
+    return _catalogRepository.resolveBarcode(
       normalizedBarcode,
       activeOnly: true,
     );
-    return switch (result) {
-      Ok<BarcodeResolution?>(:final value) => value,
-      // A lookup failure (network/server) degrades to "not found" instead of
-      // throwing into the scan handler; the nullable return already signals it.
-      Error<BarcodeResolution?>() => null,
-    };
   }
 
   Future<ProductVariant?> createQuickProduct(ProductDraft draft) async {

@@ -10,6 +10,7 @@ import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/cart_line.dart';
 import '../../../data/models/modifier_group.dart';
 import '../../../shared/barcode/scale_barcode.dart';
+import '../../../shared/barcode/scan_feedback_sounds.dart';
 import '../../../shared/formatters.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/contact.dart';
@@ -138,8 +139,10 @@ class PosViewModel extends ChangeNotifier {
     ScopedJsonStorage sessionStorage = const SharedPreferencesScopedJsonStorage(
       'pointy.pos.sessions.v1',
     ),
+    ScanFeedbackPlayer? scanFeedback,
   }) : _analyticsEngine = analyticsEngine,
-       _sessionStorage = sessionStorage;
+       _sessionStorage = sessionStorage,
+       _scanFeedback = scanFeedback;
 
   final CatalogRepository _catalogRepository;
   final RegisterSessionRepository _registerSessionRepository;
@@ -148,6 +151,8 @@ class PosViewModel extends ChangeNotifier {
   final PrintingRepository _printingRepository;
   final AnalyticsEngine? _analyticsEngine;
   final ScopedJsonStorage _sessionStorage;
+  // Audible scan feedback (null = silent, e.g. unit tests).
+  final ScanFeedbackPlayer? _scanFeedback;
 
   // Local persistence of in-progress sale sessions (see pos_persistence.dart).
   String? _persistScope;

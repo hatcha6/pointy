@@ -33,6 +33,7 @@ import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/local_scoped_json_storage.dart';
 import 'package:pointy_frontend/src/data/services/print_transport.dart';
 import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart';
+import 'package:pointy_frontend/src/shared/barcode/scan_feedback_sounds.dart';
 import 'package:pointy_frontend/src/shared/unit_options.dart';
 
 void main() {
@@ -861,6 +862,59 @@ void main() {
       expect(viewModel.activeCartLine!.unitCode, 'carton');
     });
 
+    test('barcode scans chime by outcome: success then not-found', () async {
+      final feedback = <ScanFeedback>[];
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_coffeeVariant],
+          },
+        ),
+        scanFeedback: feedback.add,
+      );
+      addTearDown(viewModel.dispose);
+
+      expect(await viewModel.addVariantByBarcode('1000001'), isTrue);
+      expect(feedback, [ScanFeedback.success]);
+
+      expect(await viewModel.addVariantByBarcode('5000009'), isFalse);
+      expect(viewModel.barcodeScanStatus, BarcodeScanStatus.notFound);
+      expect(feedback, [ScanFeedback.success, ScanFeedback.notFound]);
+    });
+
+    test('a failed barcode lookup chimes the error sound', () async {
+      final feedback = <ScanFeedback>[];
+      final viewModel = _viewModel(
+        _BarcodeErrorPosApiService(),
+        scanFeedback: feedback.add,
+      );
+      addTearDown(viewModel.dispose);
+
+      expect(await viewModel.addVariantByBarcode('1000001'), isFalse);
+      expect(viewModel.barcodeScanStatus, BarcodeScanStatus.error);
+      expect(feedback, [ScanFeedback.error]);
+    });
+
+    test('a swallowed rescan (mid-resolve) does not chime', () async {
+      final feedback = <ScanFeedback>[];
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_coffeeVariant],
+          },
+        ),
+        scanFeedback: feedback.add,
+      );
+      addTearDown(viewModel.dispose);
+
+      final first = viewModel.addVariantByBarcode('1000001');
+      // Fired while the first scan is still resolving: dropped silently.
+      final second = viewModel.addVariantByBarcode('1000001');
+      expect(await second, isFalse);
+      expect(await first, isTrue);
+      expect(feedback, [ScanFeedback.success]);
+    });
+
     test('setActiveCartLineUnit switches the active line unit of measure',
         () async {
       final viewModel = _viewModel(
@@ -1014,6 +1068,7 @@ PosViewModel _viewModel(
   _FakePosApiService apiService, {
   AnalyticsEngine? analyticsEngine,
   ScopedJsonStorage? sessionStorage,
+  ScanFeedbackPlayer? scanFeedback,
 }) {
   return PosViewModel(
     CatalogRepository(apiService),
@@ -1029,7 +1084,21 @@ PosViewModel _viewModel(
     ),
     analyticsEngine: analyticsEngine,
     sessionStorage: sessionStorage ?? MemoryScopedJsonStorage(),
+    scanFeedback: scanFeedback,
   );
+}
+
+/// Fails every catalog lookup, driving the barcode path into its error status.
+class _BarcodeErrorPosApiService extends _FakePosApiService {
+  _BarcodeErrorPosApiService();
+
+  @override
+  Future<ProductVariantPage> fetchProductVariants({
+    required ModelQuery query,
+    int page = 1,
+  }) async {
+    throw Exception('catalog lookup unavailable');
+  }
 }
 
 Future<void> _settle() async {

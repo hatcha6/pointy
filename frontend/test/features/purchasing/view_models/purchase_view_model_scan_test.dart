@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/barcode_resolution.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
@@ -133,6 +134,29 @@ void main() {
     viewModel.setLineQuantity(variant, 2.5);
     expect(viewModel.draft.single.quantity, 2.5);
   });
+
+  test('resolveBarcode surfaces a failed lookup as Error, not "not found"',
+      () async {
+    final viewModel = PurchaseViewModel(
+      _ErrorCatalogRepository(),
+      _FakePurchaseRepository(),
+    );
+
+    // The distinction drives the scan chime + UI: an unreadable code must
+    // not open the quick-create sheet for a product that may well exist.
+    expect(
+      await viewModel.resolveBarcode('1000001'),
+      isA<Error<BarcodeResolution?>>(),
+    );
+    await expectLater(
+      viewModel.findVariantByBarcode('1000001'),
+      throwsA(isA<Exception>()),
+    );
+    // Blank input is a clean miss, not an error.
+    final blank = await viewModel.resolveBarcode('  ');
+    expect(blank, isA<Ok<BarcodeResolution?>>());
+    expect((blank as Ok<BarcodeResolution?>).value, isNull);
+  });
 }
 
 class _FakeCatalogRepository extends CatalogRepository {
@@ -147,6 +171,14 @@ class _FakeCatalogRepository extends CatalogRepository {
   @override
   Future<Result<Product>> loadProduct(int id) async =>
       Error(Exception('product $id not found'));
+}
+
+class _ErrorCatalogRepository extends _FakeCatalogRepository {
+  @override
+  Future<Result<BarcodeResolution?>> resolveBarcode(
+    String barcode, {
+    bool activeOnly = true,
+  }) async => Error(Exception('catalog lookup unavailable'));
 }
 
 class _FakePurchaseRepository extends PurchaseRepository {

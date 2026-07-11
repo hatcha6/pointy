@@ -78,6 +78,13 @@ extension PosBarcodeActions on PosViewModel {
         _barcodeScanStatus = BarcodeScanStatus.error;
     }
 
+    // One chime per scan outcome, mirroring the status line the cashier sees.
+    _scanFeedback?.call(switch (_barcodeScanStatus) {
+      BarcodeScanStatus.found => ScanFeedback.success,
+      BarcodeScanStatus.notFound => ScanFeedback.notFound,
+      _ => ScanFeedback.error,
+    });
+
     _notifyChanged();
     return _barcodeScanStatus == BarcodeScanStatus.found;
   }
