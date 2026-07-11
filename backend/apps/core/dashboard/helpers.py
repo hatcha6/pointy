@@ -476,7 +476,9 @@ def _totals_by_key(rows, *, key):
 
 
 def _purchase_order_balance_rows(orders):
-    return list(
+    # Streamed, not list()ed: the purchasing section consumes this in a single
+    # pass, so a 12k-PO history never has to sit in memory per cache miss.
+    return (
         orders.values(
             "id",
             "order_number",
@@ -504,6 +506,7 @@ def _purchase_order_balance_rows(orders):
             ),
         )
         .order_by("due_date", "id")
+        .iterator(chunk_size=2000)
     )
 
 
@@ -514,7 +517,9 @@ def _purchase_order_balance_due(row):
     )
 
 
-def _top_supplier_balances(balance_rows):
+def _top_supplier_balances(balances_by_supplier):
+    """``balances_by_supplier`` is the per-supplier sum of PO balances, already
+    accumulated by the purchasing section's single pass over the balance rows."""
     active_suppliers = {
         row["id"]: row["name"]
         for row in Supplier.objects.filter(is_active=True).values("id", "name")
@@ -523,11 +528,6 @@ def _top_supplier_balances(balance_rows):
         return []
 
     supplier_ids = set(active_suppliers)
-    balances_by_supplier = defaultdict(lambda: Decimal("0.00"))
-    for row in balance_rows:
-        supplier_id = row["supplier_id"]
-        if supplier_id in supplier_ids:
-            balances_by_supplier[supplier_id] += _purchase_order_balance_due(row)
 
     unallocated_payments_by_supplier = {
         row["supplier_id"]: row["total"]
@@ -564,7 +564,7 @@ def _top_supplier_balances(balance_rows):
     rows = []
     for supplier_id, supplier_name in active_suppliers.items():
         payable = max(
-            balances_by_supplier[supplier_id]
+            balances_by_supplier.get(supplier_id, Decimal("0.00"))
             - unallocated_payments_by_supplier.get(supplier_id, Decimal("0.00")),
             Decimal("0.00"),
         )

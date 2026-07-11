@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
@@ -129,10 +130,24 @@ def reopen_finding(finding, *, user):
 def schedule_targeted_sweep():
     """Kick a detection sweep right after a risky action (void, return, cash
     pay-out, register close) so findings surface when the owner needs them,
-    not minutes later on the periodic beat."""
+    not minutes later on the periodic beat.
+
+    Coalesced: a burst of risky actions (a multi-invoice return, several
+    registers closing at shift end) used to enqueue one full 30-day sweep per
+    action. The ``cache.add`` window collapses the burst into a single queued
+    sweep — which still sees every row of the burst, because it runs after
+    the commits that scheduled it.
+    """
     from .tasks import sync_suspected_fraud_findings_task
 
     def _enqueue():
+        window = int(getattr(settings, "POINTY_FRAUD_SWEEP_DEBOUNCE_SECONDS", 0))
+        if window > 0:
+            try:
+                if not cache.add("pointy:fraud:targeted-sweep:queued", 1, window):
+                    return  # a sweep is already queued for this window
+            except Exception:  # noqa: BLE001 — no Redis: enqueue as before
+                pass
         try:
             sync_suspected_fraud_findings_task.delay()
         except Exception:

@@ -4,16 +4,23 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Count, DecimalField, F, Q, Sum, Value
+from django.db.models import Count, DecimalField, F, OuterRef, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from apps.core.roles import user_is_manager
 from apps.discounts.models import DiscountRule
 from apps.inventory.models import StockBatch, StockItem
+from apps.payments.models import Payment
 from apps.printing.models import PrintAgent, PrintJob
 from apps.purchasing.models import PurchaseOrder, SupplierPayment
-from apps.sales.models import Order, OrderLine, RegisterSession
+from apps.sales.models import (
+    Order,
+    OrderAdjustment,
+    OrderLine,
+    RegisterCashMovement,
+    RegisterSession,
+)
 
 from .cache import bump_notifications_version, bump_user_notifications_version
 from .models import BusinessNotification, BusinessNotificationUserState
@@ -279,9 +286,18 @@ def acknowledge_notifications_for_user(user, queryset, now=None):
 
 def _inventory_notifications(now):
     specs = []
-    stock = StockItem.objects.select_related("variant", "variant__product").filter(
-        variant__is_active=True,
-        variant__product__is_active=True,
+    # Only rows that can alert leave the DB: on a 30k-item catalog a handful
+    # are at/below reorder, but this used to materialize every StockItem.
+    stock = (
+        StockItem.objects.select_related("variant", "variant__product")
+        .filter(
+            variant__is_active=True,
+            variant__product__is_active=True,
+        )
+        .filter(
+            Q(quantity_on_hand__lte=0)
+            | Q(quantity_on_hand__lte=F("reorder_level"))
+        )
     )
     for item in stock:
         if item.quantity_on_hand <= 0:
@@ -396,11 +412,16 @@ def _purchasing_notifications(now):
                 output_field=MONEY_FIELD,
             ),
         )
+        # Overdue + unpaid decided in SQL: only actual alerts leave the DB,
+        # not every non-cancelled PO ever recorded.
+        .filter(
+            due_date__isnull=False,
+            due_date__lt=today,
+            total__gt=F("notification_paid_total") + F("notification_credit_total"),
+        )
         .select_related("supplier")
     )
     for order in orders:
-        if order.due_date is None or order.due_date >= today:
-            continue
         balance = max(
             order.total - order.notification_paid_total - order.notification_credit_total,
             Decimal("0.00"),
@@ -480,12 +501,66 @@ def _printing_notifications(now):
 
 def _sales_notifications(now):
     specs = []
-    sessions = RegisterSession.objects.filter(
-        status=RegisterSession.Status.CLOSED,
-        closing_cash__isnull=False,
+    # cash_variance is a 4-aggregate Python property (payments, refunds,
+    # pay-ins, pay-outs) — computing it per closed session used to cost
+    # 1 + 4N queries over all-time history. The same filtered sums as
+    # correlated subqueries decide "has variance" in one query; each relation
+    # gets its own subquery because joining them would fan out the sums.
+    def _session_sum(queryset, field="amount"):
+        return Coalesce(
+            Subquery(
+                queryset.values("register_session")
+                .annotate(total=Sum(field))
+                .values("total")[:1]
+            ),
+            Value(Decimal("0.00")),
+            output_field=MONEY_FIELD,
+        )
+
+    sessions = (
+        RegisterSession.objects.filter(
+            status=RegisterSession.Status.CLOSED,
+            closing_cash__isnull=False,
+        )
+        .annotate(
+            variance_cash_sales=_session_sum(
+                Payment.objects.filter(
+                    register_session=OuterRef("pk"),
+                    method=Payment.Method.CASH,
+                    amount__gt=0,
+                )
+            ),
+            variance_refunds=_session_sum(
+                OrderAdjustment.objects.filter(register_session=OuterRef("pk")),
+                "cash_amount",
+            ),
+            variance_pay_in=_session_sum(
+                RegisterCashMovement.objects.filter(
+                    register_session=OuterRef("pk"),
+                    movement_type=RegisterCashMovement.MovementType.PAY_IN,
+                )
+            ),
+            variance_pay_out=_session_sum(
+                RegisterCashMovement.objects.filter(
+                    register_session=OuterRef("pk"),
+                    movement_type=RegisterCashMovement.MovementType.PAY_OUT,
+                )
+            ),
+        )
+        .annotate(
+            cash_variance_amount=F("closing_cash")
+            - (
+                F("opening_cash")
+                + F("variance_cash_sales")
+                + F("variance_pay_in")
+                - F("variance_pay_out")
+                - F("variance_refunds")
+            )
+        )
+        .exclude(cash_variance_amount=Decimal("0.00"))
     )
     for session in sessions:
-        variance = session.cash_variance
+        variance = session.cash_variance_amount
         if variance in (None, Decimal("0.00")):
             continue
         absolute_variance = abs(variance)
