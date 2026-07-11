@@ -74,3 +74,27 @@ class SelectiveGzipTests(TestCase):
         )
         processed = middleware.process_response(request, response)
         self.assertIsNone(processed.get("Content-Encoding"))
+
+    def test_installer_archives_are_not_recompressed(self):
+        # The client installers (APK/exe/tar.gz) are already compressed;
+        # gzipping them again would waste CPU and, on the streamed ASGI path,
+        # drop Content-Length.
+        from django.http import HttpResponse
+        from django.test import RequestFactory
+
+        from apps.core.gzip import SelectiveGZipMiddleware
+
+        middleware = SelectiveGZipMiddleware(lambda request: None)
+        request = RequestFactory().get(
+            "/clients/files/pointy.apk", HTTP_ACCEPT_ENCODING="gzip"
+        )
+        for content_type in (
+            "application/vnd.android.package-archive",
+            "application/gzip",
+            "application/zip",
+            "application/octet-stream",
+        ):
+            with self.subTest(content_type=content_type):
+                response = HttpResponse(b"x" * 4096, content_type=content_type)
+                processed = middleware.process_response(request, response)
+                self.assertIsNone(processed.get("Content-Encoding"))

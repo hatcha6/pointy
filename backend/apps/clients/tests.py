@@ -66,6 +66,39 @@ class ClientDownloadTests(TestCase):
         self.assertIn("attachment", response["Content-Disposition"])
         self.assertEqual(b"".join(response.streaming_content), b"FAKE-TARBALL-BYTES")
 
+    async def test_asgi_download_streams_an_async_iterator(self):
+        # Under ASGI (uvicorn in production) a sync file iterator would be
+        # buffered wholesale — the entire installer in memory per download —
+        # so the view must hand Django an async iterator there, carrying the
+        # headers FileResponse would have set.
+        response = await self.async_client.get(
+            reverse("clients-file", args=[self.apk_name])
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.streaming)
+        self.assertTrue(response.is_async)
+        self.assertEqual(
+            response["Content-Type"], "application/vnd.android.package-archive"
+        )
+        self.assertEqual(response["Content-Length"], "14")
+        self.assertIn("attachment", response["Content-Disposition"])
+        self.assertIn(self.apk_name, response["Content-Disposition"])
+        body = b"".join([chunk async for chunk in response.streaming_content])
+        self.assertEqual(body, b"FAKE-APK-BYTES")
+
+    def test_download_is_not_gzipped(self):
+        # Dart's HttpClient sends Accept-Encoding: gzip by default;
+        # recompressing an APK wastes CPU and drops Content-Length
+        # (download progress).
+        response = self.client.get(
+            reverse("clients-file", args=[self.apk_name]),
+            REMOTE_ADDR="192.168.1.10",
+            HTTP_ACCEPT_ENCODING="gzip",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.get("Content-Encoding"))
+        self.assertEqual(response["Content-Length"], "14")
+
     def test_unknown_file_is_404(self):
         response = self.client.get(
             reverse("clients-file", args=["pointy-evil.apk"]),

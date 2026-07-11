@@ -13,13 +13,16 @@ import mimetypes
 from pathlib import Path
 
 from django.conf import settings
-from django.http import FileResponse, Http404, HttpResponse
+from django.core.handlers.asgi import ASGIRequest
+from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
 from django.utils.html import escape
+from django.utils.http import content_disposition_header
 from rest_framework import status, views
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from apps.core.discovery import request_discovery_allowed
+from apps.core.streaming import aiter_file
 
 _PLATFORMS = ("android", "windows", "linux")
 _CONTENT_TYPES = {
@@ -108,6 +111,22 @@ class ClientFileView(views.APIView):
             or mimetypes.guess_type(str(path))[0]
             or "application/octet-stream"
         )
+        django_request = getattr(request, "_request", request)
+        if isinstance(django_request, ASGIRequest):
+            # Served over ASGI (uvicorn in production), Django buffers
+            # FileResponse's sync file iterator wholesale — the entire
+            # installer in memory before the first byte, per download. Hand it
+            # an async iterator instead, setting by hand the headers
+            # FileResponse would have derived from the file handle. WSGI
+            # (runserver, tests) keeps native sync streaming.
+            response = StreamingHttpResponse(
+                aiter_file(path), content_type=content_type
+            )
+            response["Content-Length"] = path.stat().st_size
+            response["Content-Disposition"] = content_disposition_header(
+                as_attachment=True, filename=name
+            )
+            return response
         return FileResponse(
             path.open("rb"),
             as_attachment=True,

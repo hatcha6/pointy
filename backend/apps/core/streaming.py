@@ -84,3 +84,42 @@ async def aiter_in_thread(generator):
             yield item
     finally:
         closed.set()
+
+
+async def aiter_file(path, chunk_size=64 * 1024):
+    """Async-iterate a file's bytes, one bounded chunk in memory at a time.
+
+    For large downloads (the client installers) under ASGI, where a plain
+    ``FileResponse`` hits the same wholesale sync-iterator buffering as SSE —
+    the entire file in memory before the first byte. ``aiter_in_thread`` is
+    the wrong bridge here: its hand-off queue is unbounded and a disk read
+    outruns any LAN client, so the queue would swallow the whole file too.
+    Reading pull-based instead gives natural backpressure — the next read
+    happens only after the ASGI server has accepted the previous chunk, which
+    uvicorn's flow control ties to the client actually draining the socket.
+    Closing the iterator early (client gone mid-download) closes the file.
+    """
+    handle = await asyncio.to_thread(open, path, "rb")
+    try:
+        while chunk := await asyncio.to_thread(handle.read, chunk_size):
+            yield chunk
+    finally:
+        handle.close()
+
+
+async def aiter_handle(handle, chunk_size=64 * 1024):
+    """``aiter_file`` for an already-open binary file-like; closes it after.
+
+    For callers whose storage abstraction hands over a file OBJECT rather
+    than a path — attachments may come back as a gzip-decompressing wrapper
+    around the stored file, so there is no path whose raw bytes are the
+    response body. Same pull-based backpressure as ``aiter_file``: each
+    (possibly decompressing) read runs on a worker thread only once the ASGI
+    server has accepted the previous chunk, and closing the iterator early
+    closes the handle.
+    """
+    try:
+        while chunk := await asyncio.to_thread(handle.read, chunk_size):
+            yield chunk
+    finally:
+        handle.close()

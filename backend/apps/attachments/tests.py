@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from asgiref.sync import sync_to_async
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -358,6 +359,56 @@ class AttachmentApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(b"".join(response.streaming_content))
+
+    async def test_asgi_content_streams_an_async_iterator(self):
+        # Under ASGI (uvicorn in production) Django buffers FileResponse's
+        # sync file iterator wholesale — the entire attachment in memory
+        # before the first byte — so the view must hand Django an async
+        # iterator carrying the headers FileResponse would have set. This
+        # payload compresses, so it's stored gzip-encoded: the stream must
+        # pass through the decompressing handle and Content-Length must be
+        # the original (decompressed) size.
+        payload = self.pdf_payload(b"H")
+        upload = await sync_to_async(self.upload_attachment)(payload, "asgi.pdf")
+        self.assertEqual(upload.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            upload.data["storage_encoding"], Attachment.StorageEncoding.GZIP
+        )
+
+        response = await self.async_client.get(upload.data["content_url"])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.streaming)
+        self.assertTrue(response.is_async)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertEqual(response["Content-Length"], str(len(payload)))
+        self.assertIn("inline", response["Content-Disposition"])
+        self.assertIn("asgi.pdf", response["Content-Disposition"])
+        self.assertEqual(response["ETag"], f'"{upload.data["checksum_sha256"]}"')
+        self.assertIn("max-age=86400", response["Cache-Control"])
+        body = b"".join([chunk async for chunk in response.streaming_content])
+        self.assertEqual(body, payload)
+
+    async def test_asgi_download_streams_with_attachment_disposition(self):
+        payload = self.pdf_payload(b"I")
+        upload = await sync_to_async(self.upload_attachment)(payload, "asgi-dl.pdf")
+        self.assertEqual(upload.status_code, status.HTTP_201_CREATED)
+        # The download action needs a real authenticated session — DRF's
+        # force_authenticate only rides the sync APIClient.
+        await sync_to_async(self.async_client.force_login)(self.user)
+
+        response = await self.async_client.get(
+            reverse("attachment-download", args=[upload.data["id"]])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.streaming)
+        self.assertTrue(response.is_async)
+        self.assertEqual(response["Content-Length"], str(len(payload)))
+        self.assertIn("attachment", response["Content-Disposition"])
+        self.assertIn("asgi-dl.pdf", response["Content-Disposition"])
+        body = b"".join([chunk async for chunk in response.streaming_content])
+        self.assertEqual(body, payload)
 
     def test_unsigned_content_url_still_requires_authentication(self):
         upload_response = self.client.post(

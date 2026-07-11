@@ -1,4 +1,5 @@
-from django.http import FileResponse, Http404
+from django.core.handlers.asgi import ASGIRequest
+from django.http import FileResponse, Http404, StreamingHttpResponse
 from django.utils.cache import get_conditional_response
 from django.utils.http import content_disposition_header, http_date, quote_etag
 from rest_framework import parsers, viewsets
@@ -7,6 +8,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from apps.core.permissions import HasPointyPermission
+from apps.core.streaming import aiter_handle
 
 from .models import Attachment, StorageVolume
 from .serializers import AttachmentSerializer, StorageVolumeSerializer
@@ -121,17 +123,41 @@ class AttachmentViewSet(viewsets.ModelViewSet):
                 file_obj = open_attachment(attachment)
             except AttachmentStorageError as exc:
                 raise Http404(str(exc)) from exc
-            response = FileResponse(
-                file_obj,
-                as_attachment=as_attachment,
-                filename=attachment.original_filename,
-                content_type=attachment.content_type or "application/octet-stream",
-            )
-            if not as_attachment:
-                response["Content-Disposition"] = content_disposition_header(
-                    as_attachment=False,
-                    filename=attachment.original_filename,
+            content_type = attachment.content_type or "application/octet-stream"
+            django_request = getattr(self.request, "_request", self.request)
+            if isinstance(django_request, ASGIRequest):
+                # Served over ASGI (uvicorn in production), Django buffers
+                # FileResponse's sync file iterator wholesale — the whole
+                # attachment in memory before the first byte; product images
+                # are small, but AI-chat file attachments run multi-MB. Hand
+                # it an async iterator over the open_attachment() handle
+                # (possibly a gzip-decompressing wrapper — there is no path
+                # whose raw bytes are the response), setting by hand the
+                # headers FileResponse would have derived. Either storage
+                # encoding streams back the original upload byte-for-byte,
+                # so original_size is the Content-Length. WSGI (runserver,
+                # tests) keeps native sync streaming.
+                response = StreamingHttpResponse(
+                    aiter_handle(file_obj), content_type=content_type
                 )
+                response["Content-Length"] = attachment.original_size
+                if disposition := content_disposition_header(
+                    as_attachment=as_attachment,
+                    filename=attachment.original_filename,
+                ):
+                    response["Content-Disposition"] = disposition
+            else:
+                response = FileResponse(
+                    file_obj,
+                    as_attachment=as_attachment,
+                    filename=attachment.original_filename,
+                    content_type=content_type,
+                )
+                if not as_attachment:
+                    response["Content-Disposition"] = content_disposition_header(
+                        as_attachment=False,
+                        filename=attachment.original_filename,
+                    )
         # On the 304 too, so clients extend their cache lifetime.
         response["ETag"] = etag
         if last_modified is not None:

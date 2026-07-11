@@ -23,6 +23,15 @@ _UNCOMPRESSIBLE_PREFIXES = (
     "image/",
     "video/",
     "audio/",
+    # Already-compressed archives/binaries — chiefly the client installers
+    # (APK/exe/tar.gz), which Dart's HttpClient requests with
+    # Accept-Encoding: gzip by default. Re-gzipping them wastes CPU per
+    # download for ~0 gain, and on a streaming response the gzip wrapper
+    # drops Content-Length, killing download progress.
+    "application/zip",
+    "application/gzip",
+    "application/vnd.android.package-archive",
+    "application/octet-stream",
 )
 
 
