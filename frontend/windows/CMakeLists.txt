@@ -32,6 +32,11 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+# MSVC 14.5x (VS 18) STL hard-errors (STL1011) on <experimental/coroutine>,
+# which C++/WinRT pulls in for plugins built as C++17 (audioplayers_windows).
+# Silence it until upstream compiles as C++20 (real <coroutine>).
+add_definitions(-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by
