@@ -340,23 +340,41 @@ class PointyAppDependencies {
       if (_enableAutomaticConnection) {
         unawaited(connectionCoordinator.pairAuthenticatedDevice());
       }
-      _dashboardViewModel?.loadDashboard();
-      _invoiceListViewModel?.loadInvoices();
-      _purchaseViewModel?.loadCatalog();
-      _purchaseOrderListViewModel?.loadOrders();
-      _contactManagementViewModel?.loadContacts();
-      _discountManagementViewModel?.loadRules();
-      _employeePayrollViewModel?.loadEmployees();
-      _employeePayrollViewModel?.loadPayrollRuns();
-      _employeePayrollViewModel?.loadLoans();
-      _activityLogViewModel?.loadEvents();
-      _activityLogViewModel?.loadUsers();
+      // Feature view models that survived the last session still need a
+      // refresh (a different user's permissions can reshape their lists),
+      // but sequentially in the background — the old parallel fan-out landed
+      // ~11 simultaneous requests at the exact moment the POS is loading.
+      unawaited(_refreshSessionViewModels());
     }
 
     if (authViewModel.status == AuthStatus.unauthenticated) {
       _lastAuthenticatedUserId = null;
       analyticsEngine.setCurrentUser(null);
       _disposeSessionViewModels();
+    }
+  }
+
+  Future<void> _refreshSessionViewModels() async {
+    final steps = <Future<void>? Function()>[
+      () => _dashboardViewModel?.loadDashboard(),
+      () => _invoiceListViewModel?.loadInvoices(),
+      () => _purchaseViewModel?.loadCatalog(),
+      () => _purchaseOrderListViewModel?.loadOrders(),
+      () => _contactManagementViewModel?.loadContacts(),
+      () => _discountManagementViewModel?.loadRules(),
+      () => _employeePayrollViewModel?.loadEmployees(),
+      () => _employeePayrollViewModel?.loadPayrollRuns(),
+      () => _employeePayrollViewModel?.loadLoans(),
+      () => _activityLogViewModel?.loadEvents(),
+      () => _activityLogViewModel?.loadUsers(),
+    ];
+    for (final step in steps) {
+      try {
+        await (step() ?? Future<void>.value());
+      } catch (_) {
+        // Each view model surfaces its own error state; one failed refresh
+        // must not abort the rest of the chain.
+      }
     }
   }
 

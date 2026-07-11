@@ -13,6 +13,7 @@ import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/customer_rank_presentation.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/query_controls/debounced_search_field.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/contact_management_view_model.dart';
@@ -470,11 +471,12 @@ class _ContactActionBar extends StatelessWidget {
                   width: isWide
                       ? constraints.maxWidth - 210 - spacing.sm
                       : null,
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: l10n.contactSearchHint,
-                      prefixIcon: const Icon(Icons.search),
-                    ),
+                  // Debounced: a raw onChanged used to fire two paginated
+                  // requests (customers + suppliers) per keystroke.
+                  child: DebouncedSearchField(
+                    value: viewModel.query.search,
+                    hintText: l10n.contactSearchHint,
+                    clearTooltip: l10n.clearSearchTooltip,
                     onChanged: viewModel.updateSearch,
                   ),
                 ),
