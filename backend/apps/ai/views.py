@@ -7,6 +7,7 @@ import urllib.request
 from datetime import timedelta
 from uuid import uuid4
 
+from django.conf import settings
 from django.core.cache import cache
 from django.core.handlers.asgi import ASGIRequest
 from django.http import HttpResponse, StreamingHttpResponse
@@ -940,6 +941,8 @@ class AiUsageView(APIView):
 
     permission_classes = [permissions.IsAuthenticated]
 
+    _CACHE_KEY = "pointy:ai:usage:{installation_id}"
+
     def get(self, request):
         installation = RelayInstallation.load()
         if not relay_ai_available(installation):
@@ -947,10 +950,27 @@ class AiUsageView(APIView):
                 {"detail": "AI is not enabled for this shop."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+        # The ring is polled by every device but the counters only move when
+        # someone actually chats; a short shop-global cache turns the fleet's
+        # polls into one relay round-trip per window. Fail-open on Redis.
+        ttl = int(getattr(settings, "POINTY_AI_USAGE_CACHE_TTL", 0))
+        cache_key = self._CACHE_KEY.format(installation_id=installation.installation_id)
+        if ttl > 0:
+            try:
+                cached = cache.get(cache_key)
+            except Exception:  # noqa: BLE001
+                cached = None
+            if cached is not None:
+                return Response(cached)
         try:
             usage = RelayControlClient().get_ai_usage(installation.access_token)
         except RelayControlError as exc:
             return _relay_error_response(exc)
+        if ttl > 0:
+            try:
+                cache.set(cache_key, usage, ttl)
+            except Exception:  # noqa: BLE001
+                pass
         return Response(usage)
 
 

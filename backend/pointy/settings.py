@@ -564,6 +564,21 @@ POINTY_USER_CACHE_TTL = 0 if TESTING else env.int("POINTY_USER_CACHE_TTL", defau
 POINTY_CHANNEL_LAST_USED_WRITE_SECONDS = (
     0 if TESTING else env.int("POINTY_CHANNEL_LAST_USED_WRITE_SECONDS", default=60)
 )
+# The RelayInstallation singleton (loaded on /me, discovery, every AI request).
+# Signal-invalidated; the TTL bounds raw-SQL edits.
+POINTY_RELAY_INSTALLATION_CACHE_TTL = (
+    0 if TESTING else env.int("POINTY_RELAY_INSTALLATION_CACHE_TTL", default=60)
+)
+# The AI usage ring: one relay round-trip per window for the whole fleet's
+# polls instead of one per poll (0 disables, forced under tests).
+POINTY_AI_USAGE_CACHE_TTL = (
+    0 if TESTING else env.int("POINTY_AI_USAGE_CACHE_TTL", default=60)
+)
+# Register-session summary / Z-Report (view + thermal + PDF hit it back to
+# back). Short: closed sessions can still change via a from-history void.
+POINTY_REGISTER_SUMMARY_CACHE_TTL = (
+    0 if TESTING else env.int("POINTY_REGISTER_SUMMARY_CACHE_TTL", default=30)
+)
 # Active-product-id list for the unfiltered POS catalog (ProductViewSet).
 # Invalidated by the viewset's own writes, so the TTL bounds staleness from
 # direct-ORM writes (imports, admin) — and must be 0 under tests, where DB

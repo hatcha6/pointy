@@ -505,6 +505,34 @@ class AiChatViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["five_hour"]["remaining"], 28)
 
+    def test_usage_endpoint_serves_the_fleet_from_one_relay_call_per_window(self):
+        from django.core.cache import cache as django_cache
+        from django.test import override_settings
+
+        snapshot = {
+            "five_hour": {"used": 2, "limit": 30, "remaining": 28},
+            "weekly": {"used": 2, "limit": 200, "remaining": 198},
+        }
+        with override_settings(
+            CACHES={
+                "default": {
+                    "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                    "LOCATION": "ai-usage-cache-tests",
+                },
+            },
+            POINTY_AI_USAGE_CACHE_TTL=60,
+        ):
+            django_cache.clear()
+            with patch("apps.ai.views.RelayControlClient") as mock_client:
+                mock_client.return_value.get_ai_usage.return_value = snapshot
+                first = self.client.get(reverse("ai-usage"))
+                second = self.client.get(reverse("ai-usage"))
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(second.status_code, 200)
+            self.assertEqual(second.data["weekly"]["remaining"], 198)
+            # Both polls, one relay round-trip.
+            self.assertEqual(mock_client.return_value.get_ai_usage.call_count, 1)
+
     def test_done_event_reports_the_user_message_id(self):
         with patch("apps.ai.views.RelayControlClient") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(

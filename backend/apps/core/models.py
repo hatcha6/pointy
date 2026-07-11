@@ -387,7 +387,13 @@ class RelayInstallation(TimeStampedModel):
 
     @classmethod
     def load(cls):
-        return cls.objects.order_by("created_at").first()
+        # Redis-cached like ShopSettings: /me, discovery, and every AI request
+        # load this row. Signal-invalidated (signals.py); TTL is the backstop.
+        from apps.core import caching
+
+        return caching.get_relay_installation(
+            lambda: cls.objects.order_by("created_at").first()
+        )
 
     @property
     def remote_access_supported(self):

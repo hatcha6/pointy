@@ -19,7 +19,7 @@ from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_has_full_visibility
 from apps.fraud.services import schedule_targeted_sweep
 from .models import Order, RegisterCashMovement, RegisterSession
-from .register_summary import build_register_session_summary
+from .register_summary import cached_register_session_summary
 from .serializers import (
     CheckoutSerializer,
     ConvertQuotationSerializer,
@@ -604,7 +604,7 @@ class RegisterSessionViewSet(
         sales-by-category breakdown and cash reconciliation. Single source of
         truth for the manager session view and the printable Z-Report."""
         session = self.get_object()
-        return Response(build_register_session_summary(session))
+        return Response(cached_register_session_summary(session))
 
     @action(detail=True, methods=["get"], url_path="cash-movements")
     def cash_movements(self, request, pk=None):

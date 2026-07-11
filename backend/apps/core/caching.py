@@ -101,6 +101,47 @@ def invalidate_shop_settings():
     _safe_delete(_shop_settings_key())
 
 
+# --- RelayInstallation singleton ------------------------------------------------
+# Loaded on /me, discovery beacons, every AI view, and the usage-ring poll; the
+# row changes only on enrollment/sync/heartbeat writes, all of which fire the
+# post_save signal. "No installation yet" is a legitimate cacheable answer, so
+# it is stored as a sentinel rather than treated as a miss.
+_RELAY_INSTALLATION_NONE = "__none__"
+
+
+def _relay_installation_ttl() -> int:
+    return int(getattr(settings, "POINTY_RELAY_INSTALLATION_CACHE_TTL", 0))
+
+
+def _relay_installation_key() -> str:
+    from apps.core.models import RelayInstallation
+
+    fields = ",".join(
+        sorted(f.attname for f in RelayInstallation._meta.concrete_fields)
+    )
+    digest = hashlib.md5(fields.encode()).hexdigest()[:10]
+    return f"pointy:core:relay-installation:{digest}"
+
+
+def get_relay_installation(loader):
+    ttl = _relay_installation_ttl()
+    if ttl <= 0:
+        return loader()
+    key = _relay_installation_key()
+    cached = _safe_get(key)
+    if cached is not None:
+        return None if cached == _RELAY_INSTALLATION_NONE else cached
+    instance = loader()
+    _safe_set(key, _RELAY_INSTALLATION_NONE if instance is None else instance, ttl)
+    return instance
+
+
+def invalidate_relay_installation():
+    if _relay_installation_ttl() <= 0:
+        return  # nothing is ever cached; skip the Redis round-trip (tests/CI)
+    _safe_delete(_relay_installation_key())
+
+
 # --- the auth user row ----------------------------------------------------------
 def _user_ttl() -> int:
     return int(getattr(settings, "POINTY_USER_CACHE_TTL", 0))

@@ -27,6 +27,7 @@ CACHED = override_settings(
     POINTY_SHOP_SETTINGS_CACHE_TTL=60,
     POINTY_PERMISSION_CACHE_TTL=300,
     POINTY_USER_CACHE_TTL=60,
+    POINTY_RELAY_INSTALLATION_CACHE_TTL=60,
 )
 
 
@@ -129,6 +130,64 @@ class PermissionCacheTests(TestCase):
             caching.cache, "set", boom
         ):
             self.assertTrue(self._fresh_user().has_perm("sales.add_order"))
+
+
+@CACHED
+class RelayInstallationCacheTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def _create(self):
+        from apps.core.models import RelayInstallation
+
+        return RelayInstallation.objects.create(
+            installation_id="inst-1",
+            relay_public_api_url="https://relay.example.com",
+            connector_token="c",
+            access_token="a",
+        )
+
+    def test_load_is_served_from_cache_after_first_read(self):
+        from apps.core.models import RelayInstallation
+
+        self._create()
+        RelayInstallation.load()  # warm
+        with self.assertNumQueries(0):
+            installation = RelayInstallation.load()
+        self.assertEqual(installation.installation_id, "inst-1")
+
+    def test_absence_is_cached_too(self):
+        from apps.core.models import RelayInstallation
+
+        self.assertIsNone(RelayInstallation.load())  # warm the sentinel
+        with self.assertNumQueries(0):
+            self.assertIsNone(RelayInstallation.load())
+
+    def test_save_invalidates(self):
+        from apps.core.models import RelayInstallation
+
+        installation = self._create()
+        RelayInstallation.load()  # cached
+        installation.ai_enabled = True
+        installation.save()
+        self.assertTrue(RelayInstallation.load().ai_enabled)
+
+    def test_enrollment_after_cached_absence_is_visible_immediately(self):
+        from apps.core.models import RelayInstallation
+
+        self.assertIsNone(RelayInstallation.load())  # sentinel cached
+        self._create()  # post_save invalidates the sentinel
+        self.assertIsNotNone(RelayInstallation.load())
+
+    def test_fails_open_when_redis_is_down(self):
+        from apps.core.models import RelayInstallation
+
+        self._create()
+        boom = mock.Mock(side_effect=ConnectionError("redis down"))
+        with mock.patch.object(caching.cache, "get", boom), mock.patch.object(
+            caching.cache, "set", boom
+        ):
+            self.assertIsNotNone(RelayInstallation.load())
 
 
 @CACHED

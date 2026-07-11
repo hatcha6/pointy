@@ -24,12 +24,15 @@ Attribution mirrors the model's drawer accounting:
 from collections import OrderedDict
 from decimal import Decimal
 
+from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Count, Sum
 
+from apps.catalog.models import Product
 from apps.expenses.models import Expense
 from apps.payments.models import Payment
 
-from .models import Order, OrderAdjustment, RegisterSession
+from .models import Order, OrderAdjustment, OrderLine, RegisterSession
 
 MONEY = Decimal("0.01")
 QTY = Decimal("0.001")
@@ -65,6 +68,35 @@ def _primary_category(product):
         return None
     categories.sort(key=lambda c: (c.display_order, c.name, c.id))
     return categories[0]
+
+
+def cached_register_session_summary(session: RegisterSession) -> dict:
+    """``build_register_session_summary`` behind a short Redis cache.
+
+    A shift review opens the summary, prints it thermally, and often exports
+    the PDF within seconds — one compute serves all three. The TTL is short
+    because a closed session is *not* strictly immutable (a manager can void
+    one of its invoices from history); 30s staleness is invisible at the desk.
+    Keyed on the session row's updated_at so reopening/closing recomputes
+    immediately. Fail-open on Redis trouble.
+    """
+    ttl = int(getattr(settings, "POINTY_REGISTER_SUMMARY_CACHE_TTL", 0))
+    if ttl <= 0:
+        return build_register_session_summary(session)
+    stamp = session.updated_at.timestamp() if session.updated_at else 0
+    key = f"pointy:sales:register-summary:{session.pk}:{session.status}:{stamp}"
+    try:
+        cached = cache.get(key)
+    except Exception:  # noqa: BLE001 — redis down: compute live
+        cached = None
+    if cached is not None:
+        return cached
+    summary = build_register_session_summary(session)
+    try:
+        cache.set(key, summary, ttl)
+    except Exception:  # noqa: BLE001
+        pass
+    return summary
 
 
 def build_register_session_summary(session: RegisterSession) -> dict:
@@ -104,40 +136,63 @@ def _session_header(session: RegisterSession) -> dict:
 
 
 def _sales_and_categories(session: RegisterSession):
-    """Single pass over the session's recognized orders for both the sales
-    totals and the per-category breakdown."""
-    orders = (
-        Order.objects.committed_sales()
-        .filter(register_session=session)
-        .prefetch_related("lines__variant__product__categories")
+    """Sales totals + per-category breakdown for the session's recognized
+    orders.
+
+    Order-level money lives in real columns, so those sums happen in SQL. The
+    per-line net deliberately stays in Python over a lean 4-column tuple scan:
+    ``line_total`` quantizes per line with Decimal's half-even rounding, which
+    SQL ``ROUND`` (half-up) would diverge from on fractional quantities — but
+    nothing heavier than the tuples is materialized (the old version loaded
+    every order with a lines→variant→product→categories prefetch)."""
+    orders = Order.objects.committed_sales().filter(register_session=session)
+    totals = orders.aggregate(
+        gross=Sum("subtotal"),
+        discount=Sum("discount_total"),
+        total=Sum("total"),
+        count=Count("id"),
     )
 
-    gross = Decimal("0.00")
-    discount = Decimal("0.00")
-    order_total = Decimal("0.00")
     items = Decimal("0.000")
-    order_count = 0
-    buckets: "OrderedDict[object, dict]" = OrderedDict()
+    product_rollups: dict[object, dict] = {}
+    lines = OrderLine.objects.filter(order__in=orders).values_list(
+        "quantity", "unit_price", "discount_total", "variant__product_id"
+    )
+    for quantity, unit_price, discount_total, product_id in lines:
+        items += quantity
+        line_net = (unit_price * quantity).quantize(MONEY) - (
+            discount_total or Decimal("0.00")
+        )
+        rollup = product_rollups.get(product_id)
+        if rollup is None:
+            rollup = {"quantity": Decimal("0.000"), "net": Decimal("0.00")}
+            product_rollups[product_id] = rollup
+        rollup["quantity"] += quantity
+        rollup["net"] += line_net.quantize(MONEY)
 
-    for order in orders:
-        order_count += 1
-        gross += order.subtotal
-        discount += order.discount_total
-        order_total += order.total
-        for line in order.lines.all():
-            items += line.quantity
-            category = _primary_category(line.variant.product)
-            key = category.id if category is not None else UNCATEGORIZED
-            bucket = buckets.get(key)
-            if bucket is None:
-                bucket = {
-                    "name": category.name if category is not None else None,
-                    "quantity": Decimal("0.000"),
-                    "net": Decimal("0.00"),
-                }
-                buckets[key] = bucket
-            bucket["quantity"] += line.quantity
-            bucket["net"] += line.line_total
+    # One query resolves the primary category of every distinct product sold
+    # this shift — bounded by the assortment, not the line count.
+    products_by_id = {
+        product.id: product
+        for product in Product.objects.filter(
+            id__in=[pid for pid in product_rollups if pid is not None]
+        ).prefetch_related("categories")
+    }
+    buckets: "OrderedDict[object, dict]" = OrderedDict()
+    for product_id, rollup in product_rollups.items():
+        product = products_by_id.get(product_id)
+        category = _primary_category(product) if product is not None else None
+        key = category.id if category is not None else UNCATEGORIZED
+        bucket = buckets.get(key)
+        if bucket is None:
+            bucket = {
+                "name": category.name if category is not None else None,
+                "quantity": Decimal("0.000"),
+                "net": Decimal("0.00"),
+            }
+            buckets[key] = bucket
+        bucket["quantity"] += rollup["quantity"]
+        bucket["net"] += rollup["net"]
 
     void_count = (
         Order.objects.filter(
@@ -162,11 +217,11 @@ def _sales_and_categories(session: RegisterSession):
     ]
 
     sales = {
-        "gross_sales": _money(gross),
-        "discount_total": _money(discount),
+        "gross_sales": _money(totals["gross"]),
+        "discount_total": _money(totals["discount"]),
         # ``net_sales`` is finalised in the caller once refunds are known.
-        "net_sales": _money(order_total),
-        "order_count": order_count,
+        "net_sales": _money(totals["total"]),
+        "order_count": totals["count"] or 0,
         "void_count": void_count,
         "items_sold": _qty(items),
     }

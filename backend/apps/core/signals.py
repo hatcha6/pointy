@@ -8,7 +8,7 @@ from django.db.models.signals import (
 from django.dispatch import receiver
 
 from . import caching
-from .models import ShopSettings
+from .models import RelayInstallation, ShopSettings
 from .roles import ensure_role_groups
 
 
@@ -24,6 +24,15 @@ def setup_auth_roles(sender, **kwargs):
 @receiver(post_delete, sender=ShopSettings)
 def invalidate_shop_settings_cache(sender, **kwargs):
     caching.invalidate_shop_settings()
+
+
+# --- RelayInstallation singleton cache -----------------------------------------
+# All writes go through .create()/.save() (enrollment, hourly sync, connector
+# heartbeats), so post_save covers them; the TTL guards raw-SQL edits.
+@receiver(post_save, sender=RelayInstallation)
+@receiver(post_delete, sender=RelayInstallation)
+def invalidate_relay_installation_cache(sender, **kwargs):
+    caching.invalidate_relay_installation()
 
 
 # --- permission cache version -------------------------------------------------
