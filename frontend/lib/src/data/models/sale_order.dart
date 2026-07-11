@@ -864,7 +864,11 @@ int _intFromJson(Object? value) {
   if (value is int) {
     return value;
   }
-  return int.parse((value ?? 0).toString());
+  if (value is num) {
+    return value.toInt();
+  }
+  final normalized = (value ?? 0).toString();
+  return int.tryParse(normalized) ?? double.tryParse(normalized)?.toInt() ?? 0;
 }
 
 int? _nullableIntFromJson(Object? value) {
