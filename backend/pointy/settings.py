@@ -129,6 +129,10 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # Compresses JSON payloads (skips SSE + images — see apps.core.gzip).
+    # Native tills talk straight to uvicorn, so this is the only gzip layer
+    # they ever get; it matters most on relay-tunnel connections.
+    "apps.core.gzip.SelectiveGZipMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
