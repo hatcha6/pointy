@@ -41,6 +41,7 @@ from apps.attachments.serializers import (
     ProductImageSearchQuerySerializer,
     ProductImageSearchResultSerializer,
 )
+from apps.core import caching
 from apps.core.permissions import HasPointyPermission
 from .cache import attach_catalog_version, catalog_etag, catalog_version
 from .models import (
@@ -279,9 +280,12 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
                     is_active=True,
                     variants__is_active=True,
                 ).distinct()
-            product_ids = self._get_active_product_ids()
-            if product_ids is None:
-                product_ids = list(
+            # Single-flight: a catalog write orphans this key for EVERY till at
+            # once; without coalescing each till's next page re-runs the same
+            # distinct id scan.
+            product_ids = caching.get_or_compute_single_flight(
+                self.active_cache_key,
+                lambda: list(
                     Product.objects.filter(
                         is_active=True,
                         variants__is_active=True,
@@ -289,8 +293,9 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
                     )
                     .distinct()
                     .values_list("id", flat=True)
-                )
-                self._set_active_product_ids(product_ids)
+                ),
+                settings.POINTY_ACTIVE_PRODUCT_CACHE_TTL,
+            )
             return queryset.filter(id__in=product_ids)
         return queryset
 
@@ -792,23 +797,6 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     def _clear_catalog_cache(self):
         try:
             cache.delete(self.active_cache_key)
-        except Exception:
-            pass
-
-    def _get_active_product_ids(self):
-        if not settings.POINTY_ACTIVE_PRODUCT_CACHE_TTL:
-            return None
-        try:
-            return cache.get(self.active_cache_key)
-        except Exception:
-            return None
-
-    def _set_active_product_ids(self, product_ids):
-        ttl = settings.POINTY_ACTIVE_PRODUCT_CACHE_TTL
-        if not ttl:
-            return
-        try:
-            cache.set(self.active_cache_key, product_ids, timeout=ttl)
         except Exception:
             pass
 

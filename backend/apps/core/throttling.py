@@ -98,3 +98,28 @@ class PasswordChangeRateThrottle(_FailOpenThrottleMixin, UserRateThrottle):
     """
 
     scope = "password_change"
+
+
+class AuthenticatedBurstCeilingThrottle(_FailOpenThrottleMixin, UserRateThrottle):
+    """A wide per-user ceiling on authenticated traffic — not a product rate
+    limit.
+
+    Normal POS bursts never come near the default (see settings); this exists
+    so a runaway client — a retry loop, a stuck poller — cannot convert one
+    device's bug into a shop-wide DB flood (PgBouncer queues at 25 concurrent
+    transactions, so one device looping flat-out degrades every till).
+
+    Keyed per user, so the shared-REMOTE_ADDR web path can never
+    cross-throttle different users. Anonymous requests pass through
+    untouched: behind nginx they share one IP and would false-positive, and
+    the sensitive anonymous endpoints (login/setup) keep their own scoped
+    throttles above.
+    """
+
+    scope = "authenticated_ceiling"
+
+    def allow_request(self, request, view):
+        user = getattr(request, "user", None)
+        if user is None or not getattr(user, "is_authenticated", False):
+            return True
+        return super().allow_request(request, view)

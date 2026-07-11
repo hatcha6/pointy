@@ -133,6 +133,106 @@ class PermissionCacheTests(TestCase):
 
 
 @CACHED
+class AuthenticatedCeilingThrottleTests(TestCase):
+    """The wide per-user ceiling: bounds a runaway client, invisible otherwise."""
+
+    def setUp(self):
+        cache.clear()
+
+    def _throttle(self, rate="2/min"):
+        from apps.core.throttling import AuthenticatedBurstCeilingThrottle
+
+        throttle = AuthenticatedBurstCeilingThrottle()
+        throttle.rate = rate
+        throttle.num_requests, throttle.duration = throttle.parse_rate(rate)
+        return throttle
+
+    def test_runaway_authenticated_client_is_bounded(self):
+        from django.test import RequestFactory
+
+        user = User.objects.create_user(username="till", password="x")
+        request = RequestFactory().get("/api/products/")
+        request.user = user
+        throttle = self._throttle(rate="2/min")
+        self.assertTrue(throttle.allow_request(request, None))
+        self.assertTrue(throttle.allow_request(request, None))
+        self.assertFalse(throttle.allow_request(request, None))
+
+    def test_anonymous_requests_pass_through(self):
+        from django.contrib.auth.models import AnonymousUser
+        from django.test import RequestFactory
+
+        request = RequestFactory().get("/api/price-check/")
+        request.user = AnonymousUser()
+        throttle = self._throttle(rate="1/min")
+        for _ in range(5):
+            self.assertTrue(throttle.allow_request(request, None))
+
+    def test_fails_open_when_redis_is_down(self):
+        from django.test import RequestFactory
+
+        user = User.objects.create_user(username="till2", password="x")
+        request = RequestFactory().get("/api/products/")
+        request.user = user
+        throttle = self._throttle(rate="1/min")
+        throttle.cache = mock.Mock()
+        throttle.cache.get.side_effect = ConnectionError("redis down")
+        # Even the throttle bookkeeping failing must not reject requests.
+        self.assertTrue(throttle.allow_request(request, None))
+    def setUp(self):
+        cache.clear()
+
+    def test_hit_skips_compute(self):
+        calls = []
+        caching.get_or_compute_single_flight("sf:key", lambda: calls.append(1) or "v", 60)
+        value = caching.get_or_compute_single_flight(
+            "sf:key", lambda: calls.append(1) or "v", 60
+        )
+        self.assertEqual(value, "v")
+        self.assertEqual(len(calls), 1)
+
+    def test_winner_releases_the_lock(self):
+        caching.get_or_compute_single_flight("sf:key", lambda: "v", 60)
+        self.assertIsNone(cache.get("sf:key:lock"))
+
+    def test_loser_polls_for_the_winners_result(self):
+        # A concurrent winner holds the lock; its value lands while the loser
+        # is polling — the loser must serve it without computing.
+        cache.add("sf:key:lock", 1, 5)
+        reads = iter([None, "winner"])  # initial miss, then the winner's value
+
+        def compute():
+            raise AssertionError("loser must serve the winner's value")
+
+        with mock.patch.object(
+            caching,
+            "_safe_get",
+            side_effect=lambda key, default=None: next(reads, "winner"),
+        ):
+            value = caching.get_or_compute_single_flight(
+                "sf:key", compute, 60, wait_ms=1, max_waits=3
+            )
+        self.assertEqual(value, "winner")
+
+    def test_loser_computes_anyway_when_the_winner_stalls(self):
+        cache.add("sf:key:lock", 1, 5)  # a winner that never finishes
+        value = caching.get_or_compute_single_flight(
+            "sf:key", lambda: "computed", 60, wait_ms=1, max_waits=2
+        )
+        self.assertEqual(value, "computed")
+        # The stalled winner's lock is not ours to release.
+        self.assertIsNotNone(cache.get("sf:key:lock"))
+
+    def test_zero_ttl_bypasses_caching(self):
+        calls = []
+        for _ in range(2):
+            caching.get_or_compute_single_flight(
+                "sf:key", lambda: calls.append(1) or "v", 0
+            )
+        self.assertEqual(len(calls), 2)
+
+
+@CACHED
 class RelayInstallationCacheTests(TestCase):
     def setUp(self):
         cache.clear()

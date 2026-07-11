@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import time
 
 from django.conf import settings
 from django.core.cache import cache
@@ -99,6 +100,52 @@ def invalidate_shop_settings():
     if _shop_settings_ttl() <= 0:
         return  # nothing is ever cached; skip the Redis round-trip (tests/CI)
     _safe_delete(_shop_settings_key())
+
+
+# --- single-flight cache fill ----------------------------------------------------
+def get_or_compute_single_flight(
+    key,
+    compute,
+    ttl,
+    *,
+    lock_timeout=5,
+    wait_ms=40,
+    max_waits=8,
+):
+    """``cache.get`` → on miss, ONE caller computes under a ``cache.add`` lock
+    while concurrent missers briefly poll for the winner's result.
+
+    Built for the version-keyed caches whose misses stampede: a catalog-version
+    bump orphans every till's next read at once, and without coalescing each
+    till re-runs the same query. Losers wait at most ``max_waits × wait_ms``
+    (~320ms by default) and then compute anyway, so a stalled winner can only
+    delay, never wedge. Fail-open on any Redis trouble; ``ttl <= 0`` bypasses
+    caching entirely and just computes.
+    """
+    if ttl <= 0:
+        return compute()
+    value = _safe_get(key)
+    if value is not None:
+        return value
+    lock_key = f"{key}:lock"
+    acquired = False
+    try:
+        acquired = bool(cache.add(lock_key, 1, lock_timeout))
+    except Exception:  # noqa: BLE001 — no usable Redis: just compute
+        acquired = True
+    if not acquired:
+        for _ in range(max_waits):
+            time.sleep(wait_ms / 1000.0)
+            value = _safe_get(key)
+            if value is not None:
+                return value
+    try:
+        value = compute()
+        _safe_set(key, value, ttl)
+        return value
+    finally:
+        if acquired:
+            _safe_delete(lock_key)
 
 
 # --- RelayInstallation singleton ------------------------------------------------

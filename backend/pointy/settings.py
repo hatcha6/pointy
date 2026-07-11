@@ -579,6 +579,11 @@ POINTY_AI_USAGE_CACHE_TTL = (
 POINTY_REGISTER_SUMMARY_CACHE_TTL = (
     0 if TESTING else env.int("POINTY_REGISTER_SUMMARY_CACHE_TTL", default=30)
 )
+# A burst of risky actions queues ONE targeted fraud sweep per window instead
+# of one per action (0 = enqueue every time, forced under tests).
+POINTY_FRAUD_SWEEP_DEBOUNCE_SECONDS = (
+    0 if TESTING else env.int("POINTY_FRAUD_SWEEP_DEBOUNCE_SECONDS", default=120)
+)
 # Active-product-id list for the unfiltered POS catalog (ProductViewSet).
 # Invalidated by the viewset's own writes, so the TTL bounds staleness from
 # direct-ORM writes (imports, admin) — and must be 0 under tests, where DB
@@ -629,13 +634,26 @@ REST_FRAMEWORK = {
     # cannot bypass throttles by spoofing X-Forwarded-For; set this to the real
     # proxy hop count (e.g. relay + nginx) to throttle on the true client IP.
     "NUM_PROXIES": env.int("DJANGO_NUM_PROXIES", default=0),
-    # Scoped rates for sensitive auth endpoints only. Authenticated POS traffic
-    # is intentionally left unthrottled; these scopes are applied per-view.
+    # A wide per-user ceiling on ALL authenticated traffic (fail-open,
+    # anonymous requests pass through — see AuthenticatedBurstCeilingThrottle).
+    # Normal POS use never approaches it; it exists so one runaway client
+    # can't flood PgBouncer. Disabled under tests, which hammer endpoints
+    # far faster than any human.
+    "DEFAULT_THROTTLE_CLASSES": [
+        "apps.core.throttling.AuthenticatedBurstCeilingThrottle",
+    ],
+    # Scoped rates for sensitive auth endpoints. Applied per-view; a view's
+    # own throttle_classes replace the default ceiling above.
     "DEFAULT_THROTTLE_RATES": {
         "login": env("DJANGO_THROTTLE_LOGIN", default="30/min"),
         "login_username": env("DJANGO_THROTTLE_LOGIN_USERNAME", default="6/min"),
         "setup": env("DJANGO_THROTTLE_SETUP", default="5/hour"),
         "password_change": env("DJANGO_THROTTLE_PASSWORD_CHANGE", default="10/min"),
+        "authenticated_ceiling": (
+            None
+            if TESTING
+            else env("POINTY_AUTHENTICATED_THROTTLE_RATE", default="1000/min")
+        ),
     },
 }
 

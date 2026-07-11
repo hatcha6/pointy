@@ -696,9 +696,8 @@ class ProductApiTests(TestCase):
         )
         match.categories.add(category)
 
-        with patch.object(
-            ProductViewSet,
-            "_get_active_product_ids",
+        with patch(
+            "apps.catalog.views.caching.get_or_compute_single_flight",
             side_effect=AssertionError("category lookup should not load all active ids"),
         ):
             response = self.client.get(
@@ -752,9 +751,8 @@ class ProductApiTests(TestCase):
             is_active=False,
         )
 
-        with patch.object(
-            ProductViewSet,
-            "_get_active_product_ids",
+        with patch(
+            "apps.catalog.views.caching.get_or_compute_single_flight",
             side_effect=AssertionError("barcode lookup should not load all active ids"),
         ):
             response = self.client.get(

@@ -2,7 +2,6 @@ from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 
-from django.core.cache import cache
 from django.db.models import (
     Count,
     DecimalField,
@@ -22,6 +21,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.catalog.models import Product, ProductCategory
+from apps.core import caching
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
 from apps.customers.models import Customer
@@ -192,20 +192,15 @@ def _period_from_request(request):
 
 
 def _cached_dashboard_section(section, request, period, builder, *, scope=None):
+    # Single-flight: section entries expire together every
+    # DASHBOARD_SECTION_CACHE_SECONDS, so several dashboards refreshing at
+    # once would otherwise each re-run the same heavy aggregates.
     cache_key = _dashboard_section_cache_key(section, request, period, scope=scope)
-    try:
-        cached = cache.get(cache_key)
-    except Exception:
-        return builder()
-    if cached is not None:
-        return cached
-
-    value = builder()
-    try:
-        cache.set(cache_key, value, timeout=DASHBOARD_SECTION_CACHE_SECONDS)
-    except Exception:
-        pass
-    return value
+    return caching.get_or_compute_single_flight(
+        cache_key,
+        builder,
+        DASHBOARD_SECTION_CACHE_SECONDS,
+    )
 
 
 def _dashboard_section_cache_key(section, request, period, *, scope=None):
@@ -413,18 +408,24 @@ def _purchasing_section(period):
         created_at__gte=period["start"],
         created_at__lt=period["end"],
     )
-    balance_rows = _purchase_order_balance_rows(orders)
     today = timezone.localdate()
     open_orders = orders.exclude(status=PurchaseOrder.Status.RECEIVED)
     purchase_total = period_orders.aggregate(
         total=Coalesce(Sum("total"), Value(Decimal("0.00")), output_field=MONEY_FIELD)
     )["total"]
+    # One streaming pass feeds due_total, the overdue list, AND the
+    # per-supplier accumulation the top-balances card needs — the PO history
+    # is never materialized and never walked twice.
     due_total = Decimal("0.00")
     overdue_orders = []
-    for row in balance_rows:
+    balances_by_supplier = defaultdict(lambda: Decimal("0.00"))
+    for row in _purchase_order_balance_rows(orders):
         balance = _purchase_order_balance_due(row)
+        if balance <= 0:
+            continue
         due_total += balance
-        if row["due_date"] is not None and row["due_date"] < today and balance > 0:
+        balances_by_supplier[row["supplier_id"]] += balance
+        if row["due_date"] is not None and row["due_date"] < today:
             overdue_orders.append((row, balance))
     overdue_orders.sort(key=lambda item: (item[0]["due_date"], -item[1]))
 
@@ -450,7 +451,7 @@ def _purchasing_section(period):
             }
             for order, balance in overdue_orders[:6]
         ],
-        "top_supplier_balances": _top_supplier_balances(balance_rows),
+        "top_supplier_balances": _top_supplier_balances(balances_by_supplier),
     }
 
 
