@@ -10,9 +10,11 @@ import 'app_dependencies.dart';
 import 'authenticated_home.dart';
 import 'core/analytics_interaction_tracker.dart';
 import 'data/models/analytics_event.dart';
+import 'data/services/connection_status_controller.dart';
 import 'data/services/pos_api_service.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'features/auth/views/auth_gate.dart';
+import 'features/connection/views/connection_gate.dart';
 import 'features/onboarding/views/shop_setup_wizard.dart';
 import 'features/price_checker/price_checker_mode_actions.dart';
 import 'features/price_checker/views/price_checker_kiosk_screen.dart';
@@ -31,7 +33,7 @@ class PointyApp extends StatefulWidget {
   State<PointyApp> createState() => _PointyAppState();
 }
 
-class _PointyAppState extends State<PointyApp> {
+class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
   late final PointyAppDependencies _dependencies;
   late final PointyNavigationRailController _navigationRailController;
   // App-lifetime home for the nav drawer/rail scroll offsets: screens replace
@@ -48,6 +50,7 @@ class _PointyAppState extends State<PointyApp> {
     _dependencies = PointyAppDependencies(apiService: widget.apiService);
     _navigationRailController = PointyNavigationRailController();
     _dependencies.authViewModel.addListener(_dependencies.handleAuthChanged);
+    WidgetsBinding.instance.addObserver(this);
     unawaited(_dependencies.start());
     unawaited(_dependencies.analyticsEngine.start());
     _frameTimingsCallback = _dependencies.analyticsEngine.recordFrameTimings;
@@ -56,9 +59,21 @@ class _PointyAppState extends State<PointyApp> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Returning to the foreground is the cheapest reliable signal that the
+    // network may have changed (Wi-Fi reconnected, roamed APs, DHCP renewed).
+    // Re-hunt for the LAN backend unless we already hold a healthy one.
+    if (state == AppLifecycleState.resumed &&
+        _dependencies.connectionStatus.phase != ConnectionPhase.connectedLocal) {
+      unawaited(_dependencies.connectionCoordinator.rediscover());
+    }
+  }
+
+  @override
   void dispose() {
     FlutterError.onError = _previousFlutterErrorHandler;
     PlatformDispatcher.instance.onError = _previousPlatformErrorHandler;
+    WidgetsBinding.instance.removeObserver(this);
     SchedulerBinding.instance.removeTimingsCallback(_frameTimingsCallback);
     _dependencies.authViewModel.removeListener(_dependencies.handleAuthChanged);
     _navigationRailController.dispose();
@@ -145,11 +160,15 @@ class _PointyAppState extends State<PointyApp> {
               repository: _dependencies.priceCheckerRepository,
               controller: _dependencies.priceCheckerModeController,
             )
-          : AuthGate(
-              viewModel: _dependencies.authViewModel,
-              analyticsEngine: _dependencies.analyticsEngine,
-              authenticatedBuilder: _buildAuthenticatedHome,
-              onEnterPriceCheckerMode: _enterPriceCheckerMode,
+          : ConnectionGate(
+              controller: _dependencies.connectionStatus,
+              coordinator: _dependencies.connectionCoordinator,
+              child: AuthGate(
+                viewModel: _dependencies.authViewModel,
+                analyticsEngine: _dependencies.analyticsEngine,
+                authenticatedBuilder: _buildAuthenticatedHome,
+                onEnterPriceCheckerMode: _enterPriceCheckerMode,
+              ),
             ),
     );
   }

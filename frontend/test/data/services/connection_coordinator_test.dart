@@ -7,6 +7,7 @@ import 'package:pointy_frontend/src/data/models/connection_profile.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/services/backend_discovery_service.dart';
 import 'package:pointy_frontend/src/data/services/connection_coordinator.dart';
+import 'package:pointy_frontend/src/data/services/connection_status_controller.dart';
 import 'package:pointy_frontend/src/data/services/connection_profile_storage.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/relay_ticket_refresh_client.dart';
@@ -57,6 +58,7 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: 'http://lan.test/api',
+          udpDiscovery: _noUdp,
         ),
         storage: storage,
       );
@@ -95,6 +97,7 @@ void main() {
       discovery: BackendDiscoveryService(
         client: client,
         defaultApiBaseUrl: 'http://lan.test/api',
+        udpDiscovery: _noUdp,
       ),
       storage: storage,
     );
@@ -103,6 +106,7 @@ void main() {
 
     expect(service.baseUrl, 'https://relay.test/api');
     expect(service.usesRelay, isTrue);
+    coordinator.dispose();
   });
 
   test('refreshes near-expiry relay ticket over LAN', () async {
@@ -143,6 +147,7 @@ void main() {
       discovery: BackendDiscoveryService(
         client: client,
         defaultApiBaseUrl: 'http://lan.test/api',
+        udpDiscovery: _noUdp,
       ),
       storage: storage,
     );
@@ -202,6 +207,7 @@ void main() {
       discovery: BackendDiscoveryService(
         client: client,
         defaultApiBaseUrl: 'http://lan.test/api',
+        udpDiscovery: _noUdp,
       ),
       storage: storage,
       relayTicketRefreshClient: RelayTicketRefreshClient(client: client),
@@ -271,6 +277,7 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: 'http://lan.test/api',
+          udpDiscovery: _noUdp,
         ),
         storage: storage,
         relayTicketRefreshClient: RelayTicketRefreshClient(client: client),
@@ -323,6 +330,7 @@ void main() {
         discovery: BackendDiscoveryService(
           client: client,
           defaultApiBaseUrl: 'http://lan.test/api',
+          udpDiscovery: _noUdp,
         ),
         storage: storage,
         relayTicketRefreshClient: RelayTicketRefreshClient(client: client),
@@ -382,6 +390,7 @@ void main() {
       discovery: BackendDiscoveryService(
         client: client,
         defaultApiBaseUrl: 'http://lan.test/api',
+        udpDiscovery: _noUdp,
       ),
       storage: storage,
     );
@@ -397,12 +406,253 @@ void main() {
     expect(productRequests, 1);
     coordinator.dispose();
   });
+
+  test('stale stored IP is ignored; UDP result for the right shop wins', () async {
+    // The server moved from old.lan to new.lan. old.lan now answers as a
+    // *different* shop (installation-other) — a classic DHCP reassignment.
+    final storage = MemoryConnectionProfileStorage(
+      profile: const ConnectionProfile(
+        localApiBaseUrl: 'http://old.lan/api',
+        relayApiBaseUrl: '',
+        relayToken: '',
+        installationId: 'installation-1',
+        shopName: 'متجر آمن',
+      ),
+    );
+    final client = MockClient((request) async {
+      final url = request.url.toString();
+      if (url == 'http://old.lan/api/discovery/service/') {
+        return _jsonResponse(
+          _backendPayload(
+            installationId: 'installation-other',
+            apiBaseUrl: 'http://old.lan/api',
+          ),
+        );
+      }
+      if (url == 'http://new.lan/api/discovery/service/') {
+        return _jsonResponse(
+          _backendPayload(
+            installationId: 'installation-1',
+            apiBaseUrl: 'http://new.lan/api',
+          ),
+        );
+      }
+      return http.Response('', 404);
+    });
+    final service = PosApiService(client: client, baseUrl: 'http://old.lan/api');
+    final coordinator = ConnectionCoordinator(
+      service: service,
+      discovery: BackendDiscoveryService(
+        client: client,
+        defaultApiBaseUrl: 'http://old.lan/api',
+        udpDiscovery: ({Duration timeout = const Duration(seconds: 2)}) async =>
+            [Uri.parse('http://new.lan/api')],
+      ),
+      storage: storage,
+    );
+
+    await coordinator.bootstrap();
+
+    // The stale IP (wrong shop) is rejected; the moved server wins.
+    expect(service.baseUrl, 'http://new.lan/api');
+    final profile = await storage.loadProfile();
+    expect(profile?.localApiBaseUrl, 'http://new.lan/api');
+    expect(profile?.installationId, 'installation-1');
+    coordinator.dispose();
+  });
+
+  test('subnet sweep recovers the backend when broadcast finds nothing', () async {
+    final storage = MemoryConnectionProfileStorage(
+      profile: const ConnectionProfile(
+        localApiBaseUrl: 'http://old.lan/api',
+        relayApiBaseUrl: '',
+        relayToken: '',
+        installationId: 'installation-1',
+        shopName: 'متجر آمن',
+      ),
+    );
+    final client = MockClient((request) async {
+      if (request.url.toString() == 'http://swept.lan/api/discovery/service/') {
+        return _jsonResponse(
+          _backendPayload(
+            installationId: 'installation-1',
+            apiBaseUrl: 'http://swept.lan/api',
+          ),
+        );
+      }
+      return http.Response('', 404);
+    });
+    final service = PosApiService(client: client, baseUrl: 'http://old.lan/api');
+    final coordinator = ConnectionCoordinator(
+      service: service,
+      discovery: BackendDiscoveryService(
+        client: client,
+        defaultApiBaseUrl: 'http://old.lan/api',
+        udpDiscovery: _noUdp,
+        subnetSweep: ({String? expectedInstallationId}) async =>
+            ['http://swept.lan/api'],
+      ),
+      storage: storage,
+    );
+
+    final found = await coordinator.rediscover(includeSweep: true);
+
+    expect(found, isTrue);
+    expect(service.baseUrl, 'http://swept.lan/api');
+    coordinator.dispose();
+  });
+
+  test('connectManually connects to a typed address and saves it', () async {
+    final storage = MemoryConnectionProfileStorage();
+    final client = MockClient((request) async {
+      if (request.url.toString() ==
+          'http://192.168.1.50:8000/api/discovery/service/') {
+        return _jsonResponse(
+          _backendPayload(
+            installationId: 'installation-9',
+            apiBaseUrl: 'http://192.168.1.50:8000/api',
+          ),
+        );
+      }
+      return http.Response('', 404);
+    });
+    final service = PosApiService(client: client, baseUrl: 'http://127.0.0.1:8000/api');
+    final coordinator = ConnectionCoordinator(
+      service: service,
+      discovery: BackendDiscoveryService(
+        client: client,
+        defaultApiBaseUrl: 'http://127.0.0.1:8000/api',
+        udpDiscovery: _noUdp,
+      ),
+      storage: storage,
+    );
+
+    // Bare IP with no scheme/port/path — normalization fills in the rest.
+    final connected = await coordinator.connectManually('192.168.1.50');
+
+    expect(connected, isTrue);
+    expect(service.baseUrl, 'http://192.168.1.50:8000/api');
+    final profile = await storage.loadProfile();
+    expect(profile?.localApiBaseUrl, 'http://192.168.1.50:8000/api');
+    coordinator.dispose();
+  });
+
+  test('connectManually returns false when the address does not answer', () async {
+    final storage = MemoryConnectionProfileStorage();
+    final client = MockClient((request) async => http.Response('', 404));
+    final service = PosApiService(client: client, baseUrl: 'http://127.0.0.1:8000/api');
+    final coordinator = ConnectionCoordinator(
+      service: service,
+      discovery: BackendDiscoveryService(
+        client: client,
+        defaultApiBaseUrl: 'http://127.0.0.1:8000/api',
+        udpDiscovery: _noUdp,
+      ),
+      storage: storage,
+    );
+
+    final connected = await coordinator.connectManually('http://nope.lan/api');
+
+    expect(connected, isFalse);
+    expect(service.baseUrl, 'http://127.0.0.1:8000/api');
+    coordinator.dispose();
+  });
+
+  test('rediscover is single-flight', () async {
+    final storage = MemoryConnectionProfileStorage();
+    final client = MockClient((request) async {
+      if (request.url.toString() == 'http://lan.test/api/discovery/service/') {
+        return _jsonResponse(
+          _backendPayload(
+            installationId: 'installation-1',
+            apiBaseUrl: 'http://lan.test/api',
+          ),
+        );
+      }
+      return http.Response('', 404);
+    });
+    final service = PosApiService(client: client, baseUrl: 'http://lan.test/api');
+    final coordinator = ConnectionCoordinator(
+      service: service,
+      discovery: BackendDiscoveryService(
+        client: client,
+        defaultApiBaseUrl: 'http://lan.test/api',
+        udpDiscovery: _noUdp,
+      ),
+      storage: storage,
+    );
+
+    final first = coordinator.rediscover(includeSweep: false);
+    // Second call while the first is still in flight coalesces to a no-op.
+    final second = coordinator.rediscover(includeSweep: false);
+
+    expect(await second, isFalse);
+    expect(await first, isTrue);
+    coordinator.dispose();
+  });
+
+  test('status controller reflects a successful LAN connection', () async {
+    final storage = MemoryConnectionProfileStorage();
+    final status = ConnectionStatusController();
+    final client = MockClient((request) async {
+      if (request.url.toString() == 'http://lan.test/api/discovery/service/') {
+        return _jsonResponse(
+          _backendPayload(
+            installationId: 'installation-1',
+            apiBaseUrl: 'http://lan.test/api',
+          ),
+        );
+      }
+      return http.Response('', 404);
+    });
+    final service = PosApiService(client: client, baseUrl: 'http://lan.test/api');
+    final coordinator = ConnectionCoordinator(
+      service: service,
+      discovery: BackendDiscoveryService(
+        client: client,
+        defaultApiBaseUrl: 'http://lan.test/api',
+        udpDiscovery: _noUdp,
+      ),
+      storage: storage,
+      status: status,
+    );
+
+    await coordinator.bootstrap();
+
+    expect(status.phase, ConnectionPhase.connectedLocal);
+    expect(status.isReady, isTrue);
+    coordinator.dispose();
+  });
+}
+
+/// No-op UDP discovery so tests never open real sockets.
+Future<List<Uri>> _noUdp({Duration timeout = const Duration(seconds: 2)}) async {
+  return const [];
+}
+
+Map<String, Object?> _backendPayload({
+  required String installationId,
+  required String apiBaseUrl,
+}) {
+  return {
+    'service': 'pointy-backend',
+    'version': 1,
+    'backend_url': apiBaseUrl.replaceFirst('/api', ''),
+    'api_base_url': apiBaseUrl,
+    'shop_name': 'متجر آمن',
+    'installation_id': installationId,
+    'remote_access_supported': false,
+    'relay_public_api_url': '',
+  };
 }
 
 http.Response _jsonResponse(Map<String, Object?> body, {int statusCode = 200}) {
+  // Declare charset so http encodes the (Arabic) body as UTF-8. Without it the
+  // http package defaults to latin1, which throws on non-latin1 shop names
+  // under older http (compat/win8 pins http 1.2.2).
   return http.Response(
     jsonEncode(body),
     statusCode,
-    headers: {'content-type': 'application/json'},
+    headers: {'content-type': 'application/json; charset=utf-8'},
   );
 }

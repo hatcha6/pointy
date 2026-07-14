@@ -23063,6 +23063,60 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مبلغ يُخصم من إجمالي هذا الأمر (مثلاً لإزالة الكسور)'**
   String get purchaseExtraDiscountHint;
+
+  /// Shown on the connection splash while auto-discovery is running.
+  ///
+  /// In ar, this message translates to:
+  /// **'نبحث عن خادم متجرك على الشبكة المحلية…'**
+  String get connectionSearchingMessage;
+
+  /// Title of the manual connection screen shown after auto-discovery gives up.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر العثور على الخادم تلقائيًا'**
+  String get connectionManualTitle;
+
+  /// Explanation on the manual connection screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل عنوان الخادم (IP أو رابط) للاتصال يدويًا.'**
+  String get connectionManualMessage;
+
+  /// Label for the manual server address input.
+  ///
+  /// In ar, this message translates to:
+  /// **'عنوان الخادم'**
+  String get connectionManualFieldLabel;
+
+  /// Hint/example for the manual server address input.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: 192.168.1.10'**
+  String get connectionManualFieldHint;
+
+  /// Button that connects to the manually entered server address.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتصال'**
+  String get connectionManualConnectButton;
+
+  /// Button that retries automatic discovery from the manual connection screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة تلقائيًا'**
+  String get connectionManualRetryButton;
+
+  /// Error shown when a manually entered server address does not respond.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الاتصال بهذا العنوان. تأكد من تشغيل الخادم واتصال الجهاز بالشبكة نفسها.'**
+  String get connectionManualError;
+
+  /// Hint that background auto-discovery is still running on the manual connection screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما زلنا نبحث تلقائيًا في الخلفية…'**
+  String get connectionManualSearchingHint;
 }
 
 class _AppLocalizationsDelegate
