@@ -302,6 +302,22 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     );
   }
 
+  void updateLabelPdfSize(BarcodeLabelPdfSize size) {
+    _updateConfig(
+      _config.copyWith(endpoint: _config.endpoint.copyWith(labelPdfSize: size)),
+    );
+  }
+
+  void updateLabelRotation(int quarterTurns) {
+    _updateConfig(
+      _config.copyWith(
+        endpoint: _config.endpoint.copyWith(
+          labelRotationQuarterTurns: ((quarterTurns % 4) + 4) % 4,
+        ),
+      ),
+    );
+  }
+
   void updateTimeout(String value) {
     _updateConfig(
       _config.copyWith(

@@ -4470,6 +4470,48 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerPdfPageSizeRoll80 => 'إيصال 80 مم';
 
   @override
+  String get printerBarcodeLabelPdfSizeLabel => 'حجم ملصق الباركود';
+
+  @override
+  String get printerBarcodeLabelPdfSizeHelper =>
+      'شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الافتراضي ملصق 40×22 مم، ويمكن اختيار لفة 50/70/80 مم أو ورقة A4 بشبكة ملصقات. يتكيّف الملصق تلقائيًا مع الحجم المختار.';
+
+  @override
+  String get printerBarcodeLabelPdfSizeSticker40x22 =>
+      'ملصق 40×22 مم (الافتراضي)';
+
+  @override
+  String get printerBarcodeLabelPdfSizeRoll50 => 'لفة 50 مم';
+
+  @override
+  String get printerBarcodeLabelPdfSizeRoll70 => 'لفة 70 مم';
+
+  @override
+  String get printerBarcodeLabelPdfSizeRoll80 => 'لفة 80 مم';
+
+  @override
+  String get printerBarcodeLabelPdfSizeA4 => 'A4 (شبكة ملصقات)';
+
+  @override
+  String get printerBarcodeLabelRotationLabel => 'تدوير الملصق';
+
+  @override
+  String get printerBarcodeLabelRotationHelper =>
+      'دوّر الملصق إذا كانت الطابعة تُغذّي الملصقات بالعرض.';
+
+  @override
+  String get printerBarcodeLabelRotation0 => 'بدون تدوير';
+
+  @override
+  String get printerBarcodeLabelRotation90 => '90° يمين';
+
+  @override
+  String get printerBarcodeLabelRotation180 => '180°';
+
+  @override
+  String get printerBarcodeLabelRotation270 => '270° يسار';
+
+  @override
   String get systemDefaultPrinterLabel => 'طابعة النظام الافتراضية';
 
   @override

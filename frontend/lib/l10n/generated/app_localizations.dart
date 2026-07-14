@@ -7899,6 +7899,84 @@ abstract class AppLocalizations {
   /// **'إيصال 80 مم'**
   String get printerPdfPageSizeRoll80;
 
+  /// No description provided for @printerBarcodeLabelPdfSizeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حجم ملصق الباركود'**
+  String get printerBarcodeLabelPdfSizeLabel;
+
+  /// No description provided for @printerBarcodeLabelPdfSizeHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الافتراضي ملصق 40×22 مم، ويمكن اختيار لفة 50/70/80 مم أو ورقة A4 بشبكة ملصقات. يتكيّف الملصق تلقائيًا مع الحجم المختار.'**
+  String get printerBarcodeLabelPdfSizeHelper;
+
+  /// No description provided for @printerBarcodeLabelPdfSizeSticker40x22.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملصق 40×22 مم (الافتراضي)'**
+  String get printerBarcodeLabelPdfSizeSticker40x22;
+
+  /// No description provided for @printerBarcodeLabelPdfSizeRoll50.
+  ///
+  /// In ar, this message translates to:
+  /// **'لفة 50 مم'**
+  String get printerBarcodeLabelPdfSizeRoll50;
+
+  /// No description provided for @printerBarcodeLabelPdfSizeRoll70.
+  ///
+  /// In ar, this message translates to:
+  /// **'لفة 70 مم'**
+  String get printerBarcodeLabelPdfSizeRoll70;
+
+  /// No description provided for @printerBarcodeLabelPdfSizeRoll80.
+  ///
+  /// In ar, this message translates to:
+  /// **'لفة 80 مم'**
+  String get printerBarcodeLabelPdfSizeRoll80;
+
+  /// No description provided for @printerBarcodeLabelPdfSizeA4.
+  ///
+  /// In ar, this message translates to:
+  /// **'A4 (شبكة ملصقات)'**
+  String get printerBarcodeLabelPdfSizeA4;
+
+  /// No description provided for @printerBarcodeLabelRotationLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تدوير الملصق'**
+  String get printerBarcodeLabelRotationLabel;
+
+  /// No description provided for @printerBarcodeLabelRotationHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'دوّر الملصق إذا كانت الطابعة تُغذّي الملصقات بالعرض.'**
+  String get printerBarcodeLabelRotationHelper;
+
+  /// No description provided for @printerBarcodeLabelRotation0.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون تدوير'**
+  String get printerBarcodeLabelRotation0;
+
+  /// No description provided for @printerBarcodeLabelRotation90.
+  ///
+  /// In ar, this message translates to:
+  /// **'90° يمين'**
+  String get printerBarcodeLabelRotation90;
+
+  /// No description provided for @printerBarcodeLabelRotation180.
+  ///
+  /// In ar, this message translates to:
+  /// **'180°'**
+  String get printerBarcodeLabelRotation180;
+
+  /// No description provided for @printerBarcodeLabelRotation270.
+  ///
+  /// In ar, this message translates to:
+  /// **'270° يسار'**
+  String get printerBarcodeLabelRotation270;
+
   /// No description provided for @systemDefaultPrinterLabel.
   ///
   /// In ar, this message translates to:

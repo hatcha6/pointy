@@ -32,6 +32,50 @@ PdfPageSize pdfPageSizeFromJson(Object? value) {
 
 String pdfPageSizeToJson(PdfPageSize size) => size.name;
 
+/// Sticker geometry for the PDF/document barcode-label path — how a label prints
+/// on a printer driven through its own PDF/graphics driver (rather than raw
+/// label-language commands). [label40x22] is the common die-cut price sticker
+/// (default); [roll50]/[roll70]/[roll80] are receipt-style continuous label
+/// rolls at that width; [a4] tiles the sticker into a grid on a full sheet.
+enum BarcodeLabelPdfSize { label40x22, roll50, roll70, roll80, a4 }
+
+/// Physical width in millimetres of a [BarcodeLabelPdfSize] sticker, or null for
+/// [a4] (a tiled sheet has no single sticker width at page level).
+double? barcodeLabelPdfWidthMm(BarcodeLabelPdfSize size) {
+  return switch (size) {
+    BarcodeLabelPdfSize.label40x22 => 40,
+    BarcodeLabelPdfSize.roll50 => 50,
+    BarcodeLabelPdfSize.roll70 => 70,
+    BarcodeLabelPdfSize.roll80 => 80,
+    BarcodeLabelPdfSize.a4 => null,
+  };
+}
+
+BarcodeLabelPdfSize barcodeLabelPdfSizeFromJson(Object? value) {
+  return switch (value?.toString()) {
+    'roll50' || 'mm50' || '50' => BarcodeLabelPdfSize.roll50,
+    'roll70' || 'mm70' || '70' => BarcodeLabelPdfSize.roll70,
+    'roll80' || 'mm80' || '80' => BarcodeLabelPdfSize.roll80,
+    'a4' || 'A4' => BarcodeLabelPdfSize.a4,
+    _ => BarcodeLabelPdfSize.label40x22,
+  };
+}
+
+String barcodeLabelPdfSizeToJson(BarcodeLabelPdfSize size) => size.name;
+
+/// Quarter-turn clockwise rotation (0–3 → 0°/90°/180°/270°) applied when a
+/// barcode sticker is laid out through the PDF/document path, so labels feed the
+/// right way up on printers whose native orientation is landscape.
+int barcodeLabelRotationFromJson(Object? value) {
+  final parsed = value is int ? value : int.tryParse(value?.toString() ?? '');
+  if (parsed == null) {
+    return 0;
+  }
+  // Tolerate degrees (0/90/180/270) as well as quarter-turns (0–3).
+  final quarters = parsed >= 4 ? (parsed ~/ 90) : parsed;
+  return ((quarters % 4) + 4) % 4;
+}
+
 enum BarcodeLabelPrinterLanguage { auto, zpl, tspl, epl, cpcl }
 
 /// How the receipt should be terminated. Cheap printers without a cutter
@@ -83,6 +127,8 @@ class PrinterEndpoint {
     this.labelHeightMm = 30,
     this.labelGapMm = 2,
     this.labelDpi = 203,
+    this.labelPdfSize = BarcodeLabelPdfSize.label40x22,
+    this.labelRotationQuarterTurns = 0,
   });
 
   final PrintTransportKind kind;
@@ -111,6 +157,14 @@ class PrinterEndpoint {
   final int labelHeightMm;
   final int labelGapMm;
   final int labelDpi;
+
+  /// Sticker geometry for barcode labels printed through the PDF/document path
+  /// (a system/driver printer). Ignored by the raw label-language thermal path,
+  /// which sizes itself from [labelWidthMm]/[labelHeightMm].
+  final BarcodeLabelPdfSize labelPdfSize;
+
+  /// Quarter-turn clockwise rotation (0–3) for the PDF barcode-label layout.
+  final int labelRotationQuarterTurns;
 
   bool get usesThermalReceipt => outputMode == PrinterOutputMode.escPos;
 
@@ -168,6 +222,14 @@ class PrinterEndpoint {
         json['label_dpi'] ?? json['barcode_label_dpi'],
         fallback: 203,
       ),
+      labelPdfSize: barcodeLabelPdfSizeFromJson(
+        json['label_pdf_size'] ?? json['barcode_label_pdf_size'],
+      ),
+      labelRotationQuarterTurns: barcodeLabelRotationFromJson(
+        json['label_rotation_quarter_turns'] ??
+            json['label_rotation'] ??
+            json['label_rotation_degrees'],
+      ),
     );
   }
 
@@ -193,6 +255,8 @@ class PrinterEndpoint {
       'label_height_mm': labelHeightMm,
       'label_gap_mm': labelGapMm,
       'label_dpi': labelDpi,
+      'label_pdf_size': barcodeLabelPdfSizeToJson(labelPdfSize),
+      'label_rotation_quarter_turns': labelRotationQuarterTurns,
     };
   }
 
@@ -215,6 +279,8 @@ class PrinterEndpoint {
     int? labelHeightMm,
     int? labelGapMm,
     int? labelDpi,
+    BarcodeLabelPdfSize? labelPdfSize,
+    int? labelRotationQuarterTurns,
   }) {
     return PrinterEndpoint(
       kind: kind ?? this.kind,
@@ -235,6 +301,9 @@ class PrinterEndpoint {
       labelHeightMm: labelHeightMm ?? this.labelHeightMm,
       labelGapMm: labelGapMm ?? this.labelGapMm,
       labelDpi: labelDpi ?? this.labelDpi,
+      labelPdfSize: labelPdfSize ?? this.labelPdfSize,
+      labelRotationQuarterTurns:
+          labelRotationQuarterTurns ?? this.labelRotationQuarterTurns,
     );
   }
 }

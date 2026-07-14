@@ -13,6 +13,7 @@ import '../models/register_session_summary.dart';
 import '../models/sale_order.dart';
 import '../models/shop_settings.dart';
 import '../services/barcode_label_command_encoder.dart';
+import '../services/barcode_label_document_service.dart';
 import '../services/barcode_label_language_detector.dart';
 import '../services/device_settings_storage_service.dart';
 import '../services/esc_pos_receipt_encoder.dart';
@@ -31,6 +32,8 @@ class PrintingRepository {
     PrintTransport fakeTransport = const FakePrintTransport(),
     BarcodeLabelCommandEncoder barcodeLabelEncoder =
         const BarcodeLabelCommandEncoder(),
+    BarcodeLabelDocumentService barcodeLabelDocumentService =
+        const BarcodeLabelDocumentService(),
     BarcodeLabelLanguageDetector barcodeLabelLanguageDetector =
         const BarcodeLabelLanguageDetector(),
     EscPosReceiptEncoder receiptEncoder = const EscPosReceiptEncoder(),
@@ -43,6 +46,7 @@ class PrintingRepository {
        _usbTransport = usbTransport ?? UsbPrintTransport(),
        _fakeTransport = fakeTransport,
        _barcodeLabelEncoder = barcodeLabelEncoder,
+       _barcodeLabelDocumentService = barcodeLabelDocumentService,
        _barcodeLabelLanguageDetector = barcodeLabelLanguageDetector,
        _receiptEncoder = receiptEncoder,
        _documentService = documentService,
@@ -55,6 +59,7 @@ class PrintingRepository {
   final PrintTransport _usbTransport;
   final PrintTransport _fakeTransport;
   final BarcodeLabelCommandEncoder _barcodeLabelEncoder;
+  final BarcodeLabelDocumentService _barcodeLabelDocumentService;
   final BarcodeLabelLanguageDetector _barcodeLabelLanguageDetector;
   final EscPosReceiptEncoder _receiptEncoder;
   final OrderDocumentService _documentService;
@@ -312,9 +317,22 @@ class PrintingRepository {
     if (config == null) {
       return const PrintTransportResult.failure('printer config unavailable');
     }
+
+    // A system/driver printer (Xprinter N160II and friends) that only speaks its
+    // vendor PDF/graphics driver prints stickers through the document path, the
+    // same route its receipts take. Raw ESC/POS-family printers use the native
+    // label-language encoder.
+    if (config.endpoint.usesDocumentInvoice) {
+      final shopName = await _loadShopNameForLabels();
+      return _barcodeLabelDocumentService.printLabels(
+        lines: lines,
+        endpoint: config.endpoint,
+        shopName: shopName,
+      );
+    }
     if (!config.endpoint.usesThermalReceipt) {
       return const PrintTransportResult.failure(
-        'barcode labels require a thermal printer',
+        'barcode labels require a thermal or document printer',
       );
     }
 
@@ -325,12 +343,26 @@ class PrintingRepository {
     }
   }
 
+  /// Best-effort shop name for the sticker header. Never throws — a label still
+  /// prints (without the shop line) if settings can't be fetched (e.g. offline).
+  Future<String?> _loadShopNameForLabels() async {
+    try {
+      final settings = await _service.fetchShopSettings();
+      final name = settings.shopName.trim();
+      return name.isEmpty ? null : name;
+    } on Object {
+      return null;
+    }
+  }
+
   Future<PrintTransportResult> printBarcodeLabelTest(
     PrinterConfig config,
   ) async {
     if (config.endpoint.usesDocumentInvoice) {
-      return const PrintTransportResult.failure(
-        'document printers do not print barcode labels',
+      final shopName = await _loadShopNameForLabels();
+      return _barcodeLabelDocumentService.printTest(
+        config.endpoint,
+        shopName: shopName,
       );
     }
     if (!config.endpoint.usesThermalReceipt) {

@@ -431,7 +431,7 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
                           },
                   ),
                   SizedBox(height: spacing.md),
-                  if (endpoint.usesDocumentInvoice)
+                  if (endpoint.usesDocumentInvoice) ...[
                     DropdownButtonFormField<PdfPageSize>(
                       key: ValueKey(endpoint.pdfPageSize),
                       initialValue: endpoint.pdfPageSize,
@@ -468,6 +468,92 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
                               }
                             },
                     ),
+                    SizedBox(height: spacing.md),
+                    Text(
+                      l10n.barcodeLabelPrinterSettingsTitle,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    SizedBox(height: spacing.sm),
+                    DropdownButtonFormField<BarcodeLabelPdfSize>(
+                      key: ValueKey(endpoint.labelPdfSize),
+                      initialValue: endpoint.labelPdfSize,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: l10n.printerBarcodeLabelPdfSizeLabel,
+                        helperText: l10n.printerBarcodeLabelPdfSizeHelper,
+                        helperMaxLines: 3,
+                        prefixIcon: const Icon(Icons.label_outline),
+                      ),
+                      items: [
+                        DropdownMenuItem(
+                          value: BarcodeLabelPdfSize.label40x22,
+                          child: Text(
+                            l10n.printerBarcodeLabelPdfSizeSticker40x22,
+                          ),
+                        ),
+                        DropdownMenuItem(
+                          value: BarcodeLabelPdfSize.roll50,
+                          child: Text(l10n.printerBarcodeLabelPdfSizeRoll50),
+                        ),
+                        DropdownMenuItem(
+                          value: BarcodeLabelPdfSize.roll70,
+                          child: Text(l10n.printerBarcodeLabelPdfSizeRoll70),
+                        ),
+                        DropdownMenuItem(
+                          value: BarcodeLabelPdfSize.roll80,
+                          child: Text(l10n.printerBarcodeLabelPdfSizeRoll80),
+                        ),
+                        DropdownMenuItem(
+                          value: BarcodeLabelPdfSize.a4,
+                          child: Text(l10n.printerBarcodeLabelPdfSizeA4),
+                        ),
+                      ],
+                      onChanged: widget.viewModel.isTesting
+                          ? null
+                          : (size) {
+                              if (size != null) {
+                                widget.viewModel.updateLabelPdfSize(size);
+                              }
+                            },
+                    ),
+                    SizedBox(height: spacing.md),
+                    DropdownButtonFormField<int>(
+                      key: ValueKey(endpoint.labelRotationQuarterTurns),
+                      initialValue: endpoint.labelRotationQuarterTurns,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: l10n.printerBarcodeLabelRotationLabel,
+                        helperText: l10n.printerBarcodeLabelRotationHelper,
+                        helperMaxLines: 2,
+                        prefixIcon: const Icon(Icons.rotate_90_degrees_cw_outlined),
+                      ),
+                      items: [
+                        DropdownMenuItem(
+                          value: 0,
+                          child: Text(l10n.printerBarcodeLabelRotation0),
+                        ),
+                        DropdownMenuItem(
+                          value: 1,
+                          child: Text(l10n.printerBarcodeLabelRotation90),
+                        ),
+                        DropdownMenuItem(
+                          value: 2,
+                          child: Text(l10n.printerBarcodeLabelRotation180),
+                        ),
+                        DropdownMenuItem(
+                          value: 3,
+                          child: Text(l10n.printerBarcodeLabelRotation270),
+                        ),
+                      ],
+                      onChanged: widget.viewModel.isTesting
+                          ? null
+                          : (turns) {
+                              if (turns != null) {
+                                widget.viewModel.updateLabelRotation(turns);
+                              }
+                            },
+                    ),
+                  ],
                   // ESC/POS thermal settings — irrelevant to the PDF/document
                   // path, so they're hidden for a system/PDF printer.
                   if (!endpoint.usesDocumentInvoice) ...[
