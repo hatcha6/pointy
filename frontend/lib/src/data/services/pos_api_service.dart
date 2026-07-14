@@ -200,6 +200,12 @@ class PosApiService {
     _session.performanceRecorder = recorder;
   }
 
+  /// Fires when a request fails against a local (LAN) target — the coordinator
+  /// uses it to trigger a debounced background re-discovery.
+  set onLocalTargetUnreachable(void Function()? callback) {
+    _session.onLocalTargetUnreachable = callback;
+  }
+
   void configureConnectionTarget({
     required String baseUrl,
     String relayToken = '',

@@ -101,6 +101,12 @@ class PosApiSession {
   String _relayToken = '';
   ApiConnectionTarget? _fallbackTarget;
 
+  /// Invoked when a request fails at the transport level while pointed at a
+  /// local (LAN) target — the signal the on-prem backend has moved or the
+  /// network flapped. The coordinator debounces this into a background
+  /// re-discovery so the LAN target self-heals without an app restart.
+  void Function()? onLocalTargetUnreachable;
+
   /// LRU of (etag, body) per request URL for opt-in conditional GETs — the
   /// catalog/category/unit/modifier/notification list endpoints send ETags so
   /// unchanged polls come back as an empty 304 and the stored body is replayed
@@ -503,6 +509,7 @@ class PosApiSession {
       _inFlightGets.clear();
     }
     final stopwatch = Stopwatch()..start();
+    final bool wasLocal = !usesRelay;
     try {
       final response = await request();
       stopwatch.stop();
@@ -552,6 +559,9 @@ class PosApiSession {
         requestSizeBytes: requestSizeBytes,
         errorMessage: exception.toString(),
       );
+      if (wasLocal) {
+        onLocalTargetUnreachable?.call();
+      }
       rethrow;
     }
   }

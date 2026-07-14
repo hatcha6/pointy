@@ -42,6 +42,7 @@ import 'data/services/backend_discovery_service.dart';
 import 'data/services/client_update_service.dart';
 import 'data/services/connection_coordinator.dart';
 import 'data/services/connection_profile_storage.dart';
+import 'data/services/connection_status_controller.dart';
 import 'data/services/pos_api_service.dart';
 import 'data/services/pos_http_client.dart';
 import 'features/auth/view_models/auth_view_model.dart';
@@ -125,6 +126,7 @@ class PointyAppDependencies {
     messagingRepository = MessagingRepository(service);
     crmRepository = CrmRepository(service);
     userRepository = UserRepository(service);
+    connectionStatus = ConnectionStatusController();
     connectionCoordinator = ConnectionCoordinator(
       service: service,
       discovery: BackendDiscoveryService(
@@ -132,7 +134,12 @@ class PointyAppDependencies {
         defaultApiBaseUrl: service.baseUrl,
       ),
       storage: const SharedPreferencesConnectionProfileStorage(),
+      status: connectionStatus,
     );
+    // A LAN request failing (server moved / network flapped) triggers a
+    // debounced background re-discovery so the target self-heals.
+    service.onLocalTargetUnreachable =
+        connectionCoordinator.notifyLocalTargetUnreachable;
     clientUpdateService = ClientUpdateService(
       apiBaseUrl: () => service.baseUrl,
     );
@@ -191,6 +198,7 @@ class PointyAppDependencies {
   late final CrmRepository crmRepository;
   late final UserRepository userRepository;
   late final ConnectionCoordinator connectionCoordinator;
+  late final ConnectionStatusController connectionStatus;
   late final AuthViewModel authViewModel;
   late final PosViewModel posViewModel;
   DeviceSettingsViewModel? _deviceSettingsViewModel;
@@ -222,15 +230,43 @@ class PointyAppDependencies {
     await priceCheckerModeController.load();
     if (_enableAutomaticConnection) {
       await connectionCoordinator.bootstrap();
+    } else {
+      // Tests and preview harnesses inject an explicit target — there is no
+      // discovery to wait on, so the connection gate is immediately ready.
+      connectionStatus.update(ConnectionPhase.connectedLocal);
     }
     final usageModeResult = await deviceSettingsRepository.loadUsageMode();
     final usageMode = switch (usageModeResult) {
       Ok<DeviceUsageMode>(value: final mode) => mode,
       Error<DeviceUsageMode>() => DeviceUsageMode.singleUser,
     };
+    _usageMode = usageMode;
     await authViewModel.loadCurrentUser(
       forgetRememberedUser: usageMode == DeviceUsageMode.multiUser,
     );
+    // Re-load the current user whenever a target is (re)acquired later — e.g.
+    // the user connects manually, or the background sweep finds the moved
+    // server — so a login attempt that failed against no target recovers on its
+    // own. Registered after the first load so it only handles later transitions.
+    _wasConnectionReady = connectionStatus.isReady;
+    connectionStatus.addListener(_handleConnectionStatusChanged);
+  }
+
+  DeviceUsageMode _usageMode = DeviceUsageMode.singleUser;
+  bool _wasConnectionReady = false;
+
+  void _handleConnectionStatusChanged() {
+    final ready = connectionStatus.isReady;
+    if (ready &&
+        !_wasConnectionReady &&
+        authViewModel.status != AuthStatus.authenticated) {
+      unawaited(
+        authViewModel.loadCurrentUser(
+          forgetRememberedUser: _usageMode == DeviceUsageMode.multiUser,
+        ),
+      );
+    }
+    _wasConnectionReady = ready;
   }
 
   DeviceSettingsViewModel get deviceSettingsViewModel =>
@@ -381,6 +417,8 @@ class PointyAppDependencies {
   }
 
   void dispose() {
+    connectionStatus.removeListener(_handleConnectionStatusChanged);
+    connectionStatus.dispose();
     connectionCoordinator.dispose();
     analyticsEngine.dispose();
     themeController.dispose();

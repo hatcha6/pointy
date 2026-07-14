@@ -13201,4 +13201,35 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get purchaseExtraDiscountHint =>
       'مبلغ يُخصم من إجمالي هذا الأمر (مثلاً لإزالة الكسور)';
+
+  @override
+  String get connectionSearchingMessage =>
+      'نبحث عن خادم متجرك على الشبكة المحلية…';
+
+  @override
+  String get connectionManualTitle => 'تعذّر العثور على الخادم تلقائيًا';
+
+  @override
+  String get connectionManualMessage =>
+      'أدخل عنوان الخادم (IP أو رابط) للاتصال يدويًا.';
+
+  @override
+  String get connectionManualFieldLabel => 'عنوان الخادم';
+
+  @override
+  String get connectionManualFieldHint => 'مثال: 192.168.1.10';
+
+  @override
+  String get connectionManualConnectButton => 'اتصال';
+
+  @override
+  String get connectionManualRetryButton => 'إعادة المحاولة تلقائيًا';
+
+  @override
+  String get connectionManualError =>
+      'تعذّر الاتصال بهذا العنوان. تأكد من تشغيل الخادم واتصال الجهاز بالشبكة نفسها.';
+
+  @override
+  String get connectionManualSearchingHint =>
+      'ما زلنا نبحث تلقائيًا في الخلفية…';
 }

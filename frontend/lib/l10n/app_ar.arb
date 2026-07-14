@@ -7967,5 +7967,41 @@
   "purchaseExtraDiscountHint": "مبلغ يُخصم من إجمالي هذا الأمر (مثلاً لإزالة الكسور)",
   "@purchaseExtraDiscountHint": {
     "description": "Hint for the one-off purchase order discount field."
+  },
+  "connectionSearchingMessage": "نبحث عن خادم متجرك على الشبكة المحلية…",
+  "@connectionSearchingMessage": {
+    "description": "Shown on the connection splash while auto-discovery is running."
+  },
+  "connectionManualTitle": "تعذّر العثور على الخادم تلقائيًا",
+  "@connectionManualTitle": {
+    "description": "Title of the manual connection screen shown after auto-discovery gives up."
+  },
+  "connectionManualMessage": "أدخل عنوان الخادم (IP أو رابط) للاتصال يدويًا.",
+  "@connectionManualMessage": {
+    "description": "Explanation on the manual connection screen."
+  },
+  "connectionManualFieldLabel": "عنوان الخادم",
+  "@connectionManualFieldLabel": {
+    "description": "Label for the manual server address input."
+  },
+  "connectionManualFieldHint": "مثال: 192.168.1.10",
+  "@connectionManualFieldHint": {
+    "description": "Hint/example for the manual server address input."
+  },
+  "connectionManualConnectButton": "اتصال",
+  "@connectionManualConnectButton": {
+    "description": "Button that connects to the manually entered server address."
+  },
+  "connectionManualRetryButton": "إعادة المحاولة تلقائيًا",
+  "@connectionManualRetryButton": {
+    "description": "Button that retries automatic discovery from the manual connection screen."
+  },
+  "connectionManualError": "تعذّر الاتصال بهذا العنوان. تأكد من تشغيل الخادم واتصال الجهاز بالشبكة نفسها.",
+  "@connectionManualError": {
+    "description": "Error shown when a manually entered server address does not respond."
+  },
+  "connectionManualSearchingHint": "ما زلنا نبحث تلقائيًا في الخلفية…",
+  "@connectionManualSearchingHint": {
+    "description": "Hint that background auto-discovery is still running on the manual connection screen."
   }
 }

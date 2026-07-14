@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'lan_interfaces.dart';
 import 'linux_self_update.dart';
 
 /// The platforms that can self-update (download + install) from the local
@@ -193,10 +194,10 @@ class ClientUpdateService {
   Future<String?> _lanHost() async {
     try {
       String? best;
-      var bestRank = _unrankedPrivate;
+      var bestRank = unrankedPrivateIpv4;
       for (final address in await _localAddresses()) {
         if (address.isLoopback || address.isLinkLocal) continue;
-        final rank = _privateIpv4Rank(address.rawAddress);
+        final rank = privateIpv4Rank(address.rawAddress);
         if (rank < bestRank) {
           best = address.address;
           bestRank = rank;
@@ -206,16 +207,6 @@ class ClientUpdateService {
     } catch (_) {
       return null; // no interfaces readable — keep the configured host
     }
-  }
-
-  static const _unrankedPrivate = 3;
-
-  static int _privateIpv4Rank(List<int> raw) {
-    if (raw.length != 4) return _unrankedPrivate;
-    if (raw[0] == 192 && raw[1] == 168) return 0;
-    if (raw[0] == 10) return 1;
-    if (raw[0] == 172 && raw[1] >= 16 && raw[1] <= 31) return 2;
-    return _unrankedPrivate;
   }
 
   Future<ClientUpdateStatus> check() async {
