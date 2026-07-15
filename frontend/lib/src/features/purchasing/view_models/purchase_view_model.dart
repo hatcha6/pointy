@@ -988,11 +988,16 @@ class PurchaseViewModel extends ChangeNotifier {
     };
   }
 
-  /// Suggested sale price for [unitCost] (the shop's typical markup), used to
-  /// pre-fill the reprice dialog when a line's cost changes.
+  /// Suggested sale price for [unitCost], offered in the reprice dialog when a
+  /// line's cost changes. Pass [productId] so the suggestion uses the markup of
+  /// that product's own category (its real pricing strategy) when there's enough
+  /// data, falling back to the shop-wide markup.
   Future<({double? suggestedPrice, double? markupPercent})>
-  loadPricingSuggestion(double unitCost) async {
-    final result = await _purchaseRepository.loadPricingSuggestion(unitCost);
+  loadPricingSuggestion(double unitCost, {int? productId}) async {
+    final result = await _purchaseRepository.loadPricingSuggestion(
+      unitCost,
+      productId: productId,
+    );
     return switch (result) {
       Ok<({double? suggestedPrice, double? markupPercent})>(:final value) =>
         value,

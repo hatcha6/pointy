@@ -107,7 +107,7 @@ class _FakePurchaseRepository extends PurchaseRepository {
 
   @override
   Future<Result<({double? suggestedPrice, double? markupPercent})>>
-  loadPricingSuggestion(double unitCost) async {
+  loadPricingSuggestion(double unitCost, {int? productId}) async {
     return Ok((suggestedPrice: suggestedPrice, markupPercent: markupPercent));
   }
 }

@@ -56,6 +56,27 @@ from .services import (
 )
 
 
+def _product_category_ids(product_id):
+    """The category ids a product belongs to, for a category-aware pricing
+    suggestion. Resolved server-side from a trusted ``product_id`` (never
+    client-sent category ids); returns ``None`` for a blank/invalid id or a
+    product with no categories, so the suggestion falls back to the shop markup."""
+    if product_id in (None, ""):
+        return None
+    try:
+        pid = int(product_id)
+    except (TypeError, ValueError):
+        return None
+    ids = [
+        cid
+        for cid in Product.objects.filter(pk=pid).values_list(
+            "categories__id", flat=True
+        )
+        if cid is not None
+    ]
+    return ids or None
+
+
 class SupplierViewSet(viewsets.ModelViewSet):
     serializer_class = SupplierSerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
@@ -248,15 +269,20 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="pricing-suggestion")
     def pricing_suggestion(self, request):
-        """Suggested sale price for ``?unit_cost=`` using the shop's typical
-        markup. Powers the purchasing reprice-siblings dialog's pre-filled
-        prices; a zero/blank/unparseable cost yields a null suggested_price."""
+        """Suggested sale price for ``?unit_cost=``, using the markup of the
+        product's own category when ``?product_id=`` is given (its real pricing
+        strategy) and falling back to the shop-wide markup otherwise. Powers the
+        purchasing reprice-siblings dialog; a zero/blank/unparseable cost yields a
+        null suggested_price."""
         from .pricing import pricing_suggestion as build_pricing_suggestion
 
         unit_cost = request.query_params.get("unit_cost")
         if unit_cost in (None, ""):
             raise serializers.ValidationError({"unit_cost": "unit_cost is required."})
-        return Response(build_pricing_suggestion(unit_cost))
+        category_ids = _product_category_ids(request.query_params.get("product_id"))
+        return Response(
+            build_pricing_suggestion(unit_cost, category_ids=category_ids)
+        )
 
     def get_required_permissions(self, request):
         if self.action == "attachments" and request.method == "POST":

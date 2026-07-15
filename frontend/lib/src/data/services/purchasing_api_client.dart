@@ -319,15 +319,20 @@ class PurchasingApiClient {
     return double.tryParse(cost.toString());
   }
 
-  /// Suggested sale price for [unitCost], using the shop's typical markup — used
-  /// to pre-fill the reprice-siblings dialog. `suggestedPrice` is null when the
-  /// cost is zero/unpriceable.
+  /// Suggested sale price for [unitCost]. When [productId] is given the shop's
+  /// markup for that product's own category is used (its real pricing strategy),
+  /// otherwise the shop-wide markup. Used to offer a price in the reprice-siblings
+  /// dialog. `suggestedPrice` is null when the cost is zero/unpriceable.
   Future<({double? suggestedPrice, double? markupPercent})> fetchPricingSuggestion(
-    double unitCost,
-  ) async {
+    double unitCost, {
+    int? productId,
+  }) async {
     final response = await _session.get(
       'purchase-orders/pricing-suggestion/',
-      query: {'unit_cost': unitCost.toStringAsFixed(2)},
+      query: {
+        'unit_cost': unitCost.toStringAsFixed(2),
+        if (productId != null) 'product_id': '$productId',
+      },
     );
     _session.throwApiException(response, 'Pricing suggestion failed with status');
     final decoded = _session.decodedBody(response);

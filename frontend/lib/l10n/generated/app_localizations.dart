@@ -10125,11 +10125,17 @@ abstract class AppLocalizations {
   /// **'بسعر تكلفة {cost} — عدّل سعر بيع كل متغيّرات هذا المنتج.'**
   String repriceSiblingsSubtitle(String cost);
 
-  /// Hint that the pre-filled prices use the shop's typical markup.
+  /// Hint that a suggested price is offered using the shop's typical markup.
   ///
   /// In ar, this message translates to:
   /// **'مقترح بهامش ربح {percent}٪'**
   String repriceSiblingsMarkupHint(String percent);
+
+  /// Tappable action that fills a variant's price field with the suggested price.
+  ///
+  /// In ar, this message translates to:
+  /// **'المقترح: {price}'**
+  String repriceSiblingsUseSuggested(String price);
 
   /// No description provided for @changePricesLoadError.
   ///

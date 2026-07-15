@@ -127,8 +127,10 @@ class PurchaseRepository {
   }
 
   Future<Result<({double? suggestedPrice, double? markupPercent})>>
-  loadPricingSuggestion(double unitCost) async {
-    return Result.guard(() => _service.fetchPricingSuggestion(unitCost));
+  loadPricingSuggestion(double unitCost, {int? productId}) async {
+    return Result.guard(
+      () => _service.fetchPricingSuggestion(unitCost, productId: productId),
+    );
   }
 
   Future<Result<PurchaseSubmission>> submitDraft(

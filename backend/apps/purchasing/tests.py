@@ -249,15 +249,18 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.data["unit"], "tray")
 
     def test_pricing_suggestion_prices_a_cost_at_the_shop_markup(self):
-        # Suggested sale price = cost * (1 + markup/100), rounded to the cent.
-        # Robust to whether the markup was inferred from the shop or the default.
+        # Suggested sale price = cost * (1 + markup/100), snapped to a real
+        # quarter-dinar denomination. Robust to whether the markup was inferred
+        # from the shop or the default.
+        from apps.purchasing.pricing import suggest_sale_price
+
         response = self.client.get(
             reverse("purchaseorder-pricing-suggestion"),
             {"unit_cost": "10.00"},
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         markup = Decimal(response.data["markup_percent"])
-        expected = (Decimal("10.00") * (1 + markup / 100)).quantize(Decimal("0.01"))
+        expected = suggest_sale_price(Decimal("10.00"), markup=markup)
         self.assertEqual(Decimal(response.data["suggested_price"]), expected)
         self.assertIn(response.data["markup_source"], ("shop", "default"))
 
@@ -3601,3 +3604,160 @@ class SupplierPaymentApiTests(TestCase):
         detail = self.client.get(reverse("purchaseorder-detail", args=[order.pk]))
         self.assertEqual(detail.data["credit_applied_total"], "1.50")
         self.assertEqual(detail.data["balance_due"], "6.00")
+
+
+class PricingSuggestionTests(TestCase):
+    """The price-recommendation engine: Libyan quarter-dinar denominations and
+    category-aware markup inference."""
+
+    def _priced_product(self, name, sku, *, price, cost, categories=()):
+        """A sellable product priced at ``price`` with a latest base-unit purchase
+        cost of ``cost`` (so it counts toward markup inference), optionally tagged
+        with ``categories``."""
+        from apps.catalog.models import Product
+
+        product = Product.objects.create(name=name)
+        variant = ProductVariant.objects.create(
+            product=product, sku=sku, unit_price=Decimal(price), is_default=True
+        )
+        if categories:
+            product.categories.add(*categories)
+        po = PurchaseOrder.objects.create(
+            supplier=Supplier.objects.create(name=f"sup-{sku}")
+        )
+        PurchaseLine.objects.create(
+            purchase_order=po,
+            variant=variant,
+            quantity=10,
+            unit_cost=Decimal(cost),
+            unit_factor=Decimal("1"),
+        )
+        return product
+
+    def _category(self, name):
+        from apps.catalog.models import ProductCategory
+
+        return ProductCategory.objects.create(name=name)
+
+    def test_suggestions_snap_to_quarter_dinar_denominations(self):
+        # A markup that computes an odd fraction is snapped to real coinage:
+        # 1.79 at 25% = 2.2375 → 2.25 (nearest quarter), never 2.24.
+        from apps.purchasing.pricing import PRICE_STEP, suggest_sale_price
+
+        self.assertEqual(
+            suggest_sale_price(Decimal("1.79"), markup=Decimal("25")),
+            Decimal("2.25"),
+        )
+        # Every suggestion across a wide cost sweep is a whole multiple of the
+        # step (so only …0.00/0.25/0.50/0.75 ever appear) and never free.
+        for cents in range(1, 500):
+            price = suggest_sale_price(Decimal(cents) / 100, markup=Decimal("37"))
+            self.assertEqual(price % PRICE_STEP, Decimal("0.00"), f"{cents}c→{price}")
+            self.assertGreaterEqual(price, PRICE_STEP)
+
+    def test_rounding_never_prices_below_cost(self):
+        # 2.10 at the 1% floor computes 2.121 → nearest quarter 2.00, which is
+        # below cost; the guard steps up to the next denomination at/above cost.
+        from apps.purchasing.pricing import suggest_sale_price
+
+        price = suggest_sale_price(Decimal("2.10"), markup=Decimal("1"))
+        self.assertEqual(price, Decimal("2.25"))
+        self.assertGreaterEqual(price, Decimal("2.10"))
+
+    def test_tiny_cost_is_never_suggested_free(self):
+        # 0.05 at 30% = 0.065 → nearest quarter is 0.00; a costed item must never
+        # be suggested free, so it floors at one step.
+        from apps.purchasing.pricing import PRICE_STEP, suggest_sale_price
+
+        self.assertEqual(
+            suggest_sale_price(Decimal("0.05"), markup=Decimal("30")), PRICE_STEP
+        )
+
+    def test_zero_cost_yields_no_suggestion(self):
+        from apps.purchasing.pricing import suggest_sale_price
+
+        self.assertIsNone(suggest_sale_price(Decimal("0")))
+        self.assertIsNone(suggest_sale_price(Decimal("-1")))
+
+    def test_category_markup_is_preferred_over_the_shop_wide_markup(self):
+        # Beverages are marked up hard (3× cost = 200%); the rest of the shop is
+        # marked up gently (1.5× cost = 50%). Pricing a beverage should use the
+        # beverage strategy, not the blended shop median.
+        from apps.purchasing.pricing import pricing_suggestion
+
+        beverages = self._category("مشروبات")
+        for i in range(3):
+            self._priced_product(
+                f"مشروب {i}",
+                f"BEV-{i}",
+                price="30.00",
+                cost="10.00",
+                categories=[beverages],
+            )
+        for i in range(6):
+            self._priced_product(
+                f"سلعة {i}", f"GEN-{i}", price="15.00", cost="10.00"
+            )
+
+        bundle = pricing_suggestion(Decimal("10.00"), category_ids=[beverages.id])
+        self.assertEqual(bundle["markup_source"], "category")
+        self.assertEqual(Decimal(bundle["markup_percent"]), Decimal("200.00"))
+        # 10 × (1 + 200%) = 30.00, already a clean denomination.
+        self.assertEqual(Decimal(bundle["suggested_price"]), Decimal("30.00"))
+
+        # With no category context the shop-wide median (50%) is used instead.
+        shop_bundle = pricing_suggestion(Decimal("10.00"))
+        self.assertEqual(shop_bundle["markup_source"], "shop")
+        self.assertEqual(Decimal(shop_bundle["markup_percent"]), Decimal("50.00"))
+
+    def test_thin_category_falls_back_to_shop_markup(self):
+        # A category with too little data (one product) is not trusted on its own;
+        # the suggestion falls back to the shop-wide median.
+        from apps.purchasing.pricing import pricing_suggestion
+
+        niche = self._category("نادر")
+        self._priced_product(
+            "فريد", "NICHE-1", price="100.00", cost="10.00", categories=[niche]
+        )
+        for i in range(5):
+            self._priced_product(
+                f"سلعة {i}", f"GEN-{i}", price="12.00", cost="10.00"
+            )
+
+        bundle = pricing_suggestion(Decimal("10.00"), category_ids=[niche.id])
+        self.assertEqual(bundle["markup_source"], "shop")
+        self.assertEqual(Decimal(bundle["markup_percent"]), Decimal("20.00"))
+
+    def test_endpoint_uses_the_products_category_markup(self):
+        # The endpoint resolves the product's categories server-side from
+        # ?product_id= and prices at that category's markup.
+        from apps.core.roles import MANAGER_GROUP, ensure_role_groups
+
+        ensure_role_groups()
+        user = get_user_model().objects.create_user(
+            username="pricing-manager", password="pw"
+        )
+        user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        snacks = self._category("وجبات خفيفة")
+        priced = None
+        for i in range(3):
+            priced = self._priced_product(
+                f"وجبة {i}",
+                f"SNK-{i}",
+                price="25.00",
+                cost="10.00",
+                categories=[snacks],
+            )
+
+        response = client.get(
+            reverse("purchaseorder-pricing-suggestion"),
+            {"unit_cost": "10.00", "product_id": priced.id},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["markup_source"], "category")
+        self.assertEqual(Decimal(response.data["markup_percent"]), Decimal("150.00"))
+        self.assertEqual(Decimal(response.data["suggested_price"]), Decimal("25.00"))
+

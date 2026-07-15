@@ -5707,6 +5707,11 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String repriceSiblingsUseSuggested(String price) {
+    return 'المقترح: $price';
+  }
+
+  @override
   String get changePricesLoadError => 'تعذر تحميل بيانات التكلفة.';
 
   @override

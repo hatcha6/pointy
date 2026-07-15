@@ -3239,9 +3239,18 @@
   },
   "repriceSiblingsMarkupHint": "مقترح بهامش ربح {percent}٪",
   "@repriceSiblingsMarkupHint": {
-    "description": "Hint that the pre-filled prices use the shop's typical markup.",
+    "description": "Hint that a suggested price is offered using the shop's typical markup.",
     "placeholders": {
       "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "repriceSiblingsUseSuggested": "المقترح: {price}",
+  "@repriceSiblingsUseSuggested": {
+    "description": "Tappable action that fills a variant's price field with the suggested price.",
+    "placeholders": {
+      "price": {
         "type": "String"
       }
     }
