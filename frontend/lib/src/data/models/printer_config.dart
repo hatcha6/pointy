@@ -123,6 +123,7 @@ class PrinterEndpoint {
     this.capabilityProfile = 'default',
     this.cutMode = ReceiptCutMode.partial,
     this.feedLines = 2,
+    this.compactReceipt = false,
     this.barcodeLabelLanguage = BarcodeLabelPrinterLanguage.auto,
     this.labelWidthMm = 40,
     this.labelHeightMm = 30,
@@ -153,6 +154,13 @@ class PrinterEndpoint {
 
   /// Blank lines fed before cutting/tearing.
   final int feedLines;
+
+  /// Dense/compact receipt layout: tighter line spacing, no double-height
+  /// headings, and trimmed blank space so a slip uses less paper. Honoured by
+  /// both output paths — the ESC/POS thermal encoder and the PDF/document
+  /// renderer (A4 and receipt rolls alike) — so output stays cohesive whichever
+  /// printer this endpoint drives.
+  final bool compactReceipt;
   final BarcodeLabelPrinterLanguage barcodeLabelLanguage;
   final int labelWidthMm;
   final int labelHeightMm;
@@ -204,6 +212,10 @@ class PrinterEndpoint {
           : 'default',
       cutMode: receiptCutModeFromJson(json['cut_mode']),
       feedLines: _intFromJson(json['feed_lines'], fallback: 2),
+      compactReceipt: _boolFromJson(
+        json['compact_receipt'] ?? json['compact'] ?? json['dense_receipt'],
+        fallback: false,
+      ),
       barcodeLabelLanguage: barcodeLabelPrinterLanguageFromJson(
         json['barcode_label_language'] ?? json['label_language'],
       ),
@@ -249,6 +261,7 @@ class PrinterEndpoint {
       'capability_profile': capabilityProfile,
       'cut_mode': cutMode.name,
       'feed_lines': feedLines,
+      'compact_receipt': compactReceipt,
       'barcode_label_language': barcodeLabelPrinterLanguageToJson(
         barcodeLabelLanguage,
       ),
@@ -275,6 +288,7 @@ class PrinterEndpoint {
     String? capabilityProfile,
     ReceiptCutMode? cutMode,
     int? feedLines,
+    bool? compactReceipt,
     BarcodeLabelPrinterLanguage? barcodeLabelLanguage,
     int? labelWidthMm,
     int? labelHeightMm,
@@ -297,6 +311,7 @@ class PrinterEndpoint {
       capabilityProfile: capabilityProfile ?? this.capabilityProfile,
       cutMode: cutMode ?? this.cutMode,
       feedLines: feedLines ?? this.feedLines,
+      compactReceipt: compactReceipt ?? this.compactReceipt,
       barcodeLabelLanguage: barcodeLabelLanguage ?? this.barcodeLabelLanguage,
       labelWidthMm: labelWidthMm ?? this.labelWidthMm,
       labelHeightMm: labelHeightMm ?? this.labelHeightMm,

@@ -2660,6 +2660,8 @@
   "printerCutModeNone": "بدون قص (تغذية فقط)",
   "printerFeedLinesLabel": "أسطر التغذية قبل القص",
   "printerFeedLinesHelper": "زدها إذا كان آخر الإيصال يُقطع قبل اكتمال الطباعة.",
+  "printerCompactReceiptLabel": "إيصال مضغوط (توفير الورق)",
+  "printerCompactReceiptHelper": "طباعة بمسافات أضيق وبدون تكبير للعناوين ليستهلك الإيصال ورقًا أقل. يسري على الطابعات الحرارية وطابعات PDF/النظام (مقاس A4 ولفات الإيصالات).",
   "barcodeLabelPrinterSettingsTitle": "إعدادات ملصقات الباركود",
   "printerBarcodeLabelLanguageLabel": "لغة طابعة الملصقات",
   "printerBarcodeLabelLanguageAuto": "اكتشاف تلقائي آمن",

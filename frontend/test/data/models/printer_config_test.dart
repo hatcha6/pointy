@@ -97,6 +97,57 @@ void main() {
     });
   });
 
+  group('PrinterEndpoint.compactReceipt', () {
+    test('defaults to false', () {
+      const endpoint = PrinterEndpoint(kind: PrintTransportKind.serial, name: '');
+      expect(endpoint.compactReceipt, isFalse);
+    });
+
+    test('survives a JSON round-trip', () {
+      const endpoint = PrinterEndpoint(
+        kind: PrintTransportKind.serial,
+        name: 'till',
+        compactReceipt: true,
+      );
+      final json = endpoint.toJson();
+      expect(json['compact_receipt'], isTrue);
+      expect(PrinterEndpoint.fromJson(json).compactReceipt, isTrue);
+    });
+
+    test('fromJson accepts legacy/alias keys', () {
+      expect(
+        PrinterEndpoint.fromJson(const {
+          'kind': 'serial',
+          'name': '',
+          'compact': true,
+        }).compactReceipt,
+        isTrue,
+      );
+      expect(
+        PrinterEndpoint.fromJson(const {
+          'kind': 'serial',
+          'name': '',
+          'dense_receipt': true,
+        }).compactReceipt,
+        isTrue,
+      );
+      // Missing → false.
+      expect(
+        PrinterEndpoint.fromJson(const {
+          'kind': 'serial',
+          'name': '',
+        }).compactReceipt,
+        isFalse,
+      );
+    });
+
+    test('copyWith updates it independently', () {
+      const endpoint = PrinterEndpoint(kind: PrintTransportKind.serial, name: '');
+      expect(endpoint.copyWith(compactReceipt: true).compactReceipt, isTrue);
+      expect(endpoint.compactReceipt, isFalse);
+    });
+  });
+
   group('BarcodeLabelPdfSize', () {
     test('maps sticker/roll sizes to their width and A4 to null', () {
       expect(barcodeLabelPdfWidthMm(BarcodeLabelPdfSize.label40x22), 40);

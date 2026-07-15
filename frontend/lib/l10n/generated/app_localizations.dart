@@ -8085,6 +8085,18 @@ abstract class AppLocalizations {
   /// **'زدها إذا كان آخر الإيصال يُقطع قبل اكتمال الطباعة.'**
   String get printerFeedLinesHelper;
 
+  /// No description provided for @printerCompactReceiptLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال مضغوط (توفير الورق)'**
+  String get printerCompactReceiptLabel;
+
+  /// No description provided for @printerCompactReceiptHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة بمسافات أضيق وبدون تكبير للعناوين ليستهلك الإيصال ورقًا أقل. يسري على الطابعات الحرارية وطابعات PDF/النظام (مقاس A4 ولفات الإيصالات).'**
+  String get printerCompactReceiptHelper;
+
   /// No description provided for @barcodeLabelPrinterSettingsTitle.
   ///
   /// In ar, this message translates to:

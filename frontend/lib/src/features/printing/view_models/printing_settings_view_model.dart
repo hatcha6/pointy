@@ -254,6 +254,14 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     );
   }
 
+  void updateCompactReceipt(bool value) {
+    _updateConfig(
+      _config.copyWith(
+        endpoint: _config.endpoint.copyWith(compactReceipt: value),
+      ),
+    );
+  }
+
   void updateBarcodeLabelLanguage(BarcodeLabelPrinterLanguage language) {
     _updateConfig(
       _config.copyWith(

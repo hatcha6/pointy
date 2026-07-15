@@ -4569,6 +4569,13 @@ class AppLocalizationsAr extends AppLocalizations {
       'زدها إذا كان آخر الإيصال يُقطع قبل اكتمال الطباعة.';
 
   @override
+  String get printerCompactReceiptLabel => 'إيصال مضغوط (توفير الورق)';
+
+  @override
+  String get printerCompactReceiptHelper =>
+      'طباعة بمسافات أضيق وبدون تكبير للعناوين ليستهلك الإيصال ورقًا أقل. يسري على الطابعات الحرارية وطابعات PDF/النظام (مقاس A4 ولفات الإيصالات).';
+
+  @override
   String get barcodeLabelPrinterSettingsTitle => 'إعدادات ملصقات الباركود';
 
   @override

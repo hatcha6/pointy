@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 
 import '../../../data/models/register_session_summary.dart';
 import '../../../data/models/shop_settings.dart';
+import '../../../shared/branding_assets.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/pdf/pdf.dart';
 
@@ -22,9 +23,11 @@ import '../../../shared/pdf/pdf.dart';
 class RegisterZReportPdfService {
   const RegisterZReportPdfService({
     this.fontLoader = const PointyPdfFontLoader(),
+    this.brandLogoLoader = const PointyBrandLogoLoader(),
   });
 
   final PointyPdfFontLoader fontLoader;
+  final PointyBrandLogoLoader brandLogoLoader;
 
   Future<Uint8List> buildBytes({
     required RegisterSessionSummary summary,
@@ -32,10 +35,12 @@ class RegisterZReportPdfService {
     Uint8List? shopLogoBytes,
   }) async {
     final fonts = await fontLoader.load();
+    final brandLogoBytes = await brandLogoLoader.load();
     final document = _buildDocument(
       summary: summary,
       shopSettings: shopSettings,
       shopLogoBytes: shopLogoBytes,
+      brandLogoBytes: brandLogoBytes,
       fonts: fonts,
     );
     return document.save();
@@ -81,6 +86,7 @@ class RegisterZReportPdfService {
     required RegisterSessionSummary summary,
     required ShopSettings? shopSettings,
     required Uint8List? shopLogoBytes,
+    required Uint8List? brandLogoBytes,
     required PointyPdfFonts fonts,
   }) {
     final shopName = (shopSettings?.shopName.trim().isNotEmpty ?? false)
@@ -97,6 +103,7 @@ class RegisterZReportPdfService {
         footer: (context) => PointyPdfFooter(
           pageLabel: 'صفحة ${context.pageNumber} / ${context.pagesCount}',
           shopFooter: shopFooter,
+          brandLogo: pdfLogoProvider(brandLogoBytes),
         ),
         build: (context) => _body(summary),
       ),
