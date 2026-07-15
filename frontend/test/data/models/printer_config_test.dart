@@ -96,4 +96,88 @@ void main() {
       expect(endpoint.pdfPageSize, PdfPageSize.a4);
     });
   });
+
+  group('BarcodeLabelPdfSize', () {
+    test('maps sticker/roll sizes to their width and A4 to null', () {
+      expect(barcodeLabelPdfWidthMm(BarcodeLabelPdfSize.label40x22), 40);
+      expect(barcodeLabelPdfWidthMm(BarcodeLabelPdfSize.roll50), 50);
+      expect(barcodeLabelPdfWidthMm(BarcodeLabelPdfSize.roll70), 70);
+      expect(barcodeLabelPdfWidthMm(BarcodeLabelPdfSize.roll80), 80);
+      expect(barcodeLabelPdfWidthMm(BarcodeLabelPdfSize.a4), isNull);
+    });
+
+    test('fromJson accepts the enum name, legacy keys, and defaults', () {
+      expect(
+        barcodeLabelPdfSizeFromJson('roll50'),
+        BarcodeLabelPdfSize.roll50,
+      );
+      expect(barcodeLabelPdfSizeFromJson('70'), BarcodeLabelPdfSize.roll70);
+      expect(barcodeLabelPdfSizeFromJson('a4'), BarcodeLabelPdfSize.a4);
+      // Unknown / missing falls back to the default 40×22 sticker.
+      expect(
+        barcodeLabelPdfSizeFromJson(null),
+        BarcodeLabelPdfSize.label40x22,
+      );
+      expect(
+        barcodeLabelPdfSizeFromJson('unknown'),
+        BarcodeLabelPdfSize.label40x22,
+      );
+    });
+  });
+
+  group('PrinterEndpoint barcode label PDF fields', () {
+    test('default to a 40×22 sticker with no rotation', () {
+      const endpoint = PrinterEndpoint(
+        kind: PrintTransportKind.system,
+        name: '',
+        outputMode: PrinterOutputMode.pdfA4,
+      );
+      expect(endpoint.labelPdfSize, BarcodeLabelPdfSize.label40x22);
+      expect(endpoint.labelRotationQuarterTurns, 0);
+    });
+
+    test('rotation fromJson tolerates quarter-turns and degrees', () {
+      expect(barcodeLabelRotationFromJson(1), 1);
+      expect(barcodeLabelRotationFromJson(3), 3);
+      expect(barcodeLabelRotationFromJson(90), 1);
+      expect(barcodeLabelRotationFromJson(270), 3);
+      expect(barcodeLabelRotationFromJson('180'), 2);
+      // Out-of-range / missing wraps back into 0–3.
+      expect(barcodeLabelRotationFromJson(null), 0);
+      expect(barcodeLabelRotationFromJson(5), 1);
+    });
+
+    test('survive a JSON round-trip', () {
+      const endpoint = PrinterEndpoint(
+        kind: PrintTransportKind.system,
+        name: 'Xprinter N160II',
+        outputMode: PrinterOutputMode.pdfA4,
+        labelPdfSize: BarcodeLabelPdfSize.roll70,
+        labelRotationQuarterTurns: 1,
+      );
+      final json = endpoint.toJson();
+      expect(json['label_pdf_size'], 'roll70');
+      expect(json['label_rotation_quarter_turns'], 1);
+
+      final restored = PrinterEndpoint.fromJson(json);
+      expect(restored.labelPdfSize, BarcodeLabelPdfSize.roll70);
+      expect(restored.labelRotationQuarterTurns, 1);
+    });
+
+    test('copyWith updates label fields independently', () {
+      const endpoint = PrinterEndpoint(
+        kind: PrintTransportKind.system,
+        name: '',
+        outputMode: PrinterOutputMode.pdfA4,
+      );
+      final updated = endpoint.copyWith(
+        labelPdfSize: BarcodeLabelPdfSize.a4,
+        labelRotationQuarterTurns: 2,
+      );
+      expect(updated.labelPdfSize, BarcodeLabelPdfSize.a4);
+      expect(updated.labelRotationQuarterTurns, 2);
+      expect(endpoint.labelPdfSize, BarcodeLabelPdfSize.label40x22);
+      expect(endpoint.labelRotationQuarterTurns, 0);
+    });
+  });
 }

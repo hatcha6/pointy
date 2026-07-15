@@ -71,8 +71,9 @@ int barcodeLabelRotationFromJson(Object? value) {
   if (parsed == null) {
     return 0;
   }
-  // Tolerate degrees (0/90/180/270) as well as quarter-turns (0–3).
-  final quarters = parsed >= 4 ? (parsed ~/ 90) : parsed;
+  // Tolerate degrees (90/180/270 → multiples of 90) as well as quarter-turns
+  // (0–3); anything else wraps back into the 0–3 range.
+  final quarters = (parsed >= 90 && parsed % 90 == 0) ? parsed ~/ 90 : parsed;
   return ((quarters % 4) + 4) % 4;
 }
 
