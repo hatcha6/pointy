@@ -147,11 +147,17 @@ jobs:
           ( cd dist && sha256sum ./*.apk > SHA256SUMS-android.txt )
           ls -lh dist
 
+      # Short retention: this artifact only needs to survive long enough for the
+      # build-onprem job (same run) to download it, and — for releases — the APK
+      # is also attached to the GitHub Release, which does NOT count against the
+      # Actions artifact storage quota. 90-day default retention was exhausting
+      # the quota ("Artifact storage quota has been hit").
       - uses: actions/upload-artifact@v4
         with:
           name: pointy-android
           path: dist/*
           if-no-files-found: error
+          retention-days: 1
 
       - name: Attach to release
         if: ${{ needs.version.outputs.is_release == 'true' }}
@@ -292,11 +298,14 @@ jobs:
           } | Out-File -Encoding ascii "dist/SHA256SUMS-windows.txt"
           Get-ChildItem dist | Select-Object Name, Length | Format-Table -AutoSize
 
+      # Short retention — see the note on the Android upload. Consumed by
+      # build-onprem (same run); also on the GitHub Release for real releases.
       - uses: actions/upload-artifact@v4
         with:
           name: pointy-windows
           path: dist/*
           if-no-files-found: error
+          retention-days: 1
 
       - name: Attach to release
         if: ${{ needs.version.outputs.is_release == 'true' }}
@@ -408,11 +417,14 @@ jobs:
           ( cd dist && sha256sum "${NAME}.tar.gz" > SHA256SUMS-linux.txt )
           ls -lh dist
 
+      # Short retention — see the note on the Android upload. Consumed by
+      # build-onprem (same run); also on the GitHub Release for real releases.
       - uses: actions/upload-artifact@v4
         with:
           name: pointy-linux
           path: dist/*
           if-no-files-found: error
+          retention-days: 1
 
       - name: Attach to release
         if: ${{ needs.version.outputs.is_release == 'true' }}
@@ -560,11 +572,17 @@ jobs:
           ( cd dist && sha256sum "${BUNDLE}.zip" > SHA256SUMS-onprem.txt )
           ls -lh dist "${BUNDLE}/images"
 
+      # Short retention: this is by far the largest artifact (it packs all six
+      # docker image tars, several GB) and is the main quota consumer. For real
+      # releases the zip is attached to the GitHub Release (separate storage, no
+      # Actions-quota cost); for manual test builds this artifact is the only
+      # output, so keep it briefly retrievable. Nothing downstream consumes it.
       - uses: actions/upload-artifact@v4
         with:
           name: pointy-onprem
           path: dist/*
           if-no-files-found: error
+          retention-days: 1
 
       - name: Attach to release
         if: ${{ needs.version.outputs.is_release == 'true' }}
