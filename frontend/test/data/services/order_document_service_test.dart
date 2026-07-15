@@ -379,6 +379,64 @@ void main() {
       expect(widths.every((w) => (w - mm(80)).abs() < 1), isTrue);
     });
 
+    test('a compact receipt roll is shorter than the standard one', () async {
+      final order = _saleOrder(
+        receiptNumber: 'R-dense',
+        lines: const [
+          SaleOrderLine(
+            id: 1,
+            productId: 10,
+            variantId: 0,
+            quantity: 2,
+            returnedQuantity: 0,
+            returnableQuantity: 2,
+            unitLabel: 'قطعة',
+            unitPrice: 5,
+            total: 10,
+            productName: 'شاي',
+          ),
+          SaleOrderLine(
+            id: 2,
+            productId: 11,
+            variantId: 0,
+            quantity: 1,
+            returnedQuantity: 0,
+            returnableQuantity: 1,
+            unitLabel: 'قطعة',
+            unitPrice: 3,
+            total: 3,
+            productName: 'قهوة',
+          ),
+        ],
+      );
+      final standard = await service.buildSaleInvoiceBytes(
+        order: order,
+        shopSettings: _settings,
+        pageSize: PdfPageSize.roll80,
+      );
+      final compact = await service.buildSaleInvoiceBytes(
+        order: order,
+        shopSettings: _settings,
+        pageSize: PdfPageSize.roll80,
+        compact: true,
+      );
+
+      // Same 80mm width, but the dense slip advances less paper.
+      expect(_mediaBoxWidths(compact).every((w) => (w - mm(80)).abs() < 1), isTrue);
+      expect(_mediaBoxHeights(compact).single, lessThan(_mediaBoxHeights(standard).single));
+    });
+
+    test('a compact A4 invoice still renders a full-width page', () async {
+      final bytes = await service.buildSaleInvoiceBytes(
+        order: _saleOrder(receiptNumber: 'R-A4-dense'),
+        shopSettings: _settings,
+        compact: true,
+      );
+      final widths = _mediaBoxWidths(bytes);
+      expect(widths, isNotEmpty);
+      expect(widths.every((w) => (w - mm(210)).abs() < 1), isTrue);
+    });
+
     test('purchase orders and proofs honor the receipt width too', () async {
       final poBytes = await service.buildPurchaseOrderBytes(
         order: _purchaseOrder(orderNumber: 'PO-1'),

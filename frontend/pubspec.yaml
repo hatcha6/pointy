@@ -179,6 +179,9 @@ flutter:
     # Brand logo, shown in-app (e.g. the login screen) and used to generate
     # the per-platform launcher icons via flutter_launcher_icons.
     - assets/branding/logo.png
+    # Monochrome brand mark used inside the printed "دُوِّنَ في دفتر" tagline
+    # (PDF documents + thermal receipts). Read as raw bytes for print rendering.
+    - assets/branding/logo_black.png
     # Barcode scan feedback chimes, WAV for winmm PlaySound (see
     # shared/barcode/scan_feedback_sounds.dart).
     - assets/sounds/

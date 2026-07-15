@@ -5,21 +5,26 @@ import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
 import '../../shared/branding.dart';
+import '../../shared/branding_assets.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 
 /// Sendable bundle for the ESC/POS isolate: payload + endpoint are plain data,
-/// and the capability profile is loaded on the caller isolate and passed across.
+/// the capability profile is loaded on the caller isolate and passed across, and
+/// the brand-mark bytes for the closing tagline (a bundled asset) are loaded up
+/// front too so the isolate never touches the asset bundle.
 class _EscPosEncodeRequest {
   const _EscPosEncodeRequest({
     required this.payload,
     required this.endpoint,
     required this.profile,
+    this.brandLogoBytes,
   });
 
   final Map<String, Object?> payload;
   final PrinterEndpoint endpoint;
   final CapabilityProfile profile;
+  final Uint8List? brandLogoBytes;
 }
 
 /// Top-level isolate entry point. The encoder is stateless, so a const instance
@@ -32,13 +37,23 @@ List<int> _encodeEscPosResolved(_EscPosEncodeRequest request) {
 /// busy printer doesn't re-decode the same image for every ticket.
 final Map<String, img.Image?> _logoRasterCache = {};
 
+/// Decoded + downscaled brand marks for the closing tagline, keyed by source
+/// length + density, so the fixed brand asset is rasterised once per size.
+final Map<String, img.Image?> _brandRasterCache = {};
+
 /// The currency symbol the current receipt renders. Set per-encode from the
 /// payload so it works inside the print isolate, where the main isolate's
 /// configured currency global isn't visible.
 String _receiptCurrencySymbol = 'د.ل';
 
 class EscPosReceiptEncoder {
-  const EscPosReceiptEncoder();
+  const EscPosReceiptEncoder({
+    this.brandLogoLoader = const PointyBrandLogoLoader(),
+  });
+
+  /// Loads the brand mark rendered in the closing tagline. Injectable so tests
+  /// can stub it; the default reads the bundled asset (best-effort).
+  final PointyBrandLogoLoader brandLogoLoader;
 
   Future<List<int>> encodeJob({
     required PrintJob job,
@@ -95,10 +110,14 @@ class EscPosReceiptEncoder {
     required PrinterEndpoint endpoint,
   }) async {
     final profile = await _loadProfile(endpoint);
+    // Loaded on the caller isolate (the asset bundle isn't available inside a
+    // `compute` isolate); best-effort, so a missing asset just drops the mark.
+    final brandLogoBytes = await brandLogoLoader.load();
     final request = _EscPosEncodeRequest(
       payload: payload,
       endpoint: endpoint,
       profile: profile,
+      brandLogoBytes: brandLogoBytes,
     );
     // Encoding (text layout, QR generation, and logo raster) is heavy and fully
     // synchronous; run it in a background isolate so a checkout never blocks the
@@ -121,6 +140,11 @@ class EscPosReceiptEncoder {
     final codeTable = endpoint.codeTable.trim().isEmpty
         ? 'CP864'
         : endpoint.codeTable.trim();
+    // A compact/dense receipt: tighter line spacing, single-height headings, and
+    // trimmed blank feeds so the slip uses less paper. Kitchen chits stay large
+    // on purpose (the line reads them across the pass), so they ignore this.
+    final dense = endpoint.compactReceipt;
+    final brandLogoBytes = request.brandLogoBytes;
     if (_string(payload['kind']) == 'kitchen') {
       return _encodeKitchenTicket(
         payload: payload,
@@ -135,6 +159,8 @@ class EscPosReceiptEncoder {
         endpoint: endpoint,
         generator: generator,
         codeTable: codeTable,
+        dense: dense,
+        brandLogoBytes: brandLogoBytes,
       );
     }
     if (_string(payload['kind']) == 'z_report') {
@@ -143,6 +169,8 @@ class EscPosReceiptEncoder {
         endpoint: endpoint,
         generator: generator,
         codeTable: codeTable,
+        dense: dense,
+        brandLogoBytes: brandLogoBytes,
       );
     }
     final order = _map(payload['order']);
@@ -162,6 +190,7 @@ class EscPosReceiptEncoder {
         shop,
         codeTable,
         _charsPerLine(endpoint.paperWidthMm),
+        dense: dense,
       ),
     );
 
@@ -232,7 +261,7 @@ class EscPosReceiptEncoder {
         styles: PosStyles(
           align: PosAlign.right,
           bold: true,
-          height: PosTextSize.size2,
+          height: _emphasisHeight(dense),
           codeTable: codeTable,
         ),
       ),
@@ -291,6 +320,7 @@ class EscPosReceiptEncoder {
         shop,
         codeTable,
         _charsPerLine(endpoint.paperWidthMm),
+        dense: dense,
       ),
     );
 
@@ -327,7 +357,9 @@ class EscPosReceiptEncoder {
       }
     }
 
-    bytes.addAll(_creditLine(generator, codeTable));
+    bytes.addAll(
+      _brandTagline(generator, codeTable, brandLogoBytes, dense: dense),
+    );
 
     bytes.addAll(_finishTicket(generator, endpoint));
     return bytes;
@@ -499,6 +531,8 @@ class EscPosReceiptEncoder {
     required PrinterEndpoint endpoint,
     required Generator generator,
     required String codeTable,
+    bool dense = false,
+    Uint8List? brandLogoBytes,
   }) {
     final shop = _map(payload['shop']);
     final proof = _map(payload['proof']);
@@ -509,7 +543,7 @@ class EscPosReceiptEncoder {
     final createdAt = _formatDateTime(proof['created_at']);
 
     final bytes = <int>[];
-    bytes.addAll(_shopMasthead(generator, shop, codeTable, width));
+    bytes.addAll(_shopMasthead(generator, shop, codeTable, width, dense: dense));
 
     bytes.addAll(generator.hr());
     // Document title, big and bold: this slip is a receipt/disbursement.
@@ -520,7 +554,7 @@ class EscPosReceiptEncoder {
         styles: PosStyles(
           align: PosAlign.center,
           bold: true,
-          height: PosTextSize.size2,
+          height: _emphasisHeight(dense),
           codeTable: codeTable,
         ),
       ),
@@ -566,7 +600,7 @@ class EscPosReceiptEncoder {
 
     bytes.addAll(generator.hr());
 
-    // The amount stands out — bold and double height.
+    // The amount stands out — bold and (unless compact) double height.
     final amountLabel = _string(proof['amount_label'], fallback: 'المبلغ');
     bytes.addAll(
       _text(
@@ -575,7 +609,7 @@ class EscPosReceiptEncoder {
         styles: PosStyles(
           align: PosAlign.right,
           bold: true,
-          height: PosTextSize.size2,
+          height: _emphasisHeight(dense),
           codeTable: codeTable,
         ),
       ),
@@ -633,9 +667,11 @@ class EscPosReceiptEncoder {
       );
     }
 
-    bytes.addAll(_shopFooter(generator, shop, codeTable, width));
+    bytes.addAll(_shopFooter(generator, shop, codeTable, width, dense: dense));
 
-    bytes.addAll(_creditLine(generator, codeTable));
+    bytes.addAll(
+      _brandTagline(generator, codeTable, brandLogoBytes, dense: dense),
+    );
 
     bytes.addAll(_finishTicket(generator, endpoint));
     return bytes;
@@ -652,6 +688,8 @@ class EscPosReceiptEncoder {
     required PrinterEndpoint endpoint,
     required Generator generator,
     required String codeTable,
+    bool dense = false,
+    Uint8List? brandLogoBytes,
   }) {
     final shop = _map(payload['shop']);
     final report = _map(payload['report']);
@@ -659,7 +697,7 @@ class EscPosReceiptEncoder {
     final width = _charsPerLine(endpoint.paperWidthMm);
 
     final bytes = <int>[];
-    bytes.addAll(_shopMasthead(generator, shop, codeTable, width));
+    bytes.addAll(_shopMasthead(generator, shop, codeTable, width, dense: dense));
 
     bytes.addAll(generator.hr());
     bytes.addAll(
@@ -669,7 +707,7 @@ class EscPosReceiptEncoder {
         styles: PosStyles(
           align: PosAlign.center,
           bold: true,
-          height: PosTextSize.size2,
+          height: _emphasisHeight(dense),
           codeTable: codeTable,
         ),
       ),
@@ -738,8 +776,10 @@ class EscPosReceiptEncoder {
       }
     }
 
-    bytes.addAll(_shopFooter(generator, shop, codeTable, width));
-    bytes.addAll(_creditLine(generator, codeTable));
+    bytes.addAll(_shopFooter(generator, shop, codeTable, width, dense: dense));
+    bytes.addAll(
+      _brandTagline(generator, codeTable, brandLogoBytes, dense: dense),
+    );
     bytes.addAll(_finishTicket(generator, endpoint));
     return bytes;
   }
@@ -790,9 +830,14 @@ class EscPosReceiptEncoder {
     String codeTable,
     int width, {
     bool includeHeaderLines = true,
+    bool dense = false,
   }) {
     final bytes = <int>[];
     bytes.addAll(generator.reset());
+    // `reset()` restores the printer's default line spacing; re-tighten it for a
+    // compact slip. Placed after every masthead reset so it governs the whole
+    // ticket. Safe because dense mode never enlarges a line beyond single height.
+    bytes.addAll(_tightLineSpacing(generator, dense));
     bytes.addAll(_logoRaster(generator, shop['logo_bytes']));
     bytes.addAll(
       _text(
@@ -801,8 +846,8 @@ class EscPosReceiptEncoder {
         styles: PosStyles(
           align: PosAlign.center,
           bold: true,
-          height: PosTextSize.size2,
-          width: PosTextSize.size2,
+          height: _emphasisHeight(dense),
+          width: _emphasisWidth(dense),
           codeTable: codeTable,
         ),
       ),
@@ -830,14 +875,18 @@ class EscPosReceiptEncoder {
     Generator generator,
     Map<String, Object?> shop,
     String codeTable,
-    int width,
-  ) {
+    int width, {
+    bool dense = false,
+  }) {
     final footer = _string(shop['receipt_footer']);
     if (footer.isEmpty) {
       return const [];
     }
     final bytes = <int>[];
-    bytes.addAll(generator.feed(1));
+    // A compact slip skips the blank separator before the footer message.
+    if (!dense) {
+      bytes.addAll(generator.feed(1));
+    }
     for (final line in _wrap(footer, width)) {
       bytes.addAll(
         _text(
@@ -850,16 +899,72 @@ class EscPosReceiptEncoder {
     return bytes;
   }
 
-  /// The centered "powered by Pointy" credit line. Shared across slips.
-  List<int> _creditLine(Generator generator, String codeTable) {
-    return [
-      ...generator.feed(1),
-      ..._text(
+  /// The closing brand stamp: the small "دُوِّنَ في دفتر" tagline. ESC/POS can't
+  /// inline an image mid-text, so the mark stacks centered above the line (where
+  /// the PDF path renders it inline). Falls back to text alone when the brand
+  /// asset is unavailable. Shared across the sale receipt, payment slip and
+  /// Z-Report.
+  List<int> _brandTagline(
+    Generator generator,
+    String codeTable,
+    Uint8List? brandLogoBytes, {
+    bool dense = false,
+  }) {
+    final bytes = <int>[];
+    if (!dense) {
+      bytes.addAll(generator.feed(1));
+    }
+    bytes.addAll(_brandLogoRaster(generator, brandLogoBytes, dense: dense));
+    bytes.addAll(
+      _text(
         generator,
-        pointyPrintCreditLine,
+        pointyPrintTagline,
         styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
       ),
-    ];
+    );
+    return bytes;
+  }
+
+  /// Reduced ESC/POS line spacing (`ESC 3 n`) for a compact slip, else nothing.
+  /// 26/203" ≈ 3.2mm — tight but with a hair of leading; the printer default is
+  /// ~30–34 dots. Only emitted in dense mode, where every line is single height.
+  List<int> _tightLineSpacing(Generator generator, bool dense) {
+    if (!dense) {
+      return const [];
+    }
+    return generator.rawBytes([0x1b, 0x33, 26]);
+  }
+
+  /// Enlarged-text height for headings/totals: double height normally, single
+  /// height in a compact slip (so the reduced line spacing never overlaps).
+  PosTextSize _emphasisHeight(bool dense) =>
+      dense ? PosTextSize.size1 : PosTextSize.size2;
+
+  /// Enlarged-text width for the shop name: double width normally, single in a
+  /// compact slip.
+  PosTextSize _emphasisWidth(bool dense) =>
+      dense ? PosTextSize.size1 : PosTextSize.size2;
+
+  /// The small centered brand mark for the closing tagline. Downscaled to a few
+  /// dozen dots (smaller still in compact mode) and cached per size, so the fixed
+  /// asset rasterises once. Renders nothing when bytes are missing/undecodable.
+  List<int> _brandLogoRaster(
+    Generator generator,
+    Uint8List? bytes, {
+    required bool dense,
+  }) {
+    if (bytes == null || bytes.isEmpty) {
+      return const [];
+    }
+    try {
+      final image = _brandRasterFor(bytes, dense: dense);
+      if (image == null) {
+        return const [];
+      }
+      return generator.imageRaster(image, align: PosAlign.center);
+    } on Object {
+      return const [];
+    }
   }
 
   /// Trailing feed + cut sequence, honoring the endpoint's feed lines and cut
@@ -1018,6 +1123,30 @@ class EscPosReceiptEncoder {
     }
     return lines;
   }
+}
+
+/// Decodes + downscales the brand mark for the closing tagline, cached by source
+/// length and density. Target ~48 dots dense / ~64 dots normal — a discreet
+/// stamp, not a masthead. Returns null when the bytes can't be decoded.
+img.Image? _brandRasterFor(Uint8List bytes, {required bool dense}) {
+  final key = '${bytes.length}:${dense ? 'd' : 'n'}';
+  if (_brandRasterCache.containsKey(key)) {
+    return _brandRasterCache[key];
+  }
+  img.Image? resized;
+  try {
+    final decoded = img.decodeImage(bytes);
+    final target = dense ? 48 : 64;
+    if (decoded != null) {
+      resized = decoded.width > target
+          ? img.copyResize(decoded, width: target)
+          : decoded;
+    }
+  } on Object {
+    resized = null;
+  }
+  _brandRasterCache[key] = resized;
+  return resized;
 }
 
 Map<String, Object?> _map(Object? value) {

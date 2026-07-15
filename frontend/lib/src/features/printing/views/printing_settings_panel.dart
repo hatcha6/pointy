@@ -428,6 +428,19 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
                           },
                   ),
                   SizedBox(height: spacing.md),
+                  // Applies to both output paths (thermal + PDF/document), so it
+                  // sits outside the mode-specific blocks below.
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: endpoint.compactReceipt,
+                    title: Text(l10n.printerCompactReceiptLabel),
+                    subtitle: Text(l10n.printerCompactReceiptHelper),
+                    secondary: const Icon(Icons.density_small_outlined),
+                    onChanged: widget.viewModel.isTesting
+                        ? null
+                        : widget.viewModel.updateCompactReceipt,
+                  ),
+                  SizedBox(height: spacing.md),
                   if (endpoint.usesDocumentInvoice)
                     DropdownButtonFormField<PdfPageSize>(
                       key: ValueKey(endpoint.pdfPageSize),

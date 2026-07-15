@@ -17,6 +17,7 @@ import '../models/shop_settings.dart';
 import 'order_document_action.dart';
 import 'order_document_web_delivery.dart';
 import 'print_transport.dart';
+import '../../shared/branding_assets.dart';
 import '../../shared/formatters.dart';
 import '../../shared/pdf/pdf.dart';
 
@@ -26,11 +27,13 @@ class OrderDocumentService {
   const OrderDocumentService({
     this.labels = const OrderDocumentLabels.arabic(),
     this.fontLoader = const PointyPdfFontLoader(),
+    this.brandLogoLoader = const PointyBrandLogoLoader(),
     this.webDelivery = const OrderDocumentWebDelivery(),
   });
 
   final OrderDocumentLabels labels;
   final PointyPdfFontLoader fontLoader;
+  final PointyBrandLogoLoader brandLogoLoader;
   final OrderDocumentWebDelivery webDelivery;
 
   String get deliveryChannel {
@@ -107,7 +110,10 @@ class OrderDocumentService {
   Future<PrintTransportResult> printTest(PrinterEndpoint endpoint) async {
     try {
       final printed = await _printPdf(
-        bytesBuilder: () => _buildTestPdf(pageSize: endpoint.pdfPageSize),
+        bytesBuilder: () => _buildTestPdf(
+          pageSize: endpoint.pdfPageSize,
+          compact: endpoint.compactReceipt,
+        ),
         jobName: labels.testPrintTitle,
         endpoint: endpoint,
       );
@@ -132,6 +138,7 @@ class OrderDocumentService {
         shopSettings: shopSettings,
         shopLogoBytes: shopLogoBytes,
         pageSize: pageSize,
+        compact: endpoint?.compactReceipt ?? false,
       ),
       jobName: saleInvoiceFileName(order),
       endpoint: endpoint,
@@ -151,6 +158,7 @@ class OrderDocumentService {
         shopSettings: shopSettings,
         shopLogoBytes: shopLogoBytes,
         pageSize: pageSize,
+        compact: endpoint?.compactReceipt ?? false,
       ),
       jobName: purchaseOrderFileName(order),
       endpoint: endpoint,
@@ -170,6 +178,7 @@ class OrderDocumentService {
         shopSettings: shopSettings,
         shopLogoBytes: shopLogoBytes,
         pageSize: pageSize,
+        compact: endpoint?.compactReceipt ?? false,
       ),
       jobName: proofOfPaymentFileName(proof),
       endpoint: endpoint,
@@ -227,13 +236,22 @@ class OrderDocumentService {
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
     PdfPageSize pageSize = PdfPageSize.a4,
+    bool compact = false,
   }) async {
     final fontData = await fontLoader.loadData();
+    final brandLogoBytes = await brandLogoLoader.load();
     final template = saleInvoiceTemplate(
       order: order,
       shopSettings: shopSettings,
     );
-    return _renderDocument(template, shopLogoBytes, fontData, pageSize);
+    return _renderDocument(
+      template,
+      shopLogoBytes,
+      fontData,
+      pageSize,
+      compact: compact,
+      brandLogoBytes: brandLogoBytes,
+    );
   }
 
   Future<Uint8List> buildPurchaseOrderBytes({
@@ -241,13 +259,22 @@ class OrderDocumentService {
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
     PdfPageSize pageSize = PdfPageSize.a4,
+    bool compact = false,
   }) async {
     final fontData = await fontLoader.loadData();
+    final brandLogoBytes = await brandLogoLoader.load();
     final template = purchaseOrderTemplate(
       order: order,
       shopSettings: shopSettings,
     );
-    return _renderDocument(template, shopLogoBytes, fontData, pageSize);
+    return _renderDocument(
+      template,
+      shopLogoBytes,
+      fontData,
+      pageSize,
+      compact: compact,
+      brandLogoBytes: brandLogoBytes,
+    );
   }
 
   Future<Uint8List> buildProofOfPaymentBytes({
@@ -255,13 +282,22 @@ class OrderDocumentService {
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
     PdfPageSize pageSize = PdfPageSize.a4,
+    bool compact = false,
   }) async {
     final fontData = await fontLoader.loadData();
+    final brandLogoBytes = await brandLogoLoader.load();
     final template = proofOfPaymentTemplate(
       proof: proof,
       shopSettings: shopSettings,
     );
-    return _renderDocument(template, shopLogoBytes, fontData, pageSize);
+    return _renderDocument(
+      template,
+      shopLogoBytes,
+      fontData,
+      pageSize,
+      compact: compact,
+      brandLogoBytes: brandLogoBytes,
+    );
   }
 
   /// Renders [template] to PDF bytes. On native platforms the heavy synchronous
@@ -273,14 +309,18 @@ class OrderDocumentService {
     OrderDocumentTemplate template,
     Uint8List? logoBytes,
     PointyPdfFontData fontData,
-    PdfPageSize pageSize,
-  ) {
+    PdfPageSize pageSize, {
+    bool compact = false,
+    Uint8List? brandLogoBytes,
+  }) {
     final request = _OrderDocumentBuildRequest(
       template: template,
       logoBytes: logoBytes,
       labels: labels,
       fontData: fontData,
       pageSize: pageSize,
+      compact: compact,
+      brandLogoBytes: brandLogoBytes,
     );
     if (kIsWeb) {
       return _buildOrderDocumentBytes(request);
@@ -672,8 +712,10 @@ class OrderDocumentService {
 
   Future<Uint8List> _buildTestPdf({
     PdfPageSize pageSize = PdfPageSize.a4,
+    bool compact = false,
   }) async {
     final fonts = await fontLoader.load();
+    final brandLogoBytes = await brandLogoLoader.load();
     final template = OrderDocumentTemplate(
       title: labels.testPrintTitle,
       reference: labels.testPrintReference,
@@ -703,12 +745,16 @@ class OrderDocumentService {
         labels: labels,
         fonts: fonts,
         widthMm: receiptWidthMm,
+        compact: compact,
+        brandLogoBytes: brandLogoBytes,
       ).build();
     }
     return _DocumentFrame(
       template: template,
       labels: labels,
       fonts: fonts,
+      compact: compact,
+      brandLogoBytes: brandLogoBytes,
     ).build();
   }
 }
@@ -738,6 +784,8 @@ class _OrderDocumentBuildRequest {
     required this.labels,
     required this.fontData,
     required this.pageSize,
+    this.compact = false,
+    this.brandLogoBytes,
   });
 
   final OrderDocumentTemplate template;
@@ -745,6 +793,12 @@ class _OrderDocumentBuildRequest {
   final OrderDocumentLabels labels;
   final PointyPdfFontData fontData;
   final PdfPageSize pageSize;
+
+  /// Dense/compact layout: trimmed whitespace so the document uses less paper.
+  final bool compact;
+
+  /// Brand mark bytes for the closing "دُوِّنَ في دفتر" tagline (best-effort).
+  final Uint8List? brandLogoBytes;
 }
 
 /// Top-level so it can serve as an isolate entry point: parses the font bytes
@@ -760,6 +814,8 @@ Future<Uint8List> _buildOrderDocumentBytes(_OrderDocumentBuildRequest request) {
       labels: request.labels,
       fonts: fonts,
       widthMm: receiptWidthMm,
+      compact: request.compact,
+      brandLogoBytes: request.brandLogoBytes,
     ).build();
   }
   return _DocumentFrame(
@@ -767,6 +823,8 @@ Future<Uint8List> _buildOrderDocumentBytes(_OrderDocumentBuildRequest request) {
     shopLogoBytes: request.logoBytes,
     labels: request.labels,
     fonts: fonts,
+    compact: request.compact,
+    brandLogoBytes: request.brandLogoBytes,
   ).build();
 }
 
@@ -1066,12 +1124,21 @@ class _DocumentFrame {
     required this.labels,
     required this.fonts,
     this.shopLogoBytes,
+    this.compact = false,
+    this.brandLogoBytes,
   });
 
   final OrderDocumentTemplate template;
   final Uint8List? shopLogoBytes;
   final OrderDocumentLabels labels;
   final PointyPdfFonts fonts;
+
+  /// Dense layout: whitespace between sections and around rows is halved so the
+  /// invoice fits more on the page.
+  final bool compact;
+
+  /// Brand mark for the closing tagline in the page footer.
+  final Uint8List? brandLogoBytes;
 
   Future<Uint8List> build() async {
     final pdf = pw.Document(
@@ -1087,12 +1154,12 @@ class _DocumentFrame {
         footer: _footer,
         build: (_) => [
           _hero(),
-          pw.SizedBox(height: 32),
+          pw.SizedBox(height: compact ? 16 : 32),
           _documentParties(),
-          pw.SizedBox(height: 24),
+          pw.SizedBox(height: compact ? 12 : 24),
           if (template.itemsTable != null) ...[
             template.itemsTable!.build(labels),
-            pw.SizedBox(height: 24),
+            pw.SizedBox(height: compact ? 12 : 24),
           ],
           _bottomSection(),
         ],
@@ -1112,7 +1179,7 @@ class _DocumentFrame {
             pw.Text(
               template.title,
               style: pw.TextStyle(
-                fontSize: 32,
+                fontSize: compact ? 24 : 32,
                 fontWeight: pw.FontWeight.bold,
                 color: PointyPdfPalette.ink,
               ),
@@ -1292,7 +1359,7 @@ class _DocumentFrame {
       children: [
         for (final row in rows)
           pw.Padding(
-            padding: const pw.EdgeInsets.only(bottom: 8),
+            padding: pw.EdgeInsets.only(bottom: compact ? 4 : 8),
             child: PointyPdfFieldRow(
               label: row.label,
               value: row.value,
@@ -1320,7 +1387,7 @@ class _DocumentFrame {
               children: [
                 for (final row in template.totals)
                   pw.Padding(
-                    padding: const pw.EdgeInsets.only(bottom: 10),
+                    padding: pw.EdgeInsets.only(bottom: compact ? 5 : 10),
                     child: PointyPdfFieldRow(
                       label: row.label,
                       value: row.value,
@@ -1359,6 +1426,7 @@ class _DocumentFrame {
       pageLabel:
           '${labels.page} ${context.pageNumber} ${labels.ofPages} ${context.pagesCount}',
       shopFooter: compactPdfText(template.notes, maxCharacters: 150),
+      brandLogo: pdfLogoProvider(brandLogoBytes),
     );
   }
 }
@@ -1378,6 +1446,8 @@ class _ReceiptFrame {
     required this.fonts,
     required this.widthMm,
     this.shopLogoBytes,
+    this.compact = false,
+    this.brandLogoBytes,
   });
 
   final OrderDocumentTemplate template;
@@ -1386,8 +1456,18 @@ class _ReceiptFrame {
   final PointyPdfFonts fonts;
   final int widthMm;
 
+  /// Dense layout: tighter dividers, row padding and inter-block gaps so the
+  /// roll advances less paper per slip.
+  final bool compact;
+
+  /// Brand mark for the closing "دُوِّنَ في دفتر" tagline at the foot of the roll.
+  final Uint8List? brandLogoBytes;
+
   static const double _horizontalMarginMm = 4;
   static const double _verticalMarginMm = 6;
+
+  /// Top/bottom paper margin, trimmed in compact mode.
+  double get _verticalMargin => compact ? 4 : _verticalMarginMm;
 
   // Thermal receipt heads are 1-bit: a dot is either full black or blank, so any
   // grey (the shared A4 palette's muted labels / hairline rules) prints faint or
@@ -1412,9 +1492,9 @@ class _ReceiptFrame {
         // Finite width, infinite height → one continuous roll page whose height
         // is measured from the content (no wasted blank tail on the roll).
         pageFormat: PdfPageFormat(widthMm * PdfPageFormat.mm, double.infinity),
-        margin: const pw.EdgeInsets.symmetric(
+        margin: pw.EdgeInsets.symmetric(
           horizontal: _horizontalMarginMm * PdfPageFormat.mm,
-          vertical: _verticalMarginMm * PdfPageFormat.mm,
+          vertical: _verticalMargin * PdfPageFormat.mm,
         ),
         theme: _thermalTheme(),
         textDirection: pw.TextDirection.rtl,
@@ -1440,7 +1520,7 @@ class _ReceiptFrame {
     final children = <pw.Widget>[..._header(), _divider(), ..._titleBlock()];
 
     if (template.details.isNotEmpty) {
-      children.add(pw.SizedBox(height: 3));
+      children.add(pw.SizedBox(height: compact ? 2 : 3));
       for (final field in template.details) {
         children.add(_fieldRow(field));
       }
@@ -1478,7 +1558,7 @@ class _ReceiptFrame {
 
     final note = compactPdfText(template.notes, maxCharacters: 160);
     if (note != null) {
-      children.add(pw.SizedBox(height: 6));
+      children.add(pw.SizedBox(height: compact ? 3 : 6));
       children.add(
         pw.Text(
           note,
@@ -1493,9 +1573,26 @@ class _ReceiptFrame {
 
     final qr = _qr();
     if (qr != null) {
-      children.add(pw.SizedBox(height: 8));
+      children.add(pw.SizedBox(height: compact ? 4 : 8));
       children.add(qr);
     }
+
+    // Closing brand stamp: "دُوِّنَ في [logo] دفتر", centered at the foot of the
+    // roll. Pure black so it survives the thermal head; falls back to text when
+    // the mark is unavailable.
+    children.add(pw.SizedBox(height: compact ? 4 : 8));
+    children.add(_divider());
+    children.add(
+      pw.Center(
+        child: PointyPdfTagline(
+          brandLogo: pdfLogoProvider(brandLogoBytes),
+          fontSize: 8,
+          logoHeight: 12,
+          color: _ink,
+          brandColor: _ink,
+        ),
+      ),
+    );
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -1600,7 +1697,7 @@ class _ReceiptFrame {
     final rows = <pw.Widget>[];
     for (var i = 0; i < table.rows.length; i++) {
       if (i > 0) {
-        rows.add(pw.SizedBox(height: 4));
+        rows.add(pw.SizedBox(height: compact ? 2 : 4));
       }
       rows.add(_itemRow(table.rows[i], twoColumn: twoColumn));
     }
@@ -1683,7 +1780,7 @@ class _ReceiptFrame {
       color: _ink,
     );
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      padding: pw.EdgeInsets.symmetric(vertical: compact ? 1 : 2),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
@@ -1697,7 +1794,7 @@ class _ReceiptFrame {
 
   pw.Widget _divider() {
     return pw.Container(
-      margin: const pw.EdgeInsets.symmetric(vertical: 5),
+      margin: pw.EdgeInsets.symmetric(vertical: compact ? 2 : 5),
       height: 0.6,
       color: _ink,
     );
