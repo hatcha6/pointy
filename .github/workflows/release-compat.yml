@@ -211,11 +211,16 @@ jobs:
           } | Out-File -Encoding ascii "dist/SHA256SUMS-windows-compat.txt"
           Get-ChildItem dist | Select-Object Name, Length | Format-Table -AutoSize
 
+      # Short retention: for real "-compat" releases the installer/zip are
+      # attached to the GitHub Release (separate storage, no Actions-quota cost);
+      # for manual test builds this artifact is the only output. 90-day default
+      # retention was contributing to the exhausted artifact storage quota.
       - uses: actions/upload-artifact@v4
         with:
           name: pointy-windows-compat
           path: dist/*
           if-no-files-found: error
+          retention-days: 1
 
       - name: Attach to release
         if: ${{ needs.version.outputs.is_release == 'true' }}
