@@ -133,9 +133,19 @@ class PrintingRepository {
     if (config.endpoint.usesDocumentInvoice) {
       return Error(Exception('document printers require order-level printing'));
     }
-    final printResult = await _transportFor(
-      config.endpoint,
-    ).printJob(job: job, endpoint: config.endpoint);
+    // `printJob` encodes the payload and writes to the device; both can throw
+    // (a bad payload, a transport fault). Unlike the thermal/document helpers,
+    // this path is called directly, so guard it here — a thrown error must
+    // become a failed print result, never an uncaught exception bubbling up
+    // into checkout.
+    PrintTransportResult printResult;
+    try {
+      printResult = await _transportFor(
+        config.endpoint,
+      ).printJob(job: job, endpoint: config.endpoint);
+    } on Object catch (error) {
+      printResult = PrintTransportResult.failure('print failed: $error');
+    }
     final report = PrintJobReportDraft(
       status: printResult.isSuccess
           ? PrintJobStatus.completed

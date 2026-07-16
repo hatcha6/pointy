@@ -161,11 +161,16 @@ class UsbPrintTransport extends PrintTransport {
     PrinterEndpoint endpoint,
   ) async {
     try {
-      final result = await _channel.invokeMapMethod<String, Object?>('write', {
-        'address': address,
-        'bytes': bytes,
-        'timeoutMs': endpoint.timeoutMs,
-      });
+      // The native side honours `timeoutMs`; the Dart-side `.timeout` is a
+      // backstop for the platform channel itself never completing (a wedged
+      // native writer), so a stuck USB printer can't leave this Future hanging.
+      final result = await _channel
+          .invokeMapMethod<String, Object?>('write', {
+            'address': address,
+            'bytes': bytes,
+            'timeoutMs': endpoint.timeoutMs,
+          })
+          .timeout(Duration(milliseconds: endpoint.timeoutMs + 2000));
       final success = result?['success'] == true;
       final message = result?['message']?.toString();
       return success
@@ -189,6 +194,9 @@ class UsbPrintTransport extends PrintTransport {
     Uint8List bytes,
     PrinterEndpoint endpoint,
   ) async {
+    // Bound the open/write handshake so a serial-bridge chip that connects but
+    // never drains its buffer (stalled printer) fails instead of hanging.
+    final ioTimeout = Duration(milliseconds: endpoint.timeoutMs);
     UsbPort? port;
     try {
       final device = await _findSerialDevice(vidPid);
@@ -198,7 +206,7 @@ class UsbPrintTransport extends PrintTransport {
         );
       }
       port = await device.create();
-      if (port == null || !await port.open()) {
+      if (port == null || !await port.open().timeout(ioTimeout)) {
         return const PrintTransportResult.failure(
           'failed to open usb serial device',
         );
@@ -209,7 +217,7 @@ class UsbPrintTransport extends PrintTransport {
         UsbPort.STOPBITS_1,
         UsbPort.PARITY_NONE,
       );
-      await port.write(bytes);
+      await port.write(bytes).timeout(ioTimeout);
       return PrintTransportResult.success(
         'usb serial print sent: ${bytes.length} bytes',
       );

@@ -203,16 +203,35 @@ extension PosCheckoutActions on PosViewModel {
 
     switch (result) {
       case Ok<SaleOrder>():
+        // The sale is committed on the backend at this point, so every print
+        // step below is strictly best-effort: each runs behind a bounded,
+        // failure-swallowing guard so a stalled printer (offline-but-listening,
+        // out of paper, a wedged OS spooler) can never freeze the just-completed
+        // checkout. Without this, a print that hangs would leave `_isCheckingOut`
+        // stuck true and the whole POS locked. See [_guardedPrintValue].
         final printStatus = shouldPrintInvoice
-            ? await _printPaidInvoice(result.value, invoicePrinterConfig)
+            ? await _guardedPrintValue(
+                () => _printPaidInvoice(result.value, invoicePrinterConfig),
+                fallback: InvoicePrintStatus.failed,
+                label: 'invoice',
+                order: result.value,
+              )
             : InvoicePrintStatus.notRequested;
         if (_checkoutSettings?.autoPrintKitchenTickets == true) {
-          await _printPaidKitchenTickets(result.value);
+          await _guardedPrintVoid(
+            () => _printPaidKitchenTickets(result.value),
+            label: 'kitchen_tickets',
+            order: result.value,
+          );
         }
         if (printProof) {
           // Hand the customer a سند قبض for the credit down-payment(s) just
           // taken. Best-effort — the sale is already committed.
-          await _printDownPaymentProofs(result.value);
+          await _guardedPrintVoid(
+            () => _printDownPaymentProofs(result.value),
+            label: 'down_payment_proof',
+            order: result.value,
+          );
         }
         // A quotation moves no stock on the backend, so don't optimistically
         // decrement the local catalog either (a held quotation reserves, not
@@ -443,6 +462,61 @@ extension PosCheckoutActions on PosViewModel {
       return int.tryParse('${id ?? ''}');
     }
     return null;
+  }
+
+  /// Runs a best-effort, value-returning post-sale print [action] behind a hard
+  /// [_checkoutPrintDeadline], swallowing any failure or timeout and returning
+  /// [fallback] instead. This is what keeps a committed sale from ever being
+  /// held hostage by a stalled printer.
+  Future<T> _guardedPrintValue<T>(
+    Future<T> Function() action, {
+    required T fallback,
+    required String label,
+    required SaleOrder order,
+  }) async {
+    try {
+      return await action().timeout(_checkoutPrintDeadline);
+    } on Object catch (error, stackTrace) {
+      _reportPrintStepFailure(label, order, error, stackTrace);
+      return fallback;
+    }
+  }
+
+  /// [_guardedPrintValue] for print steps that return nothing (kitchen chits,
+  /// down-payment proofs). A failure/timeout is logged and swallowed so it can
+  /// neither throw out of checkout nor hang it.
+  Future<void> _guardedPrintVoid(
+    Future<void> Function() action, {
+    required String label,
+    required SaleOrder order,
+  }) async {
+    try {
+      await action().timeout(_checkoutPrintDeadline);
+    } on Object catch (error, stackTrace) {
+      _reportPrintStepFailure(label, order, error, stackTrace);
+    }
+  }
+
+  void _reportPrintStepFailure(
+    String label,
+    SaleOrder order,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    unawaited(
+      _analyticsEngine?.captureError(
+            error,
+            stackTrace,
+            severity: AnalyticsEventSeverity.warning,
+            attributes: {
+              'failure_reason': 'checkout_print_step_failed',
+              'print_step': label,
+              'sale_order_id': order.id,
+              'receipt_number': order.receiptNumber,
+            },
+          ) ??
+          Future<void>.value(),
+    );
   }
 
   Future<InvoicePrintStatus> _printPaidInvoice(

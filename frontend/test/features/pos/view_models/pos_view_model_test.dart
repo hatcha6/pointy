@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -1025,6 +1026,97 @@ void main() {
       );
     });
   });
+
+  group('checkout survives a broken receipt printer', () {
+    test('a printer that hangs never freezes the committed sale', () async {
+      // The printer accepts the job but never finishes (out of paper / wedged
+      // spooler): its Future never completes. Before the fix this hung checkout
+      // forever with `isCheckingOut` stuck true; now the print step is abandoned
+      // at the deadline and the sale still finalizes cleanly.
+      final apiService = _FakePosApiService(
+        shopSettings: _autoPrintSettings,
+        catalogPages: const {
+          1: [_coffeeVariant],
+        },
+      );
+      final stubPrinting = _StubPrintingRepository(
+        apiService,
+        invoiceResult: () => Completer<PrintTransportResult>().future,
+      );
+      final viewModel = _viewModel(
+        apiService,
+        printingRepository: stubPrinting,
+        checkoutPrintDeadline: const Duration(milliseconds: 50),
+      );
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
+      await viewModel.loadCheckoutSettings();
+      viewModel.addVariant(_coffeeVariant);
+
+      final outcome = await viewModel
+          .checkoutCurrentSale(
+            payments: const [
+              SaleCheckoutPaymentDraft(
+                method: PaymentMethod.cash,
+                amount: 3.5,
+              ),
+            ],
+          )
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () =>
+                fail('checkout hung on the stalled printer — the bug is back'),
+          );
+
+      expect(stubPrinting.invoiceCalls, 1, reason: 'the print was attempted');
+      expect(outcome.isSuccess, isTrue, reason: 'the sale is committed');
+      expect(
+        outcome.printStatus,
+        InvoicePrintStatus.failed,
+        reason: 'the stalled print surfaces as a failed receipt, not a hang',
+      );
+      expect(viewModel.isCheckingOut, isFalse, reason: 'the POS is unlocked');
+      expect(viewModel.cart, isEmpty, reason: 'the sale finalized');
+    });
+
+    test('a printer that throws is swallowed, not propagated', () async {
+      // A thrown transport/encoder error must become a failed receipt, never an
+      // uncaught exception bubbling out of checkout.
+      final apiService = _FakePosApiService(
+        shopSettings: _autoPrintSettings,
+        catalogPages: const {
+          1: [_coffeeVariant],
+        },
+      );
+      final stubPrinting = _StubPrintingRepository(
+        apiService,
+        invoiceResult: () async => throw Exception('printer exploded'),
+      );
+      final viewModel = _viewModel(
+        apiService,
+        printingRepository: stubPrinting,
+      );
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
+      await viewModel.loadCheckoutSettings();
+      viewModel.addVariant(_coffeeVariant);
+
+      final outcome = await viewModel.checkoutCurrentSale(
+        payments: const [
+          SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 3.5),
+        ],
+      );
+
+      expect(outcome.isSuccess, isTrue);
+      expect(outcome.printStatus, InvoicePrintStatus.failed);
+      expect(viewModel.isCheckingOut, isFalse);
+      expect(viewModel.cart, isEmpty);
+    });
+  });
 }
 
 PosViewModel _viewModel(
@@ -1032,22 +1124,26 @@ PosViewModel _viewModel(
   AnalyticsEngine? analyticsEngine,
   ScopedJsonStorage? sessionStorage,
   ScanFeedbackPlayer? scanFeedback,
+  PrintingRepository? printingRepository,
+  Duration checkoutPrintDeadline = const Duration(seconds: 20),
 }) {
   return PosViewModel(
     CatalogRepository(apiService),
     RegisterSessionRepository(apiService),
     SaleRepository(apiService),
     ShopSettingsRepository(apiService),
-    PrintingRepository(
-      apiService,
-      serialTransport: const _NoopPrintTransport(),
-      bluetoothTransport: const _NoopPrintTransport(),
-      wifiTransport: const _NoopPrintTransport(),
-      fakeTransport: const _NoopPrintTransport(),
-    ),
+    printingRepository ??
+        PrintingRepository(
+          apiService,
+          serialTransport: const _NoopPrintTransport(),
+          bluetoothTransport: const _NoopPrintTransport(),
+          wifiTransport: const _NoopPrintTransport(),
+          fakeTransport: const _NoopPrintTransport(),
+        ),
     analyticsEngine: analyticsEngine,
     sessionStorage: sessionStorage ?? MemoryScopedJsonStorage(),
     scanFeedback: scanFeedback,
+    checkoutPrintDeadline: checkoutPrintDeadline,
   );
 }
 
@@ -1246,6 +1342,70 @@ const _settings = ShopSettings(
   transferCommissionPercent: 0,
 );
 
+/// [_settings] with automatic receipt printing on, so checkout exercises the
+/// post-sale print path (and its failure guards).
+const _autoPrintSettings = ShopSettings(
+  shopName: 'نقطة البيع',
+  receiptHeader: '',
+  receiptFooter: '',
+  enableOnlineInvoices: false,
+  requireOpeningCash: true,
+  autoPrintReceipts: true,
+  allowOverselling: false,
+  preventSellingAtLoss: true,
+  lowStockThreshold: 5,
+  cashierReturnWindowHours: 42,
+  enableCashPayments: true,
+  enableCardPayments: true,
+  enableTransferPayments: true,
+  requireCardPaymentReceipt: false,
+  trustedCardTerminalIds: [],
+  cardCommissionPercent: 1,
+  transferCommissionPercent: 0,
+);
+
+/// A printing repository whose default printer is a thermal receipt printer and
+/// whose invoice print resolves to a test-controlled [invoiceResult] — hang it
+/// (a never-completing Future) or fail it (an errored Future) to model a broken
+/// printer without any real device or transport.
+class _StubPrintingRepository extends PrintingRepository {
+  _StubPrintingRepository(super.service, {required this.invoiceResult})
+    : super(
+        serialTransport: const _NoopPrintTransport(),
+        bluetoothTransport: const _NoopPrintTransport(),
+        wifiTransport: const _NoopPrintTransport(),
+        fakeTransport: const _NoopPrintTransport(),
+      );
+
+  /// Built fresh per print so an errored future is first listened to by the
+  /// guard under test (not left dangling as an unhandled zone error at setup).
+  final Future<PrintTransportResult> Function() invoiceResult;
+  int invoiceCalls = 0;
+
+  @override
+  Future<Result<PrinterConfig>> loadDefaultPrinterConfig() async {
+    return Ok(
+      const PrinterConfig(
+        endpoint: PrinterEndpoint(
+          kind: PrintTransportKind.wifi,
+          name: 'stub-thermal',
+          address: '10.0.0.9',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<PrintTransportResult> printSaleInvoice({
+    required SaleOrder order,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+  }) {
+    invoiceCalls += 1;
+    return invoiceResult();
+  }
+}
+
 class _CatalogRequest {
   const _CatalogRequest({required this.query, required this.page});
 
@@ -1261,10 +1421,15 @@ class _FakePosApiService extends PosApiService {
     this.onPreviewDiscounts,
     this.discountsVersion,
     this.catalogPages = const {},
+    this.shopSettings,
   }) : super(
          client: MockClient((_) async => http.Response('{}', 500)),
          baseUrl: 'http://pointy.test/api',
        );
+
+  /// Overrides the settings returned by [fetchShopSettings] (defaults to
+  /// [_settings]); lets a test flip flags like `autoPrintReceipts`.
+  final ShopSettings? shopSettings;
 
   /// Overrides the discounts version the real session learns from response
   /// headers, so the no-rules latch can be exercised without HTTP plumbing.
@@ -1307,7 +1472,7 @@ class _FakePosApiService extends PosApiService {
 
   @override
   Future<ShopSettings> fetchShopSettings() async {
-    return _settings;
+    return shopSettings ?? _settings;
   }
 
   @override
