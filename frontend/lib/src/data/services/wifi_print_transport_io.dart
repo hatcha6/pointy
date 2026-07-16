@@ -115,18 +115,21 @@ class WifiPrintTransport extends PrintTransport {
       return const PrintTransportResult.failure('printer host is required');
     }
 
+    // A printer that accepts the TCP connection but then stalls (out of paper,
+    // its receive buffer full, powered-on-but-wedged) makes `flush`/`close`
+    // block forever — the connect timeout alone does not cover the write phase.
+    // Bound every blocking step so a stall surfaces as a failure (caught below)
+    // instead of an unresolved Future that would wedge the write queue and, at
+    // checkout, freeze the whole POS.
+    final ioTimeout = Duration(milliseconds: endpoint.timeoutMs);
     Socket? socket;
     try {
-      socket = await Socket.connect(
-        host,
-        endpoint.port,
-        timeout: Duration(milliseconds: endpoint.timeoutMs),
-      );
+      socket = await Socket.connect(host, endpoint.port, timeout: ioTimeout);
       for (final chunk in byteChunks(bytes, 1024)) {
         socket.add(chunk);
-        await socket.flush();
+        await socket.flush().timeout(ioTimeout);
       }
-      await socket.close();
+      await socket.close().timeout(ioTimeout);
       return PrintTransportResult.success(
         'network print sent: ${bytes.length} bytes',
       );

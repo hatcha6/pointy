@@ -140,9 +140,11 @@ class PosViewModel extends ChangeNotifier {
       'pointy.pos.sessions.v1',
     ),
     ScanFeedbackPlayer? scanFeedback,
+    Duration checkoutPrintDeadline = const Duration(seconds: 20),
   }) : _analyticsEngine = analyticsEngine,
        _sessionStorage = sessionStorage,
-       _scanFeedback = scanFeedback;
+       _scanFeedback = scanFeedback,
+       _checkoutPrintDeadline = checkoutPrintDeadline;
 
   final CatalogRepository _catalogRepository;
   final RegisterSessionRepository _registerSessionRepository;
@@ -153,6 +155,16 @@ class PosViewModel extends ChangeNotifier {
   final ScopedJsonStorage _sessionStorage;
   // Audible scan feedback (null = silent, e.g. unit tests).
   final ScanFeedbackPlayer? _scanFeedback;
+
+  /// Hard ceiling on any single post-sale print step at checkout. The sale is
+  /// already committed by the time we print, so a step that overruns this is
+  /// abandoned as a failure rather than freezing the POS. It sits above the
+  /// per-write transport timeout (`PrinterEndpoint.timeoutMs`, 5s default) so a
+  /// transport usually surfaces its own failure first; this is the backstop for
+  /// hangs a Dart timeout can't interrupt on its own (e.g. a wedged OS print
+  /// spooler on the document/PDF path). Injectable so tests can drive the
+  /// timeout without waiting real seconds.
+  final Duration _checkoutPrintDeadline;
 
   // Local persistence of in-progress sale sessions (see pos_persistence.dart).
   String? _persistScope;
