@@ -7027,6 +7027,24 @@ abstract class AppLocalizations {
   /// **'تعذر تصدير التتبع. راجع الفلاتر وحاول مرة أخرى.'**
   String get analyticsExportFailedMessage;
 
+  /// No description provided for @analyticsExportSaveDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ ملف التتبع'**
+  String get analyticsExportSaveDialogTitle;
+
+  /// Snackbar shown after the tracking export is saved, telling the user the exact file path.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُفظ ملف التتبع في: {path}'**
+  String analyticsExportSavedMessage(String path);
+
+  /// No description provided for @analyticsExportCanceledMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغي حفظ ملف التتبع.'**
+  String get analyticsExportCanceledMessage;
+
   /// No description provided for @backupRestoreSectionTitle.
   ///
   /// In ar, this message translates to:

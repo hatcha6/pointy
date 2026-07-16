@@ -193,6 +193,13 @@ DATABASES["default"]["CONN_MAX_AGE"] = env("DATABASE_CONN_MAX_AGE")
 # exist". Harmless (tiny per-query cost) when connecting straight to Postgres.
 if str(DATABASES["default"].get("ENGINE", "")).endswith("postgresql"):
     DATABASES["default"].setdefault("OPTIONS", {}).setdefault("prepare_threshold", None)
+    # Named (server-side) cursors can't survive transaction pooling either: the
+    # DECLARE lands on one PgBouncer backend and the FETCH/CLOSE on another, so
+    # Postgres periodically logs `cursor "_django_curs_..._sync_N" does not exist`
+    # (or "already exists" when a recycled name collides on a backend that still
+    # holds a prior cursor). Disable them so QuerySet.iterator() streams rows
+    # client-side. At single-shop scale the extra client-side buffering is cheap.
+    DATABASES["default"]["DISABLE_SERVER_SIDE_CURSORS"] = True
 
 SECURE_SSL_REDIRECT = env("DJANGO_SECURE_SSL_REDIRECT")
 SESSION_COOKIE_SECURE = env("DJANGO_SESSION_COOKIE_SECURE")

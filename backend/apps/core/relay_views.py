@@ -24,6 +24,7 @@ from .models import RelayInstallation, ShopSettings
 from .permissions import HasPointyPermission
 from .relay import (
     RelayControlError,
+    connector_setup_token_accepted,
     consume_connector_setup_token,
     ensure_relay_installation,
     issue_pairing_ticket,
@@ -214,9 +215,14 @@ class RelayConnectorConfigView(views.APIView):
             installation,
             request.headers.get("X-Pointy-Connector-Token", ""),
         )
+        setup_token = ""
         if not is_renewal:
-            provided_token = request.headers.get("X-Pointy-Connector-Setup-Token", "")
-            if not consume_connector_setup_token(provided_token):
+            setup_token = request.headers.get("X-Pointy-Connector-Setup-Token", "")
+            # Validate but do NOT spend the token yet: a one-time token must
+            # survive a failed bootstrap (e.g. the relay is briefly unreachable
+            # below) so the connector can retry, instead of being stranded with a
+            # spent token that every later request rejects with 403 (issue #4).
+            if not connector_setup_token_accepted(setup_token):
                 return Response(
                     {"detail": "connector setup token rejected"},
                     status=status.HTTP_403_FORBIDDEN,
@@ -234,6 +240,11 @@ class RelayConnectorConfigView(views.APIView):
         )
         if isinstance(certificate, Response):
             return certificate
+        if not is_renewal:
+            # The whole bootstrap succeeded — only now spend the token. Any
+            # non-seed token becomes single-use; the env seed stays valid so the
+            # connector can re-bootstrap after a state-volume loss.
+            consume_connector_setup_token(setup_token)
         serializer = RelayConnectorConfigSerializer(
             self._connector_config_payload(installation, certificate)
         )

@@ -1,11 +1,15 @@
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
+// ignore: implementation_imports
+import 'package:file_picker/src/platform/file_picker_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import 'package:pointy_frontend/src/core/authorization.dart';
@@ -68,6 +72,30 @@ import 'package:pointy_frontend/src/shared/product_tile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'shared/fake_app_navigation.dart';
+
+/// Stands in for the native save-file dialog: records the bytes the analytics
+/// export handed off and reports back a fixed destination path.
+class _FakeSaveFilePicker extends FilePickerPlatform
+    with MockPlatformInterfaceMixin {
+  String? returnedPath = '/Users/tester/Downloads/analytics-events.csv';
+  Uint8List? savedBytes;
+  String? savedFileName;
+
+  @override
+  Future<String?> saveFile({
+    String? dialogTitle,
+    String? fileName,
+    String? initialDirectory,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    Uint8List? bytes,
+    bool lockParentWindow = false,
+  }) async {
+    savedFileName = fileName;
+    savedBytes = bytes;
+    return returnedPath;
+  }
+}
 
 void main() {
   setUp(() {
@@ -2939,6 +2967,11 @@ void main() {
 
     Uri? exportUri;
 
+    final savePicker = _FakeSaveFilePicker();
+    final previousPicker = FilePickerPlatform.instance;
+    FilePickerPlatform.instance = savePicker;
+    addTearDown(() => FilePickerPlatform.instance = previousPicker);
+
     await tester.pumpWidget(
       PointyApp(
         apiService: _mockApiService(
@@ -2994,7 +3027,14 @@ void main() {
     expect(exportUri?.queryParameters['severity'], 'warning');
     expect(exportUri?.queryParameters['search'], 'checkout');
     expect(exportUri?.queryParameters['platform'], 'flutter-web');
-    expect(find.text('بدأ تنزيل ملف التتبع.'), findsOneWidget);
+    // The export bytes were handed to the save dialog, and the resulting path is
+    // surfaced so the user knows exactly where the file landed.
+    expect(savePicker.savedBytes, isNotNull);
+    expect(savePicker.savedBytes, isNotEmpty);
+    expect(
+      find.text('حُفظ ملف التتبع في: /Users/tester/Downloads/analytics-events.csv'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('manager can configure and fake-test local printing', (

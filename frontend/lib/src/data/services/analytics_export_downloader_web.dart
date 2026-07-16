@@ -5,11 +5,15 @@ import 'dart:typed_data';
 
 import '../models/analytics_export.dart';
 
-Future<bool> downloadAnalyticsExportFilePlatform(
-  AnalyticsExportFile file,
-) async {
+/// Web: trigger a browser download. The browser owns the destination folder, so
+/// there is no path to report back ([AnalyticsExportSaveResult.location] stays
+/// `null`). [dialogTitle] is unused here — the browser has no save dialog.
+Future<AnalyticsExportSaveResult> downloadAnalyticsExportFilePlatform(
+  AnalyticsExportFile file, {
+  String? dialogTitle,
+}) async {
   if (file.bytes.isEmpty) {
-    return false;
+    return const AnalyticsExportSaveResult.failed();
   }
 
   final blob = html.Blob([Uint8List.fromList(file.bytes)], file.contentType);
@@ -21,5 +25,5 @@ Future<bool> downloadAnalyticsExportFilePlatform(
   anchor.click();
   anchor.remove();
   html.Url.revokeObjectUrl(url);
-  return true;
+  return const AnalyticsExportSaveResult.saved();
 }

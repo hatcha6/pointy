@@ -1392,22 +1392,43 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       return;
     }
 
-    final downloaded = file != null && await downloadAnalyticsExportFile(file);
-    if (file != null) {
+    // The export itself failed (the view model already surfaces the error in the
+    // footer); still confirm it to the user so the tap doesn't feel ignored.
+    if (file == null) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.analyticsExportFailedMessage)),
+        );
+      return;
+    }
+
+    final result = await downloadAnalyticsExportFile(
+      file,
+      dialogTitle: l10n.analyticsExportSaveDialogTitle,
+    );
+    if (!result.isCanceled) {
       widget.viewModel.trackAnalyticsExportDownloadResult(
         file,
-        downloaded: downloaded,
+        downloaded: result.isSaved,
       );
     }
+
+    final message = switch (result.status) {
+      AnalyticsExportSaveStatus.saved => result.location == null
+          ? l10n.analyticsExportStartedMessage
+          : l10n.analyticsExportSavedMessage(result.location!),
+      AnalyticsExportSaveStatus.canceled => l10n.analyticsExportCanceledMessage,
+      AnalyticsExportSaveStatus.failed => l10n.analyticsExportFailedMessage,
+    };
     messenger
       ..clearSnackBars()
       ..showSnackBar(
         SnackBar(
-          content: Text(
-            downloaded
-                ? l10n.analyticsExportStartedMessage
-                : l10n.analyticsExportFailedMessage,
-          ),
+          content: Text(message),
+          duration: result.isSaved && result.location != null
+              ? const Duration(seconds: 6)
+              : const Duration(seconds: 4),
         ),
       );
   }

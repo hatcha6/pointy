@@ -3967,6 +3967,17 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذر تصدير التتبع. راجع الفلاتر وحاول مرة أخرى.';
 
   @override
+  String get analyticsExportSaveDialogTitle => 'حفظ ملف التتبع';
+
+  @override
+  String analyticsExportSavedMessage(String path) {
+    return 'حُفظ ملف التتبع في: $path';
+  }
+
+  @override
+  String get analyticsExportCanceledMessage => 'أُلغي حفظ ملف التتبع.';
+
+  @override
   String get backupRestoreSectionTitle => 'النسخ والاستعادة';
 
   @override

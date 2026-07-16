@@ -591,23 +591,62 @@ def issue_pairing_ticket(installation, *, device_id="", device_name="", client=N
     return issued
 
 
-def consume_connector_setup_token(raw_token):
+def connector_setup_token_accepted(raw_token):
+    """Whether ``raw_token`` may bootstrap a connector — WITHOUT spending it.
+
+    Validation is deliberately separated from consumption so a one-time token is
+    only burned once the *whole* bootstrap has succeeded (see
+    ``consume_connector_setup_token``). Previously the token was consumed up
+    front, so a transient failure downstream — the relay being unreachable while
+    issuing the connector certificate, say — permanently stranded the connector
+    with a token it had already spent, and every retry came back
+    ``403 connector setup token rejected`` (issue #4).
+
+    The env seed (``POINTY_RELAY_CONNECTOR_SETUP_TOKEN``) is a durable deployment
+    secret that the backend and its own connector share through the same
+    ``.env``, so it stays valid for re-bootstrap and recovery — a wiped
+    connector-state volume, a reissued installation — even after an earlier
+    bootstrap consumed it. Rotating the seed still revokes: a token that no
+    longer matches the current seed is accepted only while a live, unconsumed,
+    unexpired record exists.
+    """
     token = str(raw_token or "").strip()
     if not token:
         return False
+    seed_token = _connector_setup_seed_token()
+    if seed_token and hmac.compare_digest(token, seed_token):
+        return True
     token_hash = connector_setup_token_hash(token)
-    now = timezone.now()
-    with transaction.atomic():
-        record = _locked_setup_token(token_hash, token)
-        if record is None:
-            return False
-        if record.consumed_at is not None:
-            return False
-        if record.expires_at is not None and now >= record.expires_at:
-            return False
-        record.consumed_at = now
-        record.save(update_fields=["consumed_at", "updated_at"])
+    record = RelayConnectorSetupToken.objects.filter(token_hash=token_hash).first()
+    if record is None:
+        return False
+    if record.consumed_at is not None:
+        return False
+    if record.expires_at is not None and timezone.now() >= record.expires_at:
+        return False
     return True
+
+
+def consume_connector_setup_token(raw_token):
+    """Record a setup token as spent — call only after a *successful* bootstrap.
+
+    Idempotent and best-effort: it marks (creating it if needed) the token's
+    record so a non-seed ad-hoc/rotated token can be redeemed only once.
+    Consuming the env seed is harmless — ``connector_setup_token_accepted``
+    honours the live seed regardless of ``consumed_at`` — but leaves an audit
+    trail of when it was used.
+    """
+    token = str(raw_token or "").strip()
+    if not token:
+        return
+    token_hash = connector_setup_token_hash(token)
+    with transaction.atomic():
+        record, _ = RelayConnectorSetupToken.objects.select_for_update().get_or_create(
+            token_hash=token_hash
+        )
+        if record.consumed_at is None:
+            record.consumed_at = timezone.now()
+            record.save(update_fields=["consumed_at", "updated_at"])
 
 
 def connector_setup_token_hash(raw_token):
@@ -615,17 +654,5 @@ def connector_setup_token_hash(raw_token):
     return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
-def _locked_setup_token(token_hash, raw_token):
-    record = (
-        RelayConnectorSetupToken.objects.select_for_update().filter(token_hash=token_hash).first()
-    )
-    if record is not None:
-        return record
-
-    seed_token = str(getattr(settings, "POINTY_RELAY_CONNECTOR_SETUP_TOKEN", "")).strip()
-    if not seed_token or not hmac.compare_digest(raw_token, seed_token):
-        return None
-    record, _ = RelayConnectorSetupToken.objects.select_for_update().get_or_create(
-        token_hash=token_hash
-    )
-    return record
+def _connector_setup_seed_token():
+    return str(getattr(settings, "POINTY_RELAY_CONNECTOR_SETUP_TOKEN", "")).strip()

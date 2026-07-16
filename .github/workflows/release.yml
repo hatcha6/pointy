@@ -592,16 +592,20 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Hosted relay — build the relay image and push it to GitHub Container
-  # Registry (ghcr.io, private) so the company-run JPaaS environment can pull
-  # and run it. This is the *central* relay that phones + on-prem connectors
-  # reach; it is separate from the relay image baked into the offline on-prem
-  # bundle above (that one stays registry-free for air-gapped sites).
+  # Registry (ghcr.io) so the company-run JPaaS environment can pull and run it.
+  # This is the *central* relay that phones + on-prem connectors reach; it is
+  # separate from the relay image baked into the offline on-prem bundle above
+  # (that one stays registry-free for air-gapped sites).
   #
-  # The image carries no secrets — the admin token, DB/Redis URLs and the
-  # OpenRouter key are all injected as env vars on the JPaaS node
-  # (POINTY_RELAY_PLATFORM=paas). Pull from JPaaS with a token that has
-  # read:packages. Runs off `version` only, so it ships without waiting on the
-  # Android/Windows client builds.
+  # The ghcr package is PUBLIC on purpose: the image carries no secrets (it is
+  # just the stripped static Go binary on Alpine — the admin token, DB/Redis
+  # URLs and the OpenRouter key are all injected as env vars on the JPaaS node,
+  # POINTY_RELAY_PLATFORM=paas), and public ghcr storage is unlimited and free,
+  # whereas private package versions accumulate on every release and exhaust the
+  # Free-tier storage quota ("Artifact storage quota has been hit"). Because it
+  # is public, JPaaS can pull it anonymously — no read:packages token needed.
+  # Runs off `version` only, so it ships without waiting on the Android/Windows
+  # client builds.
   # ---------------------------------------------------------------------------
   publish-relay:
     name: Publish relay image (ghcr)

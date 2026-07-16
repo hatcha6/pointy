@@ -32,6 +32,27 @@ class FakeRelayResponse:
         self.closed = True
 
 
+class DroppingRelayResponse:
+    """A relay stream that yields some lines then the upstream drops mid-read.
+
+    Mimics the relay tunnel losing the connection partway through a turn: the
+    underlying http.client.HTTPResponse iteration raises (IncompleteRead /
+    ConnectionResetError), which is NOT a RelayControlError.
+    """
+
+    def __init__(self, lines, error=None):
+        self._lines = lines
+        self._error = error or ConnectionResetError("relay tunnel dropped mid-stream")
+        self.closed = False
+
+    def __iter__(self):
+        yield from self._lines
+        raise self._error
+
+    def close(self):
+        self.closed = True
+
+
 def fake_sse_lines(
     text_chunks, *, model="test/model", tier="smart", reasoning="thinking", title=None,
     web_search=False, sources=None,
@@ -236,6 +257,35 @@ class AiChatViewTests(TestCase):
         self.assertEqual(assistant.tier, "smart")
         self.assertEqual(assistant.reasoning, "thinking")
         self.assertEqual(assistant.completion_tokens, 2)
+
+    def test_relay_drop_midstream_ends_with_error_event_not_a_crash(self):
+        # A relay tunnel blip mid-turn raises inside iter_relay_sse (not a
+        # RelayControlError). It must be converted to a clean SSE error event,
+        # never propagate out of the generator — under ASGI that would surface
+        # as "Exception in ASGI application" and kill the client's stream with
+        # no signal.
+        dropped = DroppingRelayResponse(
+            [
+                b"event: delta\n",
+                b'data: {"text": "Hel"}\n',
+                b"\n",
+            ]
+        )
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = dropped
+            response = self.client.post(
+                reverse("ai-chat"),
+                {"message": "مرحبا"},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 200)
+            # Consuming the stream must NOT raise — the generator swallows the
+            # upstream error and ends gracefully.
+            body = b"".join(response.streaming_content).decode("utf-8")
+
+        self.assertIn('"text": "Hel"', body)  # what streamed before the drop
+        self.assertIn("event: error", body)  # clean error signal to the client
+        self.assertTrue(dropped.closed)  # the upstream response was closed
 
     def test_first_turn_requests_and_persists_an_ai_title(self):
         with patch("apps.ai.views.RelayControlClient") as mock_client:

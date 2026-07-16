@@ -2328,6 +2328,17 @@
   "analyticsExportRunningButton": "جار التصدير...",
   "analyticsExportStartedMessage": "بدأ تنزيل ملف التتبع.",
   "analyticsExportFailedMessage": "تعذر تصدير التتبع. راجع الفلاتر وحاول مرة أخرى.",
+  "analyticsExportSaveDialogTitle": "حفظ ملف التتبع",
+  "analyticsExportSavedMessage": "حُفظ ملف التتبع في: {path}",
+  "@analyticsExportSavedMessage": {
+    "description": "Snackbar shown after the tracking export is saved, telling the user the exact file path.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "analyticsExportCanceledMessage": "أُلغي حفظ ملف التتبع.",
   "backupRestoreSectionTitle": "النسخ والاستعادة",
   "backupStatusLoadingSummary": "جار تحميل حالة النسخ الاحتياطي",
   "backupScheduleDisabledSummary": "النسخ التلقائي متوقف",

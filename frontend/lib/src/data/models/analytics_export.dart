@@ -69,6 +69,30 @@ class AnalyticsExportFile {
   final String contentType;
 }
 
+/// Outcome of handing an [AnalyticsExportFile] to the platform so the user can
+/// keep it. `canceled` means the user dismissed the save dialog (not an error).
+enum AnalyticsExportSaveStatus { saved, canceled, failed }
+
+class AnalyticsExportSaveResult {
+  const AnalyticsExportSaveResult.saved({this.location})
+    : status = AnalyticsExportSaveStatus.saved;
+  const AnalyticsExportSaveResult.canceled()
+    : status = AnalyticsExportSaveStatus.canceled,
+      location = null;
+  const AnalyticsExportSaveResult.failed()
+    : status = AnalyticsExportSaveStatus.failed,
+      location = null;
+
+  final AnalyticsExportSaveStatus status;
+
+  /// Absolute path the file was written to, when the platform can report one
+  /// (desktop/mobile). `null` on the web, where the browser owns the download.
+  final String? location;
+
+  bool get isSaved => status == AnalyticsExportSaveStatus.saved;
+  bool get isCanceled => status == AnalyticsExportSaveStatus.canceled;
+}
+
 enum AnalyticsExportFormat { csv, json }
 
 String analyticsExportFormatToJson(AnalyticsExportFormat format) {

@@ -659,6 +659,19 @@ class AiChatView(APIView):
                     "web_search": web_searched,
                 },
             )
+        except Exception:
+            # A mid-stream failure — most often the relay tunnel dropping the
+            # upstream SSE connection (IncompleteRead / ConnectionReset /
+            # timeout while iterating iter_relay_sse, none of which are a
+            # RelayControlError) — must never escape this generator. Under ASGI
+            # aiter_in_thread would re-raise it and uvicorn would log "Exception
+            # in ASGI application" while the client's stream just dies with no
+            # signal. Emit a clean SSE error instead and end the turn; the
+            # finally below still persists any partial answer. GeneratorExit
+            # (client disconnect / early aclose) is a BaseException, not caught
+            # here, so early-close cleanup keeps working.
+            logger.exception("AI chat stream failed mid-turn")
+            yield sse_event("error", {"detail": "ai stream failed"})
         finally:
             if not saved and not paused and ("".join(answer) or "".join(reasoning) or tool_events):
                 self._save_assistant(

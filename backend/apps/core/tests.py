@@ -1169,9 +1169,13 @@ class RelayBackendApiTests(TestCase):
                     format="json",
                     HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
                 )
-                replayed = APIClient().post(
+                # Re-presenting the live seed token (e.g. the connector lost its
+                # state volume and must re-bootstrap) must NOT be rejected: the
+                # env seed is a durable deployment secret, not a one-time pairing
+                # code, so recovery has to work with no operator intervention.
+                recovered = APIClient().post(
                     reverse("relay-connector-config"),
-                    {},
+                    {"csr_pem": "-----BEGIN CERTIFICATE REQUEST-----\nrecover\n-----END CERTIFICATE REQUEST-----\n"},
                     format="json",
                     HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
                 )
@@ -1184,7 +1188,7 @@ class RelayBackendApiTests(TestCase):
 
         self.assertEqual(rejected.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(accepted.status_code, status.HTTP_200_OK)
-        self.assertEqual(replayed.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(recovered.status_code, status.HTTP_200_OK)
         self.assertEqual(renewed.status_code, status.HTTP_200_OK)
         self.assertEqual(
             accepted.data["connector_token"],
@@ -1208,7 +1212,11 @@ class RelayBackendApiTests(TestCase):
         self.assertNotEqual(setup_token.token_hash, "setup-secret")
         self.assertIsNotNone(setup_token.consumed_at)
         installation = RelayInstallation.objects.get()
-        event = AnalyticsEvent.objects.get(name="relay.connector.bootstrap_succeeded")
+        # Both the first bootstrap and the recovery re-bootstrap record the
+        # event; they assert identically, so inspect the first.
+        event = AnalyticsEvent.objects.filter(
+            name="relay.connector.bootstrap_succeeded"
+        ).first()
         self.assertEqual(event.event_type, AnalyticsEvent.EventType.AUDIT)
         self.assertIsNone(event.received_by)
         self.assertEqual(event.installation_id, "installation-1")
@@ -1221,6 +1229,130 @@ class RelayBackendApiTests(TestCase):
         )
         self.assertEqual(renewal_event.installation_id, "installation-1")
         self.assertNotIn("connector_token", renewal_event.attributes)
+
+    @override_settings(
+        POINTY_RELAY_CONTROL_URL="https://relay.example",
+        POINTY_RELAY_PUBLIC_API_URL="https://relay.example",
+        POINTY_RELAY_CONNECTOR_ADDR="relay.example:443",
+        POINTY_RELAY_ADMIN_TOKEN="",
+        POINTY_RELAY_ACCESS_TOKEN="ptr1.installation-1.access-secret",
+        POINTY_RELAY_INSTALLATION_ID="installation-1",
+        POINTY_RELAY_CONNECTOR_TOKEN="ptc1.installation-1.connector-secret",
+        POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret",
+    )
+    def test_connector_setup_token_survives_failed_certificate_issuance(self):
+        # Regression for issue #4: the relay being briefly unreachable while
+        # issuing the connector certificate must NOT burn the one-time setup
+        # token. Otherwise the connector is stranded — every retry comes back
+        # 403 "connector setup token rejected" and the till loses remote access
+        # for good with no way to recover short of hand-editing the token.
+        from apps.core.relay import RelayControlError
+
+        csr = "-----BEGIN CERTIFICATE REQUEST-----\ncsr\n-----END CERTIFICATE REQUEST-----\n"
+        with mock.patch(
+            "apps.core.relay_views.scoped_relay_client",
+            side_effect=RelayControlError("relay unreachable"),
+        ):
+            failed = APIClient().post(
+                reverse("relay-connector-config"),
+                {"csr_pem": csr},
+                format="json",
+                HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
+            )
+
+        self.assertEqual(failed.status_code, status.HTTP_502_BAD_GATEWAY)
+        # The token was validated but never spent, so no consumed record exists.
+        self.assertFalse(
+            RelayConnectorSetupToken.objects.filter(consumed_at__isnull=False).exists()
+        )
+
+        # The relay comes back; the connector retries with the same token and
+        # now bootstraps successfully.
+        fake_relay = FakeRelayControlClient()
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch(
+                "apps.core.relay_views.scoped_relay_client", return_value=fake_relay
+            ):
+                retried = APIClient().post(
+                    reverse("relay-connector-config"),
+                    {"csr_pem": csr},
+                    format="json",
+                    HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
+                )
+
+        self.assertEqual(retried.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            retried.data["connector_token"], "ptc1.installation-1.connector-secret"
+        )
+        self.assertIn("BEGIN CERTIFICATE", retried.data["connector_certificate_pem"])
+        self.assertIsNotNone(RelayConnectorSetupToken.objects.get().consumed_at)
+
+    @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
+    def test_connector_setup_token_survives_failed_installation_bootstrap(self):
+        # Same guarantee for the other transient failure on the bootstrap path:
+        # if ensure_relay_installation() can't reach the relay, the setup token
+        # must remain usable for the retry.
+        from apps.core.relay import RelayControlError
+
+        csr = "-----BEGIN CERTIFICATE REQUEST-----\ncsr\n-----END CERTIFICATE REQUEST-----\n"
+        with mock.patch(
+            "apps.core.relay_views.ensure_relay_installation",
+            side_effect=RelayControlError("relay unreachable"),
+        ) as ensure:
+            failed = APIClient().post(
+                reverse("relay-connector-config"),
+                {"csr_pem": csr},
+                format="json",
+                HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
+            )
+
+        self.assertEqual(failed.status_code, status.HTTP_502_BAD_GATEWAY)
+        ensure.assert_called_once()
+        self.assertFalse(
+            RelayConnectorSetupToken.objects.filter(consumed_at__isnull=False).exists()
+        )
+
+        fake_relay = FakeRelayControlClient()
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch(
+                "apps.core.relay.RelayControlClient", return_value=fake_relay
+            ):
+                retried = APIClient().post(
+                    reverse("relay-connector-config"),
+                    {"csr_pem": csr},
+                    format="json",
+                    HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
+                )
+
+        self.assertEqual(retried.status_code, status.HTTP_200_OK)
+
+    @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
+    def test_connector_setup_token_single_use_after_seed_rotation(self):
+        # Rotating POINTY_RELAY_CONNECTOR_SETUP_TOKEN still revokes: a token that
+        # no longer matches the current seed is genuinely single-use, so once a
+        # prior bootstrap consumed it, it can never bootstrap again.
+        fake_relay = FakeRelayControlClient()
+        csr = "-----BEGIN CERTIFICATE REQUEST-----\ncsr\n-----END CERTIFICATE REQUEST-----\n"
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch(
+                "apps.core.relay.RelayControlClient", return_value=fake_relay
+            ):
+                bootstrapped = APIClient().post(
+                    reverse("relay-connector-config"),
+                    {"csr_pem": csr},
+                    format="json",
+                    HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
+                )
+        self.assertEqual(bootstrapped.status_code, status.HTTP_200_OK)
+
+        with override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="rotated-seed"):
+            rejected = APIClient().post(
+                reverse("relay-connector-config"),
+                {"csr_pem": csr},
+                format="json",
+                HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secret",
+            )
+        self.assertEqual(rejected.status_code, status.HTTP_403_FORBIDDEN)
 
     @override_settings(
         POINTY_RELAY_CONTROL_URL="https://relay.example",
