@@ -132,9 +132,15 @@ def _digest(context: DiscountContext) -> str:
         "|".join(sorted(context.normalized_coupon_codes)),
         f"v{rules_version()}",
     ]
+    # Line keys are positional (prepare_discount_lines enumerates the cart) and the
+    # cached allocations are keyed by them, so the keys are part of the cart's
+    # identity: on a content-only digest the same lines reordered share an entry, and
+    # each allocation is then read back onto whichever line now sits at that index.
+    # Reordering costs a recompute; a debounced re-preview keeps its order and hits.
     for line in sorted(
         context.lines,
         key=lambda ln: (
+            ln.key,
             ln.product_id or 0,
             ln.variant_id or 0,
             str(ln.unit_amount),
@@ -143,7 +149,7 @@ def _digest(context: DiscountContext) -> str:
     ):
         categories = ",".join(sorted(str(cat) for cat in line.category_ids))
         parts.append(
-            f"{line.product_id}:{line.variant_id}:{line.quantity}:"
+            f"{line.key}:{line.product_id}:{line.variant_id}:{line.quantity}:"
             f"{line.unit_amount}:{categories}"
         )
     raw = "\x1f".join(parts)

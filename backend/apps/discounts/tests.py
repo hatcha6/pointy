@@ -4,9 +4,10 @@ from decimal import Decimal
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -1840,3 +1841,84 @@ class QuantityPromotionEngineTests(TestCase):
         self.assertIsNone(rule.buy_quantity)
         self.assertIsNone(rule.get_quantity)
         self.assertEqual(rule.reward_type, "")
+
+
+# Real (locmem) cache so a preview result actually survives to the next request —
+# the configured django-redis backend has no Redis under test, which would
+# exercise only the fail-open path and never serve a cached result.
+_LOCMEM_CACHE = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "discount-preview-line-order-test",
+    }
+}
+
+
+@override_settings(CACHES=_LOCMEM_CACHE)
+class DiscountPreviewCacheLineOrderTests(TestCase):
+    """A cached preview carries allocations keyed by each line's request-order
+    index, so it may only ever be served to a cart whose lines sit in that same
+    order (see the line key in apps.discounts.cache._digest)."""
+
+    def setUp(self):
+        cache.clear()
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="preview-cashier",
+            password="pass",
+        )
+        self.user.user_permissions.add(
+            *Permission.objects.filter(
+                content_type__app_label__in=("discounts", "sales"),
+            )
+        )
+        self.client.force_authenticate(self.user)
+        self.cheap = create_product_with_default_variant(
+            sku="ORDER-CHEAP",
+            name="Cheap",
+            unit_price=Decimal("1.00"),
+        )
+        self.pricey = create_product_with_default_variant(
+            sku="ORDER-PRICEY",
+            name="Pricey",
+            unit_price=Decimal("100.00"),
+        )
+        DiscountRule.objects.create(
+            name="Whole cart 10%",
+            channel=DiscountRule.Channel.SALES,
+            scope=DiscountRule.Scope.DOCUMENT,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+            exclusive=False,
+        )
+
+    def preview_allocations(self, *products):
+        """Preview a cart of one unit per product -> {variant_id: amount}."""
+        response = self.client.post(
+            "/api/orders/discount-preview/",
+            {
+                "lines": [
+                    {"variant": product.default_variant.pk, "quantity": 1}
+                    for product in products
+                ],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(len(response.data["applied_discounts"]), 1, response.data)
+        return {
+            allocation["variant_id"]: allocation["amount"]
+            for allocation in response.data["applied_discounts"][0]["allocations"]
+        }
+
+    def test_allocations_stay_with_their_line_across_cart_order(self):
+        expected = {
+            self.cheap.default_variant.pk: "0.10",  # 10% of 1.00
+            self.pricey.default_variant.pk: "10.00",  # 10% of 100.00
+        }
+
+        self.assertEqual(self.preview_allocations(self.cheap, self.pricey), expected)
+        # Same lines, scanned the other way round. A result cached under a digest
+        # built from line CONTENT alone is replayed onto this cart by index, which
+        # hands the 100.00 item's discount to the 1.00 one.
+        self.assertEqual(self.preview_allocations(self.pricey, self.cheap), expected)
