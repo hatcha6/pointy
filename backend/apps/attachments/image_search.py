@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ipaddress
 import logging
-import mimetypes
 import socket
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +20,7 @@ from django.core.exceptions import ImproperlyConfigured
 from apps.core.models import RelayInstallation
 from apps.core.relay import RelayControlClient, RelayControlError
 
+from .image_normalization import normalize_image_bytes
 from .models import Attachment
 from .services import clean_original_filename, store_uploaded_attachment
 
@@ -173,10 +173,14 @@ def import_product_image_from_token(
 ) -> Attachment:
     payload = load_image_import_payload(import_token)
     image_url = str(payload.get("image_url") or "").strip()
-    if not image_url:
+    thumbnail_url = str(payload.get("thumbnail_url") or "").strip()
+    if not image_url and not thumbnail_url:
         raise ProductImageImportError("Image import token is missing its image URL.")
 
-    upload = fetch_remote_image_upload(image_url)
+    upload, imported_url = fetch_first_available_image(
+        candidates=[image_url, thumbnail_url],
+        referer=str(payload.get("source_url") or "").strip(),
+    )
     metadata = {
         "imported_from": "internet_search",
         "source_url": payload.get("source_url") or "",
@@ -184,6 +188,13 @@ def import_product_image_from_token(
         "source_name": payload.get("source_name") or "",
         "title": payload.get("title") or "",
         "provider": payload.get("provider") or "",
+        # Which candidate actually served the bytes: the full-size original, or
+        # the thumbnail we fell back to when its host refused us. Shops that
+        # want a sharper photo can tell the two apart.
+        "imported_url": imported_url,
+        "imported_fallback_thumbnail": bool(
+            imported_url and image_url and imported_url != image_url
+        ),
     }
     return store_uploaded_attachment(
         uploaded_file=upload,
@@ -195,7 +206,39 @@ def import_product_image_from_token(
     )
 
 
-def fetch_remote_image_upload(url: str) -> RemoteImageUpload:
+def fetch_first_available_image(
+    *,
+    candidates: list[str],
+    referer: str = "",
+) -> tuple[RemoteImageUpload, str]:
+    """Download the first candidate URL that yields a usable image.
+
+    Search results carry two URLs for the same picture: the full-size original on
+    the publisher's own host, and the provider-hosted thumbnail. Only the
+    thumbnail is ever shown in the picker, while the original is what a shop is
+    really asking for -- so we try the original first and fall back to the
+    thumbnail. Publisher hosts block hotlinking, rate-limit, or simply 404 out of
+    a stale search index often enough that without the fallback a shop hits
+    "I can see it but I can't save it" on results that looked perfectly fine.
+    """
+    attempted = []
+    last_error: ProductImageImportError | None = None
+    for url in candidates:
+        if not url or url in attempted:
+            continue
+        attempted.append(url)
+        try:
+            return fetch_remote_image_upload(url, referer=referer), url
+        except ProductImageImportError as exc:
+            logger.info("Product image candidate %s failed: %s", url, exc)
+            last_error = exc
+
+    if last_error is not None:
+        raise last_error
+    raise ProductImageImportError("Image import token is missing its image URL.")
+
+
+def fetch_remote_image_upload(url: str, *, referer: str = "") -> RemoteImageUpload:
     validate_remote_image_url(url)
     timeout = getattr(
         settings,
@@ -203,23 +246,13 @@ def fetch_remote_image_upload(url: str) -> RemoteImageUpload:
         DEFAULT_IMAGE_FETCH_TIMEOUT_SECONDS,
     )
     max_bytes = remote_image_max_bytes()
-    request = Request(
-        url,
-        headers={
-            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-            "User-Agent": "PointyPOS/1.0",
-        },
-    )
+    request = Request(url, headers=remote_image_request_headers(url, referer=referer))
 
     try:
         with build_opener(ValidatingRedirectHandler()).open(
             request,
             timeout=timeout,
         ) as response:
-            content_type = response.headers.get_content_type()
-            if not content_type.startswith("image/"):
-                raise ProductImageDownloadError("Selected URL did not return an image.")
-
             content_length = response.headers.get("Content-Length")
             if content_length and int(content_length) > max_bytes:
                 raise ProductImageDownloadError("Selected image is larger than allowed.")
@@ -241,11 +274,51 @@ def fetch_remote_image_upload(url: str) -> RemoteImageUpload:
     if not data:
         raise ProductImageDownloadError("Selected image was empty.")
 
+    # Decode rather than trust the Content-Type header. Hosts mislabel images
+    # constantly, and a hotlink-blocking host will serve its "no hotlinking"
+    # HTML page under an image/* header -- stored unchecked, that page becomes
+    # the product photo and renders as a broken tile forever after.
+    normalized = normalize_image_bytes(bytes(data))
+    if normalized is None:
+        raise ProductImageDownloadError("Selected URL did not return an image.")
+
     return RemoteImageUpload(
-        name=remote_image_filename(final_url, content_type),
-        content_type=content_type,
-        data=bytes(data),
+        name=remote_image_filename(final_url, normalized.extension),
+        content_type=normalized.content_type,
+        data=normalized.data,
     )
+
+
+def remote_image_request_headers(url: str, *, referer: str = "") -> dict[str, str]:
+    """Headers that read as a browser loading the image on its own page.
+
+    Publisher hosts fend off hotlinking and bot traffic by checking exactly these
+    two things, so an honest "PointyPOS/1.0" with no Referer is precisely the
+    request they are built to refuse. Note the Accept list omits AVIF and SVG on
+    purpose: a content-negotiating CDN offered those would hand back a format the
+    clients cannot decode, which is the other half of this bug.
+    """
+    headers = {
+        "Accept": "image/webp,image/apng,image/jpeg,image/png,image/gif,image/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+    }
+    # A browser sends the page the image is embedded in; that is the value
+    # referer-based hotlink rules are checking for. Only send it when it is a
+    # safe absolute http(s) URL, never a private host we probed.
+    referer = str(referer or "").strip()
+    if referer:
+        parsed = urlparse(referer)
+        if parsed.scheme in {"http", "https"} and parsed.hostname:
+            headers["Referer"] = referer
+    else:
+        parsed = urlparse(url)
+        if parsed.scheme in {"http", "https"} and parsed.hostname:
+            headers["Referer"] = f"{parsed.scheme}://{parsed.hostname}/"
+    return headers
 
 
 def sign_image_import_payload(payload: dict) -> str:
@@ -312,13 +385,16 @@ def remote_image_max_bytes() -> int:
     )
 
 
-def remote_image_filename(url: str, content_type: str) -> str:
+def remote_image_filename(url: str, extension: str) -> str:
+    """Name the stored file after the URL, but always with the real extension.
+
+    The extension comes from what the bytes actually decoded to, not from the
+    URL: a ``.jpg`` that was really an AVIF has just been re-encoded, and
+    carrying the original suffix would mislabel it all over again.
+    """
     path_name = clean_original_filename(Path(urlparse(url).path).name)
-    suffix = Path(path_name).suffix
-    if suffix:
-        return path_name
-    extension = mimetypes.guess_extension(content_type) or ".img"
-    return f"{path_name or 'product-image'}{extension}"
+    stem = Path(path_name).stem or "product-image"
+    return f"{stem}{extension or '.img'}"
 
 
 def is_supported_remote_image_result_url(url: str) -> bool:
