@@ -25,6 +25,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.attachments.image_normalization import normalize_uploaded_image
 from apps.attachments.image_search import (
     ProductImageDownloadError,
     ProductImageImportError,
@@ -70,6 +71,16 @@ from .serializers import (
 )
 from .search_filters import CatalogRelevanceFilter, VariantRelevanceFilter
 from .services import category_ids_with_descendants
+
+
+def _within_upload_limit(uploaded_file) -> bool:
+    """Whether reading the whole upload to normalize it is safe.
+
+    An oversized file is left for store_uploaded_attachment to reject with the
+    size error, rather than pulled into memory here just to re-encode it.
+    """
+    max_bytes = getattr(settings, "POINTY_ATTACHMENT_MAX_UPLOAD_BYTES", 0)
+    return not max_bytes or getattr(uploaded_file, "size", 0) <= max_bytes
 
 
 class ProductCategoryFilter(django_filters.FilterSet):
@@ -584,6 +595,20 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             .filter(role=Attachment.Role.PRODUCT_IMAGE)
             .exists(),
         )
+        # Decode the bytes and re-encode anything the clients cannot render, so a
+        # HEIC/AVIF/TIFF picked from disk -- which the picker mislabels as
+        # image/jpeg -- can never be stored under a false type and show up as an
+        # invisible tile. Undecodable payloads are refused rather than stored as
+        # a broken product photo. Oversized files fall through to
+        # store_uploaded_attachment, which reports the size error instead.
+        upload = data.get("file")
+        if upload is not None and _within_upload_limit(upload):
+            normalized = normalize_uploaded_image(upload)
+            if normalized is None:
+                raise ValidationError(
+                    {"file": "Uploaded file is not an image we can display."}
+                )
+            data["file"] = normalized
         serializer = AttachmentSerializer(
             data=data,
             context={**self.get_serializer_context(), "owner": product},

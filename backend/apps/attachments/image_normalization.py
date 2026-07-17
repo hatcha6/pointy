@@ -12,9 +12,21 @@ server, where it holds for every client at once.
 from __future__ import annotations
 
 import io
+from pathlib import Path
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image, ImageOps, UnidentifiedImageError
 from PIL.Image import DecompressionBombError
+
+try:
+    # Teach Pillow to decode HEIC/HEIF (the default iPhone photo format), so
+    # such uploads are re-encoded rather than rejected. Optional: on a build
+    # without pillow-heif a HEIC simply stays undecodable and is refused.
+    from pillow_heif import register_heif_opener
+
+    register_heif_opener()
+except ImportError:  # pragma: no cover - exercised only where the wheel is absent
+    pass
 
 # Formats Flutter's decoder handles natively. Anything else is re-encoded.
 CLIENT_RENDERABLE_FORMATS = frozenset({"JPEG", "PNG", "GIF", "WEBP", "BMP"})
@@ -128,4 +140,27 @@ def _reencode(image: Image.Image) -> NormalizedImage:
         data=buffer.getvalue(),
         content_type=CONTENT_TYPES_BY_FORMAT[target_format],
         extension=EXTENSIONS_BY_FORMAT[target_format],
+    )
+
+
+def normalize_uploaded_image(uploaded_file) -> SimpleUploadedFile | None:
+    """Re-encode a directly uploaded image into client-renderable bytes.
+
+    Returns a fresh upload carrying the decoded bytes under a truthful content
+    type and extension, or ``None`` when the payload is not a decodable image.
+    Unlike the search-import path, a direct upload otherwise reaches storage
+    with whatever content type the client declared -- and the picker labels
+    every unrecognized extension ``image/jpeg`` -- so a HEIC or AVIF chosen from
+    disk would be stored mislabeled and render as an invisible tile everywhere.
+    Deciding the type from the bytes here keeps that from happening.
+    """
+    uploaded_file.seek(0)
+    normalized = normalize_image_bytes(uploaded_file.read())
+    if normalized is None:
+        return None
+    stem = Path(getattr(uploaded_file, "name", "") or "product-image").stem or "product-image"
+    return SimpleUploadedFile(
+        f"{stem}{normalized.extension}",
+        normalized.data,
+        content_type=normalized.content_type,
     )

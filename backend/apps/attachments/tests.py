@@ -144,8 +144,8 @@ class AttachmentApiTests(TestCase):
             reverse("product-attachments", args=[self.product.pk]),
             {
                 "file": SimpleUploadedFile(
-                    "product.txt",
-                    b"product image placeholder" * 100,
+                    "product.jpg",
+                    _encoded_image("JPEG"),
                     content_type="image/jpeg",
                 ),
             },
@@ -160,6 +160,65 @@ class AttachmentApiTests(TestCase):
         self.assertEqual(product_response.status_code, status.HTTP_200_OK)
         self.assertEqual(product_response.data["primary_image"]["id"], response.data["id"])
         self.assertEqual(len(product_response.data["image_attachments"]), 1)
+
+    def _upload_product_image(self, data, filename, content_type):
+        return self.client.post(
+            reverse("product-attachments", args=[self.product.pk]),
+            {"file": SimpleUploadedFile(filename, data, content_type=content_type)},
+            format="multipart",
+        )
+
+    def test_product_image_upload_reencodes_a_format_clients_cannot_decode(self):
+        # A TIFF picked from disk stores happily and then renders as nothing on
+        # the client -- the direct-upload half of the invisible-image report.
+        response = self._upload_product_image(
+            _encoded_image("TIFF"), "product.tiff", "image/tiff"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["content_type"], "image/jpeg")
+        self.assertTrue(response.data["original_filename"].endswith(".jpg"))
+        self.assertEqual(self._stored_image_format(response.data["id"]), "JPEG")
+
+    def test_product_image_upload_reencodes_a_heic_photo(self):
+        # The picker labels an unrecognized extension image/jpeg, so an iPhone
+        # HEIC arrives mislabeled; decoding the bytes re-encodes it to JPEG.
+        buffer = io.BytesIO()
+        try:
+            Image.new("RGB", (48, 32), (10, 120, 200)).save(buffer, format="HEIF")
+        except (OSError, KeyError, ValueError):
+            self.skipTest("This Pillow build cannot encode HEIC.")
+
+        response = self._upload_product_image(
+            buffer.getvalue(), "IMG_0421.heic", "image/jpeg"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["content_type"], "image/jpeg")
+        self.assertEqual(self._stored_image_format(response.data["id"]), "JPEG")
+
+    def test_product_image_upload_keeps_renderable_bytes_untouched(self):
+        original = _encoded_image("PNG")
+
+        response = self._upload_product_image(original, "product.png", "image/png")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["content_type"], "image/png")
+        # Already renderable and in budget: re-encoding would only lose quality.
+        self.assertEqual(self._stored_bytes(response.data["id"]), original)
+
+    def test_product_image_upload_rejects_a_file_that_is_not_an_image(self):
+        # The picker's content type is not trusted: bytes that no client can
+        # decode are refused rather than stored as an invisible product photo.
+        response = self._upload_product_image(
+            b"not an image at all", "product.jpg", "image/jpeg"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("file", response.data)
+        self.assertFalse(
+            Attachment.objects.filter(role=Attachment.Role.PRODUCT_IMAGE).exists()
+        )
 
     def test_product_image_search_returns_signed_import_tokens(self):
         with patch(
@@ -515,12 +574,13 @@ class AttachmentApiTests(TestCase):
             return image.format
 
     def test_signed_content_url_can_render_without_authenticated_api_session(self):
+        preview = _encoded_image("JPEG")
         upload_response = self.client.post(
             reverse("product-attachments", args=[self.product.pk]),
             {
                 "file": SimpleUploadedFile(
                     "preview.jpg",
-                    b"authenticated preview",
+                    preview,
                     content_type="image/jpeg",
                 ),
             },
@@ -534,7 +594,7 @@ class AttachmentApiTests(TestCase):
         self.assertEqual(content_response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             b"".join(content_response.streaming_content),
-            b"authenticated preview",
+            preview,
         )
 
     def test_content_response_carries_cache_validators(self):
@@ -632,7 +692,7 @@ class AttachmentApiTests(TestCase):
             {
                 "file": SimpleUploadedFile(
                     "private.jpg",
-                    b"private preview",
+                    _encoded_image("JPEG"),
                     content_type="image/jpeg",
                 ),
             },
