@@ -23,6 +23,7 @@ class QueryControlBar extends StatelessWidget {
     this.enabled = true,
     this.autofocus = false,
     this.searchFieldKey,
+    this.searchFocusNode,
   });
 
   final String searchValue;
@@ -39,6 +40,7 @@ class QueryControlBar extends StatelessWidget {
   final bool enabled;
   final bool autofocus;
   final Key? searchFieldKey;
+  final FocusNode? searchFocusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +59,7 @@ class QueryControlBar extends StatelessWidget {
           enabled: enabled,
           autofocus: autofocus,
           fieldKey: searchFieldKey,
+          focusNode: searchFocusNode,
         );
         final actions = _QueryActions(
           hasScanner: hasScanner,

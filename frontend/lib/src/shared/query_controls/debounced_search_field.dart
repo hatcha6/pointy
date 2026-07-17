@@ -16,6 +16,7 @@ class DebouncedSearchField extends StatefulWidget {
     this.enabled = true,
     this.autofocus = false,
     this.fieldKey,
+    this.focusNode,
   });
 
   final String value;
@@ -27,6 +28,12 @@ class DebouncedSearchField extends StatefulWidget {
   final bool enabled;
   final bool autofocus;
   final Key? fieldKey;
+
+  /// An externally-owned focus node, so a caller can programmatically pull
+  /// focus back to the field (e.g. the POS returning focus to catalog search
+  /// after a sale). The owner is responsible for disposing it; when null the
+  /// [TextField] manages its own node as before.
+  final FocusNode? focusNode;
 
   @override
   State<DebouncedSearchField> createState() => _DebouncedSearchFieldState();
@@ -73,6 +80,7 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
       child: TextField(
         key: widget.fieldKey,
         controller: _controller,
+        focusNode: widget.focusNode,
         enabled: widget.enabled,
         autofocus: widget.autofocus,
         textInputAction: TextInputAction.search,

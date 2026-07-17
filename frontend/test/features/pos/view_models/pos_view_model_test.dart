@@ -914,6 +914,76 @@ void main() {
     );
   });
 
+  group('search focus signal (return-to-search workflow)', () {
+    test('a catalog/scanner add asks for search focus', () {
+      final viewModel = _viewModel(_FakePosApiService());
+      addTearDown(viewModel.dispose);
+      var requests = 0;
+      viewModel.searchFocusController.addListener(() => requests += 1);
+
+      viewModel.addVariant(_coffeeVariant, source: 'product_tile');
+      expect(requests, 1);
+
+      viewModel.addVariant(_teaVariant, source: 'variant_picker');
+      expect(requests, 2);
+
+      viewModel.addVariant(_coffeeVariant, source: 'camera_scanner');
+      expect(requests, 3);
+    });
+
+    test('a plain cart-button add does not ask for search focus', () {
+      final viewModel = _viewModel(_FakePosApiService());
+      addTearDown(viewModel.dispose);
+      var requests = 0;
+      viewModel.searchFocusController.addListener(() => requests += 1);
+
+      // The +/- buttons and other programmatic adds must not steal focus.
+      viewModel.addVariant(_coffeeVariant);
+      viewModel.incrementCartLine(viewModel.cart.single.lineKey);
+      expect(requests, 0);
+    });
+
+    test('clearing the cart asks for search focus', () {
+      final viewModel = _viewModel(_FakePosApiService());
+      addTearDown(viewModel.dispose);
+      viewModel.addVariant(_coffeeVariant);
+      var requests = 0;
+      viewModel.searchFocusController.addListener(() => requests += 1);
+
+      viewModel.clearCart();
+      expect(requests, 1);
+    });
+
+    test('opening and switching sale sessions asks for search focus', () {
+      final viewModel = _viewModel(_FakePosApiService());
+      addTearDown(viewModel.dispose);
+      // A held sale is needed before a new session can be opened.
+      viewModel.addVariant(_coffeeVariant);
+      final firstSessionId = viewModel.activeSaleSessionSummary.id;
+      var requests = 0;
+      viewModel.searchFocusController.addListener(() => requests += 1);
+
+      viewModel.startNewSaleSession();
+      expect(requests, 1);
+
+      viewModel.switchSaleSession(firstSessionId);
+      expect(requests, 2);
+    });
+
+    test(
+      'requestSearchFocus fires the controller (checkout / edit-done hook)',
+      () {
+        final viewModel = _viewModel(_FakePosApiService());
+        addTearDown(viewModel.dispose);
+        var requests = 0;
+        viewModel.searchFocusController.addListener(() => requests += 1);
+
+        viewModel.requestSearchFocus();
+        expect(requests, 1);
+      },
+    );
+  });
+
   group('discount preview gate', () {
     test('a no-rules preview latches: later cart edits preview locally, '
         'with zero requests', () async {
