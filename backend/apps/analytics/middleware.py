@@ -1,11 +1,51 @@
 import contextlib
+import sys
 import time
+import traceback
 
 from django.conf import settings
+from django.core.signals import got_request_exception
 from django.db import connections
+from django.dispatch import receiver
 
 from .models import AnalyticsEvent
 from .services import record_event, record_event_buffered
+
+# Where the crashing view stashes its exception for the middleware to read.
+_EXCEPTION_ATTR = "_pointy_analytics_exception"
+
+
+@receiver(got_request_exception)
+def _capture_request_exception(sender, request=None, **kwargs):
+    """Stash an unhandled view exception on the request.
+
+    Django wraps the view (and every middleware layer) in
+    ``convert_exception_to_response``, so by the time a view's exception reaches
+    this middleware it is already a plain 500 *response* — an ``except`` block
+    here can never see it. That left every 500 recorded with no error type, no
+    message and no traceback, which is why a 5xx flood on the busiest endpoint
+    (the POS discount preview) could not be diagnosed from tracking at all.
+    ``got_request_exception`` fires at the moment of that conversion, which is
+    the only seam that still has the exception.
+    """
+    if request is None:
+        return
+    exc_type, exc_value, exc_tb = sys.exc_info()
+    if exc_value is None:
+        return
+    setattr(
+        request,
+        _EXCEPTION_ATTR,
+        {
+            "error_type": exc_type.__name__,
+            "error_message": str(exc_value)[:512],
+            # The innermost frames are what identify the bug; the outer ones are
+            # the same middleware stack on every request.
+            "error_traceback": "".join(
+                traceback.format_exception(exc_type, exc_value, exc_tb)
+            )[-2048:],
+        },
+    )
 
 
 class BackendPerformanceAnalyticsMiddleware:
@@ -22,6 +62,8 @@ class BackendPerformanceAnalyticsMiddleware:
             with _instrumented_connections(recorder):
                 response = self.get_response(request)
         except Exception as exc:
+            # Only reachable for exceptions raised *outside* the converted
+            # chain (e.g. by a middleware layered above this one).
             elapsed_ms = _elapsed_ms(started_at)
             metrics = _request_metrics(
                 elapsed_ms=elapsed_ms,
@@ -76,7 +118,12 @@ class BackendPerformanceAnalyticsMiddleware:
                 severity=AnalyticsEvent.Severity.ERROR,
                 user=getattr(request, "user", None),
                 request=request,
-                attributes=attributes,
+                # A 500 with no cause attached is a row that only says
+                # "something broke"; attach whatever the signal captured.
+                attributes={
+                    **attributes,
+                    **getattr(request, _EXCEPTION_ATTR, {}),
+                },
                 metrics=metrics,
             )
         return response
