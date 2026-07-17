@@ -53,6 +53,16 @@ enum RegisterSessionGateStatus {
 
 enum BarcodeScanStatus { idle, resolving, found, notFound, error }
 
+/// Lets the POS view model ask the catalog search field to reclaim keyboard
+/// focus at natural resting points in the cashier's flow — a completed sale, a
+/// finished line-quantity edit, a product added from the grid — so the next
+/// item can be searched or scanned without a tap. It is a pure signal: the
+/// search field itself decides whether taking focus is appropriate right now
+/// (never while a sheet or dialog is up, never on the compact phone layout).
+class PosSearchFocusController extends ChangeNotifier {
+  void requestFocus() => notifyListeners();
+}
+
 enum PosProductSelectionStatus {
   added,
   chooseVariant,
@@ -166,12 +176,29 @@ class PosViewModel extends ChangeNotifier {
   /// timeout without waiting real seconds.
   final Duration _checkoutPrintDeadline;
 
+  // Drives the "return focus to catalog search" moments (see
+  // PosSearchFocusController). Owned here so both view-model events (checkout,
+  // new invoice, cart cleared) and the catalog/cart panes can fire it.
+  final PosSearchFocusController _searchFocusController =
+      PosSearchFocusController();
+
   // Local persistence of in-progress sale sessions (see pos_persistence.dart).
   String? _persistScope;
   bool _sessionsRestored = false;
   Timer? _persistDebounce;
 
   CatalogRepository get catalogRepository => _catalogRepository;
+
+  /// Observed by the catalog search field so it can pull focus back at the
+  /// cashier's resting points. See [requestSearchFocus].
+  PosSearchFocusController get searchFocusController => _searchFocusController;
+
+  /// Asks the catalog search field to reclaim keyboard focus so the cashier can
+  /// immediately look up or scan the next item. Fired at natural resting points
+  /// (a completed sale, a finished line-quantity edit, a grid/scanner add, a
+  /// fresh or switched invoice) — never mid-edit, so it can't yank the caret out
+  /// from under a quantity being typed. A no-op when nothing is listening.
+  void requestSearchFocus() => _searchFocusController.requestFocus();
 
   List<Product> _products = [];
   final List<_PosSaleSession> _saleSessions = [
@@ -405,6 +432,7 @@ class PosViewModel extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _persistDebounce?.cancel();
+    _searchFocusController.dispose();
     super.dispose();
   }
 

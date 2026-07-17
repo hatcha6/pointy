@@ -200,10 +200,9 @@ class _PosCatalogGrid extends StatelessWidget {
   Future<void> _selectProduct(BuildContext context, Product product) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
-    // Release the search field's focus so the keys typed next reach the
-    // workspace-level scan listener: pick a product, type "12", and the new
-    // line's quantity is set — same flow as scan-then-type.
-    FocusManager.instance.primaryFocus?.unfocus();
+    // The add itself returns keyboard focus to the search field (via the view
+    // model's search-focus signal) once the line lands, so the cashier can look
+    // up or scan the next item straight away.
     final result = await viewModel.selectProductForSale(product);
     if (!context.mounted) {
       return;
@@ -286,7 +285,7 @@ class _PosCatalogEmptyState extends StatelessWidget {
   }
 }
 
-class _PosProductLookupControls extends StatelessWidget {
+class _PosProductLookupControls extends StatefulWidget {
   const _PosProductLookupControls({
     required this.viewModel,
     required this.capabilities,
@@ -296,8 +295,70 @@ class _PosProductLookupControls extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
 
   @override
+  State<_PosProductLookupControls> createState() =>
+      _PosProductLookupControlsState();
+}
+
+class _PosProductLookupControlsState extends State<_PosProductLookupControls> {
+  // Owned here (not by the TextField) so the view model can pull focus back to
+  // the search field between the cashier's actions.
+  final FocusNode _searchFocusNode = FocusNode(
+    debugLabel: 'pos_product_search',
+  );
+
+  PosViewModel get _viewModel => widget.viewModel;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewModel.searchFocusController.addListener(_handleFocusRequest);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PosProductLookupControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.viewModel, widget.viewModel)) {
+      oldWidget.viewModel.searchFocusController.removeListener(
+        _handleFocusRequest,
+      );
+      widget.viewModel.searchFocusController.addListener(_handleFocusRequest);
+    }
+  }
+
+  @override
+  void dispose() {
+    _viewModel.searchFocusController.removeListener(_handleFocusRequest);
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  /// Pulls keyboard focus onto the search field at the view model's request.
+  /// Deferred to after the frame — the request usually fires during a rebuild
+  /// (e.g. right after a line is added) — and suppressed when a modal is up (a
+  /// payment sheet, a dialog) or on the compact phone layout, so it never
+  /// steals the caret from a sheet or pops the soft keyboard unbidden. The
+  /// view model only ever fires it between actions, never mid quantity-edit.
+  void _handleFocusRequest() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final route = ModalRoute.of(context);
+      if (route != null && !route.isCurrent) {
+        return;
+      }
+      if (AppBreakpoints.of(context).index < AppBreakpoint.tablet.index) {
+        return;
+      }
+      _searchFocusNode.requestFocus();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final viewModel = widget.viewModel;
+    final capabilities = widget.capabilities;
 
     return CheckoutCapabilityBuilder(
       capabilities: capabilities,
@@ -308,6 +369,7 @@ class _PosProductLookupControls extends StatelessWidget {
           allowAvailabilityFilter: false,
           searchHint: l10n.posProductLookupHint,
           searchFieldKey: const ValueKey('product_lookup_field'),
+          searchFocusNode: _searchFocusNode,
           autofocus:
               AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
           onSearchChanged: viewModel.updateSearch,
@@ -343,10 +405,10 @@ class _PosProductLookupControls extends StatelessWidget {
       return;
     }
     for (final entry in entries) {
-      if (viewModel.isCheckingOut) {
+      if (_viewModel.isCheckingOut) {
         return;
       }
-      viewModel.addVariant(
+      _viewModel.addVariant(
         entry.variant,
         quantity: entry.quantity.toDouble(),
         source: 'camera_scanner',
@@ -355,7 +417,7 @@ class _PosProductLookupControls extends StatelessWidget {
   }
 
   Future<ProductVariant?> _lookupVariantByBarcode(String barcode) async {
-    final result = await viewModel.catalogRepository
+    final result = await _viewModel.catalogRepository
         .findProductVariantByBarcode(barcode, activeOnly: true);
     // Camera scans resolve inside the sheet, bypassing the view model's
     // barcode path — chime here so every scan still gets audible feedback.

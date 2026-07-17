@@ -311,6 +311,10 @@ class PosCartPane extends StatelessWidget {
         }
       }
       onCheckoutSuccess?.call();
+      // The sale is done and the cart has reset — send the cashier straight
+      // back to the search field for the next customer. Fired last, after any
+      // public-invoice dialog has closed, so it lands on the live route.
+      viewModel.requestSearchFocus();
     }
   }
 
@@ -622,6 +626,11 @@ class _CartScrollContentState extends State<_CartScrollContent> {
         return KeyEventResult.handled;
       }
       _applyPendingQuantity(line);
+      // Done editing this line — return focus to the search field so the next
+      // item can be searched or scanned immediately. Requesting search focus
+      // blurs this scope (deselecting the line), which is the intended "done"
+      // state. Only ever fires on the deliberate Enter commit, never mid-typing.
+      _viewModel.requestSearchFocus();
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.add ||
@@ -639,9 +648,15 @@ class _CartScrollContentState extends State<_CartScrollContent> {
     }
     if (key == LogicalKeyboardKey.escape) {
       if (_pendingQuantity.isNotEmpty) {
+        // First Esc just clears the half-typed quantity; the line stays focused
+        // so the cashier can retype without losing their place.
         setState(() => _pendingQuantity = '');
       } else {
+        // Nothing pending: the cashier is done with this line. Drop the cart
+        // scope and hand focus back to the search field (the request is a no-op
+        // if the search field can't take focus right now, e.g. behind a sheet).
         _focusNode.unfocus();
+        _viewModel.requestSearchFocus();
       }
       return KeyEventResult.handled;
     }

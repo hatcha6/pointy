@@ -9,6 +9,9 @@ extension PosSaleSessionActions on PosViewModel {
     final session = _createSaleSession();
     _saleSessions.add(session);
     _activeSaleSessionId = session.id;
+    // A fresh, empty invoice is open — put the cashier straight back on the
+    // search field to start ringing it up.
+    _searchFocusController.requestFocus();
     _notifyChanged();
   }
 
@@ -21,6 +24,9 @@ extension PosSaleSessionActions on PosViewModel {
     }
 
     _activeSaleSessionId = sessionId;
+    // Switching to another held sale usually means resuming it — hand focus to
+    // the search field so the next item can be added without a tap.
+    _searchFocusController.requestFocus();
     _notifyChanged();
   }
 

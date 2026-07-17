@@ -31,6 +31,11 @@ extension PosCartActions on PosViewModel {
           modifiers,
           _unitCodeFor(unit),
         )?.lineKey;
+        // A grid tap, variant pick, or camera scan is a discrete "add" gesture:
+        // hand keyboard focus back to the search field so the cashier can look
+        // up or scan the next item without reaching for the mouse. The field
+        // ignores the request while a sheet is still up.
+        _searchFocusController.requestFocus();
       }
       _notifyChanged();
       unawaited(refreshDiscountPreview());
@@ -310,6 +315,9 @@ extension PosCartActions on PosViewModel {
     _discountPreview = null;
     _hasDiscountPreviewError = false;
     _touchActiveSaleSession();
+    // The cart is now empty and ready for the next scan/lookup — return focus to
+    // the search field (the confirm dialog has already closed by this point).
+    _searchFocusController.requestFocus();
     _notifyChanged();
   }
 
