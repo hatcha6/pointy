@@ -263,6 +263,77 @@ def store_uploaded_attachment(
                 os.unlink(path)
 
 
+def replace_attachment_file(attachment: Attachment, uploaded_file) -> Attachment:
+    """Swap an existing attachment's bytes, keeping its identity.
+
+    Used by backfills that rewrite stored content in place. The row keeps its pk,
+    owner and is_primary flag, so everything already pointing at this attachment
+    keeps working; only the file, its path and the size/checksum metadata move.
+    """
+    validate_upload(uploaded_file)
+
+    previous_path = attachment.absolute_path
+    source_path = None
+    compressed_path = None
+    final_path = None
+    try:
+        source_path, checksum, original_size = spool_upload(uploaded_file)
+        compressed_path = gzip_file(source_path)
+        compressed_size = os.path.getsize(compressed_path)
+
+        if compressed_size < original_size:
+            selected_path = compressed_path
+            storage_encoding = Attachment.StorageEncoding.GZIP
+            stored_size = compressed_size
+        else:
+            selected_path = source_path
+            storage_encoding = Attachment.StorageEncoding.IDENTITY
+            stored_size = original_size
+
+        relative_path = build_relative_path(
+            role=attachment.role,
+            original_filename=uploaded_file.name,
+            storage_encoding=storage_encoding,
+        )
+        final_path = attachment.storage_volume.root_path / relative_path
+        final_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(selected_path, final_path)
+
+        attachment.relative_path = relative_path
+        attachment.original_filename = clean_original_filename(uploaded_file.name)
+        attachment.content_type = content_type_for_upload(uploaded_file)
+        attachment.original_size = original_size
+        attachment.stored_size = stored_size
+        attachment.checksum_sha256 = checksum
+        attachment.storage_encoding = storage_encoding
+        attachment.save(
+            update_fields=[
+                "relative_path",
+                "original_filename",
+                "content_type",
+                "original_size",
+                "stored_size",
+                "checksum_sha256",
+                "storage_encoding",
+                "updated_at",
+            ]
+        )
+    except Exception:
+        if final_path is not None and final_path.exists():
+            final_path.unlink()
+        raise
+    finally:
+        for path in (source_path, compressed_path):
+            if path is not None and os.path.exists(path):
+                os.unlink(path)
+
+    # Only once the row points at the new file, so a crash mid-rewrite leaves an
+    # orphaned file rather than an attachment with no bytes at all.
+    if previous_path != attachment.absolute_path and previous_path.exists():
+        previous_path.unlink()
+    return attachment
+
+
 def validate_upload(uploaded_file) -> None:
     max_bytes = getattr(settings, "POINTY_ATTACHMENT_MAX_UPLOAD_BYTES", 0)
     if max_bytes and getattr(uploaded_file, "size", 0) > max_bytes:
