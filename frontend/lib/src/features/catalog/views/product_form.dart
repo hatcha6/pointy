@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/parsing.dart';
 import '../../../core/result.dart';
 import '../../../data/models/modifier_group.dart';
+import '../../../data/models/product.dart';
 import '../../../data/models/product_draft.dart';
 import '../../../data/models/product_unit.dart';
 import '../../../data/models/product_variant_draft.dart';
@@ -25,10 +26,24 @@ import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
 
 class ProductForm extends StatefulWidget {
-  const ProductForm({super.key, required this.viewModel, this.onCreated});
+  const ProductForm({
+    super.key,
+    required this.viewModel,
+    this.onCreated,
+    this.initialBarcode,
+  });
 
   final CatalogViewModel viewModel;
-  final VoidCallback? onCreated;
+
+  /// Called with the freshly created product once creation succeeds. The
+  /// catalog closes its sheet; the purchasing workspace also adds the
+  /// product's default variant to the current purchase order.
+  final void Function(Product product)? onCreated;
+
+  /// Prefills the default variant's barcode and SKU — used when the form is
+  /// opened for a scanned code that matched no existing product, so the created
+  /// product resolves on the next scan.
+  final String? initialBarcode;
 
   @override
   State<ProductForm> createState() => _ProductFormState();
@@ -99,6 +114,11 @@ class _ProductFormState extends State<ProductForm> {
   @override
   void initState() {
     super.initState();
+    final initialBarcode = widget.initialBarcode?.trim() ?? '';
+    if (initialBarcode.isNotEmpty) {
+      _barcodeController.text = initialBarcode;
+      _skuController.text = initialBarcode;
+    }
     _lastSkuPrefix = _skuController.text;
     _lastBasePrice = _priceController.text;
     _nameController.addListener(_refreshImageSearchSeed);
@@ -600,7 +620,7 @@ class _ProductFormState extends State<ProductForm> {
     );
 
     final imageSelection = _selectedImage;
-    final outcome = await widget.viewModel.createProduct(
+    final result = await widget.viewModel.createProduct(
       draft,
       imageUpload: imageSelection?.upload,
       imageImportToken: imageSelection?.importToken,
@@ -609,19 +629,20 @@ class _ProductFormState extends State<ProductForm> {
       return;
     }
 
-    if (outcome != ProductCreateOutcome.failed) {
+    final createdProduct = result.product;
+    if (result.outcome != ProductCreateOutcome.failed && createdProduct != null) {
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
         ..showSnackBar(
           SnackBar(
             content: Text(
-              outcome == ProductCreateOutcome.createdWithImageError
+              result.outcome == ProductCreateOutcome.createdWithImageError
                   ? l10n.productCreatedImageAttachError
                   : l10n.productCreatedMessage,
             ),
           ),
         );
-      widget.onCreated?.call();
+      widget.onCreated?.call(createdProduct);
     }
   }
 

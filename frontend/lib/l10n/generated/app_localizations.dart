@@ -12199,42 +12199,6 @@ abstract class AppLocalizations {
   /// **'استلام أمر الشراء فورًا'**
   String get receivePurchaseImmediatelyLabel;
 
-  /// No description provided for @quickCreateProductTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'إضافة منتج سريع'**
-  String get quickCreateProductTitle;
-
-  /// Explains that a scanned barcode is missing and can be created quickly.
-  ///
-  /// In ar, this message translates to:
-  /// **'الباركود {barcode} غير موجود. أضف المنتج الآن لمتابعة أمر الشراء.'**
-  String quickCreateProductMessage(String barcode);
-
-  /// No description provided for @quickCreateProductNameHint.
-  ///
-  /// In ar, this message translates to:
-  /// **'اسم المنتج على فاتورة المورد'**
-  String get quickCreateProductNameHint;
-
-  /// No description provided for @quickCreateUnitCostLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'تكلفة الشراء'**
-  String get quickCreateUnitCostLabel;
-
-  /// No description provided for @quickCreateProductButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'إضافة للشراء'**
-  String get quickCreateProductButton;
-
-  /// No description provided for @quickCreateProductSaving.
-  ///
-  /// In ar, this message translates to:
-  /// **'جار الإضافة...'**
-  String get quickCreateProductSaving;
-
   /// Submit purchase order button label with total amount.
   ///
   /// In ar, this message translates to:

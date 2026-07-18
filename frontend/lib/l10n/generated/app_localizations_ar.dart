@@ -6944,26 +6944,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get receivePurchaseImmediatelyLabel => 'استلام أمر الشراء فورًا';
 
   @override
-  String get quickCreateProductTitle => 'إضافة منتج سريع';
-
-  @override
-  String quickCreateProductMessage(String barcode) {
-    return 'الباركود $barcode غير موجود. أضف المنتج الآن لمتابعة أمر الشراء.';
-  }
-
-  @override
-  String get quickCreateProductNameHint => 'اسم المنتج على فاتورة المورد';
-
-  @override
-  String get quickCreateUnitCostLabel => 'تكلفة الشراء';
-
-  @override
-  String get quickCreateProductButton => 'إضافة للشراء';
-
-  @override
-  String get quickCreateProductSaving => 'جار الإضافة...';
-
-  @override
   String submitPurchaseDraftButton(String amount) {
     return 'إرسال أمر الشراء $amount';
   }

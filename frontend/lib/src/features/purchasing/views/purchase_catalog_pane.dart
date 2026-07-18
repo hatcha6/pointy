@@ -14,7 +14,7 @@ import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/purchase_view_model.dart';
-import 'purchase_quick_product_sheet.dart';
+import 'purchase_product_create.dart';
 
 class PurchaseCatalogPane extends StatelessWidget {
   const PurchaseCatalogPane({super.key, required this.viewModel});
@@ -158,7 +158,7 @@ class PurchaseCatalogPane extends StatelessWidget {
       mode: CameraBarcodeScannerMode.multiple,
       lookupVariant: _lookupVariantByBarcode,
       createMissingVariant: (barcode) {
-        return showPurchaseQuickProductSheet(
+        return showPurchaseProductForm(
           context,
           barcode: barcode,
           viewModel: viewModel,

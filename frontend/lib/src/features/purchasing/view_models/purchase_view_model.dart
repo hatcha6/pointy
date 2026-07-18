@@ -9,7 +9,6 @@ import '../../../data/models/analytics_event.dart';
 import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/contact.dart';
 import '../../../data/models/product.dart';
-import '../../../data/models/product_draft.dart';
 import '../../../data/models/product_query.dart';
 import '../../../data/models/product_unit.dart';
 import '../../../data/models/product_variant.dart';
@@ -57,6 +56,7 @@ class PurchaseViewModel extends ChangeNotifier {
   Timer? _persistDebounce;
 
   CatalogRepository get catalogRepository => _catalogRepository;
+  AnalyticsEngine? get analyticsEngine => _analyticsEngine;
 
   List<ProductVariant> _variants = [];
   final List<PurchaseDraftLine> _draft = [];
@@ -80,7 +80,6 @@ class PurchaseViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool _isLoadingMore = false;
   bool _isSubmitting = false;
-  bool _isCreatingProduct = false;
   bool _receiveImmediately = true;
   bool _hasMoreProducts = true;
   int _nextVariantPage = 1;
@@ -116,7 +115,6 @@ class PurchaseViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   bool get isSubmitting => _isSubmitting;
-  bool get isCreatingProduct => _isCreatingProduct;
   bool get receiveImmediately => _receiveImmediately;
   bool get hasMoreProducts => _hasMoreProducts;
   String get supplierInvoiceNumber => _supplierInvoiceNumber;
@@ -288,28 +286,6 @@ class PurchaseViewModel extends ChangeNotifier {
       normalizedBarcode,
       activeOnly: true,
     );
-  }
-
-  Future<ProductVariant?> createQuickProduct(ProductDraft draft) async {
-    if (_isCreatingProduct || _isSubmitting) {
-      return null;
-    }
-
-    _isCreatingProduct = true;
-    notifyListeners();
-
-    final result = await _catalogRepository.createProduct(draft);
-    switch (result) {
-      case Ok<Product>():
-        await loadCatalog();
-        _isCreatingProduct = false;
-        notifyListeners();
-        return result.value.defaultVariant;
-      case Error<Product>():
-        _isCreatingProduct = false;
-        notifyListeners();
-        return null;
-    }
   }
 
   Future<void> addVariant(
@@ -950,13 +926,6 @@ class PurchaseViewModel extends ChangeNotifier {
       }
     }
     return null;
-  }
-
-  void rememberVariantCost(ProductVariant variant, double unitCost) {
-    if (unitCost < 0) {
-      return;
-    }
-    _lastCostByVariantId[variant.id] = unitCost;
   }
 
   Future<double> _lastCostForVariant(ProductVariant variant) async {

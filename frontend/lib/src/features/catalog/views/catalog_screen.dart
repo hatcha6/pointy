@@ -280,7 +280,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           ),
           child: ProductForm(
             viewModel: viewModel,
-            onCreated: () => Navigator.of(sheetContext).pop(),
+            onCreated: (_) => Navigator.of(sheetContext).pop(),
           ),
         );
       },

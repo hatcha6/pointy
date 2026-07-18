@@ -16,6 +16,12 @@ enum CatalogBarcodeLookupStatus { found, notFound, error }
 
 enum ProductCreateOutcome { failed, created, createdWithImageError }
 
+/// The result of [CatalogViewModel.createProduct]: the outcome plus the created
+/// [Product] (null when creation failed) so callers — e.g. the purchasing
+/// workspace — can act on the fresh product, such as dropping its default
+/// variant straight into a purchase order.
+typedef ProductCreateResult = ({ProductCreateOutcome outcome, Product? product});
+
 class BulkActionResult {
   const BulkActionResult({required this.ok, required this.updated});
 
@@ -302,7 +308,7 @@ class CatalogViewModel extends ChangeNotifier {
     }
   }
 
-  Future<ProductCreateOutcome> createProduct(
+  Future<ProductCreateResult> createProduct(
     ProductDraft draft, {
     ProductImageUpload? imageUpload,
     String? imageImportToken,
@@ -331,14 +337,17 @@ class CatalogViewModel extends ChangeNotifier {
           _errorMessage = 'catalog_image_attach_error';
         }
         notifyListeners();
-        return imageAttached
-            ? ProductCreateOutcome.created
-            : ProductCreateOutcome.createdWithImageError;
+        return (
+          outcome: imageAttached
+              ? ProductCreateOutcome.created
+              : ProductCreateOutcome.createdWithImageError,
+          product: result.value,
+        );
       case Error<Product>():
         _errorMessage = 'catalog_create_error';
         _isSaving = false;
         notifyListeners();
-        return ProductCreateOutcome.failed;
+        return (outcome: ProductCreateOutcome.failed, product: null);
     }
   }
 
@@ -399,5 +408,24 @@ class CatalogViewModel extends ChangeNotifier {
         'default_unit_price': draft.variantUnitPrice,
       },
     );
+  }
+
+  // A short-lived instance (e.g. the purchasing product-create sheet) can be
+  // disposed while an in-flight load is still awaiting; swallow the late
+  // notification instead of asserting "used after disposed".
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_disposed) {
+      return;
+    }
+    super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

@@ -4101,20 +4101,6 @@
     }
   },
   "receivePurchaseImmediatelyLabel": "استلام أمر الشراء فورًا",
-  "quickCreateProductTitle": "إضافة منتج سريع",
-  "quickCreateProductMessage": "الباركود {barcode} غير موجود. أضف المنتج الآن لمتابعة أمر الشراء.",
-  "@quickCreateProductMessage": {
-    "description": "Explains that a scanned barcode is missing and can be created quickly.",
-    "placeholders": {
-      "barcode": {
-        "type": "String"
-      }
-    }
-  },
-  "quickCreateProductNameHint": "اسم المنتج على فاتورة المورد",
-  "quickCreateUnitCostLabel": "تكلفة الشراء",
-  "quickCreateProductButton": "إضافة للشراء",
-  "quickCreateProductSaving": "جار الإضافة...",
   "submitPurchaseDraftButton": "إرسال أمر الشراء {amount}",
   "@submitPurchaseDraftButton": {
     "description": "Submit purchase order button label with total amount.",

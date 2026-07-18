@@ -1950,69 +1950,75 @@ void main() {
     },
   );
 
-  testWidgets('purchase order can quick-create a missing barcode product', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+  testWidgets(
+    'purchase order creates a missing-barcode product via the full workflow',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await _openNavigationDestination(tester, 'المشتريات');
-    await tester.tap(find.text('أمر شراء جديد'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+      await _openNavigationDestination(tester, 'المشتريات');
+      await tester.tap(find.text('أمر شراء جديد'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.enterText(
-      find.byKey(const ValueKey('purchase_product_lookup_field')),
-      '987654',
-    );
-    await tester.testTextInput.receiveAction(TextInputAction.search);
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+      await tester.enterText(
+        find.byKey(const ValueKey('purchase_product_lookup_field')),
+        '987654',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    expect(find.text('إضافة منتج سريع'), findsOneWidget);
-    expect(
-      find.text(
-        'الباركود 987654 غير موجود. أضف المنتج الآن لمتابعة أمر الشراء.',
-      ),
-      findsOneWidget,
-    );
+      // The full product-creation wizard now opens for an unknown barcode —
+      // the old quick-create sheet is gone.
+      expect(find.text('منتج جديد'), findsOneWidget);
+      expect(find.text('إضافة منتج سريع'), findsNothing);
 
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'اسم المنتج'),
-      'سكر المورد',
-    );
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'رمز المنتج'),
-      'SUG-1',
-    );
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'تكلفة الشراء'),
-      '4.25',
-    );
-    await tester.ensureVisible(find.text('إضافة للشراء'));
-    await tester.tap(find.text('إضافة للشراء'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+      // Step 1 — parent details.
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'اسم المنتج'),
+        'سكر المورد',
+      );
+      await tester.tap(find.text('التالي'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    expect(find.text('سكر المورد'), findsOneWidget);
-    expect(find.text('استلام أمر الشراء فورًا'), findsOneWidget);
-    expect(find.text('اختر موردًا قبل إرسال أمر الشراء.'), findsOneWidget);
-    expect(find.text('إرسال أمر الشراء 4.25 د.ل'), findsOneWidget);
+      // Step 2 — the default variant's SKU and barcode arrive prefilled with
+      // the scanned code; supply the sale price and create.
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'السعر'),
+        '4.25',
+      );
+      await tester.tap(find.text('إنشاء المنتج'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    await tester.tap(find.byTooltip('إعدادات مسودة الشراء'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('تغيير'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
-    await tester.tap(find.text('مورد المدينة').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'حفظ'));
-    await tester.pumpAndSettle();
+      // The created product's default variant is added straight to the order.
+      expect(find.text('سكر المورد'), findsWidgets);
+      expect(find.text('استلام أمر الشراء فورًا'), findsOneWidget);
+      expect(find.text('اختر موردًا قبل إرسال أمر الشراء.'), findsOneWidget);
 
-    await tester.tap(find.text('إرسال أمر الشراء 4.25 د.ل'));
-    await tester.pumpAndSettle(const Duration(seconds: 1));
+      // Set a purchase cost on the freshly added line, then submit the order.
+      await tester.enterText(
+        find.widgetWithText(TextField, 'التكلفة'),
+        '4.25',
+      );
+      await tester.pumpAndSettle();
 
-    expect(
-      find.text('تم استلام أمر الشراء رقم P20260515000200.'),
-      findsOneWidget,
-    );
-  });
+      await tester.tap(find.byTooltip('إعدادات مسودة الشراء'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('تغيير'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+      await tester.tap(find.text('مورد المدينة').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'حفظ'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.textContaining('إرسال أمر الشراء'));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      expect(
+        find.text('تم استلام أمر الشراء رقم P20260515000200.'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('purchase order details show lines and status actions', (
     WidgetTester tester,

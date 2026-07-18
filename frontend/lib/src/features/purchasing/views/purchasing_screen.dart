@@ -20,7 +20,7 @@ import '../../../shared/unit_options.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_catalog_pane.dart';
 import 'purchase_draft_pane.dart';
-import 'purchase_quick_product_sheet.dart';
+import 'purchase_product_create.dart';
 
 class PurchasingScreen extends StatelessWidget {
   const PurchasingScreen({
@@ -146,7 +146,7 @@ class _PurchasingWorkspace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BarcodeScanListener(
-      enabled: !viewModel.isSubmitting && !viewModel.isCreatingProduct,
+      enabled: !viewModel.isSubmitting,
       onBarcodeScanned: (barcode) {
         unawaited(_addBarcode(context, barcode));
       },
