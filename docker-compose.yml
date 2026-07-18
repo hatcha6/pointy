@@ -14,10 +14,12 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis-data:/data
+    # Cache + Celery broker only — nothing here is authoritative (all money and
+    # order state live in Postgres), so Redis runs purely in-memory with no AOF
+    # and no RDB. Without a persistence file, an unclean shutdown (power loss)
+    # cannot leave a corrupt append-only file that makes redis-server refuse to
+    # start, which would otherwise block the whole stack from booting.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
 
 volumes:
   postgres-data:
-  redis-data:
