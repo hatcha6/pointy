@@ -178,14 +178,22 @@ services:
   redis:
     image: redis:7-alpine
     restart: always
+    # Cache + Celery broker only — nothing here is authoritative (orders,
+    # payments, refunds and cash movements are synchronous, atomic writes to
+    # Postgres), so Redis runs purely in-memory: no AOF, no RDB, no data volume.
+    # A persistence file is exactly what an unclean shutdown (power loss)
+    # corrupts, after which redis-server refuses to start ("Bad file format
+    # reading the append only file") and, because the app is gated on Redis
+    # being healthy, blocks the entire POS from booting until the volume is
+    # wiped by hand. With no persistence, Redis always comes back clean; a cold
+    # cache refills from Postgres in seconds and the periodic Celery beat
+    # re-covers any queued (non-financial) task lost on restart.
     command:
       - redis-server
+      - --save
+      - ""
       - --appendonly
-      - "yes"
-      - --appendfsync
-      - everysec
-    volumes:
-      - pointy-redis-data:/data
+      - "no"
     mem_limit: "${POINTY_REDIS_MEM_LIMIT:-768m}"
     cpus: "${POINTY_REDIS_CPUS:-1}"
     healthcheck:
@@ -424,7 +432,6 @@ services:
 
 volumes:
   pointy-postgres-data:
-  pointy-redis-data:
   pointy-media:
   pointy-static:
   pointy-backups:
