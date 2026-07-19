@@ -17,6 +17,7 @@ void main() {
       flushInterval: const Duration(hours: 1),
     );
     await engine.start();
+    engine.setCurrentUser(1); // authenticated: flush is allowed to POST
     engine.setCurrentScreen('pos');
 
     await tester.pumpWidget(
@@ -61,6 +62,7 @@ void main() {
       flushInterval: const Duration(hours: 1),
     );
     await engine.start();
+    engine.setCurrentUser(1); // authenticated: flush is allowed to POST
     engine.setCurrentScreen('catalog');
 
     await tester.pumpWidget(

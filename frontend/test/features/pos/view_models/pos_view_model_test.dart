@@ -569,6 +569,7 @@ void main() {
         maxBatchSize: 100,
       );
       await engine.start();
+      engine.setCurrentUser(1); // authenticated: flush is allowed to POST
       sink.acceptedEvents.clear();
 
       final viewModel = _viewModel(

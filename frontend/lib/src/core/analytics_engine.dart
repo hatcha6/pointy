@@ -17,6 +17,7 @@ class AnalyticsEngine {
     this.flushInterval = const Duration(seconds: 15),
     this.maxBatchSize = 50,
     this.maxQueueSize = 2000,
+    this.frameTimingWindow = const Duration(seconds: 10),
   }) : _storage = storage ?? const SharedPreferencesAnalyticsQueueStorage(),
        _clock = clock ?? (() => DateTime.now().toUtc());
 
@@ -27,6 +28,12 @@ class AnalyticsEngine {
   final int maxBatchSize;
   final int maxQueueSize;
 
+  /// Frame timing is the highest-volume telemetry stream. Instead of one event
+  /// per engine callback (which floods ingestion on a busy till), raw frame
+  /// counts accumulate and emit as a single sample per window. Aggregating —
+  /// not sampling — keeps janky%/slow% ratios exact.
+  final Duration frameTimingWindow;
+
   final List<AnalyticsEventDraft> _queue = [];
   Timer? _flushTimer;
   Future<void>? _startFuture;
@@ -36,6 +43,16 @@ class AnalyticsEngine {
   String? _sessionId;
   String? _currentScreen;
   int? _currentUserId;
+
+  // Frame timing accumulator, drained once per [frameTimingWindow].
+  int _frameBuildMicros = 0;
+  int _frameRasterMicros = 0;
+  int _frameTotalMicros = 0;
+  int _frameMaxTotalMicros = 0;
+  int _frameSlowCount = 0;
+  int _frameJankyCount = 0;
+  int _frameCount = 0;
+  DateTime? _frameWindowStartedAt;
 
   int get pendingEventCount => _queue.length;
 
@@ -68,6 +85,9 @@ class AnalyticsEngine {
   }
 
   void setCurrentUser(int? userId) {
+    // Also the flush gate: [flush] holds everything until this is non-null, so
+    // nothing is POSTed before sign-in. The backlog ships on the first flush
+    // after login — see PointyAppDependencies.handleAuthChanged.
     _currentUserId = userId;
   }
 
@@ -257,29 +277,47 @@ class AnalyticsEngine {
       return;
     }
 
-    var buildMicros = 0;
-    var rasterMicros = 0;
-    var totalMicros = 0;
-    var maxTotalMicros = 0;
-    var slowFrames = 0;
-    var jankyFrames = 0;
     for (final timing in timings) {
       final total = timing.totalSpan.inMicroseconds;
-      buildMicros += timing.buildDuration.inMicroseconds;
-      rasterMicros += timing.rasterDuration.inMicroseconds;
-      totalMicros += total;
-      if (total > maxTotalMicros) {
-        maxTotalMicros = total;
+      _frameBuildMicros += timing.buildDuration.inMicroseconds;
+      _frameRasterMicros += timing.rasterDuration.inMicroseconds;
+      _frameTotalMicros += total;
+      if (total > _frameMaxTotalMicros) {
+        _frameMaxTotalMicros = total;
       }
       if (total > 16000) {
-        slowFrames += 1;
+        _frameSlowCount += 1;
       }
       if (total > 32000) {
-        jankyFrames += 1;
+        _frameJankyCount += 1;
       }
+      _frameCount += 1;
     }
 
-    final frameCount = timings.length;
+    final now = _clock();
+    _frameWindowStartedAt ??= now;
+    if (now.difference(_frameWindowStartedAt!) >= frameTimingWindow) {
+      _emitFrameTimings();
+    }
+  }
+
+  /// Emit the accumulated frame stats as one sample, then reset the window.
+  /// The counts are summed across every callback in the window, so the derived
+  /// janky/slow ratios are identical to reporting each callback separately —
+  /// only the request count drops.
+  void _emitFrameTimings() {
+    final frameCount = _frameCount;
+    if (frameCount == 0) {
+      return;
+    }
+    final buildMicros = _frameBuildMicros;
+    final rasterMicros = _frameRasterMicros;
+    final totalMicros = _frameTotalMicros;
+    final maxTotalMicros = _frameMaxTotalMicros;
+    final slowFrames = _frameSlowCount;
+    final jankyFrames = _frameJankyCount;
+    _resetFrameAccumulator();
+
     unawaited(
       trackPerformance(
         name: analyticsEventNameToJson(AnalyticsEventName.frontendFrameTiming),
@@ -299,6 +337,17 @@ class AnalyticsEngine {
         },
       ),
     );
+  }
+
+  void _resetFrameAccumulator() {
+    _frameBuildMicros = 0;
+    _frameRasterMicros = 0;
+    _frameTotalMicros = 0;
+    _frameMaxTotalMicros = 0;
+    _frameSlowCount = 0;
+    _frameJankyCount = 0;
+    _frameCount = 0;
+    _frameWindowStartedAt = null;
   }
 
   Future<void> track(
@@ -358,6 +407,13 @@ class AnalyticsEngine {
   Future<void> flush() async {
     try {
       await _ensureStarted();
+      // Never POST before sign-in. The ingest endpoint requires an
+      // authenticated user, so a pre-auth flush only produces 401s — in the
+      // field these were ~4 of every 5 ingest calls. Events stay queued (and
+      // persisted across restarts) and ship on the first flush after login.
+      if (_currentUserId == null) {
+        return;
+      }
       if (_isFlushing || _queue.isEmpty) {
         return;
       }
@@ -386,6 +442,10 @@ class AnalyticsEngine {
   void dispose() {
     _flushTimer?.cancel();
     _flushTimer = null;
+    // Fold the open frame-timing window into the queue so its ~last window
+    // isn't lost (the queue is persisted, so it survives even if this flush
+    // can't finish during teardown).
+    _emitFrameTimings();
     if (_isStarted) {
       unawaited(flush());
     }
