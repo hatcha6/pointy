@@ -345,6 +345,8 @@ class AnalyticsEventViewSet(
             user=request.user,
             request=request,
         )
+        # 202, not 201: the rows are queued for a buffered bulk insert, not
+        # written before the response returns (see services.ingest_events).
         return Response(
             {
                 "accepted": result.accepted,
@@ -352,7 +354,7 @@ class AnalyticsEventViewSet(
                 "event_ids": result.event_ids,
                 "duplicate_event_ids": result.duplicate_event_ids,
             },
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_202_ACCEPTED,
         )
 
     @action(detail=False, methods=["get"])

@@ -1,3 +1,5 @@
+import 'dart:ui' show FrameTiming;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/src/core/analytics_engine.dart';
 import 'package:pointy_frontend/src/core/result.dart';
@@ -18,6 +20,7 @@ void main() {
         flushInterval: const Duration(hours: 1),
         maxBatchSize: 2,
       );
+      engine.setCurrentUser(1); // authenticated: flush is allowed to POST
 
       await engine.trackUsage(
         AnalyticsEventName.posCheckoutCompleted,
@@ -75,7 +78,8 @@ void main() {
       flushInterval: const Duration(hours: 1),
       maxBatchSize: 100,
     );
-    await engine.start();
+    engine.setCurrentUser(1); // authenticated before start: the appStarted
+    await engine.start(); //     startup event ships and is cleared below
     sink.submittedBatches.clear();
 
     for (var i = 0; i < 250; i += 1) {
@@ -109,6 +113,7 @@ void main() {
       minImmediateFlushGap: const Duration(seconds: 30),
     );
     await engine.start();
+    engine.setCurrentUser(1);
     sink.submittedBatches.clear();
 
     await engine.captureError(Exception('first'), null);
@@ -171,6 +176,7 @@ void main() {
       flushInterval: const Duration(hours: 1),
     );
     await engine.start();
+    engine.setCurrentUser(1);
 
     engine.recordApiRequest(
       const ApiRequestPerformance(
@@ -202,6 +208,7 @@ void main() {
       storage: MemoryAnalyticsQueueStorage(installationId: 'install-4'),
       flushInterval: const Duration(hours: 1),
     );
+    engine.setCurrentUser(1);
 
     final result = await engine.measure(
       'catalog.search',
@@ -219,6 +226,90 @@ void main() {
     expect(event.metrics['duration_ms'], isA<num>());
     engine.dispose();
   });
+
+  test('nothing is POSTed before sign-in; the backlog ships after', () async {
+    final sink = _FakeAnalyticsSink();
+    final engine = AnalyticsEngine(
+      sink,
+      storage: MemoryAnalyticsQueueStorage(installationId: 'install-5'),
+      flushInterval: const Duration(hours: 1),
+    );
+    await engine.start();
+
+    // Pre-auth: events queue (and persist) but never hit the network.
+    await engine.trackUsage(
+      AnalyticsEventName.appStarted,
+      flushImmediately: true,
+    );
+    await engine.flush();
+    expect(sink.submittedBatches, isEmpty);
+    expect(engine.pendingEventCount, greaterThan(0));
+
+    // Signing in opens the gate; the backlog goes out on the next flush.
+    engine.setCurrentUser(9);
+    await engine.flush();
+    expect(sink.submittedBatches, isNotEmpty);
+    expect(engine.pendingEventCount, 0);
+    engine.dispose();
+  });
+
+  test('frame timings aggregate into one sample per window', () async {
+    final sink = _FakeAnalyticsSink();
+    var now = DateTime.utc(2026, 7, 20, 9);
+    final engine = AnalyticsEngine(
+      sink,
+      storage: MemoryAnalyticsQueueStorage(installationId: 'install-6'),
+      flushInterval: const Duration(hours: 1),
+      clock: () => now,
+      frameTimingWindow: const Duration(seconds: 10),
+    );
+    await engine.start();
+    engine.setCurrentUser(3);
+
+    // Three callbacks inside one window emit nothing yet...
+    for (var i = 0; i < 3; i += 1) {
+      engine.recordFrameTimings([
+        _frame(totalUs: 8000), // smooth
+        _frame(totalUs: 45000), // janky (> 32ms)
+      ]);
+    }
+    await engine.flush();
+    expect(
+      sink.acceptedEvents.where((e) => e.name == 'frontend.frame_timing'),
+      isEmpty,
+    );
+
+    // ...crossing the window boundary flushes exactly one aggregated sample.
+    now = now.add(const Duration(seconds: 11));
+    engine.recordFrameTimings([_frame(totalUs: 8000)]);
+    await engine.flush();
+
+    final frameEvents = sink.acceptedEvents
+        .where((e) => e.name == 'frontend.frame_timing')
+        .toList();
+    expect(frameEvents, hasLength(1));
+    // 3 callbacks x 2 frames + the 1 boundary-crossing frame = 7 frames, of
+    // which 3 were janky. Aggregation keeps those counts (and their ratio) exact.
+    expect(frameEvents.single.metrics['frame_count'], 7);
+    expect(frameEvents.single.metrics['janky_frame_count'], 3);
+    expect(frameEvents.single.severity, AnalyticsEventSeverity.warning);
+    engine.dispose();
+  });
+}
+
+// totalSpan == rasterFinish - vsyncStart, which the engine uses to classify
+// slow (>16ms) / janky (>32ms) frames. Stamps are laid out from 0 so every
+// phase duration stays non-negative; build/raster splits don't affect the
+// counts this test asserts.
+FrameTiming _frame({required int totalUs, int buildUs = 2000}) {
+  return FrameTiming(
+    vsyncStart: 0,
+    buildStart: 0,
+    buildFinish: buildUs,
+    rasterStart: buildUs,
+    rasterFinish: totalUs,
+    rasterFinishWallTime: totalUs,
+  );
 }
 
 class _FakeAnalyticsSink implements AnalyticsEventSink {

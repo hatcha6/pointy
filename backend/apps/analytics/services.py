@@ -57,27 +57,32 @@ class AnalyticsExportResult:
 
 
 def ingest_events(*, events, user, request=None) -> AnalyticsIngestResult:
-    client_event_ids = [
-        event.get("client_event_id") or uuid.uuid4() for event in events
-    ]
-    existing_event_ids = set(
-        AnalyticsEvent.objects.filter(
-            client_event_id__in=client_event_ids,
-        ).values_list("client_event_id", flat=True)
-    )
+    """Queue a batch of client telemetry for buffered bulk insertion.
+
+    Deliberately does no per-request SELECT and opens no transaction: this is
+    the single busiest endpoint in the fleet, and a telemetry POST must never
+    hold a worker or contend on the (ever-growing) events table while the shop
+    is trading. Rows go through the shared analytics buffer, which amortises the
+    INSERT across requests and dedupes retried ``client_event_id``s at write
+    time via the column's unique constraint (``ignore_conflicts``).
+
+    The result is optimistic — ``accepted`` counts what was queued. Duplicates
+    are dropped silently at insert rather than reported back (the old dedup
+    SELECT grew with the table and the client never read the count: it keys its
+    own retry queue by ``client_event_id``)."""
+    from . import buffer
 
     request_path = getattr(request, "path", "") if request is not None else ""
     ip_address = _client_ip(request) if request is not None else None
     user_agent = _user_agent(request) if request is not None else ""
+    received_by = user if getattr(user, "is_authenticated", False) else None
 
-    to_create = []
-    duplicate_event_ids = []
-    for event, client_event_id in zip(events, client_event_ids, strict=True):
-        if client_event_id in existing_event_ids:
-            duplicate_event_ids.append(str(client_event_id))
-            continue
-
-        to_create.append(
+    rows = []
+    event_ids = []
+    for event in events:
+        client_event_id = event.get("client_event_id") or uuid.uuid4()
+        event_ids.append(str(client_event_id))
+        rows.append(
             AnalyticsEvent(
                 client_event_id=client_event_id,
                 event_type=event["event_type"],
@@ -85,7 +90,7 @@ def ingest_events(*, events, user, request=None) -> AnalyticsIngestResult:
                 severity=event.get("severity", AnalyticsEvent.Severity.INFO),
                 source=event.get("source", AnalyticsEvent.Source.FRONTEND),
                 occurred_at=event.get("occurred_at") or timezone.now(),
-                received_by=user if getattr(user, "is_authenticated", False) else None,
+                received_by=received_by,
                 session_id=event.get("session_id", ""),
                 device_id=event.get("device_id", ""),
                 installation_id=event.get("installation_id", ""),
@@ -103,22 +108,13 @@ def ingest_events(*, events, user, request=None) -> AnalyticsIngestResult:
             )
         )
 
-    with transaction.atomic():
-        created = AnalyticsEvent.objects.bulk_create(to_create, ignore_conflicts=True)
+    buffer.enqueue_many(rows)
 
-    created_event_ids = tuple(str(event.client_event_id) for event in created)
-    created_event_id_set = set(created_event_ids)
-    raced_duplicate_ids = tuple(
-        str(event.client_event_id)
-        for event in to_create
-        if str(event.client_event_id) not in created_event_id_set
-    )
-    all_duplicate_event_ids = tuple(duplicate_event_ids) + raced_duplicate_ids
     return AnalyticsIngestResult(
-        accepted=len(created_event_ids),
-        duplicates=len(all_duplicate_event_ids),
-        event_ids=created_event_ids,
-        duplicate_event_ids=all_duplicate_event_ids,
+        accepted=len(rows),
+        duplicates=0,
+        event_ids=tuple(event_ids),
+        duplicate_event_ids=(),
     )
 
 

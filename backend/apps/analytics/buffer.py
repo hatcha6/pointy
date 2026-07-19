@@ -62,6 +62,35 @@ def enqueue(event) -> None:
     _insert(batch)
 
 
+def enqueue_many(events) -> None:
+    """Queue several unsaved ``AnalyticsEvent`` rows in one lock acquisition.
+
+    Same flush rule as ``enqueue`` (fills or ages out on the calling thread),
+    but built for the ingest endpoint, which hands over a whole client batch at
+    once and must not pay a per-event lock round-trip."""
+    events = list(events)
+    if not events:
+        return
+    size = buffer_size()
+    if size <= 0:
+        _insert(events)
+        return
+    global _oldest_at
+    batch = None
+    with _lock:
+        if not _pending:
+            _oldest_at = time.monotonic()
+        _pending.extend(events)
+        if (
+            len(_pending) >= size
+            or time.monotonic() - _oldest_at >= _max_age_seconds()
+        ):
+            batch = _pending.copy()
+            _pending.clear()
+    if batch is not None:
+        _insert(batch)
+
+
 def flush() -> None:
     """Insert everything currently buffered (interpreter exit, tests)."""
     with _lock:
@@ -81,7 +110,10 @@ def _insert(batch) -> None:
     from .models import AnalyticsEvent
 
     try:
-        AnalyticsEvent.objects.bulk_create(batch)
+        # ignore_conflicts: the ingest path enqueues client-supplied
+        # client_event_ids, and a retried batch can carry one already stored.
+        # Skipping the duplicate row must not drop the rest of the shared batch.
+        AnalyticsEvent.objects.bulk_create(batch, ignore_conflicts=True)
     except Exception:  # noqa: BLE001 — telemetry must never break a request
         logger.warning(
             "dropped %d buffered analytics events", len(batch), exc_info=True

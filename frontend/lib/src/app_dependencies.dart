@@ -365,6 +365,10 @@ class PointyAppDependencies {
         _lastAuthenticatedUserId != currentUser.id) {
       _lastAuthenticatedUserId = currentUser.id;
       analyticsEngine.setCurrentUser(currentUser.id);
+      // Telemetry queued on the login screen was held back (the ingest
+      // endpoint rejects anonymous callers); now that we're signed in, ship
+      // that backlog instead of waiting for the next flush tick.
+      unawaited(analyticsEngine.flush());
       unawaited(
         analyticsEngine.trackUsage(
           AnalyticsEventName.authSessionStarted,

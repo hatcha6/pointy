@@ -7,7 +7,9 @@ from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -107,7 +109,7 @@ class AnalyticsEventApiTests(TestCase):
             REMOTE_ADDR="127.0.0.1",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
         self.assertEqual(response.data["accepted"], 1)
         event = AnalyticsEvent.objects.get(client_event_id=event_id)
         self.assertEqual(event.received_by, self.cashier)
@@ -145,15 +147,56 @@ class AnalyticsEventApiTests(TestCase):
             format="json",
         )
 
-        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(second_response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(second_response.data["accepted"], 0)
-        self.assertEqual(second_response.data["duplicates"], 1)
+        self.assertEqual(first_response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(second_response.status_code, status.HTTP_202_ACCEPTED)
+        # Ingest acknowledges optimistically (no per-request dedup SELECT);
+        # idempotency is enforced at insert time by the unique client_event_id
+        # constraint, so the repeat is silently skipped and never doubles the row.
+        self.assertEqual(second_response.data["accepted"], 1)
         self.assertEqual(
             AnalyticsEvent.objects.filter(
                 source=AnalyticsEvent.Source.FRONTEND
             ).count(),
             1,
+        )
+
+    def test_ingest_never_reads_back_the_events_table(self):
+        # The old dedup SELECT (client_event_id__in) ran on the busiest endpoint
+        # in the fleet and got slower as the events table grew. Ingest must now
+        # only ever write the table, never read it.
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+        table = AnalyticsEvent._meta.db_table
+        payload = {
+            "events": [
+                {
+                    "client_event_id": str(uuid4()),
+                    "event_type": "performance",
+                    "name": "frontend.frame_timing",
+                    "source": "frontend",
+                    "metrics": {"frame_count": 3},
+                }
+                for _ in range(5)
+            ]
+        }
+
+        with CaptureQueriesContext(connection) as queries:
+            response = client.post(
+                reverse("analytics-event-ingest"),
+                payload,
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        reads = [
+            query
+            for query in queries.captured_queries
+            if table in query["sql"]
+            and query["sql"].lstrip().upper().startswith("SELECT")
+        ]
+        self.assertEqual(reads, [], reads)
+        self.assertEqual(
+            AnalyticsEvent.objects.filter(name="frontend.frame_timing").count(), 5
         )
 
     def test_manager_can_list_events_and_cashier_cannot(self):
