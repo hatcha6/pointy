@@ -81,6 +81,10 @@ class BusinessNotificationViewSet(
     def dismiss(self, request, pk=None):
         notification = self.get_object()
         acknowledge_notification(notification, request.user)
+        # get_object() prefetched user_states; the mutation just added this
+        # user's state, so drop that now-stale prefetch before serializing (the
+        # serializer reads the per-user state) or is_hidden would still be false.
+        notification.refresh_from_db()
         serializer = self.get_serializer(notification)
         return Response(serializer.data)
 
@@ -94,12 +98,14 @@ class BusinessNotificationViewSet(
             request.user,
             duration=serializer.duration,
         )
+        notification.refresh_from_db()  # drop the pre-mutation user_states prefetch
         return Response(self.get_serializer(notification).data)
 
     @action(detail=True, methods=["post"])
     def restore(self, request, pk=None):
         notification = self.get_object()
         restore_notification(notification, request.user)
+        notification.refresh_from_db()  # drop the pre-mutation user_states prefetch
         return Response(self.get_serializer(notification).data)
 
     @action(detail=False, methods=["post"], url_path="dismiss-all")

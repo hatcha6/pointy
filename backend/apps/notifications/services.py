@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from decimal import Decimal
 
@@ -24,6 +25,8 @@ from apps.sales.models import (
 
 from .cache import bump_notifications_version, bump_user_notifications_version
 from .models import BusinessNotification, BusinessNotificationUserState
+
+logger = logging.getLogger(__name__)
 
 MANAGED_CODES = (
     "inventory.out_of_stock",
@@ -143,16 +146,21 @@ INLINE_SYNC_THROTTLE_CACHE_KEY = "notifications:inline-sync:lock"
 
 
 def maybe_sync_business_notifications(now=None):
-    """Recompute the notifications feed inline, at most once per throttle window.
+    """Advance the feed out of band, at most once per throttle window, WITHOUT
+    ever running the recompute on the request path.
 
-    The Celery beat is the primary path that keeps the table fresh. This inline
-    top-up exists to (a) prime the table immediately after a fresh deploy, before
-    the beat's first tick, and (b) keep the feed advancing if the worker is down.
-    ``cache.add`` is atomic on the Redis backend, so concurrent polls from every
-    signed-in device collapse into a single recompute per window instead of one
-    full scan per request.
+    The Celery beat is the primary refresher. This top-up hands a recompute to
+    the worker so (a) a fresh deploy primes the table before the beat's first
+    tick and (b) the feed keeps advancing between ticks — but the bell/badge
+    poll from every signed-in device never itself pays (or waits on) the full
+    whole-catalog scan, which was ~1300 queries and several seconds inline.
+    ``cache.add`` is atomic on the Redis backend, so concurrent polls collapse
+    into a single enqueue per window.
 
-    Returns the sync result dict when this call actually recomputed, else None.
+    Falls back to an inline recompute only when the broker can't be reached
+    (Celery not configured / worker+broker down), so the feed still advances in
+    that degraded state. Returns the sync result dict only when it recomputed
+    inline (throttle disabled or broker unreachable), else None.
     """
     throttle_seconds = getattr(
         settings,
@@ -160,12 +168,25 @@ def maybe_sync_business_notifications(now=None):
         INLINE_SYNC_THROTTLE_SECONDS,
     )
     if throttle_seconds <= 0:
+        # Escape hatch: recompute inline on every read (e.g. a deployment with no
+        # running beat/worker that accepts the per-read cost).
         return sync_business_notifications(now=now)
     # Only the first caller in the window sets the key and proceeds; the rest see
     # the key already present and short-circuit, serving the last-computed table.
     if not cache.add(INLINE_SYNC_THROTTLE_CACHE_KEY, "1", timeout=throttle_seconds):
         return None
-    return sync_business_notifications(now=now)
+    from .tasks import sync_business_notifications_task
+
+    try:
+        # retry=False: enqueuing a best-effort recompute must never add latency
+        # to (or hang) the poll if the broker is briefly unreachable.
+        sync_business_notifications_task.apply_async(retry=False)
+        return None
+    except Exception:
+        logger.warning(
+            "notification sync enqueue failed; recomputing inline", exc_info=True
+        )
+        return sync_business_notifications(now=now)
 
 
 def visible_notifications_for_user(user):
@@ -828,6 +849,13 @@ def _state_for_user(notification, user):
     for state in notification.user_states.all():
         if state.user_id == user.id:
             return state
+    # When user_states is prefetched (the feed list always prefetches it), the
+    # loop above is authoritative: the user simply has no state, so skip the
+    # fallback query. Serializing each notification hits this four times (one
+    # per state-derived field), so the fallback was a per-notification N+1 (x4)
+    # across the whole feed on every read.
+    if "user_states" in getattr(notification, "_prefetched_objects_cache", {}):
+        return None
     return BusinessNotificationUserState.objects.filter(
         notification=notification,
         user=user,

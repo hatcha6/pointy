@@ -15,6 +15,7 @@ from apps.analytics.models import AnalyticsEvent
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.inventory.models import StockBatch, StockItem
+from apps.notifications import services as notification_services
 from apps.notifications.models import BusinessNotification
 from apps.printing.models import PrintJob, PrintTemplate, PrintTemplateVersion
 from apps.purchasing.models import PurchaseOrder, PurchaseReceipt, Supplier
@@ -38,6 +39,19 @@ class BusinessNotificationApiTests(APITestCase):
         # clear it so each test's first read recomputes.
         cache.clear()
         self.addCleanup(cache.clear)
+        # Reads now ENQUEUE the recompute onto the Celery worker instead of
+        # running it on the request path. No worker runs under the test runner,
+        # so stand in for one: make the enqueue execute the sync synchronously.
+        # The module-qualified call keeps late binding, so a test that patches
+        # sync_business_notifications still intercepts it.
+        worker = mock.patch(
+            "apps.notifications.tasks.sync_business_notifications_task.apply_async",
+            side_effect=lambda *args, **kwargs: (
+                notification_services.sync_business_notifications()
+            ),
+        )
+        worker.start()
+        self.addCleanup(worker.stop)
         ensure_role_groups()
         User = get_user_model()
         self.manager = User.objects.create_user(
@@ -166,6 +180,62 @@ class BusinessNotificationApiTests(APITestCase):
 
         # The old code did a get_or_create per alert; the rewrite is set-based,
         # so dismissing 20 alerts costs the same statements as dismissing 2.
+        self.assertEqual(_count_for(2), _count_for(20))
+
+    def test_read_enqueues_the_recompute_instead_of_running_it_inline(self):
+        # The whole-catalog recompute (~1300 queries, several seconds) must never
+        # run on the bell/badge request path: the read hands it to the worker.
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        with (
+            mock.patch(
+                "apps.notifications.tasks.sync_business_notifications_task.apply_async"
+            ) as enqueue,
+            mock.patch(
+                "apps.notifications.services.sync_business_notifications"
+            ) as inline_sync,
+        ):
+            response = client.get(reverse("business-notification-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        enqueue.assert_called_once()
+        inline_sync.assert_not_called()
+
+    def test_list_query_count_does_not_grow_with_notification_count(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        throttle_key = notification_services.INLINE_SYNC_THROTTLE_CACHE_KEY
+
+        def _count_for(alert_count):
+            BusinessNotification.objects.all().delete()
+            for index in range(alert_count):
+                BusinessNotification.objects.create(
+                    code="inventory.out_of_stock",
+                    category=BusinessNotification.Category.INVENTORY,
+                    severity=BusinessNotification.Severity.CRITICAL,
+                    fingerprint=f"inventory.out_of_stock:list:{index}",
+                )
+            # No-op the enqueue so the read never recomputes (which would resolve
+            # these hand-made alerts); isolate the read + serialize cost.
+            with mock.patch(
+                "apps.notifications.tasks.sync_business_notifications_task.apply_async"
+            ):
+                # A warm-up read first so the measured read is steady-state
+                # (version / permission / content-type caches populated).
+                cache.delete(throttle_key)
+                client.get(reverse("business-notification-list"))
+                cache.delete(throttle_key)
+                with CaptureQueriesContext(connection) as ctx:
+                    response = client.get(reverse("business-notification-list"))
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertEqual(len(response.data["results"]), alert_count)
+            return len(ctx)
+
+        # The serializer reads each notification's per-user state; with user_states
+        # prefetched and the redundant per-row fallback query removed, serializing
+        # 20 alerts costs the same statements as 2 (no per-notification N+1).
         self.assertEqual(_count_for(2), _count_for(20))
 
     def test_cashier_only_sees_alert_categories_allowed_by_permissions(self):
