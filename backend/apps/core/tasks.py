@@ -40,6 +40,21 @@ def run_due_scheduled_backup():
     return job.pk if job is not None else None
 
 
+@shared_task(
+    name="core.warm_dashboard_cache",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 2},
+)
+def warm_dashboard_cache_task():
+    """Keep the manager dashboard's shop-scope aggregates hot so the landing
+    screen is served from cache instead of paying the ~7.5s cold build."""
+    from apps.core.dashboard.view import warm_dashboard_cache
+
+    return warm_dashboard_cache()
+
+
 @shared_task(name="core.ensure_relay_enrollment")
 def ensure_relay_enrollment_task():
     """Best-effort periodic license redemption for shops that installed offline.

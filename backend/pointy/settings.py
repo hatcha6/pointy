@@ -60,6 +60,7 @@ env = environ.Env(
     DJANGO_CSRF_COOKIE_SECURE=(bool, False),
     POINTY_EXPIRY_ALERT_WINDOW_DAYS=(int, 30),
     POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES=(int, 15),
+    POINTY_DASHBOARD_WARM_INTERVAL_MINUTES=(int, 5),
     POINTY_FRAUD_DETECTION_INTERVAL_MINUTES=(int, 15),
     POINTY_FRAUD_DETECTION_LOOKBACK_DAYS=(int, 30),
     POINTY_BACKUP_RETENTION_COUNT=(int, 7),
@@ -290,6 +291,10 @@ POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES = max(
     env("POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES"),
     1,
 )
+POINTY_DASHBOARD_WARM_INTERVAL_MINUTES = max(
+    env("POINTY_DASHBOARD_WARM_INTERVAL_MINUTES"),
+    1,
+)
 POINTY_FRAUD_DETECTION_LOOKBACK_DAYS = max(
     env("POINTY_FRAUD_DETECTION_LOOKBACK_DAYS"),
     1,
@@ -336,6 +341,10 @@ CELERY_BEAT_SCHEDULE = {
     "notifications.sync-business-notifications": {
         "task": "notifications.sync_business_notifications",
         "schedule": timedelta(minutes=POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES),
+    },
+    "core.warm-dashboard-cache": {
+        "task": "core.warm_dashboard_cache",
+        "schedule": timedelta(minutes=POINTY_DASHBOARD_WARM_INTERVAL_MINUTES),
     },
     "fraud.sync-suspected-fraud-findings": {
         "task": "fraud.sync_suspected_fraud_findings",

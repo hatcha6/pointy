@@ -1961,6 +1961,32 @@ class DashboardApiTests(TestCase):
             "70.00",
         )
 
+    def test_warm_dashboard_cache_serves_managers_from_the_hot_cache(self):
+        from apps.core.dashboard.view import warm_dashboard_cache
+
+        # The beat warms the shop-scope sections. Change the data afterwards, and
+        # a manager's landing read is still served the warmed snapshot — i.e. it
+        # hit the hot cache instead of paying the cold ~7.5s aggregate build.
+        result = warm_dashboard_cache()
+        self.assertGreater(result["warmed"], 0)
+        self._create_paid_order(
+            user=self.cashier,
+            receipt_number="R-DASH-WARM",
+            total=Decimal("100.00"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        response = client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # 50.00 = the two setUp orders warmed into the cache; the order added
+        # after warming is absent, proving the read was served hot (not recomputed).
+        self.assertEqual(
+            response.data["sections"]["payments"]["summary"]["total"],
+            "50.00",
+        )
+
     def test_dashboard_reports_parent_products_and_variant_breakdown(self):
         large_variant = ProductVariant.objects.create(
             product=self.product,

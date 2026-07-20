@@ -52,11 +52,17 @@ MONEY_FIELD = DecimalField(max_digits=12, decimal_places=2)
 QTY_FIELD = DecimalField(max_digits=14, decimal_places=3)
 ZERO_QTY = Value(Decimal("0"), output_field=QTY_FIELD)
 DASHBOARD_SECTION_CACHE_SECONDS = 30
+# The background warmer writes sections with a much longer TTL so the (heavy,
+# ~7.5s cold) aggregates stay hot between the infrequent, spread-out dashboard
+# loads a small shop actually makes — comfortably longer than the beat interval
+# so a few missed ticks don't leave the cache cold.
+DASHBOARD_WARM_CACHE_SECONDS = 20 * 60
 DASHBOARD_CACHE_VERSION = 1
 
 __all__ = [
     "MONEY_PLACES", "MONEY_FIELD", "QTY_FIELD", "ZERO_QTY",
-    "DASHBOARD_SECTION_CACHE_SECONDS", "DASHBOARD_CACHE_VERSION",
+    "DASHBOARD_SECTION_CACHE_SECONDS", "DASHBOARD_WARM_CACHE_SECONDS",
+    "DASHBOARD_CACHE_VERSION",
     "_sales_summary", "_sales_trend", "_hourly_sales", "_top_products",
     "_sales_reports", "_product_sales_report", "_variant_sales_report",
     "_variant_full_name", "_sales_report_ordering", "_top_categories",

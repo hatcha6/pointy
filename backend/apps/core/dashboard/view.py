@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
@@ -49,6 +50,9 @@ from apps.sales.models import (
 from apps.holidays.services import today_dashboard_special_days
 
 from .helpers import *  # noqa: F401,F403
+
+logger = logging.getLogger(__name__)
+
 
 class DashboardView(APIView):
     permission_classes = [IsAuthenticated, HasPointyPermission]
@@ -169,6 +173,64 @@ def build_dashboard_snapshot(request):
         )
 
     return data
+
+
+class _DashboardWarmUser:
+    """Shop-wide, all-permissions viewer for the cache warmer — never a real
+    user. is_superuser short-circuits user_has_full_visibility (shop scope) and
+    has_perm passes every section gate, so the warmer builds the exact shop-scope
+    figures every manager reads."""
+
+    is_authenticated = True
+    is_superuser = True
+    pk = 0
+
+    def has_perm(self, permission):  # noqa: ARG002 — all sections are permitted
+        return True
+
+
+class _DashboardWarmRequest:
+    def __init__(self, *, days=30):
+        self.user = _DashboardWarmUser()
+        self.query_params = {"days": str(days)}
+
+
+def warm_dashboard_cache(*, days=30):
+    """Recompute the shop-scope dashboard sections and store them under the same
+    keys the request path reads, but with the long DASHBOARD_WARM_CACHE_SECONDS
+    TTL. Run off a Celery beat so the landing dashboard is served hot instead of
+    paying the ~7.5s / ~108-query cold build on the request itself.
+
+    Only the shop scope + default period are warmed (what managers overwhelmingly
+    load); other scopes/periods still compute on demand. The request path
+    (build_dashboard_snapshot) is deliberately untouched."""
+    request = _DashboardWarmRequest(days=days)
+    period = _period_from_request(request)
+    # (name, builder, scope) mirroring build_dashboard_snapshot. A section that
+    # drifts out of this list is simply served cold, never wrong.
+    specs = (
+        ("sales", lambda: _sales_section(request, period), None),
+        ("payments", lambda: _payments_section(request, period), None),
+        ("inventory", lambda: _inventory_section(period), None),
+        ("purchasing", lambda: _purchasing_section(period), "global"),
+        ("payroll", lambda: _payroll_section(period), None),
+        ("profitability", lambda: _profitability_section(request, period), None),
+        ("customers", lambda: _customers_section(period), None),
+        ("discounts", lambda: _discounts_section(period), None),
+        ("fraud", lambda: _fraud_section(), None),
+        ("printing", lambda: _printing_section(request, period), None),
+    )
+    warmed = 0
+    for name, builder, scope in specs:
+        try:
+            value = builder()
+        except Exception:  # noqa: BLE001 — one bad section must not stop the rest
+            logger.warning("dashboard warm failed for section %s", name, exc_info=True)
+            continue
+        cache_key = _dashboard_section_cache_key(name, request, period, scope=scope)
+        caching._safe_set(cache_key, value, DASHBOARD_WARM_CACHE_SECONDS)
+        warmed += 1
+    return {"warmed": warmed, "days": period["days"]}
 
 
 def _period_from_request(request):
