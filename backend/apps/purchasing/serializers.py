@@ -1022,11 +1022,13 @@ class PurchaseOrderAuditEventSerializer(serializers.ModelSerializer):
 
 class PurchaseOrderListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for the purchase-order list. Carries the summary
-    fields, the lines (the UI shows a line count), and the payment status, but
-    omits the heavy receipt/adjustment/audit/attachment trees the detail screen
-    re-fetches on open."""
+    fields, a line COUNT (the row shows the count, never the items), and the
+    payment status, but omits the line items and the heavy
+    receipt/adjustment/audit/attachment trees the detail screen re-fetches on
+    open. Shipping the fully-serialized line items just to render a count was the
+    bulk of the list payload."""
 
-    lines = PurchaseLineSerializer(many=True, read_only=True)
+    line_count = serializers.IntegerField(read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     supplier_reference = serializers.CharField(
         source="supplier_invoice_number",
@@ -1052,7 +1054,7 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
             "supplier_reference",
             "status",
             "due_date",
-            "lines",
+            "line_count",
             "subtotal",
             "discount_total",
             "extra_discount_amount",

@@ -145,7 +145,10 @@ class PurchaseOrder {
         json['supplier_reference'],
       ]),
       supplierInvoiceDate: _dateTimeFromJson(json['supplier_invoice_date']),
-      lineCount: lines.length,
+      // The list/payables rows carry a `line_count` and omit the line items
+      // (the detail screen re-fetches the full order); the full detail response
+      // has no `line_count`, so fall back to the parsed lines.
+      lineCount: (json['line_count'] as num?)?.toInt() ?? lines.length,
       lines: lines,
       adjustments: adjustments
           .whereType<Map<String, Object?>>()

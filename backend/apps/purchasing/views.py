@@ -5,6 +5,7 @@ from django.db.models import (
     Count,
     DecimalField,
     F,
+    IntegerField,
     Max,
     Min,
     OuterRef,
@@ -302,43 +303,30 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset()
         if self.action in self._list_shaped_actions:
-            # The list serializer omits the receipt/adjustment/audit/attachment
-            # trees, so drop those prefetches and keep only what the summary,
-            # line count, and balance need. The line queryset carries the
-            # previous-cost annotation so the serializer's unit-cost-change
-            # fields do not run one lookup query per line.
-            queryset = queryset.prefetch_related(None).prefetch_related(
-                Prefetch(
-                    "lines",
-                    queryset=PurchaseLine.objects.select_related(
-                        "variant__product"
+            # The list rows show only summary + balance + a line COUNT (never the
+            # line items themselves — the detail screen re-fetches the full order
+            # on open). So drop every heavy tree, including the whole `lines`
+            # prefetch that used to ship each order's fully-serialized line items
+            # just to render a count (the list payload's bulk), and count lines
+            # with a correlated subquery — immune to row inflation from the
+            # product/variant line filters below, matching the balance subquery.
+            line_count = (
+                PurchaseLine.objects.filter(purchase_order=OuterRef("pk"))
+                .order_by()
+                .values("purchase_order")
+                .annotate(count=Count("id"))
+                .values("count")[:1]
+            )
+            queryset = (
+                queryset.prefetch_related(None)
+                .prefetch_related("supplier_payments", "supplier_credits")
+                .annotate(
+                    line_count=Coalesce(
+                        Subquery(line_count, output_field=IntegerField()),
+                        Value(0),
+                        output_field=IntegerField(),
                     )
-                    .prefetch_related(
-                        Prefetch(
-                            "variant__option_values",
-                            queryset=VariantOptionValue.objects.select_related(
-                                "option"
-                            ),
-                        ),
-                        "receipt_lines",
-                        "adjustment_lines",
-                    )
-                    .annotate(
-                        previous_unit_cost_value=Subquery(
-                            PurchaseLine.objects.filter(
-                                variant_id=OuterRef("variant_id"),
-                                created_at__lt=OuterRef("created_at"),
-                            )
-                            .exclude(
-                                purchase_order__status=PurchaseOrder.Status.CANCELLED
-                            )
-                            .order_by("-created_at", "-id")
-                            .values("unit_cost")[:1]
-                        )
-                    ),
-                ),
-                "supplier_payments",
-                "supplier_credits",
+                )
             )
         product_id = self.request.query_params.get("product")
         variant_id = self.request.query_params.get("variant")

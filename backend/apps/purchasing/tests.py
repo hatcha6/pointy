@@ -3056,7 +3056,10 @@ class PurchaseOrderApiTests(TestCase):
         row = response.data["results"][0]
         self.assertEqual(row["balance_due"], "10.00")
         self.assertTrue(row["is_overdue"])
-        self.assertEqual(len(row["lines"]), 1)
+        # The row carries a line COUNT, never the line items (nor the heavy
+        # receipt/adjustment/audit trees) — the detail fetch has those.
+        self.assertEqual(row["line_count"], 1)
+        self.assertNotIn("lines", row)
         self.assertNotIn("receipts", row)
         self.assertNotIn("adjustments", row)
         self.assertNotIn("audit_events", row)
