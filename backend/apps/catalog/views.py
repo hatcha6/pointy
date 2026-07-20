@@ -11,6 +11,7 @@ from django.db.models import (
     Exists,
     F,
     OuterRef,
+    Prefetch,
     ProtectedError,
     Q,
     Sum,
@@ -71,6 +72,26 @@ from .serializers import (
 )
 from .search_filters import CatalogRelevanceFilter, VariantRelevanceFilter
 from .services import category_ids_with_descendants
+
+
+def _image_attachment_prefetch(lookup):
+    """Prefetch product/variant image attachments with their serialized FKs.
+
+    AttachmentSummarySerializer reads storage_volume.name, created_by.username
+    and owner_content_type (via owner_type). A bare string prefetch leaves those
+    FKs unfetched, so every image on a catalog page fired three extra queries —
+    the dominant catalog-list N+1 (~three quarters of product-list's queries).
+    select_related pulls them in with the prefetch; the default ordering is
+    unchanged, so owner_attachments still picks the primary image the same way.
+    """
+    return Prefetch(
+        lookup,
+        queryset=Attachment.objects.select_related(
+            "owner_content_type",
+            "storage_volume",
+            "created_by",
+        ),
+    )
 
 
 def _within_upload_limit(uploaded_file) -> bool:
@@ -228,12 +249,12 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         "bought_together": ("catalog.view_product",),
     }
     queryset = Product.objects.prefetch_related(
-        "attachments",
+        _image_attachment_prefetch("attachments"),
         "categories",
         "units__unit",
         "units__barcodes",
         "variants",
-        "variants__attachments",
+        _image_attachment_prefetch("variants__attachments"),
         "variants__option_values",
         "variants__option_values__option",
         # Each variant serializes its on-hand quantity (variant.stock is a 1:1);
@@ -838,13 +859,27 @@ class ProductVariantViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         "partial_update": ("catalog.change_productvariant",),
         "destroy": ("catalog.delete_productvariant",),
     }
-    queryset = ProductVariant.objects.select_related("product").prefetch_related(
-        "attachments",
-        "product__attachments",
+    queryset = ProductVariant.objects.select_related(
+        "product",
+        # quantity_on_hand reads the 1:1 stock row; without this it queried
+        # inventory once per variant.
+        "stock",
+    ).prefetch_related(
+        _image_attachment_prefetch("attachments"),
+        _image_attachment_prefetch("product__attachments"),
         "product__units__unit",
         "product__units__barcodes",
         "option_values",
         "option_values__option",
+        # product_detail (ProductCatalogSummarySerializer) serializes the parent
+        # product's categories, variant options and modifier groups; prefetch
+        # those chains so each doesn't fire once per variant.
+        Prefetch(
+            "product__categories",
+            queryset=ProductCategory.objects.select_related("parent"),
+        ),
+        "product__variant_options__values",
+        "product__modifier_group_links__group__options",
     )
     # Same relevance search as the POS catalog: VariantRelevanceFilter replaces
     # the stock SearchFilter/OrderingFilter so purchasing and the stock-count
