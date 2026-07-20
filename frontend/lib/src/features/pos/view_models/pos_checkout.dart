@@ -209,12 +209,20 @@ extension PosCheckoutActions on PosViewModel {
         // out of paper, a wedged OS spooler) can never freeze the just-completed
         // checkout. Without this, a print that hangs would leave `_isCheckingOut`
         // stuck true and the whole POS locked. See [_guardedPrintValue].
+        // ONE shared budget for every post-sale print step combined. Each step
+        // draws from the same deadline, so a stalled printer can delay the
+        // already-committed checkout by at most _checkoutPrintDeadline in total
+        // — not per step. Previously each of the invoice / kitchen / proof
+        // steps got its own full deadline, so two hung printers summed to ~2x
+        // and froze the POS for ~40s (the checkout-hang tail seen in the field).
+        final printDeadline = DateTime.now().add(_checkoutPrintDeadline);
         final printStatus = shouldPrintInvoice
             ? await _guardedPrintValue(
                 () => _printPaidInvoice(result.value, invoicePrinterConfig),
                 fallback: InvoicePrintStatus.failed,
                 label: 'invoice',
                 order: result.value,
+                deadline: printDeadline,
               )
             : InvoicePrintStatus.notRequested;
         if (_checkoutSettings?.autoPrintKitchenTickets == true) {
@@ -222,6 +230,7 @@ extension PosCheckoutActions on PosViewModel {
             () => _printPaidKitchenTickets(result.value),
             label: 'kitchen_tickets',
             order: result.value,
+            deadline: printDeadline,
           );
         }
         if (printProof) {
@@ -231,6 +240,7 @@ extension PosCheckoutActions on PosViewModel {
             () => _printDownPaymentProofs(result.value),
             label: 'down_payment_proof',
             order: result.value,
+            deadline: printDeadline,
           );
         }
         // A quotation moves no stock on the backend, so don't optimistically
@@ -473,9 +483,20 @@ extension PosCheckoutActions on PosViewModel {
     required T fallback,
     required String label,
     required SaleOrder order,
+    required DateTime deadline,
   }) async {
+    final remaining = deadline.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      _reportPrintStepFailure(
+        label,
+        order,
+        TimeoutException('checkout print budget exhausted'),
+        StackTrace.current,
+      );
+      return fallback;
+    }
     try {
-      return await action().timeout(_checkoutPrintDeadline);
+      return await action().timeout(remaining);
     } on Object catch (error, stackTrace) {
       _reportPrintStepFailure(label, order, error, stackTrace);
       return fallback;
@@ -489,9 +510,20 @@ extension PosCheckoutActions on PosViewModel {
     Future<void> Function() action, {
     required String label,
     required SaleOrder order,
+    required DateTime deadline,
   }) async {
+    final remaining = deadline.difference(DateTime.now());
+    if (remaining <= Duration.zero) {
+      _reportPrintStepFailure(
+        label,
+        order,
+        TimeoutException('checkout print budget exhausted'),
+        StackTrace.current,
+      );
+      return;
+    }
     try {
-      await action().timeout(_checkoutPrintDeadline);
+      await action().timeout(remaining);
     } on Object catch (error, stackTrace) {
       _reportPrintStepFailure(label, order, error, stackTrace);
     }

@@ -1189,6 +1189,72 @@ void main() {
       expect(viewModel.cart, isEmpty, reason: 'the sale finalized');
     });
 
+    test('the print budget is shared across steps, not per step', () async {
+      // Two post-sale print steps (invoice + kitchen chits) both behind a
+      // stalled printer must not each get the full deadline and sum to ~2x the
+      // freeze. The invoice hangs and exhausts the ONE shared budget, so the
+      // kitchen step is abandoned immediately instead of hanging for another
+      // full deadline (the ~40s checkout tail seen in the field).
+      final apiService = _FakePosApiService(
+        shopSettings: _autoPrintSettings,
+        catalogPages: const {
+          1: [_coffeeVariant],
+        },
+        onCheckout: (draft, key) async => _saleOrder(
+          total: 3.5,
+          lines: const [],
+          kitchenPrintJobs: const [
+            PrintJob(
+              id: 1,
+              status: PrintJobStatus.pending,
+              jobType: 'kitchen_ticket',
+              payload: {},
+            ),
+          ],
+        ),
+      );
+      final stubPrinting = _StubPrintingRepository(
+        apiService,
+        invoiceResult: () => Completer<PrintTransportResult>().future,
+      );
+      final viewModel = _viewModel(
+        apiService,
+        printingRepository: stubPrinting,
+        checkoutPrintDeadline: const Duration(milliseconds: 50),
+      );
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
+      await viewModel.loadCheckoutSettings();
+      viewModel.addVariant(_coffeeVariant);
+
+      final outcome = await viewModel
+          .checkoutCurrentSale(
+            payments: const [
+              SaleCheckoutPaymentDraft(
+                method: PaymentMethod.cash,
+                amount: 3.5,
+              ),
+            ],
+          )
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () =>
+                fail('checkout hung — the shared print budget regressed'),
+          );
+
+      expect(stubPrinting.invoiceCalls, 1, reason: 'the invoice was attempted');
+      expect(
+        stubPrinting.kitchenConfigLoads,
+        0,
+        reason: 'the invoice hang exhausted the shared budget, so the kitchen '
+            'step is skipped rather than granted its own full deadline',
+      );
+      expect(outcome.isSuccess, isTrue, reason: 'the sale is committed');
+      expect(viewModel.isCheckingOut, isFalse, reason: 'the POS is unlocked');
+    });
+
     test('a printer that throws is swallowed, not propagated', () async {
       // A thrown transport/encoder error must become a failed receipt, never an
       // uncaught exception bubbling out of checkout.
@@ -1277,12 +1343,14 @@ Future<void> _settle() async {
 SaleOrder _saleOrder({
   required double total,
   required List<SaleOrderLine> lines,
+  List<PrintJob> kitchenPrintJobs = const [],
 }) {
   return SaleOrder(
     id: 100,
     receiptNumber: 'R-100',
     status: 'paid',
     lines: lines,
+    kitchenPrintJobs: kitchenPrintJobs,
     payments: [
       SalePayment(
         id: 1,
@@ -1489,6 +1557,13 @@ class _StubPrintingRepository extends PrintingRepository {
   /// guard under test (not left dangling as an unhandled zone error at setup).
   final Future<PrintTransportResult> Function() invoiceResult;
   int invoiceCalls = 0;
+  int kitchenConfigLoads = 0;
+
+  @override
+  Future<Map<int, PrinterConfig>> loadKitchenStationConfigs() async {
+    kitchenConfigLoads += 1;
+    return const {};
+  }
 
   @override
   Future<Result<PrinterConfig>> loadDefaultPrinterConfig() async {
