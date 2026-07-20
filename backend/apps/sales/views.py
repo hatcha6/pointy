@@ -27,7 +27,9 @@ from .serializers import (
     DiscountPreviewSerializer,
     OrderAssignCustomerSerializer,
     OrderExchangeInputSerializer,
+    OrderListSerializer,
     OrderSerializer,
+    OrderSessionSerializer,
     PublicInvoiceSerializer,
     OrderReturnSerializer,
     OrderVoidSerializer,
@@ -109,8 +111,33 @@ class OrderViewSet(
     )
     ordering_fields = ("created_at", "updated_at", "total", "receipt_number")
 
+    def get_serializer_class(self):
+        if self.action == "list":
+            return OrderListSerializer
+        return OrderSerializer
+
+    def _list_summary_queryset(self, queryset):
+        # The invoices list rows show a line COUNT and totals/profit (computed
+        # from the lines) but never the line items themselves — the detail screen
+        # re-fetches those on open. Keep a LIGHT `lines` prefetch (the rows only,
+        # for total_cost / total_profit / the count) and drop the heavy per-line
+        # variant / option / adjustment trees that were the bulk of the payload.
+        return queryset.prefetch_related(None).prefetch_related(
+            # lines + their adjustment_lines only: total_cost/profit and the
+            # can_void/return/exchange affordances read them. The heavy
+            # variant/product/option trees (the payload bulk) are dropped since
+            # the rows never serialize the line items.
+            "lines__adjustment_lines",
+            "payments",
+            "applied_discounts",
+            "exchanges__replacement_order",
+            "exchanges__created_by",
+        )
+
     def get_queryset(self):
         queryset = super().get_queryset()
+        if self.action == "list":
+            queryset = self._list_summary_queryset(queryset)
         product_id = self.request.query_params.get("product")
         variant_id = self.request.query_params.get("variant")
         if product_id:
@@ -585,9 +612,15 @@ class RegisterSessionViewSet(
     @action(detail=True, methods=["get"])
     def orders(self, request, pk=None):
         session = self.get_object()
+        # The strip renders row summaries + a line count + a returnable flag, not
+        # the line items. Prefetch the lines (with their adjustment_lines) so the
+        # count, totals/profit AND the returnable flag all read from cache — the
+        # flag's returnable_quantity otherwise fired an adjustment-line query per
+        # line (the endpoint's N+1) — then serialize the trimmed
+        # OrderSessionSerializer instead of the full line items.
         orders = (
             session.orders.select_related("customer", "register_session")
-            .prefetch_related("lines__variant__product", "payments")
+            .prefetch_related("lines__adjustment_lines", "payments")
             .order_by("-created_at")
         )
         customer_id = request.query_params.get("customer")
@@ -595,14 +628,16 @@ class RegisterSessionViewSet(
             orders = orders.filter(customer_id=customer_id)
         page = self.paginate_queryset(orders)
         if page is not None:
-            serializer = OrderSerializer(
+            serializer = OrderSessionSerializer(
                 page,
                 many=True,
                 context={"request": request},
             )
             return self.get_paginated_response(serializer.data)
         return Response(
-            OrderSerializer(orders, many=True, context={"request": request}).data,
+            OrderSessionSerializer(
+                orders, many=True, context={"request": request}
+            ).data,
         )
 
     @action(detail=True, methods=["get"])

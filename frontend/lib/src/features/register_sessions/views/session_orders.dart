@@ -579,9 +579,7 @@ class _SessionSalesList extends StatelessWidget {
               title: l10n.emptySessionSales,
             ),
             itemBuilder: (context, order) {
-              final hasReturnableItems = order.lines.any(
-                (line) => line.returnableQuantity > 0,
-              );
+              final hasReturnableItems = order.hasReturnableItems;
               final canManagerAdjust =
                   capabilities.canManageShopSettings &&
                   order.status == 'paid' &&
@@ -712,7 +710,7 @@ class SessionOrderTile extends StatelessWidget {
       title: l10n.saleReceiptTitle(receiptNumber),
       subtitle: [
         if (order.createdAt != null) formatDateTime(order.createdAt!),
-        l10n.lineItemCount(order.lines.length),
+        l10n.lineItemCount(order.lineCount),
         if (order.customerName != null && order.customerName!.isNotEmpty)
           order.customerName!,
       ].join(' • '),

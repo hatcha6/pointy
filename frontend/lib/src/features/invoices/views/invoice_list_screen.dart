@@ -256,7 +256,7 @@ class InvoiceTile extends StatelessWidget {
       title: l10n.invoiceNumberValue(receiptNumber),
       subtitle: [
         if (invoice.createdAt != null) formatDateTime(invoice.createdAt!),
-        l10n.lineItemCount(invoice.lines.length),
+        l10n.lineItemCount(invoice.lineCount),
         if (invoice.customerName != null && invoice.customerName!.isNotEmpty)
           invoice.customerName!,
         if (invoice.registerSessionNumber != null &&

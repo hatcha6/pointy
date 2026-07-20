@@ -593,7 +593,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
         'print_job_status': printJob.status.name,
         'source': 'sale_order_details_sheet',
       },
-      metrics: {'total': order.total, 'line_count': order.lines.length},
+      metrics: {'total': order.total, 'line_count': order.lineCount},
     );
   }
 
@@ -609,7 +609,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
         ..._orderAttributes(order),
         'source': 'sale_order_details_sheet',
       },
-      metrics: {'total': order.total, 'line_count': order.lines.length},
+      metrics: {'total': order.total, 'line_count': order.lineCount},
       flushImmediately: true,
     );
   }
@@ -635,7 +635,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
       },
       metrics: {
         'total': originalOrder.total,
-        'line_count': originalOrder.lines.length,
+        'line_count': originalOrder.lineCount,
         ...metrics,
       },
     );

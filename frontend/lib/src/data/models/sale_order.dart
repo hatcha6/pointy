@@ -366,6 +366,8 @@ class SaleOrder {
     this.canExchange = false,
     this.canAssignCustomer = false,
     this.requiresManagerAdjustment = false,
+    this.lineCount = 0,
+    this.hasReturnableItems = false,
     this.discountTotal = 0,
     this.appliedDiscounts = const [],
     this.saleType = SaleType.standard,
@@ -403,6 +405,12 @@ class SaleOrder {
   /// assigned to a different customer — nothing has been collected yet.
   final bool canAssignCustomer;
   final bool requiresManagerAdjustment;
+
+  /// List/summary rows carry a line count and a returnable flag instead of the
+  /// full line items (the detail fetch has those). Both fall back to deriving
+  /// from [lines] when the full order is loaded.
+  final int lineCount;
+  final bool hasReturnableItems;
   final List<SaleOrderLine> lines;
   final List<SalePayment> payments;
   final double subtotal;
@@ -422,6 +430,10 @@ class SaleOrder {
   factory SaleOrder.fromJson(Map<String, Object?> json) {
     final linesJson = (json['lines'] as List<Object?>?) ?? const [];
     final paymentsJson = (json['payments'] as List<Object?>?) ?? const [];
+    final parsedLines = linesJson
+        .whereType<Map<String, Object?>>()
+        .map(SaleOrderLine.fromJson)
+        .toList(growable: false);
 
     return SaleOrder(
       id: _intFromJson(json['id']),
@@ -457,10 +469,13 @@ class SaleOrder {
       requiresManagerAdjustment: _boolFromJson(
         json['requires_manager_adjustment'],
       ),
-      lines: linesJson
-          .whereType<Map<String, Object?>>()
-          .map(SaleOrderLine.fromJson)
-          .toList(growable: false),
+      // List/summary rows send a count + returnable flag and omit the items;
+      // the full detail response omits those, so fall back to the parsed lines.
+      lineCount: (json['line_count'] as num?)?.toInt() ?? parsedLines.length,
+      hasReturnableItems:
+          json['has_returnable_items'] as bool? ??
+          parsedLines.any((line) => line.returnableQuantity > 0),
+      lines: parsedLines,
       payments: paymentsJson
           .whereType<Map<String, Object?>>()
           .map(SalePayment.fromJson)

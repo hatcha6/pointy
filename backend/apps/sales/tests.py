@@ -457,6 +457,35 @@ class RegisterSessionApiTests(TestCase):
         self.assertEqual(response.data["results"][0]["id"], checkout_response.data["id"])
         self.assertEqual(response.data["results"][0]["total"], "6.00")
 
+    def test_orders_action_row_carries_count_and_returnable_flag_not_items(self):
+        # The session strip renders a line count + a returnable flag, not the
+        # line items (that was the payload bulk and an adjustment-line N+1).
+        product = create_product_with_default_variant(
+            sku="TEA2", barcode="", name="Tea2", unit_price=Decimal("2.00")
+        )
+        variant = product.default_variant
+        StockItem.objects.create(variant=variant, quantity_on_hand=5)
+        session = self.client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "0.00"},
+            format="json",
+        ).data
+        self.client.post(
+            reverse("order-checkout"),
+            {"lines": [{"variant": variant.pk, "quantity": 3}]},
+            format="json",
+        )
+
+        row = self.client.get(
+            reverse("register-session-orders", args=[session["id"]])
+        ).data["results"][0]
+
+        self.assertNotIn("lines", row)
+        self.assertEqual(row["line_count"], 1)
+        # A freshly paid order still has returnable items (drives the
+        # manager-adjust affordance the strip shows per row).
+        self.assertTrue(row["has_returnable_items"])
+
     def test_orders_action_does_not_expose_another_owner_session(self):
         User = get_user_model()
         first_user = User.objects.create_user(username="session-owner", password="pass")
@@ -2482,6 +2511,21 @@ class OrderListQueryCountTests(TestCase):
         # settings, or the manager check would make the five-order page issue
         # strictly more queries than the two-order page.
         self.assertEqual(len(few_orders), len(more_orders))
+
+    def test_order_list_row_carries_a_line_count_not_the_line_items(self):
+        # The invoices list shows a line COUNT; the line items belong to the
+        # detail fetch. Shipping them per row was the bulk of the list payload.
+        self._checkout_order()
+        manager_client = APIClient()
+        manager_client.force_authenticate(user=self.manager)
+
+        row = manager_client.get(reverse("order-list")).data["results"][0]
+
+        self.assertNotIn("lines", row)
+        self.assertEqual(row["line_count"], 1)
+        # Totals/profit (computed from the lines) are still present.
+        self.assertIn("total_profit", row)
+        self.assertIn("total", row)
 
 
 class StockReservationTests(TestCase):

@@ -580,6 +580,44 @@ class OrderSerializer(serializers.ModelSerializer):
         return create_order_with_lines(lines_data=lines_data, **validated_data)
 
 
+class OrderListSerializer(OrderSerializer):
+    """List/summary variant of OrderSerializer: a line COUNT instead of the full
+    line items (the detail screen re-fetches the order on open). Serialising
+    every line — each with product/variant names and a dozen cost/return fields
+    — was the bulk of the invoices-list payload. ``line_count`` comes from a
+    queryset annotation; everything else (totals, customer, can_*, payments) is
+    unchanged."""
+
+    lines = None  # dropped from the payload (see line_count)
+    line_count = serializers.SerializerMethodField()
+
+    class Meta(OrderSerializer.Meta):
+        fields = [
+            field for field in OrderSerializer.Meta.fields if field != "lines"
+        ] + ["line_count"]
+
+    def get_line_count(self, order):
+        # The order still carries a light `lines` prefetch (total_cost/profit
+        # read it), so count from the cache rather than the serialized array.
+        return len(order.lines.all())
+
+
+class OrderSessionSerializer(OrderListSerializer):
+    """List variant for the register-session orders strip. Adds a
+    ``has_returnable_items`` flag (the row's manager-adjust affordance needs it)
+    computed from the prefetched lines, so the client no longer scans a full
+    line array — nor does the line's returnable_quantity fire an adjustment-line
+    query per row."""
+
+    has_returnable_items = serializers.SerializerMethodField()
+
+    class Meta(OrderListSerializer.Meta):
+        fields = OrderListSerializer.Meta.fields + ["has_returnable_items"]
+
+    def get_has_returnable_items(self, order):
+        return any(line.returnable_quantity > 0 for line in order.lines.all())
+
+
 class PublicInvoiceLineSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="variant.product.name", read_only=True)
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
