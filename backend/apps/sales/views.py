@@ -176,7 +176,14 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         order = serializer.save()
-        response_data = OrderSerializer(order, context={"request": request}).data
+        # Serialize through the list/retrieve queryset so the response reads the
+        # order's lines, variants, options, adjustments and payments from
+        # prefetches instead of firing a query per line (the checkout response
+        # N+1). The bare `order` is kept for the print/kitchen steps below.
+        response_data = OrderSerializer(
+            self.get_queryset().get(pk=order.pk),
+            context={"request": request},
+        ).data
 
         claimed_print_job = self._claim_checkout_invoice_print_job(
             order,

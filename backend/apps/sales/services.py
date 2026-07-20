@@ -23,6 +23,7 @@ from apps.discounts.services import (
     DiscountUsageLimitExceeded,
     persist_applied_discounts,
 )
+from apps.catalog.models import ProductVariant
 from apps.catalog.units import quantize_quantity
 from apps.inventory.models import StockMovement
 from apps.inventory.services import (
@@ -103,6 +104,12 @@ def create_order_with_lines(
         order_fields["special_day_keys"] = special_day_keys_for()
 
     order = Order.objects.create(**order_fields)
+    # One batched cost lookup for the whole cart instead of one purchase/
+    # production query per line (latest_sale_unit_cost was the checkout's
+    # per-line cost N+1).
+    cost_by_variant = latest_sale_unit_costs(
+        [line_data["variant"] for line_data in lines_data]
+    )
     line_objects_by_key = {}
     for line_data in lines_data:
         variant = line_data["variant"]
@@ -112,6 +119,7 @@ def create_order_with_lines(
         # later. unit_cost is per base unit, scaled to the transacted unit so
         # line_cost = unit_cost * quantity stays correct.
         unit_factor = line_data.get("unit_factor", Decimal("1"))
+        base_unit_cost = cost_by_variant.get(variant.pk) or Decimal("0.00")
         line = OrderLine.objects.create(
             order=order,
             variant=variant,
@@ -121,7 +129,7 @@ def create_order_with_lines(
             # Effective price folds in the selected unit's price + modifier deltas;
             # falls back to the bare variant price for lines without either.
             unit_price=line_data.get("effective_unit_price", variant.unit_price),
-            unit_cost=money(latest_sale_unit_cost(variant) * unit_factor),
+            unit_cost=money(base_unit_cost * unit_factor),
             discount_total=discount_by_line_key.get(line_key, Decimal("0.00")),
             notes=line_data.get("notes", ""),
         )
@@ -174,7 +182,11 @@ def prepare_discount_lines(lines_data):
                 variant_id=variant.pk,
                 quantity=line_data["quantity"],
                 unit_amount=line_data.get("effective_unit_price", variant.unit_price),
-                category_ids=tuple(product.categories.values_list("id", flat=True)),
+                # .all() (not .values_list) so the preloaded product__categories
+                # prefetch is reused instead of firing a query per cart line.
+                category_ids=tuple(
+                    category.id for category in product.categories.all()
+                ),
             )
         )
     return tuple(prepared_lines)
@@ -434,6 +446,29 @@ def validate_sale_variants_sellable(lines_data):
         )
 
 
+def preload_checkout_line_variants(lines_data):
+    """Load every line's variant once with the relations checkout reads per line,
+    then swap the enriched instances into ``lines_data``.
+
+    The API resolves each line variant with ``select_related("product")``, but the
+    service still touches ``variant.option_values`` (the display name) and
+    ``product.categories`` (discount eligibility) once per line. Loading them all
+    in a single bulk query turns those per-line reads into a constant few — the
+    checkout is the busiest write path in the shop, run thousands of times a day."""
+    variant_ids = {line_data["variant"].pk for line_data in lines_data}
+    if not variant_ids:
+        return
+    enriched = (
+        ProductVariant.objects.select_related("product")
+        .prefetch_related("option_values__option", "product__categories")
+        .in_bulk(variant_ids)
+    )
+    for line_data in lines_data:
+        preloaded = enriched.get(line_data["variant"].pk)
+        if preloaded is not None:
+            line_data["variant"] = preloaded
+
+
 @transaction.atomic
 def checkout_order(
     *,
@@ -452,6 +487,7 @@ def checkout_order(
 
     settings = ShopSettings.load()
     is_quotation = sale_type == Order.SaleType.QUOTATION
+    preload_checkout_line_variants(lines_data)
     validate_sale_variants_sellable(lines_data)
     validate_checkout_loss_sales_allowed(
         settings=settings,
