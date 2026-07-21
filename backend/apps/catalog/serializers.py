@@ -561,6 +561,11 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         # parent. The standalone /product-variants/ endpoint keeps product_detail.
         if self.context.get("catalog_list"):
             self.fields.pop("product_detail", None)
+        # The POS catalog card shows only the primary image; the full
+        # image_attachments gallery is re-fetched with the product on open. Drop
+        # it from the (heavily paged, per-variant) catalog LIST payload.
+        if self.context.get("catalog_summary"):
+            self.fields.pop("image_attachments", None)
 
     class Meta:
         model = ProductVariant
@@ -774,6 +779,15 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
     primary_image = serializers.SerializerMethodField()
     image_attachments = serializers.SerializerMethodField()
     is_archived = serializers.BooleanField(read_only=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Catalog LIST rows show only the primary image; the full
+        # image_attachments gallery is re-fetched with the product on open, so
+        # drop it (and each nested variant's — see ProductVariantSerializer) from
+        # the paged list payload. The retrieve/detail action leaves it in.
+        if self.context.get("catalog_summary"):
+            self.fields.pop("image_attachments", None)
 
     class Meta:
         model = Product

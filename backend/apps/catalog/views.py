@@ -295,6 +295,15 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             return ("catalog.change_product", "attachments.add_attachment")
         return self.permission_map.get(self.action)
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        # The catalog LIST rows drop the full image_attachments gallery (product
+        # and nested variants) — the card shows only the primary image and the
+        # detail screen re-fetches the rest. Retrieve keeps the full payload.
+        if self.action == "list":
+            context["catalog_summary"] = True
+        return context
+
     def get_queryset(self):
         queryset = self._with_variant_rollups(super().get_queryset())
         queryset = self._filter_by_category(queryset)
