@@ -51,7 +51,14 @@ class PointyMasonryGrid extends StatelessWidget {
       maxColumns: maxColumns < 1 ? 1 : maxColumns,
       spacing: resolvedSpacing,
       textDirection: Directionality.of(context),
-      children: children,
+      // Isolate each tile behind a RepaintBoundary: the grid isn't virtualized,
+      // so its tiles (the dashboard's CustomPaint charts among them) all share
+      // one layer — without this, one tile repainting (an animation, a hover, a
+      // data refresh) re-rasters the whole grid. Layout is unaffected; only the
+      // raster is scoped to the tile that actually changed.
+      children: [
+        for (final child in children) RepaintBoundary(child: child),
+      ],
     );
   }
 }
