@@ -1008,24 +1008,33 @@ class DashboardAiDigestView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        snapshot = build_dashboard_snapshot(request)
-        sections = snapshot.get("sections") or {}
-        period_days = (snapshot.get("period") or {}).get("days", 30)
-
-        # Bump the version to invalidate every shop's cached digest at once when
-        # the figures shape or generation prompt changes.
-        cache_key = (
-            f"ai_dashboard_digest:v2:{request.user.pk}:"
-            f"{period_days}:{timezone.localdate().isoformat()}"
-        )
+        # The digest is an optional dashboard widget: neither the snapshot build
+        # (a section's aggregate) nor the relay-hosted generation should ever
+        # 500 it — degrade to the empty digest (logged for diagnosis) instead.
         try:
-            cached = cache.get(cache_key)
-        except Exception:
-            cached = None
-        if cached is not None:
-            return Response(cached)
+            snapshot = build_dashboard_snapshot(request)
+            sections = snapshot.get("sections") or {}
+            period_days = (snapshot.get("period") or {}).get("days", 30)
 
-        digest = generate_dashboard_digest(installation, sections, period_days)
+            # Bump the version to invalidate every shop's cached digest at once
+            # when the figures shape or generation prompt changes.
+            cache_key = (
+                f"ai_dashboard_digest:v2:{request.user.pk}:"
+                f"{period_days}:{timezone.localdate().isoformat()}"
+            )
+            try:
+                cached = cache.get(cache_key)
+            except Exception:
+                cached = None
+            if cached is not None:
+                return Response(cached)
+
+            digest = generate_dashboard_digest(installation, sections, period_days)
+        except Exception:
+            logger.warning(
+                "dashboard digest failed; serving the empty digest", exc_info=True
+            )
+            return Response(self._EMPTY)
         if digest is None:
             # Don't cache a miss — a transient relay hiccup shouldn't blank the
             # digest for the rest of the day.

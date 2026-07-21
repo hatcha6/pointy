@@ -170,3 +170,25 @@ class DashboardAiDigestViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["brief"], "")
         self.assertEqual(response.data["explainers"], {})
+
+    def test_snapshot_failure_degrades_to_the_empty_digest(self):
+        # The digest is an optional dashboard widget. A failing section aggregate
+        # (the snapshot build) must never 500 the whole dashboard load — it
+        # degrades to an empty digest so the client simply shows nothing.
+        with patch("apps.ai.views.build_dashboard_snapshot") as snapshot:
+            snapshot.side_effect = RuntimeError("a section aggregate blew up")
+            response = self.client.get(reverse("ai-dashboard-digest"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["brief"], "")
+        self.assertEqual(response.data["explainers"], {})
+
+    def test_generation_failure_degrades_to_the_empty_digest(self):
+        with patch("apps.ai.views.build_dashboard_snapshot") as snapshot, patch(
+            "apps.ai.views.generate_dashboard_digest"
+        ) as generate:
+            snapshot.return_value = {"period": {"days": 30}, "sections": _sections()}
+            generate.side_effect = RuntimeError("relay generation blew up")
+            response = self.client.get(reverse("ai-dashboard-digest"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["brief"], "")
+        self.assertEqual(response.data["explainers"], {})

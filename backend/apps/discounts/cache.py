@@ -182,6 +182,19 @@ def preview_with_cache(context: DiscountContext, compute) -> DiscountCalculation
     if isinstance(cached, DiscountCalculationResult):
         return cached
 
-    result = compute()
+    try:
+        result = compute()
+    except Exception:
+        # Preview is best-effort and fires on every cart edit: a live-engine
+        # failure must degrade to an undiscounted preview (correct base totals,
+        # no discount shown) rather than 500 the keystroke. Logged so the
+        # underlying engine error stays diagnosable — and note the authoritative
+        # checkout calc is NOT cached/guarded here, so a genuine engine bug still
+        # surfaces there rather than being silently swallowed everywhere.
+        logger.warning(
+            "discount preview engine failed; serving an undiscounted preview",
+            exc_info=True,
+        )
+        return _empty_result(context)
     _safe_set(key, result, _result_ttl())
     return result

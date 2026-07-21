@@ -81,6 +81,30 @@ class PreviewCacheTest(TestCase):
         self.assertEqual(len(calls), 2, "rule edit did not invalidate the cache")
         self.assertEqual(third.discount_total, Decimal("2.00"))  # 20% now
 
+    def test_engine_failure_degrades_to_an_undiscounted_preview(self):
+        # An active rule so the no-rules gate doesn't short-circuit, then the
+        # engine throws. The preview fires on every cart edit, so it must never
+        # 500 — it degrades to the base totals with no discount shown.
+        DiscountRule.objects.create(
+            name="boom",
+            channel=DiscountRule.Channel.SALES,
+            application_type=DiscountRule.ApplicationType.AUTOMATIC,
+            scope=DiscountRule.Scope.DOCUMENT,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+            exclusive=False,
+            is_active=True,
+        )
+
+        def boom():
+            raise RuntimeError("engine blew up")
+
+        result = preview_with_cache(self.context, boom)  # must not raise
+
+        self.assertEqual(result.total, self.context.subtotal)
+        self.assertEqual(result.discount_total, Decimal("0.00"))
+        self.assertEqual(result.applications, ())
+
     def test_matches_live_calculation(self):
         DiscountRule.objects.create(
             name="5pct",
