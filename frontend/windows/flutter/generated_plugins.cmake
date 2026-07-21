@@ -10,6 +10,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_tts
   printing
   record_windows
+  sqlite3_flutter_libs
   url_launcher_windows
 )
 

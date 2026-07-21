@@ -50,7 +50,22 @@ dependencies:
   image: ^4.3.0
   flutter_bluetooth_classic_serial: ^1.3.2
   multicast_dns: ^0.3.3
+  # Local key/value persistence. `shared_preferences` is kept as the WEB backend
+  # (browser storage has no torn-write problem) and as the one-time migration
+  # source on native. On native the app now persists through a SQLite-backed
+  # KeyValueStore (see lib/src/core/storage/) whose atomic, fsync'd commits
+  # survive the power outages that corrupt the shared_preferences JSON file.
   shared_preferences: ^2.5.5
+  # SQLite key/value store. `sqflite` (mobile plugin) + `sqflite_common` (shared
+  # api types) are already in the tree via flutter_cache_manager; declared here
+  # because the storage layer imports them directly. `sqflite_common_ffi` is the
+  # desktop `databaseFactoryFfi` and `sqlite3_flutter_libs` bundles the native
+  # sqlite3 for Windows/Linux/macOS. compat/win8 pins these to their last
+  # Dart-3.3-safe lines — keep the storage sources in sync (see the plan).
+  sqflite: ^2.4.2
+  sqflite_common: ^2.5.8
+  sqflite_common_ffi: ^2.3.3
+  sqlite3_flutter_libs: ^0.5.24
   mobile_scanner: ^7.2.0
   pdf: ^3.12.0
   printing: ^5.14.3
