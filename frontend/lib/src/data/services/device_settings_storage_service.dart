@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart' show ThemeMode;
-import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/storage/app_key_value_store.dart';
 import '../models/device_settings.dart';
 import '../models/price_checker_config.dart';
 import '../models/printer_config.dart';
@@ -18,8 +18,8 @@ class DeviceSettingsStorageService {
   static const _priceCheckerConfigKey = 'price_checker_config';
 
   Future<DeviceUsageMode?> loadDeviceUsageMode() async {
-    final preferences = await SharedPreferences.getInstance();
-    final encoded = preferences.getString(_deviceUsageModeKey);
+    final store = await AppKeyValueStore.instance();
+    final encoded = await store.getString(_deviceUsageModeKey);
     if (encoded == null) {
       return null;
     }
@@ -27,8 +27,8 @@ class DeviceSettingsStorageService {
   }
 
   Future<void> saveDeviceUsageMode(DeviceUsageMode usageMode) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(
+    final store = await AppKeyValueStore.instance();
+    await store.setString(
       _deviceUsageModeKey,
       deviceUsageModeToJson(usageMode),
     );
@@ -37,8 +37,8 @@ class DeviceSettingsStorageService {
   /// The light/dark/system preference for this device. `null` when the user has
   /// never chosen, letting callers fall back to their own default.
   Future<ThemeMode?> loadThemeMode() async {
-    final preferences = await SharedPreferences.getInstance();
-    return switch (preferences.getString(_themeModeKey)) {
+    final store = await AppKeyValueStore.instance();
+    return switch (await store.getString(_themeModeKey)) {
       'light' => ThemeMode.light,
       'dark' => ThemeMode.dark,
       'system' => ThemeMode.system,
@@ -47,8 +47,8 @@ class DeviceSettingsStorageService {
   }
 
   Future<void> saveThemeMode(ThemeMode mode) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_themeModeKey, switch (mode) {
+    final store = await AppKeyValueStore.instance();
+    await store.setString(_themeModeKey, switch (mode) {
       ThemeMode.light => 'light',
       ThemeMode.dark => 'dark',
       ThemeMode.system => 'system',
@@ -58,15 +58,15 @@ class DeviceSettingsStorageService {
   /// The per-device price-checker (kiosk) configuration. Returns an empty
   /// config when this device has never been set up as a price checker.
   Future<PriceCheckerConfig> loadPriceCheckerConfig() async {
-    final preferences = await SharedPreferences.getInstance();
+    final store = await AppKeyValueStore.instance();
     return PriceCheckerConfig.decode(
-      preferences.getString(_priceCheckerConfigKey),
+      await store.getString(_priceCheckerConfigKey),
     );
   }
 
   Future<void> savePriceCheckerConfig(PriceCheckerConfig config) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_priceCheckerConfigKey, config.encode());
+    final store = await AppKeyValueStore.instance();
+    await store.setString(_priceCheckerConfigKey, config.encode());
   }
 
   Future<PrinterConfig?> loadDefaultPrinterConfig() async {
@@ -78,9 +78,9 @@ class DeviceSettingsStorageService {
   }
 
   Future<PrinterConfig?> loadPrinterConfigForRole(PrinterRole role) async {
-    final preferences = await SharedPreferences.getInstance();
+    final store = await AppKeyValueStore.instance();
     final roleConfigs = _decodeRoleConfigs(
-      preferences.getString(_printerRoleConfigsKey),
+      await store.getString(_printerRoleConfigsKey),
     );
     final encodedRoleConfig = roleConfigs[printerRoleToJson(role)];
     if (encodedRoleConfig is Map<String, Object?>) {
@@ -91,7 +91,7 @@ class DeviceSettingsStorageService {
       return null;
     }
 
-    final encoded = preferences.getString(_defaultPrinterConfigKey);
+    final encoded = await store.getString(_defaultPrinterConfigKey);
     if (encoded == null) {
       return null;
     }
@@ -108,19 +108,19 @@ class DeviceSettingsStorageService {
     PrinterRole role,
     PrinterConfig config,
   ) async {
-    final preferences = await SharedPreferences.getInstance();
+    final store = await AppKeyValueStore.instance();
     final roleConfigs = _decodeRoleConfigs(
-      preferences.getString(_printerRoleConfigsKey),
+      await store.getString(_printerRoleConfigsKey),
     );
     roleConfigs[printerRoleToJson(role)] = config.toJson();
-    await preferences.setString(
+    await store.setString(
       _printerRoleConfigsKey,
       jsonEncode(roleConfigs),
     );
     if (role != PrinterRole.posReceipt) {
       return;
     }
-    await preferences.setString(
+    await store.setString(
       _defaultPrinterConfigKey,
       jsonEncode(config.toJson()),
     );
@@ -142,9 +142,9 @@ class DeviceSettingsStorageService {
   /// here; otherwise kitchen chits for that station stay queued for another
   /// device. Stored as `{ "<stationId>": <PrinterConfig json> }`.
   Future<Map<int, PrinterConfig>> loadKitchenStationConfigs() async {
-    final preferences = await SharedPreferences.getInstance();
+    final store = await AppKeyValueStore.instance();
     final decoded = _decodeRoleConfigs(
-      preferences.getString(_kitchenStationConfigsKey),
+      await store.getString(_kitchenStationConfigsKey),
     );
     final configs = <int, PrinterConfig>{};
     decoded.forEach((key, value) {
@@ -165,26 +165,26 @@ class DeviceSettingsStorageService {
     int stationId,
     PrinterConfig config,
   ) async {
-    final preferences = await SharedPreferences.getInstance();
+    final store = await AppKeyValueStore.instance();
     final stationConfigs = _decodeRoleConfigs(
-      preferences.getString(_kitchenStationConfigsKey),
+      await store.getString(_kitchenStationConfigsKey),
     );
     stationConfigs['$stationId'] = config.toJson();
-    await preferences.setString(
+    await store.setString(
       _kitchenStationConfigsKey,
       jsonEncode(stationConfigs),
     );
   }
 
   Future<void> removeKitchenStationConfig(int stationId) async {
-    final preferences = await SharedPreferences.getInstance();
+    final store = await AppKeyValueStore.instance();
     final stationConfigs = _decodeRoleConfigs(
-      preferences.getString(_kitchenStationConfigsKey),
+      await store.getString(_kitchenStationConfigsKey),
     );
     if (stationConfigs.remove('$stationId') == null) {
       return;
     }
-    await preferences.setString(
+    await store.setString(
       _kitchenStationConfigsKey,
       jsonEncode(stationConfigs),
     );

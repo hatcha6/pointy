@@ -50,6 +50,20 @@ dependencies:
   # 2.3.3+1 / 2.5.4 are the newest that still say >=3.3.0.)
   sqflite: '>=2.3.0 <2.3.3+2'
   sqflite_common: '>=2.5.0 <2.5.4+1'
+  # compat/win8: SQLite key/value store (lib/src/core/storage/) — durable local
+  # persistence that survives power outages, unlike the shared_preferences JSON
+  # file. sqflite_common_ffi supplies the Windows/Linux/macOS databaseFactoryFfi
+  # (the mobile `sqflite` plugin above still doesn't register on Windows), and
+  # sqlite3_flutter_libs bundles the native sqlite3 — self-contained (only
+  # kernel32), so no Win7-absent system DLL like audioplayers/mfmediaengine.
+  # All three floor above Dart 3.3 in recent majors; the caps are the last
+  # 3.3-safe lines. BEST-EFFORT — confirm the tree with the compat CI's
+  # Flutter-3.19 `pub get`, which also regenerates
+  # windows/flutter/generated_plugins.cmake to register sqlite3_flutter_libs and
+  # bundle sqlite3.dll into the release-compat installer.
+  sqflite_common_ffi: '>=2.3.2 <2.3.4'   # needs sqflite_common <=2.5.4 (pinned)
+  sqlite3: '>=2.1.0 <2.4.0'              # 2.4+ floors at Dart 3.4
+  sqlite3_flutter_libs: '>=0.5.20 <0.6.0'
   synchronized: '>=3.1.0 <3.2.0'
   http: ^1.2.2
   intl: any

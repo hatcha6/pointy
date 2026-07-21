@@ -1,4 +1,4 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/storage/app_key_value_store.dart';
 
 /// A small key/value store for a single JSON payload, namespaced by an opaque
 /// [scope] string (typically the signed-in user id) so one device shared by
@@ -22,8 +22,8 @@ class SharedPreferencesScopedJsonStorage implements ScopedJsonStorage {
 
   @override
   Future<String?> load(String scope) async {
-    final preferences = await SharedPreferences.getInstance();
-    final encoded = preferences.getString(_key(scope));
+    final store = await AppKeyValueStore.instance();
+    final encoded = await store.getString(_key(scope));
     if (encoded == null || encoded.isEmpty) {
       return null;
     }
@@ -32,14 +32,14 @@ class SharedPreferencesScopedJsonStorage implements ScopedJsonStorage {
 
   @override
   Future<void> save(String scope, String json) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_key(scope), json);
+    final store = await AppKeyValueStore.instance();
+    await store.setString(_key(scope), json);
   }
 
   @override
   Future<void> clear(String scope) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.remove(_key(scope));
+    final store = await AppKeyValueStore.instance();
+    await store.remove(_key(scope));
   }
 }
 

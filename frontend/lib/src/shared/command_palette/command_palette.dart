@@ -4,9 +4,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/analytics_interaction_tracker.dart';
+import '../../core/storage/app_key_value_store.dart';
 import '../design/design.dart';
 import '../navigation/app_navigation.dart';
 import '../navigation/navigation_catalog.dart';
@@ -257,8 +257,8 @@ class CommandPaletteRecents {
   /// Loads persisted recents. Call once at startup; safe to call again.
   Future<void> load() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(storageKey);
+      final store = await AppKeyValueStore.instance();
+      final raw = await store.getString(storageKey);
       if (raw == null) {
         return;
       }
@@ -294,8 +294,8 @@ class CommandPaletteRecents {
 
   Future<void> _persist() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
+      final store = await AppKeyValueStore.instance();
+      await store.setString(
         storageKey,
         jsonEncode([for (final entry in _entries) entry.toJson()]),
       );
