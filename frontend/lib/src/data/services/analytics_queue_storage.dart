@@ -1,7 +1,6 @@
 import 'dart:convert';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
+import '../../core/storage/app_key_value_store.dart';
 import '../models/analytics_event.dart';
 
 abstract class AnalyticsQueueStorage {
@@ -19,8 +18,8 @@ class SharedPreferencesAnalyticsQueueStorage implements AnalyticsQueueStorage {
 
   @override
   Future<List<AnalyticsEventDraft>> loadEvents() async {
-    final preferences = await SharedPreferences.getInstance();
-    final encodedEvents = preferences.getStringList(_queueKey) ?? const [];
+    final store = await AppKeyValueStore.instance();
+    final encodedEvents = await store.getStringList(_queueKey) ?? const [];
     return encodedEvents
         .map(_decodeEvent)
         .whereType<AnalyticsEventDraft>()
@@ -29,8 +28,8 @@ class SharedPreferencesAnalyticsQueueStorage implements AnalyticsQueueStorage {
 
   @override
   Future<void> saveEvents(List<AnalyticsEventDraft> events) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setStringList(
+    final store = await AppKeyValueStore.instance();
+    await store.setStringList(
       _queueKey,
       events.map((event) => jsonEncode(event.toJson())).toList(growable: false),
     );
@@ -38,14 +37,14 @@ class SharedPreferencesAnalyticsQueueStorage implements AnalyticsQueueStorage {
 
   @override
   Future<String?> loadInstallationId() async {
-    final preferences = await SharedPreferences.getInstance();
-    return preferences.getString(_installationIdKey);
+    final store = await AppKeyValueStore.instance();
+    return store.getString(_installationIdKey);
   }
 
   @override
   Future<void> saveInstallationId(String installationId) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_installationIdKey, installationId);
+    final store = await AppKeyValueStore.instance();
+    await store.setString(_installationIdKey, installationId);
   }
 
   AnalyticsEventDraft? _decodeEvent(String encoded) {

@@ -22,11 +22,12 @@ import 'package:pointy_frontend/src/data/models/sale_order_page.dart';
 import 'package:pointy_frontend/src/data/models/shop_settings.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/shared/product_tile.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../support/key_value_store_testing.dart';
 
 void main() {
   setUp(() {
-    SharedPreferences.setMockInitialValues({
+    installMemoryKeyValueStore({
       'default_printer_config': jsonEncode({
         'endpoint': {
           'kind': 'fake',
