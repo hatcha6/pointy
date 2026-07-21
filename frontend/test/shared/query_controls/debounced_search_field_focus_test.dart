@@ -43,4 +43,48 @@ void main() {
       isTrue,
     );
   });
+
+  // The POS fires a reset signal after a hardware scan so the scanner's key
+  // burst (which briefly types into the focused search field and queues a
+  // debounced search) can't push the barcode back into the field.
+  testWidgets('a reset signal clears the field and cancels its debounce', (
+    tester,
+  ) async {
+    final reset = ValueNotifier<int>(0);
+    addTearDown(reset.dispose);
+    final changes = <String>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: PointyTheme.light(),
+        home: Scaffold(
+          body: DebouncedSearchField(
+            value: '',
+            hintText: 'search',
+            clearTooltip: 'clear',
+            debounceDuration: const Duration(milliseconds: 300),
+            onChanged: changes.add,
+            resetSignal: reset,
+          ),
+        ),
+      ),
+    );
+
+    // Type a "barcode" — its search is debounced, not yet delivered.
+    await tester.enterText(find.byType(TextField), '12345');
+    expect(find.text('12345'), findsOneWidget);
+    expect(changes, isEmpty);
+
+    // Fire the reset before the debounce elapses.
+    reset.value++;
+    await tester.pump();
+
+    // The field is cleared right away and the query is reset to empty.
+    expect(find.text('12345'), findsNothing);
+    expect(changes, ['']);
+
+    // The queued debounce is dead — it never delivers the typed barcode.
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(changes, ['']);
+  });
 }

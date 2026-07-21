@@ -21,6 +21,7 @@ import '../../contacts/views/collect_debt_dialog.dart';
 import '../view_models/pos_view_model.dart';
 import 'pos_cart_pane.dart';
 import 'pos_catalog_pane.dart';
+import 'pos_shortcuts_sheet.dart';
 import 'register_cash_movement_sheet.dart';
 import 'register_session_close_sheet.dart';
 import 'register_session_gate.dart';
@@ -60,6 +61,13 @@ class PosScreen extends StatelessWidget {
             leading: const PointyNavigationMenuButton(),
             title: Text(l10n.appTitle),
             actions: [
+              // Discoverable keyboard-shortcuts cheat sheet — so cashiers who
+              // don't use the till shortcuts can still find and learn them.
+              IconButton(
+                icon: const Icon(Icons.keyboard_outlined),
+                tooltip: l10n.posShortcutsButtonTooltip,
+                onPressed: () => showPosShortcutsSheet(context),
+              ),
               // A single, clearly-labeled session control replaces the old row of
               // cryptic icon-only buttons. It shows the active session and opens a
               // labeled menu of everything you can do at the register.
@@ -459,6 +467,12 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
   /// or a checkout is in progress, matching the on-screen switcher button.
   void _newInvoice() => widget.viewModel.startNewSaleSession();
 
+  /// Page Down / Page Up — cycle through the held invoices (next / previous),
+  /// wrapping around. Returns whether it moved (so the key is only consumed when
+  /// there is more than one open invoice to cycle).
+  bool _cycleHeldInvoice({required bool forward}) =>
+      widget.viewModel.cycleActiveSaleSession(forward: forward);
+
   /// F2 / arrow keys — cycle the active line (last scanned, catalog-tapped, or
   /// tapped-to-select) through the product's sellable units. Arrow Up/Right =
   /// next, Down/Left = previous; F2 (no [key]) advances forward. Wraps around.
@@ -559,6 +573,10 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
         }
         return false;
       },
+      // Page Down / Page Up cycle the held invoices, like F1 opens a new one —
+      // global (not focus-tree) so they work from anywhere on the POS.
+      onPageKey: (key) =>
+          _cycleHeldInvoice(forward: key == LogicalKeyboardKey.pageDown),
       onCommandEnter: _requestCheckout,
       child: LayoutBuilder(
         builder: (context, constraints) {

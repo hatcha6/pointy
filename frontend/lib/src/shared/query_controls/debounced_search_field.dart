@@ -17,6 +17,7 @@ class DebouncedSearchField extends StatefulWidget {
     this.autofocus = false,
     this.fieldKey,
     this.focusNode,
+    this.resetSignal,
   });
 
   final String value;
@@ -35,6 +36,13 @@ class DebouncedSearchField extends StatefulWidget {
   /// [TextField] manages its own node as before.
   final FocusNode? focusNode;
 
+  /// An externally-owned signal that clears the field and cancels any pending
+  /// debounce when it fires. The POS uses it after a barcode scan so the
+  /// scanner's key burst (which momentarily lands in the field and queues a
+  /// debounced search) can't push the code back into the field. The owner
+  /// disposes it; when null the field behaves as before.
+  final Listenable? resetSignal;
+
   @override
   State<DebouncedSearchField> createState() => _DebouncedSearchFieldState();
 }
@@ -48,11 +56,16 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.value);
+    widget.resetSignal?.addListener(_handleReset);
   }
 
   @override
   void didUpdateWidget(covariant DebouncedSearchField oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.resetSignal != oldWidget.resetSignal) {
+      oldWidget.resetSignal?.removeListener(_handleReset);
+      widget.resetSignal?.addListener(_handleReset);
+    }
     if (widget.value != oldWidget.value) {
       _inputRevision++;
       _debounce?.cancel();
@@ -64,9 +77,28 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
 
   @override
   void dispose() {
+    widget.resetSignal?.removeListener(_handleReset);
     _debounce?.cancel();
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Hard-reset: drop the text and cancel any in-flight debounce (bumping the
+  /// revision so a timer already scheduled is ignored when it fires). The query
+  /// is reset to empty after the frame — deferred so this can be invoked from
+  /// within a view-model notification without re-entrancy. See
+  /// [DebouncedSearchField.resetSignal].
+  void _handleReset() {
+    _debounce?.cancel();
+    _inputRevision++;
+    if (_controller.text.isNotEmpty) {
+      _setControllerText('');
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.onChanged('');
+      }
+    });
   }
 
   @override
