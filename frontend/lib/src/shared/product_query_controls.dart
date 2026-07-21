@@ -27,6 +27,7 @@ class ProductQueryControls extends StatelessWidget {
     this.autofocus = false,
     this.searchFieldKey,
     this.searchFocusNode,
+    this.searchResetSignal,
   });
 
   final ProductQuery query;
@@ -43,6 +44,7 @@ class ProductQueryControls extends StatelessWidget {
   final bool autofocus;
   final Key? searchFieldKey;
   final FocusNode? searchFocusNode;
+  final Listenable? searchResetSignal;
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +67,7 @@ class ProductQueryControls extends StatelessWidget {
       autofocus: autofocus,
       searchFieldKey: searchFieldKey,
       searchFocusNode: searchFocusNode,
+      searchResetSignal: searchResetSignal,
     );
   }
 

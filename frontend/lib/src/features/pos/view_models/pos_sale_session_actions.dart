@@ -30,6 +30,26 @@ extension PosSaleSessionActions on PosViewModel {
     _notifyChanged();
   }
 
+  /// Cycles the active invoice to the next ([forward]) or previous held sale
+  /// session, wrapping around. Backs the Page Down / Page Up till shortcuts.
+  /// A no-op (returns false, so the key isn't consumed) when a checkout is in
+  /// progress or there is only one open invoice.
+  bool cycleActiveSaleSession({required bool forward}) {
+    if (_isCheckingOut || _saleSessions.length < 2) {
+      return false;
+    }
+    final currentIndex = _saleSessions.indexWhere(
+      (session) => session.id == _activeSaleSessionId,
+    );
+    if (currentIndex == -1) {
+      return false;
+    }
+    final count = _saleSessions.length;
+    final nextIndex = (currentIndex + (forward ? 1 : -1) + count) % count;
+    switchSaleSession(_saleSessions[nextIndex].id);
+    return true;
+  }
+
   void discardSaleSession(int sessionId) {
     if (_isCheckingOut || sessionId == _activeSaleSessionId) {
       return;

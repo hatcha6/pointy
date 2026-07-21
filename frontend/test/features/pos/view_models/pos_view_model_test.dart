@@ -983,6 +983,74 @@ void main() {
         expect(requests, 1);
       },
     );
+
+    test('a hardware scan asks the search field to reset', () async {
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_coffeeVariant],
+          },
+        ),
+      );
+      addTearDown(viewModel.dispose);
+      var resets = 0;
+      viewModel.searchResetController.addListener(() => resets += 1);
+
+      // A found scan clears the search field so the code can't linger there.
+      expect(
+        await viewModel.addVariantByBarcode(
+          '1000001',
+          source: 'hardware_scanner',
+        ),
+        isTrue,
+      );
+      expect(resets, 1);
+
+      // It also fires when the scan misses — the field must clear either way.
+      expect(
+        await viewModel.addVariantByBarcode(
+          '5000009',
+          source: 'hardware_scanner',
+        ),
+        isFalse,
+      );
+      expect(resets, 2);
+
+      // The manual "type a term + Enter" path (default source) must NOT reset —
+      // it would wipe the cashier's typed search.
+      await viewModel.addVariantByBarcode('1000001');
+      expect(resets, 2);
+    });
+  });
+
+  group('held-invoice cycling (Page Up / Page Down)', () {
+    test('cycleActiveSaleSession walks the held invoices and wraps', () {
+      final viewModel = _viewModel(_FakePosApiService());
+      addTearDown(viewModel.dispose);
+
+      // A single open invoice: nothing to cycle, so the key isn't consumed.
+      expect(viewModel.cycleActiveSaleSession(forward: true), isFalse);
+
+      // Open three invoices (each new one needs a non-empty active cart).
+      viewModel.addVariant(_coffeeVariant);
+      viewModel.startNewSaleSession();
+      viewModel.addVariant(_teaVariant);
+      viewModel.startNewSaleSession();
+      expect(viewModel.saleSessions, hasLength(3));
+      expect(viewModel.activeSaleSessionNumber, 3);
+
+      // Page Down (forward) wraps from the last invoice back to the first.
+      expect(viewModel.cycleActiveSaleSession(forward: true), isTrue);
+      expect(viewModel.activeSaleSessionNumber, 1);
+      expect(viewModel.cycleActiveSaleSession(forward: true), isTrue);
+      expect(viewModel.activeSaleSessionNumber, 2);
+
+      // Page Up (backward) wraps from the first invoice to the last.
+      expect(viewModel.cycleActiveSaleSession(forward: false), isTrue);
+      expect(viewModel.activeSaleSessionNumber, 1);
+      expect(viewModel.cycleActiveSaleSession(forward: false), isTrue);
+      expect(viewModel.activeSaleSessionNumber, 3);
+    });
   });
 
   group('discount preview gate', () {

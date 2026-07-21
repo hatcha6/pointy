@@ -51,6 +51,7 @@ class BarcodeScanListener extends StatefulWidget {
     this.requireCurrentRoute = true,
     this.onArrowKey,
     this.onFunctionKey,
+    this.onPageKey,
     this.onCommandEnter,
     @visibleForTesting this.clock = DateTime.now,
   });
@@ -79,6 +80,13 @@ class BarcodeScanListener extends StatefulWidget {
   /// outside their subtree). Fires even while a text field is focused:
   /// function keys never type. Return true to consume. Gated on [enabled].
   final bool Function(LogicalKeyboardKey key)? onFunctionKey;
+
+  /// Page Up / Page Down, dispatched through the same global handler as
+  /// [onFunctionKey] — so cycling held invoices works no matter where focus
+  /// sits (including the always-focused catalog search field, where these keys
+  /// do nothing useful on a single-line input). Return true to consume. Gated
+  /// on [enabled].
+  final bool Function(LogicalKeyboardKey key)? onPageKey;
 
   /// Ctrl/Cmd+Enter — the checkout chord, global for the same reason as
   /// [onFunctionKey]. Gated on [enabled].
@@ -111,6 +119,11 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
     LogicalKeyboardKey.arrowDown,
     LogicalKeyboardKey.arrowLeft,
     LogicalKeyboardKey.arrowRight,
+  };
+
+  static final _pageKeys = {
+    LogicalKeyboardKey.pageUp,
+    LogicalKeyboardKey.pageDown,
   };
 
   static final _functionKeys = {
@@ -181,6 +194,13 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
       return widget.enabled &&
           onFunctionKey != null &&
           onFunctionKey(event.logicalKey);
+    }
+    if (_pageKeys.contains(event.logicalKey) &&
+        !hasCommandModifier &&
+        !hardware.isAltPressed) {
+      _clearBuffer();
+      final onPageKey = widget.onPageKey;
+      return widget.enabled && onPageKey != null && onPageKey(event.logicalKey);
     }
     if (hasCommandModifier &&
         (event.logicalKey == LogicalKeyboardKey.enter ||

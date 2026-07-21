@@ -7978,6 +7978,39 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posSessionMenuTooltip => 'خيارات الجلسة';
 
   @override
+  String get posShortcutsButtonTooltip => 'اختصارات لوحة المفاتيح';
+
+  @override
+  String get posShortcutsTitle => 'اختصارات لوحة المفاتيح';
+
+  @override
+  String get posShortcutsSubtitle => 'تعمل من أي مكان في شاشة البيع';
+
+  @override
+  String get posShortcutsSectionInvoices => 'الفواتير';
+
+  @override
+  String get posShortcutsSectionItems => 'الأصناف';
+
+  @override
+  String get posShortcutsSectionCheckout => 'الدفع';
+
+  @override
+  String get posShortcutNewInvoice => 'فتح فاتورة معلّقة جديدة';
+
+  @override
+  String get posShortcutCycleInvoices => 'التنقّل بين الفواتير المعلّقة';
+
+  @override
+  String get posShortcutCycleUnit => 'تبديل وحدة الصنف المحدد';
+
+  @override
+  String get posShortcutDeleteLine => 'حذف الصنف المحدد';
+
+  @override
+  String get posShortcutCheckout => 'إتمام البيع';
+
+  @override
   String get payInRegisterSessionDescription => 'إيداع مبلغ نقدي في الدرج';
 
   @override

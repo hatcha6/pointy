@@ -63,6 +63,18 @@ class PosSearchFocusController extends ChangeNotifier {
   void requestFocus() => notifyListeners();
 }
 
+/// Lets the POS view model tell the catalog search field to hard-reset: clear
+/// its text AND cancel any in-flight debounce. Needed after a hardware scan —
+/// the scanner's key burst lands in the (focused) search field and starts a
+/// debounced search; even though [BarcodeScanListener] restores the field, that
+/// pending debounce would otherwise fire ~350ms later and push the barcode back
+/// into the field (and filter the grid to it). Firing this on every scan
+/// cancels that debounce so the barcode never reappears. A pure signal, like
+/// [PosSearchFocusController].
+class PosSearchResetController extends ChangeNotifier {
+  void requestReset() => notifyListeners();
+}
+
 enum PosProductSelectionStatus {
   added,
   chooseVariant,
@@ -181,6 +193,11 @@ class PosViewModel extends ChangeNotifier {
   // new invoice, cart cleared) and the catalog/cart panes can fire it.
   final PosSearchFocusController _searchFocusController =
       PosSearchFocusController();
+  // Fired after a barcode scan to cancel the search field's pending debounce so
+  // the scanned code can't round-trip back into the field. See
+  // [requestSearchReset].
+  final PosSearchResetController _searchResetController =
+      PosSearchResetController();
 
   // Local persistence of in-progress sale sessions (see pos_persistence.dart).
   String? _persistScope;
@@ -193,12 +210,23 @@ class PosViewModel extends ChangeNotifier {
   /// cashier's resting points. See [requestSearchFocus].
   PosSearchFocusController get searchFocusController => _searchFocusController;
 
+  /// Observed by the catalog search field so it can clear itself (and cancel any
+  /// pending debounce) after a scan. See [requestSearchReset].
+  PosSearchResetController get searchResetController => _searchResetController;
+
   /// Asks the catalog search field to reclaim keyboard focus so the cashier can
   /// immediately look up or scan the next item. Fired at natural resting points
   /// (a completed sale, a finished line-quantity edit, a grid/scanner add, a
   /// fresh or switched invoice) — never mid-edit, so it can't yank the caret out
   /// from under a quantity being typed. A no-op when nothing is listening.
   void requestSearchFocus() => _searchFocusController.requestFocus();
+
+  /// Asks the catalog search field to clear its text and cancel any in-flight
+  /// debounce. Fired after every hardware/keyboard barcode scan so the scanned
+  /// code — which briefly lands in the focused search field as a key burst —
+  /// can't be pushed back into the field by a debounce that was already queued.
+  /// A no-op when nothing is listening.
+  void requestSearchReset() => _searchResetController.requestReset();
 
   List<Product> _products = [];
   final List<_PosSaleSession> _saleSessions = [
@@ -433,6 +461,7 @@ class PosViewModel extends ChangeNotifier {
     _disposed = true;
     _persistDebounce?.cancel();
     _searchFocusController.dispose();
+    _searchResetController.dispose();
     super.dispose();
   }
 

@@ -18,6 +18,7 @@ void main() {
       List<String> scanned,
       List<LogicalKeyboardKey> arrows,
       List<LogicalKeyboardKey> functionKeys,
+      List<LogicalKeyboardKey> pageKeys,
       List<int> commandEnters,
       _FakeClock clock,
     })
@@ -30,6 +31,7 @@ void main() {
     final scanned = <String>[];
     final arrows = <LogicalKeyboardKey>[];
     final functionKeys = <LogicalKeyboardKey>[];
+    final pageKeys = <LogicalKeyboardKey>[];
     final commandEnters = <int>[];
     final clock = _FakeClock();
     await tester.pumpWidget(
@@ -45,6 +47,10 @@ void main() {
             functionKeys.add(key);
             return true;
           },
+          onPageKey: (key) {
+            pageKeys.add(key);
+            return true;
+          },
           onCommandEnter: () => commandEnters.add(1),
           clock: () => clock.now,
           child: child,
@@ -56,6 +62,7 @@ void main() {
       scanned: scanned,
       arrows: arrows,
       functionKeys: functionKeys,
+      pageKeys: pageKeys,
       commandEnters: commandEnters,
       clock: clock,
     );
@@ -304,6 +311,26 @@ void main() {
     expect(events.functionKeys, [
       LogicalKeyboardKey.f1,
       LogicalKeyboardKey.f2,
+    ]);
+    expect(events.scanned, isEmpty);
+  });
+
+  testWidgets('page keys fire globally — even with a focused text field', (
+    tester,
+  ) async {
+    final events = await pumpListener(
+      tester,
+      child: const Material(child: TextField(autofocus: true)),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+    events.clock.advance(const Duration(milliseconds: 500));
+    await tester.sendKeyEvent(LogicalKeyboardKey.pageUp);
+    await tester.pump();
+
+    expect(events.pageKeys, [
+      LogicalKeyboardKey.pageDown,
+      LogicalKeyboardKey.pageUp,
     ]);
     expect(events.scanned, isEmpty);
   });

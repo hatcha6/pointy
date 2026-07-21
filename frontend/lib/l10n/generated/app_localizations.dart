@@ -13915,6 +13915,72 @@ abstract class AppLocalizations {
   /// **'خيارات الجلسة'**
   String get posSessionMenuTooltip;
 
+  /// No description provided for @posShortcutsButtonTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختصارات لوحة المفاتيح'**
+  String get posShortcutsButtonTooltip;
+
+  /// No description provided for @posShortcutsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختصارات لوحة المفاتيح'**
+  String get posShortcutsTitle;
+
+  /// No description provided for @posShortcutsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعمل من أي مكان في شاشة البيع'**
+  String get posShortcutsSubtitle;
+
+  /// No description provided for @posShortcutsSectionInvoices.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير'**
+  String get posShortcutsSectionInvoices;
+
+  /// No description provided for @posShortcutsSectionItems.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأصناف'**
+  String get posShortcutsSectionItems;
+
+  /// No description provided for @posShortcutsSectionCheckout.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفع'**
+  String get posShortcutsSectionCheckout;
+
+  /// No description provided for @posShortcutNewInvoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح فاتورة معلّقة جديدة'**
+  String get posShortcutNewInvoice;
+
+  /// No description provided for @posShortcutCycleInvoices.
+  ///
+  /// In ar, this message translates to:
+  /// **'التنقّل بين الفواتير المعلّقة'**
+  String get posShortcutCycleInvoices;
+
+  /// No description provided for @posShortcutCycleUnit.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبديل وحدة الصنف المحدد'**
+  String get posShortcutCycleUnit;
+
+  /// No description provided for @posShortcutDeleteLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الصنف المحدد'**
+  String get posShortcutDeleteLine;
+
+  /// No description provided for @posShortcutCheckout.
+  ///
+  /// In ar, this message translates to:
+  /// **'إتمام البيع'**
+  String get posShortcutCheckout;
+
   /// No description provided for @payInRegisterSessionDescription.
   ///
   /// In ar, this message translates to:

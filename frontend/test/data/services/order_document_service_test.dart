@@ -95,6 +95,22 @@ void main() {
     },
   );
 
+  test('the sale invoice issue date carries the time, not just the day', () {
+    const service = OrderDocumentService();
+    final template = service.saleInvoiceTemplate(
+      order: _saleOrder(
+        receiptNumber: 'R-time',
+        createdAt: DateTime(2026, 5, 20, 14, 5),
+      ),
+      shopSettings: _settings,
+    );
+
+    final issueDate = template.details
+        .firstWhere((field) => field.label == 'تاريخ الإصدار')
+        .value;
+    expect(issueDate, '2026/05/20 14:05');
+  });
+
   test(
     'quotation template uses the quote title and suppresses paid framing',
     () {
@@ -434,6 +450,74 @@ void main() {
       final widths = _mediaBoxWidths(bytes);
       expect(widths, isNotEmpty);
       expect(widths.every((w) => (w - mm(210)).abs() < 1), isTrue);
+    });
+
+    test('a long receipt paginates instead of overflowing one roll page', () async {
+      // Far more items than fit on a single roll segment.
+      final lines = [
+        for (var i = 0; i < 80; i++)
+          SaleOrderLine(
+            id: i + 1,
+            productId: 100 + i,
+            variantId: 0,
+            quantity: 1,
+            returnedQuantity: 0,
+            returnableQuantity: 1,
+            unitLabel: 'قطعة',
+            unitPrice: 3,
+            total: 3,
+            productName: 'صنف رقم $i',
+          ),
+      ];
+      final bytes = await service.buildSaleInvoiceBytes(
+        order: _saleOrder(
+          receiptNumber: 'R-long',
+          lines: lines,
+          subtotal: 240,
+          total: 240,
+        ),
+        shopSettings: _settings,
+        pageSize: PdfPageSize.roll80,
+      );
+
+      final heights = _mediaBoxHeights(bytes);
+      final widths = _mediaBoxWidths(bytes);
+      // Content overran one segment, so it flows across several pages instead of
+      // one over-tall page (which pushed the total off the top of the slip).
+      expect(heights.length, greaterThan(1));
+      // Every page is a bounded 80mm-wide roll segment no taller than the cap.
+      expect(widths.every((w) => (w - mm(80)).abs() < 1), isTrue);
+      final cap = mm(80) * 6;
+      expect(heights.every((h) => h <= cap + 1), isTrue);
+    });
+
+    test('a short receipt stays a single continuous page', () async {
+      final bytes = await service.buildSaleInvoiceBytes(
+        order: _saleOrder(
+          receiptNumber: 'R-short',
+          lines: const [
+            SaleOrderLine(
+              id: 1,
+              productId: 10,
+              variantId: 0,
+              quantity: 1,
+              returnedQuantity: 0,
+              returnableQuantity: 1,
+              unitLabel: 'قطعة',
+              unitPrice: 5,
+              total: 5,
+              productName: 'شاي',
+            ),
+          ],
+          subtotal: 5,
+          total: 5,
+        ),
+        shopSettings: _settings,
+        pageSize: PdfPageSize.roll80,
+      );
+
+      // A normal receipt is not paginated — one content-height page, no tail.
+      expect(_mediaBoxHeights(bytes).length, 1);
     });
 
     test('purchase orders and proofs honor the receipt width too', () async {

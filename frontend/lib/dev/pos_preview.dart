@@ -40,6 +40,7 @@ import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart
 import 'package:pointy_frontend/src/features/pos/views/pos_cart_pane.dart';
 import 'package:pointy_frontend/src/features/pos/views/payment/payment_sheet.dart';
 import 'package:pointy_frontend/src/features/pos/views/pos_catalog_pane.dart';
+import 'package:pointy_frontend/src/features/pos/views/pos_shortcuts_sheet.dart';
 import 'package:pointy_frontend/src/features/pos/views/unit_quantity_sheet.dart';
 import 'package:pointy_frontend/src/shared/barcode/scan_feedback_sounds.dart';
 import 'package:pointy_frontend/src/shared/unit_options.dart';
@@ -189,8 +190,13 @@ class _PosSurfaceState extends State<_PosSurface> {
             style: PointyAppBarStyle.highFocus,
             leading: const Icon(Icons.point_of_sale_outlined),
             title: Text(l10n.appTitle),
-            actions: const [
-              Padding(
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.keyboard_outlined),
+                tooltip: l10n.posShortcutsButtonTooltip,
+                onPressed: () => showPosShortcutsSheet(context),
+              ),
+              const Padding(
                 padding: EdgeInsetsDirectional.only(end: 8),
                 child: Icon(Icons.sync),
               ),

@@ -370,6 +370,9 @@ class _PosProductLookupControlsState extends State<_PosProductLookupControls> {
           searchHint: l10n.posProductLookupHint,
           searchFieldKey: const ValueKey('product_lookup_field'),
           searchFocusNode: _searchFocusNode,
+          // Clears the field (and cancels its debounce) after a scan so a
+          // scanned barcode never lingers in the search box.
+          searchResetSignal: viewModel.searchResetController,
           autofocus:
               AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
           onSearchChanged: viewModel.updateSearch,

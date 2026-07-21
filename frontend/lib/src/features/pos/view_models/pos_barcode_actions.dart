@@ -17,6 +17,14 @@ extension PosBarcodeActions on PosViewModel {
     _lastScannedBarcode = normalizedBarcode;
     _lastScannedProductName = null;
     _barcodeScanStatus = BarcodeScanStatus.resolving;
+    // A hardware scan's key burst lands in the (focused) search field and queues
+    // a debounced search; clear the field and cancel that debounce now so the
+    // barcode can't reappear in the field a moment later. Only for the wedge
+    // path — the manual "type a term and press Enter" path must keep the typed
+    // search (it clears itself via onSubmitted only when it resolves).
+    if (source == 'hardware_scanner') {
+      _searchResetController.requestReset();
+    }
     _notifyChanged();
 
     final result = await _catalogRepository.resolveBarcode(

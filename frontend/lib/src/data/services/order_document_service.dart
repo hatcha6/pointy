@@ -351,7 +351,13 @@ class OrderDocumentService {
       ]),
       details: [
         if (order.createdAt != null)
-          OrderDocumentField(labels.issueDate, formatPdfDate(order.createdAt!)),
+          // Date + time: cashiers reconcile receipts by the minute they were
+          // issued, so the sale invoice carries HH:mm, not just the day. (The
+          // thermal ESC/POS path already prints the time.)
+          OrderDocumentField(
+            labels.issueDate,
+            formatPdfDateTime(order.createdAt!),
+          ),
         // A quotation is valid until its expiry, not a money status; a sale
         // shows its paid/partial/unpaid status. Either way the line is the
         // highlighted "what is this document" cue at the top of the details.
@@ -766,8 +772,15 @@ PdfPageFormat _platformPageFormat(PdfPageSize size) {
     return PdfPageFormat.a4;
   }
   final width = widthMm * PdfPageFormat.mm;
-  return PdfPageFormat(width, width * 6);
+  return PdfPageFormat(width, width * _kRollPageHeightMultiple);
 }
+
+/// A single roll "segment" is at most this many times the paper width tall. It
+/// bounds both the platform page-format hint ([_platformPageFormat]) and the
+/// point at which a long receipt stops being one continuous page and paginates
+/// ([_ReceiptFrame]) — keeping the two in agreement so a driver never receives a
+/// page taller than the hint (which pushed a long receipt's total off the top).
+const double _kRollPageHeightMultiple = 6;
 
 /// Sendable bundle for [_buildOrderDocumentBytes] so PDF rendering can run in a
 /// background isolate. Every field is plain data (the template and labels) or
@@ -1474,30 +1487,79 @@ class _ReceiptFrame {
   double get _contentWidth =>
       widthMm * PdfPageFormat.mm - 2 * _horizontalMarginMm * PdfPageFormat.mm;
 
-  Future<Uint8List> build() {
-    final pdf = pw.Document(
-      title: '${template.title} ${template.reference}',
-      author: template.shopName,
-      creator: 'دفتر',
-      subject: template.title,
-    );
+  /// The tallest a single continuous roll page may be before it is paginated.
+  /// Matches the platform page-format hint ([_platformPageFormat]) so no page
+  /// ever exceeds what the driver is told to expect.
+  double get _maxPageHeight =>
+      widthMm * PdfPageFormat.mm * _kRollPageHeightMultiple;
 
+  pw.EdgeInsets get _pageMargin => pw.EdgeInsets.symmetric(
+    horizontal: _horizontalMarginMm * PdfPageFormat.mm,
+    vertical: _verticalMargin * PdfPageFormat.mm,
+  );
+
+  Future<Uint8List> build() async {
+    // Render as one continuous roll page (content-height, no blank tail) — the
+    // right shape for the common short receipt.
+    final continuous = _continuousDocument();
+    final bytes = await continuous.save();
+    // `save()` resolves the infinite-height page to its measured content height.
+    final pages = continuous.document.pdfPageList.pages;
+    final measured = pages.isEmpty ? 0.0 : pages.first.pageFormat.height;
+    if (measured <= _maxPageHeight) {
+      return bytes;
+    }
+    // A long receipt (many items) whose content overruns a roll segment: a
+    // single over-tall page overflows the driver's page and lands the total at
+    // the top of a garbled slip. Re-render paginated so every item prints and
+    // the total sits at the end, across as many segments as it takes.
+    return _paginatedDocument().save();
+  }
+
+  pw.Document _newDocument() => pw.Document(
+    title: '${template.title} ${template.reference}',
+    author: template.shopName,
+    creator: 'دفتر',
+    subject: template.title,
+  );
+
+  pw.Document _continuousDocument() {
+    final pdf = _newDocument();
     pdf.addPage(
       pw.Page(
         // Finite width, infinite height → one continuous roll page whose height
         // is measured from the content (no wasted blank tail on the roll).
         pageFormat: PdfPageFormat(widthMm * PdfPageFormat.mm, double.infinity),
-        margin: pw.EdgeInsets.symmetric(
-          horizontal: _horizontalMarginMm * PdfPageFormat.mm,
-          vertical: _verticalMargin * PdfPageFormat.mm,
-        ),
+        margin: _pageMargin,
         theme: _thermalTheme(),
         textDirection: pw.TextDirection.rtl,
-        build: (context) => _body(),
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          mainAxisSize: pw.MainAxisSize.min,
+          children: _bodyChildren(),
+        ),
       ),
     );
+    return pdf;
+  }
 
-    return pdf.save();
+  pw.Document _paginatedDocument() {
+    final pdf = _newDocument();
+    pdf.addPage(
+      pw.MultiPage(
+        // Bounded roll segments: the same body widgets flow across as many
+        // fixed-height pages as needed. Each item row is a top-level widget so
+        // the page break can fall between rows, never mid-row.
+        pageFormat: PdfPageFormat(widthMm * PdfPageFormat.mm, _maxPageHeight),
+        margin: _pageMargin,
+        theme: _thermalTheme(),
+        textDirection: pw.TextDirection.rtl,
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        maxPages: 200,
+        build: (context) => _bodyChildren(),
+      ),
+    );
+    return pdf;
   }
 
   /// A heavier base so small Arabic survives the ~203-dpi thermal head — old
@@ -1511,7 +1573,11 @@ class _ReceiptFrame {
     );
   }
 
-  pw.Widget _body() {
+  /// The receipt body as a FLAT list of widgets — deliberately not wrapped in
+  /// one Column, so [_paginatedDocument]'s [pw.MultiPage] can break the page
+  /// between any two top-level widgets (notably between item rows) when a long
+  /// receipt spills past a single roll segment.
+  List<pw.Widget> _bodyChildren() {
     final children = <pw.Widget>[..._header(), _divider(), ..._titleBlock()];
 
     if (template.details.isNotEmpty) {
@@ -1526,10 +1592,10 @@ class _ReceiptFrame {
       children.addAll(_recipient());
     }
 
-    final items = _items();
-    if (items != null) {
+    final items = _itemWidgets();
+    if (items.isNotEmpty) {
       children.add(_divider());
-      children.add(items);
+      children.addAll(items);
     }
 
     if (template.totals.isNotEmpty) {
@@ -1589,11 +1655,7 @@ class _ReceiptFrame {
       ),
     );
 
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      mainAxisSize: pw.MainAxisSize.min,
-      children: children,
-    );
+    return children;
   }
 
   List<pw.Widget> _header() {
@@ -1683,10 +1745,13 @@ class _ReceiptFrame {
     return widgets;
   }
 
-  pw.Widget? _items() {
+  /// The item rows as separate top-level widgets (with the inter-row spacing
+  /// interleaved), so a long list can be paginated between rows. Empty when
+  /// there is no items table.
+  List<pw.Widget> _itemWidgets() {
     final table = template.itemsTable;
     if (table == null || table.rows.isEmpty) {
-      return null;
+      return const [];
     }
     final twoColumn = table.columns.length <= 2;
     final rows = <pw.Widget>[];
@@ -1696,10 +1761,7 @@ class _ReceiptFrame {
       }
       rows.add(_itemRow(table.rows[i], twoColumn: twoColumn));
     }
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: rows,
-    );
+    return rows;
   }
 
   pw.Widget _itemRow(List<String> row, {required bool twoColumn}) {
