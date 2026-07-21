@@ -1,8 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:shared_preferences/shared_preferences.dart';
-
+import '../../core/storage/app_key_value_store.dart';
 import '../models/connection_profile.dart';
 
 abstract class ConnectionProfileStorage {
@@ -20,8 +19,8 @@ class SharedPreferencesConnectionProfileStorage
 
   @override
   Future<ConnectionProfile?> loadProfile() async {
-    final preferences = await SharedPreferences.getInstance();
-    final encoded = preferences.getString(_profileKey);
+    final store = await AppKeyValueStore.instance();
+    final encoded = await store.getString(_profileKey);
     if (encoded == null || encoded.isEmpty) {
       return null;
     }
@@ -41,19 +40,19 @@ class SharedPreferencesConnectionProfileStorage
 
   @override
   Future<void> saveProfile(ConnectionProfile profile) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_profileKey, jsonEncode(profile.toJson()));
+    final store = await AppKeyValueStore.instance();
+    await store.setString(_profileKey, jsonEncode(profile.toJson()));
   }
 
   @override
   Future<String> loadOrCreateDeviceId() async {
-    final preferences = await SharedPreferences.getInstance();
-    final existing = preferences.getString(_deviceIdKey);
+    final store = await AppKeyValueStore.instance();
+    final existing = await store.getString(_deviceIdKey);
     if (existing != null && existing.isNotEmpty) {
       return existing;
     }
     final generated = _generateDeviceId();
-    await preferences.setString(_deviceIdKey, generated);
+    await store.setString(_deviceIdKey, generated);
     return generated;
   }
 }

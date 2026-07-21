@@ -65,13 +65,13 @@ import 'package:pointy_frontend/src/shared/responsive/adaptive_modal.dart';
 import 'package:pointy_frontend/src/shared/infinite_scroll_grid.dart';
 import 'package:pointy_frontend/src/shared/navigation/app_navigation.dart';
 import 'package:pointy_frontend/src/shared/product_tile.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'shared/fake_app_navigation.dart';
+import 'support/key_value_store_testing.dart';
 
 void main() {
   setUp(() {
-    SharedPreferences.setMockInitialValues({});
+    installMemoryKeyValueStore();
   });
 
   test('printer endpoint parses transport and barcode label options', () {
@@ -400,7 +400,7 @@ void main() {
   });
 
   test('printing repository stores POS receipt role printer config', () async {
-    SharedPreferences.setMockInitialValues({
+    final store = installMemoryKeyValueStore({
       'default_printer_config': jsonEncode({
         'endpoint': {
           'kind': 'serial',
@@ -433,13 +433,12 @@ void main() {
     );
     expect(saveResult, isA<Ok<void>>());
 
-    final preferences = await SharedPreferences.getInstance();
     expect(
-      preferences.getString('printer_role_configs'),
+      await store.getString('printer_role_configs'),
       contains('pos_receipt'),
     );
     expect(
-      preferences.getString('default_printer_config'),
+      await store.getString('default_printer_config'),
       contains('192.168.1.55'),
     );
   });
@@ -2595,7 +2594,7 @@ void main() {
   testWidgets('multi-user device mode forgets authenticated user on startup', (
     WidgetTester tester,
   ) async {
-    SharedPreferences.setMockInitialValues({'device_usage_mode': 'multi_user'});
+    installMemoryKeyValueStore({'device_usage_mode': 'multi_user'});
     var logoutRequests = 0;
 
     await tester.pumpWidget(
@@ -7339,7 +7338,7 @@ Map<String, Object?> _printAuditEventJson(Map<String, Object?> body) {
 }
 
 void _setFakePrinterConfig() {
-  SharedPreferences.setMockInitialValues({
+  installMemoryKeyValueStore({
     'default_printer_config': jsonEncode({
       'endpoint': {'kind': 'fake', 'name': 'محاكاة الطابعة', 'address': 'fake'},
       'is_enabled': true,
