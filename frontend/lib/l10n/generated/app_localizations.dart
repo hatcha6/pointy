@@ -9951,6 +9951,12 @@ abstract class AppLocalizations {
   /// **'لا توجد مشتريات مسجلة لهذا المنتج بعد.'**
   String get productCostHistoryEmpty;
 
+  /// Cost-history subtitle detail for a line bought in a multi-piece pack: the pack price and pack name (e.g. '162.00 لكل كرتون'). The trailing figure on the row stays per base unit so rows are comparable.
+  ///
+  /// In ar, this message translates to:
+  /// **'{cost} لكل {unit}'**
+  String productCostHistoryPackCost(String cost, String unit);
+
   /// No description provided for @productDocumentHistoryTitle.
   ///
   /// In ar, this message translates to:

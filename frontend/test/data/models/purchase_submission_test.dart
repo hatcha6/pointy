@@ -299,4 +299,47 @@ void main() {
     );
     expect(order(status: 'cancelled').isEditable, isFalse);
   });
+
+  test('cost history entry exposes per-base cost for pack rows', () {
+    final entry = ProductCostHistoryEntry.fromJson(const {
+      'product': 5,
+      'variant': 9,
+      'quantity': '2.000',
+      'unit': 'carton',
+      'unit_label': 'كرتون',
+      'unit_factor': '24.000000',
+      'unit_cost': '48.00',
+      'effective_unit_cost': '48.00',
+      'base_unit_cost': '2.00',
+      'effective_base_unit_cost': '2.00',
+    });
+
+    expect(entry.isPackPurchase, isTrue);
+    expect(entry.unitLabel, 'كرتون');
+    expect(entry.displayBaseUnitCost, 2.0);
+  });
+
+  test('cost history entry converts to base client-side for old backends', () {
+    final entry = ProductCostHistoryEntry.fromJson(const {
+      'product': 5,
+      'variant': 9,
+      'quantity': '1.000',
+      'unit_factor': '24.000000',
+      'unit_cost': '48.00',
+    });
+
+    expect(entry.displayBaseUnitCost, 2.0);
+  });
+
+  test('cost history entry without pack context shows the raw cost', () {
+    final entry = ProductCostHistoryEntry.fromJson(const {
+      'product': 5,
+      'variant': 9,
+      'quantity': '1',
+      'unit_cost': '2.10',
+    });
+
+    expect(entry.isPackPurchase, isFalse);
+    expect(entry.displayBaseUnitCost, 2.10);
+  });
 }

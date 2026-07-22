@@ -555,6 +555,17 @@ class PurchaseLine(TimeStampedModel):
         return (self.unit_cost / factor).quantize(Decimal("0.01"))
 
     @property
+    def effective_base_unit_cost(self) -> Decimal:
+        """``effective_unit_cost`` (net of discounts + landed costs) per base
+        unit. Any comparison against a variant's ``unit_price`` (always per base
+        unit) must use this, never the raw per-pack figure — a 162-per-carton
+        line is 0.45 per egg, not a 161-dinar loss."""
+        factor = self.unit_factor or Decimal("1")
+        if factor <= 0:
+            return self.effective_unit_cost
+        return (self.effective_unit_cost / factor).quantize(Decimal("0.01"))
+
+    @property
     def effective_line_total(self):
         return (
             self.net_line_total + self.allocated_landed_cost

@@ -305,10 +305,12 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
 
     _MISSING = object()
 
-    def _previous_unit_cost(self, line):
-        # List views annotate the previous cost in SQL (one correlated subquery
-        # inside the lines prefetch) — a per-line lookup here would fan out into
-        # a query for every line on the page.
+    def _previous_base_unit_cost(self, line):
+        # List views may annotate the previous cost in SQL (one correlated
+        # subquery inside the lines prefetch) — a per-line lookup here would fan
+        # out into a query for every line on the page. Contract: the annotation
+        # is the previous line's cost PER BASE UNIT (unit_cost / unit_factor),
+        # full precision, so it scales cleanly to any pack.
         annotated = getattr(line, "previous_unit_cost_value", self._MISSING)
         if annotated is not self._MISSING:
             return annotated
@@ -319,10 +321,33 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
                 line.variant_id,
                 before_line=line,
             )
-            self._previous_unit_cost_cache[line.pk] = (
-                None if previous_line is None else previous_line.unit_cost
-            )
+            if previous_line is None:
+                previous_base = None
+            else:
+                # Full precision (no money quantize) so re-scaling to this
+                # line's pack doesn't accumulate rounding into a phantom
+                # "cost changed" flag.
+                factor = previous_line.unit_factor or Decimal("1")
+                previous_base = (
+                    previous_line.unit_cost / factor
+                    if factor > 0
+                    else previous_line.unit_cost
+                )
+            self._previous_unit_cost_cache[line.pk] = previous_base
         return self._previous_unit_cost_cache[line.pk]
+
+    def _previous_unit_cost(self, line):
+        # The previous purchase's cost re-expressed in THIS line's unit: the
+        # last buy may have been a carton and this one loose pieces (or vice
+        # versa), and comparing raw snapshots across packs turns a normal
+        # restock into a fake ±3000% cost swing.
+        previous_base = self._previous_base_unit_cost(line)
+        if previous_base is None:
+            return None
+        factor = line.unit_factor or Decimal("1")
+        if factor <= 0:
+            factor = Decimal("1")
+        return (previous_base * factor).quantize(Decimal("0.01"))
 
     def get_base_quantity(self, line):
         return str(line.to_base_quantity(line.quantity))
@@ -492,6 +517,25 @@ class ProductCostHistorySerializer(serializers.ModelSerializer):
         source="variant.product_id",
         read_only=True,
     )
+    # Pack context: unit_cost/effective_unit_cost are per the line's own
+    # purchase unit, so a carton row (162) sits next to piece rows (0.45).
+    # Clients label the pack and/or fall back to the per-base figures.
+    unit_label = serializers.SerializerMethodField()
+    unit_factor = serializers.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        read_only=True,
+    )
+    base_unit_cost = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
+    effective_base_unit_cost = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+    )
     variant = serializers.IntegerField(
         source="variant_id",
         read_only=True,
@@ -534,8 +578,13 @@ class ProductCostHistorySerializer(serializers.ModelSerializer):
             "supplier",
             "supplier_name",
             "quantity",
+            "unit",
+            "unit_label",
+            "unit_factor",
             "unit_cost",
             "effective_unit_cost",
+            "base_unit_cost",
+            "effective_base_unit_cost",
             "landed_unit_cost",
             "expiry_date",
             "received_at",
@@ -543,6 +592,9 @@ class ProductCostHistorySerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+    def get_unit_label(self, line):
+        return unit_label_for(line.unit or line.variant.product.unit, self.context)
 
 
 class PurchaseAdjustmentHistorySerializer(serializers.ModelSerializer):

@@ -1110,6 +1110,38 @@ class OrderCheckoutApiTests(TestCase):
         self.stock_item.refresh_from_db()
         self.assertEqual(self.stock_item.quantity_on_hand, 10)
 
+    def test_checkout_does_not_flag_loss_after_pack_purchase(self):
+        # Bought a carton of 24 at 72.00 (3.00 a piece), selling pieces at
+        # 3.50: profitable. The loss guard must compare per-base costs — the
+        # historical bug read the 72.00 carton price as a per-piece cost and
+        # blocked (or mis-reported) every sale of pack-purchased products.
+        self.start_session()
+        supplier = Supplier.objects.create(name="Pack supplier")
+        purchase = PurchaseOrder.objects.create(
+            supplier=supplier,
+            status=PurchaseOrder.Status.RECEIVED,
+        )
+        purchase.lines.create(
+            variant=self.variant,
+            quantity=1,
+            unit="carton",
+            unit_factor=Decimal("24"),
+            unit_cost=Decimal("72.00"),
+        )
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        line = response.data["lines"][0]
+        self.assertEqual(line["unit_cost"], "3.00")
+        self.assertEqual(line["line_cost"], "6.00")
+        self.assertEqual(line["line_profit"], "1.00")
+        self.assertEqual(response.data["total_profit"], "1.00")
+
     def test_checkout_allows_loss_sale_when_setting_is_disabled(self):
         ShopSettings.load()
         ShopSettings.objects.filter(pk=1).update(prevent_selling_at_loss=False)

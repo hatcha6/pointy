@@ -93,6 +93,26 @@ void main() {
     expect(viewModel.draft.single.unitCost, 0.45);
   });
 
+  test('an edited pack cost prefills later lines per base unit', () async {
+    final viewModel = makeViewModel();
+    await viewModel.addVariant(variant, unitCost: 5);
+    viewModel.updateLineUnit(
+      variant,
+      unitCode: 'carton',
+      unitLabel: 'كرتون',
+      unitFactor: 24,
+    );
+    // The user corrects the carton price: 168 a carton = 7.00 a piece.
+    viewModel.updateLineCost(variant, 168);
+
+    viewModel.clearDraft(trackLineDeletes: false);
+    await viewModel.addVariant(variant);
+
+    // The prefill cache is per BASE unit: the fresh (piece) line starts at
+    // 7.00 — the raw 168 carton figure must not leak into piece lines.
+    expect(viewModel.draft.single.unitCost, 7.0);
+  });
+
   test('a typed fraction survives a unit switch', () async {
     final viewModel = makeViewModel();
     await viewModel.addVariant(

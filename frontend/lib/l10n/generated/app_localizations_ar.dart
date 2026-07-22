@@ -5606,6 +5606,11 @@ class AppLocalizationsAr extends AppLocalizations {
       'لا توجد مشتريات مسجلة لهذا المنتج بعد.';
 
   @override
+  String productCostHistoryPackCost(String cost, String unit) {
+    return '$cost لكل $unit';
+  }
+
+  @override
   String get productDocumentHistoryTitle => 'الفواتير المرتبطة';
 
   @override

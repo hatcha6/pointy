@@ -459,7 +459,11 @@ class PurchaseViewModel extends ChangeNotifier {
     if (index == -1) {
       return;
     }
-    _lastCostByVariantId[variant.id] = unitCost;
+    // The cache is per BASE unit (that's what addVariant multiplies by the new
+    // line's factor); the entered cost is per this line's unit, so a carton's
+    // 162 must be stored as 162/30 — not poison the next piece-line prefill.
+    final factor = _draft[index].unitFactor;
+    _lastCostByVariantId[variant.id] = factor > 0 ? unitCost / factor : unitCost;
     _draft[index] = _draft[index].copyWith(unitCost: unitCost);
     _touchSubmissionIntent();
     notifyListeners();

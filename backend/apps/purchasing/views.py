@@ -2,8 +2,10 @@ from decimal import Decimal
 
 from django.db.models import (
     Avg,
+    Case,
     Count,
     DecimalField,
+    ExpressionWrapper,
     F,
     IntegerField,
     Max,
@@ -14,6 +16,7 @@ from django.db.models import (
     Subquery,
     Sum,
     Value,
+    When,
 )
 from django.db.models.functions import Coalesce
 from rest_framework import mixins, parsers, serializers, status, viewsets
@@ -450,12 +453,27 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         lines = PurchaseLine.objects.filter(variant__product=product).exclude(
             purchase_order__status=PurchaseOrder.Status.CANCELLED
         )
+        # Aggregate per BASE unit: lines are stored per purchase pack (162 for a
+        # carton, 5.40 for a tray), so min/max/avg over the raw column would mix
+        # denominations and report a carton price as the "cost" next to a
+        # per-piece sale price.
+        base_cost = Case(
+            When(
+                unit_factor__gt=0,
+                then=ExpressionWrapper(
+                    F("effective_unit_cost") / F("unit_factor"),
+                    output_field=DecimalField(max_digits=18, decimal_places=6),
+                ),
+            ),
+            default=F("effective_unit_cost"),
+            output_field=DecimalField(max_digits=18, decimal_places=6),
+        )
         stats_by_variant = {
             row["variant_id"]: row
             for row in lines.values("variant_id").annotate(
-                lowest_cost=Min("effective_unit_cost"),
-                highest_cost=Max("effective_unit_cost"),
-                average_cost=Avg("effective_unit_cost"),
+                lowest_cost=Min(base_cost),
+                highest_cost=Max(base_cost),
+                average_cost=Avg(base_cost),
                 purchases_count=Count("id"),
             )
         }
@@ -469,10 +487,12 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                     "variant": variant.pk,
                     "variant_name": variant.display_name,
                     "unit_price": variant.unit_price,
-                    "lowest_cost": stats["lowest_cost"] if stats else None,
-                    "highest_cost": stats["highest_cost"] if stats else None,
-                    "average_cost": stats["average_cost"] if stats else None,
-                    "last_cost": None if last_line is None else last_line.effective_unit_cost,
+                    "lowest_cost": _money_2dp(stats["lowest_cost"]) if stats else None,
+                    "highest_cost": _money_2dp(stats["highest_cost"]) if stats else None,
+                    "average_cost": _money_2dp(stats["average_cost"]) if stats else None,
+                    "last_cost": (
+                        None if last_line is None else last_line.effective_base_unit_cost
+                    ),
                     "purchases_count": stats["purchases_count"] if stats else 0,
                 }
             )
@@ -750,10 +770,20 @@ def money_string(value):
     return None if value is None else str(value.quantize(Decimal("0.01")))
 
 
+def _money_2dp(value):
+    """Quantize a (possibly high-precision) per-base-unit cost to money — the
+    SQL divide by ``unit_factor`` yields 6dp intermediates."""
+    return None if value is None else Decimal(value).quantize(Decimal("0.01"))
+
+
 def margin_amount(variant, line):
     if line is None:
         return None
-    return (variant.unit_price - line.effective_unit_cost).quantize(Decimal("0.01"))
+    # unit_price is per base unit; the line's cost must be too, or a carton
+    # purchase reads as selling every piece at a giant loss.
+    return (variant.unit_price - line.effective_base_unit_cost).quantize(
+        Decimal("0.01")
+    )
 
 
 def margin_percent(variant, line):
@@ -774,10 +804,18 @@ def product_margin_impact_payload(*, product, variant, latest_line, previous_lin
     previous_margin_amount = margin_amount(variant, previous_line)
     latest_margin_percent = margin_percent(variant, latest_line)
     previous_margin_percent = margin_percent(variant, previous_line)
-    latest_effective_cost = None if latest_line is None else latest_line.effective_unit_cost
-    previous_effective_cost = None if previous_line is None else previous_line.effective_unit_cost
-    latest_unit_cost = None if latest_line is None else latest_line.unit_cost
-    previous_unit_cost = None if previous_line is None else previous_line.unit_cost
+    # Everything in this payload sits next to the per-base unit_price, and the
+    # latest/previous lines may have been bought in different packs (a carton
+    # this week, loose pieces last week) — per-base is the only denomination
+    # their costs and deltas are comparable in.
+    latest_effective_cost = (
+        None if latest_line is None else latest_line.effective_base_unit_cost
+    )
+    previous_effective_cost = (
+        None if previous_line is None else previous_line.effective_base_unit_cost
+    )
+    latest_unit_cost = None if latest_line is None else latest_line.base_unit_cost
+    previous_unit_cost = None if previous_line is None else previous_line.base_unit_cost
     return {
         "product": product.pk,
         "variant": variant.pk,

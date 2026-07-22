@@ -102,7 +102,9 @@ def latest_product_unit_cost(product_id, *, variant_id=None):
         return latest_variant_unit_cost(variant_id)
 
     line = latest_purchase_line_for_product(product_id)
-    return None if line is None else line.unit_cost
+    # Per base unit, like the variant path — the raw column is per purchase
+    # pack (162 for a carton), which would read as a per-piece cost here.
+    return None if line is None else line.base_unit_cost
 
 
 def supplier_candidates_for_variants(variant_ids):

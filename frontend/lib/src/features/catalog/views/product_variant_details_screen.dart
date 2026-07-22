@@ -266,6 +266,15 @@ class _ProductCostHistorySection extends StatelessWidget {
                           entry.purchaseOrderNumber!,
                         ),
                       l10n.purchaseOrderLineQuantity(formatQuantity(entry.quantity)),
+                      // A pack row carries its pack price for reference; the
+                      // trailing figure stays per base unit so a carton row
+                      // doesn't read as a 30× cost spike next to piece rows.
+                      if (entry.isPackPurchase &&
+                          (entry.unitLabel?.isNotEmpty ?? false))
+                        l10n.productCostHistoryPackCost(
+                          formatMoney(entry.effectiveUnitCost ?? entry.unitCost),
+                          entry.unitLabel!,
+                        ),
                       if (entry.recordedAt != null)
                         formatDate(entry.recordedAt!),
                     ].join(' • '),
@@ -273,7 +282,7 @@ class _ProductCostHistorySection extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   trailing: Text(
-                    formatMoney(entry.effectiveUnitCost ?? entry.unitCost),
+                    formatMoney(entry.displayBaseUnitCost),
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                 );

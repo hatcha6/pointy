@@ -190,6 +190,10 @@ class ProductCostHistoryEntry {
     this.supplierName,
     this.effectiveUnitCost,
     this.landedUnitCost,
+    this.unitLabel,
+    this.unitFactor = 1,
+    this.baseUnitCost,
+    this.effectiveBaseUnitCost,
     this.recordedAt,
   });
 
@@ -204,8 +208,31 @@ class ProductCostHistoryEntry {
   final double unitCost;
   final double? effectiveUnitCost;
   final double? landedUnitCost;
+
+  /// The purchase pack this line was bought in ("كرتون"), empty/null = base.
+  final String? unitLabel;
+
+  /// Base units per purchase pack (30 pieces per carton). 1 = bought loose.
+  final double unitFactor;
+  final double? baseUnitCost;
+  final double? effectiveBaseUnitCost;
   final double total;
   final DateTime? recordedAt;
+
+  /// True when this line was bought in a multi-piece pack, so per-pack money
+  /// (162 a carton) must not be shown as if it were a per-piece cost.
+  bool get isPackPurchase => unitFactor > 1;
+
+  /// Cost of one BASE unit — the only figure comparable across rows bought in
+  /// different packs. Falls back to a client-side conversion for old backends.
+  double get displayBaseUnitCost {
+    final effective = effectiveBaseUnitCost ?? baseUnitCost;
+    if (effective != null) {
+      return effective;
+    }
+    final perPack = effectiveUnitCost ?? unitCost;
+    return unitFactor > 0 ? perPack / unitFactor : perPack;
+  }
 
   factory ProductCostHistoryEntry.fromJson(Map<String, Object?> json) {
     final unitCost = _moneyFromJson(
@@ -235,6 +262,12 @@ class ProductCostHistoryEntry {
       unitCost: unitCost,
       effectiveUnitCost: effectiveUnitCost,
       landedUnitCost: _nullableMoneyFromJson(json['landed_unit_cost']),
+      unitLabel: json['unit_label']?.toString(),
+      unitFactor: _quantityFromJson(json['unit_factor'] ?? 1),
+      baseUnitCost: _nullableMoneyFromJson(json['base_unit_cost']),
+      effectiveBaseUnitCost: _nullableMoneyFromJson(
+        json['effective_base_unit_cost'],
+      ),
       total:
           _nullableMoneyFromJson(json['total'] ?? json['line_total']) ??
           unitCost * quantity,
