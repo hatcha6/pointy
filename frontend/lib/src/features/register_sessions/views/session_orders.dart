@@ -298,6 +298,12 @@ class _SalesSummarySection extends StatelessWidget {
                   label: l10n.sessionExpensesMetric,
                   value: formatMoney(summary.expenses.total),
                 ),
+              if (summary.drawerPurchases.count > 0)
+                PointyMetricGridItem(
+                  icon: Icons.shopping_basket_outlined,
+                  label: l10n.sessionDrawerPurchasesMetric,
+                  value: formatMoney(summary.drawerPurchases.total),
+                ),
             ],
           ),
         ],

@@ -2504,6 +2504,8 @@
   "receiptHeaderLabel": "ترويسة الإيصال",
   "receiptFooterLabel": "خاتمة الإيصال",
   "requireOpeningCashLabel": "طلب نقدية افتتاح الجلسة",
+  "posCashPurchaseLimitSettingLabel": "حد الشراء النقدي من شاشة البيع",
+  "posCashPurchaseLimitSettingHelp": "الحد الأقصى لقيمة الشراء النقدي الواحد المدفوع من درج الوردية. اتركه فارغاً لإلغاء الحد.",
   "cashierReturnWindowLabel": "مدة صلاحية الإرجاع للكاشير",
   "cashierReturnWindowDialogTitle": "مدة صلاحية الإرجاع",
   "cashierReturnWindowDaysLabel": "الأيام",
@@ -4755,6 +4757,55 @@
   "posShortcutCheckout": "إتمام البيع",
   "payInRegisterSessionDescription": "إيداع مبلغ نقدي في الدرج",
   "payOutRegisterSessionDescription": "سحب مبلغ نقدي من الدرج",
+  "posCashPurchaseTitle": "شراء نقدي من الصندوق",
+  "posCashPurchaseDescription": "تسجيل مشتريات تُدفع نقداً من الدرج وتدخل للمخزون",
+  "posCashPurchaseSupplierLabel": "المورد",
+  "posCashPurchaseSelectSupplierHint": "اختر المورد الذي اشتريت منه",
+  "posCashPurchaseChangeSupplierButton": "تغيير",
+  "posCashPurchaseSupplierSearchHint": "ابحث عن مورد…",
+  "posCashPurchaseNoSuppliersMessage": "لا يوجد موردون مطابقون",
+  "posCashPurchaseProductSearchHint": "ابحث باسم المنتج أو امسح الباركود",
+  "posCashPurchaseNoProductsMessage": "لا توجد منتجات مطابقة",
+  "posCashPurchaseLinesEmptyMessage": "أضف المنتجات المشتراة لتسجيلها",
+  "posCashPurchaseQuantityLabel": "الكمية",
+  "posCashPurchaseUnitCostLabel": "سعر الشراء",
+  "posCashPurchaseExpiryLabel": "تاريخ الانتهاء",
+  "posCashPurchaseExpiryRequiredError": "حدد تاريخ الانتهاء لهذا المنتج",
+  "posCashPurchaseTotalLabel": "الإجمالي المدفوع من الدرج",
+  "posCashPurchaseLimitHint": "الحد الأقصى للشراء النقدي: {amount}",
+  "@posCashPurchaseLimitHint": {
+    "description": "Shown under the total when the shop caps POS cash purchases.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "posCashPurchaseOverLimitError": "المبلغ يتجاوز الحد الأقصى المسموح ({amount})",
+  "@posCashPurchaseOverLimitError": {
+    "description": "Blocks submitting a POS cash purchase above the shop cap.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "posCashPurchaseSubmitButton": "تسجيل الشراء والدفع نقداً",
+  "posCashPurchaseSuccessMessage": "تم تسجيل الشراء {orderNumber} وخصم {amount} من الدرج",
+  "@posCashPurchaseSuccessMessage": {
+    "description": "Snackbar after a POS cash purchase is recorded.",
+    "placeholders": {
+      "orderNumber": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "posCashPurchaseNoSessionError": "تحتاج وردية صندوق مفتوحة لتسجيل شراء نقدي",
+  "posCashPurchaseCreateError": "تعذر تسجيل الشراء. تحقق من البيانات وحاول مرة أخرى.",
+  "posCashPurchaseRemoveLineTooltip": "إزالة الصنف",
   "collectDebtSessionDescription": "استلام دفعة من عميل عليه رصيد آجل",
   "refreshCatalogDescription": "مزامنة قائمة المنتجات مع الخادم",
   "closeRegisterSessionDescription": "إنهاء الجلسة وعدّ النقدية في الدرج",
@@ -4840,6 +4891,7 @@
   "sessionItemsSoldMetric": "القطع المباعة",
   "sessionVoidCountMetric": "فواتير ملغاة",
   "sessionExpensesMetric": "مصروفات الوردية",
+  "sessionDrawerPurchasesMetric": "مشتريات من الدرج",
   "sessionPaymentMethodsTitle": "حسب طريقة الدفع",
   "sessionPaymentCollectedLabel": "المقبوض",
   "sessionPaymentCommissionLabel": "العمولة",

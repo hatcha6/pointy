@@ -1575,6 +1575,16 @@ class PosApiService {
     return _purchasing.updatePurchaseOrder(purchaseOrderId, draft);
   }
 
+  Future<PurchaseOrder> createPosCashPurchase(
+    PurchaseOrderDraft draft, {
+    String? idempotencyKey,
+  }) {
+    return _purchasing.createPosCashPurchase(
+      draft,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
   Future<PurchaseDiscountPreview> previewPurchaseDiscounts(
     PurchaseDiscountPreviewDraft draft,
   ) {

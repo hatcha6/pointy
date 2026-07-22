@@ -29,6 +29,7 @@ class ShopSettings {
     this.enableProductionOperations = false,
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
+    this.posCashPurchaseLimit,
     this.currencyCode = 'LYD',
     this.currencySymbol = 'د.ل',
     this.logoAttachment,
@@ -65,9 +66,16 @@ class ShopSettings {
   final bool enableProductionOperations;
   final bool enableKitchenOperations;
   final bool enableJobTracking;
+
+  /// Per-purchase ceiling for POS cash purchases (drawer-paid POs from the
+  /// sell screen). Null or 0 = no cap.
+  final double? posCashPurchaseLimit;
   final String currencyCode;
   final String currencySymbol;
   final AttachmentSummary? logoAttachment;
+
+  bool get hasPosCashPurchaseLimit =>
+      posCashPurchaseLimit != null && posCashPurchaseLimit! > 0;
 
   factory ShopSettings.fromJson(Map<String, Object?> json) {
     final logoJson = json['logo_attachment'];
@@ -142,6 +150,9 @@ class ShopSettings {
         false,
       ),
       enableJobTracking: _boolFromJson(json['enable_job_tracking'], false),
+      posCashPurchaseLimit: json['pos_cash_purchase_limit'] == null
+          ? null
+          : _moneyFromJson(json['pos_cash_purchase_limit'], 0),
       currencyCode: json['currency_code']?.toString() ?? 'LYD',
       currencySymbol: json['currency_symbol']?.toString() ?? 'د.ل',
       logoAttachment: logoJson is Map<String, Object?>
@@ -190,6 +201,7 @@ class ShopSettingsDraft {
     this.enableProductionOperations = false,
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
+    this.posCashPurchaseLimit,
   });
 
   final String shopName;
@@ -217,6 +229,7 @@ class ShopSettingsDraft {
   final bool enableProductionOperations;
   final bool enableKitchenOperations;
   final bool enableJobTracking;
+  final double? posCashPurchaseLimit;
 
   Map<String, Object?> toJson() {
     return {
@@ -247,6 +260,7 @@ class ShopSettingsDraft {
       'enable_production_operations': enableProductionOperations,
       'enable_kitchen_operations': enableKitchenOperations,
       'enable_job_tracking': enableJobTracking,
+      'pos_cash_purchase_limit': posCashPurchaseLimit?.toStringAsFixed(2),
     };
   }
 }

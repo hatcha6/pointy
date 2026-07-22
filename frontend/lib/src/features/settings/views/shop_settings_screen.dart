@@ -264,6 +264,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late final TextEditingController _lowStockThresholdController;
   late final TextEditingController _cardCommissionController;
   late final TextEditingController _transferCommissionController;
+  late final TextEditingController _posCashPurchaseLimitController;
   late final TextEditingController _analyticsSearchController;
   late final TextEditingController _analyticsPlatformController;
   late final TextEditingController _analyticsSessionController;
@@ -324,6 +325,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         _transferCommissionController,
         widget.settings.transferCommissionPercent.toStringAsFixed(2),
       );
+      _setControllerText(
+        _posCashPurchaseLimitController,
+        _formatPosCashPurchaseLimit(widget.settings.posCashPurchaseLimit),
+      );
       _cashierReturnWindowHours = widget.settings.cashierReturnWindowHours;
       _requireOpeningCash = widget.settings.requireOpeningCash;
       _autoPrintReceipts = widget.settings.autoPrintReceipts;
@@ -354,6 +359,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _lowStockThresholdController.dispose();
     _cardCommissionController.dispose();
     _transferCommissionController.dispose();
+    _posCashPurchaseLimitController.dispose();
     _analyticsSearchController.dispose();
     _analyticsPlatformController.dispose();
     _analyticsSessionController.dispose();
@@ -378,6 +384,9 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _transferCommissionController = TextEditingController(
       text: settings.transferCommissionPercent.toStringAsFixed(2),
     );
+    _posCashPurchaseLimitController = TextEditingController(
+      text: _formatPosCashPurchaseLimit(settings.posCashPurchaseLimit),
+    );
     _analyticsSearchController = TextEditingController();
     _analyticsPlatformController = TextEditingController();
     _analyticsSessionController = TextEditingController();
@@ -401,6 +410,23 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _logoAttachment = settings.logoAttachment;
     _selectedLogoUpload = null;
     _removeLogo = false;
+  }
+
+  static String _formatPosCashPurchaseLimit(double? limit) {
+    if (limit == null || limit <= 0) {
+      return '';
+    }
+    return limit == limit.roundToDouble()
+        ? limit.toStringAsFixed(0)
+        : limit.toStringAsFixed(2);
+  }
+
+  double? _parsePosCashPurchaseLimit() {
+    final parsed = double.tryParse(_posCashPurchaseLimitController.text.trim());
+    if (parsed == null || parsed <= 0) {
+      return null;
+    }
+    return parsed;
   }
 
   void _setControllerText(TextEditingController controller, String value) {
@@ -846,6 +872,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         requireOpeningCash: _requireOpeningCash,
         enabled: !widget.viewModel.isSaving,
         returnWindowText: _formatCashierReturnWindow(l10n),
+        posCashPurchaseLimitController: _posCashPurchaseLimitController,
         onRequireOpeningCashChanged: (value) {
           setState(() => _requireOpeningCash = value);
           refresh();
@@ -1451,6 +1478,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         ),
         requireCustomerForCredit: _requireCustomerForCredit,
         allowCashierCustomerAccess: _allowCashierCustomerAccess,
+        posCashPurchaseLimit: _parsePosCashPurchaseLimit(),
         enableRepairOperations: currentSettings.enableRepairOperations,
         enableProductionOperations: currentSettings.enableProductionOperations,
         enableKitchenOperations: currentSettings.enableKitchenOperations,

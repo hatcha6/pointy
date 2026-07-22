@@ -320,6 +320,7 @@ class _RegisterSessionSettingsFields extends StatelessWidget {
     required this.requireOpeningCash,
     required this.enabled,
     required this.returnWindowText,
+    required this.posCashPurchaseLimitController,
     required this.onRequireOpeningCashChanged,
     required this.onTap,
   });
@@ -327,6 +328,7 @@ class _RegisterSessionSettingsFields extends StatelessWidget {
   final bool requireOpeningCash;
   final bool enabled;
   final String returnWindowText;
+  final TextEditingController posCashPurchaseLimitController;
   final ValueChanged<bool> onRequireOpeningCashChanged;
   final VoidCallback onTap;
 
@@ -349,6 +351,19 @@ class _RegisterSessionSettingsFields extends StatelessWidget {
           label: l10n.cashierReturnWindowLabel,
           value: returnWindowText,
           onTap: onTap,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: posCashPurchaseLimitController,
+          enabled: enabled,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [DecimalTextInputFormatter()],
+          decoration: InputDecoration(
+            labelText: l10n.posCashPurchaseLimitSettingLabel,
+            helperText: l10n.posCashPurchaseLimitSettingHelp,
+            helperMaxLines: 3,
+            prefixIcon: const Icon(Icons.shopping_basket_outlined),
+          ),
         ),
       ],
     );

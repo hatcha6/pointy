@@ -20,6 +20,7 @@ class RegisterSessionSummary {
     required this.categories,
     required this.cash,
     required this.expenses,
+    required this.drawerPurchases,
   });
 
   final int sessionId;
@@ -35,6 +36,11 @@ class RegisterSessionSummary {
   final List<CategoryBreakdown> categories;
   final SessionCashSummary cash;
   final SessionExpenseTotals expenses;
+
+  /// Supplier purchases paid in cash from this drawer (POS cash purchases).
+  /// Already inside [SessionCashSummary.payOutTotal]; broken out so the shift
+  /// review can tell stock buys from generic pay-outs.
+  final SessionExpenseTotals drawerPurchases;
 
   factory RegisterSessionSummary.fromJson(Map<String, Object?> json) {
     final session = _map(json['session']);
@@ -56,6 +62,9 @@ class RegisterSessionSummary {
       ).map(CategoryBreakdown.fromJson).toList(growable: false),
       cash: SessionCashSummary.fromJson(_map(json['cash'])),
       expenses: SessionExpenseTotals.fromJson(_map(json['expenses'])),
+      drawerPurchases: SessionExpenseTotals.fromJson(
+        _map(json['drawer_purchases']),
+      ),
     );
   }
 }

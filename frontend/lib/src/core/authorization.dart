@@ -28,6 +28,7 @@ enum AppCapability {
   processReturnsByLookup,
   accessPurchasing,
   createPurchaseOrder,
+  createPosCashPurchase,
   editDraftPurchaseOrder,
   receivePurchaseOrder,
   adjustPurchaseOrder,
@@ -214,6 +215,15 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewPurchasingDashboard)
           ..add(AppCapability.accessPurchasing)
           ..add(AppCapability.createPurchaseOrder);
+      }
+      // Deliberately grants NO purchasing-screen access: the POS quick cash
+      // purchase is its own narrow capability, usable entirely from the sell
+      // screen (mirrors how process_return_lookup stays out of invoices).
+      if (_hasAny(user, const [
+        'add_pos_cash_purchase',
+        'purchasing.add_pos_cash_purchase',
+      ])) {
+        capabilities.add(AppCapability.createPosCashPurchase);
       }
       if (_hasAny(user, const [
         'edit_draft_purchaseorder',
@@ -465,16 +475,10 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewConversations)
           ..add(AppCapability.manageConversations);
       }
-      if (_hasAny(user, const [
-        'manage_campaigns',
-        'crm.manage_campaigns',
-      ])) {
+      if (_hasAny(user, const ['manage_campaigns', 'crm.manage_campaigns'])) {
         capabilities.add(AppCapability.manageCampaigns);
       }
-      if (_hasAny(user, const [
-        'send_campaigns',
-        'crm.send_campaigns',
-      ])) {
+      if (_hasAny(user, const ['send_campaigns', 'crm.send_campaigns'])) {
         capabilities
           ..add(AppCapability.manageCampaigns)
           ..add(AppCapability.sendCampaigns);
@@ -696,6 +700,8 @@ class AuthorizationCapabilities {
       allows(AppCapability.closeRegisterSession);
   bool get canCreateRegisterCashMovement =>
       allows(AppCapability.createRegisterCashMovement);
+  bool get canCreatePosCashPurchase =>
+      allows(AppCapability.createPosCashPurchase);
   bool get canViewCatalogManagement =>
       allows(AppCapability.viewCatalogManagement);
   bool get canManageCategories => allows(AppCapability.manageCategories);
@@ -717,8 +723,7 @@ class AuthorizationCapabilities {
   bool get canManagePriceCheckers => allows(AppCapability.managePriceCheckers);
   bool get canManageMessaging => allows(AppCapability.manageMessaging);
   bool get canViewConversations => allows(AppCapability.viewConversations);
-  bool get canManageConversations =>
-      allows(AppCapability.manageConversations);
+  bool get canManageConversations => allows(AppCapability.manageConversations);
   bool get canManageCampaigns => allows(AppCapability.manageCampaigns);
   bool get canSendCampaigns => allows(AppCapability.sendCampaigns);
   bool get canViewExpenses => allows(AppCapability.viewExpenses);

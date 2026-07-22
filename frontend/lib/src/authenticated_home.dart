@@ -283,6 +283,8 @@ class _AuthenticatedRoutes implements AppNavigation {
         contactRepository: dependencies.contactRepository,
         printingRepository: dependencies.printingRepository,
         shopSettingsRepository: dependencies.shopSettingsRepository,
+        catalogRepository: dependencies.catalogRepository,
+        purchaseRepository: dependencies.purchaseRepository,
         capabilities: capabilities,
         navigation: this,
       ),
@@ -789,8 +791,7 @@ class _AuthenticatedRoutes implements AppNavigation {
                 initialOrder: order,
                 capabilities: capabilities,
                 onEditDraft: capabilities.canEditDraftPurchaseOrder
-                    ? (draft) =>
-                          openPurchaseOrderEditor(routeContext, draft.id)
+                    ? (draft) => openPurchaseOrderEditor(routeContext, draft.id)
                     : null,
               ),
             );

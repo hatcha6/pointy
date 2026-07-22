@@ -13,6 +13,7 @@ import 'package:pointy_frontend/src/data/models/register_session.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
+import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/register_session_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/sale_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.dart';
@@ -31,9 +32,8 @@ final PosUser _managerUser = PosUser.fromJson(const {
   'permissions': <String>[],
 });
 
-final AuthorizationCapabilities _managerCaps = AuthorizationCapabilities.forUser(
-  _managerUser,
-);
+final AuthorizationCapabilities _managerCaps =
+    AuthorizationCapabilities.forUser(_managerUser);
 
 class _FakeCatalogRepository extends CatalogRepository {
   _FakeCatalogRepository() : super(PosApiService());
@@ -79,6 +79,10 @@ class _FakeShopSettingsRepository extends ShopSettingsRepository {
 
 class _FakeContactRepository extends ContactRepository {
   _FakeContactRepository() : super(PosApiService());
+}
+
+class _FakePurchaseRepository extends PurchaseRepository {
+  _FakePurchaseRepository() : super(PosApiService());
 }
 
 class _FakeNavigation implements AppNavigation {
@@ -143,6 +147,8 @@ Future<void> _pumpPos(WidgetTester tester, PosViewModel viewModel) async {
         contactRepository: _FakeContactRepository(),
         printingRepository: PrintingRepository(PosApiService()),
         shopSettingsRepository: _FakeShopSettingsRepository(),
+        catalogRepository: _FakeCatalogRepository(),
+        purchaseRepository: _FakePurchaseRepository(),
         capabilities: _managerCaps,
         navigation: _FakeNavigation(),
       ),
@@ -189,7 +195,8 @@ void main() {
         expect(
           find.descendant(of: appBar, matching: find.byIcon(cryptic)),
           findsNothing,
-          reason: 'cryptic toolbar icon $cryptic should be gone from the app bar',
+          reason:
+              'cryptic toolbar icon $cryptic should be gone from the app bar',
         );
       }
     },
@@ -216,6 +223,8 @@ void main() {
     expect(find.text('إضافة نقدية'), findsOneWidget);
     expect(find.text('إيداع مبلغ نقدي في الدرج'), findsOneWidget);
     expect(find.text('سحب نقدية'), findsOneWidget);
+    // The drawer-paid quick purchase (manager holds every capability).
+    expect(find.text('شراء نقدي من الصندوق'), findsOneWidget);
     expect(find.text('تحصيل دين'), findsOneWidget);
     expect(find.text('تحديث المنتجات'), findsOneWidget);
     expect(find.text('إغلاق جلسة الدرج'), findsOneWidget);

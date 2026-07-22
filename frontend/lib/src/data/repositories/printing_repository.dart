@@ -967,6 +967,11 @@ class PrintingRepository {
           'label': 'مصروفات الوردية',
           'value': formatMoney(summary.expenses.total),
         },
+      if (summary.drawerPurchases.count > 0)
+        {
+          'label': 'مشتريات من الدرج',
+          'value': formatMoney(summary.drawerPurchases.total),
+        },
     ];
 
     final paymentRows = <Map<String, Object?>>[
