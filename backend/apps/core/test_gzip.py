@@ -36,18 +36,26 @@ class SelectiveGzipTests(TestCase):
         self.assertEqual(response.get("Content-Encoding"), "gzip")
 
     def test_attachment_content_is_not_recompressed(self):
+        import io
+
+        from PIL import Image
+
         from apps.catalog.testing import create_product_with_default_variant
 
         product = create_product_with_default_variant(
             name="Widget", sku="GZ-IMG", unit_price="10.00", barcode="880001"
         )
+        # The upload endpoint decodes the bytes (normalize_uploaded_image), so
+        # the fixture must be a real JPEG, not just jpeg-labelled bytes.
+        buffer = io.BytesIO()
+        Image.new("RGB", (64, 48), (200, 60, 60)).save(buffer, format="JPEG")
+        jpeg_bytes = buffer.getvalue()
+        self.assertGreater(len(jpeg_bytes), 200)  # so only the type skips gzip
         upload = self.client_api.post(
             reverse("product-attachments", args=[product.pk]),
             {
                 "file": SimpleUploadedFile(
-                    "photo.jpg",
-                    b"jpegbytes" * 100,  # >200 bytes so only the type skips it
-                    content_type="image/jpeg",
+                    "photo.jpg", jpeg_bytes, content_type="image/jpeg"
                 ),
             },
             format="multipart",
