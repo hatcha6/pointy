@@ -1356,6 +1356,83 @@ def create_supplier_payment(*, created_by=None, **payment_fields):
 
 
 @transaction.atomic
+def create_pos_cash_purchase(*, request, validated_data):
+    """One-tap drawer purchase from the sell screen: create → submit → receive
+    a purchase order, pay it in full in cash, and record the linked register
+    pay-out so the drawer reconciles automatically
+    (``RegisterSession.expected_cash`` nets out pay-outs).
+
+    Refuses to run without an open register session — the drawer effect is the
+    whole point; a purchase paid some other way belongs in the purchasing
+    screen. ``validated_data`` is ``PurchaseOrderSerializer.validated_data``,
+    so lines carry the same UoM/pack-cost semantics as any other PO.
+    """
+    from apps.core.models import ShopSettings
+    from apps.sales.models import RegisterCashMovement, RegisterSession
+
+    session = RegisterSession.open_for(getattr(request, "user", None))
+    if session is None:
+        raise serializers.ValidationError(
+            {"detail": "An open register session is required for a POS cash purchase."}
+        )
+
+    lines_data = validated_data.pop("lines", [])
+    landed_cost_entries_data = validated_data.pop("landed_cost_entries", None)
+    purchase_order = save_purchase_order_with_lines(
+        lines_data=lines_data,
+        landed_cost_entries_data=landed_cost_entries_data,
+        request=request,
+        **validated_data,
+    )
+
+    # The cap reads the total AFTER discounts/landed costs — the exact amount
+    # that would leave the drawer. Raising here rolls back the whole purchase.
+    limit = ShopSettings.load().pos_cash_purchase_limit
+    if limit is not None and limit > 0 and purchase_order.total > limit:
+        raise serializers.ValidationError(
+            {"detail": f"POS cash purchases are capped at {limit}."}
+        )
+
+    purchase_order = submit_purchase_order(purchase_order, request=request)
+    purchase_order = receive_purchase_order(purchase_order, request=request)
+
+    created_by = purchase_created_by(request)
+    if purchase_order.total > 0:
+        movement = RegisterCashMovement.objects.create(
+            register_session=session,
+            movement_type=RegisterCashMovement.MovementType.PAY_OUT,
+            amount=purchase_order.total,
+            reason=(
+                f"شراء نقدي: {purchase_order.supplier.name}"
+                f" — {purchase_order.order_number}"
+            ),
+            created_by=created_by,
+        )
+        create_supplier_payment(
+            created_by=created_by,
+            supplier=purchase_order.supplier,
+            purchase_order=purchase_order,
+            amount=purchase_order.total,
+            method=SupplierPayment.Method.CASH,
+            notes="شراء نقدي من نقطة البيع",
+            register_session=session,
+            cash_movement=movement,
+        )
+    record_domain_event(
+        name="purchasing.pos_cash_purchase.created",
+        user=created_by,
+        attributes={
+            "purchase_order_id": purchase_order.pk,
+            "order_number": purchase_order.order_number,
+            "supplier_id": purchase_order.supplier_id,
+            "register_session_id": session.pk,
+        },
+        metrics={"amount": float(purchase_order.total)},
+    )
+    return purchase_order
+
+
+@transaction.atomic
 def cancel_purchase_order(purchase_order, *, request=None):
     locked_order = (
         PurchaseOrder.objects.select_for_update()

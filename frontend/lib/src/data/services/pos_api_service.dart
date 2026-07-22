@@ -1575,6 +1575,16 @@ class PosApiService {
     return _purchasing.updatePurchaseOrder(purchaseOrderId, draft);
   }
 
+  Future<PurchaseOrder> createPosCashPurchase(
+    PurchaseOrderDraft draft, {
+    String? idempotencyKey,
+  }) {
+    return _purchasing.createPosCashPurchase(
+      draft,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
   Future<PurchaseDiscountPreview> previewPurchaseDiscounts(
     PurchaseDiscountPreviewDraft draft,
   ) {
@@ -1675,10 +1685,8 @@ class PosApiService {
     return _purchasing.fetchLastProductCost(productId, variantId: variantId);
   }
 
-  Future<({double? suggestedPrice, double? markupPercent})> fetchPricingSuggestion(
-    double unitCost, {
-    int? productId,
-  }) {
+  Future<({double? suggestedPrice, double? markupPercent})>
+  fetchPricingSuggestion(double unitCost, {int? productId}) {
     return _purchasing.fetchPricingSuggestion(unitCost, productId: productId);
   }
 

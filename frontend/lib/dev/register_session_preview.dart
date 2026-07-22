@@ -203,6 +203,7 @@ final RegisterSessionSummary _demoSummary = RegisterSessionSummary(
     ],
   ),
   expenses: const SessionExpenseTotals(total: 12.5, count: 2),
+  drawerPurchases: const SessionExpenseTotals(total: 21, count: 1),
 );
 
 final PosUser _managerUser = PosUser.fromJson(const {

@@ -143,6 +143,17 @@ class ShopSettings(TimeStampedModel):
     # can't browse other cashiers' invoices or edit customer records. Off =
     # customer lookup + debt collection stay manager/accountant only.
     allow_cashier_customer_access = models.BooleanField(default=True)
+    # Per-purchase ceiling for POS cash purchases (drawer-paid POs created from
+    # the sell screen by holders of purchasing.add_pos_cash_purchase). Applies to
+    # every user of that flow — bigger buys belong in the purchasing screen.
+    # Null or 0 = no cap (0 would otherwise block the flow entirely).
+    pos_cash_purchase_limit = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(0)],
+    )
 
     objects = ShopSettingsQuerySet.as_manager()
 

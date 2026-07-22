@@ -80,6 +80,11 @@ PERMISSION_CATALOG = [
         "permissions": [
             _perm("purchasing.view_purchaseorder", "عرض المشتريات", "الاطلاع على أوامر الشراء."),
             _perm("purchasing.add_purchaseorder", "إنشاء أوامر الشراء", "إنشاء أوامر شراء جديدة."),
+            _perm(
+                "purchasing.add_pos_cash_purchase",
+                "شراء نقدي من شاشة البيع",
+                "تسجيل مشتريات فورية (خبز، حليب، ...) من شاشة البيع تُدفع نقداً من درج الوردية وتدخل للمخزون مباشرة.",
+            ),
             _perm("purchasing.edit_draft_purchaseorder", "تعديل المسودات", "تعديل أوامر الشراء قبل اعتمادها."),
             _perm("purchasing.receive_purchaseorder", "استلام المشتريات", "استلام البضائع وإدخالها للمخزون."),
             _perm("purchasing.adjust_received_purchaseorder", "تعديل المستلم", "تسوية أوامر الشراء بعد الاستلام."),

@@ -43,16 +43,7 @@ LEDGER_SOURCES = (
 
 def open_register_session(user):
     """The user's currently open register session, if any."""
-    if user is None or not getattr(user, "is_authenticated", False):
-        return None
-    return (
-        RegisterSession.objects.filter(
-            owner_key=f"user:{user.pk}",
-            status=RegisterSession.Status.OPEN,
-        )
-        .order_by("-created_at")
-        .first()
-    )
+    return RegisterSession.open_for(user)
 
 
 @transaction.atomic
@@ -181,12 +172,15 @@ def _expense_rows(start, end):
 
 def _register_payout_rows(start_dt, end_dt):
     # Standalone pay-outs only: a pay-out linked to an Expense is already
-    # represented by its expense row, so excluding it here avoids double counting.
+    # represented by its expense row, and one linked to a SupplierPayment (POS
+    # cash purchase) by its purchase-order row — excluding both here avoids
+    # double counting.
     queryset = RegisterCashMovement.objects.filter(
         movement_type=RegisterCashMovement.MovementType.PAY_OUT,
         created_at__gte=start_dt,
         created_at__lt=end_dt,
         expense__isnull=True,
+        supplier_payment__isnull=True,
     )
     return [
         _row(

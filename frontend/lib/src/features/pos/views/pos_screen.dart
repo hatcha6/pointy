@@ -5,8 +5,10 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/register_cash_movement.dart';
+import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
+import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
@@ -19,6 +21,7 @@ import '../../../shared/shell/shell.dart';
 import '../../../shared/unit_options.dart';
 import '../../contacts/views/collect_debt_dialog.dart';
 import '../view_models/pos_view_model.dart';
+import 'pos_cash_purchase_sheet.dart';
 import 'pos_cart_pane.dart';
 import 'pos_catalog_pane.dart';
 import 'pos_shortcuts_sheet.dart';
@@ -33,6 +36,8 @@ class PosScreen extends StatelessWidget {
     required this.contactRepository,
     required this.printingRepository,
     required this.shopSettingsRepository,
+    required this.catalogRepository,
+    required this.purchaseRepository,
     required this.capabilities,
     required this.navigation,
   });
@@ -41,6 +46,8 @@ class PosScreen extends StatelessWidget {
   final ContactRepository contactRepository;
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
+  final CatalogRepository catalogRepository;
+  final PurchaseRepository purchaseRepository;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
 
@@ -198,6 +205,34 @@ class PosScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _showPosCashPurchaseSheet(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final submission = await showPosCashPurchaseSheet(
+      context,
+      contactRepository: contactRepository,
+      catalogRepository: catalogRepository,
+      purchaseRepository: purchaseRepository,
+      shopSettingsRepository: shopSettingsRepository,
+    );
+    if (submission == null) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          l10n.posCashPurchaseSuccessMessage(
+            submission.draftNumber,
+            formatMoney(submission.total),
+          ),
+        ),
+      ),
+    );
+    // The purchase changed on-hand quantities; refresh the sale catalog so the
+    // cashier sells against the new stock right away.
+    viewModel.loadCatalog();
+  }
+
   /// Opens the labeled register-session menu — every register action presented
   /// as an icon + title + description tile, gated by the same capabilities the
   /// old toolbar icons were.
@@ -285,6 +320,15 @@ class PosScreen extends StatelessWidget {
               _showCashMovementSheet(context, RegisterCashMovementType.payOut),
         ),
       ],
+      // The drawer-paid quick purchase (bread/milk vendors at the door): its
+      // own narrow permission, granted per-cashier by the owner.
+      if (capabilities.canCreatePosCashPurchase)
+        _PosSessionAction(
+          icon: Icons.shopping_basket_outlined,
+          label: l10n.posCashPurchaseTitle,
+          description: l10n.posCashPurchaseDescription,
+          onTap: () => _showPosCashPurchaseSheet(context),
+        ),
       if (capabilities.canCollectCustomerDebt)
         _PosSessionAction(
           icon: Icons.request_quote_outlined,

@@ -193,6 +193,31 @@ class PurchaseRepository {
     });
   }
 
+  /// One-tap POS cash purchase: a single atomic backend call creates the
+  /// order, receives it into stock, pays it in cash, and books the register
+  /// pay-out — unlike [submitDraft], which needs the wider purchasing
+  /// permissions and never touches the drawer.
+  Future<Result<PurchaseSubmission>> submitPosCashPurchase(
+    List<PurchaseDraftLine> lines, {
+    required int supplierId,
+    String? idempotencyKey,
+  }) async {
+    if (lines.isEmpty) {
+      return Error(Exception('purchase draft is empty'));
+    }
+    return Result.guard(() async {
+      final draft = PurchaseOrderDraft.fromDraftLines(
+        lines,
+        supplierId: supplierId,
+      );
+      final order = await _service.createPosCashPurchase(
+        draft,
+        idempotencyKey: _scopedIdempotencyKey(idempotencyKey, 'pos-cash'),
+      );
+      return order.toSubmission();
+    });
+  }
+
   /// Saves edits to an existing **draft** purchase order without committing it
   /// (it stays a draft). Replaces the order's lines, landed costs and
   /// editor-managed fields with [lines] and the supplied values. The backend

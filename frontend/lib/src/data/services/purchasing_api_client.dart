@@ -194,6 +194,27 @@ class PurchasingApiClient {
     );
   }
 
+  /// One-tap drawer purchase from the POS: the backend creates the order,
+  /// receives it into stock, pays it in full in cash, and records the linked
+  /// register pay-out against the caller's open session — atomically.
+  Future<PurchaseOrder> createPosCashPurchase(
+    PurchaseOrderDraft draft, {
+    String? idempotencyKey,
+  }) async {
+    final response = await _session.post(
+      'purchase-orders/pos-cash-purchase/',
+      body: draft.toJson(),
+      idempotencyKey: idempotencyKey,
+    );
+    _session.throwApiException(
+      response,
+      'POS cash purchase failed with status',
+    );
+    return PurchaseOrder.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   /// Replaces an existing draft purchase order with the edited [draft]. The
   /// backend rejects this for any non-draft order and replaces its lines and
   /// landed costs wholesale, recalculating totals.
@@ -323,10 +344,8 @@ class PurchasingApiClient {
   /// markup for that product's own category is used (its real pricing strategy),
   /// otherwise the shop-wide markup. Used to offer a price in the reprice-siblings
   /// dialog. `suggestedPrice` is null when the cost is zero/unpriceable.
-  Future<({double? suggestedPrice, double? markupPercent})> fetchPricingSuggestion(
-    double unitCost, {
-    int? productId,
-  }) async {
+  Future<({double? suggestedPrice, double? markupPercent})>
+  fetchPricingSuggestion(double unitCost, {int? productId}) async {
     final response = await _session.get(
       'purchase-orders/pricing-suggestion/',
       query: {
@@ -334,7 +353,10 @@ class PurchasingApiClient {
         if (productId != null) 'product_id': '$productId',
       },
     );
-    _session.throwApiException(response, 'Pricing suggestion failed with status');
+    _session.throwApiException(
+      response,
+      'Pricing suggestion failed with status',
+    );
     final decoded = _session.decodedBody(response);
     if (decoded is! Map<String, Object?>) {
       return (suggestedPrice: null, markupPercent: null);

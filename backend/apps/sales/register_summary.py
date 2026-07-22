@@ -117,6 +117,7 @@ def build_register_session_summary(session: RegisterSession) -> dict:
         "categories": categories,
         "cash": _cash_reconciliation(session),
         "expenses": _expenses(session),
+        "drawer_purchases": _drawer_purchases(session),
     }
 
 
@@ -328,6 +329,20 @@ def _cash_reconciliation(session: RegisterSession) -> dict:
 
 def _expenses(session: RegisterSession) -> dict:
     aggregate = session.expenses.aggregate(total=Sum("amount"), count=Count("id"))
+    return {
+        "total": _money(aggregate["total"] or Decimal("0.00")),
+        "count": aggregate["count"] or 0,
+    }
+
+
+def _drawer_purchases(session: RegisterSession) -> dict:
+    """Supplier purchases paid in cash from this drawer (POS cash purchases).
+    Their pay-outs are already inside ``pay_out_total``; this block attributes
+    them so the shift review can tell stock buys from generic pay-outs."""
+    aggregate = session.supplier_payments.aggregate(
+        total=Sum("amount"),
+        count=Count("id"),
+    )
     return {
         "total": _money(aggregate["total"] or Decimal("0.00")),
         "count": aggregate["count"] or 0,

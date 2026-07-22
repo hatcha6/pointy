@@ -53,6 +53,7 @@ from .serializers import (
 from .services import (
     cancel_purchase_order,
     clear_purchase_order_applied_discounts,
+    create_pos_cash_purchase,
     latest_purchase_line_for_variant,
     receive_purchase_order,
     record_purchase_order_audit_event,
@@ -97,6 +98,16 @@ class SupplierViewSet(viewsets.ModelViewSet):
     filterset_fields = ("is_active",)
     search_fields = ("name", "contact_name", "phone", "email", "address")
     ordering_fields = ("name", "created_at", "updated_at")
+
+    def get_required_permissions(self, request):
+        # A POS cash purchaser has to say who they bought from, so the narrow
+        # purchase permission doubles as read access to the supplier list —
+        # without unlocking supplier management.
+        if self.action in ("list", "retrieve") and not request.user.has_perm(
+            "purchasing.view_supplier"
+        ):
+            return ("purchasing.add_pos_cash_purchase",)
+        return self.permission_map.get(self.action)
 
     def get_queryset(self):
         # Annotate the purchase totals/counts the serializer needs so a list of
@@ -199,6 +210,10 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "adjustment_history": ("purchasing.view_purchaseorder",),
         "attachments": ("purchasing.view_purchaseorder", "attachments.view_attachment"),
         "create": ("purchasing.add_purchaseorder",),
+        # Deliberately the single narrow code: the flow implies stock-in and the
+        # drawer pay-out server-side, so cashiers don't need the broad
+        # inventory/receiving permissions the manual lifecycle requires.
+        "pos_cash_purchase": ("purchasing.add_pos_cash_purchase",),
         "submit": ("purchasing.edit_draft_purchaseorder",),
         "cancel": ("purchasing.cancel_purchaseorder",),
         "receive": (
@@ -291,6 +306,12 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     def get_required_permissions(self, request):
         if self.action == "attachments" and request.method == "POST":
             return ("purchasing.view_purchaseorder", "attachments.add_attachment")
+        # Cost prefill for the POS cash-purchase sheet: the narrow permission is
+        # enough to read a product's last purchase cost (but nothing else).
+        if self.action in ("last_cost", "variant_last_cost") and not request.user.has_perm(
+            "purchasing.view_purchaseorder"
+        ):
+            return ("purchasing.add_pos_cash_purchase",)
         return self.permission_map.get(self.action)
 
     # Read-only list-shaped actions: the payables strip endpoint serves the
@@ -666,6 +687,29 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                 {"variant": "Variant does not belong to the selected product."}
             )
         return variant
+
+    @action(detail=False, methods=["post"], url_path="pos-cash-purchase")
+    def pos_cash_purchase(self, request):
+        """Drawer purchase from the sell screen: the posted PO is created,
+        received into stock, and paid in full in cash against the caller's open
+        register session in one atomic step. Body = the normal PO create
+        payload (supplier + lines)."""
+        return run_idempotent_request(
+            request,
+            lambda: self._pos_cash_purchase(request),
+        )
+
+    def _pos_cash_purchase(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        purchase_order = create_pos_cash_purchase(
+            request=request,
+            validated_data=serializer.validated_data,
+        )
+        return Response(
+            self.get_serializer(purchase_order).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["post"])
     def submit(self, request, pk=None):

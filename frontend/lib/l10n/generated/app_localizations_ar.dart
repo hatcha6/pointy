@@ -4246,6 +4246,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get requireOpeningCashLabel => 'طلب نقدية افتتاح الجلسة';
 
   @override
+  String get posCashPurchaseLimitSettingLabel =>
+      'حد الشراء النقدي من شاشة البيع';
+
+  @override
+  String get posCashPurchaseLimitSettingHelp =>
+      'الحد الأقصى لقيمة الشراء النقدي الواحد المدفوع من درج الوردية. اتركه فارغاً لإلغاء الحد.';
+
+  @override
   String get cashierReturnWindowLabel => 'مدة صلاحية الإرجاع للكاشير';
 
   @override
@@ -8022,6 +8030,84 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payOutRegisterSessionDescription => 'سحب مبلغ نقدي من الدرج';
 
   @override
+  String get posCashPurchaseTitle => 'شراء نقدي من الصندوق';
+
+  @override
+  String get posCashPurchaseDescription =>
+      'تسجيل مشتريات تُدفع نقداً من الدرج وتدخل للمخزون';
+
+  @override
+  String get posCashPurchaseSupplierLabel => 'المورد';
+
+  @override
+  String get posCashPurchaseSelectSupplierHint => 'اختر المورد الذي اشتريت منه';
+
+  @override
+  String get posCashPurchaseChangeSupplierButton => 'تغيير';
+
+  @override
+  String get posCashPurchaseSupplierSearchHint => 'ابحث عن مورد…';
+
+  @override
+  String get posCashPurchaseNoSuppliersMessage => 'لا يوجد موردون مطابقون';
+
+  @override
+  String get posCashPurchaseProductSearchHint =>
+      'ابحث باسم المنتج أو امسح الباركود';
+
+  @override
+  String get posCashPurchaseNoProductsMessage => 'لا توجد منتجات مطابقة';
+
+  @override
+  String get posCashPurchaseLinesEmptyMessage =>
+      'أضف المنتجات المشتراة لتسجيلها';
+
+  @override
+  String get posCashPurchaseQuantityLabel => 'الكمية';
+
+  @override
+  String get posCashPurchaseUnitCostLabel => 'سعر الشراء';
+
+  @override
+  String get posCashPurchaseExpiryLabel => 'تاريخ الانتهاء';
+
+  @override
+  String get posCashPurchaseExpiryRequiredError =>
+      'حدد تاريخ الانتهاء لهذا المنتج';
+
+  @override
+  String get posCashPurchaseTotalLabel => 'الإجمالي المدفوع من الدرج';
+
+  @override
+  String posCashPurchaseLimitHint(String amount) {
+    return 'الحد الأقصى للشراء النقدي: $amount';
+  }
+
+  @override
+  String posCashPurchaseOverLimitError(String amount) {
+    return 'المبلغ يتجاوز الحد الأقصى المسموح ($amount)';
+  }
+
+  @override
+  String get posCashPurchaseSubmitButton => 'تسجيل الشراء والدفع نقداً';
+
+  @override
+  String posCashPurchaseSuccessMessage(String orderNumber, String amount) {
+    return 'تم تسجيل الشراء $orderNumber وخصم $amount من الدرج';
+  }
+
+  @override
+  String get posCashPurchaseNoSessionError =>
+      'تحتاج وردية صندوق مفتوحة لتسجيل شراء نقدي';
+
+  @override
+  String get posCashPurchaseCreateError =>
+      'تعذر تسجيل الشراء. تحقق من البيانات وحاول مرة أخرى.';
+
+  @override
+  String get posCashPurchaseRemoveLineTooltip => 'إزالة الصنف';
+
+  @override
   String get collectDebtSessionDescription =>
       'استلام دفعة من عميل عليه رصيد آجل';
 
@@ -8213,6 +8299,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get sessionExpensesMetric => 'مصروفات الوردية';
+
+  @override
+  String get sessionDrawerPurchasesMetric => 'مشتريات من الدرج';
 
   @override
   String get sessionPaymentMethodsTitle => 'حسب طريقة الدفع';

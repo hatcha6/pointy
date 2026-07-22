@@ -59,6 +59,21 @@ class RegisterSession(TimeStampedModel):
     def __str__(self) -> str:
         return f"{self.owner_key} {self.status} register session"
 
+    @classmethod
+    def open_for(cls, user):
+        """The user's currently open register session, if any. Shared by every
+        drawer-linked flow (expense pay-outs, POS cash purchases)."""
+        if user is None or not getattr(user, "is_authenticated", False):
+            return None
+        return (
+            cls.objects.filter(
+                owner_key=f"user:{user.pk}",
+                status=cls.Status.OPEN,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+
     @property
     def session_number(self) -> str:
         if self.pk is None:

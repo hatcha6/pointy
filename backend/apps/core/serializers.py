@@ -424,6 +424,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "transfer_commission_percent",
             "require_customer_for_credit",
             "allow_cashier_customer_access",
+            "pos_cash_purchase_limit",
             "logo_attachment",
             "updated_at",
         ]

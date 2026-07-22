@@ -7521,6 +7521,18 @@ abstract class AppLocalizations {
   /// **'طلب نقدية افتتاح الجلسة'**
   String get requireOpeningCashLabel;
 
+  /// No description provided for @posCashPurchaseLimitSettingLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حد الشراء النقدي من شاشة البيع'**
+  String get posCashPurchaseLimitSettingLabel;
+
+  /// No description provided for @posCashPurchaseLimitSettingHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد الأقصى لقيمة الشراء النقدي الواحد المدفوع من درج الوردية. اتركه فارغاً لإلغاء الحد.'**
+  String get posCashPurchaseLimitSettingHelp;
+
   /// No description provided for @cashierReturnWindowLabel.
   ///
   /// In ar, this message translates to:
@@ -13999,6 +14011,138 @@ abstract class AppLocalizations {
   /// **'سحب مبلغ نقدي من الدرج'**
   String get payOutRegisterSessionDescription;
 
+  /// No description provided for @posCashPurchaseTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'شراء نقدي من الصندوق'**
+  String get posCashPurchaseTitle;
+
+  /// No description provided for @posCashPurchaseDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل مشتريات تُدفع نقداً من الدرج وتدخل للمخزون'**
+  String get posCashPurchaseDescription;
+
+  /// No description provided for @posCashPurchaseSupplierLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المورد'**
+  String get posCashPurchaseSupplierLabel;
+
+  /// No description provided for @posCashPurchaseSelectSupplierHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر المورد الذي اشتريت منه'**
+  String get posCashPurchaseSelectSupplierHint;
+
+  /// No description provided for @posCashPurchaseChangeSupplierButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير'**
+  String get posCashPurchaseChangeSupplierButton;
+
+  /// No description provided for @posCashPurchaseSupplierSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن مورد…'**
+  String get posCashPurchaseSupplierSearchHint;
+
+  /// No description provided for @posCashPurchaseNoSuppliersMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد موردون مطابقون'**
+  String get posCashPurchaseNoSuppliersMessage;
+
+  /// No description provided for @posCashPurchaseProductSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث باسم المنتج أو امسح الباركود'**
+  String get posCashPurchaseProductSearchHint;
+
+  /// No description provided for @posCashPurchaseNoProductsMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد منتجات مطابقة'**
+  String get posCashPurchaseNoProductsMessage;
+
+  /// No description provided for @posCashPurchaseLinesEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف المنتجات المشتراة لتسجيلها'**
+  String get posCashPurchaseLinesEmptyMessage;
+
+  /// No description provided for @posCashPurchaseQuantityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية'**
+  String get posCashPurchaseQuantityLabel;
+
+  /// No description provided for @posCashPurchaseUnitCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر الشراء'**
+  String get posCashPurchaseUnitCostLabel;
+
+  /// No description provided for @posCashPurchaseExpiryLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الانتهاء'**
+  String get posCashPurchaseExpiryLabel;
+
+  /// No description provided for @posCashPurchaseExpiryRequiredError.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدد تاريخ الانتهاء لهذا المنتج'**
+  String get posCashPurchaseExpiryRequiredError;
+
+  /// No description provided for @posCashPurchaseTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجمالي المدفوع من الدرج'**
+  String get posCashPurchaseTotalLabel;
+
+  /// Shown under the total when the shop caps POS cash purchases.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد الأقصى للشراء النقدي: {amount}'**
+  String posCashPurchaseLimitHint(String amount);
+
+  /// Blocks submitting a POS cash purchase above the shop cap.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ يتجاوز الحد الأقصى المسموح ({amount})'**
+  String posCashPurchaseOverLimitError(String amount);
+
+  /// No description provided for @posCashPurchaseSubmitButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الشراء والدفع نقداً'**
+  String get posCashPurchaseSubmitButton;
+
+  /// Snackbar after a POS cash purchase is recorded.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل الشراء {orderNumber} وخصم {amount} من الدرج'**
+  String posCashPurchaseSuccessMessage(String orderNumber, String amount);
+
+  /// No description provided for @posCashPurchaseNoSessionError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتاج وردية صندوق مفتوحة لتسجيل شراء نقدي'**
+  String get posCashPurchaseNoSessionError;
+
+  /// No description provided for @posCashPurchaseCreateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تسجيل الشراء. تحقق من البيانات وحاول مرة أخرى.'**
+  String get posCashPurchaseCreateError;
+
+  /// No description provided for @posCashPurchaseRemoveLineTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة الصنف'**
+  String get posCashPurchaseRemoveLineTooltip;
+
   /// No description provided for @collectDebtSessionDescription.
   ///
   /// In ar, this message translates to:
@@ -14364,6 +14508,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مصروفات الوردية'**
   String get sessionExpensesMetric;
+
+  /// No description provided for @sessionDrawerPurchasesMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشتريات من الدرج'**
+  String get sessionDrawerPurchasesMetric;
 
   /// No description provided for @sessionPaymentMethodsTitle.
   ///

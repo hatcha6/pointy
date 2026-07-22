@@ -159,6 +159,10 @@ class PurchaseOrder(TimeStampedModel):
             ("receive_purchaseorder", "Can receive purchase order"),
             ("adjust_received_purchaseorder", "Can adjust received purchase order"),
             ("cancel_purchaseorder", "Can cancel purchase order"),
+            # Narrow POS capability: create a PO that is immediately received and
+            # paid in cash from the holder's open register drawer. Grants none of
+            # the wider PO lifecycle (drafting, receiving, cancelling).
+            ("add_pos_cash_purchase", "Can create POS cash purchase"),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -804,6 +808,15 @@ class PurchaseOrderAdjustment(TimeStampedModel):
 
 
 class SupplierPayment(TimeStampedModel):
+    """Money paid to a supplier, optionally against a specific purchase order.
+
+    When paid in cash from an open register (the POS cash-purchase flow), the
+    payment also records a linked ``RegisterCashMovement`` pay-out
+    (``cash_movement``) so the drawer reconciles — mirroring
+    ``expenses.Expense``. The unified expense ledger excludes such pay-outs from
+    the register-pay-out source so a drawer-paid purchase is never counted twice.
+    """
+
     class Method(models.TextChoices):
         CASH = "cash", "Cash"
         CARD = "card", "Card"
@@ -833,6 +846,20 @@ class SupplierPayment(TimeStampedModel):
     reference = models.CharField(max_length=128, blank=True)
     notes = models.TextField(blank=True)
     paid_at = models.DateTimeField(default=timezone.now)
+    register_session = models.ForeignKey(
+        "sales.RegisterSession",
+        on_delete=models.PROTECT,
+        related_name="supplier_payments",
+        blank=True,
+        null=True,
+    )
+    cash_movement = models.OneToOneField(
+        "sales.RegisterCashMovement",
+        on_delete=models.PROTECT,
+        related_name="supplier_payment",
+        blank=True,
+        null=True,
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

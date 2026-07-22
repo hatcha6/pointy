@@ -1811,14 +1811,20 @@ class SupplierPaymentSerializer(serializers.ModelSerializer):
             "reference",
             "notes",
             "paid_at",
+            "register_session",
+            "cash_movement",
             "created_by_username",
             "created_at",
             "updated_at",
         ]
+        # The drawer linkage is set only by the POS cash-purchase service —
+        # a manually recorded payment never claims a register pay-out.
         read_only_fields = (
             "id",
             "supplier_name",
             "purchase_order_number",
+            "register_session",
+            "cash_movement",
             "created_by_username",
             "created_at",
             "updated_at",

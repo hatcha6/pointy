@@ -123,8 +123,9 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
                               SwitchListTile(
                                 secondary: const Icon(Icons.qr_code_2_outlined),
                                 title: Text(l10n.enableJobTrackingTitle),
-                                subtitle:
-                                    Text(l10n.enableJobTrackingDescription),
+                                subtitle: Text(
+                                  l10n.enableJobTrackingDescription,
+                                ),
                                 value: settings.enableJobTracking,
                                 onChanged: isBusy
                                     ? null
@@ -204,7 +205,6 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
                                   ),
                               ],
                             ),
-
                         ],
                       ),
                     ),
@@ -299,6 +299,7 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
         trustedCardTerminalIds: settings.trustedCardTerminalIds,
         cardCommissionPercent: settings.cardCommissionPercent,
         transferCommissionPercent: settings.transferCommissionPercent,
+        posCashPurchaseLimit: settings.posCashPurchaseLimit,
         enableRepairOperations:
             enableRepairOperations ?? settings.enableRepairOperations,
         enableProductionOperations:
@@ -324,7 +325,8 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
       name: template.name,
       jobType: template.jobType,
       isActive: isActive ?? template.isActive,
-      stages: stages ??
+      stages:
+          stages ??
           [
             for (final stage in template.stages)
               WorkflowStageDraft(
@@ -373,9 +375,9 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
 
   void _showError() {
     final l10n = AppLocalizations.of(context)!;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(l10n.operationsActionError)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.operationsActionError)));
   }
 }
 
@@ -543,7 +545,8 @@ class _WorkflowStageEditorPageState extends State<_WorkflowStageEditorPage> {
     setState(() {
       _stages.add(
         _EditableStage(
-          code: 'stage-${DateTime.now().millisecondsSinceEpoch}-$_newStageCounter',
+          code:
+              'stage-${DateTime.now().millisecondsSinceEpoch}-$_newStageCounter',
           name: '',
         ),
       );
@@ -568,8 +571,7 @@ class _WorkflowStageEditorPageState extends State<_WorkflowStageEditorPage> {
               displayOrder: index,
               isInitial: _stages[index].isInitial,
               isTerminal: _stages[index].isTerminal,
-              requiresCustomerApproval:
-                  _stages[index].requiresCustomerApproval,
+              requiresCustomerApproval: _stages[index].requiresCustomerApproval,
               consumesMaterials: _stages[index].consumesMaterials,
               producesOutput: _stages[index].producesOutput,
             ),

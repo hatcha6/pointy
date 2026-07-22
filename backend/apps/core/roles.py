@@ -293,6 +293,7 @@ PURCHASING_AGENT_PERMISSION_CODES = (
     "purchasing.receive_purchaseorder",
     "purchasing.adjust_received_purchaseorder",
     "purchasing.cancel_purchaseorder",
+    "purchasing.add_pos_cash_purchase",
     "purchasing.view_supplierpayment",
     "inventory.view_stockitem",
     "inventory.view_stockmovement",
