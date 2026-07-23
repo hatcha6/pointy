@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -977,18 +978,203 @@ func TestHTTPRelayRejectsOversizedBackendResponse(t *testing.T) {
 		Logger:                      logger,
 		MaxRelayedResponseBodyBytes: 3,
 	}
-	request, err := http.NewRequest(http.MethodGet, "http://relay.test/api/products/", nil)
+	// The body now streams (headers go out before the size is knowable), so an
+	// over-limit body can no longer become a clean 502 — the transfer must
+	// abort so the client sees a failure instead of a truncated-but-200 body.
+	proxy := httptest.NewServer(server)
+	defer proxy.Close()
+
+	request, err := http.NewRequest(http.MethodGet, proxy.URL+"/api/products/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
-	recorder := httptest.NewRecorder()
-	server.ServeHTTP(recorder, request)
-	response := recorder.Result()
+	response, err := proxy.Client().Do(request)
+	if err != nil {
+		// The abort can reset the connection before the client even finishes
+		// the response headers — also a correctly-signaled failure.
+		return
+	}
 	defer response.Body.Close()
 
-	if response.StatusCode != http.StatusBadGateway {
-		t.Fatalf("expected 502, got %d", response.StatusCode)
+	body, err := io.ReadAll(response.Body)
+	if err == nil {
+		t.Fatalf("expected an aborted transfer, got a clean body %q", body)
+	}
+	if int64(len(body)) > server.MaxRelayedResponseBodyBytes {
+		t.Fatalf("expected at most %d bytes before the abort, got %d", server.MaxRelayedResponseBodyBytes, len(body))
+	}
+}
+
+// sseBackendBody emits SSE events on a schedule so a buffering hop is
+// unmistakable: streamed = each event readable ~interval apart; buffered =
+// nothing until the writer finishes.
+func sseBackendBody(events int, interval time.Duration) io.ReadCloser {
+	reader, writer := io.Pipe()
+	go func() {
+		for i := 0; i < events; i++ {
+			fmt.Fprintf(writer, "event: delta\ndata: {\"text\": \"token-%d\"}\n\n", i)
+			time.Sleep(interval)
+		}
+		writer.Close()
+	}()
+	return reader
+}
+
+func TestHTTPRelayStreamsEventStreamResponsesLive(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	backendURL, err := url.Parse("http://127.0.0.1:8000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const events = 5
+	const interval = 120 * time.Millisecond
+	backendClient := &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     "200 OK",
+				Proto:      "HTTP/1.1",
+				ProtoMajor: 1,
+				ProtoMinor: 1,
+				Body:       sseBackendBody(events, interval),
+				// Unknown length, exactly like a real SSE response.
+				ContentLength: -1,
+				Header:        http.Header{"Content-Type": []string{"text/event-stream"}},
+				Request:       r,
+			}, nil
+		}),
+	}
+	store, provisioned := provisionRelayInstallation(t)
+	hub := NewHub()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	startInMemoryConnector(t, ctx, hub, provisioned.Installation.ID, connector.Client{
+		BackendURL: backendURL,
+		Logger:     logger,
+		HTTPClient: backendClient,
+	})
+	waitUntil(t, time.Second, func() bool {
+		return hub.IsOnline(provisioned.Installation.ID)
+	})
+
+	server := HTTPServer{
+		Store:  store,
+		Hub:    hub,
+		Logger: logger,
+		// Tiny cap + short total timeout: SSE must be exempt from the byte
+		// limit, and the timeout must act on idleness, not total duration —
+		// the whole stream takes ~600ms of continuous activity.
+		MaxRelayedResponseBodyBytes: 8,
+		RelayRequestTimeout:         300 * time.Millisecond,
+	}
+	proxy := httptest.NewServer(server)
+	defer proxy.Close()
+
+	request, err := http.NewRequest(http.MethodGet, proxy.URL+"/api/ai/chat/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	started := time.Now()
+	response, err := proxy.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.StatusCode)
+	}
+
+	scanner := bufio.NewScanner(response.Body)
+	var eventArrivals []time.Duration
+	for scanner.Scan() {
+		if strings.HasPrefix(scanner.Text(), "event:") {
+			eventArrivals = append(eventArrivals, time.Since(started))
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("stream ended with error: %v", err)
+	}
+	if len(eventArrivals) != events {
+		t.Fatalf("expected %d events, got %d", events, len(eventArrivals))
+	}
+	// Buffered would deliver everything at ~events*interval; streamed delivers
+	// the first event immediately.
+	if eventArrivals[0] > interval*2 {
+		t.Fatalf("first event arrived after %v — response was buffered, not streamed", eventArrivals[0])
+	}
+	if spread := eventArrivals[len(eventArrivals)-1] - eventArrivals[0]; spread < interval*2 {
+		t.Fatalf("events arrived %v apart in total — response was buffered, not streamed", spread)
+	}
+}
+
+func TestHTTPRelayStreamsZipBeyondByteLimit(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	backendURL, err := url.Parse("http://127.0.0.1:8000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A "zip" far above the relayed-body cap: exports must pass whole.
+	payload := strings.Repeat("z", 256*1024)
+	backendClient := &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode:    http.StatusOK,
+				Status:        "200 OK",
+				Proto:         "HTTP/1.1",
+				ProtoMajor:    1,
+				ProtoMinor:    1,
+				Body:          io.NopCloser(strings.NewReader(payload)),
+				ContentLength: int64(len(payload)),
+				Header:        http.Header{"Content-Type": []string{"application/zip"}},
+				Request:       r,
+			}, nil
+		}),
+	}
+	store, provisioned := provisionRelayInstallation(t)
+	hub := NewHub()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	startInMemoryConnector(t, ctx, hub, provisioned.Installation.ID, connector.Client{
+		BackendURL: backendURL,
+		Logger:     logger,
+		HTTPClient: backendClient,
+	})
+	waitUntil(t, time.Second, func() bool {
+		return hub.IsOnline(provisioned.Installation.ID)
+	})
+
+	server := HTTPServer{
+		Store:                       store,
+		Hub:                         hub,
+		Logger:                      logger,
+		MaxRelayedResponseBodyBytes: 1024,
+	}
+	proxy := httptest.NewServer(server)
+	defer proxy.Close()
+
+	request, err := http.NewRequest(http.MethodGet, proxy.URL+"/api/analytics-events/export/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	response, err := proxy.Client().Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.StatusCode)
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("zip transfer failed mid-body: %v", err)
+	}
+	if len(body) != len(payload) {
+		t.Fatalf("expected %d bytes, got %d", len(payload), len(body))
 	}
 }
 

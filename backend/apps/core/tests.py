@@ -1740,6 +1740,20 @@ class RelayDiagnosticsAnalyticsExportTests(TestCase):
             ["analytics_events.csv", "manifest.json"],
         )
 
+    def test_export_accepts_explicit_csv_format_param(self):
+        # The relay CLI forwards --format csv verbatim; DRF's renderer
+        # override must not 404 it (see ExportFormatAgnosticNegotiation).
+        self._create_event()
+
+        response = APIClient().get(
+            reverse("relay-diagnostics-analytics-export"),
+            {"format": "csv"},
+            HTTP_X_POINTY_CONNECTOR_TOKEN="ptc1.installation-1.connector-secret",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/zip")
+
     def test_missing_or_wrong_connector_token_is_rejected(self):
         missing = APIClient().get(reverse("relay-diagnostics-analytics-export"))
         wrong = APIClient().get(

@@ -203,7 +203,7 @@ func (c Client) handleStream(ctx context.Context, stream *protocol.Stream) {
 		request.Header.Set(connectorTokenHeader, c.Token)
 	}
 
-	outbound, cancel := c.backendRequest(ctx, request)
+	outbound, cancel, headersReceived := c.backendRequest(ctx, request)
 	defer cancel()
 	response, err := c.httpClient().Do(outbound)
 	if err != nil {
@@ -214,21 +214,46 @@ func (c Client) handleStream(ctx context.Context, stream *protocol.Stream) {
 	defer response.Body.Close()
 	removeHopHeaders(response.Header)
 	response.Close = true
+	// Do() returns once headers are in; the body is still streaming from the
+	// backend. Switch the timeout from "total" to "idle" for the copy — a
+	// fixed deadline here cut every AI chat turn and large export off at
+	// RequestTimeout mid-body, while an idle clock only cuts a stalled one.
+	idleGuard := headersReceived(response)
 	if err := response.Write(stream); err != nil && !errors.Is(err, io.ErrClosedPipe) {
 		c.logger().Warn("relay connector response write failed", "error", err)
 	}
+	idleGuard.Stop()
 }
 
+// backendRequest builds the outbound backend request. RequestTimeout is
+// applied in two phases rather than as one fixed deadline over the whole
+// exchange: a deadline until response HEADERS arrive, then — via the returned
+// headersReceived hook — an idle watchdog over the body copy that only fires
+// when no body bytes move for RequestTimeout. A single total deadline used to
+// kill every long streamed response (AI chat SSE turns, large tracking
+// exports) mid-body at RequestTimeout no matter how alive it was.
 func (c Client) backendRequest(
 	ctx context.Context,
 	request *http.Request,
-) (*http.Request, context.CancelFunc) {
+) (*http.Request, context.CancelFunc, func(*http.Response) *bodyIdleGuard) {
 	requestContext := ctx
-	cancel := func() {}
+	cancel := context.CancelFunc(func() {})
+	headersReceived := func(*http.Response) *bodyIdleGuard { return &bodyIdleGuard{} }
 	if c.RequestTimeout > 0 {
-		timeoutCtx, timeoutCancel := context.WithTimeout(ctx, c.RequestTimeout)
-		requestContext = timeoutCtx
-		cancel = timeoutCancel
+		cancelCtx, cancelRequest := context.WithCancel(ctx)
+		requestContext = cancelCtx
+		// Phase one: cancel outright if headers do not arrive in time.
+		headerTimer := time.AfterFunc(c.RequestTimeout, cancelRequest)
+		cancel = func() {
+			headerTimer.Stop()
+			cancelRequest()
+		}
+		// Phase two: headers are in — swap the deadline for an idle watchdog
+		// that resets on every body read and cancels only a stalled stream.
+		headersReceived = func(response *http.Response) *bodyIdleGuard {
+			headerTimer.Stop()
+			return guardBodyIdle(response, c.RequestTimeout, cancelRequest)
+		}
 	}
 
 	outbound := request.WithContext(requestContext)
@@ -242,7 +267,48 @@ func (c Client) backendRequest(
 	outbound.Header = request.Header.Clone()
 	removeHopHeaders(outbound.Header)
 	outbound.Header.Set("Connection", "close")
-	return outbound, cancel
+	return outbound, cancel, headersReceived
+}
+
+// bodyIdleGuard cancels the backend request when the response body sits idle
+// for the configured window; every read of the (wrapped) body pushes the
+// deadline out again.
+type bodyIdleGuard struct {
+	timer *time.Timer
+}
+
+func (g *bodyIdleGuard) Stop() {
+	if g.timer != nil {
+		g.timer.Stop()
+	}
+}
+
+func guardBodyIdle(
+	response *http.Response,
+	idleTimeout time.Duration,
+	cancelRequest context.CancelFunc,
+) *bodyIdleGuard {
+	guard := &bodyIdleGuard{timer: time.AfterFunc(idleTimeout, cancelRequest)}
+	response.Body = idleResettingBody{
+		ReadCloser: response.Body,
+		timer:      guard.timer,
+		window:     idleTimeout,
+	}
+	return guard
+}
+
+type idleResettingBody struct {
+	io.ReadCloser
+	timer  *time.Timer
+	window time.Duration
+}
+
+func (b idleResettingBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if n > 0 {
+		b.timer.Reset(b.window)
+	}
+	return n, err
 }
 
 func (c Client) httpClient() *http.Client {

@@ -15,7 +15,10 @@ from apps.analytics.services import (
     iter_events_export_zip,
     record_domain_event,
 )
-from apps.analytics.views import build_events_export_response
+from apps.analytics.views import (
+    ExportFormatAgnosticNegotiation,
+    build_events_export_response,
+)
 
 from .discovery import (
     backend_discovery_payload,
@@ -363,6 +366,9 @@ class RelayDiagnosticsAnalyticsExportView(views.APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    # ``?format=csv`` names the file inside the zip; without this DRF reads it
+    # as a renderer override and 404s (see ExportFormatAgnosticNegotiation).
+    content_negotiation_class = ExportFormatAgnosticNegotiation
 
     def get(self, request):
         installation = RelayInstallation.load()

@@ -172,6 +172,113 @@ func TestServeSessionContinuesAfterBackendFailure(t *testing.T) {
 	}
 }
 
+func TestServeSessionKeepsActiveStreamAliveBeyondRequestTimeout(t *testing.T) {
+	backendURL := parseBackendURL(t)
+	const chunks = 8
+	const interval = 100 * time.Millisecond
+	backendClient := &http.Client{
+		Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			reader, writer := io.Pipe()
+			go func() {
+				for i := 0; i < chunks; i++ {
+					fmt.Fprintf(writer, "chunk-%d\n", i)
+					time.Sleep(interval)
+				}
+				writer.Close()
+			}()
+			return &http.Response{
+				StatusCode:    http.StatusOK,
+				Status:        "200 OK",
+				Proto:         "HTTP/1.1",
+				ProtoMajor:    1,
+				ProtoMinor:    1,
+				Body:          reader,
+				ContentLength: -1,
+				Header:        http.Header{"Content-Type": []string{"text/event-stream"}},
+				Request:       request,
+			}, nil
+		}),
+	}
+	session := startClientSession(t, Client{
+		BackendURL: backendURL,
+		Logger:     testLogger(),
+		HTTPClient: backendClient,
+		// Shorter than the ~800ms the body takes end to end, longer than any
+		// single inter-chunk gap: a fixed total deadline would kill this
+		// stream mid-body; the idle watchdog must let it finish.
+		RequestTimeout: 250 * time.Millisecond,
+	})
+
+	stream := openRequestStream(t, session, "/api/ai/chat/")
+	defer stream.Close()
+	response := readStreamResponse(t, stream)
+	body := readResponseBody(t, response)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", response.StatusCode, body)
+	}
+	for i := 0; i < chunks; i++ {
+		if !strings.Contains(body, fmt.Sprintf("chunk-%d", i)) {
+			t.Fatalf("active stream was cut before chunk %d; got %q", i, body)
+		}
+	}
+}
+
+func TestServeSessionCutsStalledStreamAfterIdleTimeout(t *testing.T) {
+	backendURL := parseBackendURL(t)
+	stalled := make(chan struct{})
+	backendClient := &http.Client{
+		Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			reader, writer := io.Pipe()
+			go func() {
+				fmt.Fprint(writer, "first-chunk\n")
+				select {
+				case <-request.Context().Done():
+					// The real http.Transport aborts an in-flight body read
+					// when the request context is canceled; mirror that.
+					writer.CloseWithError(request.Context().Err())
+				case <-stalled: // never closes during the test window
+				}
+			}()
+			return &http.Response{
+				StatusCode:    http.StatusOK,
+				Status:        "200 OK",
+				Proto:         "HTTP/1.1",
+				ProtoMajor:    1,
+				ProtoMinor:    1,
+				Body:          reader,
+				ContentLength: -1,
+				Header:        http.Header{"Content-Type": []string{"text/event-stream"}},
+				Request:       request,
+			}, nil
+		}),
+	}
+	defer close(stalled)
+	session := startClientSession(t, Client{
+		BackendURL:     backendURL,
+		Logger:         testLogger(),
+		HTTPClient:     backendClient,
+		RequestTimeout: 200 * time.Millisecond,
+	})
+
+	stream := openRequestStream(t, session, "/api/ai/chat/")
+	defer stream.Close()
+	response := readStreamResponse(t, stream)
+	done := make(chan struct{})
+	var body []byte
+	go func() {
+		body, _ = io.ReadAll(response.Body)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("stalled stream was not cut by the idle watchdog")
+	}
+	if !strings.Contains(string(body), "first-chunk") {
+		t.Fatalf("expected the delivered prefix before the cut, got %q", body)
+	}
+}
+
 func startClientSession(t *testing.T, client Client) *protocol.Session {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())

@@ -6,8 +6,10 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.negotiation import DefaultContentNegotiation
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.settings import api_settings
 
 from apps.core.permissions import HasPointyPermission, IsManager
 from apps.core.streaming import aiter_in_thread
@@ -322,6 +324,32 @@ class AnalyticsEventFilter(django_filters.FilterSet):
         return queryset
 
 
+class _NoFormatOverrideSettings:
+    """DRF api_settings view with the ``?format=`` renderer override disabled."""
+
+    def __init__(self, base):
+        self._base = base
+
+    def __getattr__(self, name):
+        if name == "URL_FORMAT_OVERRIDE":
+            return None
+        return getattr(self._base, name)
+
+
+class ExportFormatAgnosticNegotiation(DefaultContentNegotiation):
+    """Content negotiation that ignores the ``?format=`` query parameter.
+
+    On the export endpoints ``format`` selects the FILE inside the zip
+    (csv/json). DRF's default negotiation reads the same parameter as its
+    renderer override and raises Http404 for ``format=csv`` — there is no
+    "csv" renderer — before the view ever runs, which made every CSV export
+    (the app's default) fail instantly. Errors still negotiate normally via
+    the Accept header (JSON).
+    """
+
+    settings = _NoFormatOverrideSettings(api_settings)
+
+
 def build_events_export_response(request, generator, exported_at, event_count):
     """Wrap an export zip generator in a streaming response.
 
@@ -388,7 +416,11 @@ class AnalyticsEventViewSet(
             status=status.HTTP_202_ACCEPTED,
         )
 
-    @action(detail=False, methods=["get"])
+    @action(
+        detail=False,
+        methods=["get"],
+        content_negotiation_class=ExportFormatAgnosticNegotiation,
+    )
     def export(self, request):
         serializer = AnalyticsEventExportQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)

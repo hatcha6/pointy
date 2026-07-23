@@ -615,6 +615,30 @@ class AnalyticsEventApiTests(TestCase):
         self.assertEqual(rows[0]["platform"], "flutter-web")
         self.assertEqual(manifest["filters"]["format"], "json")
 
+    def test_export_accepts_explicit_csv_format_param(self):
+        """``?format=csv`` must reach the view, not DRF's renderer override.
+
+        The app always sends ``format`` (csv is its default); DRF's default
+        negotiation used to read it as a renderer name and 404 before the
+        view ran — no "csv" renderer exists.
+        """
+        AnalyticsEvent.objects.create(
+            event_type=AnalyticsEvent.EventType.USAGE,
+            name="app.started",
+            severity=AnalyticsEvent.Severity.INFO,
+            source=AnalyticsEvent.Source.FRONTEND,
+            occurred_at=timezone.now(),
+        )
+
+        response = self._manager_client().get(
+            reverse("analytics-event-export"), {"format": "csv"}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/zip")
+        archive = zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content)))
+        self.assertIn("analytics_events.csv", archive.namelist())
+
     def test_export_zip_streams_keyset_batches_with_bounded_queries(self):
         events = [
             AnalyticsEvent.objects.create(

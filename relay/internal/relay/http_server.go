@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"pointy/relay/internal/artifacts"
@@ -1452,7 +1453,17 @@ func (s HTTPServer) serveInstallationDiagnosticsAnalytics(
 		w.Header().Set(diagLastConnectedHeader, installation.LastConnectorConnectedAt.UTC().Format(time.RFC3339))
 	}
 	w.WriteHeader(response.StatusCode)
-	if _, err := io.Copy(w, response.Body); err != nil {
+	// Idle watchdog instead of the total deadline for the body: a large
+	// diagnostics zip over a slow shop uplink legitimately outlives the
+	// request timeout while bytes are still flowing.
+	stopDeadlineCloser()
+	touch, stopIdleCloser := closeStreamOnIdle(stream, s.relayRequestTimeout())
+	defer stopIdleCloser()
+	if _, _, err := flushingCopy(
+		w,
+		activityReader{reader: response.Body, touch: touch},
+		0,
+	); err != nil {
 		s.logger().Warn("diagnostics response copy failed", "installation_id", installation.ID, "error", err)
 	}
 }
@@ -1527,7 +1538,7 @@ func (s HTTPServer) tryProxyDiagnosticsToRemoteNode(
 
 	copyHeader(w.Header(), response.Header)
 	w.WriteHeader(response.StatusCode)
-	if _, err := io.Copy(w, response.Body); err != nil {
+	if _, _, err := flushingCopy(w, response.Body, 0); err != nil {
 		s.logger().Warn(
 			"diagnostics remote node proxy response copy failed",
 			"installation_id", installationID,
@@ -2421,43 +2432,6 @@ func (s HTTPServer) handleRelayWithOptions(
 		return
 	}
 	defer response.Body.Close()
-	if maxBytes := s.MaxRelayedResponseBodyBytes; maxBytes > 0 {
-		content, tooLarge, err := readResponseBodyWithinLimit(response.Body, maxBytes)
-		if err != nil {
-			if requestCtx.Err() != nil {
-				statusCode = http.StatusGatewayTimeout
-				outcome = "response_timeout"
-				s.logger().Warn("relay response timed out while reading body", "installation_id", installation.ID, "error", requestCtx.Err())
-				writeJSON(w, http.StatusGatewayTimeout, map[string]string{"error": "relay response timed out"})
-				return
-			}
-			statusCode = http.StatusBadGateway
-			outcome = "backend_failure"
-			s.metrics().RecordBackendFailure()
-			s.logger().Warn("relay response body read failed", "installation_id", installation.ID, "error", err)
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "relay response failed"})
-			return
-		}
-		if tooLarge {
-			statusCode = http.StatusBadGateway
-			outcome = "response_body_too_large"
-			s.metrics().RecordResponseBodyLimitFailed()
-			s.logger().Warn("relay backend response exceeded body limit", "installation_id", installation.ID, "limit_bytes", maxBytes)
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "relay response body too large"})
-			return
-		}
-		statusCode = response.StatusCode
-		outcome = "relayed"
-		if response.StatusCode >= 500 {
-			s.metrics().RecordBackendFailure()
-		}
-		copyHeader(w.Header(), response.Header)
-		w.WriteHeader(response.StatusCode)
-		if _, err := w.Write(content); err != nil {
-			s.logger().Warn("relay response copy failed", "installation_id", installation.ID, "error", err)
-		}
-		return
-	}
 	statusCode = response.StatusCode
 	outcome = "relayed"
 	if response.StatusCode >= 500 {
@@ -2465,7 +2439,36 @@ func (s HTTPServer) handleRelayWithOptions(
 	}
 	copyHeader(w.Header(), response.Header)
 	w.WriteHeader(response.StatusCode)
-	if _, err := io.Copy(w, response.Body); err != nil {
+
+	// Headers are on the wire: the total deadline has done its job. Buffering
+	// the body here (the old readResponseBodyWithinLimit path) froze AI chat
+	// SSE — no token reached the app until the whole turn finished — and the
+	// 60s total deadline killed long turns and large exports mid-body. Stream
+	// the body with per-chunk flushes under an idle watchdog instead: only a
+	// stalled tunnel gets cut, a live stream never does.
+	stopDeadlineCloser()
+	touch, stopIdleCloser := closeStreamOnIdle(stream, s.relayRequestTimeout())
+	defer stopIdleCloser()
+
+	written, tooLarge, err := flushingCopy(
+		w,
+		activityReader{reader: response.Body, touch: touch},
+		s.relayedBodyByteLimit(response.Header),
+	)
+	if tooLarge {
+		outcome = "response_body_too_large"
+		s.metrics().RecordResponseBodyLimitFailed()
+		s.logger().Warn(
+			"relay backend response exceeded body limit mid-stream; transfer aborted",
+			"installation_id", installation.ID,
+			"limit_bytes", s.MaxRelayedResponseBodyBytes,
+			"written_bytes", written,
+		)
+		// The status line already went out; aborting the connection is the
+		// only way left to signal failure instead of a silently-truncated body.
+		panic(http.ErrAbortHandler)
+	}
+	if err != nil {
 		s.logger().Warn("relay response copy failed", "installation_id", installation.ID, "error", err)
 	}
 }
@@ -2580,7 +2583,9 @@ func (s HTTPServer) tryProxyRelayToRemoteNode(
 
 	copyHeader(w.Header(), response.Header)
 	w.WriteHeader(response.StatusCode)
-	if _, err := io.Copy(w, response.Body); err != nil {
+	// Flush per chunk so SSE relayed via a peer node still streams; the byte
+	// limit is enforced by the node that owns the connector tunnel.
+	if _, _, err := flushingCopy(w, response.Body, 0); err != nil {
 		s.logger().Warn(
 			"relay remote node proxy response copy failed",
 			"installation_id",
@@ -2993,8 +2998,11 @@ func closeStreamOnContextDone(ctx context.Context, stream closeableStream) func(
 		case <-done:
 		}
 	}()
+	var once sync.Once
+	// Idempotent: callers stop the deadline closer explicitly when handing
+	// the stream to the idle watchdog, and their deferred stop still runs.
 	return func() {
-		close(done)
+		once.Do(func() { close(done) })
 	}
 }
 
@@ -3011,6 +3019,110 @@ func readResponseBodyWithinLimit(body io.Reader, maxBytes int64) ([]byte, bool, 
 		return nil, true, nil
 	}
 	return content, false, nil
+}
+
+// relayedBodyByteLimit is the byte cap to enforce while relaying a backend
+// response body. Streamed/bulk media are exempt: the AI chat SSE stream is
+// open-ended by design (buffering it froze token streaming entirely), and
+// zip exports (tracking/diagnostics pulls) legitimately exceed any fixed cap
+// on large shops. The flushing copy holds only one chunk in memory whatever
+// the body size, so the cap's original memory rationale no longer applies to
+// them; it remains as an abuse guard on ordinary (JSON) bodies.
+func (s HTTPServer) relayedBodyByteLimit(header http.Header) int64 {
+	contentType := header.Get("Content-Type")
+	if strings.HasPrefix(contentType, "text/event-stream") ||
+		strings.HasPrefix(contentType, "application/zip") {
+		return 0
+	}
+	return s.MaxRelayedResponseBodyBytes
+}
+
+// flushingCopy copies body to w in bounded chunks, flushing after each so a
+// streamed response (SSE chat tokens, a zip being generated row by row)
+// reaches the client as it is produced instead of pooling in the HTTP write
+// buffer. maxBytes > 0 is enforced DURING the copy; on breach the copy stops
+// and reports tooLarge — the status line is already on the wire by then, so
+// the caller must abort the connection rather than write a clean error.
+func flushingCopy(w http.ResponseWriter, body io.Reader, maxBytes int64) (int64, bool, error) {
+	flusher, _ := w.(http.Flusher)
+	buffer := make([]byte, 32*1024)
+	var written int64
+	for {
+		n, readErr := body.Read(buffer)
+		if n > 0 {
+			if maxBytes > 0 && written+int64(n) > maxBytes {
+				return written, true, nil
+			}
+			if _, writeErr := w.Write(buffer[:n]); writeErr != nil {
+				return written, false, writeErr
+			}
+			written += int64(n)
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+		if readErr == io.EOF {
+			return written, false, nil
+		}
+		if readErr != nil {
+			return written, false, readErr
+		}
+	}
+}
+
+// closeStreamOnIdle guards the response-body copy: the total request deadline
+// (closeStreamOnContextDone) is right for opening the tunnel and reading
+// headers, but it kills an actively-flowing long stream — an AI chat turn or
+// a large export — mid-body. Once headers have arrived the caller switches to
+// this watchdog, which closes the stream only when NO bytes have moved for
+// idleTimeout: a stalled backend still gets cut, a live stream never does.
+// touch marks activity; stop dismisses the watchdog.
+func closeStreamOnIdle(stream closeableStream, idleTimeout time.Duration) (touch func(), stop func()) {
+	var mu sync.Mutex
+	lastActivity := time.Now()
+	done := make(chan struct{})
+	touch = func() {
+		mu.Lock()
+		lastActivity = time.Now()
+		mu.Unlock()
+	}
+	go func() {
+		timer := time.NewTimer(idleTimeout)
+		defer timer.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-timer.C:
+				mu.Lock()
+				idle := time.Since(lastActivity)
+				mu.Unlock()
+				if idle >= idleTimeout {
+					_ = stream.Close()
+					return
+				}
+				timer.Reset(idleTimeout - idle)
+			}
+		}
+	}()
+	var once sync.Once
+	return touch, func() {
+		once.Do(func() { close(done) })
+	}
+}
+
+// activityReader marks watchdog activity on every read from the tunnel.
+type activityReader struct {
+	reader io.Reader
+	touch  func()
+}
+
+func (r activityReader) Read(p []byte) (int, error) {
+	n, err := r.reader.Read(p)
+	if n > 0 {
+		r.touch()
+	}
+	return n, err
 }
 
 type adminValidationError string
@@ -3157,7 +3269,20 @@ func (s HTTPServer) nodeProxyHTTPClient() *http.Client {
 	if s.NodeProxyHTTPClient != nil {
 		return s.NodeProxyHTTPClient
 	}
-	return &http.Client{Timeout: s.relayRequestTimeout()}
+	// No Client.Timeout: it covers the ENTIRE body read, so it would cut
+	// long streams (AI chat SSE, large exports) at the deadline on the
+	// node-proxy hop — the exact mid-body kill the idle watchdog replaces on
+	// the direct path. Connection setup and waiting for headers stay bounded;
+	// the peer node enforces its own idle watchdog on the tunnel body.
+	return &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: s.streamOpenTimeout(),
+			}).DialContext,
+			TLSHandshakeTimeout:   s.streamOpenTimeout(),
+			ResponseHeaderTimeout: s.relayRequestTimeout(),
+		},
+	}
 }
 
 func (s HTTPServer) relayRefreshTTL() time.Duration {
