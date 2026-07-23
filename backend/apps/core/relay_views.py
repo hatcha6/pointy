@@ -2,7 +2,6 @@ import secrets
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status, views
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -11,10 +10,12 @@ from rest_framework.response import Response
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.serializers import AnalyticsEventExportQuerySerializer
 from apps.analytics.services import (
-    build_events_export_zip,
+    count_events_for_export,
     filter_events_for_export,
+    iter_events_export_zip,
     record_domain_event,
 )
+from apps.analytics.views import build_events_export_response
 
 from .discovery import (
     backend_discovery_payload,
@@ -382,14 +383,11 @@ class RelayDiagnosticsAnalyticsExportView(views.APIView):
         serializer = AnalyticsEventExportQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
         queryset = filter_events_for_export(
-            AnalyticsEvent.objects.select_related("received_by"),
+            AnalyticsEvent.objects.all(),
             serializer.normalized_filters,
         )
-        export = build_events_export_zip(
-            queryset=queryset,
-            filters=serializer.normalized_filters,
-            exported_by=None,
-        )
+        exported_at = timezone.now()
+        event_count = count_events_for_export(queryset)
         record_domain_event(
             name="analytics.export.support_pull",
             event_type=AnalyticsEvent.EventType.AUDIT,
@@ -399,13 +397,19 @@ class RelayDiagnosticsAnalyticsExportView(views.APIView):
             installation_id=installation.installation_id,
             attributes={
                 "installation_id": installation.installation_id,
-                "event_count": export.event_count,
+                "event_count": event_count,
                 "format": serializer.normalized_filters.get("format", "csv"),
             },
         )
-        response = HttpResponse(export.content, content_type="application/zip")
-        response["Content-Disposition"] = f'attachment; filename="{export.filename}"'
-        response["X-Pointy-Analytics-Event-Count"] = str(export.event_count)
+        generator = iter_events_export_zip(
+            queryset=queryset,
+            filters=serializer.normalized_filters,
+            exported_by=None,
+            exported_at=exported_at,
+        )
+        response = build_events_export_response(
+            request, generator, exported_at, event_count
+        )
         response["X-Pointy-App-Version"] = str(
             settings.SPECTACULAR_SETTINGS.get("VERSION", "")
         )

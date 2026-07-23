@@ -18,7 +18,11 @@ from rest_framework.test import APIClient
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 
 from .models import AnalyticsEvent
-from .services import record_domain_event
+from .services import (
+    filter_events_for_export,
+    iter_events_export_zip,
+    record_domain_event,
+)
 
 
 class AnalyticsEventApiTests(TestCase):
@@ -548,7 +552,7 @@ class AnalyticsEventApiTests(TestCase):
         self.assertEqual(response["X-Pointy-Analytics-Event-Count"], "1")
         self.assertIn("attachment;", response["Content-Disposition"])
 
-        archive = zipfile.ZipFile(io.BytesIO(response.content))
+        archive = zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content)))
         self.assertEqual(
             sorted(archive.namelist()),
             ["analytics_events.csv", "manifest.json"],
@@ -598,7 +602,7 @@ class AnalyticsEventApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        archive = zipfile.ZipFile(io.BytesIO(response.content))
+        archive = zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content)))
         self.assertEqual(
             sorted(archive.namelist()),
             ["analytics_events.json", "manifest.json"],
@@ -610,6 +614,55 @@ class AnalyticsEventApiTests(TestCase):
         self.assertEqual(rows[0]["id"], event.id)
         self.assertEqual(rows[0]["platform"], "flutter-web")
         self.assertEqual(manifest["filters"]["format"], "json")
+
+    def test_export_zip_streams_keyset_batches_with_bounded_queries(self):
+        events = [
+            AnalyticsEvent.objects.create(
+                event_type=AnalyticsEvent.EventType.USAGE,
+                name="app.started",
+                severity=AnalyticsEvent.Severity.INFO,
+                source=AnalyticsEvent.Source.FRONTEND,
+                occurred_at=timezone.now(),
+                received_by=self.manager if index % 2 else None,
+                attributes={"index": index},
+            )
+            for index in range(7)
+        ]
+
+        queryset = filter_events_for_export(AnalyticsEvent.objects.all(), {})
+        with CaptureQueriesContext(connection) as queries:
+            chunks = list(
+                iter_events_export_zip(
+                    queryset=queryset,
+                    filters={"format": "csv"},
+                    exported_by=self.manager,
+                    batch_size=3,
+                )
+            )
+
+        # 7 rows at batch_size=3 → exactly 3 keyset queries, regardless of the
+        # table size: the export must never materialize the whole result set.
+        self.assertEqual(len(queries.captured_queries), 3)
+
+        archive = zipfile.ZipFile(io.BytesIO(b"".join(chunks)))
+        rows = list(
+            csv.DictReader(io.StringIO(archive.read("analytics_events.csv").decode()))
+        )
+        manifest = json.loads(archive.read("manifest.json").decode())
+
+        self.assertEqual(
+            [int(row["id"]) for row in rows],
+            sorted(event.id for event in events),
+        )
+        self.assertEqual(
+            [json.loads(row["attributes"])["index"] for row in rows],
+            list(range(7)),
+        )
+        self.assertEqual(
+            {row["received_by_username"] for row in rows},
+            {"", "analytics-manager"},
+        )
+        self.assertEqual(manifest["event_count"], 7)
 
     def test_cashier_cannot_export_events(self):
         client = APIClient()

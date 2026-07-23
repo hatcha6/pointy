@@ -28,7 +28,7 @@ class _StreamEnd:
         self.error = error
 
 
-async def aiter_in_thread(generator):
+async def aiter_in_thread(generator, *, maxsize=0):
     """Async-iterate a blocking sync ``generator``, chunk by chunk.
 
     The generator body only starts executing (and the worker thread only
@@ -38,9 +38,17 @@ async def aiter_in_thread(generator):
     the partial answer, close the upstream relay stream) still run, exactly as
     they would under WSGI. A generator exception is re-raised here, aborting
     the response mid-stream like the sync path would.
+
+    ``maxsize`` bounds the hand-off queue for producers that outrun their
+    consumer — a DB-backed download generator can emit far faster than a
+    relay-tunnel client drains, and an unbounded queue would quietly buffer
+    the entire body in memory (the aiter_file docstring's warning). With a
+    bound, ``emit`` blocks the worker until the loop takes a chunk, giving the
+    same pull-paced backpressure as a file read. The default stays unbounded
+    for latency-first streams (SSE), whose chunks are tiny and sparse.
     """
     loop = asyncio.get_running_loop()
-    queue = asyncio.Queue()
+    queue = asyncio.Queue(maxsize)
     closed = threading.Event()
 
     def emit(item):
@@ -67,10 +75,15 @@ async def aiter_in_thread(generator):
             # thread; nothing else (no request_finished, no handler) will ever
             # close them.
             connections.close_all()
-            try:
-                emit(_StreamEnd(error))
-            except Exception:
-                pass  # consumer/loop already gone; nothing left to notify
+            if not closed.is_set():
+                # Skip the sentinel once the consumer is gone: with a bounded
+                # queue nobody would drain it, and parking here would leak the
+                # thread. (The consumer's close drains the queue, so an emit
+                # racing this check still gets released rather than stuck.)
+                try:
+                    emit(_StreamEnd(error))
+                except Exception:
+                    pass  # consumer/loop already gone; nothing left to notify
 
     thread = threading.Thread(target=produce, name="sse-stream-bridge", daemon=True)
     thread.start()
@@ -84,6 +97,14 @@ async def aiter_in_thread(generator):
             yield item
     finally:
         closed.set()
+        # A bounded-queue producer may be parked in emit() with the queue
+        # full; free the slots so it wakes, sees ``closed``, and runs its
+        # cleanup instead of blocking forever.
+        while True:
+            try:
+                queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
 
 
 async def aiter_file(path, chunk_size=64 * 1024):

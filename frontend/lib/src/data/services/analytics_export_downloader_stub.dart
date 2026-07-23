@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 
 import '../models/analytics_export.dart';
@@ -25,7 +23,7 @@ Future<AnalyticsExportSaveResult> downloadAnalyticsExportFilePlatform(
       fileName: file.filename,
       type: extension == null ? FileType.any : FileType.custom,
       allowedExtensions: extension == null ? null : [extension],
-      bytes: Uint8List.fromList(file.bytes),
+      bytes: file.bytes,
     );
     if (savedPath == null) {
       return const AnalyticsExportSaveResult.canceled();

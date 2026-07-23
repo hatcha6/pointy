@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 class AnalyticsExportQuery {
   const AnalyticsExportQuery({
     this.format = AnalyticsExportFormat.csv,
@@ -64,7 +66,9 @@ class AnalyticsExportFile {
     required this.contentType,
   });
 
-  final List<int> bytes;
+  /// Typed as [Uint8List] so consumers (save dialog, browser blob) can hand
+  /// the response buffer over as-is — a large export must not be copied again.
+  final Uint8List bytes;
   final String filename;
   final String contentType;
 }

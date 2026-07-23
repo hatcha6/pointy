@@ -1,13 +1,16 @@
 import django_filters
 from django import forms
-from django.http import HttpResponse
+from django.core.handlers.asgi import ASGIRequest
+from django.http import StreamingHttpResponse
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.permissions import HasPointyPermission, IsManager
+from apps.core.streaming import aiter_in_thread
 
 from .models import AnalyticsEvent
 from .serializers import (
@@ -15,7 +18,13 @@ from .serializers import (
     AnalyticsEventExportQuerySerializer,
     AnalyticsEventSerializer,
 )
-from .services import build_events_export_zip, filter_events_for_export, ingest_events
+from .services import (
+    count_events_for_export,
+    export_zip_filename,
+    filter_events_for_export,
+    ingest_events,
+    iter_events_export_zip,
+)
 
 
 ANALYTICS_EVENT_ACTIONS = {
@@ -313,6 +322,28 @@ class AnalyticsEventFilter(django_filters.FilterSet):
         return queryset
 
 
+def build_events_export_response(request, generator, exported_at, event_count):
+    """Wrap an export zip generator in a streaming response.
+
+    Served over ASGI (uvicorn in production), Django would buffer a sync
+    generator wholesale — the entire archive in memory before the first byte —
+    so bridge it to an async iterator. The bounded queue matters: the DB-fed
+    producer outruns a slow (relay-tunnel) client, and backpressure caps the
+    buffered lead at a few chunks instead of the whole file. WSGI (runserver,
+    tests) streams sync generators natively.
+    """
+    django_request = getattr(request, "_request", request)
+    body = generator
+    if isinstance(django_request, ASGIRequest):
+        body = aiter_in_thread(generator, maxsize=8)
+    response = StreamingHttpResponse(body, content_type="application/zip")
+    response["Content-Disposition"] = (
+        f'attachment; filename="{export_zip_filename(exported_at)}"'
+    )
+    response["X-Pointy-Analytics-Event-Count"] = str(event_count)
+    return response
+
+
 class AnalyticsEventViewSet(
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
@@ -365,12 +396,14 @@ class AnalyticsEventViewSet(
             self.get_queryset(),
             serializer.normalized_filters,
         )
-        export = build_events_export_zip(
+        exported_at = timezone.now()
+        # Counted up front (headers must precede the streamed body); the zip
+        # manifest carries the exact streamed count.
+        event_count = count_events_for_export(queryset)
+        generator = iter_events_export_zip(
             queryset=queryset,
             filters=serializer.normalized_filters,
             exported_by=request.user,
+            exported_at=exported_at,
         )
-        response = HttpResponse(export.content, content_type="application/zip")
-        response["Content-Disposition"] = f'attachment; filename="{export.filename}"'
-        response["X-Pointy-Analytics-Event-Count"] = str(export.event_count)
-        return response
+        return build_events_export_response(request, generator, exported_at, event_count)

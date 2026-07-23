@@ -1,5 +1,7 @@
+import asyncio
 import json
 import tempfile
+import threading
 import zipfile
 from datetime import timedelta
 from decimal import Decimal
@@ -23,7 +25,7 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -1732,7 +1734,7 @@ class RelayDiagnosticsAnalyticsExportTests(TestCase):
         self.assertEqual(response["X-Pointy-Connector-Version"], "pointy-relay/test")
         self.assertIn("X-Pointy-App-Version", response)
         self.assertIn("attachment;", response["Content-Disposition"])
-        archive = zipfile.ZipFile(BytesIO(response.content))
+        archive = zipfile.ZipFile(BytesIO(b"".join(response.streaming_content)))
         self.assertEqual(
             sorted(archive.namelist()),
             ["analytics_events.csv", "manifest.json"],
@@ -1773,7 +1775,7 @@ class RelayDiagnosticsAnalyticsExportTests(TestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        archive = zipfile.ZipFile(BytesIO(response.content))
+        archive = zipfile.ZipFile(BytesIO(b"".join(response.streaming_content)))
         rows = json.loads(archive.read("analytics_events.json").decode())
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["name"], "error.boom")
@@ -2105,7 +2107,7 @@ class DashboardApiTests(TestCase):
         return order
 
 
-class RolePermissionBootstrapTests(TestCase):
+class RoleGroupDomainPermissionTests(TestCase):
     def test_role_groups_receive_domain_permissions(self):
         ensure_role_groups()
         User = get_user_model()
@@ -2884,3 +2886,59 @@ class RelayEnrollmentTaskTests(TestCase):
             access_token="ptr1.installation-1.access-secret",
         )
         self.assertEqual(ensure_relay_enrollment_task(), "already enrolled")
+
+
+class AiterInThreadBackpressureTests(SimpleTestCase):
+    """Bounded-queue behavior of the sync→async streaming bridge.
+
+    The unbounded default is exercised implicitly by every AI-chat SSE test;
+    these cover the download path, where ``maxsize`` keeps a fast producer from
+    buffering a whole export ahead of a slow client.
+    """
+
+    async def test_bounded_queue_delivers_all_chunks_in_order(self):
+        from apps.core.streaming import aiter_in_thread
+
+        chunks = [b"chunk-%d" % index for index in range(20)]
+
+        def produce():
+            yield from chunks
+
+        received = [chunk async for chunk in aiter_in_thread(produce(), maxsize=2)]
+
+        self.assertEqual(received, chunks)
+
+    async def test_bounded_queue_reraises_producer_error(self):
+        from apps.core.streaming import aiter_in_thread
+
+        def produce():
+            yield b"first"
+            raise RuntimeError("boom")
+
+        stream = aiter_in_thread(produce(), maxsize=1)
+        self.assertEqual(await stream.__anext__(), b"first")
+        with self.assertRaisesMessage(RuntimeError, "boom"):
+            async for _ in stream:
+                pass
+
+    async def test_early_close_unblocks_parked_producer(self):
+        from apps.core.streaming import aiter_in_thread
+
+        cleaned_up = threading.Event()
+
+        def produce():
+            try:
+                for _ in range(1000):
+                    yield b"x" * 1024
+            finally:
+                cleaned_up.set()
+
+        stream = aiter_in_thread(produce(), maxsize=1)
+        self.assertEqual(await stream.__anext__(), b"x" * 1024)
+        # Give the producer time to fill the queue and park in emit().
+        await asyncio.sleep(0.05)
+        await stream.aclose()
+
+        # The parked producer must wake, observe the close, and run its
+        # ``finally`` instead of leaking a blocked thread.
+        self.assertTrue(await asyncio.to_thread(cleaned_up.wait, 5))

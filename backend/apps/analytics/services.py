@@ -3,10 +3,11 @@ import io
 import json
 import uuid
 import zipfile
+from collections import deque
 from dataclasses import dataclass
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 
 from .models import AnalyticsEvent
@@ -40,6 +41,19 @@ ANALYTICS_EXPORT_CSV_FIELDS = (
     "updated_at",
 )
 
+# ``received_by_username`` is an annotation (LEFT JOIN on the user table); every
+# other CSV column is a concrete AnalyticsEvent column we can pull via values().
+_EXPORT_ROW_FIELDS = tuple(
+    field for field in ANALYTICS_EXPORT_CSV_FIELDS if field != "received_by_username"
+)
+
+# Rows fetched per keyset batch. Each batch is one indexed query and at most a
+# few MB of dicts, so memory stays flat no matter how large the table grows.
+ANALYTICS_EXPORT_BATCH_SIZE = 2000
+
+# Compressed bytes buffered before the generator hands a chunk to the response.
+_EXPORT_STREAM_CHUNK_BYTES = 64 * 1024
+
 
 @dataclass(frozen=True)
 class AnalyticsIngestResult:
@@ -47,13 +61,6 @@ class AnalyticsIngestResult:
     duplicates: int
     event_ids: tuple[str, ...]
     duplicate_event_ids: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class AnalyticsExportResult:
-    content: bytes
-    filename: str
-    event_count: int
 
 
 def ingest_events(*, events, user, request=None) -> AnalyticsIngestResult:
@@ -118,41 +125,133 @@ def ingest_events(*, events, user, request=None) -> AnalyticsIngestResult:
     )
 
 
-def build_events_export_zip(*, queryset, filters, exported_by) -> AnalyticsExportResult:
-    exported_at = timezone.now()
+class _ZipStreamSink(io.RawIOBase):
+    """Unseekable write target for ``zipfile``: buffers written bytes until the
+    export generator drains them to the response, so the archive is produced
+    chunk by chunk instead of accumulating whole in memory. Being unseekable
+    makes ``zipfile`` write data-descriptor records — no rewinding needed."""
+
+    def __init__(self):
+        self._chunks = deque()
+        self._position = 0
+        self.pending = 0
+
+    def writable(self):
+        return True
+
+    def write(self, data):
+        chunk = bytes(data)
+        self._chunks.append(chunk)
+        self._position += len(chunk)
+        self.pending += len(chunk)
+        return len(chunk)
+
+    def tell(self):
+        return self._position
+
+    def drain(self):
+        while self._chunks:
+            chunk = self._chunks.popleft()
+            self.pending -= len(chunk)
+            yield chunk
+
+
+def export_zip_filename(exported_at) -> str:
+    return f"pointy-analytics-events-{exported_at.strftime('%Y%m%dT%H%M%SZ')}.zip"
+
+
+def count_events_for_export(queryset) -> int:
+    """One aggregate for the count header — cheap next to streaming the rows."""
+    return queryset.order_by().count()
+
+
+def iter_export_rows(queryset, *, batch_size=ANALYTICS_EXPORT_BATCH_SIZE):
+    """Yield export rows as dicts, in id order, with flat memory at any size.
+
+    ``queryset.iterator()`` cannot do this here: on-prem Postgres runs behind
+    PgBouncer in transaction pooling, so ``DISABLE_SERVER_SIDE_CURSORS`` is set
+    and ``iterator()`` silently fetches the ENTIRE result client-side — the
+    exact blow-up that made large exports crawl and then die. Keyset pagination
+    over the primary key keeps every batch a small indexed query that works
+    through any pooler, on any backend, with any filter combination.
+
+    ``values()`` (plus a username annotation instead of ``select_related``)
+    also skips model instantiation — a large constant-factor win per row.
+    """
+    rows = queryset.order_by("id").values(
+        *_EXPORT_ROW_FIELDS,
+        received_by_username=F("received_by__username"),
+    )
+    last_id = None
+    while True:
+        batch = rows if last_id is None else rows.filter(id__gt=last_id)
+        batch = list(batch[:batch_size])
+        yield from batch
+        if len(batch) < batch_size:
+            return
+        last_id = batch[-1]["id"]
+
+
+def iter_events_export_zip(
+    *,
+    queryset,
+    filters,
+    exported_by,
+    exported_at=None,
+    batch_size=ANALYTICS_EXPORT_BATCH_SIZE,
+):
+    """Generate the export zip's bytes incrementally, in bounded memory.
+
+    The old builder assembled the full CSV/JSON in a StringIO, compressed it
+    into a BytesIO, then copied that into the response — several times the raw
+    data size resident at once, and zero bytes on the wire until all of it was
+    done. This generator writes each row straight into the zip member and
+    yields compressed chunks as they accumulate, so the download starts
+    immediately and peak memory no longer depends on the export size.
+
+    Level-1 deflate: shop PCs are CPU-poor and the LAN is not the bottleneck;
+    with streaming, transfer overlaps compression anyway, so the cheaper
+    compressor wins end-to-end.
+    """
+    exported_at = exported_at or timezone.now()
     export_format = filters.get("format", "csv")
     data_filename = f"analytics_events.{export_format}"
 
-    zip_buffer = io.BytesIO()
+    sink = _ZipStreamSink()
     event_count = 0
-    with zipfile.ZipFile(zip_buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        if export_format == "json":
-            json_buffer = io.StringIO()
-            json_buffer.write("[\n")
-            for event in queryset.iterator():
-                if event_count:
-                    json_buffer.write(",\n")
-                json_buffer.write(
-                    json.dumps(
-                        _event_export_row(event),
-                        ensure_ascii=False,
-                        sort_keys=True,
+    with zipfile.ZipFile(
+        sink, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=1
+    ) as archive:
+        # force_zip64: with an unseekable sink the member header cannot be
+        # rewritten, so oversized (>4GB) members must be declared up front.
+        with archive.open(data_filename, mode="w", force_zip64=True) as member:
+            with io.TextIOWrapper(member, encoding="utf-8", newline="") as text:
+                if export_format == "json":
+                    text.write("[\n")
+                    for row in iter_export_rows(queryset, batch_size=batch_size):
+                        if event_count:
+                            text.write(",\n")
+                        text.write(
+                            json.dumps(
+                                _event_export_row(row),
+                                ensure_ascii=False,
+                                sort_keys=True,
+                            )
+                        )
+                        event_count += 1
+                        if sink.pending >= _EXPORT_STREAM_CHUNK_BYTES:
+                            yield from sink.drain()
+                    text.write("\n]\n")
+                else:
+                    writer = csv.DictWriter(
+                        text, fieldnames=ANALYTICS_EXPORT_CSV_FIELDS
                     )
-                )
-                event_count += 1
-            json_buffer.write("\n]\n")
-            archive.writestr(
-                data_filename,
-                json_buffer.getvalue(),
-            )
-        else:
-            csv_buffer = io.StringIO()
-            writer = csv.DictWriter(csv_buffer, fieldnames=ANALYTICS_EXPORT_CSV_FIELDS)
-            writer.writeheader()
-            for event in queryset.iterator():
-                writer.writerow(_event_export_row(event))
-                event_count += 1
-            archive.writestr(data_filename, csv_buffer.getvalue())
+                    writer.writeheader()
+                    for row in iter_export_rows(queryset, batch_size=batch_size):
+                        writer.writerow(_event_export_row(row))
+                        event_count += 1
+                        if sink.pending >= _EXPORT_STREAM_CHUNK_BYTES:
+                            yield from sink.drain()
         manifest = {
             "generated_at": exported_at.isoformat(),
             "generated_by": {
@@ -167,13 +266,7 @@ def build_events_export_zip(*, queryset, filters, exported_by) -> AnalyticsExpor
             "manifest.json",
             json.dumps(manifest, ensure_ascii=False, indent=2),
         )
-
-    filename_timestamp = exported_at.strftime("%Y%m%dT%H%M%SZ")
-    return AnalyticsExportResult(
-        content=zip_buffer.getvalue(),
-        filename=f"pointy-analytics-events-{filename_timestamp}.zip",
-        event_count=event_count,
-    )
+    yield from sink.drain()
 
 
 def filter_events_for_export(queryset, filters):
@@ -213,7 +306,9 @@ def filter_events_for_export(queryset, filters):
         queryset = queryset.filter(risk_score__gte=filters["risk_score_min"])
     if filters.get("risk_score_max") is not None:
         queryset = queryset.filter(risk_score__lte=filters["risk_score_max"])
-    return queryset.order_by("occurred_at", "id")
+    # Ordering is left to iter_export_rows: keyset pagination needs id order,
+    # which the primary key serves for free on every filter combination.
+    return queryset
 
 
 def build_event(
@@ -291,37 +386,34 @@ def record_domain_event(
         create_event()
 
 
-def _event_export_row(event):
+def _event_export_row(row):
+    """Format one ``iter_export_rows`` values() dict for the CSV/JSON member."""
     return {
-        "id": event.id,
-        "client_event_id": str(event.client_event_id),
-        "event_type": event.event_type,
-        "name": event.name,
-        "severity": event.severity,
-        "source": event.source,
-        "occurred_at": event.occurred_at.isoformat(),
-        "received_by_id": event.received_by_id or "",
-        "received_by_username": (
-            event.received_by.username
-            if event.received_by_id and event.received_by is not None
-            else ""
-        ),
-        "session_id": event.session_id,
-        "device_id": event.device_id,
-        "installation_id": event.installation_id,
-        "app_version": event.app_version,
-        "platform": event.platform,
-        "request_path": event.request_path,
-        "ip_address": event.ip_address or "",
-        "user_agent": event.user_agent,
-        "trace_id": event.trace_id,
-        "entity_type": event.entity_type,
-        "entity_id": event.entity_id,
-        "risk_score": event.risk_score if event.risk_score is not None else "",
-        "attributes": json.dumps(event.attributes, ensure_ascii=False, sort_keys=True),
-        "metrics": json.dumps(event.metrics, ensure_ascii=False, sort_keys=True),
-        "created_at": event.created_at.isoformat(),
-        "updated_at": event.updated_at.isoformat(),
+        "id": row["id"],
+        "client_event_id": str(row["client_event_id"]),
+        "event_type": row["event_type"],
+        "name": row["name"],
+        "severity": row["severity"],
+        "source": row["source"],
+        "occurred_at": row["occurred_at"].isoformat(),
+        "received_by_id": row["received_by_id"] or "",
+        "received_by_username": row["received_by_username"] or "",
+        "session_id": row["session_id"],
+        "device_id": row["device_id"],
+        "installation_id": row["installation_id"],
+        "app_version": row["app_version"],
+        "platform": row["platform"],
+        "request_path": row["request_path"],
+        "ip_address": str(row["ip_address"] or ""),
+        "user_agent": row["user_agent"],
+        "trace_id": row["trace_id"],
+        "entity_type": row["entity_type"],
+        "entity_id": row["entity_id"],
+        "risk_score": row["risk_score"] if row["risk_score"] is not None else "",
+        "attributes": json.dumps(row["attributes"], ensure_ascii=False, sort_keys=True),
+        "metrics": json.dumps(row["metrics"], ensure_ascii=False, sort_keys=True),
+        "created_at": row["created_at"].isoformat(),
+        "updated_at": row["updated_at"].isoformat(),
     }
 
 
