@@ -121,6 +121,11 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+      # Probe every 1s DURING startup (Docker 25+) so Postgres is marked healthy
+      # ~1-2s after it accepts connections instead of waiting for the first 10s
+      # interval tick — this gates the whole stack (pgbouncer + backend wait on
+      # it), so it is the biggest lever on cold-boot/reboot time-to-serving.
+      start_interval: 1s
     stop_grace_period: 60s
     logging: *pointy-logging
 
@@ -202,6 +207,10 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+      # Fast startup probe (Docker 25+): redis is ready almost immediately, so
+      # this marks it healthy in ~1s instead of at the first 10s tick, letting
+      # the backend (which waits on redis) start sooner.
+      start_interval: 1s
     stop_grace_period: 30s
     logging: *pointy-logging
 
@@ -268,6 +277,13 @@ services:
       timeout: 5s
       retries: 6
       start_period: 90s
+      # Probe every 2s DURING startup (Docker 25+) so the backend is marked
+      # healthy within ~2s of /readyz passing instead of at the next 15s tick.
+      # web/celery/connector all wait on backend health, so this brings the rest
+      # of the stack online ~2s sooner. Steady-state stays at 15s (the readyz
+      # check spawns a Python process, so we don't want it firing every 2s once
+      # the container is up).
+      start_interval: 2s
     stop_grace_period: 45s
     logging: *pointy-logging
 
@@ -312,6 +328,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+      # Probe every 5s during startup (Docker 25+) so a booted worker is marked
+      # healthy in ~5-10s instead of drifting up to a full 60s interval — keeps
+      # the watchdog from ever seeing a healthy-but-still-"starting" worker.
+      # `celery inspect ping` is heavier than a socket check, hence 5s not 1s.
+      start_interval: 5s
     stop_grace_period: 60s
     logging: *pointy-logging
 
@@ -373,6 +394,12 @@ services:
     pids_limit: 64
     mem_limit: "${POINTY_CONNECTOR_MEM_LIMIT:-128m}"
     cpus: "${POINTY_CONNECTOR_CPUS:-0.5}"
+    # Wait for the backend to be HEALTHY: the connector bootstraps by POSTing to
+    # the backend and EXITS on failure (relying on restart: always), so starting
+    # it before the backend listens just crash-loops it through the boot window
+    # with nothing gained — it can't serve relay traffic until the backend is up
+    # anyway. The backend's start_interval healthcheck marks it healthy ~2s after
+    # it serves, so this condition is no longer a slow gate.
     depends_on:
       backend:
         condition: service_healthy
@@ -412,9 +439,14 @@ services:
     pids_limit: 128
     mem_limit: "${POINTY_WEB_MEM_LIMIT:-128m}"
     cpus: "${POINTY_WEB_CPUS:-0.5}"
+    # Only wait for the backend to START, not to be healthy: nginx serves the
+    # Flutter app shell immediately and reverse-proxies /api with a re-resolving
+    # upstream, so the browser UI loads right away and API calls simply retry
+    # until the backend is ready — no reason to hold the whole web front door
+    # behind the backend health check.
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_started
     ports:
       - "${POINTY_WEB_BIND:-0.0.0.0}:${POINTY_WEB_PORT:-80}:80"
     tmpfs:
@@ -427,6 +459,9 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+      # nginx serves within ~1s; fast startup probe (Docker 25+) marks it healthy
+      # promptly instead of at the first 15s tick.
+      start_interval: 1s
     stop_grace_period: 15s
     logging: *pointy-logging
 

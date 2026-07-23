@@ -1,3 +1,4 @@
+from django.apps import apps as django_apps
 from django.contrib.auth.models import Group, User
 from django.db.models.signals import (
     m2m_changed,
@@ -14,6 +15,21 @@ from .roles import ensure_role_groups
 
 @receiver(post_migrate)
 def setup_auth_roles(sender, **kwargs):
+    # post_migrate is emitted once for EVERY installed app, but rebuilding the
+    # role groups is global work (hundreds of queries) that only needs to happen
+    # once per migrate — and only after every app's permissions have been
+    # created. Django emits post_migrate in app order and skips apps whose
+    # models_module is None, so gate on the LAST app that will emit: it runs a
+    # single time, last, with all permissions present. Without this gate the
+    # rebuild ran ~29x on every boot (≈10s of redundant queries in the startup
+    # critical path); this makes it run once.
+    emitting = [
+        app_config
+        for app_config in django_apps.get_app_configs()
+        if app_config.models_module is not None
+    ]
+    if not emitting or sender is not emitting[-1]:
+        return
     ensure_role_groups()
 
 
