@@ -173,7 +173,7 @@ class ShopSettingsViewModel extends ChangeNotifier {
               ...attributes,
               'content_type': result.value.contentType,
             },
-            metrics: {'byte_count': result.value.bytes.length},
+            metrics: {'byte_count': result.value.sizeBytes},
           ),
         );
         unawaited(
@@ -183,7 +183,7 @@ class ShopSettingsViewModel extends ChangeNotifier {
               ...attributes,
               'filename_extension': result.value.filename.split('.').last,
             },
-            metrics: {'byte_count': result.value.bytes.length},
+            metrics: {'byte_count': result.value.sizeBytes},
           ),
         );
         notifyListeners();
@@ -334,7 +334,7 @@ class ShopSettingsViewModel extends ChangeNotifier {
           'content_type': file.contentType,
           'source': 'analytics_export_sheet',
         },
-        metrics: {'byte_count': file.bytes.length},
+        metrics: {'byte_count': file.sizeBytes},
         flushImmediately: !downloaded,
       ),
     );

@@ -223,7 +223,8 @@ class PosApiSession {
 
     // Look the entry up once and hold the reference: eviction by a concurrent
     // request must not turn a 304 into an empty response.
-    final cached = _conditionalCache[uri(path, queryParameters: query).toString()];
+    final cached =
+        _conditionalCache[uri(path, queryParameters: query).toString()];
     final response = await _send(
       method: 'GET',
       path: path,
@@ -234,8 +235,10 @@ class PosApiSession {
         }
         // uri() is re-resolved per attempt so the relay-fallback retry inside
         // _send targets the switched base URL, same as the plain path above.
-        return client.get(uri(path, queryParameters: query),
-            headers: requestHeaders);
+        return client.get(
+          uri(path, queryParameters: query),
+          headers: requestHeaders,
+        );
       },
     );
 
@@ -304,6 +307,20 @@ class PosApiSession {
         body: encodedBody,
       ),
     );
+  }
+
+  /// Opens a GET whose body the caller consumes as a stream — for large
+  /// downloads (the tracking export zip) that must never be buffered whole in
+  /// app memory. Carries the same session/relay headers as [get], but skips
+  /// the in-flight coalescing, conditional cache, and perf recording that all
+  /// assume a fully-materialized [http.Response].
+  Future<http.StreamedResponse> getStreamed(
+    String path, {
+    Map<String, String>? query,
+  }) {
+    final request = http.Request('GET', uri(path, queryParameters: query));
+    request.headers.addAll(headers());
+    return client.send(request);
   }
 
   /// Opens a Server-Sent Events stream (POST) and yields parsed [SseEvent]s as

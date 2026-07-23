@@ -11,11 +11,12 @@ Future<AnalyticsExportSaveResult> downloadAnalyticsExportFilePlatform(
   AnalyticsExportFile file, {
   String? dialogTitle,
 }) async {
-  if (file.bytes.isEmpty) {
+  final bytes = file.bytes;
+  if (bytes == null || bytes.isEmpty) {
     return const AnalyticsExportSaveResult.failed();
   }
 
-  final blob = html.Blob([file.bytes], file.contentType);
+  final blob = html.Blob([bytes], file.contentType);
   final url = html.Url.createObjectUrlFromBlob(blob);
   final anchor = html.AnchorElement(href: url)
     ..download = file.filename

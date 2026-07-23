@@ -59,18 +59,34 @@ class AnalyticsExportQuery {
   }
 }
 
+/// The exported tracking archive, carried either as a temp file on disk
+/// (native platforms — the download streams straight to disk so an export of
+/// any size never has to fit in the app's memory) or as bytes (web, where the
+/// browser download needs a blob).
 class AnalyticsExportFile {
-  const AnalyticsExportFile({
-    required this.bytes,
+  const AnalyticsExportFile.spooled({
+    required String this.tempFilePath,
     required this.filename,
     required this.contentType,
-  });
+    required this.sizeBytes,
+  }) : bytes = null;
 
-  /// Typed as [Uint8List] so consumers (save dialog, browser blob) can hand
-  /// the response buffer over as-is — a large export must not be copied again.
-  final Uint8List bytes;
+  const AnalyticsExportFile.inMemory({
+    required Uint8List this.bytes,
+    required this.filename,
+    required this.contentType,
+    required this.sizeBytes,
+  }) : tempFilePath = null;
+
+  /// Web only: the whole archive. `null` on native platforms.
+  final Uint8List? bytes;
+
+  /// Native platforms: where the streamed download landed. `null` on web.
+  final String? tempFilePath;
+
   final String filename;
   final String contentType;
+  final int sizeBytes;
 }
 
 /// Outcome of handing an [AnalyticsExportFile] to the platform so the user can

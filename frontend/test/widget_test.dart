@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 // ignore: implementation_imports
@@ -1994,10 +1995,7 @@ void main() {
       expect(find.text('اختر موردًا قبل إرسال أمر الشراء.'), findsOneWidget);
 
       // Set a purchase cost on the freshly added line, then submit the order.
-      await tester.enterText(
-        find.widgetWithText(TextField, 'التكلفة'),
-        '4.25',
-      );
+      await tester.enterText(find.widgetWithText(TextField, 'التكلفة'), '4.25');
       await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('إعدادات مسودة الشراء'));
@@ -2972,7 +2970,13 @@ void main() {
 
     Uri? exportUri;
 
-    final savePicker = _FakeSaveFilePicker();
+    // The desktop save flow moves the spooled download to the picked path, so
+    // the fake dialog must return somewhere actually writable.
+    final saveDirectory = Directory.systemTemp.createTempSync('pointy-export');
+    addTearDown(() => saveDirectory.deleteSync(recursive: true));
+    final savePicker = _FakeSaveFilePicker()
+      ..returnedPath =
+          '${saveDirectory.path}${Platform.pathSeparator}analytics-events.csv';
     final previousPicker = FilePickerPlatform.instance;
     FilePickerPlatform.instance = savePicker;
     addTearDown(() => FilePickerPlatform.instance = previousPicker);
@@ -3032,12 +3036,16 @@ void main() {
     expect(exportUri?.queryParameters['severity'], 'warning');
     expect(exportUri?.queryParameters['search'], 'checkout');
     expect(exportUri?.queryParameters['platform'], 'flutter-web');
-    // The export bytes were handed to the save dialog, and the resulting path is
-    // surfaced so the user knows exactly where the file landed.
-    expect(savePicker.savedBytes, isNotNull);
-    expect(savePicker.savedBytes, isNotEmpty);
+    // Desktop saves by moving the spooled download to the chosen path: the
+    // dialog only picks the destination (no bytes cross it), the file lands
+    // there intact, and the path is surfaced to the user.
+    expect(savePicker.savedFileName, 'analytics.csv');
+    expect(savePicker.savedBytes, isNull);
+    final savedFile = File(savePicker.returnedPath!);
+    expect(savedFile.existsSync(), isTrue);
+    expect(savedFile.readAsStringSync(), 'id,name\n1,frontend.operation\n');
     expect(
-      find.text('حُفظ ملف التتبع في: /Users/tester/Downloads/analytics-events.csv'),
+      find.text('حُفظ ملف التتبع في: ${savePicker.returnedPath!}'),
       findsOneWidget,
     );
   });

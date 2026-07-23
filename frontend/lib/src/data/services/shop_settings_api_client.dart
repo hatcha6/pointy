@@ -1,6 +1,7 @@
 import '../models/analytics_export.dart';
 import '../models/shop_settings.dart';
 import '../models/system_backup.dart';
+import 'analytics_export_receiver.dart';
 import 'api_session.dart';
 
 class ShopSettingsApiClient {
@@ -86,13 +87,23 @@ class ShopSettingsApiClient {
   Future<AnalyticsExportFile> exportAnalyticsEvents(
     AnalyticsExportQuery query,
   ) async {
-    final response = await _session.get(
+    // Streamed, not buffered: the backend streams the zip as it is built, and
+    // on native platforms the receiver spools it straight to disk — an export
+    // is never limited by what fits in app memory.
+    final response = await _session.getStreamed(
       'analytics-events/export/',
       query: query.toQueryParameters(),
     );
-    _session.throwApiException(response, 'Analytics export failed with status');
-    return AnalyticsExportFile(
-      bytes: response.bodyBytes,
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final errorBody = await response.stream.bytesToString();
+      throw PosApiException(
+        message: 'Analytics export failed with status ${response.statusCode}',
+        statusCode: response.statusCode,
+        responseBody: errorBody,
+      );
+    }
+    return receiveAnalyticsExport(
+      response,
       filename: _filenameFromHeaders(response.headers),
       contentType: response.headers['content-type'] ?? 'application/zip',
     );
