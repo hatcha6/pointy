@@ -1429,7 +1429,11 @@ func (s HTTPServer) serveInstallationDiagnosticsAnalytics(
 	proxyReq.URL.RawQuery = r.URL.RawQuery
 	proxyReq.Close = true
 	proxyReq.Header.Set("Connection", "close")
-	proxyReq.Header.Set("Accept", "application/zip")
+	// State the preference, but keep the */* fallback: the on-prem backend
+	// negotiates content before its handler runs, and a shop that has not yet
+	// taken the update that declares a zip renderer answers a bare
+	// "application/zip" with 406 instead of the export.
+	proxyReq.Header.Set("Accept", "application/zip, */*")
 
 	if err := proxyReq.Write(stream); err != nil {
 		s.logger().Warn("diagnostics request write failed", "installation_id", installation.ID, "error", err)

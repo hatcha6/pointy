@@ -28,3 +28,7 @@ pyarmor.bug.log
 *.mdb
 fahd_data.sqlite
 fahd_migration.sqlite
+
+# Operator workspace: compiled admin CLI + local .env holding the production
+# fleet admin token. Rebuild with `make relay-cli`.
+/ops/

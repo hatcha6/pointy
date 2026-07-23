@@ -3122,13 +3122,14 @@ func TestHTTPAdminDiagnosticsAnalyticsProxiesThroughConnector(t *testing.T) {
 		t.Fatal(err)
 	}
 	var mu sync.Mutex
-	var gotPath, gotQuery, gotToken string
+	var gotPath, gotQuery, gotToken, gotAccept string
 	backendClient := &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			mu.Lock()
 			gotPath = r.URL.Path
 			gotQuery = r.URL.RawQuery
 			gotToken = r.Header.Get("X-Pointy-Connector-Token")
+			gotAccept = r.Header.Get("Accept")
 			mu.Unlock()
 			body := "PK-zip-bytes"
 			return &http.Response{
@@ -3211,6 +3212,12 @@ func TestHTTPAdminDiagnosticsAnalyticsProxiesThroughConnector(t *testing.T) {
 	}
 	if gotToken != "connector-secret" {
 		t.Fatalf("expected connector token injected, got %q", gotToken)
+	}
+	// The */* fallback is load-bearing: DRF on the on-prem backend negotiates
+	// content before the handler runs and answers a zip-only Accept with 406
+	// unless that shop has taken the update declaring a zip renderer.
+	if !strings.Contains(gotAccept, "*/*") {
+		t.Fatalf("expected Accept to keep a */* fallback, got %q", gotAccept)
 	}
 }
 

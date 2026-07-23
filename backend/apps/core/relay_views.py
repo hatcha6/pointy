@@ -16,6 +16,7 @@ from apps.analytics.services import (
     record_domain_event,
 )
 from apps.analytics.views import (
+    EXPORT_RENDERER_CLASSES,
     ExportFormatAgnosticNegotiation,
     build_events_export_response,
 )
@@ -369,6 +370,9 @@ class RelayDiagnosticsAnalyticsExportView(views.APIView):
     # ``?format=csv`` names the file inside the zip; without this DRF reads it
     # as a renderer override and 404s (see ExportFormatAgnosticNegotiation).
     content_negotiation_class = ExportFormatAgnosticNegotiation
+    # The relay asks for ``application/zip`` on the tunnel request; negotiation
+    # runs before the handler and 406s without a renderer declaring it.
+    renderer_classes = EXPORT_RENDERER_CLASSES
 
     def get(self, request):
         installation = RelayInstallation.load()

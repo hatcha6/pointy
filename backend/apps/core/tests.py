@@ -1754,6 +1754,22 @@ class RelayDiagnosticsAnalyticsExportTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response["Content-Type"], "application/zip")
 
+    def test_export_accepts_application_zip_accept_header(self):
+        # The relay sends `Accept: application/zip` on the tunnel request. DRF
+        # negotiates renderers before the handler runs and knows nothing about
+        # zip, so without an explicit zip renderer every operator diagnostics
+        # pull 406s.
+        self._create_event()
+
+        response = APIClient().get(
+            reverse("relay-diagnostics-analytics-export"),
+            HTTP_X_POINTY_CONNECTOR_TOKEN="ptc1.installation-1.connector-secret",
+            HTTP_ACCEPT="application/zip",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response["Content-Type"], "application/zip")
+
     def test_missing_or_wrong_connector_token_is_rejected(self):
         missing = APIClient().get(reverse("relay-diagnostics-analytics-export"))
         wrong = APIClient().get(

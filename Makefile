@@ -12,6 +12,7 @@ FLUTTER ?= flutter
 GO ?= go
 GO_CACHE ?= $(RELAY_DIR)/.gocache
 GO_MOD_CACHE ?= $(RELAY_DIR)/.gomodcache
+OPS_DIR ?= ops
 WEB_HOST ?= 127.0.0.1
 WEB_PORT ?= 8080
 API_HOST ?= 127.0.0.1
@@ -120,7 +121,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-load-test backend-stress-test backend-endurance-test \
 	backend-shell backend-superuser backend-test backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
-	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision \
+	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable postgres-ready clean
 
 help: ## Show available commands.
@@ -479,6 +480,10 @@ relay-subscription-update: ## Update company-owned relay subscription state thro
 		--ai-enabled "$(RELAY_SUBSCRIPTION_AI_ENABLED)" \
 		--subscription-ends-at "$(RELAY_SUBSCRIPTION_ENDS_AT)" \
 		--clear-subscription-end="$(RELAY_SUBSCRIPTION_CLEAR_END)"
+
+relay-cli: ## Build the operator CLI into the gitignored ops/ workspace (keeps ops/.env).
+	@OPS_DIR="$(abspath $(OPS_DIR))" GO="$(GO)" GO_CACHE="$(abspath $(GO_CACHE))" GO_MOD_CACHE="$(abspath $(GO_MOD_CACHE))" \
+		RELAY_REMOTE_HOST="$(RELAY_REMOTE_HOST)" ./scripts/build-operator-cli.sh
 
 relay-remote-mint: ## Mint an enrollment token on the remote relay for dev-remote (operator step; needs RELAY_REMOTE_ADMIN_TOKEN). Copy the printed pte1.xxx token to backend/.env POINTY_RELAY_ENROLLMENT_TOKEN.
 	@test -n "$(RELAY_REMOTE_ADMIN_TOKEN)" || { \

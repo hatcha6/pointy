@@ -8,6 +8,7 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.negotiation import DefaultContentNegotiation
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.response import Response
 from rest_framework.settings import api_settings
 
@@ -336,6 +337,35 @@ class _NoFormatOverrideSettings:
         return getattr(self._base, name)
 
 
+class ZipRenderer(BaseRenderer):
+    """Declares ``application/zip`` so DRF can negotiate the export endpoints.
+
+    Negotiation runs in ``initial()``, before the handler — a client that asks
+    for the media type these views actually return (the relay sends
+    ``Accept: application/zip`` on diagnostics pulls) is rejected with 406
+    against the default JSON-only renderer set. The export views return a
+    ``StreamingHttpResponse``, not a DRF ``Response``, so this renderer never
+    renders anything; it exists to make negotiation succeed.
+
+    Keep it AFTER ``JSONRenderer`` in ``renderer_classes``: the first entry is
+    the default for ``*/*`` clients, and error responses (403/404) are DRF
+    ``Response`` objects that must still render as JSON.
+    """
+
+    media_type = "application/zip"
+    format = "zip"
+    charset = None
+    render_style = "binary"
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        return data
+
+
+#: Renderer set for endpoints that stream an export zip. JSON stays first so
+#: errors and ``*/*`` clients are unaffected.
+EXPORT_RENDERER_CLASSES = [JSONRenderer, ZipRenderer]
+
+
 class ExportFormatAgnosticNegotiation(DefaultContentNegotiation):
     """Content negotiation that ignores the ``?format=`` query parameter.
 
@@ -420,6 +450,7 @@ class AnalyticsEventViewSet(
         detail=False,
         methods=["get"],
         content_negotiation_class=ExportFormatAgnosticNegotiation,
+        renderer_classes=EXPORT_RENDERER_CLASSES,
     )
     def export(self, request):
         serializer = AnalyticsEventExportQuerySerializer(data=request.query_params)

@@ -315,6 +315,13 @@ export POINTY_RELAY_ADMIN_TOKEN='<admin-token>'
 export POINTY_RELAY_OPERATOR='ops@example.com'   # default audit actor
 ```
 
+For a persistent setup, `make relay-cli` (from the repo root) compiles the CLI
+into the gitignored `ops/` workspace and seeds `ops/.env` with those three
+settings. `./ops/pointy-relay <command>` then works from any directory —
+the wrapper points `POINTY_RELAY_ENV_FILE` at `ops/.env`, and real environment
+variables still override it for one-off runs against another relay. Rebuilding
+never overwrites an existing `ops/.env`.
+
 Find and inspect installations (human-readable tables; add `--json` for scripts):
 
 ```sh
