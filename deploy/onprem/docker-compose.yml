@@ -41,6 +41,14 @@ x-backend-environment: &backend-environment
   POINTY_DISCOUNT_PREVIEW_CACHE_TTL: "${POINTY_DISCOUNT_PREVIEW_CACHE_TTL:-15}"
   POINTY_CATALOG_CACHE_ENABLED: "${POINTY_CATALOG_CACHE_ENABLED:-true}"
   POINTY_PRICE_LOOKUP_CACHE_TTL: "${POINTY_PRICE_LOOKUP_CACHE_TTL:-30}"
+  # Extra Postgres workers the analytics/diagnostics export may fan its COPY
+  # across. The per-row formatting is CPU-bound and parallelises ~1.3-1.4x, but
+  # every worker competes with the POS while the shop trades. Postgres here is
+  # capped at ~1.5 CPU (see the postgres service), so the default stays low; set
+  # to 0 to keep exports single-threaded, or raise it only if you give Postgres
+  # more cores. An export is manager-initiated and infrequent, so the brief
+  # contention is bounded.
+  POINTY_ANALYTICS_EXPORT_PARALLEL_WORKERS: "${POINTY_ANALYTICS_EXPORT_PARALLEL_WORKERS:-2}"
   POINTY_ATTACHMENT_STORAGE_ROOT: /var/lib/pointy/media
   POINTY_BACKUP_ALLOWED_ROOTS: /var/lib/pointy/backups,/mnt/pointy-external
   POINTY_BACKUP_STAGING_ROOT: /tmp/pointy-backup-staging

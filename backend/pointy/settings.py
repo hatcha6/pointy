@@ -22,6 +22,7 @@ env = environ.Env(
     POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED=(bool, True),
     POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS=(int, 750),
     POINTY_ANALYTICS_BUFFER_SIZE=(int, 50),
+    POINTY_ANALYTICS_EXPORT_PARALLEL_WORKERS=(int, 2),
     POINTY_ANALYTICS_BUFFER_MAX_AGE_SECONDS=(int, 5),
     POINTY_ATTACHMENT_MAX_UPLOAD_BYTES=(int, 100 * 1024 * 1024),
     POINTY_ATTACHMENT_CONTENT_TOKEN_MAX_AGE_SECONDS=(int, 60 * 60 * 6),
@@ -453,6 +454,15 @@ POINTY_ANALYTICS_BACKEND_PERFORMANCE_PATHS = ("/api/",)
 # forced synchronous under tests so assertions can see the row immediately.
 POINTY_ANALYTICS_BUFFER_SIZE = 0 if TESTING else env("POINTY_ANALYTICS_BUFFER_SIZE")
 POINTY_ANALYTICS_BUFFER_MAX_AGE_SECONDS = env("POINTY_ANALYTICS_BUFFER_MAX_AGE_SECONDS")
+# Extra Postgres workers the analytics export's COPY may fan out across. The
+# per-row work (three timestamp formats + two jsonb reads) is CPU-bound and
+# parallelises cleanly, but every worker is a Postgres process competing with
+# the POS while the shop trades — so this is a bounded, operator-tunable knob,
+# not "as many as possible". 0 keeps the export single-threaded. On-prem caps
+# Postgres CPU, so raise this only to match the cores actually allotted to it.
+POINTY_ANALYTICS_EXPORT_PARALLEL_WORKERS = env(
+    "POINTY_ANALYTICS_EXPORT_PARALLEL_WORKERS"
+)
 POINTY_ATTACHMENT_STORAGE_ROOT = env(
     "POINTY_ATTACHMENT_STORAGE_ROOT",
     default=str(MEDIA_ROOT),
