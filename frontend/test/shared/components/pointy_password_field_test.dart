@@ -10,20 +10,23 @@ void main() {
   ) async {
     await _pumpField(tester);
 
+    final l10n = AppLocalizations.of(
+      tester.element(find.byType(PointyPasswordField)),
+    )!;
+
     EditableText field() =>
         tester.widget<EditableText>(find.byType(EditableText));
     IconButton toggle() => tester.widget<IconButton>(find.byType(IconButton));
 
     expect(field().obscureText, isTrue);
-    expect(toggle().tooltip, 'إظهار كلمة المرور');
+    expect(toggle().tooltip, l10n.showPasswordTooltip);
 
     await tester.tap(find.byType(IconButton));
     await tester.pump();
 
     expect(field().obscureText, isFalse);
     // The tooltip is also the screen-reader label, so it must track the state.
-    expect(toggle().tooltip, 'إخفاء كلمة المرور');
-  });
+    expect(toggle().tooltip, l10n.hidePasswordTooltip);
 
   testWidgets('disables the toggle while the field is disabled', (
     tester,
