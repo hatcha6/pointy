@@ -29,7 +29,7 @@ void main() {
     expect(find.textContaining('شيبس'), findsOneWidget);
     expect(find.text('لا توجد منتجات'), findsNothing);
 
-    await tester.tap(find.text('مسح البحث والتصنيف'));
+    await tester.tap(find.text('مسح البحث والفلاتر'));
     expect(cleared, 1);
   });
 
@@ -41,8 +41,69 @@ void main() {
       ),
     );
 
-    expect(find.text('لا توجد منتجات ضمن هذا التصنيف'), findsOneWidget);
-    expect(find.text('مسح البحث والتصنيف'), findsOneWidget);
+    expect(find.text('لا توجد منتجات مطابقة للفلاتر المحددة'), findsOneWidget);
+    expect(find.text('مسح البحث والفلاتر'), findsOneWidget);
+  });
+
+  for (final entry in <String, ProductQuery>{
+    'availability': ProductQuery(
+      availability: ProductAvailabilityFilter.inactive,
+    ),
+    'supplier': ProductQuery(supplierId: 7, supplierName: 'مورد'),
+    'archived': ProductQuery(archived: ProductArchivedFilter.onlyArchived),
+  }.entries) {
+    testWidgets('offers a way out of a ${entry.key} filter', (tester) async {
+      await _pumpEmptyState(
+        tester,
+        query: entry.value,
+        emptyAction: const Text('أضف منتجًا'),
+      );
+
+      expect(
+        find.text('لا توجد منتجات مطابقة للفلاتر المحددة'),
+        findsOneWidget,
+      );
+      expect(find.text('مسح البحث والفلاتر'), findsOneWidget);
+      // The "create one" invitation would be wrong advice here: the product may
+      // well exist, just outside the filter.
+      expect(find.text('أضف منتجًا'), findsNothing);
+    });
+  }
+
+  testWidgets('shows the create action only on a genuinely empty catalog', (
+    tester,
+  ) async {
+    await _pumpEmptyState(
+      tester,
+      query: const ProductQuery(),
+      emptyAction: const Text('أضف منتجًا'),
+    );
+
+    expect(find.text('لا توجد منتجات'), findsOneWidget);
+    expect(find.text('أضف منتجًا'), findsOneWidget);
+  });
+
+  test('clearing keeps app-set narrowing and the chosen ordering', () {
+    const query = ProductQuery(
+      search: 'شيبس',
+      categories: [ProductCategory(id: 1, name: 'مشروبات')],
+      availability: ProductAvailabilityFilter.inactive,
+      archived: ProductArchivedFilter.onlyArchived,
+      supplierId: 7,
+      supplierName: 'مورد',
+      stock: ProductStockFilter.inStockOnly,
+      preferredSupplierId: 3,
+      ordering: ProductOrdering.priceDesc,
+    );
+
+    final cleared = CatalogEmptyState.cleared(query);
+
+    expect(CatalogEmptyState.isFiltered(query), isTrue);
+    expect(CatalogEmptyState.isFiltered(cleared), isFalse);
+    expect(cleared.supplierId, isNull);
+    expect(cleared.stock, ProductStockFilter.inStockOnly);
+    expect(cleared.preferredSupplierId, 3);
+    expect(cleared.ordering, ProductOrdering.priceDesc);
   });
 }
 
@@ -50,6 +111,7 @@ Future<void> _pumpEmptyState(
   WidgetTester tester, {
   required ProductQuery query,
   VoidCallback? onClear,
+  Widget? emptyAction,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -64,6 +126,7 @@ Future<void> _pumpEmptyState(
             query: query,
             emptyMessage: 'لا توجد منتجات',
             onClear: onClear ?? () {},
+            emptyAction: emptyAction,
           ),
         ),
       ),

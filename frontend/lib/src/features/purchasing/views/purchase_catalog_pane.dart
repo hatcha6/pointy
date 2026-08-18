@@ -80,7 +80,7 @@ class PurchaseCatalogPane extends StatelessWidget {
               query: viewModel.query,
               emptyMessage: l10n.emptyCatalog,
               onClear: () => viewModel.applyQuery(
-                viewModel.query.copyWith(search: '', categories: const []),
+                CatalogEmptyState.cleared(viewModel.query),
               ),
             ),
             gridDelegate: PointyProductCardGrid.delegateFor(

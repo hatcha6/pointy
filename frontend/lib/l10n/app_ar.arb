@@ -2797,17 +2797,17 @@
       }
     }
   },
-  "catalogNoFilteredResultsTitle": "لا توجد منتجات ضمن هذا التصنيف",
+  "catalogNoFilteredResultsTitle": "لا توجد منتجات مطابقة للفلاتر المحددة",
   "@catalogNoFilteredResultsTitle": {
-    "description": "Catalog empty state title when a category filter returned nothing."
+    "description": "Catalog empty state title when the active filters returned nothing and no search term is set."
   },
-  "catalogNoResultsMessage": "تحقق من الكتابة أو امسح البحث والتصنيف لعرض كل المنتجات.",
+  "catalogNoResultsMessage": "تحقق من الكتابة أو امسح البحث والفلاتر لعرض كل المنتجات.",
   "@catalogNoResultsMessage": {
     "description": "Catalog empty state hint telling the user how to get results back."
   },
-  "catalogClearSearchAndFiltersButton": "مسح البحث والتصنيف",
+  "catalogClearSearchAndFiltersButton": "مسح البحث والفلاتر",
   "@catalogClearSearchAndFiltersButton": {
-    "description": "Catalog empty state action that clears the search term and the selected category."
+    "description": "Catalog empty state action that clears the search term and every active filter."
   },
   "productListTitle": "قائمة المنتجات",
   "addProductButton": "إضافة منتج",
