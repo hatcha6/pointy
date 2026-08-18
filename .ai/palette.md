@@ -27,3 +27,19 @@ under an older version — noise that buries a small UX diff in review.
 **Action:** After formatting, always `git diff` the touched files and hand-revert
 hunks you did not intend. AGENTS.md already warns against `dart format lib`; the same
 risk applies per-file.
+
+## 2026-08-18 - Scheduled runs cannot verify Flutter UI visually
+
+**Learning:** `preview_start` refuses to run in an unattended scheduled-task session
+("nobody is present to approve the command"), so the whole `lib/dev/*_preview.dart`
+harness — the repo's documented way to eyeball a screen — is off the table on these
+runs, even though the harness and its `make`/launch.json targets already exist for
+most routes (login, pos, purchasing, users, discounts, …).
+
+**Action:** Plan the UX change so a **widget test** is the proof, not a screenshot.
+Assert the behaviour that would otherwise be checked by eye — that an `IconButton`'s
+`tooltip` tracks state, that `EditableText.obscureText` flips, that `onPressed` is
+null while disabled — via `tester.widget<T>(find.byType(T))`. Pump with `locale:
+Locale('ar')` + `AppLocalizations.localizationsDelegates` + `Directionality.rtl`
+(copy `_pumpSurface` in `test/shared/components/pointy_components_test.dart`).
+Say plainly in the PR that visual QA was not possible, rather than implying it was.

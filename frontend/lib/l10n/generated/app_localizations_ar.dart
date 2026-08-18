@@ -2115,6 +2115,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get passwordLabel => 'كلمة المرور';
 
   @override
+  String get showPasswordTooltip => 'إظهار كلمة المرور';
+
+  @override
+  String get hidePasswordTooltip => 'إخفاء كلمة المرور';
+
+  @override
   String get loginButton => 'دخول';
 
   @override

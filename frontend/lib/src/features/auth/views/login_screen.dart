@@ -335,16 +335,12 @@ class _LoginForm extends StatelessWidget {
                   : null,
             ),
             SizedBox(height: spacing.sm),
-            TextFormField(
+            PointyPasswordField(
               controller: passwordController,
+              labelText: l10n.passwordLabel,
               enabled: !isSubmitting,
-              obscureText: true,
               textInputAction: TextInputAction.done,
               onFieldSubmitted: (_) => onSubmit(),
-              decoration: InputDecoration(
-                labelText: l10n.passwordLabel,
-                prefixIcon: const Icon(Icons.lock_outline),
-              ),
               validator: (value) => value == null || value.trim().isEmpty
                   ? l10n.requiredField
                   : null,
