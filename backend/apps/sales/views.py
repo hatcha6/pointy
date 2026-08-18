@@ -15,6 +15,7 @@ from apps.channels.services import require_active_sales_channel
 from apps.core.idempotency import run_idempotent_request
 from apps.core.discovery import request_is_relayed
 from apps.core.models import ShopSettings
+from apps.core.pagination import CreatedAtCursorPagination
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_has_full_visibility
 from apps.fraud.services import schedule_targeted_sweep
@@ -599,6 +600,11 @@ class RegisterSessionViewSet(
         ),
     }
     queryset = RegisterSession.objects.select_related("owner")
+    # Every list this viewset serves (sessions, a session's orders, its cash
+    # movements) is newest-first over a drawer that may still be selling, so all
+    # three page by cursor: an offset page 2 would re-serve the boundary rows and
+    # drop whatever was written since page 1.
+    pagination_class = CreatedAtCursorPagination
 
     def get_queryset(self):
         queryset = super().get_queryset()

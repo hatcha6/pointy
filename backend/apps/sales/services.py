@@ -525,6 +525,17 @@ def checkout_order(
             )
             payment_serializer.is_valid(raise_exception=True)
             payment_serializer.save()
+        # A sale that costs nothing (a fully-discounted cart, a giveaway line, an
+        # exchange whose replacement is free) takes no tender, so no payment row
+        # ever fires PaymentSerializer's flip-to-PAID and the order would sit at
+        # OPEN forever. An OPEN standard order is not a recognized sale:
+        # ``committed_sales`` skips it, so it reaches neither the register
+        # summary, the Z-Report nor any revenue report — while the goods have
+        # left and the line still shows on the session's sales list. Settle it
+        # here; stock moved above, so this only flips the status.
+        order.refresh_from_db()
+        if order.status == Order.Status.OPEN and order.balance_due <= Decimal("0.00"):
+            mark_order_paid(order, request=request, stock_already_recorded=True)
     order.refresh_from_db()
     record_domain_event(
         name="sales.checkout.completed",

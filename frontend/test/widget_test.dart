@@ -5236,15 +5236,16 @@ PosApiService _mockApiService({
       }
 
       if (path.endsWith('/register-sessions/1/orders/')) {
-        final page =
-            int.tryParse(request.url.queryParameters['page'] ?? '1') ?? 1;
+        // Cursor-paginated (see CreatedAtCursorPagination): page 1 has no
+        // cursor, the next page echoes the cursor page 1 handed out.
+        final cursor = request.url.queryParameters['cursor'];
+        final page = cursor == null ? 1 : 2;
         onOrderPage?.call(page);
         if (page == 2) {
           return _jsonResponse({
-            'count': 2,
             'next': null,
             'previous':
-                'http://localhost/api/register-sessions/1/orders/?page=1',
+                'http://localhost/api/register-sessions/1/orders/?cursor=p1',
             'results': [
               _orderJson(
                 id: 101,
@@ -5257,8 +5258,7 @@ PosApiService _mockApiService({
           });
         }
         return _jsonResponse({
-          'count': 2,
-          'next': 'http://localhost/api/register-sessions/1/orders/?page=2',
+          'next': 'http://localhost/api/register-sessions/1/orders/?cursor=p2',
           'previous': null,
           'results': [
             _orderJson(
@@ -5271,12 +5271,11 @@ PosApiService _mockApiService({
       }
 
       if (path.endsWith('/register-sessions/')) {
-        final page = int.tryParse(request.url.queryParameters['page'] ?? '1');
+        final page = request.url.queryParameters['cursor'] == null ? 1 : 2;
         if (page == 2) {
           return _jsonResponse({
-            'count': 2,
             'next': null,
-            'previous': 'http://localhost/api/register-sessions/?page=1',
+            'previous': 'http://localhost/api/register-sessions/?cursor=p1',
             'results': [
               _sessionJson(
                 id: 2,
@@ -5292,8 +5291,7 @@ PosApiService _mockApiService({
         }
 
         return _jsonResponse({
-          'count': 2,
-          'next': 'http://localhost/api/register-sessions/?page=2',
+          'next': 'http://localhost/api/register-sessions/?cursor=p2',
           'previous': null,
           'results': [
             _sessionJson(

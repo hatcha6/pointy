@@ -79,9 +79,15 @@ def cached_register_session_summary(session: RegisterSession) -> dict:
     one of its invoices from history); 30s staleness is invisible at the desk.
     Keyed on the session row's updated_at so reopening/closing recomputes
     immediately. Fail-open on Redis trouble.
+
+    An OPEN drawer is never cached. That burst-of-three is a *closing* ritual;
+    a session that is still selling changes with every sale, and nothing in the
+    key moves when one lands (a sale does not touch the session row), so a
+    cached payload would hold totals that omit the last half-minute of takings
+    — including right after the reviewer pressed refresh to see them.
     """
     ttl = int(getattr(settings, "POINTY_REGISTER_SUMMARY_CACHE_TTL", 0))
-    if ttl <= 0:
+    if ttl <= 0 or session.status == RegisterSession.Status.OPEN:
         return build_register_session_summary(session)
     stamp = session.updated_at.timestamp() if session.updated_at else 0
     key = f"pointy:sales:register-summary:{session.pk}:{session.status}:{stamp}"

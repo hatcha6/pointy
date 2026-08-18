@@ -65,9 +65,13 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
   bool _hasMoreSessions = true;
   bool _hasMoreOrders = false;
   bool _hasMoreCashMovements = false;
-  int _nextSessionPage = 1;
-  int _nextOrderPage = 1;
-  int _nextCashMovementPage = 1;
+  // Keyset cursors, not page numbers: these three feeds are written to while
+  // they are being read (a shift keeps selling, a drawer opens mid-scroll), and
+  // an offset page would re-serve the boundary rows while silently dropping
+  // everything recorded since the previous page. Null = start from the top.
+  String? _nextSessionCursor;
+  String? _nextOrderCursor;
+  String? _nextCashMovementCursor;
 
   List<RegisterSession> get sessions => List.unmodifiable(_sessions);
   List<SaleOrder> get orders => List.unmodifiable(_orders);
@@ -97,17 +101,17 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     _isLoadingSessions = true;
     _hasSessionLoadError = false;
     _hasMoreSessions = true;
-    _nextSessionPage = 1;
+    _nextSessionCursor = null;
     notifyListeners();
 
-    final result = await _registerSessionRepository.loadSessionHistory(
-      page: _nextSessionPage,
-    );
+    final result = await _registerSessionRepository.loadSessionHistory();
     switch (result) {
       case Ok<RegisterSessionPage>():
         _sessions = result.value.sessions;
-        _hasMoreSessions = result.value.hasMore;
-        _nextSessionPage = 2;
+        _nextSessionCursor = result.value.nextCursor;
+        // "More" means "there is a cursor to ask with". Trusting a bare `next`
+        // would spin forever against a page that cannot be advanced.
+        _hasMoreSessions = _nextSessionCursor != null;
         if (_selectedSession != null &&
             !_sessions.any((session) => session.id == _selectedSession!.id)) {
           _selectedSession = null;
@@ -116,8 +120,8 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
           _cashMovements = [];
           _hasMoreOrders = false;
           _hasMoreCashMovements = false;
-          _nextOrderPage = 1;
-          _nextCashMovementPage = 1;
+          _nextOrderCursor = null;
+          _nextCashMovementCursor = null;
         }
       case Error<RegisterSessionPage>():
         _sessions = [];
@@ -127,14 +131,21 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
         _cashMovements = [];
         _hasMoreOrders = false;
         _hasMoreCashMovements = false;
-        _nextOrderPage = 1;
-        _nextCashMovementPage = 1;
+        _nextOrderCursor = null;
+        _nextCashMovementCursor = null;
         _hasSessionLoadError = true;
         _hasMoreSessions = false;
     }
 
     _isLoadingSessions = false;
     notifyListeners();
+
+    // Refresh means refresh: the detail pane is showing the same shift the list
+    // just re-read, and on an open drawer its sales and totals have moved on.
+    final selected = _selectedSession;
+    if (selected != null) {
+      await _reloadSelectedSessionDetail(selected);
+    }
   }
 
   Future<void> loadMoreSessions() async {
@@ -145,14 +156,19 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     _isLoadingMoreSessions = true;
     notifyListeners();
 
+    final cursor = _nextSessionCursor;
     final result = await _registerSessionRepository.loadSessionHistory(
-      page: _nextSessionPage,
+      cursor: cursor,
     );
     switch (result) {
       case Ok<RegisterSessionPage>():
-        _sessions = [..._sessions, ...result.value.sessions];
-        _hasMoreSessions = result.value.hasMore;
-        _nextSessionPage += 1;
+        _sessions = _appendById(
+          _sessions,
+          result.value.sessions,
+          (session) => session.id,
+        );
+        _nextSessionCursor = result.value.nextCursor;
+        _hasMoreSessions = _nextSessionCursor != null;
       case Error<RegisterSessionPage>():
         _hasSessionLoadError = true;
         _hasMoreSessions = false;
@@ -163,7 +179,12 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
   }
 
   Future<void> selectSession(RegisterSession session) async {
-    if (_selectedSession?.id == session.id && _orders.isNotEmpty) {
+    // Re-tapping the session on screen REFETCHES it. An open drawer keeps
+    // selling while it is being reviewed, so the sales, cash movements and
+    // summary already on screen go stale within seconds — returning early here
+    // left the reviewer looking at a shift that had moved on. The only thing
+    // skipped is a tap that lands while the same session is already loading.
+    if (_selectedSession?.id == session.id && _isLoadingOrders) {
       return;
     }
 
@@ -182,8 +203,8 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     _hasSummaryLoadError = false;
     _hasMoreOrders = true;
     _hasMoreCashMovements = true;
-    _nextOrderPage = 1;
-    _nextCashMovementPage = 1;
+    _nextOrderCursor = null;
+    _nextCashMovementCursor = null;
     notifyListeners();
 
     // Load the summary concurrently with orders/movements — it backs the first
@@ -193,13 +214,12 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     final result = await _saleRepository.loadOrdersForSession(
       session.id,
       query: _orderQuery,
-      page: _nextOrderPage,
     );
     switch (result) {
       case Ok<SaleOrderPage>():
         _orders = result.value.orders;
-        _hasMoreOrders = result.value.hasMore;
-        _nextOrderPage = 2;
+        _nextOrderCursor = result.value.nextCursor;
+        _hasMoreOrders = _nextOrderCursor != null;
       case Error<SaleOrderPage>():
         _orders = [];
         _hasOrderLoadError = true;
@@ -210,12 +230,12 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     notifyListeners();
 
     final movementResult = await _registerSessionRepository
-        .loadCashMovementsForSession(session.id, page: _nextCashMovementPage);
+        .loadCashMovementsForSession(session.id);
     switch (movementResult) {
       case Ok<RegisterCashMovementPage>():
         _cashMovements = movementResult.value.movements;
-        _hasMoreCashMovements = movementResult.value.hasMore;
-        _nextCashMovementPage = 2;
+        _nextCashMovementCursor = movementResult.value.nextCursor;
+        _hasMoreCashMovements = _nextCashMovementCursor != null;
       case Error<RegisterCashMovementPage>():
         _cashMovements = [];
         _hasCashMovementLoadError = true;
@@ -355,13 +375,17 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     final result = await _saleRepository.loadOrdersForSession(
       session.id,
       query: _orderQuery,
-      page: _nextOrderPage,
+      cursor: _nextOrderCursor,
     );
     switch (result) {
       case Ok<SaleOrderPage>():
-        _orders = [..._orders, ...result.value.orders];
-        _hasMoreOrders = result.value.hasMore;
-        _nextOrderPage += 1;
+        _orders = _appendById(
+          _orders,
+          result.value.orders,
+          (order) => order.id,
+        );
+        _nextOrderCursor = result.value.nextCursor;
+        _hasMoreOrders = _nextOrderCursor != null;
       case Error<SaleOrderPage>():
         _hasOrderLoadError = true;
         _hasMoreOrders = false;
@@ -388,25 +412,61 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     await _reloadOrdersForSelectedSession(session);
   }
 
+  /// Re-reads everything the detail pane renders for [session] — its sales, its
+  /// cash movements and the summary the totals and Z-Report come from.
+  Future<void> _reloadSelectedSessionDetail(RegisterSession session) async {
+    _cashMovements = [];
+    _isLoadingCashMovements = true;
+    _isLoadingMoreCashMovements = false;
+    _hasCashMovementLoadError = false;
+    _hasMoreCashMovements = true;
+    _nextCashMovementCursor = null;
+
+    final summaryFuture = _loadSummary(session.id);
+    await _reloadOrdersForSelectedSession(session);
+
+    final movementResult = await _registerSessionRepository
+        .loadCashMovementsForSession(session.id);
+    // The reviewer may have moved to another shift while this was in flight;
+    // drop the stale page rather than painting it over the new selection.
+    if (_selectedSession?.id != session.id) {
+      _isLoadingCashMovements = false;
+      return;
+    }
+    switch (movementResult) {
+      case Ok<RegisterCashMovementPage>():
+        _cashMovements = movementResult.value.movements;
+        _nextCashMovementCursor = movementResult.value.nextCursor;
+        _hasMoreCashMovements = _nextCashMovementCursor != null;
+      case Error<RegisterCashMovementPage>():
+        _cashMovements = [];
+        _hasCashMovementLoadError = true;
+        _hasMoreCashMovements = false;
+    }
+    _isLoadingCashMovements = false;
+    notifyListeners();
+
+    await summaryFuture;
+  }
+
   Future<void> _reloadOrdersForSelectedSession(RegisterSession session) async {
     _orders = [];
     _isLoadingOrders = true;
     _isLoadingMoreOrders = false;
     _hasOrderLoadError = false;
     _hasMoreOrders = true;
-    _nextOrderPage = 1;
+    _nextOrderCursor = null;
     notifyListeners();
 
     final result = await _saleRepository.loadOrdersForSession(
       session.id,
       query: _orderQuery,
-      page: _nextOrderPage,
     );
     switch (result) {
       case Ok<SaleOrderPage>():
         _orders = result.value.orders;
-        _hasMoreOrders = result.value.hasMore;
-        _nextOrderPage = 2;
+        _nextOrderCursor = result.value.nextCursor;
+        _hasMoreOrders = _nextOrderCursor != null;
       case Error<SaleOrderPage>():
         _orders = [];
         _hasOrderLoadError = true;
@@ -431,13 +491,17 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
 
     final result = await _registerSessionRepository.loadCashMovementsForSession(
       session.id,
-      page: _nextCashMovementPage,
+      cursor: _nextCashMovementCursor,
     );
     switch (result) {
       case Ok<RegisterCashMovementPage>():
-        _cashMovements = [..._cashMovements, ...result.value.movements];
-        _hasMoreCashMovements = result.value.hasMore;
-        _nextCashMovementPage += 1;
+        _cashMovements = _appendById(
+          _cashMovements,
+          result.value.movements,
+          (movement) => movement.id,
+        );
+        _nextCashMovementCursor = result.value.nextCursor;
+        _hasMoreCashMovements = _nextCashMovementCursor != null;
       case Error<RegisterCashMovementPage>():
         _hasCashMovementLoadError = true;
         _hasMoreCashMovements = false;
@@ -521,6 +585,22 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
       case Error<SaleOrder>():
         return false;
     }
+  }
+
+  /// Appends a page, dropping anything already on screen. The cursor makes a
+  /// repeat impossible server-side; this keeps a retried or replayed page from
+  /// showing the same sale twice regardless.
+  static List<T> _appendById<T>(
+    List<T> existing,
+    List<T> page,
+    int Function(T) idOf,
+  ) {
+    final seen = existing.map(idOf).toSet();
+    return [
+      ...existing,
+      for (final item in page)
+        if (seen.add(idOf(item))) item,
+    ];
   }
 
   void _replaceOrder(SaleOrder updatedOrder) {

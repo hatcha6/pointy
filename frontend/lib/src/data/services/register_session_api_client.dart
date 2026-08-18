@@ -27,12 +27,16 @@ class RegisterSessionApiClient {
     );
   }
 
+  /// Newest-first, paginated by cursor: pass the previous page's
+  /// [RegisterSessionPage.nextCursor] to continue. A page number would be an
+  /// offset into a list that grows at its head every time a drawer opens, which
+  /// silently drops the newest sessions from the history.
   Future<RegisterSessionPage> fetchRegisterSessionHistory({
-    int page = 1,
+    String? cursor,
   }) async {
     final response = await _session.get(
       'register-sessions/',
-      query: {'page': '$page'},
+      query: {if (cursor != null && cursor.isNotEmpty) 'cursor': cursor},
     );
     _session.ensureSuccess(
       response,
@@ -43,14 +47,16 @@ class RegisterSessionApiClient {
     );
   }
 
+  /// Paginated by cursor — a shift that is still selling grows this feed at its
+  /// head while it is being read.
   Future<SaleOrderPage> fetchRegisterSessionOrders(
     int sessionId, {
     SaleOrderQuery query = const SaleOrderQuery(),
-    int page = 1,
+    String? cursor,
   }) async {
     final response = await _session.get(
       'register-sessions/$sessionId/orders/',
-      query: query.toQueryParameters(page: page),
+      query: query.toCursorQueryParameters(cursor: cursor),
     );
     _session.ensureSuccess(
       response,
@@ -90,11 +96,11 @@ class RegisterSessionApiClient {
 
   Future<RegisterCashMovementPage> fetchRegisterSessionCashMovements(
     int sessionId, {
-    int page = 1,
+    String? cursor,
   }) async {
     final response = await _session.get(
       'register-sessions/$sessionId/cash-movements/',
-      query: {'page': '$page'},
+      query: {if (cursor != null && cursor.isNotEmpty) 'cursor': cursor},
     );
     _session.ensureSuccess(
       response,

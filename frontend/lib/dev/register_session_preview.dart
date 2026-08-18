@@ -224,7 +224,9 @@ class _FakeRegisterSessionRepository extends RegisterSessionRepository {
   _FakeRegisterSessionRepository() : super(PosApiService());
 
   @override
-  Future<Result<RegisterSessionPage>> loadSessionHistory({int page = 1}) async {
+  Future<Result<RegisterSessionPage>> loadSessionHistory({
+    String? cursor,
+  }) async {
     return Ok(
       RegisterSessionPage(sessions: const [_demoSession], hasMore: false),
     );
@@ -240,7 +242,7 @@ class _FakeRegisterSessionRepository extends RegisterSessionRepository {
   @override
   Future<Result<RegisterCashMovementPage>> loadCashMovementsForSession(
     int sessionId, {
-    int page = 1,
+    String? cursor,
   }) async {
     return const Ok(RegisterCashMovementPage(movements: [], hasMore: false));
   }
@@ -253,7 +255,7 @@ class _FakeSaleRepository extends SaleRepository {
   Future<Result<SaleOrderPage>> loadOrdersForSession(
     int sessionId, {
     SaleOrderQuery query = const SaleOrderQuery(),
-    int page = 1,
+    String? cursor,
   }) async {
     return const Ok(SaleOrderPage(orders: [], hasMore: false));
   }

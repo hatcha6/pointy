@@ -1198,19 +1198,19 @@ class PosApiService {
     return _registerSessions.fetchCurrentRegisterSession();
   }
 
-  Future<RegisterSessionPage> fetchRegisterSessionHistory({int page = 1}) {
-    return _registerSessions.fetchRegisterSessionHistory(page: page);
+  Future<RegisterSessionPage> fetchRegisterSessionHistory({String? cursor}) {
+    return _registerSessions.fetchRegisterSessionHistory(cursor: cursor);
   }
 
   Future<SaleOrderPage> fetchRegisterSessionOrders(
     int sessionId, {
     SaleOrderQuery query = const SaleOrderQuery(),
-    int page = 1,
+    String? cursor,
   }) {
     return _registerSessions.fetchRegisterSessionOrders(
       sessionId,
       query: query,
-      page: page,
+      cursor: cursor,
     );
   }
 
@@ -1220,11 +1220,11 @@ class PosApiService {
 
   Future<RegisterCashMovementPage> fetchRegisterSessionCashMovements(
     int sessionId, {
-    int page = 1,
+    String? cursor,
   }) {
     return _registerSessions.fetchRegisterSessionCashMovements(
       sessionId,
-      page: page,
+      cursor: cursor,
     );
   }
 

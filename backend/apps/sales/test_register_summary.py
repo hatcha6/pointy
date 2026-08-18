@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -250,6 +250,64 @@ class RegisterSummaryEndpointTests(TestCase):
         self.assertIsNone(cash["closing_cash"])
         self.assertIsNone(cash["cash_variance"])
         self.assertEqual(len(cash["denominations"]), 4)
+
+    # 8. A sale that costs nothing still counts. It takes no tender, so nothing
+    # ever fired the flip-to-PAID and the order sat at OPEN — which
+    # ``committed_sales`` skips, so the shift showed the line on its sales list
+    # while the summary and the Z-Report pretended it had not happened.
+    def test_zero_total_sale_is_recognized_by_the_summary(self):
+        session = _open_session(self.user)
+        variant = _product(sku="FREE-1", price="0.00")
+        order = checkout_order(
+            register_session=session,
+            lines_data=[{"variant": variant, "quantity": Decimal("2")}],
+            payments_data=[],
+        )
+
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PAID)
+
+        sales = self._summary(session.pk).data["sales"]
+        self.assertEqual(sales["order_count"], 1)
+        self.assertEqual(sales["items_sold"], "2")
+        self.assertEqual(sales["net_sales"], "0.00")
+
+    # 9. An open drawer is never served from the summary cache. Nothing in the
+    # cache key moves when a sale lands (a sale does not touch the session row),
+    # so a cached payload would keep showing takings from before it — including
+    # to a reviewer who just pressed refresh to see them.
+    def test_open_session_summary_is_never_cached(self):
+        session = _open_session(self.user)
+        variant = _product(sku="LIVE-1", price="4.00")
+        checkout_order(
+            register_session=session,
+            lines_data=[{"variant": variant, "quantity": Decimal("1")}],
+            payments_data=[{"method": "cash", "amount": Decimal("4.00")}],
+        )
+
+        # A real (local-memory) cache, so the assertion tests the caching rule
+        # rather than an unreachable Redis quietly failing open.
+        with override_settings(
+            POINTY_REGISTER_SUMMARY_CACHE_TTL=30,
+            CACHES={
+                "default": {
+                    "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                    "LOCATION": "register-summary-open-session",
+                }
+            },
+        ):
+            first = self._summary(session.pk).data["sales"]
+            self.assertEqual(first["net_sales"], "4.00")
+
+            checkout_order(
+                register_session=session,
+                lines_data=[{"variant": variant, "quantity": Decimal("1")}],
+                payments_data=[{"method": "cash", "amount": Decimal("4.00")}],
+            )
+            second = self._summary(session.pk).data["sales"]
+
+        self.assertEqual(second["net_sales"], "8.00")
+        self.assertEqual(second["order_count"], 2)
 
 
 class RegisterSummaryAccessTests(TestCase):

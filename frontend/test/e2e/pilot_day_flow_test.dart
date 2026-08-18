@@ -312,7 +312,7 @@ class _PilotDayApiService extends PosApiService {
   @override
   Future<RegisterCashMovementPage> fetchRegisterSessionCashMovements(
     int sessionId, {
-    int page = 1,
+    String? cursor,
   }) async {
     return const RegisterCashMovementPage(movements: [], hasMore: false);
   }
@@ -403,7 +403,7 @@ class _PilotDayApiService extends PosApiService {
 
   @override
   Future<RegisterSessionPage> fetchRegisterSessionHistory({
-    int page = 1,
+    String? cursor,
   }) async {
     return RegisterSessionPage(
       sessions: [
@@ -417,7 +417,7 @@ class _PilotDayApiService extends PosApiService {
   Future<SaleOrderPage> fetchRegisterSessionOrders(
     int sessionId, {
     SaleOrderQuery query = const SaleOrderQuery(),
-    int page = 1,
+    String? cursor,
   }) async {
     return SaleOrderPage(orders: orders, hasMore: false);
   }

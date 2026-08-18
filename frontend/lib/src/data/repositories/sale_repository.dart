@@ -146,13 +146,13 @@ class SaleRepository {
   Future<Result<SaleOrderPage>> loadOrdersForSession(
     int sessionId, {
     SaleOrderQuery query = const SaleOrderQuery(),
-    int page = 1,
+    String? cursor,
   }) async {
     return Result.guard(
       () => _service.fetchRegisterSessionOrders(
         sessionId,
         query: query,
-        page: page,
+        cursor: cursor,
       ),
     );
   }

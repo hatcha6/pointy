@@ -15,16 +15,23 @@ class RegisterSessionRepository {
     return Result.guard(_service.fetchCurrentRegisterSession);
   }
 
-  Future<Result<RegisterSessionPage>> loadSessionHistory({int page = 1}) async {
-    return Result.guard(() => _service.fetchRegisterSessionHistory(page: page));
+  /// First page when [cursor] is null, then the page after [cursor]
+  /// (a [RegisterSessionPage.nextCursor] from the previous response).
+  Future<Result<RegisterSessionPage>> loadSessionHistory({
+    String? cursor,
+  }) async {
+    return Result.guard(
+      () => _service.fetchRegisterSessionHistory(cursor: cursor),
+    );
   }
 
   Future<Result<RegisterCashMovementPage>> loadCashMovementsForSession(
     int sessionId, {
-    int page = 1,
+    String? cursor,
   }) async {
     return Result.guard(
-      () => _service.fetchRegisterSessionCashMovements(sessionId, page: page),
+      () =>
+          _service.fetchRegisterSessionCashMovements(sessionId, cursor: cursor),
     );
   }
 
