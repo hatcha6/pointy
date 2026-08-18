@@ -163,10 +163,10 @@ class PurchaseLineListSerializer(serializers.ListSerializer):
         rows = data.all() if isinstance(data, Manager) else data
         if not isinstance(rows, list):
             rows = list(rows)
-        # A lone line is cheaper cold (one lookup) than primed (two), so the
-        # primer only earns its keep from two lines up.
-        if len(rows) > 1:
-            self.child.prime_previous_unit_costs(rows)
+        # The primer itself decides what is worth a query: annotated rows cost
+        # nothing to fill, and it leaves a lone un-annotated line to the cold
+        # path (one lookup, cheaper than the primer's two).
+        self.child.prime_previous_unit_costs(rows)
         return super().to_representation(rows)
 
 
@@ -350,17 +350,38 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         previous_cost = self._previous_unit_cost(line)
         return False if previous_cost is None else line.unit_cost != previous_cost
 
+    _MISSING = object()
+
     @staticmethod
-    def _base_unit_cost_of(previous_line):
-        # The previous line's cost PER BASE UNIT, full precision (no money
-        # quantize) so re-scaling to this line's pack doesn't accumulate
-        # rounding into a phantom "cost changed" flag.
+    def _base_unit_cost(unit_cost, unit_factor):
+        # A cost PER BASE UNIT, full precision (no money quantize) so re-scaling
+        # to this line's pack doesn't accumulate rounding into a phantom "cost
+        # changed" flag. The single arithmetic implementation every path runs,
+        # which is why the SQL annotation carries raw columns and not a quotient.
+        factor = unit_factor or Decimal("1")
+        if factor <= 0:
+            return unit_cost
+        return unit_cost / factor
+
+    @classmethod
+    def _base_unit_cost_of(cls, previous_line):
         if previous_line is None:
             return None
-        factor = previous_line.unit_factor or Decimal("1")
-        if factor <= 0:
-            return previous_line.unit_cost
-        return previous_line.unit_cost / factor
+        return cls._base_unit_cost(previous_line.unit_cost, previous_line.unit_factor)
+
+    @classmethod
+    def _annotated_base_unit_cost(cls, line):
+        """The previous cost already carried on the row by
+        ``previous_purchase_line_annotations``, or ``_MISSING`` when this line
+        did not come from an annotated queryset. ``None`` means the row was
+        annotated and there is no earlier purchase."""
+        unit_cost = getattr(line, "previous_line_unit_cost", cls._MISSING)
+        if unit_cost is cls._MISSING or unit_cost is None:
+            return unit_cost if unit_cost is cls._MISSING else None
+        return cls._base_unit_cost(
+            unit_cost,
+            getattr(line, "previous_line_unit_factor", None),
+        )
 
     @property
     def _previous_cost_cache(self):
@@ -378,19 +399,37 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         cold path, so a primed line and a cold one always agree.
         """
         cache = self._previous_cost_cache
-        pending = [line for line in lines if line.pk not in cache]
-        if not pending:
+        pending = []
+        for line in lines:
+            if line.pk in cache:
+                continue
+            annotated = self._annotated_base_unit_cost(line)
+            if annotated is not self._MISSING:
+                # The queryset that read this row already answered: no query.
+                cache[line.pk] = annotated
+            else:
+                pending.append(line)
+        # A lone pending line is cheaper cold (one lookup) than primed (two), so
+        # leave it for ``_previous_base_unit_cost`` to resolve on its own.
+        if len(pending) < 2:
             return
         for line_pk, previous_line in previous_purchase_lines_for(pending).items():
             cache[line_pk] = self._base_unit_cost_of(previous_line)
 
     def _previous_base_unit_cost(self, line):
-        # Primed in bulk by ``PurchaseLineListSerializer`` when this line is part
-        # of an order's payload; a lone line falls back to its own lookup.
+        # Three ways this is answered, cheapest first: annotated onto the row by
+        # the queryset that read it (free), primed in bulk by
+        # ``PurchaseLineListSerializer`` (2 queries an order), or — for a lone
+        # bare line — its own lookup.
         cache = self._previous_cost_cache
         if line.pk not in cache:
-            cache[line.pk] = self._base_unit_cost_of(
-                latest_purchase_line_for_variant(line.variant_id, before_line=line)
+            annotated = self._annotated_base_unit_cost(line)
+            cache[line.pk] = (
+                annotated
+                if annotated is not self._MISSING
+                else self._base_unit_cost_of(
+                    latest_purchase_line_for_variant(line.variant_id, before_line=line)
+                )
             )
         return cache[line.pk]
 

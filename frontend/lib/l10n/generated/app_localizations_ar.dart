@@ -9117,6 +9117,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'راجع الخطوة المحددة وأكمل البيانات المطلوبة.';
 
   @override
+  String get discountFormFixFieldsError =>
+      'أكمل الحقول المطلوبة المميزة بالأحمر.';
+
+  @override
   String get discountWizardNoExtraRules => 'بدون شروط إضافية';
 
   @override

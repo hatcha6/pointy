@@ -2832,6 +2832,53 @@ void main() {
     expect(discountBody?['products'], [1]);
   });
 
+  testWidgets('discount form validates on unfocus and reveals the blocker', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _openNavigationDestination(tester, 'الخصومات');
+    await tester.tap(find.text('خصم جديد'));
+    await tester.pumpAndSettle();
+
+    final nameField = find.widgetWithText(TextFormField, 'اسم الخصم');
+    final formScroll = find.byKey(const ValueKey('discount_rule_form_scroll'));
+    final saveButton = find.byKey(const ValueKey('discount_rule_save_button'));
+
+    // Leaving the required name empty flags it the moment focus moves on, so
+    // the mistake is reported where the user is looking instead of being held
+    // back until Save.
+    expect(find.text('هذا الحقل مطلوب.'), findsNothing);
+    await tester.tap(nameField);
+    await tester.pumpAndSettle();
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    expect(find.text('هذا الحقل مطلوب.'), findsOneWidget);
+
+    // Scroll the still-empty name off the top of the single-scroll form.
+    for (var i = 0; i < 8 && tester.getTopLeft(nameField).dy >= 0; i++) {
+      await tester.drag(formScroll, const Offset(0, -150));
+      await tester.pumpAndSettle();
+    }
+    expect(tester.getTopLeft(nameField).dy, lessThan(0));
+
+    // Saving must carry the user back to the field that blocked the save,
+    // not just drop a snackbar about a step this form no longer has.
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('أكمل الحقول المطلوبة المميزة بالأحمر.'), findsOneWidget);
+    final revealed = tester.getTopLeft(nameField).dy;
+    expect(revealed, greaterThanOrEqualTo(0));
+    expect(revealed, lessThan(1000));
+  });
+
   testWidgets('manager can open and save shop settings', (
     WidgetTester tester,
   ) async {

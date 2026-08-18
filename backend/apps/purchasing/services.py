@@ -54,6 +54,51 @@ def latest_purchase_line_for_variant(variant_id, *, before_line=None):
     return lines.order_by("-created_at", "-id").first()
 
 
+def _previous_purchase_line_query():
+    """The previous purchase of the same variant, as a correlated subquery.
+
+    One definition of the selection rule ``latest_purchase_line_for_variant``
+    applies — same variant, not on a cancelled order, strictly older, newest
+    first with ``-id`` breaking ties — shared by both batching strategies below.
+    The ``exclude(pk=before_line.pk)`` there is redundant here because
+    ``created_at`` is ``auto_now_add`` (never null on a saved row), so
+    ``created_at__lt`` already rules the line itself out.
+    """
+    return (
+        PurchaseLine.objects.filter(variant_id=models.OuterRef("variant_id"))
+        .exclude(purchase_order__status=PurchaseOrder.Status.CANCELLED)
+        .filter(created_at__lt=models.OuterRef("created_at"))
+        .order_by("-created_at", "-id")
+    )
+
+
+def previous_purchase_line_annotations():
+    """The previous purchase's raw cost columns, for a ``PurchaseLine`` queryset
+    that is already being read — 0 extra queries instead of the primer's 2.
+
+    ``previous_purchase_lines_for`` below batches the lookup for any caller that
+    hands the serializer bare lines. When the lines arrive from a queryset we
+    control, though, they can carry the answer already: the PO detail tree
+    prefetches ``lines`` regardless, so folding these two subqueries into that
+    prefetch makes the payload flat in the line count. It also stops the primer
+    repeating per order on ``supplier-purchase-history``, which serializes a
+    whole page of orders through the detail serializer.
+
+    Only the previous line's RAW columns are annotated — the per-base-unit
+    division stays in ``_base_unit_cost_of`` so every path runs one arithmetic
+    implementation. Dividing in SQL would break that: Django's SQLite decimal
+    converter quantizes an annotated value to the declared scale, and re-scaled
+    to a 162-per-carton pack that drift is a phantom "cost changed" flag.
+    """
+    previous = _previous_purchase_line_query()
+    return {
+        "previous_line_unit_cost": models.Subquery(previous.values("unit_cost")[:1]),
+        "previous_line_unit_factor": models.Subquery(
+            previous.values("unit_factor")[:1]
+        ),
+    }
+
+
 def previous_purchase_lines_for(lines):
     """Batched ``latest_purchase_line_for_variant(variant_id, before_line=line)``
     for many lines at once — 2 queries total instead of 1 per line.
@@ -64,12 +109,10 @@ def previous_purchase_lines_for(lines):
     ``purchaseorder-detail``. Measured on a 20-line order: retrieve 43 -> 24
     queries (1.0 -> 0.0 per line).
 
-    Returns ``{line_pk: PurchaseLine | None}``. The selection rule is exactly the
-    one ``latest_purchase_line_for_variant`` applies, expressed as a correlated
-    subquery: same variant, not on a cancelled order, strictly older, newest
-    first with ``-id`` breaking ties. The ``exclude(pk=before_line.pk)`` there is
-    redundant here because ``created_at`` is ``auto_now_add`` (never null on a
-    saved row), so ``created_at__lt`` already rules the line itself out.
+    Returns ``{line_pk: PurchaseLine | None}``, selected by
+    ``_previous_purchase_line_query``. Lines that already carry the annotations
+    from ``previous_purchase_line_annotations`` never reach here — the serializer
+    filters them out first.
     """
     rows = [
         line
@@ -79,12 +122,7 @@ def previous_purchase_lines_for(lines):
     if not rows:
         return {}
 
-    previous = (
-        PurchaseLine.objects.filter(variant_id=models.OuterRef("variant_id"))
-        .exclude(purchase_order__status=PurchaseOrder.Status.CANCELLED)
-        .filter(created_at__lt=models.OuterRef("created_at"))
-        .order_by("-created_at", "-id")
-    )
+    previous = _previous_purchase_line_query()
     previous_ids = dict(
         PurchaseLine.objects.filter(pk__in=[line.pk for line in rows])
         .annotate(previous_line_id=models.Subquery(previous.values("pk")[:1]))
