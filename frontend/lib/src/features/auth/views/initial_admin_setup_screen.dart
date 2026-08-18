@@ -248,31 +248,24 @@ class _SetupForm extends StatelessWidget {
             ),
           ),
           SizedBox(height: spacing.sm),
-          TextFormField(
+          PointyPasswordField(
             controller: passwordController,
+            labelText: l10n.newPasswordLabel,
             enabled: !isSubmitting,
-            obscureText: true,
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.newPassword],
-            decoration: InputDecoration(
-              labelText: l10n.newPasswordLabel,
-              prefixIcon: const Icon(Icons.lock_outline),
-            ),
             validator: (value) =>
                 value == null || value.isEmpty ? l10n.requiredField : null,
           ),
           SizedBox(height: spacing.sm),
-          TextFormField(
+          PointyPasswordField(
             controller: confirmPasswordController,
+            labelText: l10n.confirmPasswordLabel,
             enabled: !isSubmitting,
-            obscureText: true,
+            prefixIcon: Icons.lock_reset_outlined,
             textInputAction: TextInputAction.done,
             autofillHints: const [AutofillHints.newPassword],
             onFieldSubmitted: (_) => onSubmit(),
-            decoration: InputDecoration(
-              labelText: l10n.confirmPasswordLabel,
-              prefixIcon: const Icon(Icons.lock_reset_outlined),
-            ),
             validator: (value) {
               if (value == null || value.isEmpty) {
                 return l10n.requiredField;

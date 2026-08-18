@@ -3705,6 +3705,18 @@ abstract class AppLocalizations {
   /// **'كلمة المرور'**
   String get passwordLabel;
 
+  /// No description provided for @showPasswordTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار كلمة المرور'**
+  String get showPasswordTooltip;
+
+  /// No description provided for @hidePasswordTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إخفاء كلمة المرور'**
+  String get hidePasswordTooltip;
+
   /// No description provided for @loginButton.
   ///
   /// In ar, this message translates to:

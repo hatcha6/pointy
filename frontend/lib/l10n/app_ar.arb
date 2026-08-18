@@ -1356,6 +1356,8 @@
   "loginTitle": "تسجيل الدخول",
   "usernameLabel": "اسم المستخدم",
   "passwordLabel": "كلمة المرور",
+  "showPasswordTooltip": "إظهار كلمة المرور",
+  "hidePasswordTooltip": "إخفاء كلمة المرور",
   "loginButton": "دخول",
   "loggingInButton": "جار الدخول...",
   "loginError": "تعذر تسجيل الدخول. تحقق من اسم المستخدم وكلمة المرور.",
