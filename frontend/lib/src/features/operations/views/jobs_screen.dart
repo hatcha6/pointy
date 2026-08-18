@@ -921,6 +921,7 @@ class _ProductionBatchDialogState extends State<_ProductionBatchDialog> {
               children: [
                 Expanded(child: Text(l10n.productionBatchesLabel)),
                 IconButton(
+                  tooltip: l10n.productionBatchesDecreaseTooltip,
                   onPressed: _batches > 1
                       ? () => setState(() => _batches -= 1)
                       : null,
@@ -931,6 +932,7 @@ class _ProductionBatchDialogState extends State<_ProductionBatchDialog> {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 IconButton(
+                  tooltip: l10n.productionBatchesIncreaseTooltip,
                   onPressed: () => setState(() => _batches += 1),
                   icon: const Icon(Icons.add_circle_outline),
                 ),

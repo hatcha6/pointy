@@ -6369,6 +6369,18 @@ abstract class AppLocalizations {
   /// **'عدد الدفعات'**
   String get productionBatchesLabel;
 
+  /// No description provided for @productionBatchesIncreaseTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة عدد الدفعات'**
+  String get productionBatchesIncreaseTooltip;
+
+  /// No description provided for @productionBatchesDecreaseTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنقاص عدد الدفعات'**
+  String get productionBatchesDecreaseTooltip;
+
   /// Preview of production output.
   ///
   /// In ar, this message translates to:
@@ -6476,6 +6488,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الكمية'**
   String get recipeComponentQuantityLabel;
+
+  /// No description provided for @recipeRemoveComponentTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف المكوّن'**
+  String get recipeRemoveComponentTooltip;
 
   /// No description provided for @recipeWastePercentLabel.
   ///
@@ -6770,6 +6788,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'اسم المرحلة'**
   String get workflowStageNameLabel;
+
+  /// No description provided for @workflowStageMoveUpTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحريك المرحلة لأعلى'**
+  String get workflowStageMoveUpTooltip;
+
+  /// No description provided for @workflowStageMoveDownTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحريك المرحلة لأسفل'**
+  String get workflowStageMoveDownTooltip;
+
+  /// No description provided for @workflowStageDeleteTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف المرحلة'**
+  String get workflowStageDeleteTooltip;
 
   /// No description provided for @workflowAddStageButton.
   ///
@@ -10842,6 +10878,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أقصى كمية'**
   String get modifierOptionMaxQtyLabel;
+
+  /// No description provided for @modifierOptionMaxQtyIncreaseTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة أقصى كمية'**
+  String get modifierOptionMaxQtyIncreaseTooltip;
+
+  /// No description provided for @modifierOptionMaxQtyDecreaseTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنقاص أقصى كمية'**
+  String get modifierOptionMaxQtyDecreaseTooltip;
 
   /// No description provided for @modifierOptionDefaultLabel.
   ///

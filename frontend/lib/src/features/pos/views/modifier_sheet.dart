@@ -309,6 +309,7 @@ class _ModifierChip extends StatelessWidget {
     // Quantifiable options always render with an inline stepper.
     if (option.isQuantifiable) {
       final colors = context.pointyColors;
+      final l10n = AppLocalizations.of(context)!;
       return Material(
         color: selected ? colors.amberContainer : colors.surface,
         shape: StadiumBorder(
@@ -321,6 +322,7 @@ class _ModifierChip extends StatelessWidget {
             children: [
               IconButton(
                 visualDensity: VisualDensity.compact,
+                tooltip: l10n.removeOneTooltip,
                 onPressed: quantity > 0
                     ? () => onSetQuantity(option, quantity - 1)
                     : null,
@@ -329,6 +331,7 @@ class _ModifierChip extends StatelessWidget {
               Text(selected ? '$_label  ×$quantity' : _label),
               IconButton(
                 visualDensity: VisualDensity.compact,
+                tooltip: l10n.addOneTooltip,
                 onPressed: quantity < option.maxQuantity
                     ? () => onSetQuantity(option, quantity + 1)
                     : null,
