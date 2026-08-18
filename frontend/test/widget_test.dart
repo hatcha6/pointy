@@ -145,12 +145,19 @@ void main() {
       PrinterEndpoint.fromJson({}).barcodeLabelLanguage,
       BarcodeLabelPrinterLanguage.auto,
     );
-    expect(
-      PrinterEndpoint.fromJson({
-        'barcode_label_language': 'esc_pos',
-      }).barcodeLabelLanguage,
-      BarcodeLabelPrinterLanguage.auto,
-    );
+    // Receipt-protocol label printers (HPRT LPQ58/LPQ80 in ESC/POS mode) must
+    // resolve to escPos, not fall back to auto — auto re-picks ZPL, which is
+    // the silent fallback that printed nothing. Both the wire spelling and the
+    // one `barcodeLabelPrinterLanguageToJson` emits have to round-trip.
+    for (final value in ['esc_pos', 'escpos']) {
+      expect(
+        PrinterEndpoint.fromJson({
+          'barcode_label_language': value,
+        }).barcodeLabelLanguage,
+        BarcodeLabelPrinterLanguage.escPos,
+        reason: '$value should parse as ESC/POS',
+      );
+    }
   });
 
   test('Moamalat receipt parser decodes the terminal receipt URL', () {

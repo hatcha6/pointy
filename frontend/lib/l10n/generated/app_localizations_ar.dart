@@ -4817,6 +4817,21 @@ class AppLocalizationsAr extends AppLocalizations {
   String get emptyCatalog => 'لا توجد منتجات';
 
   @override
+  String catalogNoSearchResultsTitle(String query) {
+    return 'لا توجد نتائج لـ «$query»';
+  }
+
+  @override
+  String get catalogNoFilteredResultsTitle => 'لا توجد منتجات ضمن هذا التصنيف';
+
+  @override
+  String get catalogNoResultsMessage =>
+      'تحقق من الكتابة أو امسح البحث والتصنيف لعرض كل المنتجات.';
+
+  @override
+  String get catalogClearSearchAndFiltersButton => 'مسح البحث والتصنيف';
+
+  @override
   String get productListTitle => 'قائمة المنتجات';
 
   @override

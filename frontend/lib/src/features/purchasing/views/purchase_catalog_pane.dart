@@ -76,9 +76,12 @@ class PurchaseCatalogPane extends StatelessWidget {
             loadMoreExtent: PointyProductCardGrid.loadMoreExtent,
             skeletonItemBuilder: (_) => const PointySkeletonCard(),
             skeletonItemCount: 12,
-            emptyBuilder: (context) => PointyEmptyState(
-              icon: Icons.inventory_2_outlined,
-              title: l10n.emptyCatalog,
+            emptyBuilder: (context) => CatalogEmptyState(
+              query: viewModel.query,
+              emptyMessage: l10n.emptyCatalog,
+              onClear: () => viewModel.applyQuery(
+                viewModel.query.copyWith(search: '', categories: const []),
+              ),
             ),
             gridDelegate: PointyProductCardGrid.delegateFor(
               width: constraints.maxWidth,
