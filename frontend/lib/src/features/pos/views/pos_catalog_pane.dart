@@ -123,8 +123,13 @@ class _PosCatalogGrid extends StatelessWidget {
               loadMoreExtent: PointyProductCardGrid.loadMoreExtent,
               skeletonItemBuilder: (_) => const PointySkeletonCard(),
               skeletonItemCount: 12,
-              emptyBuilder: (context) =>
-                  _PosCatalogEmptyState(message: emptyMessage),
+              emptyBuilder: (context) => CatalogEmptyState(
+                query: viewModel.query,
+                emptyMessage: emptyMessage,
+                onClear: () => viewModel.applyQuery(
+                  viewModel.query.copyWith(search: '', categories: const []),
+                ),
+              ),
               gridDelegate: PointyProductCardGrid.delegateFor(
                 width: constraints.maxWidth,
                 spacing: spacing.gutter,
@@ -271,17 +276,6 @@ class _PosCatalogGrid extends StatelessWidget {
           ..clearSnackBars()
           ..showSnackBar(SnackBar(content: Text(l10n.catalogLoadError)));
     }
-  }
-}
-
-class _PosCatalogEmptyState extends StatelessWidget {
-  const _PosCatalogEmptyState({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return PointyEmptyState(icon: Icons.inventory_2_outlined, title: message);
   }
 }
 

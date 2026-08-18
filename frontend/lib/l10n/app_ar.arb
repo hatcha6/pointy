@@ -2788,6 +2788,27 @@
   "backTooltip": "رجوع",
   "sampleCatalogNotice": "يتم عرض منتجات تجريبية إلى أن يعمل الخادم.",
   "emptyCatalog": "لا توجد منتجات",
+  "catalogNoSearchResultsTitle": "لا توجد نتائج لـ «{query}»",
+  "@catalogNoSearchResultsTitle": {
+    "description": "Catalog empty state title when a search term returned nothing.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "catalogNoFilteredResultsTitle": "لا توجد منتجات ضمن هذا التصنيف",
+  "@catalogNoFilteredResultsTitle": {
+    "description": "Catalog empty state title when a category filter returned nothing."
+  },
+  "catalogNoResultsMessage": "تحقق من الكتابة أو امسح البحث والتصنيف لعرض كل المنتجات.",
+  "@catalogNoResultsMessage": {
+    "description": "Catalog empty state hint telling the user how to get results back."
+  },
+  "catalogClearSearchAndFiltersButton": "مسح البحث والتصنيف",
+  "@catalogClearSearchAndFiltersButton": {
+    "description": "Catalog empty state action that clears the search term and the selected category."
+  },
   "productListTitle": "قائمة المنتجات",
   "addProductButton": "إضافة منتج",
   "productTableProductColumn": "المنتج",

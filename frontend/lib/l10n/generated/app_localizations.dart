@@ -8527,6 +8527,30 @@ abstract class AppLocalizations {
   /// **'لا توجد منتجات'**
   String get emptyCatalog;
 
+  /// Catalog empty state title when a search term returned nothing.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد نتائج لـ «{query}»'**
+  String catalogNoSearchResultsTitle(String query);
+
+  /// Catalog empty state title when a category filter returned nothing.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد منتجات ضمن هذا التصنيف'**
+  String get catalogNoFilteredResultsTitle;
+
+  /// Catalog empty state hint telling the user how to get results back.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحقق من الكتابة أو امسح البحث والتصنيف لعرض كل المنتجات.'**
+  String get catalogNoResultsMessage;
+
+  /// Catalog empty state action that clears the search term and the selected category.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح البحث والتصنيف'**
+  String get catalogClearSearchAndFiltersButton;
+
   /// No description provided for @productListTitle.
   ///
   /// In ar, this message translates to:

@@ -43,3 +43,38 @@ null while disabled — via `tester.widget<T>(find.byType(T))`. Pump with `local
 Locale('ar')` + `AppLocalizations.localizationsDelegates` + `Directionality.rtl`
 (copy `_pumpSurface` in `test/shared/components/pointy_components_test.dart`).
 Say plainly in the PR that visual QA was not possible, rather than implying it was.
+
+## 2026-08-18 - Establish the test baseline before claiming a run is green
+
+**Learning:** `flutter analyze` and `flutter test` were already red at `main`:
+an automated "Potential fix for pull request finding" commit (f4c82178) deleted the
+closing `});` of the first test in `test/shared/components/pointy_password_field_test.dart`
+— a file a *previous Palette PR* added — so the whole suite failed to compile. There is
+also a genuinely failing assertion at `test/widget_test.dart:148`
+(`BarcodeLabelPrinterLanguage` expected `auto`, gets `escPos`). Running only the tests
+you just wrote hides both, and stating "tests pass" would have been wrong.
+
+**Action:** On every run, `git stash -u` and run the full suite *before* touching
+anything, so you know which failures you inherited. Report inherited failures explicitly
+in the PR instead of implying a clean suite. Both of these turned out to be stale *tests*
+rather than broken behaviour — the second asserted that `'esc_pos'` parses to
+`BarcodeLabelPrinterLanguage.auto`, written before `bb1e2dc0` added the `escPos` value
+and never updated, so it was asserting the exact ZPL-fallback bug that commit fixed.
+Read the enum and its git history before assuming a red assertion means the product is
+wrong; a feature commit that adds an enum value and skips the parser test is the common
+shape here.
+
+## 2026-08-18 - `PointyEmptyState.action` existed but nothing used it
+
+**Learning:** `PointyEmptyState` has always supported an `action` widget, yet every
+call site in the app passed only `icon`/`title`. The worst case is the POS and
+purchasing catalogs: the grid goes blank on a typo'd search or a pinned quick-access
+category and shows the same generic "لا توجد منتجات" as a genuinely empty shop, with
+no way out. Dead-end empty states are the app's most common UX gap, not missing labels.
+
+**Action:** When a list can be filtered, its empty state must distinguish *empty* from
+*filtered-to-nothing* and offer a one-tap escape. `CatalogEmptyState`
+(`lib/src/shared/catalog/catalog_empty_state.dart`) is the pattern to copy: take the
+query object, branch on it, and call back into `viewModel.applyQuery(query.copyWith(...))`
+to clear. `DebouncedSearchField` syncs its text from `widget.value`, so clearing the
+query also clears the visible search box — no extra reset signal needed.

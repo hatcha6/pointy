@@ -27,6 +27,7 @@ void main() {
     expect(field().obscureText, isFalse);
     // The tooltip is also the screen-reader label, so it must track the state.
     expect(toggle().tooltip, l10n.hidePasswordTooltip);
+  });
 
   testWidgets('disables the toggle while the field is disabled', (
     tester,
