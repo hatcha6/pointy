@@ -1,2 +1,4 @@
 .env
 external-backups/
+# Held by a running update; tells the watchdog to stand down.
+.update.lock

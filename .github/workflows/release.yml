@@ -33,6 +33,12 @@ env:
   REDIS_IMAGE: "redis:7-alpine"
   # Keep in lockstep with the pgbouncer service default in deploy/onprem/docker-compose.yml.
   PGBOUNCER_IMAGE: "edoburu/pgbouncer:v1.23.1-p2"
+  # The LAN front door. Its tag is bumped BY HAND (and in the compose default),
+  # never per release: shops keep this container through every application
+  # update, and re-tagging it per version would make each update recreate the
+  # one thing holding the till port open. Bump it only when
+  # deploy/onprem/edge/ changes, and expect it to apply at the next full restart.
+  EDGE_IMAGE: "pointy-edge:1"
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -480,6 +486,11 @@ jobs:
           --build-arg POINTY_VERSION=${{ needs.version.outputs.version }}
           -t "pointy-relay:${{ needs.version.outputs.version }}" .
 
+      - name: Build LAN front-door image (nginx + flip config)
+        run: >
+          docker build -f deploy/onprem/edge/Dockerfile
+          -t "${EDGE_IMAGE}" .
+
       - name: Build web image (Flutter web + nginx)
         run: >
           docker build -f deploy/onprem/web/Dockerfile
@@ -508,6 +519,9 @@ jobs:
           docker save "${POSTGRES_IMAGE}"          -o "${BUNDLE}/images/postgres.tar"
           docker save "${REDIS_IMAGE}"             -o "${BUNDLE}/images/redis.tar"
           docker save "${PGBOUNCER_IMAGE}"         -o "${BUNDLE}/images/pgbouncer.tar"
+          # Named pointy-edge*.tar so the live updater recognises it as
+          # infrastructure and does NOT load it under a trading shop.
+          docker save "${EDGE_IMAGE}"              -o "${BUNDLE}/images/pointy-edge.tar"
 
           echo "==> Staging client installers (Android APK + Windows installer + Linux tar.gz)…"
           mkdir -p "${BUNDLE}/clients"
@@ -537,13 +551,14 @@ jobs:
           echo "Client manifest:"; cat "${BUNDLE}/clients/manifest.json"
 
           echo "==> Rendering offline Compose (drop source 'build:' sections, keep anchors)…"
-          yq eval 'del(.services.backend.build) | del(.services.connector.build) | del(.services.web.build)' \
+          yq eval 'del(.services.backend.build) | del(.services.connector.build) | del(.services.web.build) | del(.services.edge.build)' \
             deploy/onprem/docker-compose.yml | sed 's/!!merge //g' > "${BUNDLE}/docker-compose.yml"
 
           echo "==> Pinning the shipped image tags in the .env template…"
           sed -e "s|^POINTY_BACKEND_IMAGE=.*|POINTY_BACKEND_IMAGE=pointy-backend:${VERSION}|" \
               -e "s|^POINTY_RELAY_IMAGE=.*|POINTY_RELAY_IMAGE=pointy-relay:${VERSION}|" \
               -e "s|^POINTY_WEB_IMAGE=.*|POINTY_WEB_IMAGE=pointy-web:${VERSION}|" \
+              -e "s|^POINTY_EDGE_IMAGE=.*|POINTY_EDGE_IMAGE=${EDGE_IMAGE}|" \
               deploy/onprem/.env.example > "${BUNDLE}/.env.example"
 
           cp deploy/onprem/install.sh deploy/onprem/install.ps1 \
@@ -551,13 +566,18 @@ jobs:
              deploy/onprem/register-autostart.sh deploy/onprem/register-autostart.ps1 \
              deploy/onprem/update-agent.sh deploy/onprem/update-agent.ps1 \
              deploy/onprem/update.sh deploy/onprem/update.ps1 \
+             deploy/onprem/update-lib.sh deploy/onprem/update-lib.ps1 \
+             deploy/onprem/disable-watchdog.sh deploy/onprem/disable-watchdog.ps1 \
+             deploy/onprem/fix-backend-outages.sh deploy/onprem/fix-backend-outages.ps1 \
              deploy/onprem/discovery-responder.py deploy/onprem/discovery-responder.ps1 \
              deploy/onprem/migrate-fahd.sh deploy/onprem/migrate-fahd.ps1 \
              deploy/onprem/INSTALL.md deploy/onprem/README.md "${BUNDLE}/"
           chmod +x "${BUNDLE}/install.sh" "${BUNDLE}/watchdog.sh" \
              "${BUNDLE}/register-autostart.sh" "${BUNDLE}/update-agent.sh" \
-             "${BUNDLE}/update.sh" "${BUNDLE}/discovery-responder.py" \
-             "${BUNDLE}/migrate-fahd.sh"
+             "${BUNDLE}/update.sh" "${BUNDLE}/update-lib.sh" \
+             "${BUNDLE}/discovery-responder.py" \
+             "${BUNDLE}/migrate-fahd.sh" "${BUNDLE}/disable-watchdog.sh" \
+             "${BUNDLE}/fix-backend-outages.sh"
           echo "${VERSION}" > "${BUNDLE}/VERSION.txt"
 
           echo "==> Sanity-checking rendered Compose…"

@@ -83,7 +83,7 @@ x-backend-environment: &backend-environment
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: "${POINTY_POSTGRES_IMAGE:-postgres:17-alpine}"
     restart: always
     environment:
       POSTGRES_DB: pointy
@@ -189,7 +189,7 @@ services:
     logging: *pointy-logging
 
   redis:
-    image: redis:7-alpine
+    image: "${POINTY_REDIS_IMAGE:-redis:7-alpine}"
     restart: always
     # Cache + Celery broker only — nothing here is authoritative (orders,
     # payments, refunds and cash movements are synchronous, atomic writes to
@@ -258,10 +258,13 @@ services:
       POINTY_ASGI_MAX_REQUESTS: "${POINTY_ASGI_MAX_REQUESTS:-0}"
       POINTY_ASGI_MAX_REQUESTS_JITTER: "${POINTY_ASGI_MAX_REQUESTS_JITTER:-0}"
       POINTY_ASGI_LIMIT_CONCURRENCY: "${POINTY_ASGI_LIMIT_CONCURRENCY:-}"
-      POINTY_ASGI_PROXY_HEADERS: "${POINTY_ASGI_PROXY_HEADERS:-0}"
-      POINTY_ASGI_FORWARDED_ALLOW_IPS: "${POINTY_ASGI_FORWARDED_ALLOW_IPS:-127.0.0.1}"
-    ports:
-      - "${POINTY_BACKEND_BIND:-0.0.0.0}:8000:8000"
+      # Every HTTP caller now arrives through the `edge` front door, which
+      # OVERWRITES X-Forwarded-For with the real peer address, so trusting it
+      # restores the true client IP for throttling, LAN discovery and analytics.
+      # Safe to trust unconditionally: :8000 is no longer published from this
+      # container, so nothing outside the Compose network can reach it.
+      POINTY_ASGI_PROXY_HEADERS: "${POINTY_ASGI_PROXY_HEADERS:-1}"
+      POINTY_ASGI_FORWARDED_ALLOW_IPS: "${POINTY_ASGI_FORWARDED_ALLOW_IPS:-*}"
     volumes:
       - pointy-media:/var/lib/pointy/media
       - pointy-static:/var/lib/pointy/staticfiles
@@ -391,7 +394,7 @@ services:
       - --relay
       - "${POINTY_RELAY_CONNECTOR_ADDR:?Set POINTY_RELAY_CONNECTOR_ADDR in deploy/onprem/.env}"
       - --backend
-      - http://backend:8000
+      - http://edge:8000
     restart: always
     init: true
     read_only: true
@@ -411,6 +414,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      edge:
+        condition: service_started
     environment:
       POINTY_RELAY_CONNECTOR_SETUP_TOKEN: "${POINTY_RELAY_CONNECTOR_SETUP_TOKEN:?Set POINTY_RELAY_CONNECTOR_SETUP_TOKEN in deploy/onprem/.env}"
       POINTY_RELAY_CONNECTOR_STATE_FILE: /var/lib/pointy/relay-connector.json
@@ -423,11 +428,73 @@ services:
     stop_grace_period: 30s
     logging: *pointy-logging
 
+  # LAN front door: owns :8000 — the port every native till talks to — and
+  # proxies it to whichever backend container is live. It exists so the backend
+  # can be REPLACED WITHOUT AN OUTAGE: a container cannot change image without
+  # being destroyed, and only one container can hold a host port, so while the
+  # backend owned :8000 itself every update shut the shop's tills out for the
+  # length of a Django boot. The updater starts the new backend alongside the
+  # old one, waits for /readyz, then rewrites ./edge/active/upstream.conf and
+  # reloads nginx — a graceful flip that finishes in-flight requests on the old
+  # container and refuses nothing.
+  #
+  # Its tag is bumped by hand (pointy-edge:1, :2, …), NOT per release: this
+  # container must survive every application update untouched, so it must not be
+  # versioned with the app. Only the "which backend is live" pointer is mounted
+  # from the host, so a flip is a file write plus a reload — never a recreate.
+  edge:
+    image: "${POINTY_EDGE_IMAGE:-pointy-edge:1}"
+    build:
+      context: ../..
+      dockerfile: deploy/onprem/edge/Dockerfile
+    restart: always
+    init: true
+    # nginx keeps its default capabilities (SETUID/SETGID to drop worker
+    # privileges); everything else is locked down like the web front door.
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: "${POINTY_EDGE_MEM_LIMIT:-96m}"
+    cpus: "${POINTY_EDGE_CPUS:-0.5}"
+    # Started, not healthy: the front door should come up and serve 502s that
+    # resolve themselves rather than wait on the app it fronts.
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "${POINTY_BACKEND_BIND:-0.0.0.0}:${POINTY_BACKEND_PORT:-8000}:8000"
+    volumes:
+      # Only the live-upstream pointer, read-only: the updater rewrites it on the
+      # HOST side and reloads. An empty or missing directory is fine — nginx
+      # then falls back to the managed backend baked into the image.
+      - type: bind
+        source: ./edge/active
+        target: /etc/nginx/conf.d/active
+        read_only: true
+    tmpfs:
+      - /run:rw,noexec,nosuid,nodev,size=8m
+      - /var/cache/nginx:rw,noexec,nosuid,nodev,size=32m
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    healthcheck:
+      # Answered by nginx itself, so the front door's health never depends on
+      # the backend behind it (which is exactly what gets swapped).
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8000/healthz-edge"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+      start_interval: 1s
+    stop_grace_period: 15s
+    logging: *pointy-logging
+
   # Browser front door: serves the Flutter web build and reverse-proxies /api,
-  # /media, /static, /admin, /healthz, /readyz to the backend on the SAME origin
-  # (no CORS, no server IP for the browser app). Native tills still hit the
-  # backend directly on :8000 via discovery, so the web app is purely additive
-  # and a web outage never affects the tills.
+  # /media, /static, /admin, /healthz, /readyz on the SAME origin (no CORS, no
+  # server IP for the browser app). It proxies through the `edge` front door
+  # rather than straight to the backend, so the browser app rides the same
+  # zero-downtime flip the tills do. Native tills reach `edge` directly on :8000
+  # via discovery, so the web app stays purely additive and a web outage never
+  # affects the tills.
   web:
     image: "${POINTY_WEB_IMAGE:-pointy-web:local}"
     build:
@@ -447,13 +514,13 @@ services:
     pids_limit: 128
     mem_limit: "${POINTY_WEB_MEM_LIMIT:-128m}"
     cpus: "${POINTY_WEB_CPUS:-0.5}"
-    # Only wait for the backend to START, not to be healthy: nginx serves the
+    # Only wait for the front door to START, not to be healthy: nginx serves the
     # Flutter app shell immediately and reverse-proxies /api with a re-resolving
     # upstream, so the browser UI loads right away and API calls simply retry
     # until the backend is ready — no reason to hold the whole web front door
     # behind the backend health check.
     depends_on:
-      backend:
+      edge:
         condition: service_started
     ports:
       - "${POINTY_WEB_BIND:-0.0.0.0}:${POINTY_WEB_PORT:-80}:80"

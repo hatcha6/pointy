@@ -128,6 +128,20 @@ if [ ! -f .env ]; then
   echo "==> Created .env: generated local secrets (licensing off — offline install)."
 fi
 
+# A full install/restart is the moment everything converges, so reset what a
+# live update may have left pointing elsewhere: the LAN front door goes back to
+# the managed backend, and any temporary container a previous update was serving
+# from is removed. Both are safe no-ops on a fresh install.
+echo "==> Resetting the LAN front door to the managed backend…"
+mkdir -p edge/active
+cat > edge/active/upstream.conf <<'UPSTREAM'
+# GENERATED — the backend the LAN front door is currently sending traffic to.
+# Rewritten by update.sh / update.ps1 during a live update; reset here.
+set $pointy_upstream      "http://backend:8000";
+set $pointy_upstream_name "backend";
+UPSTREAM
+docker rm -f pointy-backend-standby >/dev/null 2>&1 || true
+
 echo "==> Starting the Pointy stack…"
 docker compose --env-file .env -f docker-compose.yml up -d
 

@@ -28,9 +28,13 @@ docker compose --env-file deploy/onprem/.env -f deploy/onprem/docker-compose.yml
 ```
 
 The backend runs migrations during startup, then starts Uvicorn against the
-Django ASGI app. Celery starts
-only after the backend is healthy. The connector uses Docker-internal
-`http://backend:8000`, so it does not depend on container UDP discovery.
+Django ASGI app. Celery starts only after the backend is healthy.
+
+`:8000` — the port tills talk to — is owned by the `edge` service, a small nginx
+that proxies to whichever backend container is currently live. That indirection
+is what makes zero-downtime updates possible (see **Updates** below); it also
+means the connector and the web app use Docker-internal `http://edge:8000`
+rather than UDP discovery, and follow the same switchover the tills do.
 
 ## Health And Logs
 
@@ -53,9 +57,13 @@ a host-level **update agent** (`update-agent.sh` / `update-agent.ps1`) runs on a
 timer alongside the watchdog. Each run it asks the relay which version this shop
 should run (`POINTY_RELAY_PUBLIC_API_URL` in `.env`, authenticated with the shop's
 connector token), and when a newer one is assigned it downloads the bundle **from
-the relay**, verifies its sha256, backs up the database, applies it, health-checks
-`/readyz/`, and **rolls back automatically** if the new version is unhealthy. It
-reports status back to the relay (`pointy-relay fleet status`).
+the relay**, verifies its sha256, backs up the database, applies it **live**
+(no downtime — see below), health-checks `/readyz/`, and **rolls back
+automatically** if the new version is unhealthy. It reports status back to the
+relay (`pointy-relay fleet status`).
+
+Because updates no longer close the tills, a rollout does not have to be timed
+for after hours.
 
 Operators drive it entirely from the relay — no shop access needed:
 
@@ -77,6 +85,13 @@ version.
 ### Manual (offline / air-gapped)
 
 ```sh
+bash update.sh /path/to/pointy-onprem-1.5.0.zip     # live; add --restart for a full restart
+```
+
+Run from the deploy directory. For development against source instead of a
+bundle:
+
+```sh
 docker compose --env-file deploy/onprem/.env -f deploy/onprem/docker-compose.yml build backend connector
 docker compose --env-file deploy/onprem/.env -f deploy/onprem/docker-compose.yml up -d
 ```
@@ -84,6 +99,36 @@ docker compose --env-file deploy/onprem/.env -f deploy/onprem/docker-compose.yml
 Keep the previous image tag available when doing customer updates, so rollback
 is just changing `POINTY_BACKEND_IMAGE` or `POINTY_RELAY_IMAGE` and running
 `up -d` again.
+
+### Zero-downtime updates (how, and what a release must honour)
+
+`update.sh` / `update.ps1` / the agent all share one engine (`update-lib.sh`,
+`update-lib.ps1`). It starts the new backend **beside** the running one, lets it
+migrate and pass `/readyz/`, and only then flips the `edge` front door to it
+with an `nginx -s reload` — graceful, so in-flight requests finish on the old
+container and none are refused. It then rebuilds the managed `backend` container
+on the new image behind the standby and hands traffic back. Failure before the
+flip is invisible to the shop; failure after it rolls the backend back.
+
+Three rules follow from that, and they are on us, not on the shop:
+
+* **Migrations must be backward compatible across one version.** Two app
+  versions share the database for about a minute during every live update.
+  Expand in one release, contract in a later one. (This was already the rule
+  for auto-rollback; it is now load-bearing on the happy path too.)
+* **A release that cannot honour it must say so.** Ship
+  `UPDATE_STRATEGY.txt` containing `restart` in the bundle and every updater
+  falls back to a full restart automatically, without the operator having to
+  know.
+* **Infrastructure is never replaced live.** Postgres, Redis, PgBouncer and the
+  front door keep running; their images stay staged in `./images` until someone
+  runs `install.sh` or `update.sh --restart`. Bumping the `pointy-edge` image
+  tag is therefore a maintenance-window change, not a per-release one.
+
+The watchdog cooperates: it stands down while `.update.lock` is fresh, it
+reconciles with `--no-recreate` (availability, not convergence — it will never
+restart the database on its own timer to apply a drift), and if an update dies
+mid-flip it points the front door back at the managed backend.
 
 ## Backup Notes
 

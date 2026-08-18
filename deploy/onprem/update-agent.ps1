@@ -3,16 +3,22 @@
 
   Polls the relay for the version this installation should run and, when a newer
   one is assigned, downloads the bundle FROM THE RELAY, verifies its sha256,
-  backs up the database, applies it (docker load + compose up via install.ps1),
-  health-checks the result, and rolls back automatically on failure. Runs as a
-  Scheduled Task next to the watchdog. Use -Check to preview without applying.
+  backs up the database, applies it, health-checks the result, and rolls back
+  automatically on failure. Runs as a Scheduled Task next to the watchdog.
+
+  It applies updates LIVE by default (see update-lib.ps1): the new backend is
+  brought up beside the running one and only takes traffic once it has answered
+  /readyz, so a shop can be updated in the middle of the trading day without a
+  till noticing. That matters most here — this agent fires on a timer, and
+  before it could do that safely the only responsible schedule was "after
+  hours". Releases that cannot be applied that way say so in the bundle and get
+  a full restart instead.
+
+  Use -Check to preview without applying.
 #>
-param([switch]$Check)
+param([switch]$Check, [switch]$Restart, [switch]$Live)
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
-
-$AgentVersion = "pointy-update-agent/1"
-function Log($m) { Write-Host ("{0} [pointy-update-agent] {1}" -f (Get-Date -Format s), $m) }
 
 # Self-update: a bundle stages the new agent as update-agent.ps1.new; promote it
 # and re-exec before doing work (never overwrite the running script).
@@ -21,30 +27,36 @@ if ((Test-Path "update-agent.ps1.new") -and (-not $env:POINTY_AGENT_PROMOTED)) {
     $env:POINTY_AGENT_PROMOTED = "1"
     $forward = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ".\update-agent.ps1")
     if ($Check) { $forward += "-Check" }
+    if ($Restart) { $forward += "-Restart" }
+    if ($Live) { $forward += "-Live" }
     & powershell.exe @forward
     exit $LASTEXITCODE
 }
 
-$compose = @("compose", "--env-file", ".env", "-f", "docker-compose.yml")
-function Compose { docker @compose @args }
-
-function EnvValue($key) {
-    $line = Select-String -Path ".env" -Pattern "^$key=" | Select-Object -First 1
-    if (-not $line) { return "" }
-    return ($line.Line -replace "^$key=", "").Trim().Trim('"')
+# The agent's own file is promoted and re-exec'd above; the rest are installed
+# here, before update-lib.ps1 is dot-sourced.
+foreach ($self in @("update.ps1", "update-lib.ps1")) {
+    if (Test-Path "$self.new") { Move-Item -Force "$self.new" $self }
 }
 
-$relay = (EnvValue "POINTY_RELAY_PUBLIC_API_URL").TrimEnd('/')
+$script:PointyLogTag = "pointy-update-agent"
+. .\update-lib.ps1
+
+$AgentVersion = "pointy-update-agent/2"
+$mode = "auto"
+if ($Restart) { $mode = "restart" }
+if ($Live) { $mode = "live" }
+
+$relay = (Get-PointyEnvValue "POINTY_RELAY_PUBLIC_API_URL").TrimEnd('/')
 if (-not $relay) { throw "POINTY_RELAY_PUBLIC_API_URL is not set in .env" }
 
-$current = "unknown"
-if (Test-Path "VERSION.txt") { $current = (Get-Content "VERSION.txt" -Raw).Trim() }
+$current = Get-PointyCurrentVersion
 
 # Connector token via `docker cp` (works even though the connector image is scratch).
 $state = New-TemporaryFile
-try { Compose cp connector:/var/lib/pointy/relay-connector.json $state.FullName 2>$null } catch {}
+try { Invoke-Compose cp connector:/var/lib/pointy/relay-connector.json $state.FullName 2>$null } catch {}
 if ((-not (Test-Path $state)) -or ((Get-Item $state).Length -eq 0)) {
-    Log "connector state unavailable yet; retrying next run"; exit 0
+    Write-PointyLog "connector state unavailable yet; retrying next run"; exit 0
 }
 $token = (Get-Content $state.FullName -Raw | ConvertFrom-Json).connector_token
 if (-not $token) { throw "connector token not found in connector state" }
@@ -56,108 +68,49 @@ function Report($cur, $status, $err) {
         Invoke-RestMethod -Method Post -Uri "$relay/v1/agent/status" -Headers $headers -ContentType "application/json" -Body $body | Out-Null
     } catch {}
 }
-function Healthy {
-    for ($i = 0; $i -lt 60; $i++) {
-        try { Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8000/readyz/" -TimeoutSec 5 | Out-Null; return $true }
-        catch { Start-Sleep 5 }
-    }
-    return $false
-}
 
 try { $manifest = Invoke-RestMethod -Uri "$relay/v1/agent/manifest" -Headers $headers }
-catch { Log "manifest fetch failed; retrying next run"; exit 0 }
+catch { Write-PointyLog "manifest fetch failed; retrying next run"; exit 0 }
 
 $directive = $manifest.directive
 $assigned = $manifest.assigned_version
 if ($directive -ne "apply" -or -not $assigned -or $assigned -eq $current) {
-    Log "up to date (current=$current, directive=$directive, assigned=$assigned)"
+    Write-PointyLog "up to date (current=$current, directive=$directive, assigned=$assigned)"
     Report $current "idle" ""
     exit 0
 }
-Log "update available: $current -> $assigned"
-if ($Check) { Log "--check: would apply $assigned"; exit 0 }
+Write-PointyLog "update available: $current -> $assigned"
+if ($Check) { Write-PointyLog "-Check: would apply $assigned"; exit 0 }
+
+# Take the update lock before downloading: it also tells the watchdog to keep
+# its hands off the stack for the duration.
+if (-not (Get-PointyUpdateLock)) { exit 0 }
+
 Report $current "applying" ""
 
-$bundlePath = $manifest.bundle.path
-$bundleSha = $manifest.bundle.sha256
-$staging = New-Item -ItemType Directory -Path (Join-Path $env:TEMP ("pointy-update-" + [guid]::NewGuid()))
-$zip = Join-Path $staging.FullName "bundle.zip"
-try { Invoke-WebRequest -UseBasicParsing -Uri "$relay$bundlePath" -Headers $headers -OutFile $zip }
-catch { Report $current "failed" "bundle download failed"; throw }
-
-$actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
-if ($bundleSha -and ($actual -ne $bundleSha.ToLower())) {
-    Report $current "failed" "sha256 mismatch"; throw "sha256 mismatch (want $bundleSha got $actual)"
-}
-Expand-Archive -Path $zip -DestinationPath (Join-Path $staging.FullName "bundle") -Force
-$bundleDir = Get-ChildItem -Path (Join-Path $staging.FullName "bundle") -Directory |
-    Where-Object { $_.Name -like "pointy-onprem-*" } | Select-Object -First 1
-$bundleDir = if ($bundleDir) { $bundleDir.FullName } else { Join-Path $staging.FullName "bundle" }
-
-# Database backup (best-effort).
-New-Item -ItemType Directory -Force -Path "backups" | Out-Null
-$backup = "backups/pre-update-$current-to-$assigned.sql"
-try { Compose exec -T postgres sh -c 'pg_dump -U "${POSTGRES_USER:-pointy}" "${POSTGRES_DB:-pointy}"' | Out-File -Encoding ascii $backup }
-catch { Log "WARN: database backup failed; continuing" }
-
-# Snapshot for rollback.
-$snap = New-Item -ItemType Directory -Path (Join-Path $env:TEMP ("pointy-rollback-" + [guid]::NewGuid()))
-Copy-Item ".env" (Join-Path $snap.FullName ".env") -Force
-if (Test-Path "docker-compose.yml") { Copy-Item "docker-compose.yml" (Join-Path $snap.FullName "docker-compose.yml") -Force }
-
-# Adopt the new bundle's files (keep .env), stage the agent self-update, pin tags.
-foreach ($f in @(
-        "docker-compose.yml", "install.ps1", "install.sh",
-        "watchdog.ps1", "watchdog.sh",
-        "register-autostart.ps1", "register-autostart.sh",
-        "update.ps1", "update.sh",
-        "discovery-responder.ps1", "discovery-responder.py",
-        "migrate-fahd.ps1", "migrate-fahd.sh",
-        ".env.example", "VERSION.txt", "INSTALL.md", "README.md")) {
-    $p = Join-Path $bundleDir $f
-    if (Test-Path $p) { Copy-Item $p (Join-Path "." $f) -Force }
-}
-if (Test-Path (Join-Path $bundleDir "images")) {
-    Remove-Item -Recurse -Force "images" -ErrorAction SilentlyContinue
-    Copy-Item (Join-Path $bundleDir "images") "images" -Recurse -Force
-}
-# Refresh bundled client installers so a backend update also updates the LAN clients.
-if (Test-Path (Join-Path $bundleDir "clients")) {
-    Remove-Item -Recurse -Force "clients" -ErrorAction SilentlyContinue
-    Copy-Item (Join-Path $bundleDir "clients") "clients" -Recurse -Force
-}
-if (Test-Path (Join-Path $bundleDir "update-agent.ps1")) { Copy-Item (Join-Path $bundleDir "update-agent.ps1") "update-agent.ps1.new" -Force }
-if (Test-Path (Join-Path $bundleDir "update-agent.sh")) { Copy-Item (Join-Path $bundleDir "update-agent.sh") "update-agent.sh" -Force }
-
-$envText = Get-Content ".env"
-$envText = $envText -replace "^POINTY_BACKEND_IMAGE=.*", "POINTY_BACKEND_IMAGE=pointy-backend:$assigned"
-$envText = $envText -replace "^POINTY_RELAY_IMAGE=.*", "POINTY_RELAY_IMAGE=pointy-relay:$assigned"
-$envText = $envText -replace "^POINTY_WEB_IMAGE=.*", "POINTY_WEB_IMAGE=pointy-web:$assigned"
-Set-Content ".env" $envText -Encoding UTF8
-
-Log "applying $assigned ..."
-$applied = $false
+$staging = (New-Item -ItemType Directory -Path (Join-Path $env:TEMP ("pointy-update-" + [guid]::NewGuid()))).FullName
+$staged = $null
 try {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\install.ps1"
-    if ($LASTEXITCODE -eq 0 -and (Healthy)) { $applied = $true }
-} catch { $applied = $false }
+    $zip = Join-Path $staging "bundle.zip"
+    try { Invoke-WebRequest -UseBasicParsing -Uri "$relay$($manifest.bundle.path)" -Headers $headers -OutFile $zip }
+    catch { Report $current "failed" "bundle download failed"; throw }
 
-if ($applied) {
-    Set-Content "VERSION.txt" $assigned -Encoding UTF8
-    # Re-register autostart so tasks the new bundle ships (watchdog, discovery
-    # responder, this agent) are installed hands-off. The scheduled task runs
-    # elevated, so this normally just works; idempotent either way.
-    try { & (Join-Path $PSScriptRoot "register-autostart.ps1") }
-    catch { Log "WARN: autostart re-registration failed: $($_.Exception.Message)" }
-    Report $assigned "succeeded" ""
-    Log "updated to $assigned"
-    exit 0
+    $expected = $manifest.bundle.sha256
+    $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+    if ($expected -and ($actual -ne $expected.ToLower())) {
+        Report $current "failed" "sha256 mismatch"
+        throw "sha256 mismatch (want $expected got $actual)"
+    }
+
+    $staged = Expand-PointyBundle $zip
+    if (Invoke-PointyApplyBundle $staged.Dir $current $assigned $mode) {
+        Report $assigned "succeeded" ""
+        exit 0
+    }
+    Report (Get-PointyCurrentVersion) "failed" "update to $assigned failed"
+    exit 1
+} finally {
+    if ($staged -and $staged.Staging) { Remove-Item -Recurse -Force $staged.Staging -ErrorAction SilentlyContinue }
+    Remove-Item -Recurse -Force $staging -ErrorAction SilentlyContinue
+    Remove-PointyUpdateLock
 }
-
-Log "update to $assigned failed; rolling back to $current"
-Copy-Item (Join-Path $snap.FullName ".env") ".env" -Force
-if (Test-Path (Join-Path $snap.FullName "docker-compose.yml")) { Copy-Item (Join-Path $snap.FullName "docker-compose.yml") "docker-compose.yml" -Force }
-Compose up -d --remove-orphans
-if (Healthy) { Report $current "failed" "update to $assigned failed; rolled back"; throw "update failed; rolled back to $current" }
-Report $current "failed" "update to $assigned failed AND rollback unhealthy"
-throw "update to $assigned failed and rollback is unhealthy - manual intervention needed"

@@ -24,6 +24,8 @@ discovery-responder.ps1 Answers POS clients' LAN discovery probes (Windows host)
 discovery-responder.py  Answers POS clients' LAN discovery probes (Linux host)
 update.sh / update.ps1  Applies a newer release bundle to this install (manual)
 update-agent.sh / .ps1  Applies relay-assigned updates automatically
+update-lib.sh / .ps1    Shared update engine used by both of the above
+edge/                   The LAN front door's config (baked into its image)
 migrate-fahd.sh / .ps1  One-shot legacy-data import for shops coming from Fahd
 README.md               Full operations / hardening / backup guide
 VERSION.txt             The Pointy version this bundle was built from
@@ -31,6 +33,7 @@ images/                 Saved Docker images (loaded by the installer)
   pointy-backend-<ver>.tar
   pointy-relay-<ver>.tar
   pointy-web-<ver>.tar    Flutter web app + nginx (browser access)
+  pointy-edge.tar         LAN front door (owns :8000; see "Updating" below)
   postgres.tar
   redis.tar
 ```
@@ -236,11 +239,63 @@ when you are done.
 
 ## Updating to a newer bundle
 
-1. Extract the new bundle into a fresh folder.
-2. Copy your existing `.env` into it.
-3. Run the installer — `docker load` brings in the new image tags and
-   `docker compose up -d` performs a rolling restart. The named Docker volumes
-   (database, media, backups) are preserved across updates.
+Updates are applied **live** — you do not have to close the shop, and you do not
+have to wait for closing time.
+
+```sh
+bash update.sh /path/to/pointy-onprem-1.5.0.zip          # Linux / macOS
+powershell -ExecutionPolicy Bypass -File .\update.ps1 C:\path\pointy-onprem-1.5.0.zip
+```
+
+Run it from the current deploy directory (next to `docker-compose.yml` and
+`.env`). Your `.env`, the named Docker volumes (database, media, backups) and
+the shop's data are all preserved; only images and scripts change.
+
+### How it stays online
+
+A container cannot change its image without being destroyed, and only one
+container can hold a host port — so for as long as the backend itself owned
+`:8000`, every update locked the tills out for the length of a Django boot. The
+`edge` service now owns that port and proxies it to whichever backend is live,
+which lets the updater work like this:
+
+1. Load the new application images (nothing running is touched).
+2. Start the **new** backend beside the one serving customers. It runs the new
+   release's migrations here, against the live database.
+3. Wait for it to answer `/readyz/` — through the front door, over the real
+   network path traffic will take.
+4. Flip: `nginx -s reload`. In-flight requests finish on the old container, new
+   ones land on the new one, and nothing is refused. The updater verifies the
+   flip landed (`X-Pointy-Upstream`) instead of assuming it did.
+5. Rebuild the managed `backend` container on the new image while the new one
+   serves, hand traffic back to it, then remove the temporary container.
+6. Replace the background workers, relay connector and web app — none of which
+   hold the LAN port.
+
+If the new version never becomes healthy, **no traffic ever moves**: the update
+aborts, restores the previous configuration, and the shop keeps trading on the
+old release. If something fails after the flip, the previous release is brought
+back and traffic returns to it.
+
+### What a live update deliberately does not touch
+
+The database, Redis, PgBouncer and the front door itself. Replacing any of them
+means recreating them, which is the one thing that cannot be done under a
+trading shop. Their new images ship in the bundle and stay staged in `./images`;
+the updater says so when it finishes. Apply them in a maintenance window with:
+
+```sh
+bash update.sh /path/to/bundle.zip --restart   # or: sudo bash install.sh
+```
+
+### One-time exception
+
+A deployment installed before the front door existed does not have it yet, so
+the first update that introduces it is applied the old way — a full restart, as
+before. Every update after that one is live. The updater tells you when this is
+what it is doing.
+
+### Rolling back
 
 To roll back, re-run the installer from the previous bundle folder (it still has
 its own images and `.env`).
