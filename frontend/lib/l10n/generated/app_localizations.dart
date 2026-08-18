@@ -15959,6 +15959,12 @@ abstract class AppLocalizations {
   /// **'راجع الخطوة المحددة وأكمل البيانات المطلوبة.'**
   String get discountWizardFixStepError;
 
+  /// No description provided for @discountFormFixFieldsError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمل الحقول المطلوبة المميزة بالأحمر.'**
+  String get discountFormFixFieldsError;
+
   /// No description provided for @discountWizardNoExtraRules.
   ///
   /// In ar, this message translates to:
