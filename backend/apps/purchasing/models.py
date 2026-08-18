@@ -40,12 +40,12 @@ class Supplier(TimeStampedModel):
         po_rows = (
             self.purchase_orders.exclude(status=PurchaseOrder.Status.CANCELLED)
             .annotate(_paid=Sum("supplier_payments__amount"))
-            .values_list("total", "_paid")
+            .values_list("pk", "total", "_paid")
         )
         outstanding = sum(
             (
                 max(po_total - (paid or Decimal("0.00")), Decimal("0.00"))
-                for po_total, paid in po_rows
+                for _po_id, po_total, paid in po_rows
             ),
             Decimal("0.00"),
         )
@@ -1012,9 +1012,9 @@ def prime_supplier_balances(suppliers):
         PurchaseOrder.objects.filter(supplier_id__in=ids)
         .exclude(status=PurchaseOrder.Status.CANCELLED)
         .annotate(_paid=Sum("supplier_payments__amount"))
-        .values_list("supplier_id", "total", "_paid")
+        .values_list("supplier_id", "pk", "total", "_paid")
     )
-    for supplier_id, po_total, paid in po_rows:
+    for supplier_id, _po_id, po_total, paid in po_rows:
         outstanding[supplier_id] = outstanding.get(supplier_id, zero) + max(
             po_total - (paid or zero), zero
         )
