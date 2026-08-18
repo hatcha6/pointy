@@ -9,7 +9,7 @@ from uuid import uuid4
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import connection
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
@@ -964,6 +964,69 @@ class AnalyticsExportCopyEngineTests(TestCase):
             {"frontend.http_request", "app.started"},
         )
 
+    def test_jsonl_embeds_json_columns_as_objects_not_strings(self):
+        """jsonl carries ``attributes``/``metrics`` as real nested objects.
+
+        The ``json`` array format double-encodes them as strings for backwards
+        compatibility; jsonl is new and does the right thing, so a reader gets
+        an object it can index instead of a string it has to parse again. This
+        is also what makes the COPY path cheaper — one encode instead of three.
+        """
+        [noisy, _] = self._create_events()
+
+        rows = [
+            json.loads(line)
+            for line in self._export(format="jsonl")
+            .read("analytics_events.jsonl")
+            .decode()
+            .splitlines()
+        ]
+        row = next(row for row in rows if row["id"] == noisy.id)
+
+        self.assertIsInstance(row["attributes"], dict)
+        self.assertEqual(row["attributes"], noisy.attributes)
+        self.assertIsInstance(row["metrics"], dict)
+
+    def test_jsonl_matches_the_orm_exporter_document_for_document(self):
+        """COPY and ORM jsonl must agree, nested objects and all."""
+        self._create_events()
+
+        def rows(engine):
+            body = (
+                self._export(format="jsonl", **engine)
+                .read("analytics_events.jsonl")
+                .decode()
+            )
+            return self._by_id([json.loads(line) for line in body.splitlines()])
+
+        copy_rows = rows({})
+        orm_rows = rows({"engine": "orm"})
+
+        self.assertEqual(len(copy_rows), 2)
+        self.assertEqual(copy_rows, orm_rows)
+
+    def test_parallel_workers_land_in_the_copy_statement_and_manifest(self):
+        """With workers configured, the export declares them and still runs.
+
+        The plan knobs are ``SET LOCAL`` so they never outlive the export's
+        transaction; here we just prove the wiring — a configured worker count
+        is recorded, the archive is still correct, and nothing about the output
+        depends on whether the planner actually chose a parallel plan.
+        """
+        self._create_events()
+
+        with override_settings(POINTY_ANALYTICS_EXPORT_PARALLEL_WORKERS=4):
+            archive = self._export(format="csv")
+
+        manifest = json.loads(archive.read("manifest.json"))
+        self.assertEqual(manifest["parallel_workers"], 4)
+        self.assertEqual(manifest["event_count"], 2)
+        rows = list(
+            csv.DictReader(io.StringIO(archive.read("analytics_events.csv").decode()))
+        )
+        self.assertEqual(len(rows), 2)
+
+
     def test_empty_export_is_still_a_valid_archive(self):
         self._create_events()
         # Filters that match nothing: an export with no rows must still be a
@@ -1041,10 +1104,10 @@ class AnalyticsExportCopyEngineTests(TestCase):
 
         The ORM exporter runs a keyset query per batch, so a month of telemetry
         is tens of thousands of round trips — that is the export nobody could
-        sit through. COPY streams the entire result set in one statement, and
-        that statement goes straight through psycopg rather than the ORM, so
-        the honest measure of it here is that Django issues nothing at all no
-        matter how many rows come back.
+        sit through. COPY streams the entire result set in one statement, so
+        the round-trip count is a small CONSTANT (the parallel ``SET LOCAL``
+        preamble) that does not move whether the export returns 2 rows or half
+        a million.
         """
         self._create_events()
         small_queries, small_count = self._export_query_count({"format": "csv"})
@@ -1064,7 +1127,9 @@ class AnalyticsExportCopyEngineTests(TestCase):
 
         self.assertEqual(small_count, 2)
         self.assertEqual(large_count, 502)
-        self.assertEqual(small_queries, 0)
+        # A small fixed preamble (SET LOCAL x4) plus the COPY, independent of
+        # row count — that constancy is the property under test.
+        self.assertLess(small_queries, 10)
         self.assertEqual(large_queries, small_queries)
 
     def test_copy_statement_streams_the_filtered_select(self):
@@ -1072,7 +1137,7 @@ class AnalyticsExportCopyEngineTests(TestCase):
             filter_events_for_export(
                 AnalyticsEvent.objects.all(), {"event_type": "error"}
             ),
-            json_mode=False,
+            export_format="csv",
             connection=connection,
         )
 
@@ -1086,12 +1151,70 @@ class AnalyticsExportCopyEngineTests(TestCase):
         """No ORDER BY: sorting a full export is the cost this engine avoids."""
         sql, _params, columns = build_export_sql(
             filter_events_for_export(AnalyticsEvent.objects.all(), {}),
-            json_mode=False,
+            export_format="csv",
             connection=connection,
         )
 
         self.assertNotIn("ORDER BY", sql.upper())
         self.assertEqual(columns, ANALYTICS_EXPORT_CSV_FIELDS)
+
+
+@unittest.skipUnless(
+    connection.vendor == "postgresql",
+    "The COPY export engine is Postgres-only.",
+)
+class AnalyticsExportParallelLeakTests(TransactionTestCase):
+    """The parallel plan knobs must not survive the export.
+
+    A ``TransactionTestCase`` on purpose: the export wraps its ``SET LOCAL``
+    knobs in ``transaction.atomic``, and under the ordinary ``TestCase`` the
+    surrounding test transaction turns that into a mere savepoint — where
+    ``SET LOCAL`` scopes to the outermost transaction and so appears to "leak"
+    for the rest of the test. Only without that wrapping transaction (as in
+    production autocommit) does ``atomic`` become a real ``BEGIN/COMMIT`` and
+    ``SET LOCAL`` reset at commit, which is exactly the property that keeps a
+    ``parallel_tuple_cost = 0`` from bleeding onto the next client of a pooled
+    connection. This test would silently pass under ``TestCase`` for the wrong
+    reason, so it lives on its own.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(
+            username="parallel-leak-manager", password="pass"
+        )
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.manager)
+
+    def _guc(self, name):
+        with connection.cursor() as cursor:
+            cursor.execute(f"SHOW {name}")
+            return cursor.fetchone()[0]
+
+    def test_parallel_gucs_reset_after_the_export(self):
+        AnalyticsEvent.objects.create(
+            event_type=AnalyticsEvent.EventType.USAGE,
+            name="app.started",
+            severity=AnalyticsEvent.Severity.INFO,
+            source=AnalyticsEvent.Source.FRONTEND,
+            occurred_at=timezone.now(),
+        )
+        before = {
+            name: self._guc(name)
+            for name in ("parallel_tuple_cost", "max_parallel_workers_per_gather")
+        }
+
+        with override_settings(POINTY_ANALYTICS_EXPORT_PARALLEL_WORKERS=4):
+            response = self.client.get(
+                reverse("analytics-event-export"), {"format": "csv"}
+            )
+            # Drain the streamed body so the export's transaction commits.
+            b"".join(response.streaming_content)
+
+        after = {name: self._guc(name) for name in before}
+        self.assertEqual(before, after)
 
 
 class AnalyticsExportNdjsonWrapperTests(TestCase):

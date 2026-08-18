@@ -108,6 +108,16 @@ class Command(BaseCommand):
             help="Delete every existing analytics event first.",
         )
         parser.add_argument(
+            "--defer-indexes",
+            action="store_true",
+            help=(
+                "Drop the table's secondary indexes for the load and rebuild "
+                "them afterwards. Much faster past a few million rows: the "
+                "random-UUID unique index in particular turns a sequential "
+                "load into random writes across an ever-growing btree."
+            ),
+        )
+        parser.add_argument(
             "--no-analyze",
             action="store_true",
             help="Skip the ANALYZE afterwards (the export's row estimate needs it).",
@@ -125,6 +135,10 @@ class Command(BaseCommand):
             self.stdout.write("Truncating analytics events…")
             with connection.cursor() as cursor:
                 cursor.execute(f"TRUNCATE {table} RESTART IDENTITY")
+
+        deferred = _drop_secondary_indexes(table) if options["defer_indexes"] else []
+        if deferred:
+            self.stdout.write(f"Dropped {len(deferred)} secondary indexes for the load.")
 
         span_microseconds = max(1, options["days"] * 86_400 * 1_000_000)
         start = timezone.now() - timedelta(days=options["days"])
@@ -154,6 +168,12 @@ class Command(BaseCommand):
                 f"({inserted / max(elapsed, 1e-9):,.0f} rows/s)"
             )
 
+        if deferred:
+            self.stdout.write(f"Rebuilding {len(deferred)} indexes…")
+            with connection.cursor() as cursor:
+                for definition in deferred:
+                    cursor.execute(definition)
+
         if not options["no_analyze"]:
             self.stdout.write("Running ANALYZE (the export's row estimate reads it)…")
             with connection.cursor() as cursor:
@@ -165,3 +185,31 @@ class Command(BaseCommand):
                 f"Seeded {inserted:,} analytics events in {elapsed:,.1f}s."
             )
         )
+
+
+def _drop_secondary_indexes(table):
+    """Drop every index on ``table`` except the primary key, returning the DDL
+    needed to put them back. The pkey stays: dropping it would take the FK
+    constraints with it."""
+    unquoted = table.strip('"')
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT i.indexdef
+            FROM pg_indexes i
+            JOIN pg_class c ON c.relname = i.indexname
+            JOIN pg_index x ON x.indexrelid = c.oid
+            WHERE i.tablename = %s AND NOT x.indisprimary
+            """,
+            [unquoted],
+        )
+        definitions = [row[0] for row in cursor.fetchall()]
+        for definition in definitions:
+            name = definition.split(" INDEX ")[1].split(" ON ")[0].strip()
+            # A unique index backing a constraint has to go through the
+            # constraint; a plain one can be dropped directly.
+            cursor.execute(
+                f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {name}"
+            )
+            cursor.execute(f'DROP INDEX IF EXISTS {name}')
+    return definitions

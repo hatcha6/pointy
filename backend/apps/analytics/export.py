@@ -27,9 +27,10 @@ SQLite (tests, dev) still works.
 
 import json
 import zipfile
+from contextlib import ExitStack
 
 from django.conf import settings
-from django.db import connections
+from django.db import connections, transaction
 from django.db.models import TextField, Value
 from django.db.models.expressions import RawSQL
 from django.db.models.functions import Coalesce
@@ -114,7 +115,7 @@ def _nullable_number_or_blank(column):
     return f"CASE WHEN {column} IS NULL THEN '\"\"'::json ELSE to_json({column}) END"
 
 
-def export_annotations(*, json_mode, connection):
+def export_annotations(*, export_format, connection):
     """The export's output columns, in order, as Django expressions.
 
     Everything is an annotation on purpose. ``QuerySet.values()`` emits
@@ -123,6 +124,8 @@ def export_annotations(*, json_mode, connection):
     exactly the order given here. ``received_by_username`` stays a real ORM
     expression so Django writes the LEFT JOIN (and its alias) itself.
     """
+    json_mode = export_format != "csv"
+    nested_json = export_format == "jsonl"
     column = {
         name: _event_column(name, connection)
         for name in (
@@ -190,10 +193,23 @@ def export_annotations(*, json_mode, connection):
             if json_mode
             else column["risk_score"]
         ),
-        # Both exports carry the JSON columns as encoded TEXT, not as nested
-        # objects — ``::text`` keeps that contract on both paths.
-        "attributes": _raw(f"{column['attributes']}::text"),
-        "metrics": _raw(f"{column['metrics']}::text"),
+        # CSV has nowhere to put a nested object, and the `json` array format
+        # has always carried these as encoded text, so both keep ``::text``.
+        #
+        # `jsonl` does not: there the ``::text`` would be serialized by
+        # Postgres and then escaped a SECOND time by the row encoder, to
+        # produce a string the reader has to parse a second time as well. Three
+        # passes over the same bytes for a worse result. Embedding the jsonb
+        # directly is one pass, smaller output, and gives the reader real
+        # objects.
+        "attributes": _raw(
+            column["attributes"]
+            if nested_json
+            else f"{column['attributes']}::text"
+        ),
+        "metrics": _raw(
+            column["metrics"] if nested_json else f"{column['metrics']}::text"
+        ),
         "created_at": _raw(_iso(column["created_at"])),
         "updated_at": _raw(_iso(column["updated_at"])),
     }
@@ -207,14 +223,16 @@ def export_annotations(*, json_mode, connection):
 _ALIAS_PREFIX = "pointy_export_"
 
 
-def build_export_sql(queryset, *, json_mode, connection):
+def build_export_sql(queryset, *, export_format, connection):
     """Compile ``queryset`` into the SELECT the COPY will stream.
 
     Only the filters come from the caller's queryset; the model's default
     ordering is dropped (``order_by()``) because sorting a whole-table export
     is exactly the cost this engine exists to avoid.
     """
-    annotations = export_annotations(json_mode=json_mode, connection=connection)
+    annotations = export_annotations(
+        export_format=export_format, connection=connection
+    )
     aliased = {f"{_ALIAS_PREFIX}{name}": value for name, value in annotations.items()}
     inner_sql, params = (
         queryset.order_by().annotate(**aliased).values(*aliased).query.sql_with_params()
@@ -272,6 +290,31 @@ def zip_compression(compression):
     return zipfile.ZIP_DEFLATED, 1
 
 
+def export_parallel_workers():
+    """Extra Postgres workers the export's COPY may fan out across (0 = off)."""
+    return max(0, int(getattr(settings, "POINTY_ANALYTICS_EXPORT_PARALLEL_WORKERS", 0)))
+
+
+def _parallel_plan_settings(workers):
+    """``SET LOCAL`` statements that let the planner parallelise the export.
+
+    Worker count alone does nothing here: the default ``parallel_tuple_cost``
+    (0.1 per row) adds ~1 unit of cost for every 10 rows the Gather passes up,
+    which on a whole-table export outweighs the parallel scan's saving and the
+    planner picks the serial plan anyway (measured: identical wall-clock at
+    every worker count until this is lowered). Dropping the per-tuple cost and
+    the table-size floor lets it choose parallel for large scans — filtered or
+    not — while still deciding per query. These are ``SET LOCAL`` so they touch
+    only this one transaction and never leak onto a pooled connection.
+    """
+    return (
+        f"SET LOCAL max_parallel_workers_per_gather = {int(workers)}",
+        "SET LOCAL parallel_tuple_cost = 0",
+        "SET LOCAL parallel_setup_cost = 0",
+        "SET LOCAL min_parallel_table_scan_size = 0",
+    )
+
+
 def iter_events_export_zip_copy(
     *,
     queryset,
@@ -295,13 +338,14 @@ def iter_events_export_zip_copy(
     data_filename = f"analytics_events.{export_format}"
 
     connection = connections[alias]
+    workers = export_parallel_workers()
 
     from .services import ZipStreamSink, manifest_filters
 
     sink = ZipStreamSink()
     event_count = 0
     sql, params, _columns = build_export_sql(
-        queryset, json_mode=export_format != "csv", connection=connection
+        queryset, export_format=export_format, connection=connection
     )
     statement = build_copy_statement(sql, export_format=export_format)
 
@@ -311,7 +355,18 @@ def iter_events_export_zip_copy(
         # force_zip64: the member header cannot be rewritten on an
         # unseekable sink, so a >4GB member has to be declared up front.
         with archive.open(data_filename, mode="w", force_zip64=True) as member:
-            with connection.cursor() as cursor:
+            # A transaction is opened ONLY to carry the SET LOCAL parallel
+            # knobs; it auto-resets them at commit so nothing leaks onto a
+            # pooled connection. COPY TO STDOUT already pins one backend for
+            # the whole stream, so this adds no connection-holding cost. With
+            # workers=0 the plain cursor path runs exactly as before.
+            with ExitStack() as scope:
+                if workers > 0:
+                    scope.enter_context(transaction.atomic(using=alias))
+                    with connection.cursor() as tuning:
+                        for statement_sql in _parallel_plan_settings(workers):
+                            tuning.execute(statement_sql)
+                cursor = scope.enter_context(connection.cursor())
                 with cursor.cursor.copy(statement, params) as copy:
                     rows = _iter_copy_bytes(copy)
                     if export_format == "json":
@@ -334,6 +389,7 @@ def iter_events_export_zip_copy(
                     },
                     "event_count": event_count,
                     "engine": "postgres-copy",
+                    "parallel_workers": workers,
                     "ordered": False,
                     "filters": manifest_filters(filters),
                     "files": [data_filename],

@@ -293,6 +293,7 @@ def iter_events_export_zip_orm(
                     # json wraps the same documents in an array; jsonl leaves
                     # them one per line.
                     as_array = export_format == "json"
+                    nested_json = export_format == "jsonl"
                     if as_array:
                         text.write("[\n")
                     for row in iter_export_rows(queryset, batch_size=batch_size):
@@ -300,7 +301,7 @@ def iter_events_export_zip_orm(
                             text.write(",\n")
                         text.write(
                             json.dumps(
-                                _event_export_row(row),
+                                _event_export_row(row, nested_json=nested_json),
                                 ensure_ascii=False,
                                 sort_keys=True,
                             )
@@ -448,8 +449,14 @@ def record_domain_event(
         create_event()
 
 
-def _event_export_row(row):
-    """Format one ``iter_export_rows`` values() dict for the CSV/JSON member."""
+def _event_export_row(row, *, nested_json=False):
+    """Format one ``iter_export_rows`` values() dict for a CSV/JSON/JSONL member.
+
+    ``nested_json`` embeds ``attributes``/``metrics`` as real objects rather
+    than as encoded JSON strings. It is only for ``jsonl``, whose whole reason
+    to exist is one clean document per line — double-encoding the JSON columns
+    there would force the reader to parse them a second time (and match the
+    Postgres COPY path, which embeds them directly)."""
     return {
         "id": row["id"],
         "client_event_id": str(row["client_event_id"]),
@@ -472,8 +479,12 @@ def _event_export_row(row):
         "entity_type": row["entity_type"],
         "entity_id": row["entity_id"],
         "risk_score": row["risk_score"] if row["risk_score"] is not None else "",
-        "attributes": json.dumps(row["attributes"], ensure_ascii=False, sort_keys=True),
-        "metrics": json.dumps(row["metrics"], ensure_ascii=False, sort_keys=True),
+        "attributes": row["attributes"]
+        if nested_json
+        else json.dumps(row["attributes"], ensure_ascii=False, sort_keys=True),
+        "metrics": row["metrics"]
+        if nested_json
+        else json.dumps(row["metrics"], ensure_ascii=False, sort_keys=True),
         "created_at": row["created_at"].isoformat(),
         "updated_at": row["updated_at"].isoformat(),
     }
