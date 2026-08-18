@@ -21,7 +21,12 @@ from apps.employees.models import Employee, PayrollLine, PayrollRun
 from apps.expenses.models import Expense
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
-from apps.purchasing.models import PurchaseOrder, Supplier, SupplierPayment
+from apps.purchasing.models import (
+    prime_supplier_balances,
+    PurchaseOrder,
+    Supplier,
+    SupplierPayment,
+)
 from apps.sales.models import (
     Order,
     OrderAdjustment,
@@ -794,6 +799,8 @@ def _purchasing_summary_report(user, period):
         Supplier.objects.filter(is_active=True).order_by("name"),
         limit=_section_row_limit("supplier_balances"),
     )
+    # Each row reads payable/credit/net — 6 queries per supplier unless primed.
+    prime_supplier_balances(supplier_row_values.rows)
     supplier_rows = [
         {
             "supplier_name": supplier.name,
