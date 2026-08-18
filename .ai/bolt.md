@@ -145,3 +145,54 @@ value is money or otherwise carries business arithmetic. Gate the primer on
 `len(rows) > 1` — a 2-query primer is a *regression* on a 1-line payload where
 the cold lookup is 1 query. Measured: `purchaseorder-detail` on a 20-line order
 43 -> 25 queries (1.0 -> 0.05 per line); receive 467 -> 449.
+
+## 2026-08-18 - Raw-column annotations are the third option, and they are free
+
+**Learning:** The entry above chose id-subquery + `in_bulk` over a value
+subquery, for the right reason (money arithmetic must not exist twice). But it
+framed the choice as two options when there are three: annotating the previous
+row's **raw columns** (`unit_cost`, `unit_factor`) keeps the arithmetic in Python
+just as well as an id does, and costs *zero* queries when the rows are already
+being read from a queryset we control — the PO detail tree prefetches `lines`
+regardless, so the subqueries ride along inside a query that was going to run.
+Two facts made the primer look better than it is: `prime_previous_unit_costs`
+runs once per `to_representation`, so on `supplier-purchase-history` (the detail
+serializer over a whole *page* of orders) it pays its 2 queries **per order**,
+not per page; and the `len(rows) > 1` guard means a 1-line order still goes cold.
+Both disappear when the annotation is present. Measured on the same fixtures:
+detail 25 -> 23, `supplier-purchase-history` (10 orders x 5 lines) 48 -> 28.
+
+**Action:** Keep both. The primer is the general safety net for callers that hand
+the serializer bare rows (create responses, `PurchaseLineViewSet`); the
+annotation is the hot path. Wire them so the primer *fills from the annotation
+first* and only batches what is left — one cache, one arithmetic implementation,
+and the cost rule ("is batching worth a query?") lives in the primer rather than
+in its caller. And when judging a per-payload primer, check whether the payload
+nests: a per-order cost multiplies by page size somewhere.
+
+## 2026-08-18 - A `Prefetch` with a queryset must precede its own `lines__…` strings
+
+**Learning:** `PurchaseOrderViewSet.queryset` prefetches `lines__variant__product`,
+`lines__receipt_lines`, … as strings. Adding `Prefetch("lines", queryset=...)`
+**after** them raises `ValueError: 'lines' lookup was already seen with a
+different queryset` — the string lookups claim `lines` with a default queryset as
+they are processed, and the first lookup to claim it wins. Put the Prefetch
+first and the nested string lookups traverse through it, annotation intact.
+
+**Action:** Any future "annotate the lines prefetch" change here goes at the TOP
+of the `prefetch_related(...)` list. Also worth knowing: `prefetch_related(None)`
+in the list path clears it, so list payloads never pay for detail-only
+annotations.
+
+## 2026-08-18 - `supplier-purchase-history` serializes the DETAIL payload per page
+
+**Learning:** While measuring the detail fix I found `SupplierViewSet.purchase_history`
+reuses `PurchaseOrderViewSet.queryset` with the full `PurchaseOrderSerializer`
+over a *paginated page of orders* — so every per-line cost on the detail screen
+is paid ~N_orders times there. Measured on 10 orders × 5 lines: 78 → 28 queries
+from the same one-line annotation (50 removed, 64%). Detail-path optimizations
+here are worth roughly a page-size multiple more than they look.
+
+**Action:** When sizing a `purchaseorder-detail` serialization win, check
+`purchase_history` too — it is the same serializer at page scale, and it is easy
+to miss because it lives on `SupplierViewSet`, not the PO viewset.

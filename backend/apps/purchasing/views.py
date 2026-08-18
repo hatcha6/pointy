@@ -55,6 +55,7 @@ from .services import (
     clear_purchase_order_applied_discounts,
     create_pos_cash_purchase,
     latest_purchase_line_for_variant,
+    previous_purchase_line_annotations,
     receive_purchase_order,
     record_purchase_order_audit_event,
     submit_purchase_order,
@@ -237,6 +238,13 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "destroy": ("purchasing.delete_purchaseorder",),
     }
     queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related(
+        # Must come FIRST: Django rejects a Prefetch that carries a queryset for
+        # a lookup an earlier `lines__...` string already claimed. Every line
+        # renders the previous purchase's cost, which is a query per line unless
+        # it rides along as an annotation here.
+        Prefetch("lines", queryset=PurchaseLine.objects.annotate(
+            **previous_purchase_line_annotations()
+        )),
         "lines__variant__product",
         "lines__receipt_lines",
         # PurchaseLine.adjusted_quantity/adjustable_quantity sum this relation;
