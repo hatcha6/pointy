@@ -54,7 +54,15 @@ class StockItemViewSet(viewsets.ModelViewSet):
         "partial_update": ("inventory.change_stockitem",),
         "destroy": ("inventory.delete_stockitem",),
     }
-    queryset = StockItem.objects.select_related("variant", "variant__product")
+    queryset = StockItem.objects.select_related(
+        "variant",
+        # display_name/full_name read the parent product's name.
+        "variant__product",
+    ).prefetch_related(
+        # display_name falls back to option_values_label, which queries
+        # option_values once per variant unless it is prefetched.
+        "variant__option_values__option",
+    )
     filterset_class = StockItemFilter
     search_fields = (
         "variant__sku",
@@ -88,9 +96,14 @@ class StockMovementViewSet(
     }
     queryset = StockMovement.objects.select_related(
         "variant",
+        # display_name/full_name read the parent product's name.
         "variant__product",
         "stock_item",
         "created_by",
+    ).prefetch_related(
+        # display_name falls back to option_values_label, which queries
+        # option_values once per variant unless it is prefetched.
+        "variant__option_values__option",
     )
     filterset_class = StockMovementFilter
     search_fields = (

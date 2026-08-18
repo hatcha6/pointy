@@ -1,12 +1,15 @@
 from rest_framework import serializers
 
 from apps.catalog.models import ProductVariant
-from apps.catalog.serializers import ProductCatalogSerializer
 from .models import StockItem, StockMovement
 
 
 class StockItemSerializer(serializers.ModelSerializer):
-    product_detail = ProductCatalogSerializer(source="variant.product", read_only=True)
+    # No product_detail here: the full ProductCatalogSerializer used to be
+    # embedded on every row (categories, units, sibling variants, option values,
+    # modifier groups, image attachments), which no client ever read. The catalog
+    # endpoints are where a product tree is fetched; this row carries the
+    # variant/product identifiers a caller needs to go get it.
     product = serializers.IntegerField(source="variant.product_id", read_only=True)
     variant = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariant.objects.all(),
@@ -43,7 +46,6 @@ class StockItemSerializer(serializers.ModelSerializer):
             "variant_sku",
             "variant_name",
             "variant_full_name",
-            "product_detail",
             "quantity_on_hand",
             "quantity_committed",
             "quantity_expected",
@@ -77,7 +79,7 @@ class StockItemSerializer(serializers.ModelSerializer):
 
 
 class StockMovementSerializer(serializers.ModelSerializer):
-    product_detail = ProductCatalogSerializer(source="variant.product", read_only=True)
+    # See StockItemSerializer: product_detail was an unread full product tree.
     product = serializers.IntegerField(source="variant.product_id", read_only=True)
     variant = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariant.objects.all(),
@@ -96,7 +98,6 @@ class StockMovementSerializer(serializers.ModelSerializer):
             "variant_sku",
             "variant_name",
             "variant_full_name",
-            "product_detail",
             "stock_item",
             "movement_type",
             "quantity",

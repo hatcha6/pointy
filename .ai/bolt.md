@@ -196,3 +196,44 @@ here are worth roughly a page-size multiple more than they look.
 **Action:** When sizing a `purchaseorder-detail` serialization win, check
 `purchase_history` too — it is the same serializer at page scale, and it is easy
 to miss because it lives on `SupplierViewSet`, not the PO viewset.
+
+## 2026-08-19 - Check whether the payload is READ before making it fast
+
+**Learning:** `select_related("variant__product")` looks like the right tool for
+a serializer that renders `source="variant.product"` — but when the *same*
+product repeats across rows it re-materializes a separate Python instance per
+row, so every nested prefetch the embedded serializer needs is impossible and
+every property-aggregate reruns. `Prefetch("variant__product", queryset=...)` on
+the same forward FK does the opposite: one `pk__in` query, one instance per
+distinct product, shared by every row that points at it, and the inner queryset
+can carry both `annotate()` and the whole nested `prefetch_related` chain.
+Measured on `stock-movements/?product=X` (the shape the Flutter client actually
+requests — a page of movements for ONE product): 8 rows went 187 -> 16 queries,
+and adding 7 more movements of the same product used to cost 161 extra queries
+(26 -> 187) and now costs zero. The generic distinct-product case was 23
+queries/row -> 0. (That endpoint ultimately shipped a different fix — see the
+last paragraph — but the technique stands for any embedded serializer that has
+to stay.)
+
+**Action:** When an embedded serializer hangs off a forward FK whose values
+repeat down the page (`variant.product`, `line.supplier`, `payment.customer`),
+reach for `Prefetch` on that FK, not `select_related`. Two things make it work:
+the inner queryset is rooted at the related model, so the nested serializer's own
+prefetch list composes straight in; and a `.aggregate()`-backed property
+(`Product.quantity_on_hand`)
+that no prefetch can ever satisfy is killed by annotating the SAME name the
+serializer already checks (`stock_quantity_on_hand`) on that inner queryset —
+no new code path, and a payload-equality test against a cold instance proves
+primed and cold agree.
+
+**But the prefetch was the wrong fix, and measuring the payload is what showed
+it.** The Flutter `StockMovement`/`StockItem` models parse only `product` (the
+id) and the quantity/note fields — **nothing reads `product_detail` at all**, and
+the frontend test fixtures for those endpoints never even included the key. So
+the tuned prefetch was making an unread 4KB-per-row product tree cheap to build
+instead of not building it. Deleting the field beat the prefetch on every axis:
+50-row `stock-movements/?product=X` went 1153 -> **4** queries (the prefetch had
+got it to 16) and 204,699 -> **23,449** bytes, and the diff got *smaller* — the
+`Prefetch` helper, the stock-rollup annotation and a shared-prefetch extraction
+in `catalog/services.py` all evaporated. What is left is `select_related` for the
+names plus one `variant__option_values__option` prefetch.
