@@ -77,3 +77,46 @@ more predictive than "shop has no rules". Also: don't estimate a saved query
 count from the number of `prefetch_related` calls; an empty base queryset makes
 them free. Measure with `CaptureQueriesContext` around a *second* request (the
 first warms the gate, permissions and content types) or the numbers lie.
+
+## 2026-08-18 - Mutation endpoints serve their response from a BARE object
+
+**Learning:** Every lifecycle action on `PurchaseOrderViewSet` (submit, receive,
+cancel, return/refund/exchange, pos-cash-purchase) handed the *detail* serializer
+an object with no prefetch cache, so the response payload N+1'd over every line,
+receipt line, adjustment and variant. Two ways it happens, both invisible at the
+call site: (a) the service layer returns `select_for_update().get(pk=...)` —
+`receive_purchase_order` returns its **locked** order, not the `get_object()` you
+passed in; (b) `purchase_order.refresh_from_db()` **clears
+`_prefetched_objects_cache`**, so an object that arrived prefetch-rich from
+`get_object()` is bare by the time it is serialized. Measured: the *response
+alone* was 495 of the 920 queries on a 20-line receive. This is the identical
+shape as the sales-checkout fix (`self.get_queryset().get(pk=...)`), so treat it
+as systemic: any POST that returns a detail payload is a suspect.
+
+**Action:** For a mutation response, re-read through the class-level queryset
+(`self.queryset.get(pk=...)` — NOT `get_queryset()`, whose list-only
+`?product=`/`?variant=` filters can filter the just-mutated order out of its own
+response). And when auditing, measure the service and the serialization
+*separately* — one `CaptureQueriesContext` around the endpoint hides which half
+is bleeding, and here they were nearly 50/50.
+
+## 2026-08-18 - `previous_unit_cost_value` is an annotation that no longer exists
+
+**Learning:** `PurchaseLineSerializer._previous_base_unit_cost` reads an
+annotation `previous_unit_cost_value` "the list views annotate" and falls back to
+a per-line `latest_purchase_line_for_variant()` lookup. Nothing annotates it any
+more — `git log -S` shows it was added for the PO list (3b6d77dc) and removed
+when the list stopped serializing lines at all (59e789f8, line_count only). So
+the fallback is now the *only* path, and it costs exactly 1 query per line on
+every PO detail read. It survives review because the comment reads like the fast
+path is live.
+
+**Action:** This is the last per-line query on `purchaseorder-detail` (measured
+slope 1.0 q/line after the prefetch fix). Fixing it means a `Prefetch("lines",
+queryset=...annotate(previous_unit_cost_value=Subquery(...)))` on the detail
+queryset whose subquery must reproduce `latest_purchase_line_for_variant(
+variant_id, before_line=line)` ordering exactly — real correctness risk (it
+drives the "cost changed" flag), so it deserves its own change with its own
+value-equality test, not a ride-along. Generally: a `getattr(obj, "x", MISSING)`
+optimization hook is dead code the moment its annotator moves — grep for the
+annotator, don't trust the comment.
