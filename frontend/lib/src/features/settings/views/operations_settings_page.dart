@@ -672,18 +672,21 @@ class _StageEditorCardState extends State<_StageEditorCard> {
                   ),
                 ),
                 IconButton(
+                  tooltip: l10n.workflowStageMoveUpTooltip,
                   onPressed: widget.enabled && widget.canMoveUp
                       ? widget.onMoveUp
                       : null,
                   icon: const Icon(Icons.arrow_upward),
                 ),
                 IconButton(
+                  tooltip: l10n.workflowStageMoveDownTooltip,
                   onPressed: widget.enabled && widget.canMoveDown
                       ? widget.onMoveDown
                       : null,
                   icon: const Icon(Icons.arrow_downward),
                 ),
                 IconButton(
+                  tooltip: l10n.workflowStageDeleteTooltip,
                   onPressed: widget.enabled && widget.canDelete
                       ? widget.onDelete
                       : null,

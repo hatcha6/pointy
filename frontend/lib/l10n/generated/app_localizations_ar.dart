@@ -3586,6 +3586,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productionBatchesLabel => 'عدد الدفعات';
 
   @override
+  String get productionBatchesIncreaseTooltip => 'زيادة عدد الدفعات';
+
+  @override
+  String get productionBatchesDecreaseTooltip => 'إنقاص عدد الدفعات';
+
+  @override
   String productionOutputPreview(String quantity, String name) {
     return 'سينتج $quantity × $name';
   }
@@ -3645,6 +3651,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get recipeComponentQuantityLabel => 'الكمية';
+
+  @override
+  String get recipeRemoveComponentTooltip => 'حذف المكوّن';
 
   @override
   String get recipeWastePercentLabel => 'نسبة الهدر %';
@@ -3807,6 +3816,15 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get workflowStageNameLabel => 'اسم المرحلة';
+
+  @override
+  String get workflowStageMoveUpTooltip => 'تحريك المرحلة لأعلى';
+
+  @override
+  String get workflowStageMoveDownTooltip => 'تحريك المرحلة لأسفل';
+
+  @override
+  String get workflowStageDeleteTooltip => 'حذف المرحلة';
 
   @override
   String get workflowAddStageButton => 'إضافة مرحلة';
@@ -6115,6 +6133,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get modifierOptionMaxQtyLabel => 'أقصى كمية';
+
+  @override
+  String get modifierOptionMaxQtyIncreaseTooltip => 'زيادة أقصى كمية';
+
+  @override
+  String get modifierOptionMaxQtyDecreaseTooltip => 'إنقاص أقصى كمية';
 
   @override
   String get modifierOptionDefaultLabel => 'افتراضي';

@@ -419,6 +419,7 @@ class _RecipeEditorPageState extends State<_RecipeEditorPage> {
               ),
             ),
             IconButton(
+              tooltip: l10n.recipeRemoveComponentTooltip,
               onPressed: isSaving
                   ? null
                   : () => setState(() => _lines.removeAt(index)),

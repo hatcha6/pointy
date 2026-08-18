@@ -460,6 +460,7 @@ class _OptionEditorRow extends StatelessWidget {
               Text(l10n.modifierOptionMaxQtyLabel),
               IconButton(
                 visualDensity: VisualDensity.compact,
+                tooltip: l10n.modifierOptionMaxQtyDecreaseTooltip,
                 onPressed: option.maxQuantity > 1
                     ? () {
                         option.maxQuantity -= 1;
@@ -471,6 +472,7 @@ class _OptionEditorRow extends StatelessWidget {
               Text('${option.maxQuantity}'),
               IconButton(
                 visualDensity: VisualDensity.compact,
+                tooltip: l10n.modifierOptionMaxQtyIncreaseTooltip,
                 onPressed: () {
                   option.maxQuantity += 1;
                   onChanged();
