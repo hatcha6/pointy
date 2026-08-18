@@ -64,9 +64,17 @@ class ShopSettingsRepository {
   }
 
   Future<Result<AnalyticsExportFile>> exportAnalyticsEvents(
-    AnalyticsExportQuery query,
-  ) async {
-    return Result.guard(() => _service.exportAnalyticsEvents(query));
+    AnalyticsExportQuery query, {
+    void Function(AnalyticsExportProgress progress)? onProgress,
+    AnalyticsExportCancellation? cancellation,
+  }) async {
+    return Result.guard(
+      () => _service.exportAnalyticsEvents(
+        query,
+        onProgress: onProgress,
+        cancellation: cancellation,
+      ),
+    );
   }
 
   Future<Result<List<BackupDestination>>> loadBackupDestinations() async {

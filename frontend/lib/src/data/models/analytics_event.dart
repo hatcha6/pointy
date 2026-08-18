@@ -31,6 +31,7 @@ enum AnalyticsEventName {
   appLifecycleChanged,
   analyticsExportStarted,
   analyticsExportCompleted,
+  analyticsExportCanceled,
   analyticsExportFailed,
   analyticsExportDownloaded,
   analyticsExportDownloadFailed,
@@ -898,6 +899,7 @@ String analyticsEventNameToJson(AnalyticsEventName name) {
     AnalyticsEventName.appLifecycleChanged => 'app.lifecycle_changed',
     AnalyticsEventName.analyticsExportStarted => 'analytics.export.started',
     AnalyticsEventName.analyticsExportCompleted => 'analytics.export.completed',
+    AnalyticsEventName.analyticsExportCanceled => 'analytics.export.canceled',
     AnalyticsEventName.analyticsExportFailed => 'analytics.export.failed',
     AnalyticsEventName.analyticsExportDownloaded =>
       'analytics.export.downloaded',

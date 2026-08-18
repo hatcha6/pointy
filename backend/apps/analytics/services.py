@@ -125,7 +125,7 @@ def ingest_events(*, events, user, request=None) -> AnalyticsIngestResult:
     )
 
 
-class _ZipStreamSink(io.RawIOBase):
+class ZipStreamSink(io.RawIOBase):
     """Unseekable write target for ``zipfile``: buffers written bytes until the
     export generator drains them to the response, so the archive is produced
     chunk by chunk instead of accumulating whole in memory. Being unseekable
@@ -150,10 +150,22 @@ class _ZipStreamSink(io.RawIOBase):
         return self._position
 
     def drain(self):
-        while self._chunks:
-            chunk = self._chunks.popleft()
-            self.pending -= len(chunk)
-            yield chunk
+        """Yield everything buffered so far as ONE chunk.
+
+        Coalescing matters more than it looks. Under ASGI each yielded chunk
+        crosses from the producer thread to the event loop and out through
+        uvicorn's send — a fixed cost per chunk, not per byte. zipfile writes
+        here in small pieces, so handing them on individually turned a 14s
+        export into a 155s one, with the hand-off, not the database or the
+        compressor, doing all the waiting. One buffer-sized chunk per drain
+        cuts that by two orders of magnitude.
+        """
+        if not self._chunks:
+            return
+        chunk = b"".join(self._chunks)
+        self._chunks.clear()
+        self.pending -= len(chunk)
+        yield chunk
 
 
 def export_zip_filename(exported_at) -> str:
@@ -200,6 +212,44 @@ def iter_events_export_zip(
     exported_at=None,
     batch_size=ANALYTICS_EXPORT_BATCH_SIZE,
 ):
+    """Stream the export zip using the fastest engine this database supports.
+
+    On Postgres that is ``COPY ... TO STDOUT`` (see ``export.py``), which keeps
+    Python out of the row path entirely — the difference between an export that
+    finishes and one nobody has ever managed to sit through. Everywhere else
+    (SQLite in dev and most tests), and whenever a caller explicitly asks for
+    ``engine=orm``, it falls back to the keyset generator below.
+    """
+    from . import export
+
+    exported_at = exported_at or timezone.now()
+    if filters.get("engine") != "orm" and export.copy_export_supported(queryset.db):
+        yield from export.iter_events_export_zip_copy(
+            queryset=queryset,
+            filters=filters,
+            exported_by=exported_by,
+            exported_at=exported_at,
+            alias=queryset.db,
+        )
+        return
+
+    yield from iter_events_export_zip_orm(
+        queryset=queryset,
+        filters=filters,
+        exported_by=exported_by,
+        exported_at=exported_at,
+        batch_size=batch_size,
+    )
+
+
+def iter_events_export_zip_orm(
+    *,
+    queryset,
+    filters,
+    exported_by,
+    exported_at=None,
+    batch_size=ANALYTICS_EXPORT_BATCH_SIZE,
+):
     """Generate the export zip's bytes incrementally, in bounded memory.
 
     The old builder assembled the full CSV/JSON in a StringIO, compressed it
@@ -213,36 +263,23 @@ def iter_events_export_zip(
     with streaming, transfer overlaps compression anyway, so the cheaper
     compressor wins end-to-end.
     """
+    from .export import zip_compression
+
     exported_at = exported_at or timezone.now()
     export_format = filters.get("format", "csv")
+    compression, compresslevel = zip_compression(filters.get("compression", "deflate"))
     data_filename = f"analytics_events.{export_format}"
 
-    sink = _ZipStreamSink()
+    sink = ZipStreamSink()
     event_count = 0
     with zipfile.ZipFile(
-        sink, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=1
+        sink, "w", compression=compression, compresslevel=compresslevel
     ) as archive:
         # force_zip64: with an unseekable sink the member header cannot be
         # rewritten, so oversized (>4GB) members must be declared up front.
         with archive.open(data_filename, mode="w", force_zip64=True) as member:
             with io.TextIOWrapper(member, encoding="utf-8", newline="") as text:
-                if export_format == "json":
-                    text.write("[\n")
-                    for row in iter_export_rows(queryset, batch_size=batch_size):
-                        if event_count:
-                            text.write(",\n")
-                        text.write(
-                            json.dumps(
-                                _event_export_row(row),
-                                ensure_ascii=False,
-                                sort_keys=True,
-                            )
-                        )
-                        event_count += 1
-                        if sink.pending >= _EXPORT_STREAM_CHUNK_BYTES:
-                            yield from sink.drain()
-                    text.write("\n]\n")
-                else:
+                if export_format == "csv":
                     writer = csv.DictWriter(
                         text, fieldnames=ANALYTICS_EXPORT_CSV_FIELDS
                     )
@@ -252,6 +289,29 @@ def iter_events_export_zip(
                         event_count += 1
                         if sink.pending >= _EXPORT_STREAM_CHUNK_BYTES:
                             yield from sink.drain()
+                else:
+                    # json wraps the same documents in an array; jsonl leaves
+                    # them one per line.
+                    as_array = export_format == "json"
+                    if as_array:
+                        text.write("[\n")
+                    for row in iter_export_rows(queryset, batch_size=batch_size):
+                        if as_array and event_count:
+                            text.write(",\n")
+                        text.write(
+                            json.dumps(
+                                _event_export_row(row),
+                                ensure_ascii=False,
+                                sort_keys=True,
+                            )
+                        )
+                        if not as_array:
+                            text.write("\n")
+                        event_count += 1
+                        if sink.pending >= _EXPORT_STREAM_CHUNK_BYTES:
+                            yield from sink.drain()
+                    if as_array:
+                        text.write("\n]\n")
         manifest = {
             "generated_at": exported_at.isoformat(),
             "generated_by": {
@@ -259,7 +319,9 @@ def iter_events_export_zip(
                 "username": getattr(exported_by, "username", ""),
             },
             "event_count": event_count,
-            "filters": _manifest_filters(filters),
+            "engine": "orm-keyset",
+            "ordered": True,
+            "filters": manifest_filters(filters),
             "files": [data_filename],
         }
         archive.writestr(
@@ -417,10 +479,12 @@ def _event_export_row(row):
     }
 
 
-def _manifest_filters(filters):
+def manifest_filters(filters):
     manifest_filters = {}
     for key, value in filters.items():
-        if key in {"user", "date_from", "date_to"}:
+        # ``engine``/``count`` describe how the export ran, not what it
+        # selected; the manifest records the engine it actually used itself.
+        if key in {"user", "date_from", "date_to", "engine", "count"}:
             continue
         if hasattr(value, "isoformat"):
             manifest_filters[key] = value.isoformat()

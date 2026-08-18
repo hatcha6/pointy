@@ -1725,6 +1725,9 @@ class RelayDiagnosticsAnalyticsExportTests(TestCase):
 
         response = APIClient().get(
             reverse("relay-diagnostics-analytics-export"),
+            # count=exact: the header is opt-in now, since the exact count is
+            # a full scan of the filtered range.
+            {"count": "exact"},
             HTTP_X_POINTY_CONNECTOR_TOKEN="ptc1.installation-1.connector-secret",
         )
 

@@ -238,6 +238,7 @@ String? _knownEventTitle(AppLocalizations l10n, String name) {
     'auth.logout' => l10n.activityEventLogout,
     'analytics.export.started' => l10n.activityEventAnalyticsExportStarted,
     'analytics.export.completed' => l10n.activityEventAnalyticsExportCompleted,
+    'analytics.export.canceled' => l10n.activityEventAnalyticsExportCanceled,
     'analytics.export.failed' => l10n.activityEventAnalyticsExportFailed,
     'analytics.export.downloaded' =>
       l10n.activityEventAnalyticsExportDownloaded,

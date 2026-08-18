@@ -2192,6 +2192,12 @@ abstract class AppLocalizations {
   /// **'اكتمل تصدير التحليلات'**
   String get activityEventAnalyticsExportCompleted;
 
+  /// No description provided for @activityEventAnalyticsExportCanceled.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغي تصدير التتبع'**
+  String get activityEventAnalyticsExportCanceled;
+
   /// No description provided for @activityEventAnalyticsExportFailed.
   ///
   /// In ar, this message translates to:
@@ -6931,6 +6937,30 @@ abstract class AppLocalizations {
   /// **'JSON'**
   String get analyticsExportFormatJson;
 
+  /// No description provided for @analyticsExportFormatJsonl.
+  ///
+  /// In ar, this message translates to:
+  /// **'JSON Lines (سطر لكل حدث)'**
+  String get analyticsExportFormatJsonl;
+
+  /// No description provided for @analyticsExportCompressionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الضغط'**
+  String get analyticsExportCompressionLabel;
+
+  /// No description provided for @analyticsExportCompressionDeflate.
+  ///
+  /// In ar, this message translates to:
+  /// **'مضغوط (أصغر حجما)'**
+  String get analyticsExportCompressionDeflate;
+
+  /// No description provided for @analyticsExportCompressionNone.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون ضغط (أسرع)'**
+  String get analyticsExportCompressionNone;
+
   /// No description provided for @analyticsExportFromDateLabel.
   ///
   /// In ar, this message translates to:
@@ -7044,6 +7074,34 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أُلغي حفظ ملف التتبع.'**
   String get analyticsExportCanceledMessage;
+
+  /// No description provided for @analyticsExportCancelButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء التصدير'**
+  String get analyticsExportCancelButton;
+
+  /// No description provided for @analyticsExportStoppedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُوقف التصدير.'**
+  String get analyticsExportStoppedMessage;
+
+  /// Live progress line under the export button: bytes downloaded, transfer rate, and elapsed time.
+  ///
+  /// In ar, this message translates to:
+  /// **'{size} · {rate}/ث · {elapsed}'**
+  String analyticsExportProgressSummary(
+    String size,
+    String rate,
+    String elapsed,
+  );
+
+  /// Approximate number of events the running export covers, from the server's planner estimate.
+  ///
+  /// In ar, this message translates to:
+  /// **'نحو {count} حدث'**
+  String analyticsExportEstimatedEventsSummary(String count);
 
   /// No description provided for @backupRestoreSectionTitle.
   ///

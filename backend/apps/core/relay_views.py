@@ -7,6 +7,7 @@ from rest_framework import status, views
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from apps.analytics.export import estimate_export_rows
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.serializers import AnalyticsEventExportQuerySerializer
 from apps.analytics.services import (
@@ -397,7 +398,20 @@ class RelayDiagnosticsAnalyticsExportView(views.APIView):
             serializer.normalized_filters,
         )
         exported_at = timezone.now()
-        event_count = count_events_for_export(queryset)
+        # Same deal as the in-app export: an exact COUNT(*) is a full scan of
+        # the filtered range, so it only happens when the puller asks for it
+        # (``count=exact``). Otherwise the planner's estimate goes on the wire
+        # and the zip manifest carries the real number.
+        filters = serializer.normalized_filters
+        count_mode = filters.get("count", "estimate")
+        event_count = (
+            count_events_for_export(queryset) if count_mode == "exact" else None
+        )
+        estimated_event_count = (
+            estimate_export_rows(queryset, alias=queryset.db)
+            if count_mode == "estimate"
+            else None
+        )
         record_domain_event(
             name="analytics.export.support_pull",
             event_type=AnalyticsEvent.EventType.AUDIT,
@@ -408,17 +422,22 @@ class RelayDiagnosticsAnalyticsExportView(views.APIView):
             attributes={
                 "installation_id": installation.installation_id,
                 "event_count": event_count,
-                "format": serializer.normalized_filters.get("format", "csv"),
+                "estimated_event_count": estimated_event_count,
+                "format": filters.get("format", "csv"),
             },
         )
         generator = iter_events_export_zip(
             queryset=queryset,
-            filters=serializer.normalized_filters,
+            filters=filters,
             exported_by=None,
             exported_at=exported_at,
         )
         response = build_events_export_response(
-            request, generator, exported_at, event_count
+            request,
+            generator,
+            exported_at,
+            event_count=event_count,
+            estimated_event_count=estimated_event_count,
         )
         response["X-Pointy-App-Version"] = str(
             settings.SPECTACULAR_SETTINGS.get("VERSION", "")

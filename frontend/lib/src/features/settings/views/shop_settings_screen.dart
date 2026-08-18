@@ -1283,6 +1283,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                           isExporting: widget.viewModel.isExportingAnalytics,
                           hasExportError:
                               widget.viewModel.hasAnalyticsExportError,
+                          progress: widget.viewModel.analyticsExportProgress,
+                          onCancel: widget.viewModel.canCancelAnalyticsExport
+                              ? widget.viewModel.cancelAnalyticsExport
+                              : null,
                           onSubmit: () {
                             _submitAnalyticsExport();
                             refreshRoute();

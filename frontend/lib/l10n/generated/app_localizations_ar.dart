@@ -1147,6 +1147,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get activityEventAnalyticsExportCompleted => 'اكتمل تصدير التحليلات';
 
   @override
+  String get activityEventAnalyticsExportCanceled => 'أُلغي تصدير التتبع';
+
+  @override
   String get activityEventAnalyticsExportFailed => 'فشل تصدير التحليلات';
 
   @override
@@ -3918,6 +3921,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get analyticsExportFormatJson => 'JSON';
 
   @override
+  String get analyticsExportFormatJsonl => 'JSON Lines (سطر لكل حدث)';
+
+  @override
+  String get analyticsExportCompressionLabel => 'الضغط';
+
+  @override
+  String get analyticsExportCompressionDeflate => 'مضغوط (أصغر حجما)';
+
+  @override
+  String get analyticsExportCompressionNone => 'بدون ضغط (أسرع)';
+
+  @override
   String get analyticsExportFromDateLabel => 'من تاريخ';
 
   @override
@@ -3976,6 +3991,26 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get analyticsExportCanceledMessage => 'أُلغي حفظ ملف التتبع.';
+
+  @override
+  String get analyticsExportCancelButton => 'إلغاء التصدير';
+
+  @override
+  String get analyticsExportStoppedMessage => 'أُوقف التصدير.';
+
+  @override
+  String analyticsExportProgressSummary(
+    String size,
+    String rate,
+    String elapsed,
+  ) {
+    return '$size · $rate/ث · $elapsed';
+  }
+
+  @override
+  String analyticsExportEstimatedEventsSummary(String count) {
+    return 'نحو $count حدث';
+  }
 
   @override
   String get backupRestoreSectionTitle => 'النسخ والاستعادة';

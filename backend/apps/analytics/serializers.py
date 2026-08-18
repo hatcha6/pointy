@@ -3,6 +3,7 @@ import json
 from django.utils import timezone
 from rest_framework import serializers
 
+from .export import ANALYTICS_EXPORT_FORMATS
 from .models import AnalyticsEvent
 
 MAX_EVENTS_PER_BATCH = 100
@@ -130,9 +131,29 @@ class AnalyticsEventBatchSerializer(serializers.Serializer):
 
 class AnalyticsEventExportQuerySerializer(serializers.Serializer):
     format = serializers.ChoiceField(
-        choices=("csv", "json"),
+        choices=ANALYTICS_EXPORT_FORMATS,
         required=False,
         default="csv",
+    )
+    #: Deflate (level 1) by default. ``none`` skips the compressor for
+    #: destinations that are faster than the CPU compressing for them.
+    compression = serializers.ChoiceField(
+        choices=("deflate", "none"),
+        required=False,
+        default="deflate",
+    )
+    #: An exact pre-count is a full scan of the filtered range, so it is opt-in;
+    #: the zip manifest always carries the exact number once the rows are out.
+    count = serializers.ChoiceField(
+        choices=("estimate", "exact", "none"),
+        required=False,
+        default="estimate",
+    )
+    #: Escape hatch: force the row-by-row ORM exporter instead of Postgres COPY.
+    engine = serializers.ChoiceField(
+        choices=("auto", "orm"),
+        required=False,
+        default="auto",
     )
     event_type = serializers.ChoiceField(
         choices=AnalyticsEvent.EventType.choices,

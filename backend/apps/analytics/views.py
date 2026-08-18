@@ -15,6 +15,7 @@ from rest_framework.settings import api_settings
 from apps.core.permissions import HasPointyPermission, IsManager
 from apps.core.streaming import aiter_in_thread
 
+from .export import estimate_export_rows
 from .models import AnalyticsEvent
 from .serializers import (
     AnalyticsEventBatchSerializer,
@@ -157,6 +158,7 @@ ANALYTICS_EVENT_ACTIONS = {
     "analytics_export": (
         "analytics.export.started",
         "analytics.export.completed",
+        "analytics.export.canceled",
         "analytics.export.failed",
         "analytics.export.downloaded",
         "analytics.export.download_failed",
@@ -380,7 +382,14 @@ class ExportFormatAgnosticNegotiation(DefaultContentNegotiation):
     settings = _NoFormatOverrideSettings(api_settings)
 
 
-def build_events_export_response(request, generator, exported_at, event_count):
+def build_events_export_response(
+    request,
+    generator,
+    exported_at,
+    *,
+    event_count=None,
+    estimated_event_count=None,
+):
     """Wrap an export zip generator in a streaming response.
 
     Served over ASGI (uvicorn in production), Django would buffer a sync
@@ -389,6 +398,11 @@ def build_events_export_response(request, generator, exported_at, event_count):
     producer outruns a slow (relay-tunnel) client, and backpressure caps the
     buffered lead at a few chunks instead of the whole file. WSGI (runserver,
     tests) streams sync generators natively.
+
+    ``X-Accel-Buffering: no`` tells an nginx front door not to spool the
+    archive before passing it on — without it the browser waits for the whole
+    export, and nginx's proxy temp directory (a small tmpfs on the on-prem web
+    container) is where a large one goes to die.
     """
     django_request = getattr(request, "_request", request)
     body = generator
@@ -398,7 +412,13 @@ def build_events_export_response(request, generator, exported_at, event_count):
     response["Content-Disposition"] = (
         f'attachment; filename="{export_zip_filename(exported_at)}"'
     )
-    response["X-Pointy-Analytics-Event-Count"] = str(event_count)
+    if event_count is not None:
+        response["X-Pointy-Analytics-Event-Count"] = str(event_count)
+    if estimated_event_count is not None:
+        response["X-Pointy-Analytics-Event-Count-Estimate"] = str(
+            estimated_event_count
+        )
+    response["X-Accel-Buffering"] = "no"
     return response
 
 
@@ -455,18 +475,37 @@ class AnalyticsEventViewSet(
     def export(self, request):
         serializer = AnalyticsEventExportQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
-        queryset = filter_events_for_export(
-            self.get_queryset(),
-            serializer.normalized_filters,
-        )
+        filters = serializer.normalized_filters
+        queryset = filter_events_for_export(self.get_queryset(), filters)
         exported_at = timezone.now()
-        # Counted up front (headers must precede the streamed body); the zip
-        # manifest carries the exact streamed count.
-        event_count = count_events_for_export(queryset)
+
+        # Anything in a header has to be known before the first byte, and an
+        # exact COUNT(*) over a month of telemetry is a full scan — minutes of
+        # silence before the download starts, which is precisely why nobody
+        # ever saw an export finish. The planner's estimate answers "roughly
+        # how big is this?" in milliseconds, and the zip manifest still carries
+        # the exact count once the rows have actually streamed. ``count=exact``
+        # buys the old behaviour back for callers that need it up front.
+        count_mode = filters.get("count", "estimate")
+        event_count = (
+            count_events_for_export(queryset) if count_mode == "exact" else None
+        )
+        estimated_event_count = (
+            estimate_export_rows(queryset, alias=queryset.db)
+            if count_mode == "estimate"
+            else None
+        )
+
         generator = iter_events_export_zip(
             queryset=queryset,
-            filters=serializer.normalized_filters,
+            filters=filters,
             exported_by=request.user,
             exported_at=exported_at,
         )
-        return build_events_export_response(request, generator, exported_at, event_count)
+        return build_events_export_response(
+            request,
+            generator,
+            exported_at,
+            event_count=event_count,
+            estimated_event_count=estimated_event_count,
+        )

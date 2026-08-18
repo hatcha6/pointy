@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import unittest
 import zipfile
 from decimal import Decimal
 from uuid import uuid4
@@ -17,8 +18,10 @@ from rest_framework.test import APIClient
 
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 
+from .export import build_copy_statement, build_export_sql, wrap_ndjson_as_json_array
 from .models import AnalyticsEvent
 from .services import (
+    ANALYTICS_EXPORT_CSV_FIELDS,
     filter_events_for_export,
     iter_events_export_zip,
     record_domain_event,
@@ -544,6 +547,9 @@ class AnalyticsEventApiTests(TestCase):
                 "entity_id": "42",
                 "risk_score_min": 80,
                 "risk_score_max": 90,
+                # The exact pre-count is opt-in now (it is a full scan); the
+                # manifest carries it for free on every export.
+                "count": "exact",
             },
         )
 
@@ -658,7 +664,10 @@ class AnalyticsEventApiTests(TestCase):
             chunks = list(
                 iter_events_export_zip(
                     queryset=queryset,
-                    filters={"format": "csv"},
+                    # engine=orm: this test is about the fallback exporter's
+                    # batching. Postgres installs stream through COPY instead,
+                    # which issues one statement and is covered separately.
+                    filters={"format": "csv", "engine": "orm"},
                     exported_by=self.manager,
                     batch_size=3,
                 )
@@ -786,3 +795,320 @@ class AnalyticsEventApiTests(TestCase):
         self.assertEqual(event.attributes["amount"], "12.50")
         self.assertEqual(event.attributes["occurred_at"], occurred_at.isoformat())
         self.assertEqual(event.metrics["amount"], "12.50")
+
+
+@unittest.skipUnless(
+    connection.vendor == "postgresql",
+    "The COPY export engine is Postgres-only; SQLite installs use the ORM path.",
+)
+class AnalyticsExportCopyEngineTests(TestCase):
+    """The COPY engine must be a drop-in for the ORM exporter.
+
+    Everything about the fast path is a rewrite of how bytes are produced —
+    Postgres formats the rows instead of Python — so the only thing worth
+    testing is that the bytes still say the same thing. Each test exports the
+    same events twice (``engine=orm`` vs the default) and compares the parsed
+    results, with a fixture chosen to break naive escaping: quotes, backslashes,
+    embedded newlines and tabs, Arabic text, and NULLs in every nullable column.
+    """
+
+    maxDiff = None
+
+    #: Every fixture carries this in ``trace_id`` and every export filters on
+    #: it. Without that, the buffered ``backend.request`` telemetry these very
+    #: API calls produce can land in the table mid-test and change the counts.
+    MARKER = "copy-parity-fixture"
+
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(
+            username="copy-export-manager", password="pass"
+        )
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.manager)
+
+    def _create_events(self):
+        base = timezone.now()
+        return [
+            AnalyticsEvent.objects.create(
+                event_type=AnalyticsEvent.EventType.ERROR,
+                name="frontend.http_request",
+                severity=AnalyticsEvent.Severity.ERROR,
+                source=AnalyticsEvent.Source.FRONTEND,
+                occurred_at=base,
+                received_by=self.manager,
+                session_id="session-1",
+                device_id="till-1",
+                installation_id="inst-1",
+                app_version="1.2.3",
+                platform="windows",
+                request_path="/api/sales/orders/",
+                ip_address="192.168.1.42",
+                user_agent='Mozilla/5.0 "quoted" \\ back\\slash\tand\ttabs',
+                trace_id=self.MARKER,
+                entity_type="sale_order",
+                entity_id="42",
+                risk_score=91,
+                attributes={
+                    "message": 'he said "boom"\nsecond line\ttabbed',
+                    "path": "C:\\Users\\pointy\\log.txt",
+                    "عربي": "قيمة",
+                    "nested": {"list": [1, 2, {"deep": None}]},
+                },
+                metrics={"duration_ms": 1234.5, "retries": 2},
+            ),
+            # Every nullable column left empty: NULL user, NULL ip, NULL risk.
+            AnalyticsEvent.objects.create(
+                event_type=AnalyticsEvent.EventType.USAGE,
+                name="app.started",
+                severity=AnalyticsEvent.Severity.INFO,
+                source=AnalyticsEvent.Source.FRONTEND,
+                occurred_at=base,
+                received_by=None,
+                ip_address=None,
+                risk_score=None,
+                trace_id=self.MARKER,
+                attributes={},
+                metrics={},
+            ),
+        ]
+
+    def _export(self, **params):
+        params.setdefault("search", self.MARKER)
+        response = self.client.get(reverse("analytics-event-export"), params)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content)))
+
+    @staticmethod
+    def _by_id(rows):
+        return sorted(rows, key=lambda row: int(row["id"]))
+
+    def test_csv_matches_the_orm_exporter_row_for_row(self):
+        self._create_events()
+
+        copied = self._export(format="csv")
+        ormed = self._export(format="csv", engine="orm")
+
+        copy_rows = self._by_id(
+            csv.DictReader(io.StringIO(copied.read("analytics_events.csv").decode()))
+        )
+        orm_rows = self._by_id(
+            csv.DictReader(io.StringIO(ormed.read("analytics_events.csv").decode()))
+        )
+
+        self.assertEqual(len(copy_rows), 2)
+        for copy_row, orm_row in zip(copy_rows, orm_rows, strict=True):
+            # attributes/metrics are JSON text on both paths, but Postgres and
+            # Python order object keys differently. Compare them as documents.
+            for column in ("attributes", "metrics"):
+                self.assertEqual(
+                    json.loads(copy_row.pop(column)),
+                    json.loads(orm_row.pop(column)),
+                )
+            self.assertEqual(copy_row, orm_row)
+
+    def test_csv_header_is_unchanged(self):
+        self._create_events()
+
+        header = (
+            self._export(format="csv")
+            .read("analytics_events.csv")
+            .decode()
+            .splitlines()[0]
+        )
+
+        self.assertEqual(header.split(","), list(ANALYTICS_EXPORT_CSV_FIELDS))
+
+    def test_json_matches_the_orm_exporter_document_for_document(self):
+        self._create_events()
+
+        copy_rows = self._by_id(
+            json.loads(self._export(format="json").read("analytics_events.json"))
+        )
+        orm_rows = self._by_id(
+            json.loads(
+                self._export(format="json", engine="orm").read("analytics_events.json")
+            )
+        )
+
+        self.assertEqual(len(copy_rows), 2)
+        for copy_row, orm_row in zip(copy_rows, orm_rows, strict=True):
+            for column in ("attributes", "metrics"):
+                self.assertEqual(
+                    json.loads(copy_row.pop(column)),
+                    json.loads(orm_row.pop(column)),
+                )
+            self.assertEqual(copy_row, orm_row)
+
+    def test_json_survives_quotes_backslashes_and_non_ascii(self):
+        [noisy, _] = self._create_events()
+
+        rows = json.loads(self._export(format="json").read("analytics_events.json"))
+        row = next(row for row in rows if row["id"] == noisy.id)
+
+        self.assertEqual(row["user_agent"], noisy.user_agent)
+        self.assertEqual(json.loads(row["attributes"]), noisy.attributes)
+        self.assertEqual(row["received_by_username"], "copy-export-manager")
+
+    def test_jsonl_writes_one_document_per_line(self):
+        self._create_events()
+
+        body = self._export(format="jsonl").read("analytics_events.jsonl").decode()
+        lines = body.splitlines()
+
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(
+            {json.loads(line)["name"] for line in lines},
+            {"frontend.http_request", "app.started"},
+        )
+
+    def test_empty_export_is_still_a_valid_archive(self):
+        self._create_events()
+        # Filters that match nothing: an export with no rows must still be a
+        # well-formed archive rather than a truncated or invalid one.
+        copied = self._export(format="json", search="matches-absolutely-nothing")
+        self.assertEqual(json.loads(copied.read("analytics_events.json")), [])
+        self.assertEqual(json.loads(copied.read("manifest.json"))["event_count"], 0)
+
+        self.assertEqual(
+            self._export(
+                format="jsonl", search="matches-absolutely-nothing"
+            ).read("analytics_events.jsonl"),
+            b"",
+        )
+        self.assertEqual(
+            self._export(format="csv", search="matches-absolutely-nothing")
+            .read("analytics_events.csv")
+            .decode()
+            .strip(),
+            ",".join(ANALYTICS_EXPORT_CSV_FIELDS),
+        )
+
+    def test_manifest_records_the_exact_count_and_engine(self):
+        self._create_events()
+
+        manifest = json.loads(self._export(format="csv").read("manifest.json"))
+
+        self.assertEqual(manifest["event_count"], 2)
+        self.assertEqual(manifest["engine"], "postgres-copy")
+        self.assertEqual(manifest["generated_by"]["username"], "copy-export-manager")
+
+    def test_uncompressed_archives_are_readable(self):
+        self._create_events()
+
+        archive = self._export(format="csv", compression="none")
+
+        self.assertEqual(
+            archive.getinfo("analytics_events.csv").compress_type,
+            zipfile.ZIP_STORED,
+        )
+        self.assertEqual(
+            len(list(csv.DictReader(io.StringIO(archive.read("analytics_events.csv").decode())))),
+            2,
+        )
+
+    def test_filters_still_apply(self):
+        [noisy, _] = self._create_events()
+
+        archive = self._export(format="csv", event_type="error", severity="error")
+        rows = list(
+            csv.DictReader(io.StringIO(archive.read("analytics_events.csv").decode()))
+        )
+
+        self.assertEqual([int(row["id"]) for row in rows], [noisy.id])
+
+    def _export_query_count(self, filters):
+        queryset = filter_events_for_export(
+            AnalyticsEvent.objects.all(), {"search": self.MARKER}
+        )
+        with CaptureQueriesContext(connection) as queries:
+            chunks = list(
+                iter_events_export_zip(
+                    queryset=queryset,
+                    filters=filters,
+                    exported_by=self.manager,
+                    exported_at=timezone.now(),
+                )
+            )
+        archive = zipfile.ZipFile(io.BytesIO(b"".join(chunks)))
+        count = json.loads(archive.read("manifest.json"))["event_count"]
+        return len(queries.captured_queries), count
+
+    def test_round_trips_do_not_grow_with_the_number_of_rows(self):
+        """The whole point: row count must not drive round-trip count.
+
+        The ORM exporter runs a keyset query per batch, so a month of telemetry
+        is tens of thousands of round trips — that is the export nobody could
+        sit through. COPY streams the entire result set in one statement, and
+        that statement goes straight through psycopg rather than the ORM, so
+        the honest measure of it here is that Django issues nothing at all no
+        matter how many rows come back.
+        """
+        self._create_events()
+        small_queries, small_count = self._export_query_count({"format": "csv"})
+
+        AnalyticsEvent.objects.bulk_create(
+            AnalyticsEvent(
+                event_type=AnalyticsEvent.EventType.USAGE,
+                name="app.started",
+                severity=AnalyticsEvent.Severity.INFO,
+                source=AnalyticsEvent.Source.FRONTEND,
+                occurred_at=timezone.now(),
+                trace_id=self.MARKER,
+            )
+            for _ in range(500)
+        )
+        large_queries, large_count = self._export_query_count({"format": "csv"})
+
+        self.assertEqual(small_count, 2)
+        self.assertEqual(large_count, 502)
+        self.assertEqual(small_queries, 0)
+        self.assertEqual(large_queries, small_queries)
+
+    def test_copy_statement_streams_the_filtered_select(self):
+        sql, _params, _columns = build_export_sql(
+            filter_events_for_export(
+                AnalyticsEvent.objects.all(), {"event_type": "error"}
+            ),
+            json_mode=False,
+            connection=connection,
+        )
+
+        statement = build_copy_statement(sql, export_format="csv")
+
+        self.assertTrue(statement.startswith("COPY ("))
+        self.assertIn("TO STDOUT WITH (FORMAT csv, HEADER)", statement)
+        self.assertIn("event_type", statement)
+
+    def test_export_does_not_sort_the_whole_table(self):
+        """No ORDER BY: sorting a full export is the cost this engine avoids."""
+        sql, _params, columns = build_export_sql(
+            filter_events_for_export(AnalyticsEvent.objects.all(), {}),
+            json_mode=False,
+            connection=connection,
+        )
+
+        self.assertNotIn("ORDER BY", sql.upper())
+        self.assertEqual(columns, ANALYTICS_EXPORT_CSV_FIELDS)
+
+
+class AnalyticsExportNdjsonWrapperTests(TestCase):
+    """The NDJSON -> JSON-array wrapper works on arbitrary byte boundaries."""
+
+    def _wrap(self, chunks):
+        return b"".join(wrap_ndjson_as_json_array(chunks))
+
+    def test_wraps_rows_split_across_chunks(self):
+        documents = [{"id": index, "name": f"row-{index}"} for index in range(5)]
+        ndjson = "".join(json.dumps(doc) + "\n" for doc in documents).encode()
+
+        for size in (1, 2, 3, 7, 64, len(ndjson), len(ndjson) + 10):
+            with self.subTest(chunk_size=size):
+                chunks = [ndjson[at : at + size] for at in range(0, len(ndjson), size)]
+                self.assertEqual(json.loads(self._wrap(chunks)), documents)
+
+    def test_empty_stream_is_an_empty_array(self):
+        self.assertEqual(json.loads(self._wrap([])), [])
+        self.assertEqual(json.loads(self._wrap([b""])), [])

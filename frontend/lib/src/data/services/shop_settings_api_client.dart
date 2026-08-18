@@ -85,11 +85,14 @@ class ShopSettingsApiClient {
   }
 
   Future<AnalyticsExportFile> exportAnalyticsEvents(
-    AnalyticsExportQuery query,
-  ) async {
+    AnalyticsExportQuery query, {
+    void Function(AnalyticsExportProgress progress)? onProgress,
+    AnalyticsExportCancellation? cancellation,
+  }) async {
     // Streamed, not buffered: the backend streams the zip as it is built, and
     // on native platforms the receiver spools it straight to disk — an export
     // is never limited by what fits in app memory.
+    final stopwatch = Stopwatch()..start();
     final response = await _session.getStreamed(
       'analytics-events/export/',
       query: query.toQueryParameters(),
@@ -102,10 +105,27 @@ class ShopSettingsApiClient {
         responseBody: errorBody,
       );
     }
+    // Approximate, and sent before the first row: an exact count would mean
+    // scanning the whole filtered range before any byte could be streamed.
+    final expectedEventCount = int.tryParse(
+      response.headers['x-pointy-analytics-event-count-estimate'] ??
+          response.headers['x-pointy-analytics-event-count'] ??
+          '',
+    );
     return receiveAnalyticsExport(
       response,
       filename: _filenameFromHeaders(response.headers),
       contentType: response.headers['content-type'] ?? 'application/zip',
+      cancellation: cancellation,
+      onProgress: onProgress == null
+          ? null
+          : (receivedBytes) => onProgress(
+              AnalyticsExportProgress(
+                receivedBytes: receivedBytes,
+                elapsed: stopwatch.elapsed,
+                expectedEventCount: expectedEventCount,
+              ),
+            ),
     );
   }
 

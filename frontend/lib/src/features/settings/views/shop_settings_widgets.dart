@@ -995,6 +995,10 @@ class _AnalyticsExportFields extends StatelessWidget {
               value: AnalyticsExportFormat.json,
               child: Text(l10n.analyticsExportFormatJson),
             ),
+            DropdownMenuItem(
+              value: AnalyticsExportFormat.jsonl,
+              child: Text(l10n.analyticsExportFormatJsonl),
+            ),
           ],
           onChanged: enabled
               ? (value) {
@@ -1253,11 +1257,19 @@ class _AnalyticsExportActionBar extends StatelessWidget {
     required this.isExporting,
     required this.hasExportError,
     required this.onSubmit,
+    this.progress,
+    this.onCancel,
   });
 
   final bool isExporting;
   final bool hasExportError;
   final VoidCallback onSubmit;
+
+  /// Live download progress, once the first bytes arrive.
+  final AnalyticsExportProgress? progress;
+
+  /// Stops the running export. Null when there is nothing to stop.
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -1265,14 +1277,16 @@ class _AnalyticsExportActionBar extends StatelessWidget {
     final colors = context.pointyColors;
 
     return PointyStickyActionFooter(
-      summary: hasExportError
-          ? Text(
-              l10n.analyticsExportFailedMessage,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: colors.danger),
-            )
-          : null,
+      summary: _summary(context, l10n, colors),
+      secondaryActions: [
+        if (isExporting && onCancel != null)
+          OutlinedButton.icon(
+            key: const ValueKey('analytics_export_cancel_button'),
+            onPressed: onCancel,
+            icon: const Icon(Icons.stop_circle_outlined),
+            label: Text(l10n.analyticsExportCancelButton),
+          ),
+      ],
       primaryAction: FilledButton.icon(
         key: const ValueKey('analytics_export_download_button'),
         onPressed: isExporting ? null : onSubmit,
@@ -1290,6 +1304,85 @@ class _AnalyticsExportActionBar extends StatelessWidget {
       ),
     );
   }
+
+  /// A month of telemetry is a real download. Reporting how much has arrived,
+  /// how fast, and roughly how many events it covers is the difference between
+  /// "this is working, leave it running" and "this has hung, kill it" — the
+  /// judgement call an unmarked spinner leaves the user unable to make.
+  Widget? _summary(
+    BuildContext context,
+    AppLocalizations l10n,
+    PointySemanticColors colors,
+  ) {
+    if (hasExportError) {
+      return Text(
+        l10n.analyticsExportFailedMessage,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: colors.danger),
+      );
+    }
+    final progress = this.progress;
+    if (!isExporting || progress == null) {
+      return null;
+    }
+
+    final expected = progress.expectedEventCount;
+    return Column(
+      key: const ValueKey('analytics_export_progress_summary'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          l10n.analyticsExportProgressSummary(
+            _formatBytes(progress.receivedBytes),
+            _formatBytes(progress.bytesPerSecond.round()),
+            _formatElapsed(progress.elapsed),
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (expected != null && expected > 0)
+          Text(
+            l10n.analyticsExportEstimatedEventsSummary(_formatCount(expected)),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+      ],
+    );
+  }
+}
+
+String _formatBytes(int bytes) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var value = bytes.toDouble();
+  var unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  final decimals = unit == 0 || value >= 100 ? 0 : 1;
+  return '${value.toStringAsFixed(decimals)} ${units[unit]}';
+}
+
+String _formatElapsed(Duration elapsed) {
+  final minutes = elapsed.inMinutes;
+  final seconds = elapsed.inSeconds % 60;
+  if (minutes == 0) {
+    return '${seconds}s';
+  }
+  return '${minutes}m ${seconds.toString().padLeft(2, '0')}s';
+}
+
+String _formatCount(int count) {
+  if (count >= 1000000) {
+    return '${(count / 1000000).toStringAsFixed(1)}M';
+  }
+  if (count >= 1000) {
+    return '${(count / 1000).toStringAsFixed(0)}K';
+  }
+  return '$count';
 }
 
 DropdownMenuItem<String> _analyticsOption(String label, String value) {

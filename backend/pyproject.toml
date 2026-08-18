@@ -57,6 +57,8 @@ packages = [
   "apps.core.management",
   "apps.core.management.commands",
   "apps.analytics",
+  "apps.analytics.management",
+  "apps.analytics.management.commands",
   "apps.analytics.migrations",
   "apps.catalog",
   "apps.catalog.management",

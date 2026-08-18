@@ -715,6 +715,7 @@
   "activityEventLogout": "سجل المستخدم خروجه",
   "activityEventAnalyticsExportStarted": "بدأ تصدير التحليلات",
   "activityEventAnalyticsExportCompleted": "اكتمل تصدير التحليلات",
+  "activityEventAnalyticsExportCanceled": "أُلغي تصدير التتبع",
   "activityEventAnalyticsExportFailed": "فشل تصدير التحليلات",
   "activityEventAnalyticsExportDownloaded": "نُزل ملف التحليلات",
   "activityEventAnalyticsExportDownloadFailed": "فشل تنزيل ملف التحليلات",
@@ -2312,6 +2313,10 @@
   "analyticsExportFormatLabel": "صيغة الملف",
   "analyticsExportFormatCsv": "CSV",
   "analyticsExportFormatJson": "JSON",
+  "analyticsExportFormatJsonl": "JSON Lines (سطر لكل حدث)",
+  "analyticsExportCompressionLabel": "الضغط",
+  "analyticsExportCompressionDeflate": "مضغوط (أصغر حجما)",
+  "analyticsExportCompressionNone": "بدون ضغط (أسرع)",
   "analyticsExportFromDateLabel": "من تاريخ",
   "analyticsExportToDateLabel": "إلى تاريخ",
   "analyticsExportOpenDateValue": "مفتوح",
@@ -2339,6 +2344,32 @@
     }
   },
   "analyticsExportCanceledMessage": "أُلغي حفظ ملف التتبع.",
+  "analyticsExportCancelButton": "إلغاء التصدير",
+  "analyticsExportStoppedMessage": "أُوقف التصدير.",
+  "analyticsExportProgressSummary": "{size} · {rate}/ث · {elapsed}",
+  "@analyticsExportProgressSummary": {
+    "description": "Live progress line under the export button: bytes downloaded, transfer rate, and elapsed time.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      },
+      "rate": {
+        "type": "String"
+      },
+      "elapsed": {
+        "type": "String"
+      }
+    }
+  },
+  "analyticsExportEstimatedEventsSummary": "نحو {count} حدث",
+  "@analyticsExportEstimatedEventsSummary": {
+    "description": "Approximate number of events the running export covers, from the server's planner estimate.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
   "backupRestoreSectionTitle": "النسخ والاستعادة",
   "backupStatusLoadingSummary": "جار تحميل حالة النسخ الاحتياطي",
   "backupScheduleDisabledSummary": "النسخ التلقائي متوقف",

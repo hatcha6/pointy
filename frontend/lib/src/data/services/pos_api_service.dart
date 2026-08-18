@@ -601,9 +601,15 @@ class PosApiService {
   }
 
   Future<AnalyticsExportFile> exportAnalyticsEvents(
-    AnalyticsExportQuery query,
-  ) {
-    return _shopSettings.exportAnalyticsEvents(query);
+    AnalyticsExportQuery query, {
+    void Function(AnalyticsExportProgress progress)? onProgress,
+    AnalyticsExportCancellation? cancellation,
+  }) {
+    return _shopSettings.exportAnalyticsEvents(
+      query,
+      onProgress: onProgress,
+      cancellation: cancellation,
+    );
   }
 
   Future<List<BackupDestination>> fetchBackupDestinations() {

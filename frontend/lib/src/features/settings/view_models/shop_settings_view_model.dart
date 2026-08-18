@@ -25,6 +25,9 @@ class ShopSettingsViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool _isSaving = false;
   bool _isExportingAnalytics = false;
+  AnalyticsExportProgress? _analyticsExportProgress;
+  AnalyticsExportCancellation? _analyticsExportCancellation;
+  DateTime? _analyticsExportProgressNotifiedAt;
   bool _isLoadingBackupOperations = false;
   bool _isSavingBackupSchedule = false;
   bool _isStartingBackup = false;
@@ -41,6 +44,12 @@ class ShopSettingsViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
   bool get isExportingAnalytics => _isExportingAnalytics;
+
+  /// Live download progress of the running export, or `null` when idle.
+  AnalyticsExportProgress? get analyticsExportProgress =>
+      _analyticsExportProgress;
+
+  bool get canCancelAnalyticsExport => _analyticsExportCancellation != null;
   bool get isLoadingBackupOperations => _isLoadingBackupOperations;
   bool get isSavingBackupSchedule => _isSavingBackupSchedule;
   bool get isStartingBackup => _isStartingBackup;
@@ -141,11 +150,37 @@ class ShopSettingsViewModel extends ChangeNotifier {
     }
   }
 
+  /// Stop a running export. Safe to call when none is running.
+  void cancelAnalyticsExport() {
+    _analyticsExportCancellation?.cancel();
+  }
+
+  /// Progress is reported per network chunk — far more often than a UI needs.
+  /// Repainting the settings screen on every 64KB of a multi-GB download would
+  /// cost more than the download does, so coalesce to a few frames a second.
+  static const _analyticsExportProgressInterval = Duration(milliseconds: 250);
+
+  void _onAnalyticsExportProgress(AnalyticsExportProgress progress) {
+    _analyticsExportProgress = progress;
+    final now = DateTime.now();
+    final last = _analyticsExportProgressNotifiedAt;
+    if (last != null &&
+        now.difference(last) < _analyticsExportProgressInterval) {
+      return;
+    }
+    _analyticsExportProgressNotifiedAt = now;
+    notifyListeners();
+  }
+
   Future<AnalyticsExportFile?> exportAnalyticsEvents(
     AnalyticsExportQuery query,
   ) async {
     _isExportingAnalytics = true;
     _hasAnalyticsExportError = false;
+    _analyticsExportProgress = null;
+    _analyticsExportProgressNotifiedAt = null;
+    final cancellation = AnalyticsExportCancellation();
+    _analyticsExportCancellation = cancellation;
     notifyListeners();
 
     final stopwatch = Stopwatch()..start();
@@ -157,9 +192,31 @@ class ShopSettingsViewModel extends ChangeNotifier {
       ),
     );
 
-    final result = await _repository.exportAnalyticsEvents(query);
+    final result = await _repository.exportAnalyticsEvents(
+      query,
+      onProgress: _onAnalyticsExportProgress,
+      cancellation: cancellation,
+    );
     stopwatch.stop();
     _isExportingAnalytics = false;
+    _analyticsExportCancellation = null;
+    _analyticsExportProgress = null;
+
+    // A cancel is the user getting what they asked for, not a failure: report
+    // it as its own outcome so the UI does not cry "export failed" at them.
+    if (result is Error<AnalyticsExportFile> &&
+        result.exception is AnalyticsExportCanceledException) {
+      unawaited(
+        _analyticsEngine?.trackUsage(
+          AnalyticsEventName.analyticsExportCanceled,
+          attributes: attributes,
+          metrics: {'elapsed_ms': stopwatch.elapsedMilliseconds},
+        ),
+      );
+      notifyListeners();
+      return null;
+    }
+
     switch (result) {
       case Ok<AnalyticsExportFile>():
         unawaited(
