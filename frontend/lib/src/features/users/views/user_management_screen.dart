@@ -576,11 +576,11 @@ class _CreateUserFormState extends State<_CreateUserForm> {
                             ? l10n.requiredField
                             : null,
                       ),
-                      TextFormField(
+                      PointyPasswordField(
                         controller: _passwordController,
                         enabled: !widget.viewModel.isSaving,
-                        obscureText: true,
-                        decoration: InputDecoration(labelText: l10n.passwordLabel),
+                        labelText: l10n.passwordLabel,
+                        prefixIcon: null,
                         validator: (value) => value == null || value.isEmpty
                             ? l10n.requiredField
                             : null,
@@ -757,13 +757,11 @@ class _EditUserFormState extends State<_EditUserForm> {
                         keyboardType: TextInputType.emailAddress,
                         decoration: InputDecoration(labelText: l10n.emailLabel),
                       ),
-                      TextFormField(
+                      PointyPasswordField(
                         controller: _passwordController,
                         enabled: !widget.viewModel.isSaving,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: l10n.passwordResetLabel,
-                        ),
+                        labelText: l10n.passwordResetLabel,
+                        prefixIcon: null,
                       ),
                     ],
                   ),

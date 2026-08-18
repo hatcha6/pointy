@@ -326,30 +326,26 @@ class _PasswordFormState extends State<_PasswordForm> {
         children: [
           ResponsiveFormGrid(
             children: [
-              TextFormField(
+              PointyPasswordField(
                 controller: _currentPasswordController,
-                decoration: InputDecoration(
-                  labelText: l10n.currentPasswordLabel,
-                ),
-                obscureText: true,
+                labelText: l10n.currentPasswordLabel,
+                prefixIcon: null,
                 textInputAction: TextInputAction.next,
                 validator: (value) =>
                     (value ?? '').isEmpty ? l10n.requiredFieldError : null,
               ),
-              TextFormField(
+              PointyPasswordField(
                 controller: _newPasswordController,
-                decoration: InputDecoration(labelText: l10n.newPasswordLabel),
-                obscureText: true,
+                labelText: l10n.newPasswordLabel,
+                prefixIcon: null,
                 textInputAction: TextInputAction.next,
                 validator: (value) =>
                     (value ?? '').isEmpty ? l10n.requiredFieldError : null,
               ),
-              TextFormField(
+              PointyPasswordField(
                 controller: _confirmPasswordController,
-                decoration: InputDecoration(
-                  labelText: l10n.confirmPasswordLabel,
-                ),
-                obscureText: true,
+                labelText: l10n.confirmPasswordLabel,
+                prefixIcon: null,
                 textInputAction: TextInputAction.done,
                 validator: (value) {
                   if ((value ?? '').isEmpty) {

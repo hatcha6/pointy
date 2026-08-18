@@ -66,6 +66,7 @@ import 'package:pointy_frontend/src/features/employees/view_models/employee_payr
 import 'package:pointy_frontend/src/features/employees/views/employee_payroll_screen.dart';
 import 'package:pointy_frontend/src/features/employees/views/payroll_run_details_screen.dart';
 import 'package:pointy_frontend/src/shared/components/pointy_navigation_surface.dart';
+import 'package:pointy_frontend/src/shared/components/pointy_password_field.dart';
 import 'package:pointy_frontend/src/shared/responsive/adaptive_modal.dart';
 import 'package:pointy_frontend/src/shared/infinite_scroll_grid.dart';
 import 'package:pointy_frontend/src/shared/navigation/app_navigation.dart';
@@ -2693,6 +2694,37 @@ void main() {
     expect(find.text('إدارة المستخدمين'), findsOneWidget);
     expect(find.text('كاشير الوردية'), findsOneWidget);
     expect(find.text('إضافة مستخدم'), findsOneWidget);
+  });
+
+  testWidgets('new user password can be revealed before it is handed over', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(PointyApp(apiService: _mockApiService()));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    await _openNavigationDestination(tester, 'المستخدمون');
+    await tester.tap(find.text('إضافة مستخدم'));
+    await tester.pumpAndSettle();
+
+    final field = find.byType(PointyPasswordField);
+    expect(field, findsOneWidget);
+    EditableText entry() => tester.widget<EditableText>(
+      find.descendant(of: field, matching: find.byType(EditableText)),
+    );
+
+    // The admin types this password once and then dictates it to the employee;
+    // with no confirmation field, an unreadable typo locks that person out.
+    expect(entry().obscureText, isTrue);
+    await tester.tap(
+      find.descendant(of: field, matching: find.byType(IconButton)),
+    );
+    await tester.pumpAndSettle();
+    expect(entry().obscureText, isFalse);
   });
 
   testWidgets('manager can open and create discount rules', (
