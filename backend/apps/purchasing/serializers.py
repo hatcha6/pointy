@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Sum
+from django.db.models import Manager, Sum
 from rest_framework import serializers
 
 from apps.attachments.models import Attachment
@@ -23,6 +23,7 @@ from apps.discounts.services import (
     rounding_metadata_payload,
 )
 from .models import (
+    prime_supplier_balances,
     PurchaseLine,
     PurchaseOrder,
     PurchaseOrderAdjustment,
@@ -57,6 +58,21 @@ def _quantity_input_field(**kwargs):
     return serializers.DecimalField(max_digits=12, decimal_places=3, **kwargs)
 
 
+class SupplierListSerializer(serializers.ListSerializer):
+    """Batches the accounting-balance lookups for a whole page of suppliers, so
+    the list costs 3 queries instead of 6 per row."""
+
+    def to_representation(self, data):
+        # Materialise first (mirroring DRF's own Manager handling) and hand the
+        # same list to the parent, so it serializes the instances we primed
+        # rather than re-querying and getting cold ones.
+        rows = data.all() if isinstance(data, Manager) else data
+        if not isinstance(rows, list):
+            rows = list(rows)
+        prime_supplier_balances(rows)
+        return super().to_representation(rows)
+
+
 class SupplierSerializer(serializers.ModelSerializer):
     payable_balance = serializers.DecimalField(
         max_digits=10,
@@ -78,6 +94,7 @@ class SupplierSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Supplier
+        list_serializer_class = SupplierListSerializer
         fields = [
             "id",
             "name",
@@ -105,6 +122,15 @@ class SupplierSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def to_representation(self, supplier):
+        # A lone supplier (retrieve/create/update) still reads three balance
+        # fields backed by two properties, so prime it too: 3 queries, not 6.
+        # ``SupplierListSerializer`` primes the whole page first, making this a
+        # no-op for list rows.
+        if getattr(supplier, "_payable_balance", None) is None:
+            prime_supplier_balances([supplier])
+        return super().to_representation(supplier)
 
     def get_total_bought(self, supplier):
         # Prefer the queryset annotation (supplier list); fall back to a direct
