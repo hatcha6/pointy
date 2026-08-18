@@ -78,3 +78,37 @@ no way out. Dead-end empty states are the app's most common UX gap, not missing 
 query object, branch on it, and call back into `viewModel.applyQuery(query.copyWith(...))`
 to clear. `DebouncedSearchField` syncs its text from `widget.value`, so clearing the
 query also clears the visible search box — no extra reset signal needed.
+
+## 2026-08-19 - `AutovalidateMode.onUserInteraction` on a *Form* is a trap
+
+**Learning:** No `Form` in this app (28 of them, 68 validators) sets
+`autovalidateMode`, so every form withholds all validation until Save. The obvious
+fix is wrong: read `FormState.build` in the SDK — `onUserInteraction` on a **Form**
+validates *every* descendant field as soon as *any one* field is touched, so typing
+the first character lights up every untouched required field in red. `onUnfocus` is
+the per-field mode (each `FormField` wraps itself in a `Focus` and validates only
+itself on blur) and is what long forms want. Also useful: `validateGranularly()`
+returns the `Set<FormFieldState>` that failed, and each state's `.context` is a real
+`BuildContext` — so `Scrollable.ensureVisible` can carry the user to the blocker.
+
+**Action:** Prefer `AutovalidateMode.onUnfocus` on `Form`; reserve
+`onUserInteraction` for a single `FormField`. Sort candidate fields by
+`localToGlobal(Offset.zero).dy`, not by `Set` order — field registration order
+follows mount order, which diverges from visual order once the user scrolls.
+
+## 2026-08-19 - Long forms built on `ListView` silently skip off-screen validation
+
+**Learning:** `discount_rule_form.dart` puts its `Form` around a lazy `ListView`.
+Fields scrolled past the cache extent are *unmounted*, so they deregister from
+`FormState._fields` and are never validated. Measured on a 1200×1000 viewport: the
+name field is still mounted at dy −220 but gone by dy ≈ −370. Practically, a required
+field far above the fold contributes nothing to `validate()`, and if *every* invalid
+field is unmounted the form would submit. Any scroll-to-first-error feature therefore
+only reaches fields inside the cache extent.
+
+**Action:** When asserting scroll-reveal behaviour in a test, don't hardcode a drag
+distance — loop small drags until `getTopLeft(field).dy < 0` and assert that
+precondition explicitly, so the test fails loudly instead of passing vacuously when
+the field unmounts. If a form must validate reliably end-to-end, it needs
+`SingleChildScrollView` + `Column` rather than `ListView` — flag that as its own
+change, it is a correctness fix, not UX polish.

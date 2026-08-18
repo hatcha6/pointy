@@ -329,6 +329,11 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
         Expanded(
           child: Form(
             key: _formKey,
+            // The form is one long scroll, so a field can sit far off-screen.
+            // Validating each field as it loses focus surfaces the problem
+            // where the cashier is looking, and clears the error the moment
+            // they fix it — instead of holding every complaint until Save.
+            autovalidateMode: AutovalidateMode.onUnfocus,
             child: ListView(
               key: const ValueKey('discount_rule_form_scroll'),
               padding: EdgeInsets.fromLTRB(
@@ -1308,15 +1313,19 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      _showError(l10n.discountWizardFixStepError);
+    final invalidFields =
+        _formKey.currentState?.validateGranularly() ??
+        const <FormFieldState<Object?>>{};
+    if (invalidFields.isNotEmpty) {
+      _revealField(invalidFields);
+      _showError(l10n.discountFormFixFieldsError);
       return;
     }
     if (_showSchedule &&
         _startsAt != null &&
         _endsAt != null &&
         !_endsAt!.isAfter(_startsAt!)) {
-      _showError(l10n.discountWizardFixStepError);
+      _showError(l10n.discountDateRangeError);
       return;
     }
     if (_valueType == DiscountValueType.tiered && _collectTiers().isEmpty) {
@@ -1409,6 +1418,38 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
     } else {
       _showError(l10n.discountSaveError);
     }
+  }
+
+  /// Scrolls the highest invalid field into view so a failed save points at the
+  /// field that blocked it. The form is one tall scroll, so the offender is
+  /// often above or below the fold; picking the smallest global `dy` keeps the
+  /// choice in visual order rather than in the order fields happened to mount.
+  void _revealField(Set<FormFieldState<Object?>> invalidFields) {
+    FormFieldState<Object?>? topmost;
+    double? topmostOffset;
+    for (final field in invalidFields) {
+      final box = field.context.findRenderObject();
+      if (box is! RenderBox || !box.hasSize) {
+        continue;
+      }
+      final offset = box.localToGlobal(Offset.zero).dy;
+      if (topmostOffset == null || offset < topmostOffset) {
+        topmostOffset = offset;
+        topmost = field;
+      }
+    }
+    final target = topmost;
+    if (target == null) {
+      return;
+    }
+    unawaited(
+      Scrollable.ensureVisible(
+        target.context,
+        alignment: 0.2,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      ),
+    );
   }
 
   void _showError(String message) {

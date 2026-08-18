@@ -5448,6 +5448,7 @@
   },
   "discountWizardAdvancedToggle": "إظهار خيارات متقدمة",
   "discountWizardFixStepError": "راجع الخطوة المحددة وأكمل البيانات المطلوبة.",
+  "discountFormFixFieldsError": "أكمل الحقول المطلوبة المميزة بالأحمر.",
   "discountWizardNoExtraRules": "بدون شروط إضافية",
   "discountWizardNoLimits": "بدون حدود",
   "discountLoadError": "تعذر تحميل الخصومات.",
