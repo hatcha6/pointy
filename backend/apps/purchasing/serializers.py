@@ -14,6 +14,7 @@ from apps.catalog.units import (
     unit_label_for,
     validate_quantity as validate_unit_quantity,
 )
+from apps.discounts.cache import preview_with_cache
 from apps.discounts.models import AppliedDiscount, DiscountRule, normalize_coupon_code
 from apps.discounts.services import (
     DiscountContext,
@@ -880,13 +881,28 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
             )
             for index, line in enumerate(attrs["lines"])
         )
-        discount_result = DiscountEngine().calculate(
-            DiscountContext(
-                channel=DiscountRule.Channel.PURCHASING,
-                supplier_id=attrs["supplier"].pk,
-                coupon_codes=coupon_codes,
-                lines=discount_lines,
-            )
+        context = DiscountContext(
+            channel=DiscountRule.Channel.PURCHASING,
+            supplier_id=attrs["supplier"].pk,
+            coupon_codes=coupon_codes,
+            lines=discount_lines,
+        )
+        # Preview only — route through the Redis guard the POS already uses
+        # (apps.discounts.cache), never the raw engine:
+        #   * no active PURCHASING/BOTH rule -> skip the engine and its rule scan
+        #     entirely (1 Redis read instead of 1 query + a full engine pass), the
+        #     common case for a shop that runs no purchasing promotions;
+        #   * otherwise memoise per exact cart, so the preview refreshes that
+        #     cannot change the discount — editing landed-cost entries, the
+        #     allocation method or the manual extra discount, none of which are in
+        #     the digest — are served from Redis instead of re-running the engine's
+        #     7 queries (rule scan + 5 M2M prefetches + tiers).
+        # Fail-open: any Redis hiccup falls straight through to a live compute.
+        # PurchaseOrder.recalculate() stays on the raw engine, so nothing that
+        # persists money reads through this cache.
+        discount_result = preview_with_cache(
+            context,
+            lambda: DiscountEngine().calculate(context),
         )
         attrs["coupon_codes"] = coupon_codes
         attrs["discount_result"] = discount_result
