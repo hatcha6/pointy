@@ -1190,5 +1190,7 @@ String _barcodeLabelLanguageLabel(
     BarcodeLabelPrinterLanguage.tspl => l10n.printerBarcodeLabelLanguageTspl,
     BarcodeLabelPrinterLanguage.epl => l10n.printerBarcodeLabelLanguageEpl,
     BarcodeLabelPrinterLanguage.cpcl => l10n.printerBarcodeLabelLanguageCpcl,
+    BarcodeLabelPrinterLanguage.escPos =>
+      l10n.printerBarcodeLabelLanguageEscPos,
   };
 }

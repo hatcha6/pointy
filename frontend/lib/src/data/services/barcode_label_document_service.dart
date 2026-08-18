@@ -309,7 +309,12 @@ class _BarcodeLabelSheet {
     final flip = (((rotationQuarterTurns % 4) + 4) % 4) == 2;
     const marginMm = 3.0;
     final contentWidth = (widthMm - 2 * marginMm) * _mm;
-    final barcodeHeight = math.max(12 * _mm, widthMm * 0.34 * _mm);
+    // A roll is far wider than a barcode needs to be: spanning the full width
+    // gives a ~0.7 mm module (nothing gains from that) and a barcode tall
+    // enough to dominate the sticker. Keep it comfortably above the ~0.25 mm
+    // minimum module instead, and let narrow rolls keep a larger share.
+    final barcodeWidth = contentWidth * (widthMm >= 70 ? 0.68 : 0.85);
+    final barcodeHeight = math.max(11 * _mm, widthMm * 0.16 * _mm);
 
     for (final sticker in stickers) {
       pdf.addPage(
@@ -324,7 +329,7 @@ class _BarcodeLabelSheet {
           build: (context) {
             final card = _card(
               sticker,
-              barcodeWidth: contentWidth,
+              barcodeWidth: barcodeWidth,
               barcodeHeight: barcodeHeight,
               compact: false,
             );
@@ -438,18 +443,26 @@ class _BarcodeLabelSheet {
     );
     children.add(pw.SizedBox(height: compact ? 2 : 4));
 
+    // Centred, not stretched: the surrounding column is `stretch`, which would
+    // hand the barcode tight full-width constraints and override the width
+    // computed for the media. `textPadding` keeps the human-readable digits
+    // clear of the bars — the widget defaults it to 0, which prints them
+    // touching the bar tips and hurts scanning.
     children.add(
-      pw.BarcodeWidget(
-        barcode: pw.Barcode.code128(),
-        data: sticker.barcode,
-        width: barcodeWidth,
-        height: barcodeHeight,
-        drawText: true,
-        color: _ink,
-        textStyle: pw.TextStyle(
-          fontSize: compact ? 6.5 : 8,
+      pw.Center(
+        child: pw.BarcodeWidget(
+          barcode: pw.Barcode.code128(),
+          data: sticker.barcode,
+          width: barcodeWidth,
+          height: barcodeHeight,
+          drawText: true,
+          textPadding: compact ? 1.0 : 2.0,
           color: _ink,
-          font: fonts.base,
+          textStyle: pw.TextStyle(
+            fontSize: compact ? 6.5 : 8,
+            color: _ink,
+            font: fonts.base,
+          ),
         ),
       ),
     );

@@ -4616,6 +4616,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerBarcodeLabelLanguageCpcl => 'CPCL';
 
   @override
+  String get printerBarcodeLabelLanguageEscPos => 'ESC/POS (طابعة إيصالات)';
+
+  @override
   String get detectBarcodeLabelLanguageButton => 'اكتشاف لغة طابعة الملصقات';
 
   @override

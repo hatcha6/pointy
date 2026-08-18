@@ -77,7 +77,13 @@ int barcodeLabelRotationFromJson(Object? value) {
   return ((quarters % 4) + 4) % 4;
 }
 
-enum BarcodeLabelPrinterLanguage { auto, zpl, tspl, epl, cpcl }
+/// Command language used for barcode-label printing.
+///
+/// [escPos] covers receipt-protocol printers that double as label printers
+/// (e.g. the HPRT LPQ58/LPQ80 switched to `Protocol: ESC/POS`). They ignore
+/// the dedicated label languages entirely, so labels are drawn with ESC/POS
+/// text plus a native `GS k` barcode.
+enum BarcodeLabelPrinterLanguage { auto, zpl, tspl, epl, cpcl, escPos }
 
 /// How the receipt should be terminated. Cheap printers without a cutter
 /// should use [none] (feed only).
@@ -331,10 +337,13 @@ BarcodeLabelPrinterLanguage barcodeLabelPrinterLanguageFromJson(Object? value) {
     'tspl' || 'tspl2' || 'TSPL' || 'TSPL2' => BarcodeLabelPrinterLanguage.tspl,
     'epl' || 'epl2' || 'EPL' || 'EPL2' => BarcodeLabelPrinterLanguage.epl,
     'cpcl' || 'CPCL' => BarcodeLabelPrinterLanguage.cpcl,
+    'escpos' ||
     'esc_pos' ||
     'escPos' ||
+    'esc/pos' ||
+    'ESC/POS' ||
     'thermal' ||
-    'receipt' => BarcodeLabelPrinterLanguage.auto,
+    'receipt' => BarcodeLabelPrinterLanguage.escPos,
     _ => BarcodeLabelPrinterLanguage.auto,
   };
 }
@@ -346,6 +355,7 @@ String barcodeLabelPrinterLanguageToJson(BarcodeLabelPrinterLanguage language) {
     BarcodeLabelPrinterLanguage.tspl => 'tspl',
     BarcodeLabelPrinterLanguage.epl => 'epl',
     BarcodeLabelPrinterLanguage.cpcl => 'cpcl',
+    BarcodeLabelPrinterLanguage.escPos => 'escpos',
   };
 }
 

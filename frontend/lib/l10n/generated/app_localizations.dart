@@ -8169,6 +8169,12 @@ abstract class AppLocalizations {
   /// **'CPCL'**
   String get printerBarcodeLabelLanguageCpcl;
 
+  /// No description provided for @printerBarcodeLabelLanguageEscPos.
+  ///
+  /// In ar, this message translates to:
+  /// **'ESC/POS (طابعة إيصالات)'**
+  String get printerBarcodeLabelLanguageEscPos;
+
   /// No description provided for @detectBarcodeLabelLanguageButton.
   ///
   /// In ar, this message translates to:

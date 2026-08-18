@@ -31,10 +31,33 @@ class BarcodeLabelLanguageDetector {
   static final _tsplStatusProbe = <int>[27, 33, 63];
   static final _eplStatusProbe = ascii.encode('UQ\r\n');
 
+  /// `GS I 65` — ESC/POS "printer model / firmware" query. Dual-protocol
+  /// printers answer with their active protocol in plain text (an HPRT LPQ80
+  /// replies `_2.05.14 ESC/POS`), which beats guessing from the device name.
+  /// It is a query, not a print command, so printers that don't understand it
+  /// stay silent instead of spitting out a page of garbage.
+  static final _escPosModelProbe = <int>[0x1D, 0x49, 0x41];
+
   Future<BarcodeLabelLanguageDetectionResult> detect({
     required PrinterEndpoint endpoint,
     required PrintTransport transport,
   }) async {
+    // Runs first: it is the only probe that is silent on printers which don't
+    // speak it. The Zebra probes below are line-oriented text, so a receipt
+    // printer would *print* them as garbage — ask the quiet question first.
+    final escPosModel = await _probe(
+      transport: transport,
+      endpoint: endpoint,
+      bytes: _escPosModelProbe,
+    );
+    final escPosResult = _languageFromModelResponse(escPosModel.text);
+    if (escPosResult != null) {
+      return BarcodeLabelLanguageDetectionResult.detected(
+        language: escPosResult,
+        message: 'detected from printer firmware protocol string',
+      );
+    }
+
     final zebraLanguage = await _probe(
       transport: transport,
       endpoint: endpoint,
@@ -101,6 +124,20 @@ class BarcodeLabelLanguageDetector {
 
   BarcodeLabelPrinterLanguage? inferFromEndpoint(PrinterEndpoint endpoint) {
     final value = [endpoint.name, endpoint.address].join(' ').toLowerCase();
+    // HPRT LPQ58/LPQ80: receipt+label hybrids that carry a firmware-level
+    // `Protocol:` switch. We deploy them as `ESC/POS` because that is the only
+    // setting where receipts print at all, and labels still work there via a
+    // native `GS k` barcode. A printer left on the factory `TSPL` setting is
+    // caught by the firmware probe above, or can be set explicitly in printer
+    // settings — this is only the last-resort guess when neither is available
+    // (notably the Windows RAW spooler, which cannot read back).
+    if (value.contains('lpq')) {
+      return BarcodeLabelPrinterLanguage.escPos;
+    }
+    // HPRT's dedicated label line ships TSPL, not ZPL.
+    if (value.contains('hprt')) {
+      return BarcodeLabelPrinterLanguage.tspl;
+    }
     if (value.contains('tspl') ||
         value.contains('tspl2') ||
         value.contains('tsc') ||
@@ -150,6 +187,32 @@ class BarcodeLabelLanguageDetector {
       endpoint: endpoint,
       readTimeout: const Duration(milliseconds: 900),
     );
+  }
+
+  /// Reads the active protocol out of a `GS I 65` firmware string. Order
+  /// matters: `ESC/POS` is checked before the label languages because a
+  /// dual-protocol printer names only the protocol it is *currently* in.
+  BarcodeLabelPrinterLanguage? _languageFromModelResponse(String value) {
+    final normalized = value.toLowerCase();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    if (normalized.contains('esc/pos') || normalized.contains('escpos')) {
+      return BarcodeLabelPrinterLanguage.escPos;
+    }
+    if (normalized.contains('tspl')) {
+      return BarcodeLabelPrinterLanguage.tspl;
+    }
+    if (normalized.contains('zpl')) {
+      return BarcodeLabelPrinterLanguage.zpl;
+    }
+    if (normalized.contains('epl')) {
+      return BarcodeLabelPrinterLanguage.epl;
+    }
+    if (normalized.contains('cpcl')) {
+      return BarcodeLabelPrinterLanguage.cpcl;
+    }
+    return null;
   }
 
   BarcodeLabelPrinterLanguage? _languageFromZebraResponse(String value) {

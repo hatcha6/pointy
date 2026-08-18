@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+
 import '../../shared/formatters.dart';
 import '../models/barcode_label.dart';
 import '../models/printer_config.dart';
@@ -18,6 +20,12 @@ class BarcodeLabelCommandEncoder {
       throw ArgumentError('Barcode label language must be resolved first.');
     }
 
+    // ESC/POS is binary (code-page bytes + a native `GS k` barcode), so it
+    // can't share the text-command buffer the label languages build below.
+    if (resolvedLanguage == BarcodeLabelPrinterLanguage.escPos) {
+      return _escPosLabels(lines: lines, endpoint: endpoint);
+    }
+
     final commands = StringBuffer();
     for (final line in lines) {
       if (line.copies <= 0) {
@@ -33,6 +41,8 @@ class BarcodeLabelCommandEncoder {
         BarcodeLabelPrinterLanguage.epl => _epl(line, endpoint),
         BarcodeLabelPrinterLanguage.cpcl => _cpcl(line, endpoint),
         BarcodeLabelPrinterLanguage.auto => '',
+        // Handled above; unreachable.
+        BarcodeLabelPrinterLanguage.escPos => '',
       });
     }
     return utf8.encode(commands.toString());
@@ -203,6 +213,167 @@ class BarcodeLabelCommandEncoder {
       ..writeln('FORM')
       ..writeln('PRINT');
     return buffer.toString();
+  }
+
+  /// Labels for a receipt-protocol printer (HPRT LPQ58/LPQ80 in `ESC/POS`
+  /// mode, and the many 80mm printers that double as label printers).
+  ///
+  /// These ignore ZPL/TSPL/EPL/CPCL completely — they accept no label language
+  /// at all — so the label is drawn the same way a receipt is: code-page text
+  /// plus a native `GS k` Code128 barcode. Text goes through [Generator] so the
+  /// Arabic product name lands on the configured code page (CP864 by default)
+  /// instead of being mangled, exactly as the receipt encoder does it.
+  Future<List<int>> _escPosLabels({
+    required List<BarcodeLabelPrintLine> lines,
+    required PrinterEndpoint endpoint,
+  }) async {
+    final profile = await CapabilityProfile.load();
+    final generator = Generator(_escPosPaperSize(endpoint.paperWidthMm), profile);
+    final codeTable = endpoint.codeTable.trim().isEmpty
+        ? 'CP864'
+        : endpoint.codeTable.trim();
+    final charsPerLine = endpoint.paperWidthMm <= 58 ? 32 : 48;
+
+    final bytes = <int>[];
+    for (final line in lines) {
+      if (line.copies <= 0) {
+        continue;
+      }
+      final barcodeValue = _barcodeData(line.label.barcode);
+      if (barcodeValue.isEmpty) {
+        throw ArgumentError('Barcode label requires a barcode.');
+      }
+      for (var copy = 0; copy < line.copies; copy++) {
+        bytes.addAll(
+          _escPosLabel(
+            generator: generator,
+            line: line,
+            endpoint: endpoint,
+            codeTable: codeTable,
+            charsPerLine: charsPerLine,
+            barcodeValue: barcodeValue,
+          ),
+        );
+      }
+    }
+    return bytes;
+  }
+
+  List<int> _escPosLabel({
+    required Generator generator,
+    required BarcodeLabelPrintLine line,
+    required PrinterEndpoint endpoint,
+    required String codeTable,
+    required int charsPerLine,
+    required String barcodeValue,
+  }) {
+    final label = line.label;
+    final bytes = <int>[...generator.reset()];
+
+    for (final textLine in _textLines(label.displayName, charsPerLine)) {
+      bytes.addAll(
+        _escPosText(
+          generator,
+          textLine,
+          styles: PosStyles(
+            align: PosAlign.center,
+            bold: true,
+            codeTable: codeTable,
+          ),
+        ),
+      );
+    }
+
+    final detailText = _detailText(line);
+    if (detailText.isNotEmpty) {
+      bytes.addAll(
+        _escPosText(
+          generator,
+          detailText,
+          styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
+        ),
+      );
+    }
+
+    // `GS k` Code128 needs an explicit code-set prefix; subset B covers the
+    // full printable ASCII range that barcodes/SKUs use.
+    if (_isEscPosBarcodeSafe(barcodeValue)) {
+      bytes.addAll(
+        generator.barcode(
+          Barcode.code128('{B$barcodeValue'.split('')),
+          height: 80,
+          width: 2,
+          textPos: BarcodeText.below,
+        ),
+      );
+    } else {
+      // Non-ASCII payloads can't be expressed in Code128; print the value as
+      // text so the label is still identifiable rather than silently blank.
+      bytes.addAll(
+        _escPosText(
+          generator,
+          barcodeValue,
+          styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
+        ),
+      );
+    }
+
+    final sku = label.sku.trim();
+    if (sku.isNotEmpty) {
+      bytes.addAll(
+        _escPosText(
+          generator,
+          sku,
+          styles: PosStyles(align: PosAlign.center, codeTable: codeTable),
+        ),
+      );
+    }
+
+    switch (endpoint.cutMode) {
+      case ReceiptCutMode.full:
+        bytes.addAll(generator.cut());
+      case ReceiptCutMode.partial:
+        bytes.addAll(generator.cut(mode: PosCutMode.partial));
+      case ReceiptCutMode.none:
+        // Tear-bar printers (the LPQ80 among them) just need the label clear
+        // of the head so it can be torn off.
+        bytes.addAll(generator.feed(3));
+    }
+    return bytes;
+  }
+
+  /// [Generator.text] converts through Latin-1 and throws on anything outside
+  /// it, so Arabic product names would take the whole label down. Mirrors the
+  /// receipt encoder's `_text`: fall back to raw UTF-8 bytes on the configured
+  /// code page rather than dropping the line.
+  List<int> _escPosText(
+    Generator generator,
+    String value, {
+    required PosStyles styles,
+  }) {
+    try {
+      return generator.text(value, styles: styles);
+    } on ArgumentError {
+      return [
+        ...generator.setStyles(styles),
+        ...generator.rawBytes(utf8.encode(value)),
+        ...generator.emptyLines(1),
+      ];
+    }
+  }
+
+  PaperSize _escPosPaperSize(int paperWidthMm) {
+    if (paperWidthMm <= 58) {
+      return PaperSize.mm58;
+    }
+    if (paperWidthMm <= 72) {
+      return PaperSize.mm72;
+    }
+    return PaperSize.mm80;
+  }
+
+  bool _isEscPosBarcodeSafe(String value) {
+    return value.codeUnits.every((unit) => unit >= 0x20 && unit <= 0x7E);
   }
 
   String _detailText(BarcodeLabelPrintLine line) {

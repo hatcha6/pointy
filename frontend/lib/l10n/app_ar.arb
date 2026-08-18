@@ -2682,6 +2682,7 @@
   "printerBarcodeLabelLanguageTspl": "TSPL/TSPL2",
   "printerBarcodeLabelLanguageEpl": "EPL/EPL2",
   "printerBarcodeLabelLanguageCpcl": "CPCL",
+  "printerBarcodeLabelLanguageEscPos": "ESC/POS (طابعة إيصالات)",
   "detectBarcodeLabelLanguageButton": "اكتشاف لغة طابعة الملصقات",
   "printerLabelWidthLabel": "عرض الملصق مم",
   "printerLabelHeightLabel": "ارتفاع الملصق مم",
