@@ -41,6 +41,9 @@ void main() {
 }
 
 Future<void> _pumpField(WidgetTester tester, {bool enabled = true}) async {
+  final controller = TextEditingController();
+  addTearDown(controller.dispose);
+
   await tester.pumpWidget(
     MaterialApp(
       locale: const Locale('ar'),
@@ -51,7 +54,7 @@ Future<void> _pumpField(WidgetTester tester, {bool enabled = true}) async {
         textDirection: TextDirection.rtl,
         child: Material(
           child: PointyPasswordField(
-            controller: TextEditingController(),
+            controller: controller,
             labelText: 'كلمة المرور',
             enabled: enabled,
           ),
