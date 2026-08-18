@@ -1477,6 +1477,16 @@ class _ReceiptFrame {
   /// Top/bottom paper margin, trimmed in compact mode.
   double get _verticalMargin => compact ? 4 : _verticalMarginMm;
 
+  /// Compact mode shrinks the type as well as the spacing — the roll advances
+  /// per millimetre of content, so smaller glyphs are a direct paper saving.
+  /// Kept above ~7pt: below that a 203dpi thermal head starts dropping strokes
+  /// off Arabic diacritics.
+  double get _bodyFont => compact ? 7.5 : 9;
+
+  double get _detailFont => compact ? 7 : 8;
+
+  double get _emphasisFont => compact ? 8.5 : 10;
+
   // Thermal receipt heads are 1-bit: a dot is either full black or blank, so any
   // grey (the shared A4 palette's muted labels / hairline rules) prints faint or
   // not at all. The receipt draws EVERYTHING in pure black; _thermalTheme pairs
@@ -1784,12 +1794,42 @@ class _ReceiptFrame {
               .where((cell) => cell.isNotEmpty)
               .join(' × ')
         : '';
+    // Compact: name, quantity detail and total share one row. The name is the
+    // only elastic part, so it takes the clip while the money stays whole.
+    if (compact) {
+      return pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Expanded(
+            child: pw.Text(
+              name,
+              maxLines: 1,
+              overflow: pw.TextOverflow.clip,
+              style: pw.TextStyle(fontSize: _bodyFont, color: _ink),
+            ),
+          ),
+          if (middle.isNotEmpty) ...[
+            pw.SizedBox(width: 4),
+            pw.Text(
+              middle,
+              style: pw.TextStyle(fontSize: _detailFont, color: _ink),
+            ),
+          ],
+          pw.SizedBox(width: 4),
+          pw.Text(
+            total,
+            style: pw.TextStyle(fontSize: _bodyFont, color: _ink),
+          ),
+        ],
+      );
+    }
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: [
         pw.Text(
           name,
-          style: const pw.TextStyle(fontSize: 9, color: _ink),
+          style: pw.TextStyle(fontSize: _bodyFont, color: _ink),
         ),
         pw.SizedBox(height: 1),
         pw.Row(
@@ -1798,19 +1838,13 @@ class _ReceiptFrame {
             pw.Expanded(
               child: pw.Text(
                 middle,
-                style: const pw.TextStyle(
-                  fontSize: 8,
-                  color: _ink,
-                ),
+                style: pw.TextStyle(fontSize: _detailFont, color: _ink),
               ),
             ),
             pw.SizedBox(width: 6),
             pw.Text(
               total,
-              style: const pw.TextStyle(
-                fontSize: 9,
-                color: _ink,
-              ),
+              style: pw.TextStyle(fontSize: _bodyFont, color: _ink),
             ),
           ],
         ),
@@ -1832,7 +1866,7 @@ class _ReceiptFrame {
     bool emphasised = false,
   }) {
     final style = pw.TextStyle(
-      fontSize: emphasised ? 10 : 9,
+      fontSize: emphasised ? _emphasisFont : _bodyFont,
       fontWeight: emphasised ? pw.FontWeight.bold : pw.FontWeight.normal,
       color: _ink,
     );
