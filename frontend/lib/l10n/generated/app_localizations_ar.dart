@@ -4822,14 +4822,15 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get catalogNoFilteredResultsTitle => 'لا توجد منتجات ضمن هذا التصنيف';
+  String get catalogNoFilteredResultsTitle =>
+      'لا توجد منتجات مطابقة للفلاتر المحددة';
 
   @override
   String get catalogNoResultsMessage =>
-      'تحقق من الكتابة أو امسح البحث والتصنيف لعرض كل المنتجات.';
+      'تحقق من الكتابة أو امسح البحث والفلاتر لعرض كل المنتجات.';
 
   @override
-  String get catalogClearSearchAndFiltersButton => 'مسح البحث والتصنيف';
+  String get catalogClearSearchAndFiltersButton => 'مسح البحث والفلاتر';
 
   @override
   String get productListTitle => 'قائمة المنتجات';

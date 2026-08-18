@@ -140,10 +140,13 @@ class ProductList extends StatelessWidget {
               selectedIds: viewModel.selectedIds,
               onToggleSelect: (product) =>
                   viewModel.toggleSelection(product.id),
-              emptyBuilder: (context) => PointyEmptyState(
-                icon: Icons.inventory_2_outlined,
-                title: l10n.emptyCatalog,
-                action: capabilities.canCreateProduct
+              emptyBuilder: (context) => CatalogEmptyState(
+                query: viewModel.query,
+                emptyMessage: l10n.emptyCatalog,
+                onClear: () => viewModel.applyQuery(
+                  CatalogEmptyState.cleared(viewModel.query),
+                ),
+                emptyAction: capabilities.canCreateProduct
                     ? FilledButton.icon(
                         onPressed: onCreateProduct,
                         icon: const Icon(Icons.add),

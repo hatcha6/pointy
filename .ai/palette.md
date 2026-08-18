@@ -112,3 +112,25 @@ precondition explicitly, so the test fails loudly instead of passing vacuously w
 the field unmounts. If a form must validate reliably end-to-end, it needs
 `SingleChildScrollView` + `Column` rather than `ListView` — flag that as its own
 change, it is a correctness fix, not UX polish.
+
+## 2026-08-19 - A shared empty state carries copy *and* a filter contract
+
+**Learning:** Reusing `CatalogEmptyState` (written for the POS, where the only
+user filter is search + pinned category) on the products management list needed
+two things beyond the widget swap. First, its Arabic copy was category-specific
+("ضمن هذا التصنيف" / "مسح البحث والتصنيف") and reads as wrong once availability,
+supplier, and archived can also blank the list — shared empty-state copy has to
+name the *filters*, not one filter. Second, `ProductQuery` mixes two kinds of
+narrowing: user-set (`search`, `categories`, `availability`, `archived`,
+`supplierId`) and app-set (`stock`, which the POS pins to `inStockOnly` when
+overselling is off, and `preferredSupplierId`, the purchasing supplier boost).
+A "clear filters" button that reset the whole query would silently re-show
+out-of-stock products to a cashier — a correctness regression dressed as UX.
+
+**Action:** Put the split in the widget as `isFiltered`/`cleared` statics next to
+the copy they belong to, so every call site inherits it instead of hand-rolling a
+`copyWith(search: '', categories: const [])` (both existing panes did). Note that
+`copyWith` cannot clear `supplierId` — chain `withSupplier()` first. And when the
+list is genuinely empty, show the "create one" CTA; when it is merely filtered,
+suppress it — inviting a manager to add a product that already exists behind the
+filter is how you get duplicate SKUs.
