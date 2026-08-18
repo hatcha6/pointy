@@ -23,7 +23,7 @@ from apps.discounts.services import (
     DiscountUsageLimitExceeded,
     persist_applied_discounts,
 )
-from apps.catalog.models import ProductVariant
+from apps.catalog.services import preload_line_variants
 from apps.catalog.units import quantize_quantity
 from apps.inventory.models import StockMovement
 from apps.inventory.services import (
@@ -446,29 +446,6 @@ def validate_sale_variants_sellable(lines_data):
         )
 
 
-def preload_checkout_line_variants(lines_data):
-    """Load every line's variant once with the relations checkout reads per line,
-    then swap the enriched instances into ``lines_data``.
-
-    The API resolves each line variant with ``select_related("product")``, but the
-    service still touches ``variant.option_values`` (the display name) and
-    ``product.categories`` (discount eligibility) once per line. Loading them all
-    in a single bulk query turns those per-line reads into a constant few — the
-    checkout is the busiest write path in the shop, run thousands of times a day."""
-    variant_ids = {line_data["variant"].pk for line_data in lines_data}
-    if not variant_ids:
-        return
-    enriched = (
-        ProductVariant.objects.select_related("product")
-        .prefetch_related("option_values__option", "product__categories")
-        .in_bulk(variant_ids)
-    )
-    for line_data in lines_data:
-        preloaded = enriched.get(line_data["variant"].pk)
-        if preloaded is not None:
-            line_data["variant"] = preloaded
-
-
 @transaction.atomic
 def checkout_order(
     *,
@@ -487,7 +464,10 @@ def checkout_order(
 
     settings = ShopSettings.load()
     is_quotation = sale_type == Order.SaleType.QUOTATION
-    preload_checkout_line_variants(lines_data)
+    # Checkout is the busiest write path in the shop, run thousands of times
+    # a day: bulk-load the lines' variants so the per-line product /
+    # categories / option_values reads below cost a constant few queries.
+    preload_line_variants(lines_data)
     validate_sale_variants_sellable(lines_data)
     validate_checkout_loss_sales_allowed(
         settings=settings,

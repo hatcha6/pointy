@@ -7,6 +7,7 @@ from rest_framework import serializers
 from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
 from apps.catalog.models import ProductVariant
+from apps.catalog.services import preload_line_variants
 from apps.catalog.units import (
     UnitConversionError,
     resolve_unit,
@@ -833,6 +834,11 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         coupon_codes = normalized_purchase_discount_codes(attrs)
+        # The PO editor re-previews on every line edit, so the per-line reads
+        # below (product, its categories, and the variant display name in
+        # purchase_preview_line_payloads) are bulk-loaded once up front instead
+        # of costing 3 queries per line.
+        preload_line_variants(attrs["lines"])
         discount_lines = tuple(
             DiscountLineInput(
                 key=str(index),
@@ -840,8 +846,10 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
                 variant_id=line["variant"].pk,
                 quantity=line["quantity"],
                 unit_amount=line["unit_cost"],
+                # .all() (not .values_list) so the preloaded product__categories
+                # prefetch is reused instead of firing a query per line.
                 category_ids=tuple(
-                    line["variant"].product.categories.values_list("id", flat=True)
+                    category.id for category in line["variant"].product.categories.all()
                 ),
             )
             for index, line in enumerate(attrs["lines"])
