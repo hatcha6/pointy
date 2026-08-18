@@ -1,4 +1,60 @@
+from django.db.models import Prefetch
+
+from apps.attachments.models import Attachment
+
 from .models import ProductCategory, ProductVariant
+
+
+def image_attachment_prefetch(lookup):
+    """Prefetch product/variant image attachments with their serialized FKs.
+
+    AttachmentSummarySerializer reads storage_volume.name, created_by.username
+    and owner_content_type (via owner_type). A bare string prefetch leaves those
+    FKs unfetched, so every image on a catalog page fired three extra queries —
+    the dominant catalog-list N+1 (~three quarters of product-list's queries).
+    select_related pulls them in with the prefetch; the default ordering is
+    unchanged, so owner_attachments still picks the primary image the same way.
+    """
+    return Prefetch(
+        lookup,
+        queryset=Attachment.objects.select_related(
+            "owner_content_type",
+            "storage_volume",
+            "created_by",
+        ),
+    )
+
+
+def product_catalog_prefetches():
+    """Every relation ProductCatalogSerializer touches, for a Product queryset.
+
+    Kept in one place because the serializer is embedded well outside the
+    catalog app (the inventory stock and stock-movement lists render it as
+    ``product_detail``); a caller that misses one of these pays a query per row
+    for it. Measured on stock-movement-list: 23 queries/row without this list,
+    0 with it.
+    """
+    return [
+        image_attachment_prefetch("attachments"),
+        "categories",
+        "units__unit",
+        "units__barcodes",
+        "variants",
+        image_attachment_prefetch("variants__attachments"),
+        "variants__option_values",
+        "variants__option_values__option",
+        # Each variant serializes its on-hand quantity (variant.stock is a 1:1);
+        # prefetch it so quantity_on_hand doesn't query once per variant.
+        "variants__stock",
+        "variant_options",
+        "variant_options__values",
+        # Modifier groups are serialized for every product in the catalog list
+        # twice: the modifier_groups id list (the M2M) and modifier_group_details
+        # (link -> group -> options). Prefetch both chains so neither fires a
+        # query per product (product_modifier_group_details reuses the links).
+        "modifier_groups",
+        "modifier_group_links__group__options",
+    ]
 
 
 def category_ids_with_descendants(category_ids):

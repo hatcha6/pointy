@@ -1,6 +1,9 @@
+from decimal import Decimal
+
 import django_filters
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F
+from django.db.models import Count, DecimalField, F, Prefetch, Sum, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
@@ -9,8 +12,11 @@ from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
-from apps.catalog.models import ProductVariant
-from apps.catalog.services import category_ids_with_descendants
+from apps.catalog.models import Product, ProductVariant
+from apps.catalog.services import (
+    category_ids_with_descendants,
+    product_catalog_prefetches,
+)
 from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
@@ -35,6 +41,38 @@ from .stock_count_serializers import (
 )
 
 
+def _product_detail_prefetch():
+    """Prefetch ``variant.product`` with everything ProductCatalogSerializer reads.
+
+    Both inventory lists embed the full ProductCatalogSerializer as
+    ``product_detail``. With only ``select_related("variant__product")`` each row
+    re-expanded its product from scratch — categories, units, sibling variants,
+    option values, modifier groups, image attachments and the on-hand aggregate —
+    at a measured 23 queries per row (a 50-row page ≈ 1150 queries).
+
+    Prefetching the forward FK instead of select_related buys two things: the
+    nested chain below loads in a fixed number of queries, and the products are
+    de-duplicated across rows. That second part is what the real callers hit —
+    the client fetches ``stock-movements/?product=X``, so a whole page of rows
+    shares one product and now expands it once instead of 50 times.
+
+    The stock rollup is annotated here because ``Product.quantity_on_hand`` is an
+    ``.aggregate()`` that no prefetch can satisfy; the serializer prefers the
+    ``stock_quantity_on_hand`` annotation when it is present (mirrors the
+    catalog list's own rollup) and the arithmetic stays identical.
+    """
+    return Prefetch(
+        "variant__product",
+        queryset=Product.objects.annotate(
+            stock_quantity_on_hand=Coalesce(
+                Sum("variants__stock__quantity_on_hand"),
+                Value(Decimal("0")),
+                output_field=DecimalField(max_digits=12, decimal_places=3),
+            ),
+        ).prefetch_related(*product_catalog_prefetches()),
+    )
+
+
 class StockItemFilter(django_filters.FilterSet):
     product = django_filters.NumberFilter(field_name="variant__product_id")
 
@@ -54,7 +92,9 @@ class StockItemViewSet(viewsets.ModelViewSet):
         "partial_update": ("inventory.change_stockitem",),
         "destroy": ("inventory.delete_stockitem",),
     }
-    queryset = StockItem.objects.select_related("variant", "variant__product")
+    queryset = StockItem.objects.select_related("variant").prefetch_related(
+        _product_detail_prefetch(),
+    )
     filterset_class = StockItemFilter
     search_fields = (
         "variant__sku",
@@ -88,9 +128,10 @@ class StockMovementViewSet(
     }
     queryset = StockMovement.objects.select_related(
         "variant",
-        "variant__product",
         "stock_item",
         "created_by",
+    ).prefetch_related(
+        _product_detail_prefetch(),
     )
     filterset_class = StockMovementFilter
     search_fields = (

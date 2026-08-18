@@ -145,3 +145,36 @@ value is money or otherwise carries business arithmetic. Gate the primer on
 `len(rows) > 1` — a 2-query primer is a *regression* on a 1-line payload where
 the cold lookup is 1 query. Measured: `purchaseorder-detail` on a 20-line order
 43 -> 25 queries (1.0 -> 0.05 per line); receive 467 -> 449.
+
+## 2026-08-19 - Prefetch a forward FK to de-duplicate a repeated parent
+
+**Learning:** `select_related("variant__product")` looks like the right tool for
+a serializer that renders `source="variant.product"` — but when the *same*
+product repeats across rows it re-materializes a separate Python instance per
+row, so every nested prefetch the embedded serializer needs is impossible and
+every property-aggregate reruns. `Prefetch("variant__product", queryset=...)` on
+the same forward FK does the opposite: one `pk__in` query, one instance per
+distinct product, shared by every row that points at it, and the inner queryset
+can carry both `annotate()` and the whole nested `prefetch_related` chain.
+Measured on `stock-movements/?product=X` (the shape the Flutter client actually
+requests — a page of movements for ONE product): 8 rows went 187 -> 16 queries,
+and adding 7 more movements of the same product used to cost 161 extra queries
+(26 -> 187) and now costs zero. The generic distinct-product case was 23
+queries/row -> 0.
+
+**Action:** When an embedded serializer hangs off a forward FK whose values
+repeat down the page (`variant.product`, `line.supplier`, `payment.customer`),
+reach for `Prefetch` on that FK, not `select_related`. Two things make it work:
+the inner queryset is rooted at the related model, so `product_catalog_prefetches()`
+composes straight in; and a `.aggregate()`-backed property (`Product.quantity_on_hand`)
+that no prefetch can ever satisfy is killed by annotating the SAME name the
+serializer already checks (`stock_quantity_on_hand`) on that inner queryset —
+no new code path, and a payload-equality test against a cold instance proves
+primed and cold agree.
+
+**Also worth knowing:** the Flutter `StockMovement`/`StockItem` models parse only
+`product` (the id) and the quantity/note fields — **nothing reads `product_detail`
+at all**. The whole embedded product tree is dead weight on the wire. Dropping
+the field is the real fix and is worth ~90% of these payloads, but it is a
+breaking API change (other clients unverified), so it needs its own decision, not
+a ride-along in a prefetch PR.
