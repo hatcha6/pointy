@@ -9,17 +9,20 @@ row at a time. The same shape was on plain ``retrieve`` — ``lines__adjustment_
 and the variants' ``option_values`` were simply missing from the prefetch tree,
 costing ~4 queries per line on the PO details screen.
 
+The last per-line read was ``PurchaseLineSerializer._previous_base_unit_cost``
+(the "cost changed" flag), now batched by ``previous_purchase_lines_for`` into
+two queries for the whole order — see ``test_previous_unit_cost_primer``.
+
 Measured on a 20-line order (sqlite, warm caches):
 
-    receive endpoint   920 -> 467 queries  (43.0 -> 21.0 per line)
-    retrieve           123 ->  43 queries  ( 5.0 ->  1.0 per line)
+    receive endpoint   920 -> 467 -> 449 queries  (43.0 -> 21.0 -> 20.1 per line)
+    retrieve           123 ->  43 ->  25 queries  ( 5.0 ->  1.0 ->  0.05 per line)
 
 The remaining receive slope is the write path itself (stock movement + receipt
 line per line, plus the receipt-quantity aggregates the service must re-read
-after each write). The remaining retrieve slope is
-``PurchaseLineSerializer._previous_base_unit_cost``, which has no annotation on
-the detail path. These bounds guard the serialization side so a dropped prefetch
-fails loudly rather than quietly restoring the N+1.
+after each write); retrieve is now flat. These bounds guard the serialization
+side so a dropped prefetch or primer fails loudly rather than quietly restoring
+the N+1.
 """
 
 from decimal import Decimal
@@ -40,10 +43,12 @@ from .models import Supplier
 
 # The receive write path is inherently per-line (a stock movement, a receipt
 # line, and the receipt-quantity re-reads that must stay live because each write
-# changes them). Measured 21.0; the response serialization contributes ~1.
-MAX_RECEIVE_QUERIES_PER_LINE = 24
-# Only ``_previous_base_unit_cost`` remains per-line on a detail read. Measured 1.0.
-MAX_RETRIEVE_QUERIES_PER_LINE = 2
+# changes them). Measured 20.1; the response serialization no longer contributes.
+MAX_RECEIVE_QUERIES_PER_LINE = 22
+# Nothing per-line is left on a detail read. Measured 0.05 (the primer's second
+# query amortised over 19 lines); the bound stays below 1 so a single restored
+# per-line lookup fails rather than fitting inside the headroom.
+MAX_RETRIEVE_QUERIES_PER_LINE = 0.5
 
 
 @override_settings(

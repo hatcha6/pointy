@@ -42,6 +42,7 @@ from .services import (
     adjust_purchase_order_items,
     create_supplier_payment,
     latest_purchase_line_for_variant,
+    previous_purchase_lines_for,
     purchase_adjustment_line_amount,
     save_purchase_order_with_lines,
     validate_purchase_order_adjustment_allowed,
@@ -152,6 +153,23 @@ class SupplierSerializer(serializers.ModelSerializer):
         ).count()
 
 
+class PurchaseLineListSerializer(serializers.ListSerializer):
+    """Batches the previous-purchase-cost lookup for a whole order's lines, so a
+    purchase-order payload costs 2 queries instead of 1 per line."""
+
+    def to_representation(self, data):
+        # Materialise first (mirroring DRF's own Manager handling) and hand the
+        # same list to the parent, so it serializes the instances we primed.
+        rows = data.all() if isinstance(data, Manager) else data
+        if not isinstance(rows, list):
+            rows = list(rows)
+        # A lone line is cheaper cold (one lookup) than primed (two), so the
+        # primer only earns its keep from two lines up.
+        if len(rows) > 1:
+            self.child.prime_previous_unit_costs(rows)
+        return super().to_representation(rows)
+
+
 class PurchaseLineSerializer(serializers.ModelSerializer):
     product = serializers.IntegerField(source="variant.product_id", read_only=True)
     variant = serializers.PrimaryKeyRelatedField(
@@ -240,6 +258,7 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PurchaseLine
+        list_serializer_class = PurchaseLineListSerializer
         fields = [
             "id",
             "product",
@@ -331,38 +350,49 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         previous_cost = self._previous_unit_cost(line)
         return False if previous_cost is None else line.unit_cost != previous_cost
 
-    _MISSING = object()
+    @staticmethod
+    def _base_unit_cost_of(previous_line):
+        # The previous line's cost PER BASE UNIT, full precision (no money
+        # quantize) so re-scaling to this line's pack doesn't accumulate
+        # rounding into a phantom "cost changed" flag.
+        if previous_line is None:
+            return None
+        factor = previous_line.unit_factor or Decimal("1")
+        if factor <= 0:
+            return previous_line.unit_cost
+        return previous_line.unit_cost / factor
 
-    def _previous_base_unit_cost(self, line):
-        # List views may annotate the previous cost in SQL (one correlated
-        # subquery inside the lines prefetch) — a per-line lookup here would fan
-        # out into a query for every line on the page. Contract: the annotation
-        # is the previous line's cost PER BASE UNIT (unit_cost / unit_factor),
-        # full precision, so it scales cleanly to any pack.
-        annotated = getattr(line, "previous_unit_cost_value", self._MISSING)
-        if annotated is not self._MISSING:
-            return annotated
+    @property
+    def _previous_cost_cache(self):
         if not hasattr(self, "_previous_unit_cost_cache"):
             self._previous_unit_cost_cache = {}
-        if line.pk not in self._previous_unit_cost_cache:
-            previous_line = latest_purchase_line_for_variant(
-                line.variant_id,
-                before_line=line,
+        return self._previous_unit_cost_cache
+
+    def prime_previous_unit_costs(self, lines):
+        """Fill the previous-cost cache for many lines in 2 queries.
+
+        Four serializer fields (previous_unit_cost, unit_cost_change,
+        _change_percent, _changed) all read this one value, and the cache below
+        already collapses them to one lookup per line — this collapses the
+        remaining per-line lookups into one batched pass. Same arithmetic as the
+        cold path, so a primed line and a cold one always agree.
+        """
+        cache = self._previous_cost_cache
+        pending = [line for line in lines if line.pk not in cache]
+        if not pending:
+            return
+        for line_pk, previous_line in previous_purchase_lines_for(pending).items():
+            cache[line_pk] = self._base_unit_cost_of(previous_line)
+
+    def _previous_base_unit_cost(self, line):
+        # Primed in bulk by ``PurchaseLineListSerializer`` when this line is part
+        # of an order's payload; a lone line falls back to its own lookup.
+        cache = self._previous_cost_cache
+        if line.pk not in cache:
+            cache[line.pk] = self._base_unit_cost_of(
+                latest_purchase_line_for_variant(line.variant_id, before_line=line)
             )
-            if previous_line is None:
-                previous_base = None
-            else:
-                # Full precision (no money quantize) so re-scaling to this
-                # line's pack doesn't accumulate rounding into a phantom
-                # "cost changed" flag.
-                factor = previous_line.unit_factor or Decimal("1")
-                previous_base = (
-                    previous_line.unit_cost / factor
-                    if factor > 0
-                    else previous_line.unit_cost
-                )
-            self._previous_unit_cost_cache[line.pk] = previous_base
-        return self._previous_unit_cost_cache[line.pk]
+        return cache[line.pk]
 
     def _previous_unit_cost(self, line):
         # The previous purchase's cost re-expressed in THIS line's unit: the

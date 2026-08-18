@@ -120,3 +120,28 @@ drives the "cost changed" flag), so it deserves its own change with its own
 value-equality test, not a ride-along. Generally: a `getattr(obj, "x", MISSING)`
 optimization hook is dead code the moment its annotator moves — grep for the
 annotator, don't trust the comment.
+**Done 2026-08-18** — but not with a Subquery of the *value*; see below.
+
+## 2026-08-18 - Batch a money lookup by subquerying the ROW ID, not the value
+
+**Learning:** The obvious way to kill the `previous_unit_cost` N+1 was to
+annotate the previous line's cost in SQL — and that means re-expressing
+`unit_cost / unit_factor` (with its `factor <= 0` guard, its full-precision
+no-quantize rule and its NULL handling) as a database expression, i.e. a second
+copy of money arithmetic that can silently disagree with the Python one and flip
+the "cost changed" flag. Annotating the previous line's **pk** instead
+(`Subquery(...values("pk")[:1])`) plus one `in_bulk` reload is still O(1) — two
+queries for the whole order — but the arithmetic stays in the one Python helper
+both paths call, so primed and cold cannot drift. The subquery only has to
+reproduce the *selection* rule, which is testable by value-equality; I verified
+the test has teeth by flipping the ordering to ascending and watching it fail.
+Two other things worth knowing: `created_at` is `auto_now_add`, so
+`created_at__lt=OuterRef("created_at")` already excludes the row itself and the
+`exclude(pk=...)` is redundant; and `in_bulk([])` short-circuits, so an order of
+first-ever purchases costs one query, not two.
+
+**Action:** Prefer id-subquery + bulk reload over value-subquery whenever the
+value is money or otherwise carries business arithmetic. Gate the primer on
+`len(rows) > 1` — a 2-query primer is a *regression* on a 1-line payload where
+the cold lookup is 1 query. Measured: `purchaseorder-detail` on a 20-line order
+43 -> 25 queries (1.0 -> 0.05 per line); receive 467 -> 449.
