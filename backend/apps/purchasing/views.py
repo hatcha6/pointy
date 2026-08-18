@@ -239,11 +239,23 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related(
         "lines__variant__product",
         "lines__receipt_lines",
+        # PurchaseLine.adjusted_quantity/adjustable_quantity sum this relation;
+        # unprefetched they cost 2 aggregate queries per line on every detail
+        # read (the return/refund/exchange affordances the details screen shows).
+        "lines__adjustment_lines",
+        # Every line, receipt line and adjustment line renders its variant's
+        # display_name, which falls back to option_values_label -> the
+        # option_values M2M. Prefetching it (with its `option` FK, which the
+        # label sorts on) turns 1-2 queries per line into 4 for the whole order.
+        "lines__variant__option_values__option",
         "landed_cost_entries",
         "receipts__lines__variant__product",
+        "receipts__lines__variant__option_values__option",
         "receipts__created_by",
         "adjustments__lines__variant__product",
+        "adjustments__lines__variant__option_values__option",
         "adjustments__replacement_lines__variant__product",
+        "adjustments__replacement_lines__variant__option_values__option",
         "adjustments__created_by",
         "adjustments__supplier_credit",
         "audit_events__created_by",
@@ -688,6 +700,24 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             )
         return variant
 
+    def _detail_response(self, purchase_order, *, status_code=status.HTTP_200_OK):
+        """Serialize a just-mutated order through the prefetch-rich queryset.
+
+        The lifecycle actions below hand back an order they loaded bare — the
+        service layer locks it with ``select_for_update().get(...)``, and
+        ``refresh_from_db()`` drops any prefetch cache — so the detail
+        serializer then re-queried every nested line, receipt line, adjustment
+        and variant one row at a time. Re-reading the order through the
+        class-level queryset pays the prefetch tree once instead. Measured on a
+        20-line receive: 495 -> 41 queries for the response payload.
+
+        Deliberately ``self.queryset`` and not ``get_queryset()``: the latter
+        layers the list-only ``?product=``/``?variant=`` filters, which would
+        filter the just-mutated order out of its own response.
+        """
+        order = self.queryset.get(pk=purchase_order.pk)
+        return Response(self.get_serializer(order).data, status=status_code)
+
     @action(detail=False, methods=["post"], url_path="pos-cash-purchase")
     def pos_cash_purchase(self, request):
         """Drawer purchase from the sell screen: the posted PO is created,
@@ -706,9 +736,9 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             request=request,
             validated_data=serializer.validated_data,
         )
-        return Response(
-            self.get_serializer(purchase_order).data,
-            status=status.HTTP_201_CREATED,
+        return self._detail_response(
+            purchase_order,
+            status_code=status.HTTP_201_CREATED,
         )
 
     @action(detail=True, methods=["post"])
@@ -720,9 +750,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     def _submit(self, request):
         purchase_order = submit_purchase_order(self.get_object(), request=request)
-        return Response(
-            self.get_serializer(purchase_order).data,
-        )
+        return self._detail_response(purchase_order)
 
     @action(detail=True, methods=["post"])
     def receive(self, request, pk=None):
@@ -734,23 +762,25 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     def _receive(self, request):
         lines_data = None
         notes = ""
+        # One load, not one per use: get_object() re-runs the whole detail
+        # prefetch tree (and the object-permission check) on every call, and a
+        # partial receipt used to call it twice.
+        purchase_order = self.get_object()
         if request.data:
             serializer = PurchaseReceiptInputSerializer(
                 data=request.data,
-                context={"purchase_order": self.get_object()},
+                context={"purchase_order": purchase_order},
             )
             serializer.is_valid(raise_exception=True)
             lines_data = serializer.validated_data["validated_lines"]
             notes = serializer.validated_data.get("notes", "")
         purchase_order = receive_purchase_order(
-            self.get_object(),
+            purchase_order,
             request=request,
             lines_data=lines_data,
             notes=notes,
         )
-        return Response(
-            self.get_serializer(purchase_order).data,
-        )
+        return self._detail_response(purchase_order)
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
@@ -761,9 +791,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
 
     def _cancel(self, request):
         purchase_order = cancel_purchase_order(self.get_object(), request=request)
-        return Response(
-            self.get_serializer(purchase_order).data,
-        )
+        return self._detail_response(purchase_order)
 
     @action(detail=True, methods=["post"], url_path="return-items")
     def return_items(self, request, pk=None):
@@ -791,8 +819,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        purchase_order.refresh_from_db()
-        return Response(self.get_serializer(purchase_order).data)
+        return self._detail_response(purchase_order)
 
     def destroy(self, request, *args, **kwargs):
         purchase_order = self.get_object()
