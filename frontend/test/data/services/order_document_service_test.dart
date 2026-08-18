@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -546,6 +547,88 @@ void main() {
         expect(widths.every((w) => (w - mm(58)).abs() < 1), isTrue);
       }
     });
+
+    // Opt-in: writes standard/compact receipt rolls at every thermal width so
+    // they can be eyeballed or replayed onto a real printer.
+    // Run with POINTY_ROLL_DUMP=<dir>.
+    test('writes standard/compact receipt rolls when POINTY_ROLL_DUMP set', () async {
+      final dumpDir = Platform.environment['POINTY_ROLL_DUMP'];
+      if (dumpDir == null || dumpDir.isEmpty) {
+        return;
+      }
+      Directory(dumpDir).createSync(recursive: true);
+      // The default loader reads the asset bundle, which is unavailable here,
+      // so Arabic would silently fall back to Helvetica. Load the real fonts
+      // off disk — the dump exists precisely to inspect Arabic rendering.
+      const dumpService = OrderDocumentService(
+        fontLoader: _FileFontLoader(),
+      );
+      final order = _saleOrder(
+        receiptNumber: 'R-2026-0042',
+        customerName: 'أحمد المهدي',
+        subtotal: 41,
+        total: 41,
+        createdAt: DateTime(2026, 8, 18, 14, 30),
+        lines: const [
+          SaleOrderLine(
+            id: 1,
+            productId: 10,
+            variantId: 0,
+            quantity: 2,
+            returnedQuantity: 0,
+            returnableQuantity: 2,
+            unitLabel: 'قطعة',
+            unitPrice: 5,
+            total: 10,
+            productName: 'شاي أخضر سيلاني ٢٠٠ جرام',
+          ),
+          SaleOrderLine(
+            id: 2,
+            productId: 11,
+            variantId: 0,
+            quantity: 3,
+            returnedQuantity: 0,
+            returnableQuantity: 3,
+            unitLabel: 'كرتونة',
+            unitPrice: 6,
+            total: 18,
+            productName: 'قهوة عربية مطحونة',
+          ),
+          SaleOrderLine(
+            id: 3,
+            productId: 12,
+            variantId: 0,
+            quantity: 1,
+            returnedQuantity: 0,
+            returnableQuantity: 1,
+            unitLabel: 'قطعة',
+            unitPrice: 13,
+            total: 13,
+            productName: 'شامبو للأطفال ٤٠٠ مل خالي من الدموع',
+          ),
+        ],
+      );
+
+      for (final (size, mmWidth) in const [
+        (PdfPageSize.roll58, 58),
+        (PdfPageSize.roll70, 70),
+        (PdfPageSize.roll80, 80),
+      ]) {
+        for (final compact in const [false, true]) {
+          final bytes = await dumpService.buildSaleInvoiceBytes(
+            order: order,
+            shopSettings: _settings,
+            pageSize: size,
+            compact: compact,
+          );
+          final tag = compact ? 'compact' : 'standard';
+          await File(
+            '$dumpDir/$tag-$mmWidth.pdf',
+          ).writeAsBytes(bytes, flush: true);
+        }
+      }
+      expect(Directory(dumpDir).listSync(), isNotEmpty);
+    });
   });
 }
 
@@ -667,3 +750,23 @@ const _settings = ShopSettings(
   cardCommissionPercent: 0,
   transferCommissionPercent: 0,
 );
+
+/// Loads the bundled Arabic TTFs straight off disk so dumped PDFs shape Arabic
+/// correctly (the asset bundle is not available under `flutter test`).
+class _FileFontLoader extends PointyPdfFontLoader {
+  const _FileFontLoader();
+
+  @override
+  Future<PointyPdfFontData> loadData() async {
+    final base = await File(
+      'assets/fonts/IBMPlexSansArabic-Regular.ttf',
+    ).readAsBytes();
+    final bold = await File(
+      'assets/fonts/IBMPlexSansArabic-Bold.ttf',
+    ).readAsBytes();
+    return TtfPointyPdfFontData(
+      base: ByteData.view(Uint8List.fromList(base).buffer),
+      bold: ByteData.view(Uint8List.fromList(bold).buffer),
+    );
+  }
+}

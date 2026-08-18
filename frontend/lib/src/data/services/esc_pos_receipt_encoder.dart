@@ -213,6 +213,14 @@ class EscPosReceiptEncoder {
     }
     bytes.addAll(generator.hr());
 
+    // Compact receipts drop to Font B and fold each item onto a single row;
+    // the normal receipt keeps Font A and the roomier name-then-detail block.
+    final itemWidth = _charsPerLine(endpoint.paperWidthMm, dense: dense);
+    final itemStyles = PosStyles(
+      align: PosAlign.right,
+      codeTable: codeTable,
+      fontType: dense ? PosFontType.fontB : PosFontType.fontA,
+    );
     for (final rawLine in lines) {
       final line = _map(rawLine);
       final name = _string(
@@ -221,35 +229,26 @@ class EscPosReceiptEncoder {
       );
       final quantity = _string(line['quantity'], fallback: '1');
       final unitLabel = _string(line['unit_label'], fallback: '');
-      for (final wrappedName in _wrap(
-        name,
-        _charsPerLine(endpoint.paperWidthMm),
-      )) {
-        bytes.addAll(
-          _text(
-            generator,
-            wrappedName,
-            styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
-          ),
-        );
-      }
       // "2 صندوق × 12.000 = 24.000" — the unit makes pack sales unambiguous.
       final quantityLabel = unitLabel.isEmpty
           ? quantity
           : '$quantity $unitLabel';
       final lineDetails =
           '$quantityLabel × ${_money(line['unit_price'])} = ${_money(line['line_total'])}';
-      for (final wrappedDetail in _wrap(
-        lineDetails,
-        _charsPerLine(endpoint.paperWidthMm),
-      )) {
-        bytes.addAll(
-          _text(
-            generator,
-            wrappedDetail,
-            styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
-          ),
-        );
+
+      final compactRow = dense
+          ? _compactItemRow(name, lineDetails, itemWidth)
+          : null;
+      if (compactRow != null) {
+        bytes.addAll(_text(generator, compactRow, styles: itemStyles));
+        continue;
+      }
+
+      for (final wrappedName in _wrap(name, itemWidth)) {
+        bytes.addAll(_text(generator, wrappedName, styles: itemStyles));
+      }
+      for (final wrappedDetail in _wrap(lineDetails, itemWidth)) {
+        bytes.addAll(_text(generator, wrappedDetail, styles: itemStyles));
       }
     }
 
@@ -263,6 +262,10 @@ class EscPosReceiptEncoder {
           bold: true,
           height: _emphasisHeight(dense),
           codeTable: codeTable,
+          // Pinned to Font A: the items above switch the printer to Font B and
+          // it stays there. The total is the one line that must stay big even
+          // on a compact slip.
+          fontType: PosFontType.fontA,
         ),
       ),
     );
@@ -1091,14 +1094,40 @@ class EscPosReceiptEncoder {
     return QRSize.size5;
   }
 
-  int _charsPerLine(int paperWidthMm) {
+  /// Characters that fit on one line. [dense] reports the capacity of the
+  /// smaller Font B, which compact receipts use for body text — a third more
+  /// characters per line on every paper size, which is where most of the paper
+  /// saving comes from. Mirrors the generator's own Font A/Font B table, so
+  /// truncation here matches what the printer actually lays out.
+  int _charsPerLine(int paperWidthMm, {bool dense = false}) {
     if (paperWidthMm <= 58) {
-      return 32;
+      return dense ? 42 : 32;
     }
     if (paperWidthMm <= 72) {
-      return 42;
+      return dense ? 56 : 42;
     }
-    return 48;
+    return dense ? 64 : 48;
+  }
+
+  /// One-row item line for compact receipts: `اسم المنتج 2 × 12.000 = 24.000`.
+  ///
+  /// The money detail is never truncated — it is the part that has to
+  /// reconcile — so the name gives up the space instead. Returns null when the
+  /// detail alone leaves no usable room for a name (a long unit label on
+  /// 58 mm), letting the caller fall back to the regular two-block layout
+  /// rather than print an unreadable stub.
+  String? _compactItemRow(String name, String details, int width) {
+    final trimmedName = name.trim();
+    final room = width - details.length - 1;
+    if (room < 4) {
+      return null;
+    }
+    if (trimmedName.length <= room) {
+      return '$trimmedName $details';
+    }
+    // Trailing dot marks the clip. Plain ASCII on purpose: '…' has no place in
+    // CP864/CP1256 and would print as noise.
+    return '${trimmedName.substring(0, room - 1).trimRight()}. $details';
   }
 
   List<String> _wrap(String value, int width) {
