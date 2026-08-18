@@ -1,14 +1,13 @@
-"""Regression tests: the inventory list endpoints must issue a constant number
-of queries regardless of how many rows are on the page.
+"""Regression tests for the inventory list endpoints' payload and query cost.
 
-Both ``stock/`` and ``stock-movements/`` embed the full ``ProductCatalogSerializer``
-as ``product_detail``. The viewsets only ``select_related`` variant/product, so
-every deep relation that serializer reads (categories, units, variants,
-option_values, modifier groups, image attachments, on-hand stock) fired once per
-row. These tests lock the query count flat as the row count grows.
+Both ``stock/`` and ``stock-movements/`` used to embed the full
+``ProductCatalogSerializer`` as ``product_detail`` — an entire product tree
+(categories, units, sibling variants, option values, modifier groups, image
+attachments, on-hand stock) on every row, which no client read, at a measured 23
+queries per row. The field is gone; these tests keep it gone and lock the query
+count flat as the row count grows.
 """
 
-import json
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -18,8 +17,7 @@ from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
-from rest_framework.request import Request
-from rest_framework.test import APIClient, APIRequestFactory
+from rest_framework.test import APIClient
 
 from apps.attachments.models import Attachment, StorageVolume
 from apps.catalog.models import (
@@ -32,7 +30,6 @@ from apps.catalog.models import (
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 
 from .models import StockItem, StockMovement
-from .serializers import StockMovementSerializer
 
 
 @override_settings(
@@ -172,44 +169,19 @@ class InventoryListQueryScalingTests(TestCase):
             f"a shared product re-expanded per row: {one} -> {many} queries",
         )
 
-    def test_product_detail_payload_is_unchanged_by_the_prefetch(self):
-        """The prefetch/annotation must be invisible in the response body.
+    def test_rows_carry_no_embedded_product_tree(self):
+        """The heavy ``product_detail`` field stays gone from both endpoints.
 
-        ``quantity_on_hand`` now comes from an annotation instead of
-        ``Product.quantity_on_hand``'s aggregate, so compare the tuned payload
-        against one rendered from a bare (un-prefetched, un-annotated) instance.
+        Each row keeps the identifiers a caller needs to fetch the product from
+        the catalog endpoints (``product``, ``variant``, sku and names) — just
+        not an inlined copy of it.
         """
-        self._add_rows(2)
-        # The annotation sums over every variant of the product, so cover a
-        # product with a second variant that has stock and a third with no stock
-        # row at all — the shapes where a Sum and the aggregate could disagree.
-        product = Product.objects.order_by("id").first()
-        sibling = ProductVariant.objects.create(
-            product=product,
-            name="sibling",
-            sku="SIB",
-            unit_price=Decimal("5"),
-            is_active=True,
-        )
-        StockItem.objects.create(variant=sibling, quantity_on_hand=Decimal("4"))
-        ProductVariant.objects.create(
-            product=product,
-            name="stockless",
-            sku="NOSTOCK",
-            unit_price=Decimal("5"),
-            is_active=True,
-        )
-
-        response = self.client.get(reverse("stockmovement-list"))
-        self.assertEqual(response.status_code, 200)
-        rows = response.data["results"]
-        self.assertEqual(len(rows), 2)
-        # Same context as the view, so attachment URLs stay absolute either way.
-        context = {"request": Request(APIRequestFactory().get("/"))}
-        for row in rows:
-            cold = StockMovement.objects.get(pk=row["id"])
-            expected = StockMovementSerializer(cold, context=context).data
-            self.assertEqual(
-                json.loads(json.dumps(row, default=str)),
-                json.loads(json.dumps(expected, default=str)),
-            )
+        self._add_rows(1)
+        for url in (reverse("stockitem-list"), reverse("stockmovement-list")):
+            row = self.client.get(url).data["results"][0]
+            self.assertNotIn("product_detail", row)
+            self.assertIn("product", row)
+            self.assertIn("variant", row)
+            self.assertEqual(row["variant_sku"], "S1")
+            self.assertEqual(row["variant_name"], "v1")
+            self.assertEqual(row["variant_full_name"], "p1 - v1")
