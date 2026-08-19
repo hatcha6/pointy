@@ -1,4 +1,63 @@
+from django.db.models import Prefetch
+
+from apps.attachments.models import Attachment
+
 from .models import ProductCategory, ProductVariant
+
+
+def image_attachment_prefetch(lookup):
+    """Prefetch product/variant image attachments with their serialized FKs.
+
+    AttachmentSummarySerializer reads storage_volume.name, created_by.username
+    and owner_content_type (via owner_type). A bare string prefetch leaves those
+    FKs unfetched, so every image on a catalog page fired three extra queries —
+    the dominant catalog-list N+1 (~three quarters of product-list's queries).
+    select_related pulls them in with the prefetch; the default ordering is
+    unchanged, so owner_attachments still picks the primary image the same way.
+    """
+    return Prefetch(
+        lookup,
+        queryset=Attachment.objects.select_related(
+            "owner_content_type",
+            "storage_volume",
+            "created_by",
+        ),
+    )
+
+
+def variant_detail_queryset():
+    """Every relation ``ProductVariantSerializer`` reads, in one queryset.
+
+    The prefetch shape belongs to the *serializer*, not to one viewset: any
+    endpoint that embeds this serializer pays 15 queries per row without it
+    (the parent product tree, the image attachments' own FKs, the 1:1 stock
+    row behind ``quantity_on_hand``). Callers that nest it under a document
+    line use it as ``Prefetch("variant", queryset=variant_detail_queryset())``
+    so a new serializer field can never be fast in one endpoint and an N+1 in
+    another.
+    """
+    return ProductVariant.objects.select_related(
+        "product",
+        # quantity_on_hand reads the 1:1 stock row; without this it queried
+        # inventory once per variant.
+        "stock",
+    ).prefetch_related(
+        image_attachment_prefetch("attachments"),
+        image_attachment_prefetch("product__attachments"),
+        "product__units__unit",
+        "product__units__barcodes",
+        "option_values",
+        "option_values__option",
+        # product_detail (ProductCatalogSummarySerializer) serializes the parent
+        # product's categories, variant options and modifier groups; prefetch
+        # those chains so each doesn't fire once per variant.
+        Prefetch(
+            "product__categories",
+            queryset=ProductCategory.objects.select_related("parent"),
+        ),
+        "product__variant_options__values",
+        "product__modifier_group_links__group__options",
+    )
 
 
 def category_ids_with_descendants(category_ids):
