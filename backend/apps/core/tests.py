@@ -1690,6 +1690,109 @@ class RelayBackendApiTests(TestCase):
         self.assertIsNotNone(installation.connector_last_seen_at)
         self.assertEqual(installation.connector_version, "pointy-relay/test")
 
+    def test_connector_heartbeat_rejects_blank_stored_connector_token(self):
+        """An installation seeded without a connector token must not authenticate
+        every anonymous caller.
+
+        ``ensure_relay_installation`` builds the on-prem installation straight
+        from the env credentials, and ``POINTY_RELAY_CONNECTOR_TOKEN`` is
+        optional there — so ``connector_token`` is legitimately "" on a shop that
+        never provisioned the tunnel. A bare ``compare_digest`` then matches the
+        equally-empty missing header, handing an unauthenticated caller the
+        connector's own identity.
+        """
+        installation = RelayInstallation.objects.create(
+            installation_id="installation-blank",
+            shop_name="متجر بلا موصّل",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="",
+            access_token="ptr1.installation-blank.access-secret",
+        )
+
+        anonymous = APIClient().post(
+            reverse("relay-connector-heartbeat"),
+            {"version": "attacker/1.0"},
+            format="json",
+        )
+        explicit_blank = APIClient().post(
+            reverse("relay-connector-heartbeat"),
+            {"version": "attacker/1.0"},
+            format="json",
+            HTTP_X_POINTY_CONNECTOR_TOKEN="",
+        )
+
+        self.assertEqual(anonymous.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(explicit_blank.status_code, status.HTTP_403_FORBIDDEN)
+        installation.refresh_from_db()
+        self.assertIsNone(installation.connector_last_seen_at)
+        self.assertEqual(installation.connector_version, "")
+
+    def test_connector_heartbeat_rejects_non_ascii_token_without_erroring(self):
+        """A non-ASCII token header is a rejected credential, not a 500.
+
+        ``secrets.compare_digest`` raises ``TypeError`` on non-ASCII ``str``, and
+        Django decodes headers as latin-1, so any high byte in the header turned
+        an anonymous request into a server error.
+        """
+        RelayInstallation.objects.create(
+            installation_id="installation-2",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-2.connector-secret",
+            access_token="ptr1.installation-2.access-secret",
+        )
+
+        response = APIClient().post(
+            reverse("relay-connector-heartbeat"),
+            {"version": "pointy-relay/test"},
+            format="json",
+            HTTP_X_POINTY_CONNECTOR_TOKEN="ptc1.installation-2.connector-sécret",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_diagnostics_export_rejects_non_ascii_token_without_erroring(self):
+        RelayInstallation.objects.create(
+            installation_id="installation-3",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-3.connector-secret",
+            access_token="ptr1.installation-3.access-secret",
+        )
+
+        response = APIClient().get(
+            reverse("relay-diagnostics-analytics-export"),
+            HTTP_X_POINTY_CONNECTOR_TOKEN="ptc1.installation-3.connector-sécret",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_connector_config_rejects_blank_stored_connector_token_as_renewal(self):
+        """The renewal path already guards blanks; pin it so it stays guarded."""
+        RelayInstallation.objects.create(
+            installation_id="installation-blank-2",
+            shop_name="متجر بلا موصّل",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="",
+            access_token="ptr1.installation-blank-2.access-secret",
+        )
+
+        response = APIClient().post(
+            reverse("relay-connector-config"),
+            {"csr_pem": ""},
+            format="json",
+            REMOTE_ADDR="192.168.1.10",
+        )
+
+        # Falls through to the setup-token gate rather than being treated as an
+        # authenticated renewal.
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("setup token", response.json()["detail"])
+
 
 class RelayDiagnosticsAnalyticsExportTests(TestCase):
     def setUp(self):

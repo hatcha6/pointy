@@ -49,6 +49,34 @@ from .relay_serializers import (
 )
 
 
+CONNECTOR_TOKEN_HEADER = "X-Pointy-Connector-Token"
+
+
+def connector_token_accepted(installation, provided_token):
+    """Is ``provided_token`` this installation's connector token?
+
+    The three connector-authenticated endpoints below all gate on this one
+    secret, and every caveat lives here rather than in three hand-rolled copies:
+
+    * A blank stored token is never a credential. ``connector_token`` is
+      legitimately "" on a shop seeded from env credentials without
+      ``POINTY_RELAY_CONNECTOR_TOKEN`` (see ``ensure_relay_installation``), and a
+      bare ``compare_digest`` would then match the equally-empty missing header
+      and authenticate every anonymous caller.
+    * ``secrets.compare_digest`` raises on non-ASCII ``str``. Django decodes
+      request headers as latin-1, so any high byte a caller sends would surface
+      as a 500 instead of a rejected credential.
+    """
+    stored = str(getattr(installation, "connector_token", "") or "")
+    provided = str(provided_token or "")
+    if not stored or not provided:
+        return False
+    try:
+        return secrets.compare_digest(provided, stored)
+    except TypeError:  # non-ASCII header value — not a credential
+        return False
+
+
 class DiscoveryServiceView(views.APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -219,7 +247,7 @@ class RelayConnectorConfigView(views.APIView):
         installation = RelayInstallation.load()
         is_renewal = self._valid_connector_token(
             installation,
-            request.headers.get("X-Pointy-Connector-Token", ""),
+            request.headers.get(CONNECTOR_TOKEN_HEADER, ""),
         )
         setup_token = ""
         if not is_renewal:
@@ -278,13 +306,7 @@ class RelayConnectorConfigView(views.APIView):
     def _valid_connector_token(self, installation, provided_token):
         if installation is None:
             return False
-        token = str(provided_token or "")
-        # Reject blanks explicitly: an empty stored connector_token (e.g. a
-        # misconfigured config bootstrap) would otherwise compare-equal to an
-        # empty provided token and bypass the one-time setup-token gate.
-        if not token or not installation.connector_token:
-            return False
-        return secrets.compare_digest(token, installation.connector_token)
+        return connector_token_accepted(installation, provided_token)
 
     def _issue_connector_certificate(self, installation, csr_pem):
         if not csr_pem.strip():
@@ -329,8 +351,8 @@ class RelayConnectorHeartbeatView(views.APIView):
                 {"detail": "relay installation is not configured"},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        provided_token = request.headers.get("X-Pointy-Connector-Token", "")
-        if not secrets.compare_digest(provided_token, installation.connector_token):
+        provided_token = request.headers.get(CONNECTOR_TOKEN_HEADER, "")
+        if not connector_token_accepted(installation, provided_token):
             return Response(
                 {"detail": "connector token rejected"},
                 status=status.HTTP_403_FORBIDDEN,
@@ -382,10 +404,8 @@ class RelayDiagnosticsAnalyticsExportView(views.APIView):
                 {"detail": "relay installation is not configured"},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        provided_token = request.headers.get("X-Pointy-Connector-Token", "")
-        if not installation.connector_token or not secrets.compare_digest(
-            provided_token, installation.connector_token
-        ):
+        provided_token = request.headers.get(CONNECTOR_TOKEN_HEADER, "")
+        if not connector_token_accepted(installation, provided_token):
             return Response(
                 {"detail": "connector token rejected"},
                 status=status.HTTP_403_FORBIDDEN,
