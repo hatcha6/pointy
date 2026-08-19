@@ -10075,6 +10075,26 @@ class AppLocalizationsAr extends AppLocalizations {
   String get showAllLoansButton => 'عرض كل السلف';
 
   @override
+  String get approveEmployeeLoanConfirmTitle => 'الموافقة على السلفة؟';
+
+  @override
+  String approveEmployeeLoanConfirmMessage(
+    String employee,
+    String amount,
+    String monthly,
+  ) {
+    return 'سيتم اعتماد سلفة $employee بمبلغ $amount، ويُخصم $monthly من الراتب كل شهر حتى السداد. لا يمكن التراجع عن القرار.';
+  }
+
+  @override
+  String get rejectEmployeeLoanConfirmTitle => 'رفض طلب السلفة؟';
+
+  @override
+  String rejectEmployeeLoanConfirmMessage(String employee, String amount) {
+    return 'سيتم رفض طلب $employee بمبلغ $amount. لا يمكن التراجع عن القرار، وسيلزم تقديم طلب جديد.';
+  }
+
+  @override
   String get approvePayrollConfirmTitle => 'اعتماد مسير الرواتب؟';
 
   @override

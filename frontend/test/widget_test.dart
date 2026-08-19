@@ -4280,6 +4280,13 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('pending_loan_approve_4')));
     await tester.pumpAndSettle();
 
+    // Approving a loan is one-way, so the card asks before committing.
+    expect(find.text('الموافقة على السلفة؟'), findsOneWidget);
+    expect(loansCard, findsOneWidget);
+
+    await tester.tap(find.text('موافقة').last);
+    await tester.pumpAndSettle();
+
     // Approved request leaves the attention card with nothing to show.
     expect(loansCard, findsNothing);
   });

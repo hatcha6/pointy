@@ -17547,6 +17547,34 @@ abstract class AppLocalizations {
   /// **'عرض كل السلف'**
   String get showAllLoansButton;
 
+  /// No description provided for @approveEmployeeLoanConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموافقة على السلفة؟'**
+  String get approveEmployeeLoanConfirmTitle;
+
+  /// Approve employee loan confirmation body.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم اعتماد سلفة {employee} بمبلغ {amount}، ويُخصم {monthly} من الراتب كل شهر حتى السداد. لا يمكن التراجع عن القرار.'**
+  String approveEmployeeLoanConfirmMessage(
+    String employee,
+    String amount,
+    String monthly,
+  );
+
+  /// No description provided for @rejectEmployeeLoanConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفض طلب السلفة؟'**
+  String get rejectEmployeeLoanConfirmTitle;
+
+  /// Reject employee loan confirmation body.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم رفض طلب {employee} بمبلغ {amount}. لا يمكن التراجع عن القرار، وسيلزم تقديم طلب جديد.'**
+  String rejectEmployeeLoanConfirmMessage(String employee, String amount);
+
   /// No description provided for @approvePayrollConfirmTitle.
   ///
   /// In ar, this message translates to:
