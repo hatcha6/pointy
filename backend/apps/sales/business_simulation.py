@@ -63,7 +63,12 @@ from apps.discounts.models import DiscountRule
 from apps.expenses.models import Expense, ExpenseCategory
 from apps.expenses.services import create_expense
 from apps.inventory.models import StockItem, StockMovement
-from apps.purchasing.models import PurchaseOrder, Supplier, SupplierPayment
+from apps.purchasing.models import (
+    PurchaseOrder,
+    Supplier,
+    SupplierPayment,
+    prime_supplier_balances,
+)
 from apps.purchasing.services import (
     create_supplier_payment,
     receive_purchase_order,
@@ -527,6 +532,39 @@ class PoRec:
     subtotal: Decimal = ZERO
     extra_discount: Decimal = ZERO
     landed_cost_total: Decimal = ZERO
+
+    @property
+    def cancelled_value(self) -> Decimal:
+        """The goods value of every unit a receipt closed as cancelled.
+
+        Built from this record's own inputs only — the quantity the line was
+        ordered at, the ``net_line_total`` the oracle computed for it, and the
+        cancelled counts the simulation itself handed to the receipt. Nothing
+        here is read back from the backend, so asserting the backend's
+        ``cancelled_total`` against it is a real check rather than a restatement.
+
+        Multiply before dividing so a wholly cancelled line comes out at
+        exactly its net value and the order settles at zero.
+        """
+        exact = ZERO
+        for line in self.lines:
+            ordered = Decimal(line.quantity)
+            if ordered <= 0 or line.recv_cancelled <= 0:
+                continue
+            cancelled = min(Decimal(line.recv_cancelled), ordered)
+            exact += line.net_line_total * cancelled / ordered
+        return even2(exact)
+
+    @property
+    def billable(self) -> Decimal:
+        """What the supplier can still invoice: the ordered total less the
+        goods that were cancelled at the door. Landed costs stay in — the
+        freight was incurred on the shipment that did arrive."""
+        return max(even2(self.total - self.cancelled_value), ZERO)
+
+    @property
+    def po_balance_due(self) -> Decimal:
+        return max(even2(self.billable - self.paid), ZERO)
 
 
 class Oracle:
@@ -1848,6 +1886,7 @@ class Simulation:
             else PurchaseOrder.Status.PARTIALLY_RECEIVED
         )
         self._assert_po(rec.po_id, expected_status=expected_status)
+        self._assert_supplier_ap(rec.supplier_id)
         for line, *_ in plan:
             self._assert_variant(line.variant_id)
         return True
@@ -1879,12 +1918,12 @@ class Simulation:
         candidates = [
             rec
             for rec in self.oracle.pos.values()
-            if even2(rec.total - rec.paid) > ZERO
+            if rec.po_balance_due > ZERO
         ]
         if not candidates:
             return False
         rec = self.rng.choice(candidates)
-        balance = even2(rec.total - rec.paid)
+        balance = rec.po_balance_due
         amount = (Decimal(self.rng.randint(1, int(balance / CENT))) * CENT).quantize(CENT)
         method = self.rng.choice(self.SUPPLIER_METHODS)
         create_supplier_payment(
@@ -1896,6 +1935,7 @@ class Simulation:
         )
         rec.paid = even2(rec.paid + amount)
         self._assert_po(rec.po_id)
+        self._assert_supplier_ap(rec.supplier_id)
         return True
 
     def op_expense_payout(self) -> bool:
@@ -2207,13 +2247,53 @@ class Simulation:
             backend, self.oracle.customer_ar(customer_id), f"customer#{customer_id} AR"
         )
 
+    def _assert_supplier_ap(self, supplier_id: int):
+        """Accounts payable to one supplier, checked against both of the
+        backend's implementations.
+
+        ``Supplier.payable_balance`` computes it per supplier, while
+        ``prime_supplier_balances`` recomputes the same figure in bulk SQL for
+        list pages and reports — two ports of one number that can drift apart.
+        The expectation is the oracle's own: the sum of what each of this
+        supplier's orders can still be invoiced for, less what has been paid
+        against it.
+        """
+        expected = even2(
+            sum(
+                (
+                    rec.po_balance_due
+                    for rec in self.oracle.pos.values()
+                    if rec.supplier_id == supplier_id
+                ),
+                ZERO,
+            )
+        )
+        cold = Supplier.objects.get(pk=supplier_id)
+        self.assert_money(
+            cold.payable_balance, expected, f"supplier#{supplier_id} payable"
+        )
+        primed = prime_supplier_balances([Supplier.objects.get(pk=supplier_id)])[0]
+        self.assert_money(
+            primed.payable_balance,
+            expected,
+            f"supplier#{supplier_id} payable (primed)",
+        )
+
     def _assert_po(self, po_id: int, expected_status=None):
         rec = self.oracle.pos[po_id]
         po = PurchaseOrder.objects.get(pk=po_id)
         self.assert_money(po.total, rec.total, f"po#{po_id} total")
         self.assert_money(po.paid_total, rec.paid, f"po#{po_id} paid_total")
+        # A short shipment must stop billing for what never came: the units a
+        # receipt cancelled can never arrive and can never be returned either
+        # (only accepted units are adjustable), so an order that keeps them on
+        # its balance leaves a payable nothing can ever clear.
         self.assert_money(
-            po.balance_due, max(even2(rec.total - rec.paid), ZERO), f"po#{po_id} balance_due"
+            po.cancelled_total, rec.cancelled_value, f"po#{po_id} cancelled_total"
+        )
+        self.assert_money(po.billable_total, rec.billable, f"po#{po_id} billable_total")
+        self.assert_money(
+            po.balance_due, rec.po_balance_due, f"po#{po_id} balance_due"
         )
         if expected_status is not None:
             self.assert_equal(po.status, expected_status, f"po#{po_id} status")

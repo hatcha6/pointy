@@ -544,8 +544,12 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         # Filter, sort, and paginate in SQL — loading every received order to
         # compute ``balance_due`` in Python hangs the purchases screen once the
         # table grows (each order also drags its prefetch trees along).
-        # ``balance_due > 0`` is ``total > sum(all supplier payments)`` because
-        # paid_total + credit_applied_total together cover every payment method.
+        # ``balance_due > 0`` is ``billable total > sum(all supplier payments)``
+        # because paid_total + credit_applied_total together cover every payment
+        # method. The billable total nets off ``cancelled_total`` — goods a
+        # receipt closed as never-arriving — so an order settled in full for
+        # what actually turned up stops being listed as outstanding instead of
+        # sitting on the payables screen forever.
         # A correlated subquery keeps that sum immune to row inflation from any
         # multi-valued joins (e.g. the product/variant line filters).
         paid = (
@@ -564,9 +568,10 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                     Subquery(paid, output_field=money),
                     Value(Decimal("0.00")),
                     output_field=money,
-                )
+                ),
+                billable_amount=F("total") - F("cancelled_total"),
             )
-            .filter(total__gt=F("paid_amount"))
+            .filter(billable_amount__gt=F("paid_amount"))
             # Most urgent first: dated orders by earliest due date, undated ones
             # last, most recently received breaking ties.
             .order_by(
