@@ -1,7 +1,6 @@
-import hmac
-
 from rest_framework.permissions import BasePermission
 
+from apps.core.credentials import constant_time_secret_equal
 from apps.core.discovery import request_is_private_network
 
 from .models import MessagingGateway
@@ -33,7 +32,7 @@ class IsGatewayPeer(BasePermission):
         expected_token = gateway.get_secret("webhook_token")
         if expected_token:
             provided = request.query_params.get("token", "")
-            if not hmac.compare_digest(expected_token, provided or ""):
+            if not constant_time_secret_equal(provided, expected_token):
                 return False
             view.gateway = gateway
             return True

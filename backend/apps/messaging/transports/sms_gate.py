@@ -18,6 +18,8 @@ import hmac
 
 import requests
 
+from apps.core.credentials import constant_time_secret_equal
+
 from .base import MessagingTransport, SendResult, register
 
 # event -> which of our webhooks it targets (inbound thread vs delivery receipt).
@@ -130,7 +132,7 @@ class SmsGateDriver(MessagingTransport):
         raw = request.body if isinstance(request.body, (bytes, bytearray)) else str(request.body).encode()
         signed = raw + str(timestamp).encode("utf-8")
         digest = hmac.new(key.encode("utf-8"), signed, hashlib.sha256).hexdigest()
-        return hmac.compare_digest(digest, signature)
+        return constant_time_secret_equal(signature, digest)
 
     def parse_inbound(self, request) -> dict:
         data = request.data if isinstance(request.data, dict) else {}

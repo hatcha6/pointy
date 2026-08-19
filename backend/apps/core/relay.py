@@ -1,6 +1,5 @@
 import base64
 import hashlib
-import hmac
 import json
 import logging
 import ssl
@@ -15,6 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
+from .credentials import constant_time_secret_equal
 from .models import RelayConnectorSetupToken, RelayInstallation, ShopSettings
 
 logger = logging.getLogger(__name__)
@@ -614,7 +614,7 @@ def connector_setup_token_accepted(raw_token):
     if not token:
         return False
     seed_token = _connector_setup_seed_token()
-    if seed_token and hmac.compare_digest(token, seed_token):
+    if constant_time_secret_equal(token, seed_token):
         return True
     token_hash = connector_setup_token_hash(token)
     record = RelayConnectorSetupToken.objects.filter(token_hash=token_hash).first()

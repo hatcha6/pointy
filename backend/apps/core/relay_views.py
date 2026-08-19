@@ -1,5 +1,3 @@
-import secrets
-
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.utils import timezone
@@ -22,6 +20,7 @@ from apps.analytics.views import (
     build_events_export_response,
 )
 
+from .credentials import constant_time_secret_equal
 from .discovery import (
     backend_discovery_payload,
     request_discovery_allowed,
@@ -56,25 +55,18 @@ def connector_token_accepted(installation, provided_token):
     """Is ``provided_token`` this installation's connector token?
 
     The three connector-authenticated endpoints below all gate on this one
-    secret, and every caveat lives here rather than in three hand-rolled copies:
-
-    * A blank stored token is never a credential. ``connector_token`` is
-      legitimately "" on a shop seeded from env credentials without
-      ``POINTY_RELAY_CONNECTOR_TOKEN`` (see ``ensure_relay_installation``), and a
-      bare ``compare_digest`` would then match the equally-empty missing header
-      and authenticate every anonymous caller.
-    * ``secrets.compare_digest`` raises on non-ASCII ``str``. Django decodes
-      request headers as latin-1, so any high byte a caller sends would surface
-      as a 500 instead of a rejected credential.
+    secret, through one comparison rather than three hand-rolled copies. It
+    matters most that a blank stored token is never a credential:
+    ``connector_token`` is legitimately "" on a shop seeded from env credentials
+    without ``POINTY_RELAY_CONNECTOR_TOKEN`` (see ``ensure_relay_installation``),
+    and a bare ``compare_digest`` would then match the equally-empty missing
+    header and authenticate every anonymous caller. That guard and the
+    non-ASCII one both live in ``constant_time_secret_equal``.
     """
-    stored = str(getattr(installation, "connector_token", "") or "")
-    provided = str(provided_token or "")
-    if not stored or not provided:
-        return False
-    try:
-        return secrets.compare_digest(provided, stored)
-    except TypeError:  # non-ASCII header value — not a credential
-        return False
+    return constant_time_secret_equal(
+        provided_token,
+        getattr(installation, "connector_token", ""),
+    )
 
 
 class DiscoveryServiceView(views.APIView):
