@@ -13575,6 +13575,29 @@ class AppLocalizationsAr extends AppLocalizations {
   String get campaignSendButton => 'موافقة وإرسال';
 
   @override
+  String get campaignSendConfirmTitle => 'تأكيد إرسال الحملة';
+
+  @override
+  String campaignSendConfirmMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'سيتم إرسال $count رسالة نصية إلى العملاء الآن، ولا يمكن التراجع بعد بدء الإرسال.',
+      two:
+          'سيتم إرسال رسالتين نصيتين إلى عميلين الآن، ولا يمكن التراجع بعد بدء الإرسال.',
+      one:
+          'سيتم إرسال رسالة نصية واحدة إلى عميل واحد الآن، ولا يمكن التراجع بعد بدء الإرسال.',
+      zero:
+          'لا يوجد عملاء قابلون للإرسال في هذه الفئة، لن تصل أي رسالة. راجع الفئة المستهدفة قبل المتابعة.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get campaignSendConfirmButton => 'إرسال الآن';
+
+  @override
   String get campaignSentMessage => 'بدأ إرسال الحملة';
 
   @override
