@@ -165,9 +165,9 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
                     fit: BoxFit.cover,
                     onDetect: _handleDetection,
                     errorBuilder: (context, error) {
-                      return _ScannerMessage(
-                        icon: Icons.videocam_off_outlined,
-                        message: l10n.cameraScannerPermissionError,
+                      return CameraScannerErrorView(
+                        errorCode: error.errorCode,
+                        onRetry: () => unawaited(_restartCamera()),
                       );
                     },
                     placeholderBuilder: (context) {
@@ -332,6 +332,14 @@ class _CameraBarcodeScannerSheetState extends State<CameraBarcodeScannerSheet> {
     });
   }
 
+  Future<void> _restartCamera() async {
+    try {
+      await _controller.start();
+    } on MobileScannerException {
+      // The scanner reports the new failure through its own error builder.
+    }
+  }
+
   void _updateEntryQuantity(int variantId, int quantity) {
     setState(() {
       final index = _entries.indexWhere(
@@ -422,7 +430,7 @@ class _ScannedEntriesList extends StatelessWidget {
                       ),
                     ),
                     if (enableQuantity)
-                      _CompactQuantityStepper(
+                      CameraScannerQuantityStepper(
                         value: entry.quantity,
                         onChanged: (value) {
                           onQuantityChanged(entry.variant.id, value);
@@ -461,30 +469,40 @@ class _QuantitySelector extends StatelessWidget {
     return Row(
       children: [
         Expanded(child: Text(label)),
-        _CompactQuantityStepper(value: value, onChanged: onChanged),
+        CameraScannerQuantityStepper(value: value, onChanged: onChanged),
       ],
     );
   }
 }
 
-class _CompactQuantityStepper extends StatelessWidget {
-  const _CompactQuantityStepper({required this.value, required this.onChanged});
+/// The compact -/+ pair used for both the per-scan quantity and each scanned
+/// line. Public so a widget test can assert its labels without a camera.
+class CameraScannerQuantityStepper extends StatelessWidget {
+  const CameraScannerQuantityStepper({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
 
   final int value;
   final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton.filledTonal(
+          tooltip: l10n.removeOneTooltip,
           onPressed: value <= 1 ? null : () => onChanged(value - 1),
           icon: const Icon(Icons.remove),
           visualDensity: VisualDensity.compact,
         ),
         SizedBox(width: 34, child: Center(child: Text('$value'))),
         IconButton.filledTonal(
+          tooltip: l10n.addOneTooltip,
           onPressed: value >= 999 ? null : () => onChanged(value + 1),
           icon: const Icon(Icons.add),
           visualDensity: VisualDensity.compact,
@@ -581,28 +599,85 @@ class _ScannerFrame extends StatelessWidget {
   }
 }
 
+/// The camera preview replaced by an explanation of why it will not start.
+///
+/// The three failures a cashier can actually hit need different answers: a
+/// denied permission is fixed in device settings, a device with no camera can
+/// never be fixed here at all, and everything else is worth one retry. Showing
+/// the permission wording for all of them sends a cashier on a till PC hunting
+/// through settings for a camera that does not exist.
+class CameraScannerErrorView extends StatelessWidget {
+  const CameraScannerErrorView({
+    super.key,
+    required this.errorCode,
+    required this.onRetry,
+  });
+
+  final MobileScannerErrorCode errorCode;
+  final VoidCallback onRetry;
+
+  bool get _isRetryable => errorCode != MobileScannerErrorCode.unsupported;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final message = switch (errorCode) {
+      MobileScannerErrorCode.permissionDenied =>
+        l10n.cameraScannerPermissionError,
+      MobileScannerErrorCode.unsupported => l10n.cameraScannerNoCameraError,
+      _ => l10n.cameraScannerGenericError,
+    };
+
+    return _ScannerMessage(
+      icon: errorCode == MobileScannerErrorCode.unsupported
+          ? Icons.no_photography_outlined
+          : Icons.videocam_off_outlined,
+      message: message,
+      action: _isRetryable
+          ? OutlinedButton(
+              onPressed: onRetry,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white),
+              ),
+              child: Text(l10n.retryButton),
+            )
+          : null,
+    );
+  }
+}
+
 class _ScannerMessage extends StatelessWidget {
-  const _ScannerMessage({required this.icon, required this.message});
+  const _ScannerMessage({
+    required this.icon,
+    required this.message,
+    this.action,
+  });
 
   final IconData icon;
   final String message;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
       color: Colors.black,
       child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white, size: 32),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: const TextStyle(color: Colors.white),
-              textAlign: TextAlign.center,
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white, size: 32),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                style: const TextStyle(color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
+              if (action != null) ...[const SizedBox(height: 12), action!],
+            ],
+          ),
         ),
       ),
     );

@@ -6056,7 +6056,15 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get cameraScannerPermissionError =>
-      'تعذر تشغيل الكاميرا. تحقق من صلاحية الكاميرا وحاول مرة أخرى.';
+      'لم يُسمح للتطبيق باستخدام الكاميرا. امنح الإذن من إعدادات الجهاز ثم أعد المحاولة.';
+
+  @override
+  String get cameraScannerNoCameraError =>
+      'لا توجد كاميرا متاحة على هذا الجهاز. استخدم قارئ الباركود أو ابحث عن المنتج بالاسم.';
+
+  @override
+  String get cameraScannerGenericError =>
+      'تعذر تشغيل الكاميرا. أعد المحاولة، وإن استمرت المشكلة أغلق النافذة وافتحها من جديد.';
 
   @override
   String cameraScannerResolvingProduct(String barcode) {

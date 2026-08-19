@@ -195,3 +195,37 @@ and the app-set stock filter.
 one. When you split them, retitle the original to the genuinely-empty wording
 ("لا توجد فواتير بعد.") — leaving it is how the fixed screen ends up claiming
 filters are active when none are.
+
+## 2026-08-19 - A plugin's typed error code is the "why", and the widget throws it away
+
+**Learning:** Same shape as the `ApiSession.ensureSuccess` entry above, one layer
+out. `MobileScanner`'s `errorBuilder` is handed a `MobileScannerException` with a
+typed `errorCode` (`permissionDenied` / `unsupported` / `genericError` / the
+controller-lifecycle ones), and `camera_barcode_scanner_sheet.dart` ignored the
+argument entirely and rendered one permission string for all of them. On a till PC
+with no webcam the plugin reports `unsupported` and the cashier was told to check
+the camera *permission* — an instruction that can never succeed. The camera sheet is
+shared by four screens (POS catalog, purchasing catalog, products catalog, stock
+count), so one wrong branch is wrong everywhere. Note `unsupported` is also the one
+code where a retry is pointless: offering it would be a control that cannot work.
+
+**Action:** When a plugin callback's argument is ignored, check whether it carries
+the distinction the copy is guessing at. Branch the copy on it, and pair each branch
+with the action that can actually fix *that* failure — retry for the transient ones,
+no action at all when nothing on this screen can help.
+
+## 2026-08-19 - You cannot pump a widget that owns a camera; extract the states
+
+**Learning:** `CameraBarcodeScannerSheet` builds a real `MobileScanner`, which needs
+platform channels, so a widget test cannot pump the sheet to assert its error copy or
+its stepper labels — the test hangs or throws before reaching them. The AGENTS.md
+advice about extracting parameter-driven public widgets is not just for the preview
+harness; it is the *only* way to test any screen that owns a plugin surface.
+
+**Action:** For a screen wrapping a camera/scanner/printer plugin, lift each state
+worth asserting into its own public widget taking plain values
+(`CameraScannerErrorView(errorCode:, onRetry:)`,
+`CameraScannerQuantityStepper(value:, onChanged:)`) and pump *that*. Also worth
+recording so nobody re-runs the sweep expecting hits: the app-wide icon-only-button
+audit is now clean — the two `IconButton.filledTonal`s in this stepper were the last
+untooltipped ones outside `lib/dev/`.

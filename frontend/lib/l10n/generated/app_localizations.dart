@@ -10723,11 +10723,23 @@ abstract class AppLocalizations {
   /// **'جار تشغيل الكاميرا...'**
   String get cameraScannerStarting;
 
-  /// No description provided for @cameraScannerPermissionError.
+  /// Camera scanner error shown when the camera permission was denied.
   ///
   /// In ar, this message translates to:
-  /// **'تعذر تشغيل الكاميرا. تحقق من صلاحية الكاميرا وحاول مرة أخرى.'**
+  /// **'لم يُسمح للتطبيق باستخدام الكاميرا. امنح الإذن من إعدادات الجهاز ثم أعد المحاولة.'**
   String get cameraScannerPermissionError;
+
+  /// Camera scanner error shown when the device has no usable camera.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد كاميرا متاحة على هذا الجهاز. استخدم قارئ الباركود أو ابحث عن المنتج بالاسم.'**
+  String get cameraScannerNoCameraError;
+
+  /// Camera scanner error shown when the camera failed to start for an unknown reason.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تشغيل الكاميرا. أعد المحاولة، وإن استمرت المشكلة أغلق النافذة وافتحها من جديد.'**
+  String get cameraScannerGenericError;
 
   /// Status shown while camera scanner resolves a barcode into a product.
   ///
