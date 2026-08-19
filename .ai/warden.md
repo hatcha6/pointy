@@ -118,3 +118,75 @@ updates the ref without touching that working tree; do not `checkout`, `stash`,
 or `reset` there to "tidy up", and do not write the journal there — use a scratch
 worktree off `origin/main` instead. Report the branch churn to a human rather
 than trying to correct it.
+
+## 2026-08-19 - Run backend tests from *inside* the worktree, never by path
+
+**Learning:** `python /tmp/warden-pr-N/backend/manage.py test …` invoked while
+the shell sits in the primary checkout does **not** cleanly test the PR. Doing
+exactly that on ⚡ Bolt's #36, I measured its query-scaling regression test as
+*passing on `main`* — printing `slope = 2.00 queries/row` from a `test_measure`
+that does not exist in the PR's file, against a sqlite `memorydb` database
+rather than Postgres. Both tells came from the primary checkout: its untracked
+work-in-progress copy of the same test module, and its `.env`
+(`DATABASE_URL='sqlite://:memory:'`) picked up by cwd. Re-run with `cd` into the
+worktree first, the same test failed on `main` exactly as claimed —
+`AssertionError: 24 != 14`. A wrong rejection of a correct, well-evidenced PR
+was one command away. (The venv's editable-install finder,
+`__editable__.pointy_backend-0.1.0.pth`, maps `apps`/`pointy` at the primary
+checkout, but it is *appended* to `sys.meta_path`, so sys.path still wins — the
+venv itself is safe to reuse, as the task says. Cwd is the trap, not the venv.)
+
+**Action:** Always `cd /tmp/warden-pr-N/backend && …/.venv/bin/python manage.py
+test …`. Verify you are testing the right tree before believing a surprising
+result: the DB line must say Postgres (`Creating test database for alias
+'default'…`, not `file:memorydb_default`), and the test count and names must
+match the file you reviewed. When a Bolt regression test *passes* on `main`,
+suspect your own invocation before you suspect the PR.
+
+## 2026-08-19 - Moving a call into a helper moves its arguments out of the guard
+
+**Learning:** 🧭 Compass's #40 replaced
+
+```python
+try:
+    current_app.tasks["crm.route_inbound"].delay(message.id)
+except Exception:
+    logger.exception(...)
+```
+
+with `enqueue_best_effort(current_app.tasks["crm.route_inbound"], message.id)`.
+The new helper has its own `try/except` — but the registry lookup is now an
+*argument*, evaluated before the helper is entered, so it sits outside every
+guard. Celery raises `NotRegistered` when the crm task module has not been
+imported, which is precisely the case the by-name lookup exists to tolerate.
+Result: a 500 on the inbound SMS webhook for a message that was already stored.
+It broke `apps.messaging.tests.TokenInboundAuthTests.test_correct_token_accepted`,
+green on `main`. The PR body and the retained code comment both still promised
+"the inbound row is stored either way".
+
+**Action:** When a diff hoists a guarded expression into a call to a new
+fail-safe helper, check what is *inside* the helper's `try` and what is merely
+an argument to it. A lookup, attribute access or property that used to sit
+inside the old `try` is silently unprotected. Cheapest detection is not reading:
+run the touched app's suite — this one surfaced immediately.
+
+## 2026-08-19 - Routines are now pushing code straight to `main`
+
+**Learning:** `d83b70ae` ("🎨 Palette: a duplicate barcode now names the product
+that owns it") landed on `origin/main` *during* this run with no PR number and
+no entry in `gh pr list --state merged`. It is a substantial backend + frontend
+change (a new `apps/catalog/identity.py`, API-client error handling, two Flutter
+dialogs, tests) — and it is exactly the uncommitted work that was sitting in the
+primary checkout when the run started. So the escalation of the
+primary-checkout problem is complete: routines working there are no longer just
+naming branches wrong, they are committing and pushing the primary checkout's
+dirty state directly to `main`, bypassing review entirely. Three of six open PRs
+this run (#36, #37, #39) were also blocked on non-`claude/*` names from the same
+root cause.
+
+**Action:** Compare `git log origin/main` against `gh pr list --state merged`
+every run and report any commit on `main` that carries no PR — you are the gate,
+and a bypass is the one failure you cannot catch by reviewing the queue. Do not
+revert it: reverting merged work is a human's call, and the change may well be
+fine. Report it, and keep reporting the primary-checkout root cause until a
+human fixes the fleet's worktree discipline.
