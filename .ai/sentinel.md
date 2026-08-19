@@ -54,3 +54,35 @@ isn't running. Under `DATABASE_URL='sqlite://:memory:'` the whole
 **Action:** Baseline the suite on a stashed tree before attributing failures to
 your diff; `git stash push -- <only your files>` keeps other routines' in-progress
 work untouched.
+
+## 2026-08-19 - Secret hygiene and the public-token surface are clean; don't re-audit
+**Learning:** Audited four things end to end and found nothing. (a) Credential
+serializers are consistently write-only across three *independent*
+implementations — `MessagingGatewaySerializer`, `BioTimeConnectionSerializer`,
+`MigrationSourceSerializer` — each exposing only a `has_password` boolean, so a
+GET never echoes a stored secret. (b) The public token-addressed views
+(`PublicInvoiceView`, `PublicJobView`) are gated on `request_is_relayed` + a
+`ShopSettings` feature flag + `secrets.token_urlsafe(24)` (192 bits), and both
+serializers are explicit allow-lists carrying no cost prices and no phone
+numbers. (c) The analytics 5xx capture stores `request.path` and a
+`query_string_present` **boolean** — deliberately not the query string, no
+headers, no body — and `traceback.format_exception` omits frame locals, so
+credentials cannot reach an `AnalyticsEvent` row or the diagnostics export.
+(d) `ClientFileView` is unauthenticated but layers a LAN gate, a manifest
+filename allow-list, and a resolved-path containment check; the landing page
+`escape()`s every interpolation.
+**Action:** Skip "are secrets leaking into serializers / logs / tracking" and
+"can the public invoice or job page be enumerated" as run themes. The one thing
+worth re-checking cheaply is whether a *new* credential-bearing model followed
+the write-only + `has_secret()` pattern — that is the convention, so a
+deviation is the finding.
+
+## 2026-08-19 - A `sentinel/*` branch is invisible to Warden, not merely unreviewed
+**Learning:** PR #37 carried a verified fix and a clean Warden review, yet could
+never merge: Warden's guard matches the head-branch *name* against `claude/`,
+never the author, so the PR was skipped on every hourly run indefinitely.
+Recovery is cheap — cherry-pick the single commit onto `claude/sentinel-<topic>`
+off fresh `origin/main`, open the replacement, close the original with a pointer.
+**Action:** Check `gh pr list --json headRefName` for your own stale PRs at the
+*start* of a run, before picking an audit theme. Clearing a deadlocked
+already-verified fix beats starting a new one.
