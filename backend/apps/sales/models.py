@@ -5,9 +5,9 @@ from django.conf import settings
 from django.contrib.contenttypes.fields import GenericRelation
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
-from django.db.models import Q, Sum
+from django.db.models import Prefetch, Q, Sum
 
-from apps.catalog.models import ProductVariant
+from apps.catalog.models import ProductVariant, VariantOptionValue
 from apps.core.models import TimeStampedModel
 from apps.customers.models import Customer
 
@@ -234,6 +234,35 @@ class OrderQuerySet(models.QuerySet):
 
     def quotations(self):
         return self.filter(sale_type=Order.SaleType.QUOTATION)
+
+    def with_serializer_relations(self):
+        """Load everything ``OrderSerializer`` reads, in a fixed query count.
+
+        This lives on the queryset rather than inline in one viewset because
+        several endpoints serialize whole orders (the sales list/detail and the
+        customer's invoices tab), and a caller that hand-rolls a shorter prefetch
+        list pays for it per row without any visible sign: ``variant.display_name``
+        falls back to a query per line when ``option_values`` is missing,
+        ``can_void``/``can_return`` read ``adjustment_lines`` per line, and
+        ``applied_discounts``/``exchanges`` cost a query per order. Extend this
+        method — not a caller's own list — when the serializer grows a field.
+        """
+        return self.select_related(
+            "customer",
+            "register_session",
+            "sales_channel",
+        ).prefetch_related(
+            "lines__variant__product",
+            "lines__adjustment_lines",
+            Prefetch(
+                "lines__variant__option_values",
+                queryset=VariantOptionValue.objects.select_related("option"),
+            ),
+            "payments",
+            "applied_discounts",
+            "exchanges__replacement_order",
+            "exchanges__created_by",
+        )
 
 
 class Order(TimeStampedModel):
