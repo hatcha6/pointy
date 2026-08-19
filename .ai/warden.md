@@ -334,3 +334,54 @@ carries the same `cd` fix for its own scratch-worktree invocation, which still
 had the by-path form an earlier entry proved wrong. If the primary checkout is
 still dirty or branch-flipping several runs from now, the prompts are being
 overridden by something else — escalate that rather than re-diagnosing it.
+
+## 2026-08-20 - `cd` into the worktree is necessary but *not* sufficient: it has no `.env`
+
+**Learning:** This corrects the "run backend tests from inside the worktree"
+entry above, which got the mechanism half right and the facts backwards. The
+primary checkout's `backend/.env` is **Postgres**
+(`DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/pointy`), not sqlite.
+`.env` is untracked, so **a git worktree has none at all** — and the settings
+fallback is sqlite. So `cd /tmp/warden-pr-N/backend && … manage.py test` , the
+exact command the task prescribes, silently ran ⚡ Bolt's #53 on
+`file:memorydb_default`. 466 tests came back green in 57s and I nearly merged on
+that. The documented sanity check does not catch it: at default verbosity sqlite
+*also* prints `Creating test database for alias 'default'...`, with no database
+name. The `file:memorydb_default` tell only appears at `-v 2`. Worse, the
+failure is silent in the direction that matters — the plan-based scaling test
+carries `skipTest` on `connection.vendor != "postgresql"`, so on sqlite the one
+test that proves the fix reports as a *skip inside a passing run*. Bolt
+independently hit this same trap and journalled it, which is corroboration, not
+coincidence.
+
+**Action:** Copy the database config into every scratch worktree before testing —
+`cp /Users/hatem/Develop/pointy/backend/.env /tmp/warden-pr-N/backend/.env` —
+and confirm the run says `('test_pointy')`, not the bare `alias 'default'`.
+Grep the log for `memorydb`: zero hits is the pass. Treat a `skipTest` on
+`connection.vendor` in a run you expected to be Postgres as a **failure**, never
+as a pass. Two mechanical follow-ons: pass `--noinput`, because a run killed
+early leaves `test_pointy` behind and the next one blocks on an interactive
+"delete it?" prompt that dies as `EOFError`; and redirect output to a file
+instead of piping to `head`, since SIGPIPE is what kills the run early in the
+first place.
+
+## 2026-08-20 - A dirty primary checkout can block the sync in a way `--ff-only` hides
+
+**Learning:** Step 2's guard — fast-forward only when `git status --porcelain`
+is empty — read like pure caution until the collision was real. Local `main` was
+six commits behind with **zero** unique commits (a clean fast-forward on paper),
+and the working tree was dirty with exactly one modified file,
+`backend/apps/employees/models.py`. That file is also touched by one of the six
+incoming commits (`0af97289`, Bolt's #41), so `git merge --ff-only` would have
+refused on its own, and forcing past it would have destroyed uncommitted work
+that exists nowhere else. The uncommitted pair
+(`employees/models.py` + an untracked `test_employee_list_query_scaling.py`) has
+now survived several runs untouched, so it is not transient.
+
+**Action:** When reporting a blocked sync, run
+`git log --oneline main..origin/main -- <each dirty path>` and say whether the
+dirty files actually collide with the incoming commits. It separates "blocked by
+policy, harmless" from "blocked by a real collision, a human must resolve it" —
+and here it is the latter, which is the difference between a footnote and an
+escalation. Every routine that branches off local `main` is starting six commits
+stale until someone commits or discards that work.
