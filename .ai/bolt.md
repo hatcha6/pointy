@@ -396,3 +396,37 @@ queryset (`Sum(total)`, three `COUNT`s, one `values_list` for
 three `COUNT`s), all collapsible into two `aggregate()` calls with `filter=Q(...)`.
 It is flat, so it is not rotting — but it is on the customer detail screen and
 runs again after every debt collection (`record_payment` returns it).
+
+## 2026-08-19 - Two `Count(distinct=True)` in one `annotate()` is a cross product, and `distinct=True` does NOT prevent it
+**Learning:** `DiscountRuleViewSet` annotated `redemption_count=Count("redemptions",
+distinct=True)` and `applied_count=Count("applied_discounts", distinct=True)` in
+the *same* `annotate()`. Both are multi-valued reverse relations, so one query
+LEFT JOINs both and the database materialises every (redemption x applied)
+pair per rule. `distinct=True` corrects the returned *number* but not the work:
+measured peak rows scanned went 8k -> 32k -> 128k -> 512k as I doubled per-rule
+usage (20 rules), i.e. **quadratic**, and the GROUP BY runs over the whole table
+so pagination cannot trim it. `AppliedDiscount` gains a row for every discounted
+line ever sold, so the product only grows. At 20 rules x 500 applied + 500
+redemptions the list query was **2657 ms**; as two `Subquery` counts, 8.4 ms.
+The fix is `Coalesce(Subquery(model.objects.filter(rule=OuterRef("pk"))
+.order_by().values("rule").annotate(c=Count("pk")).values("c")[:1]), 0)` —
+`order_by()` strips `Meta.ordering` from the grouped subquery and `Coalesce`
+reproduces the LEFT JOIN's 0 for an unused rule.
+**Action:** A **query-count test cannot catch this** — the count is identical
+before and after (see also the Meta.ordering-join entry above). Lock it with a
+plan-based scaling test: `EXPLAIN (ANALYZE)` the queryset at N and 2N rows per
+parent and assert peak `actual ... rows=` grows ~2x, not ~4x. It must run on
+Postgres, so skip when `connection.vendor != "postgresql"`. Grep for two
+aggregates over *different* reverse relations in one `annotate()`; aggregating
+several columns of the **same** relation (`Sum("po__total")` + `Count("po")`) is
+fine and is the common, harmless case.
+
+**Next target (measured, unfixed):** `ProductCategoryViewSet.get_queryset`
+(`apps/catalog/views.py`) has the identical shape — `children` + `products` —
+and its comment states the opposite of the truth: "distinct=True on both
+aggregates: ... would otherwise multiply the rows via the join fan-out". It
+does multiply them. Measured 10 parents x 5 children x 40 products = **2,050**
+peak rows scanned (exactly the cross product). Left out of the discounts PR to
+keep the change one subsystem; the helper needs a field-name parameter to be
+shared, so it wants its own change. Treat a comment that *asserts* a fan-out is
+handled as a reason to measure, not to move on.
