@@ -74,3 +74,23 @@ inject a broker failure against the real app in a test, set the
 reads `os.environ` ahead of the configured value) and then drop the cached pools
 with `app.__dict__.pop("amqp", None); app._pool = None` — see
 `apps/core/test_broker_timeouts.black_hole_broker`.
+
+## 2026-08-19 - A guard cannot cover what the caller evaluates to reach it
+
+**Learning:** Wrapping a fragile call in `enqueue_best_effort(...)` moved the
+`try/except` *inside* the helper — but the inbound SMS webhook was passing
+`current_app.tasks["crm.route_inbound"]` as the argument, and arguments are
+evaluated before the callee is entered. Celery's registry raises `NotRegistered`
+on a miss, which is exactly the condition a by-name lookup exists to tolerate
+(crm's tasks module not imported yet), so the new guard covered strictly *less*
+than the bare `try/except` it replaced: the row was written and the view then
+500'd, handing a retryable error back to a gateway for a message already stored.
+Worse, it only reproduced when `apps.messaging` ran alone — a full-suite run
+imports crm and the registry hits, so the whole suite was green.
+
+**Action:** When centralising a guard, check what the call sites must *evaluate*
+to call it. If a lookup, parse or property access can throw, the helper has to
+take the raw input (a task **name**, a URL string, a key) and do the lookup
+inside its own `try` — never accept the already-resolved object. And when a
+failure depends on import order, inject it explicitly (`mock.patch.dict` over
+`current_app.tasks`) rather than trusting an app-scoped run to expose it.

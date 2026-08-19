@@ -211,3 +211,31 @@ class NotificationTopUpTests(TestCase):
         )
         self.assertEqual(result["outcome"], "returned")
         self.assertLess(result["elapsed"], 15)
+
+
+class ByNameDispatchTests(SimpleTestCase):
+    """A registry miss must be a dropped enqueue, not a 500.
+
+    Cross-app dispatch (messaging → crm) looks the task up by *name* precisely
+    because the owning tasks module may not be imported yet — and Celery's
+    registry raises ``NotRegistered`` when it is not. Resolving that name at the
+    call site (``enqueue_best_effort(current_app.tasks[name], ...)``) evaluates
+    the lookup as an argument, i.e. before the guard inside the publisher is
+    entered, so the miss escapes it: the inbound SMS row is written and the
+    gateway then gets a 500 for a message that *was* stored, and retries it.
+
+    These two pin the publisher's half of that contract — by-name dispatch
+    resolves, and a miss is a ``False``. The call site is pinned end to end by
+    ``apps.messaging.tests.TokenInboundAuthTests`` \
+    ``.test_accepted_even_when_the_crm_task_is_not_registered``, which is the
+    test that actually fails if the lookup moves back out to the caller.
+    """
+
+    def test_an_unregistered_name_is_a_dropped_enqueue_not_an_exception(self):
+        self.assertIs(enqueue_best_effort("crm.no_such_task", 1), False)
+
+    def test_a_registered_name_still_reaches_the_task(self):
+        """Guard against the above passing because every name now misses."""
+        with mock.patch.object(run_due_scheduled_backup, "apply_async") as publish:
+            self.assertIs(enqueue_best_effort(run_due_scheduled_backup.name), True)
+        publish.assert_called_once()

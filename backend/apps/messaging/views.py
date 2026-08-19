@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import secrets
 
-from celery import current_app
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import viewsets
@@ -157,15 +156,15 @@ class InboundWebhookView(APIView):
             provider_message_id=parsed.get("provider_message_id", ""),
         )
         if created:
-            # Look the task up by name (no crm import) and enqueue it through the
-            # bounded publisher, which honours task_always_eager for tests and —
-            # unlike the bare try/except this replaces — also survives a broker
-            # that accepts the connection and then stops answering. The inbound
-            # row is stored either way; only the routing pass is lost, and the
-            # gateway must not be left holding an open POST for it.
-            if not enqueue_best_effort(
-                current_app.tasks["crm.route_inbound"], message.id
-            ):
+            # Dispatch by *name* (no crm import) through the bounded publisher,
+            # which honours task_always_eager for tests and — unlike the bare
+            # try/except this replaces — also survives a broker that accepts the
+            # connection and then stops answering. The name is passed, not
+            # resolved here, so a registry miss (crm's tasks module not imported
+            # yet) stays inside the publisher's guard. The inbound row is stored
+            # either way; only the routing pass is lost, and the gateway must not
+            # be left holding an open POST for it.
+            if not enqueue_best_effort("crm.route_inbound", message.id):
                 logger.warning("inbound %s stored but not routed", message.id)
         return Response({"ok": True, "id": message.id, "created": created})
 

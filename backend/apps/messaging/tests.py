@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from datetime import time
+from unittest import mock
 
+from celery import current_app
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
@@ -11,7 +13,7 @@ from rest_framework.test import APIClient
 
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 
-from .models import MessagingGateway, OutboundMessage
+from .models import InboundMessage, MessagingGateway, OutboundMessage
 from .phone import normalize_phone
 from .secrets import decrypt_secrets, encrypt_secrets
 from .segments import count_segments
@@ -301,3 +303,34 @@ class TokenInboundAuthTests(TestCase):
     def test_wrong_token_rejected(self):
         resp = self.client.post(self._url("nope"), {"id": "t3"}, format="json")
         self.assertEqual(resp.status_code, 403)
+
+    def test_accepted_even_when_the_crm_task_is_not_registered(self):
+        """A registry miss must cost the routing pass, not the whole webhook.
+
+        Routing is dispatched by *name* precisely so messaging never imports crm
+        — which means the crm tasks module may not be imported yet, and Celery's
+        registry raises ``NotRegistered`` when it is not. Resolving the name at
+        the call site would evaluate it as an argument, outside the publisher's
+        guard, and the view would raise *after* ``record_inbound`` had already
+        written the row: the gateway gets a 500 for a message that was in fact
+        stored, and retries it.
+
+        Injected by emptying the name out of the live registry, so this holds
+        whichever other apps' tasks a given test run happens to have imported —
+        unlike the plain accept test above, which only exercises the miss when
+        ``apps.messaging`` runs on its own.
+        """
+        with mock.patch.dict(current_app.tasks, clear=False):
+            current_app.tasks.pop("crm.route_inbound", None)
+            resp = self.client.post(
+                self._url(self.token),
+                {"from": "+218912345678", "body": "hi", "id": "no-crm"},
+                format="json",
+            )
+
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertTrue(resp.json()["created"])
+        self.assertTrue(
+            InboundMessage.objects.filter(provider_message_id="no-crm").exists(),
+            "the inbound row must be stored even when routing could not be queued",
+        )
