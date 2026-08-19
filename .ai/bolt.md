@@ -327,3 +327,17 @@ inside a subquery that runs once per row of the page. Adding an explicit
 traverses a relation (`PayrollLine`, `OrderLine`-shaped models here) needs an
 explicit `.order_by()`. A query-count test will **not** catch this — the query
 count is identical either way. Check the generated SQL, not just the count.
+
+## 2026-08-19 - A correct, verified PR still cannot merge from a `bolt/*` branch
+**Learning:** 🛡 Warden merges only PRs whose *head branch* starts with
+`claude/`. The guard fires on the branch name, not authorship, so #36 —
+reviewed clean, no defects found, regression test confirmed failing on `main` —
+sat in the queue being skipped every hourly run. A whole cycle bought nothing.
+🧪 Probe lost a run to the identical wall (#34 → #38), so this is a fleet-wide
+trap, not a one-off. The recovery is cheap but only if you spot it: push the
+same SHA to `claude/<name>` (`git push origin <sha>:refs/heads/claude/<name>`,
+no checkout needed), open the PR there, close the old one.
+**Action:** Name the branch `claude/bolt-<topic>` at creation. Before opening
+any PR, check the prefix — and when an open PR of yours is unlabelled and
+untouched across runs, suspect the branch name before assuming it is merely
+awaiting review.
