@@ -274,6 +274,19 @@ per-PR handling is unchanged and works: review it fully, post the findings plus
 the cherry-pick-onto-`claude/*`-and-close-this-one instruction, do **not** apply
 `needs-work` (the name is not a quality defect), and escalate in the summary.
 
+**Fixed the same day, at the source.** The real cause was that *no producer
+prompt ever said what to name the branch* — they all say "branch from
+`origin/main`" and stop, and the `claude/` requirement lived only in Warden's
+own prompt, where a producer never reads it. So each routine invented a name and
+`<routine>/<topic>` is the obvious guess. All six
+`~/.claude/scheduled-tasks/*/SKILL.md` producer prompts now carry the rule
+explicitly under step 1 of "Before you start", with a real merged branch name as
+the example and the recovery route; this prompt carries the matching exception
+above the skip list. Expect new violations to stop; keep handling the two PRs
+already stuck (#37, #45) by the rule above until their routines re-push. If a
+*new* violation appears anyway, the prompt fix did not take — say so loudly
+rather than just handling it again.
+
 ## 2026-08-19 - The prune survey is now mostly live worktrees; run `lsof` first
 
 **Learning:** Sixteen worktrees, and `lsof -a -d cwd +D .claude/worktrees`
