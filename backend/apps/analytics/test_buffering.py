@@ -8,6 +8,7 @@ rows synchronously; every test here opts back in explicitly.
 from unittest import mock
 
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.test import RequestFactory, TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -187,3 +188,70 @@ class MiddlewareBufferingIntegrationTests(TestCase):
         event = AnalyticsEvent.objects.filter(name="backend.request").latest("id")
         self.assertEqual(event.attributes["path"], "/api/auth/me/")
         self.assertEqual(event.received_by, user)
+
+
+class TransactionScopedBufferTests(TestCase):
+    """``transaction_scoped`` ties the buffer's tail to the caller's transaction.
+
+    Without it a caller that wraps a long run in one transaction and rolls it
+    back (``simulate_business``) leaves the tail queued past the rollback; the
+    ``atexit`` flush then inserts rows whose FK targets no longer exist.
+    """
+
+    def setUp(self):
+        buffer.reset()
+
+    def tearDown(self):
+        buffer.reset()
+
+    @override_settings(
+        POINTY_ANALYTICS_BUFFER_SIZE=1000,
+        POINTY_ANALYTICS_BUFFER_MAX_AGE_SECONDS=3600,
+    )
+    def test_tail_is_written_inside_the_block_and_dies_with_a_rollback(self):
+        class Rollback(Exception):
+            pass
+
+        with self.assertRaises(Rollback):
+            with transaction.atomic():
+                with buffer.transaction_scoped():
+                    record_event_buffered(name="backend.request")
+                    self.assertEqual(AnalyticsEvent.objects.count(), 0)
+                # Drained on the way out — still inside the transaction, so the
+                # rollback below takes the rows with it.
+                self.assertEqual(AnalyticsEvent.objects.count(), 1)
+                raise Rollback()
+
+        self.assertEqual(AnalyticsEvent.objects.count(), 0)
+        # Nothing left queued: a later flush (atexit) cannot resurrect the rows.
+        buffer.flush()
+        self.assertEqual(AnalyticsEvent.objects.count(), 0)
+
+    @override_settings(
+        POINTY_ANALYTICS_BUFFER_SIZE=1000,
+        POINTY_ANALYTICS_BUFFER_MAX_AGE_SECONDS=3600,
+    )
+    def test_tail_is_drained_when_the_block_raises(self):
+        class Boom(Exception):
+            pass
+
+        with transaction.atomic():
+            with self.assertRaises(Boom):
+                with buffer.transaction_scoped():
+                    record_event_buffered(name="backend.request")
+                    raise Boom()
+            self.assertEqual(AnalyticsEvent.objects.count(), 1)
+
+    @override_settings(
+        POINTY_ANALYTICS_BUFFER_SIZE=1000,
+        POINTY_ANALYTICS_BUFFER_MAX_AGE_SECONDS=3600,
+    )
+    def test_events_queued_before_the_block_are_not_captured_by_it(self):
+        record_event_buffered(name="backend.request")
+
+        with transaction.atomic():
+            with buffer.transaction_scoped():
+                pass
+            # The earlier event was written on the way in; it belongs to whoever
+            # produced it, not to this transaction.
+            self.assertEqual(AnalyticsEvent.objects.count(), 1)

@@ -23,6 +23,7 @@ Telemetry-grade guarantees, by design:
 from __future__ import annotations
 
 import atexit
+import contextlib
 import logging
 import threading
 import time
@@ -104,6 +105,32 @@ def reset() -> None:
     """Discard the buffer without inserting (test isolation only)."""
     with _lock:
         _pending.clear()
+
+
+@contextlib.contextmanager
+def transaction_scoped():
+    """Keep everything buffered inside the block inside the caller's transaction.
+
+    The buffer deliberately outlives any single request: it holds a tail of rows
+    until a later enqueue fills it or ``atexit`` drains it. That is right for a
+    server, and wrong for a caller that wraps a whole run in one transaction and
+    rolls it back (``simulate_business``) — the tail survives the rollback, and
+    the ``atexit`` flush then tries to insert rows whose FK targets the rollback
+    removed: a hard IntegrityError on COMMIT, or, for a batch whose FKs happen to
+    survive, orphan telemetry left behind in the database.
+
+    Draining on the way in and on the way out — the exit flush still inside the
+    caller's ``atomic()`` block, on the error path too — puts exactly the block's
+    own events under the caller's commit/rollback. Buffering itself stays on, so
+    the caller still exercises the real bulk-insert path.
+    """
+    # Anything queued before the block belongs to whoever produced it, not to
+    # the caller's transaction; write it out before that transaction claims it.
+    flush()
+    try:
+        yield
+    finally:
+        flush()
 
 
 def _insert(batch) -> None:

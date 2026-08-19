@@ -73,6 +73,7 @@ from apps.purchasing.services import (
 from apps.sales.models import Order, OrderLine, RegisterSession
 from apps.sales.services import (
     convert_quotation_to_sale,
+    exchange_order_items,
     record_customer_account_payment,
     record_customer_payment,
     release_quote_reservations,
@@ -1395,9 +1396,10 @@ class Simulation:
             and any(line.returnable_qty > ZERO for line in o.lines)
         ]
 
-    def _apply_refund(self, rec: OrderRec, refund_lines):
+    def _apply_refund(self, rec: OrderRec, refund_lines) -> Decimal:
         """refund_lines: list of (LineRec, qty). Applies the documented refund
-        arithmetic to the oracle and returns nothing (asserts handled by caller)."""
+        arithmetic to the oracle and returns the refund total (asserts handled
+        by the caller)."""
         total = ZERO
         per_line_refund = []
         for line, qty in refund_lines:
@@ -1426,6 +1428,7 @@ class Simulation:
                 )
         if all(line.returnable_qty <= ZERO for line in rec.lines):
             rec.voided = True
+        return even2(total)
 
     def _line_refund_discount(self, line: LineRec, qty) -> Decimal:
         if line.discount_total <= ZERO:
@@ -1465,6 +1468,103 @@ class Simulation:
         for line, _ in refund_lines:
             self._assert_variant(line.variant_id)
         self._assert_session(self.current_session_id)
+        return True
+
+    def op_exchange(self) -> bool:
+        """Swap goods from a past order for different goods, in one operation.
+
+        An exchange is not a refund and it is not a sale — it is both, glued by
+        an arithmetic of its own, and that glue is what this models. The
+        customer hands back part of an old order and walks out with something
+        else, settling only the *difference*; the drawer, however, must see both
+        legs at full gross (a refund out, a payment in), because that is what
+        actually moved. A shop is defrauded quietly if the net the customer pays
+        and the gross the drawer records ever stop agreeing.
+
+        Everything expected here is computed from this operation's own inputs:
+        the outbound total from the documented refund arithmetic already ported
+        for returns, the replacement total from the ported discount engine
+        priced (as the backend prices it) against the *original* order's
+        customer with no coupon, and the net as their difference. Nothing is
+        read back from the backend to decide what to expect.
+        """
+        candidates = self._refundable_orders()
+        if not candidates:
+            return False
+        rec = self.rng.choice(candidates)
+        returnable = [line for line in rec.lines if line.returnable_qty > ZERO]
+        outbound = []
+        outbound_api_lines = []
+        for line in self.rng.sample(returnable, self.rng.randint(1, len(returnable))):
+            qty = self._pick_return_qty(line)
+            if qty <= ZERO:
+                continue
+            outbound.append((line, qty))
+            outbound_api_lines.append((OrderLine.objects.get(pk=line.order_line_id), qty))
+        if not outbound:
+            return False
+        # Replacement goods are chosen against availability as it stands *before*
+        # the outbound leg restocks — deliberately conservative, so the choice can
+        # never trip the backend's stock guard on quantities the return is about
+        # to hand back.
+        specs = self._choose_lines(include_service=False)
+        if not specs:
+            return False
+        # The backend prices the replacement leg with the ORIGINAL order's
+        # customer and no coupon codes; mirror exactly that.
+        customer_id = rec.customer_id
+        per_line_discount, _ = self._compute_discounts(specs, customer_id, ())
+        _, _, replacement_total = self._order_totals(specs, per_line_discount)
+        if replacement_total <= ZERO:
+            return False
+        settlement = self.rng.choice(list(self.PAYMENT_METHODS))
+        exchange = exchange_order_items(
+            order=Order.objects.get(pk=rec.order_id),
+            outbound_lines=outbound_api_lines,
+            replacement_lines=self._build_lines_payload(specs),
+            settlement_method=settlement,
+            reason="sim exchange",
+            register_session=self._register_session_obj(),
+            request=None,
+        )
+        # Apply the two legs to the oracle in the order the backend applies
+        # them: refund first (restocks, reverses tenders), then the new sale.
+        outbound_total = self._apply_refund(rec, outbound)
+        replacement_rec = self._build_order_rec(
+            exchange.replacement_order,
+            specs,
+            per_line_discount,
+            Order.SaleType.STANDARD,
+            customer_id,
+        )
+        self._apply_sale_stock(specs)
+        self.record_order_payment(replacement_rec, settlement, replacement_total)
+
+        self.assert_money(
+            exchange.outbound_amount, outbound_total, "exchange outbound_amount"
+        )
+        self.assert_money(
+            exchange.replacement_amount, replacement_total, "exchange replacement_amount"
+        )
+        self.assert_money(
+            exchange.net_amount,
+            even2(replacement_total - outbound_total),
+            "exchange net_amount",
+        )
+        self.assert_equal(
+            exchange.settlement_method, settlement, "exchange settlement_method"
+        )
+        self.assert_equal(
+            exchange.original_order_id, rec.order_id, "exchange original_order"
+        )
+        self._assert_order(rec)
+        self._assert_order(replacement_rec)
+        for line, _ in outbound:
+            self._assert_variant(line.variant_id)
+        self._assert_touched(specs)
+        self._assert_session(self.current_session_id)
+        if customer_id is not None:
+            self._assert_customer(customer_id)
         return True
 
     def op_void_order(self) -> bool:
@@ -1833,6 +1933,7 @@ class Simulation:
             (self.op_convert_quotation, 4),
             (self.op_release_quotation, 2),
             (self.op_return_items, 7),
+            (self.op_exchange, 4),
             (self.op_void_order, 3),
             (self.op_purchase_submit, 7),
             (self.op_purchase_receive, 7),
@@ -2054,7 +2155,11 @@ class Simulation:
             self.assert_money(
                 session.expected_cash, explained, f"identity: session#{session_id} drawer"
             )
-        # 2. Per method across ALL orders, backend net payments == oracle net.
+        # 2. Per method across every order this run created, backend net
+        # payments == oracle net. Scoped to the run's own orders on purpose:
+        # unscoped, the sum also picks up whatever payments the database already
+        # held, so a run against a non-empty database (a dev Postgres, say)
+        # reports an oracle mismatch that is really pre-existing data.
         from apps.payments.models import Payment
 
         for method in self.PAYMENT_METHODS:
@@ -2062,7 +2167,9 @@ class Simulation:
                 sum(
                     (
                         p.amount
-                        for p in Payment.objects.filter(method=method)
+                        for p in Payment.objects.filter(
+                            method=method, order_id__in=list(self.oracle.orders)
+                        )
                     ),
                     ZERO,
                 )
