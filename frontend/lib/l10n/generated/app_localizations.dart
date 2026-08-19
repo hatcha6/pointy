@@ -23614,6 +23614,24 @@ abstract class AppLocalizations {
   /// **'موافقة وإرسال'**
   String get campaignSendButton;
 
+  /// Title of the confirmation dialog shown before an SMS campaign is blasted to customers.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد إرسال الحملة'**
+  String get campaignSendConfirmTitle;
+
+  /// Body of the campaign send confirmation, naming how many customers will receive the SMS.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا يوجد عملاء قابلون للإرسال في هذه الفئة، لن تصل أي رسالة. راجع الفئة المستهدفة قبل المتابعة.} =1{سيتم إرسال رسالة نصية واحدة إلى عميل واحد الآن، ولا يمكن التراجع بعد بدء الإرسال.} =2{سيتم إرسال رسالتين نصيتين إلى عميلين الآن، ولا يمكن التراجع بعد بدء الإرسال.} other{سيتم إرسال {count} رسالة نصية إلى العملاء الآن، ولا يمكن التراجع بعد بدء الإرسال.}}'**
+  String campaignSendConfirmMessage(int count);
+
+  /// Confirm button of the campaign send confirmation dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال الآن'**
+  String get campaignSendConfirmButton;
+
   /// No description provided for @campaignSentMessage.
   ///
   /// In ar, this message translates to:

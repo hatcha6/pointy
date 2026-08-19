@@ -8188,6 +8188,23 @@
   },
   "campaignSampleTitle": "نموذج الرسالة",
   "campaignSendButton": "موافقة وإرسال",
+  "campaignSendConfirmTitle": "تأكيد إرسال الحملة",
+  "@campaignSendConfirmTitle": {
+    "description": "Title of the confirmation dialog shown before an SMS campaign is blasted to customers."
+  },
+  "campaignSendConfirmMessage": "{count, plural, =0{لا يوجد عملاء قابلون للإرسال في هذه الفئة، لن تصل أي رسالة. راجع الفئة المستهدفة قبل المتابعة.} =1{سيتم إرسال رسالة نصية واحدة إلى عميل واحد الآن، ولا يمكن التراجع بعد بدء الإرسال.} =2{سيتم إرسال رسالتين نصيتين إلى عميلين الآن، ولا يمكن التراجع بعد بدء الإرسال.} other{سيتم إرسال {count} رسالة نصية إلى العملاء الآن، ولا يمكن التراجع بعد بدء الإرسال.}}",
+  "@campaignSendConfirmMessage": {
+    "description": "Body of the campaign send confirmation, naming how many customers will receive the SMS.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "campaignSendConfirmButton": "إرسال الآن",
+  "@campaignSendConfirmButton": {
+    "description": "Confirm button of the campaign send confirmation dialog."
+  },
   "campaignSentMessage": "بدأ إرسال الحملة",
   "campaignSendError": "تعذّر إرسال الحملة",
   "campaignNoSendPermission": "ليس لديك صلاحية إرسال الحملات",

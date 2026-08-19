@@ -241,6 +241,7 @@ class _CampaignEditorScreenState extends State<CampaignEditorScreen> {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
+    if (!await _confirmSend(l10n)) return;
     final ok = await widget.viewModel.send();
     if (!mounted) return;
     messenger.showSnackBar(
@@ -249,6 +250,23 @@ class _CampaignEditorScreenState extends State<CampaignEditorScreen> {
       ),
     );
     if (ok) navigator.pop();
+  }
+
+  /// Sending is irreversible — the messages leave immediately and cannot be
+  /// recalled — so the recipient count is put in front of the manager first.
+  Future<bool> _confirmSend(AppLocalizations l10n) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => PointyDestructiveConfirmationDialog(
+        key: const ValueKey('campaign_send_confirm_dialog'),
+        title: l10n.campaignSendConfirmTitle,
+        message: l10n.campaignSendConfirmMessage(
+          widget.viewModel.preview?.sendableEstimate ?? 0,
+        ),
+        confirmLabel: l10n.campaignSendConfirmButton,
+      ),
+    );
+    return confirmed == true && mounted;
   }
 
   @override

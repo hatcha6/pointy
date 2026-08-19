@@ -229,3 +229,24 @@ worth asserting into its own public widget taking plain values
 recording so nobody re-runs the sweep expecting hits: the app-wide icon-only-button
 audit is now clean — the two `IconButton.filledTonal`s in this stepper were the last
 untooltipped ones outside `lib/dev/`.
+
+## 2026-08-19 - A "destructive action" grep misses the irreversible ones
+
+**Learning:** Auditing for unconfirmed destructive actions by grepping `delete`
+produces a false all-clear: every `delete*` call site in this app already routes
+through a `_confirmDelete` + `PointyDestructiveConfirmationDialog`. The gap is in
+the verbs nobody greps — **send / approve / apply / pay**. The campaign editor
+(`crm/views/campaigns_screen.dart`) blasted an SMS to the whole targeted segment on
+one tap of "موافقة وإرسال", with no confirmation, even though the preview it sits
+under had already computed `sendableEstimate`. `PointyDestructiveConfirmationDialog`'s
+own docstring settles whether it applies: it covers "irreversible **or** destructive",
+so an outward-facing send qualifies even though nothing is deleted.
+
+**Action:** Audit by *consequence*, not by verb — anything that leaves the shop
+(SMS/campaign send), moves money (payroll approve, mark-paid), or flips a status the
+UI offers no way back from. When the screen already fetched a preview/estimate, put
+that number **inside** the confirmation ("سيتم إرسال 37 رسالة") rather than a generic
+"are you sure" — it is the only thing that lets a manager catch a wrong audience.
+Also note `CampaignEditorScreen` is one of the few *public* screen widgets, so a
+widget test can pump it directly with a fake `CrmRepository` (subclass, override the
+two methods) and assert `sendCalls == 0` before confirming — no extraction needed.
