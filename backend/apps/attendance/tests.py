@@ -157,6 +157,31 @@ class AttendanceDayRollupTests(AttendanceTestBase):
         self.assertIsNone(rebuild_attendance_day(self.employee, self.monday))
         self.assertFalse(AttendanceDay.objects.exists())
 
+    def test_overnight_shift_does_not_invent_a_night_of_overtime(self):
+        # A night crew works 22:00 -> 06:00. Monday evening they clock in at
+        # 21:55 and scan again at 23:30 heading out for a break; every one of
+        # those 95 minutes is inside the shift, so none of it is overtime.
+        self.connection.shift_start = time(22, 0)
+        self.connection.shift_end = time(6, 0)
+        self.connection.save()
+        self.add_punch(aware(self.monday, 21, 55))
+        self.add_punch(aware(self.monday, 23, 30))
+        day = rebuild_attendance_day(self.employee, self.monday)
+        self.assertEqual(day.worked_minutes, 95)
+        self.assertEqual(day.overtime_minutes, 0)
+        self.assertEqual(day.late_minutes, 0)
+
+    def test_overnight_shift_still_catches_a_late_arrival(self):
+        self.connection.shift_start = time(22, 0)
+        self.connection.shift_end = time(6, 0)
+        self.connection.save()
+        self.add_punch(aware(self.monday, 22, 40))
+        self.add_punch(aware(self.monday, 23, 30))
+        day = rebuild_attendance_day(self.employee, self.monday)
+        self.assertEqual(day.status, AttendanceDay.Status.LATE)
+        self.assertEqual(day.late_minutes, 40)
+        self.assertEqual(day.overtime_minutes, 0)
+
     def test_profile_schedule_override_wins(self):
         self.profile.shift_start = time(7, 0)
         self.profile.grace_minutes = 0
@@ -289,6 +314,16 @@ class AttendanceSummaryTests(AttendanceTestBase):
         self.assertEqual(summary["absent_days"], 3)
         self.assertEqual(summary["overtime_minutes"], 60)
 
+    def test_summary_stops_expecting_days_after_termination(self):
+        # Left on Tuesday: only Monday and Tuesday can be worked or missed.
+        self.employee.termination_date = self.monday + timedelta(days=1)
+        self.employee.save()
+        summary = attendance_summary(
+            self.employee, self.monday, self.monday + timedelta(days=6)
+        )
+        self.assertEqual(summary["expected_days"], 2)
+        self.assertEqual(summary["absent_days"], 2)
+
     def test_summary_ignores_days_before_hire(self):
         self.employee.hire_date = self.monday + timedelta(days=2)
         self.employee.save()
@@ -374,6 +409,27 @@ class ApplyAttendanceToPayrollTests(AttendanceTestBase):
             rebuild_attendance_day(self.employee, day)
         apply_attendance_to_run(self.run)
         self.line.refresh_from_db()
+        self.assertEqual(self.line.overtime_hours, Decimal("0.00"))
+        self.assertEqual(self.line.overtime_amount, Decimal("0.00"))
+
+    def test_night_crew_working_their_shift_earns_no_overtime_pay(self):
+        # Shop runs a night crew: 22:00 -> 06:00, Monday to Friday. Each night
+        # they clock in just before ten and scan again on the way out for their
+        # break. Nothing here is worked outside the shift, so nothing is owed
+        # on top of the salary.
+        self.connection.shift_start = time(22, 0)
+        self.connection.shift_end = time(6, 0)
+        self.connection.save()
+        for offset in range(5):
+            day = self.monday + timedelta(days=offset)
+            self.add_punch(aware(day, 21, 55))
+            self.add_punch(aware(day, 23, 30))
+            rebuild_attendance_day(self.employee, day)
+
+        apply_attendance_to_run(self.run)
+
+        self.line.refresh_from_db()
+        self.assertEqual(self.line.absence_days, Decimal("0.00"))
         self.assertEqual(self.line.overtime_hours, Decimal("0.00"))
         self.assertEqual(self.line.overtime_amount, Decimal("0.00"))
 
