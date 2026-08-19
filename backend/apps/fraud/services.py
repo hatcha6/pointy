@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.core.dispatch import enqueue_best_effort
 
 from .engine import detect_suspected_fraud
 from .models import FraudFinding
@@ -148,11 +149,11 @@ def schedule_targeted_sweep():
                     return  # a sweep is already queued for this window
             except Exception:  # noqa: BLE001 — no Redis: enqueue as before
                 pass
-        try:
-            sync_suspected_fraud_findings_task.delay()
-        except Exception:
-            # Broker unavailable — the periodic sweep still covers detection.
-            pass
+        # Bounded: this hook runs inside the returns/void/exchange/register
+        # request, after the commit. An unreachable broker must cost the cashier
+        # a fraction of a second, not their response — the periodic sweep still
+        # covers detection.
+        enqueue_best_effort(sync_suspected_fraud_findings_task)
 
     transaction.on_commit(_enqueue)
 

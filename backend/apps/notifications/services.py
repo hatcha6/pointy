@@ -9,6 +9,7 @@ from django.db.models import Count, DecimalField, F, OuterRef, Q, Subquery, Sum,
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
+from apps.core.dispatch import enqueue_best_effort
 from apps.core.roles import user_is_manager
 from apps.discounts.models import DiscountRule
 from apps.inventory.models import StockBatch, StockItem
@@ -193,16 +194,13 @@ def maybe_sync_business_notifications(now=None):
         return None
     from .tasks import sync_business_notifications_task
 
-    try:
-        # retry=False: enqueuing a best-effort recompute must never add latency
-        # to (or hang) the poll if the broker is briefly unreachable.
-        sync_business_notifications_task.apply_async(retry=False)
+    # Bounded and best-effort: enqueuing a recompute must never add latency to
+    # (or hang) the bell poll every device runs. A broker that accepts the
+    # connection and then stops answering is the case a bare try/except cannot
+    # see, so the deadline lives in the connection.
+    if enqueue_best_effort(sync_business_notifications_task):
         return None
-    except Exception:
-        logger.warning(
-            "notification sync enqueue failed; recomputing inline", exc_info=True
-        )
-        return sync_business_notifications(now=now)
+    return sync_business_notifications(now=now)
 
 
 def visible_notifications_for_user(user):
