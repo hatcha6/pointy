@@ -33,6 +33,7 @@ from apps.sales.models import (
     OrderLine,
     RegisterCashMovement,
     RegisterSession,
+    returned_cost_total,
 )
 
 from .models import ReportRun
@@ -311,7 +312,13 @@ def _sales_summary_report(user, period):
         ),
     )
     net_sales = order_values["order_total"] - adjustment_values["refund_total"]
-    profit = line_values["profit"] - adjustment_values["refund_total"]
+    # A refund reverses margin, not margin *plus* cost: the goods are restocked,
+    # so their cost comes back with them.
+    profit = (
+        line_values["profit"]
+        - adjustment_values["refund_total"]
+        + returned_cost_total(adjustments)
+    )
     top_products = _product_sales_rows(orders)
     recent_orders = _bounded_queryset(
         orders.order_by("-created_at"),
@@ -1072,7 +1079,8 @@ def _profit_costs_report(user, period):
             output_field=MONEY_FIELD,
         )
     )["total"]
-    gross_profit = line_profit - refund_total
+    # Restocked returns give their cost back, so only the margin is reversed.
+    gross_profit = line_profit - refund_total + returned_cost_total(adjustments)
 
     payroll_paid = PayrollRun.objects.filter(
         status=PayrollRun.Status.PAID,

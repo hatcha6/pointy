@@ -45,6 +45,7 @@ from apps.sales.models import (
     OrderLine,
     RegisterCashMovement,
     RegisterSession,
+    returned_cost_total,
 )
 
 MONEY_PLACES = Decimal("0.01")
@@ -106,7 +107,13 @@ def _sales_summary(orders, adjustments):
         ),
     )
     net_sales = order_values["order_total"] - adjustment_values["refund_total"]
-    profit = line_values["profit"] - adjustment_values["refund_total"]
+    # A refund reverses margin, not margin *plus* cost: the goods are restocked,
+    # so their cost comes back with them.
+    profit = (
+        line_values["profit"]
+        - adjustment_values["refund_total"]
+        + returned_cost_total(adjustments)
+    )
     order_count = order_values["order_count"]
     return {
         "gross_sales": _money(order_values["gross_sales"]),

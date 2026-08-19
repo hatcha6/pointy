@@ -636,6 +636,28 @@ class OrderAdjustmentLine(TimeStampedModel):
         return (gross_total - self.discount_total).quantize(Decimal("0.01"))
 
 
+def returned_cost_total(adjustments) -> Decimal:
+    """Cost of the goods that came back with ``adjustments`` (voids + returns).
+
+    Every adjustment restocks what it takes back, so the shop keeps the goods
+    and their cost. Netting refunds out of profit must therefore subtract only
+    the *margin* that was reversed — ``refund_total - returned_cost_total`` —
+    otherwise voiding a sale would reduce reported profit by the whole cost of
+    goods that never left the shelf.
+
+    ``OrderAdjustmentLine.quantity`` is in the order line's transacted unit,
+    which is the unit ``OrderLine.unit_cost`` is snapshotted in, so the two
+    multiply directly.
+    """
+    total = OrderAdjustmentLine.objects.filter(adjustment__in=adjustments).aggregate(
+        total=Sum(
+            models.F("quantity") * models.F("order_line__unit_cost"),
+            output_field=models.DecimalField(max_digits=12, decimal_places=2),
+        )
+    )["total"]
+    return (total or Decimal("0.00")).quantize(Decimal("0.01"))
+
+
 class OrderExchange(TimeStampedModel):
     """Links the two legs of a sales exchange into one audited operation.
 

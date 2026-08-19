@@ -65,3 +65,29 @@ hour.
 stuck outside the prefix, cherry-pick the commits onto a fresh
 `claude/*` branch off `origin/main`, open the new PR, and close the old one
 with a pointer — do not leave two open PRs side by side.
+
+## 2026-08-19 - Netting a refund out of profit is only correct if the restocked cost is credited back
+**Learning:** `profit = Sum(qty*(price-cost) - discount) - refund_total` appeared
+verbatim in three places (`reports._sales_summary_report`,
+`reports._profit_costs_report`, `core.dashboard.helpers._sales_summary`) and was
+wrong in all three. A return/void never touches the original `OrderLine` — it
+adds `OrderAdjustmentLine`s and restocks — so the line profit stays whole while
+the *entire* refunded revenue is subtracted. Net effect of any void: reported
+profit falls by exactly the COGS of goods still sitting on the shelf. Voiding a
+100.00 sale that cost 60.00 moved reported profit from 40.00 to −20.00.
+**Action:** Wherever a money aggregate subtracts a refund, ask what the refund
+*returned*. If the goods came back, only the margin reverses. And check the
+whole family: the same expression is copy-pasted between `apps/reports` and
+`apps/core/dashboard` — a formula that is wrong in one is wrong in both, and a
+fix that lands in one makes two screens disagree.
+
+## 2026-08-19 - Report builders are a second implementation of formulas that already live on the model
+**Learning:** `apps/reports/services.py` re-implements register expected-cash
+(`_register_expected_cash`) rather than reading `RegisterSession.expected_cash`,
+and re-implements profit rather than reading `OrderLine.line_profit`. The
+register pair happen to agree today, but `_register_session_cash_totals` buckets
+cash movements as "PAY_IN else pay_out" — a third `MovementType` would silently
+be subtracted from the drawer in the report while the model ignored it.
+**Action:** In `apps/reports`, treat every formula as a fork and diff it against
+the model property it mirrors; the interesting test is "do the two surfaces
+agree", not "does the report return a number".
