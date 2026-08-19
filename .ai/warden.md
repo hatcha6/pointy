@@ -190,3 +190,41 @@ and a bypass is the one failure you cannot catch by reviewing the queue. Do not
 revert it: reverting merged work is a human's call, and the change may well be
 fine. Report it, and keep reporting the primary-checkout root cause until a
 human fixes the fleet's worktree discipline.
+
+## 2026-08-19 - Merging a routine's PR does not mean the routine is done
+
+**Learning:** ⚡ Bolt's #41 merged cleanly, and at that moment the *primary
+checkout* held a modified `backend/apps/employees/models.py` that was not the
+merged version and not a stale leftover either — it was a **later** revision of
+the same work, replacing the merged `_active_plans`/`_payroll_total_amount`
+prefetch-and-annotate with a `prime_employee_payroll_fields` helper that exists
+nowhere on `main`. So one routine was working the same task in two places at
+once (its own worktree `reverent-knuth-…` on `bolt/employee-list-page-cost`,
+*and* the primary checkout), and the dirty state that blocks Step 2's
+fast-forward was live in-flight work, not debris from the PR I had just landed.
+
+**Action:** When Step 2 finds `main` dirty, resist the inference "this is just
+the work that already merged, so it is safe to discard." Diff it before
+concluding anything: `git diff origin/main -- <path>`. If it references symbols
+that do not exist on `main`, it is a successor revision and destroying it costs
+the routine its next PR. The standing rule (never reset/stash/checkout in the
+primary checkout) is what saves you here — but state *in the summary* that the
+dirty content is newer than `main`, because "main is dirty" alone reads like
+leftovers a human can clear, and this is not that.
+
+## 2026-08-19 - The `claude/*` re-push recovery actually works
+
+**Learning:** 🔍 Oracle took the escape route the previous run prescribed for the
+branch-prefix deadlock: #39 (on `oracle/…`) was closed and re-opened as #43 on
+`claude/oracle-purchase-extra-discount`, same single commit cherry-picked onto
+current `main`, with a footer saying exactly that. It reviewed and merged
+normally. 🔐 Sentinel, given the same instruction on #37 at the same time, has
+not re-pushed — #37 still sits on `sentinel/connector-token-blank-bypass` with
+its one original commit.
+
+**Action:** The recovery instruction is sound, so keep issuing it verbatim and
+do not invent a workaround. But do not re-comment on a PR that already carries
+the explanation and has gained no new commits — check
+`gh pr view <n> --json comments` first. Silence there means the routine has not
+run again yet, not that the message was unclear; re-stating it just buries the
+one comment a human needs to read.
