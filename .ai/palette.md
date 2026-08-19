@@ -369,3 +369,32 @@ the neighbour is the explanation.
 l10n so it still compiles) and re-running: the run should report `+0 -N`. A
 pending-state test that never pumps the in-flight frame passes against the old
 code too.
+
+## 2026-08-20 - `PointyErrorState` without `action:` is a scannable dead-end class
+
+**Learning:** A balanced-paren scan for `PointyErrorState(` bodies that never
+mention `action:` found **17** call sites across the app, against 34 that do —
+so "a failure state with no way to re-ask" is a real, enumerable backlog rather
+than a one-off. The repo's own idiom is unambiguous (`action: FilledButton.icon`
+or `OutlinedButton.icon` → `onPressed: viewModel.loadX`, `Icons.sync`/`refresh`,
+`l10n.retryButton`, which already exists in `app_ar.arb` — these fixes need no
+new string). The register-session history was the sharpest case: its *summary*
+tab retried, while the sales tab, the cash-movements tab and the session list
+beside it did not, so the fix was literally "match the sibling in this file".
+Remaining after this run: `payments_hub_screen` (×2), `employee_payroll_screen`
+(×3), `payroll_run_details_screen`, `user_management_screen`,
+`device_settings_screen`, `product_document_history_section` (×2),
+`discount_details_screen`, `shop_settings_screen`, `shop_backup_widgets`,
+`payment_sheet` (that one is a *config* gap, not a fetch — no retry applies).
+
+**Action:** Scan with balanced parens, not `grep -A5` — these calls span 3–12
+lines. Before adding a view-model method, check for a private reloader: the
+retry usually already exists (`_reloadOrdersForSelectedSession`) and only needs
+a thin public wrapper that no-ops when nothing is selected. Do **not** reuse a
+broad `selectSession`-style entry point as the retry — it re-emits analytics and
+resets sibling panes. When one reloader is embedded in a bigger "reload
+everything" method, split it into `_resetX()` + `_fetchX(session)` so the retry
+can reuse both without reordering the original's awaits. And note the test trap:
+these panes are `StatelessWidget`s fed a view model by a parent
+`ListenableBuilder` — pump them bare and the retry refetches but never repaints,
+so the test fails for the wrong reason.
