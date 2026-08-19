@@ -331,3 +331,41 @@ depend on one of them — `widget_test.dart` taps `pending_loan_approve_4`. Give
 extracted widget a `keyPrefix` and pass each surface's own prefix; hardcoding one
 key silently breaks the other surface's test *and* makes the keys ambiguous if both
 surfaces are ever in the tree at once.
+
+## 2026-08-19 - The pending-affordance idiom is repo-wide; audit for deviations, not for absence
+
+**Learning:** Four seams I expected to be productive were already fully covered,
+and checking them cost most of the run: every `IconButton` in `lib/src` has a
+`tooltip:` or an enclosing `Tooltip(` (a balanced-paren audit returned **zero**
+candidates); every delete/archive path routes through a confirmation dialog;
+`stock_count_reconciliation_screen.dart` and `register_session_gate.dart` are
+exemplary (confirm + guard + spinner + a `PointyInlineMessage` explaining the
+permission lock); and the POS payment sheet already names its blocker via
+`_summaryErrorMessage`, as the purchase draft pane does with three stacked
+`PointyInlineMessage.warning`s. Do **not** re-audit these from scratch.
+
+What is still productive is auditing for *deviation from an idiom the repo
+already applies elsewhere*. The idiom here is
+`onPressed: isX ? null : run` **plus** `icon: isX ? spinner : Icon(...)` **plus**
+`label: Text(isX ? inProgressCopy : copy)` — used in the register gate, the POS
+checkout footer, the purchase draft submit/save, the attendance sync button and
+(best of all) `reports_screen.dart`, which adds a `_ReportActionProgress` banner
+naming *which* action is running. Grep for buttons that have the first line and
+not the other two: that shortlist is short, real and defensible, because the fix
+is "match the neighbour", never a subjective addition.
+
+**Action:** Audit by *inconsistency with a sibling*, ideally one in the same
+file — that makes the change self-justifying to review. Two traps when the flag
+is shared: (1) one `isMutating` driving two buttons cannot say which is running,
+so track the pressed action in the `State` (a private enum) rather than adding
+view-model flags — smaller diff, no VM churn; (2) set it with `setState` and
+clear it in a `finally`, or a failed request leaves the row spinning forever —
+assert that failure path explicitly, it is the one a network timeout actually
+hits. Also note the payoff: showing *which* action is running is simultaneously
+the fix for "this control is disabled and won't say why", because the spinner on
+the neighbour is the explanation.
+
+**Verify non-vacuity by reverting only the production file** (keep the generated
+l10n so it still compiles) and re-running: the run should report `+0 -N`. A
+pending-state test that never pumps the in-flight frame passes against the old
+code too.

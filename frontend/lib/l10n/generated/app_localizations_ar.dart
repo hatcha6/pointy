@@ -11197,6 +11197,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get attendanceTestConnectionButton => 'اختبار الاتصال';
 
   @override
+  String get attendanceTestInProgressButton => 'جار الاختبار...';
+
+  @override
   String attendanceTestSuccess(int count) {
     return 'تم الاتصال بنجاح. عدد الموظفين في BioTime: $count';
   }
@@ -11273,6 +11276,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String attendanceUnmatchedTitle(int count) {
     return 'في BioTime بدون ربط ($count)';
   }
+
+  @override
+  String get attendanceSaveInProgressButton => 'جار الحفظ...';
 
   @override
   String get attendanceSettingsSaved => 'تم حفظ إعدادات الحضور.';
