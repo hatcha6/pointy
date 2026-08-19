@@ -2809,6 +2809,14 @@
   "@queryClearSearchAndFiltersButton": {
     "description": "Button that clears the search term and every user-set filter on a query-driven list."
   },
+  "queryNoSearchResultsMessage": "تحقق من الكتابة، أو امسح البحث لعرض القائمة كاملة.",
+  "@queryNoSearchResultsMessage": {
+    "description": "Query-driven list empty state guidance when the search term is the only thing narrowing the list."
+  },
+  "queryClearSearchButton": "مسح البحث",
+  "@queryClearSearchButton": {
+    "description": "Button that clears only the search term, on a list with no user-set filters."
+  },
   "catalogNoSearchResultsTitle": "لا توجد نتائج لـ «{query}»",
   "@catalogNoSearchResultsTitle": {
     "description": "Catalog empty state title when a search term returned nothing.",

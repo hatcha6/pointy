@@ -7,6 +7,7 @@ import '../data/repositories/contact_repository.dart';
 import 'components/components.dart';
 import 'design/design.dart';
 import 'query_controls/debounced_search_field.dart';
+import 'query_controls/query_empty_state.dart';
 import 'responsive/responsive.dart';
 
 class ContactSelectionTile extends StatelessWidget {
@@ -291,10 +292,18 @@ class _CustomerPickerState extends State<_CustomerPicker> {
         errorBuilder: (context) => PointyErrorState(
           title: l10n.contactsLoadError,
           icon: Icons.person_search_outlined,
+          action: FilledButton.tonalIcon(
+            onPressed: () => _load(reset: true),
+            icon: const Icon(Icons.sync),
+            label: Text(l10n.retryButton),
+          ),
         ),
-        emptyBuilder: (context) => PointyEmptyState(
+        emptyBuilder: (context) => QueryEmptyState(
           icon: Icons.person_outline,
-          title: l10n.emptyCustomers,
+          search: _query.search,
+          hasFilters: false,
+          emptyTitle: l10n.emptyCustomers,
+          onClear: _clearSearch,
         ),
         padding: EdgeInsets.zero,
         framed: false,
@@ -311,6 +320,13 @@ class _CustomerPickerState extends State<_CustomerPicker> {
         },
       ),
     );
+  }
+
+  /// Drops the search term and reloads the unfiltered list — the one tap out
+  /// of a search that matched nothing.
+  void _clearSearch() {
+    _query = _query.copyWith(search: '');
+    _load(reset: true);
   }
 
   Future<void> _load({required bool reset}) async {
@@ -417,10 +433,18 @@ class _SupplierPickerState extends State<_SupplierPicker> {
         errorBuilder: (context) => PointyErrorState(
           title: l10n.contactsLoadError,
           icon: Icons.person_search_outlined,
+          action: FilledButton.tonalIcon(
+            onPressed: () => _load(reset: true),
+            icon: const Icon(Icons.sync),
+            label: Text(l10n.retryButton),
+          ),
         ),
-        emptyBuilder: (context) => PointyEmptyState(
+        emptyBuilder: (context) => QueryEmptyState(
           icon: Icons.local_shipping_outlined,
-          title: l10n.emptySuppliers,
+          search: _query.search,
+          hasFilters: false,
+          emptyTitle: l10n.emptySuppliers,
+          onClear: _clearSearch,
         ),
         padding: EdgeInsets.zero,
         framed: false,
@@ -438,6 +462,13 @@ class _SupplierPickerState extends State<_SupplierPicker> {
         },
       ),
     );
+  }
+
+  /// Drops the search term and reloads the unfiltered list — the one tap out
+  /// of a search that matched nothing.
+  void _clearSearch() {
+    _query = _query.copyWith(search: '');
+    _load(reset: true);
   }
 
   Future<void> _load({required bool reset}) async {

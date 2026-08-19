@@ -250,3 +250,34 @@ that number **inside** the confirmation ("سيتم إرسال 37 رسالة") ra
 Also note `CampaignEditorScreen` is one of the few *public* screen widgets, so a
 widget test can pump it directly with a fake `CrmRepository` (subclass, override the
 two methods) and assert `sendCalls == 0` before confirming — no extraction needed.
+
+## 2026-08-19 - A shared empty state must word its escape after what is narrowing
+
+**Learning:** `QueryEmptyState` was written for the list screens, which all have
+a funnel, so its escape was hardcoded to "مسح البحث والفلاتر" / "امسح البحث
+والفلاتر". Reused on the customer/supplier picker sheets — which have a search
+box and *no* funnel at all — it told the cashier to clear filters that do not
+exist on that surface. Same on the list screens whenever the funnel is untouched
+and only the search term emptied the list, which is the common case.
+
+**Action:** `hasFilters` is not only the "should I show the filtered branch"
+switch; it must also pick the copy. Branch message *and* button label (and the
+button icon: `filter_alt_off_outlined` vs `search_off`) on it, so a search-only
+blank list says "مسح البحث". When adding a shared empty/error state, check every
+control it names actually exists on the narrowest surface that uses it.
+
+## 2026-08-19 - `pumpAndSettle` does not fire `DebouncedSearchField`'s timer
+
+**Learning:** `DebouncedSearchField` waits 350ms before it calls `onChanged`.
+A pending `Timer` schedules no frame, so `pumpAndSettle` (which pumps until no
+frame is scheduled) returns *before* the search ever runs. A test that types a
+term and immediately asserts on the empty state is therefore asserting the
+pre-search list — and `find.textContaining(term)` still passes, because the
+`TextField` itself contains the text, which is exactly how such a test passes
+vacuously.
+
+**Action:** After `enterText` on any `DebouncedSearchField`, pump past the
+debounce explicitly — `await tester.pump(const Duration(milliseconds: 400))` —
+*then* `pumpAndSettle`. Assert on something only the post-search build can
+produce (the "no results" title, or the fake repository's recorded query), never
+on text that the field itself echoes.

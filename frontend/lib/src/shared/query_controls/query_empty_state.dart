@@ -8,8 +8,9 @@ import '../components/components.dart';
 /// A bare "no records" line leaves the user guessing why the list went blank
 /// when the cause is their own search term or one of the filters hidden behind
 /// the funnel icon. When either is active this says so and offers one tap to
-/// clear both; otherwise it falls back to [emptyTitle] (with [emptyAction],
-/// e.g. "create one").
+/// clear it, wording the escape after whichever is actually narrowing the
+/// list; otherwise it falls back to [emptyTitle] (with [emptyAction], e.g.
+/// "create one").
 ///
 /// The catalog has its own `CatalogEmptyState`, which knows about pinned
 /// categories and the app-set stock filter; this is the plain version for every
@@ -59,16 +60,28 @@ class QueryEmptyState extends StatelessWidget {
       );
     }
 
+    // Only name the funnel when a filter is actually narrowing the list. The
+    // contact pickers have no funnel at all, and on the list screens it is
+    // usually untouched — telling the user to clear filters they never set
+    // points at a control that will not change anything.
     return PointyEmptyState(
       icon: Icons.search_off,
       title: term.isEmpty
           ? l10n.queryNoFilteredResultsTitle
           : l10n.queryNoSearchResultsTitle(term),
-      message: l10n.queryNoResultsMessage,
+      message: hasFilters
+          ? l10n.queryNoResultsMessage
+          : l10n.queryNoSearchResultsMessage,
       action: FilledButton.tonalIcon(
         onPressed: onClear,
-        icon: const Icon(Icons.filter_alt_off_outlined),
-        label: Text(l10n.queryClearSearchAndFiltersButton),
+        icon: Icon(
+          hasFilters ? Icons.filter_alt_off_outlined : Icons.search_off,
+        ),
+        label: Text(
+          hasFilters
+              ? l10n.queryClearSearchAndFiltersButton
+              : l10n.queryClearSearchButton,
+        ),
       ),
     );
   }
