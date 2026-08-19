@@ -19370,6 +19370,12 @@ abstract class AppLocalizations {
   /// **'اختبار الاتصال'**
   String get attendanceTestConnectionButton;
 
+  /// Label on the BioTime test-connection button while the test request is in flight.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الاختبار...'**
+  String get attendanceTestInProgressButton;
+
   /// Snack message after a successful BioTime connection test.
   ///
   /// In ar, this message translates to:
@@ -19495,6 +19501,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'في BioTime بدون ربط ({count})'**
   String attendanceUnmatchedTitle(int count);
+
+  /// Label on the attendance settings save button while the save request is in flight.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الحفظ...'**
+  String get attendanceSaveInProgressButton;
 
   /// No description provided for @attendanceSettingsSaved.
   ///

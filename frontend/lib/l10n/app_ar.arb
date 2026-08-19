@@ -6902,6 +6902,10 @@
   "attendanceEnableLabel": "تفعيل مزامنة الحضور",
   "attendanceEnableSubtitle": "عند التفعيل يمكن سحب البصمات وتطبيقها على الرواتب",
   "attendanceTestConnectionButton": "اختبار الاتصال",
+  "attendanceTestInProgressButton": "جار الاختبار...",
+  "@attendanceTestInProgressButton": {
+    "description": "Label on the BioTime test-connection button while the test request is in flight."
+  },
   "attendanceTestSuccess": "تم الاتصال بنجاح. عدد الموظفين في BioTime: {count}",
   "@attendanceTestSuccess": {
     "description": "Snack message after a successful BioTime connection test.",
@@ -6965,6 +6969,10 @@
         "type": "int"
       }
     }
+  },
+  "attendanceSaveInProgressButton": "جار الحفظ...",
+  "@attendanceSaveInProgressButton": {
+    "description": "Label on the attendance settings save button while the save request is in flight."
   },
   "attendanceSettingsSaved": "تم حفظ إعدادات الحضور.",
   "attendanceSettingsSaveError": "تعذر حفظ إعدادات الحضور.",
