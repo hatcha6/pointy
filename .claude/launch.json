@@ -74,6 +74,12 @@
       "port": 8080
     },
     {
+      "name": "product-form-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": ["frontend-product-form-preview"],
+      "port": 8080
+    },
+    {
       "name": "command-palette-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": ["frontend-command-palette-preview"],

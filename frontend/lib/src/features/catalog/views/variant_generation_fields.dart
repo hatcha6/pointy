@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../data/models/catalog_identity_conflict.dart';
 import '../../../data/models/variant_option.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../view_models/variant_generation.dart';
+import 'variant_identity_watcher.dart';
 
 /// Lets the user define a product's options (e.g. Color, Size) by **creating a
 /// new option inline** as the primary action. Previously created options can
@@ -100,9 +102,9 @@ class VariantOptionField extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     l10n.reuseVariantOptionLabel,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: colors.mutedInk,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: colors.mutedInk),
                   ),
                   const SizedBox(height: 6),
                   Wrap(
@@ -187,7 +189,14 @@ class GeneratedVariantsPreview extends StatelessWidget {
     required this.onActiveChanged,
     required this.requiredValidator,
     required this.numberValidator,
+    this.conflictsBySignature = const {},
   });
+
+  /// Duplicate SKU/barcode errors per generated row, keyed by combination
+  /// signature. Populated both by the form's own in-payload check and by a
+  /// rejected save.
+  final Map<String, Map<CatalogIdentityField, CatalogIdentityConflict>>
+  conflictsBySignature;
 
   final List<VariantCombination> combinations;
   final Map<String, TextEditingController> nameControllers;
@@ -230,6 +239,7 @@ class GeneratedVariantsPreview extends StatelessWidget {
                 onActiveChanged(combination.signature, value),
             requiredValidator: requiredValidator,
             numberValidator: numberValidator,
+            conflicts: conflictsBySignature[combination.signature] ?? const {},
           ),
           if (combination != combinations.last) const SizedBox(height: 8),
         ],
@@ -334,8 +344,10 @@ class _GeneratedVariantTile extends StatelessWidget {
     required this.onActiveChanged,
     required this.requiredValidator,
     required this.numberValidator,
+    this.conflicts = const {},
   });
 
+  final Map<CatalogIdentityField, CatalogIdentityConflict> conflicts;
   final VariantCombination combination;
   final TextEditingController nameController;
   final TextEditingController skuController;
@@ -352,11 +364,23 @@ class _GeneratedVariantTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
+    final skuConflict = conflicts[CatalogIdentityField.sku];
+    final barcodeConflict = conflicts[CatalogIdentityField.barcode];
+    final skuError = skuConflict == null
+        ? null
+        : identityConflictMessage(l10n, skuConflict);
+    final barcodeError = barcodeConflict == null
+        ? null
+        : identityConflictMessage(l10n, barcodeConflict);
 
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.surface,
-        border: Border.all(color: colors.line),
+        // A rejected row reads as rejected at a glance, not only through the
+        // small red text inside it.
+        border: Border.all(
+          color: conflicts.isEmpty ? colors.line : colors.danger,
+        ),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
@@ -401,8 +425,9 @@ class _GeneratedVariantTile extends StatelessWidget {
               decoration: InputDecoration(
                 labelText: l10n.skuLabel,
                 prefixIcon: const Icon(Icons.qr_code_2),
+                errorText: skuError,
               ),
-              validator: requiredValidator,
+              validator: (value) => skuError ?? requiredValidator(value),
             ),
             const SizedBox(height: 8),
             TextFormField(
@@ -411,7 +436,9 @@ class _GeneratedVariantTile extends StatelessWidget {
                 labelText: l10n.barcodeLabel,
                 hintText: l10n.barcodeHint,
                 prefixIcon: const Icon(Icons.document_scanner_outlined),
+                errorText: barcodeError,
               ),
+              validator: (_) => barcodeError,
             ),
             const SizedBox(height: 8),
             TextFormField(

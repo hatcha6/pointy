@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/parsing.dart';
 import '../../../core/result.dart';
+import '../../../data/models/catalog_identity_conflict.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_draft.dart';
 import '../../../data/models/variant_option.dart';
@@ -67,6 +68,11 @@ class _ProductVariantGenerationSheetState
       selectedValueIdsByOption: _selectedValueIdsByOption,
     );
   }
+
+  /// Duplicate SKU/barcode errors per generated row, keyed by combination
+  /// signature — filled by the in-form check and by a rejected save.
+  final Map<String, Map<CatalogIdentityField, CatalogIdentityConflict>>
+  _generatedConflicts = {};
 
   List<_GenerationCandidate> get _candidates {
     final existingSignatures = {
@@ -242,6 +248,7 @@ class _ProductVariantGenerationSheetState
                         setState(() => _activeBySignature[signature] = value),
                     requiredValidator: _requiredValidator,
                     numberValidator: _numberValidator,
+                    conflictsBySignature: _generatedConflicts,
                   ),
                   if (_candidates.isEmpty && _combinations.isNotEmpty) ...[
                     const SizedBox(height: 8),
@@ -512,12 +519,15 @@ class _ProductVariantGenerationSheetState
     if (!mounted) {
       return;
     }
-    if (saved) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(l10n.variantsGeneratedMessage)));
-      widget.onSaved?.call();
+    if (!saved) {
+      _applyServerConflicts(candidates);
+      return;
     }
+
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(l10n.variantsGeneratedMessage)));
+    widget.onSaved?.call();
   }
 
   bool _validateGeneration() {
@@ -542,34 +552,124 @@ class _ProductVariantGenerationSheetState
       return false;
     }
 
-    final skus = <String>{
+    // Codes already spoken for — by one of the product's other variants, or by
+    // an earlier row of this same list — are marked on the row that repeats
+    // them, so the fix is one field away instead of a hunt down a long list.
+    // Which of the two it is decides the wording, so they stay separate.
+    final existingBySku = <String, ProductVariant>{
       for (final variant in widget.viewModel.variants)
-        variant.sku.toUpperCase(),
+        variant.sku.toUpperCase(): variant,
+    };
+    final existingByBarcode = <String, ProductVariant>{
+      for (final variant in widget.viewModel.variants)
+        if (variant.barcode.trim().isNotEmpty) variant.barcode.trim(): variant,
     };
     for (final candidate in _candidates) {
+      // A row that rewrites an existing variant is not competing with itself.
       final reusableVariant = candidate.reusableVariant;
       if (reusableVariant != null) {
-        skus.remove(reusableVariant.sku.toUpperCase());
+        existingBySku.remove(reusableVariant.sku.toUpperCase());
+        existingByBarcode.remove(reusableVariant.barcode.trim());
       }
     }
+
+    final conflicts =
+        <String, Map<CatalogIdentityField, CatalogIdentityConflict>>{};
+    final seenSkus = <String>{};
+    final seenBarcodes = <String>{};
     for (final candidate in _candidates) {
-      final sku = _skuControllers[candidate.combination.signature]!.text
-          .trim()
-          .toUpperCase();
-      if (sku.isEmpty) {
-        continue;
+      final signature = candidate.combination.signature;
+      final sku = _skuControllers[signature]!.text.trim().toUpperCase();
+      final skuConflict = _rowConflict(
+        field: CatalogIdentityField.sku,
+        value: sku,
+        owner: existingBySku[sku],
+        repeatedInForm: !seenSkus.add(sku),
+      );
+      if (skuConflict != null) {
+        conflicts.putIfAbsent(signature, () => {})[CatalogIdentityField.sku] =
+            skuConflict;
       }
-      if (!skus.add(sku)) {
-        setState(() => _generationErrorKey = 'duplicate_sku');
-        return false;
+      final barcode = _barcodeControllers[signature]!.text.trim();
+      final barcodeConflict = _rowConflict(
+        field: CatalogIdentityField.barcode,
+        value: barcode,
+        owner: existingByBarcode[barcode],
+        repeatedInForm: !seenBarcodes.add(barcode),
+      );
+      if (barcodeConflict != null) {
+        conflicts.putIfAbsent(
+          signature,
+          () => {},
+        )[CatalogIdentityField.barcode] = barcodeConflict;
       }
     }
 
     setState(() {
-      _generationErrorKey = null;
+      _generatedConflicts
+        ..clear()
+        ..addAll(conflicts);
+      _generationErrorKey = conflicts.isEmpty ? null : 'duplicate_in_form';
       _valueErrorOptionIds = {};
     });
-    return true;
+    return conflicts.isEmpty;
+  }
+
+  /// The conflict for one generated row's code: the variant of this product
+  /// that already carries it, or a repeat of an earlier row. Null when free.
+  CatalogIdentityConflict? _rowConflict({
+    required CatalogIdentityField field,
+    required String value,
+    required ProductVariant? owner,
+    required bool repeatedInForm,
+  }) {
+    if (value.isEmpty) {
+      return null;
+    }
+    if (owner != null) {
+      return CatalogIdentityConflict(
+        field: field,
+        kind: CatalogIdentityConflictKind.variant,
+        target: CatalogIdentityTarget.variants,
+        value: value,
+        productName: widget.viewModel.product.name,
+        variantName: owner.displayLabel,
+        variantId: owner.id,
+        variantSku: owner.sku,
+      );
+    }
+    if (repeatedInForm) {
+      return CatalogIdentityConflict(
+        field: field,
+        kind: CatalogIdentityConflictKind.payload,
+        target: CatalogIdentityTarget.variants,
+        value: value,
+      );
+    }
+    return null;
+  }
+
+  /// Routes a rejected save's conflicts to the row that carries the value; the
+  /// server indexes them by position in the submitted list.
+  void _applyServerConflicts(List<_GenerationCandidate> candidates) {
+    final conflicts =
+        <String, Map<CatalogIdentityField, CatalogIdentityConflict>>{};
+    for (final conflict in widget.viewModel.variantSaveConflicts) {
+      final index = conflict.index;
+      if (index == null || index < 0 || index >= candidates.length) {
+        continue;
+      }
+      conflicts.putIfAbsent(
+        candidates[index].combination.signature,
+        () => {},
+      )[conflict.field] = conflict;
+    }
+    setState(() {
+      _generatedConflicts
+        ..clear()
+        ..addAll(conflicts);
+      _generationErrorKey = conflicts.isEmpty ? null : 'duplicate_in_form';
+    });
   }
 
   Future<void> _createVariantOption() async {
@@ -658,7 +758,7 @@ class _ProductVariantGenerationSheetState
     }
     final l10n = AppLocalizations.of(context)!;
     return switch (key) {
-      'duplicate_sku' => l10n.generatedVariantsDuplicateSku,
+      'duplicate_in_form' => l10n.formFixHighlightedFieldsError,
       'too_many' => l10n.generatedVariantsTooMany,
       _ => l10n.generatedVariantsMissingValues,
     };

@@ -4,6 +4,7 @@ import '../../shared/barcode/scale_barcode.dart';
 import '../models/attachment_summary.dart';
 import '../models/barcode_resolution.dart';
 import '../models/bought_together_product.dart';
+import '../models/catalog_identity_conflict.dart';
 import '../models/modifier_group.dart';
 import '../models/product.dart';
 import '../models/product_bulk_action.dart';
@@ -452,6 +453,26 @@ class CatalogRepository {
         );
       }
     });
+  }
+
+  /// Asks the backend whether a SKU / barcode is still free.
+  ///
+  /// Drives the live "that barcode belongs to `<product>`" hint in the product
+  /// and variant dialogs. Deliberately *not* routed through [resolveBarcode]:
+  /// that lookup is cached, POS-shaped, and blind to archived products, whose
+  /// codes are still claimed at the unique index.
+  Future<Result<CatalogIdentityCheck>> checkVariantIdentity({
+    String sku = '',
+    String barcode = '',
+    int? excludeVariantId,
+  }) {
+    return Result.guard(
+      () => _service.checkVariantIdentity(
+        sku: sku,
+        barcode: barcode,
+        excludeVariantId: excludeVariantId,
+      ),
+    );
   }
 
   /// Resolves a scanned code to the variant it rings up — and, when the code

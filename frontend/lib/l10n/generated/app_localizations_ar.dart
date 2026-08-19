@@ -5121,12 +5121,58 @@ class AppLocalizationsAr extends AppLocalizations {
       'اختر قيمة واحدة على الأقل لكل خيار.';
 
   @override
-  String get generatedVariantsDuplicateSku =>
-      'رموز الخيارات المولدة يجب أن تكون غير مكررة.';
-
-  @override
   String get generatedVariantsTooMany =>
       'عدد الخيارات المولدة كبير جدًا. قلل القيم المحددة.';
+
+  @override
+  String skuTakenError(String owner) {
+    return 'رمز المنتج مستخدم في \"$owner\"';
+  }
+
+  @override
+  String barcodeTakenError(String owner) {
+    return 'الباركود مستخدم في \"$owner\"';
+  }
+
+  @override
+  String barcodeTakenByUnitError(String unit, String owner) {
+    return 'الباركود مسجَّل كباركود عبوة ($unit) للمنتج \"$owner\"';
+  }
+
+  @override
+  String get skuTakenUnknownOwner => 'رمز المنتج مستخدم في منتج آخر';
+
+  @override
+  String get barcodeTakenUnknownOwner => 'الباركود مستخدم في منتج آخر';
+
+  @override
+  String get identityArchivedOwnerSuffix => '(منتج مؤرشف)';
+
+  @override
+  String get skuDuplicateInFormError => 'رمز المنتج مكرر داخل هذا النموذج';
+
+  @override
+  String get barcodeDuplicateInFormError => 'الباركود مكرر داخل هذا النموذج';
+
+  @override
+  String get identityCodeClaimedDuringSave =>
+      'تم حجز هذا الرمز من جهاز آخر أثناء الحفظ. أعد المحاولة برمز مختلف.';
+
+  @override
+  String get identityCheckingLabel => 'جارٍ التحقق...';
+
+  @override
+  String get skuAvailableLabel => 'الرمز متاح';
+
+  @override
+  String get barcodeAvailableLabel => 'الباركود متاح';
+
+  @override
+  String get identityCheckUnavailableLabel => 'تعذر التحقق من التوفر الآن';
+
+  @override
+  String get formFixHighlightedFieldsError =>
+      'راجع الحقول المعلَّمة بالأحمر ثم أعد المحاولة.';
 
   @override
   String get generatedVariantsNoMissing =>

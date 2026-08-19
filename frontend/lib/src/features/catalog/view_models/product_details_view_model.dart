@@ -7,6 +7,7 @@ import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/attachment_summary.dart';
 import '../../../data/models/bought_together_product.dart';
+import '../../../data/models/catalog_identity_conflict.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_image_upload.dart';
 import '../../../data/models/product_update_draft.dart';
@@ -74,6 +75,9 @@ class ProductDetailsViewModel extends ChangeNotifier {
   bool _isSavingPrices = false;
   List<VariantCostSummary> _costSummaries = [];
   String? _errorMessage;
+  // Duplicate SKU/barcode findings from the last failed variant save, so the
+  // variant dialog can mark the offending field.
+  List<CatalogIdentityConflict> _variantSaveConflicts = const [];
 
   CatalogRepository get catalogRepository => _catalogRepository;
   SaleRepository get saleRepository => _saleRepository;
@@ -117,6 +121,8 @@ class ProductDetailsViewModel extends ChangeNotifier {
   List<VariantCostSummary> get costSummaries =>
       List.unmodifiable(_costSummaries);
   String? get errorMessage => _errorMessage;
+  List<CatalogIdentityConflict> get variantSaveConflicts =>
+      List.unmodifiable(_variantSaveConflicts);
 
   Future<void> loadProduct() async {
     _isLoading = true;
@@ -291,6 +297,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
 
     _isSavingVariant = true;
     _errorMessage = null;
+    _variantSaveConflicts = const [];
     notifyListeners();
 
     final result = await _catalogRepository.createVariantForProduct(
@@ -309,6 +316,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
         notifyListeners();
         return true;
       case Error<ProductVariant>():
+        _variantSaveConflicts = catalogConflictsFromException(result.exception);
         _errorMessage = 'variant_create_error';
         _isSavingVariant = false;
         notifyListeners();
@@ -326,6 +334,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
 
     _isSavingVariant = true;
     _errorMessage = null;
+    _variantSaveConflicts = const [];
     notifyListeners();
 
     final result = await _catalogRepository.updateProduct(
@@ -355,6 +364,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
         notifyListeners();
         return true;
       case Error<Product>():
+        _variantSaveConflicts = catalogConflictsFromException(result.exception);
         _errorMessage = 'variant_generate_error';
         _isSavingVariant = false;
         notifyListeners();
@@ -372,6 +382,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
 
     _isSavingVariant = true;
     _errorMessage = null;
+    _variantSaveConflicts = const [];
     notifyListeners();
 
     final result = await _catalogRepository.updateProductVariant(
@@ -390,6 +401,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
         notifyListeners();
         return true;
       case Error<ProductVariant>():
+        _variantSaveConflicts = catalogConflictsFromException(result.exception);
         _errorMessage = 'variant_update_error';
         _isSavingVariant = false;
         notifyListeners();

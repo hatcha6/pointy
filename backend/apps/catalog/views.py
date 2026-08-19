@@ -46,6 +46,12 @@ from apps.attachments.serializers import (
 from apps.core import caching
 from apps.core.permissions import HasPointyPermission
 from .cache import attach_catalog_version, catalog_etag, catalog_version
+from .identity import (
+    BARCODE_FIELD,
+    SKU_FIELD,
+    find_barcode_conflict,
+    find_sku_conflict,
+)
 from .models import (
     ModifierGroup,
     Product,
@@ -856,6 +862,14 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             pass
 
 
+def _int_param(request, name):
+    raw = request.query_params.get(name)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 class ProductVariantViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     product_cache_key = ProductViewSet.active_cache_key
     serializer_class = ProductVariantSerializer
@@ -867,6 +881,8 @@ class ProductVariantViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         "update": ("catalog.change_productvariant",),
         "partial_update": ("catalog.change_productvariant",),
         "destroy": ("catalog.delete_productvariant",),
+        # Read-only "is this code taken" probe behind the same view permission.
+        "identity_check": ("catalog.view_productvariant",),
     }
     queryset = ProductVariant.objects.select_related(
         "product",
@@ -904,6 +920,34 @@ class ProductVariantViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         # Variants of archived products never appear in the purchasing picker
         # (or anywhere this endpoint feeds).
         return super().get_queryset().filter(product__archived_at__isnull=True)
+
+    @action(detail=False, methods=["get"], url_path="identity-check")
+    def identity_check(self, request):
+        """Is this SKU / barcode still free?
+
+        Lets the product and variant forms answer "that barcode belongs to
+        <product>" while the user is still typing, instead of after a failed
+        save. Deliberately queries the unfiltered model rather than
+        get_queryset(): a code held by an *archived* product is still taken, and
+        a form that called it free would fail at the unique index.
+        """
+        exclude_ids = [
+            value
+            for value in [_int_param(request, "exclude_variant")]
+            if value is not None
+        ]
+        sku = request.query_params.get(SKU_FIELD, "")
+        barcode = request.query_params.get(BARCODE_FIELD, "")
+        sku_conflict = find_sku_conflict(sku, exclude_variant_ids=exclude_ids)
+        barcode_conflict = find_barcode_conflict(barcode, exclude_variant_ids=exclude_ids)
+        return Response(
+            {
+                SKU_FIELD: None if sku_conflict is None else sku_conflict.as_payload(),
+                BARCODE_FIELD: (
+                    None if barcode_conflict is None else barcode_conflict.as_payload()
+                ),
+            }
+        )
 
     def perform_create(self, serializer):
         variant = serializer.save()

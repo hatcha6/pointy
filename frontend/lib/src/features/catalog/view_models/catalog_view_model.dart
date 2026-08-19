@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
+import '../../../data/models/catalog_identity_conflict.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_bulk_action.dart';
 import '../../../data/models/product_draft.dart';
@@ -68,6 +69,9 @@ class CatalogViewModel extends ChangeNotifier {
   bool _hasMoreProducts = true;
   int _nextProductPage = 1;
   String? _errorMessage;
+  // Duplicate SKU/barcode findings from the last failed create, so the product
+  // form can mark the offending field instead of printing one red line.
+  List<CatalogIdentityConflict> _saveConflicts = const [];
   // Browse "most bought" first by default (A–Z stays available in the filters).
   ProductQuery _query = const ProductQuery(ordering: ProductOrdering.mostBought);
 
@@ -81,6 +85,8 @@ class CatalogViewModel extends ChangeNotifier {
   bool get isSaving => _isSaving;
   bool get hasMoreProducts => _hasMoreProducts;
   String? get errorMessage => _errorMessage;
+  List<CatalogIdentityConflict> get saveConflicts =>
+      List.unmodifiable(_saveConflicts);
   ProductQuery get query => _query;
 
   // ---- Multi-select / bulk operations ----
@@ -315,6 +321,7 @@ class CatalogViewModel extends ChangeNotifier {
   }) async {
     _isSaving = true;
     _errorMessage = null;
+    _saveConflicts = const [];
     notifyListeners();
 
     final result = await _catalogRepository.createProduct(draft);
@@ -344,6 +351,7 @@ class CatalogViewModel extends ChangeNotifier {
           product: result.value,
         );
       case Error<Product>():
+        _saveConflicts = catalogConflictsFromException(result.exception);
         _errorMessage = 'catalog_create_error';
         _isSaving = false;
         notifyListeners();

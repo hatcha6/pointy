@@ -1,11 +1,24 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from rest_framework import serializers
 
 from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
+from .identity import (
+    BARCODE_FIELD,
+    KIND_PAYLOAD,
+    KIND_RACE,
+    SKU_FIELD,
+    TARGET_DEFAULT_VARIANT,
+    TARGET_VARIANT,
+    TARGET_VARIANTS,
+    IdentityConflict,
+    find_barcode_conflict,
+    find_conflicts,
+    find_sku_conflict,
+)
 from .models import (
     ModifierGroup,
     ModifierOption,
@@ -19,6 +32,7 @@ from .models import (
     VariantOption,
     VariantOptionValue,
     normalize_barcode,
+    normalize_sku,
     variant_option_signature,
     validate_variant_option_values,
 )
@@ -69,6 +83,85 @@ def raise_serializer_validation(error):
     if hasattr(error, "message_dict"):
         raise serializers.ValidationError(error.message_dict)
     raise serializers.ValidationError(error.messages)
+
+
+def raise_identity_conflicts(conflicts):
+    """Turn duplicate SKU/barcode findings into one per-field 400.
+
+    The detail carries both shapes on purpose: ``{"barcode": [message]}`` (and
+    ``{"variants": [{}, {"sku": [...]}]}`` for a generated-variant payload) so
+    any DRF client renders something sensible, plus a flat ``conflicts`` list
+    the app parses to mark the exact input and name the owning product. DRF runs
+    every leaf of the detail through ``force_str``, so the conflict payload is
+    stringified deliberately rather than accidentally.
+    """
+    conflicts = [conflict for conflict in conflicts if conflict is not None]
+    if not conflicts:
+        return
+
+    detail = {"conflicts": [conflict.as_payload(stringify=True) for conflict in conflicts]}
+    variant_rows: dict[int, dict] = {}
+    for conflict in conflicts:
+        if conflict.target == TARGET_VARIANTS and conflict.index is not None:
+            row = variant_rows.setdefault(conflict.index, {})
+            row.setdefault(conflict.field, []).append(conflict.message)
+        elif conflict.target == TARGET_DEFAULT_VARIANT:
+            nested_detail = detail.setdefault(TARGET_DEFAULT_VARIANT, {})
+            nested_detail.setdefault(conflict.field, []).append(conflict.message)
+        else:
+            detail.setdefault(conflict.field, []).append(conflict.message)
+
+    if variant_rows:
+        size = max(variant_rows) + 1
+        detail[TARGET_VARIANTS] = [variant_rows.get(index, {}) for index in range(size)]
+
+    raise serializers.ValidationError(detail)
+
+
+def raise_identity_conflict_for_integrity_error(error, *, target):
+    """Backstop for the unique index firing after a clean pre-flight check.
+
+    Two cashiers can claim the same barcode in the same second, and a payload
+    that moves a code between two of a product's own variants is applied row by
+    row. Neither should reach the client as a 500.
+    """
+    text = str(error).lower()
+    if BARCODE_FIELD in text:
+        field = BARCODE_FIELD
+    elif SKU_FIELD in text:
+        field = SKU_FIELD
+    else:
+        return False
+    raise_identity_conflicts(
+        [IdentityConflict(field=field, value="", kind=KIND_RACE).at(target)]
+    )
+    return True
+
+
+def _normalized_identity(field, value):
+    if field == SKU_FIELD:
+        return normalize_sku(value)
+    return normalize_barcode(value)
+
+
+def variant_identity_conflicts(data, *, exclude_variant_ids=(), target, index=None):
+    """Conflicts for one variant payload's SKU and barcode."""
+    conflicts = []
+    if SKU_FIELD in data:
+        conflict = find_sku_conflict(
+            data.get(SKU_FIELD) or "",
+            exclude_variant_ids=exclude_variant_ids,
+        )
+        if conflict is not None:
+            conflicts.append(conflict.at(target, index))
+    if BARCODE_FIELD in data:
+        conflict = find_barcode_conflict(
+            data.get(BARCODE_FIELD) or "",
+            exclude_variant_ids=exclude_variant_ids,
+        )
+        if conflict is not None:
+            conflicts.append(conflict.at(target, index))
+    return conflicts
 
 
 class ProductCategorySerializer(serializers.ModelSerializer):
@@ -524,6 +617,17 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         queryset=Product.objects.all(),
         required=False,
     )
+    # Uniqueness is checked in validate() instead of by the model-derived
+    # UniqueValidator: DRF's stock message ("product variant with this barcode
+    # already exists") never says which product owns the code, and the client
+    # needs the structured conflict to mark the right input.
+    sku = serializers.CharField(max_length=64, validators=[])
+    barcode = serializers.CharField(
+        max_length=64,
+        required=False,
+        allow_blank=True,
+        validators=[],
+    )
     product_name = serializers.CharField(source="product.name", read_only=True)
     product_detail = ProductCatalogSummarySerializer(source="product", read_only=True)
     tracks_expiry = serializers.BooleanField(
@@ -645,6 +749,14 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             validate_variant_option_values(product, option_values, variant=self.instance)
         except DjangoValidationError as error:
             raise_serializer_validation(error)
+
+        raise_identity_conflicts(
+            variant_identity_conflicts(
+                attrs,
+                exclude_variant_ids=[getattr(self.instance, "pk", None)],
+                target=TARGET_VARIANT,
+            )
+        )
         return attrs
 
     def create(self, validated_data):
@@ -663,6 +775,12 @@ class ProductVariantSerializer(serializers.ModelSerializer):
                 return variant
         except DjangoValidationError as error:
             raise_serializer_validation(error)
+        except IntegrityError as error:
+            if not raise_identity_conflict_for_integrity_error(
+                error,
+                target=TARGET_VARIANT,
+            ):
+                raise
 
     def update(self, instance, validated_data):
         option_values = validated_data.pop("option_values", None)
@@ -682,6 +800,12 @@ class ProductVariantSerializer(serializers.ModelSerializer):
                 return instance
         except DjangoValidationError as error:
             raise_serializer_validation(error)
+        except IntegrityError as error:
+            if not raise_identity_conflict_for_integrity_error(
+                error,
+                target=TARGET_VARIANT,
+            ):
+                raise
 
 
 class ProductVariantInputSerializer(serializers.Serializer):
@@ -853,7 +977,92 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {field: "Default must be the base unit or one of the product's units."}
                 )
+        raise_identity_conflicts(self._identity_conflicts(attrs))
         return attrs
+
+    def _identity_conflicts(self, attrs):
+        """Duplicate SKUs/barcodes anywhere in a product write.
+
+        Checked here rather than left to the unique index so the response names
+        the offending field, the offending row, and the product that already
+        owns the code — a duplicate barcode used to surface as a 500.
+        """
+        variants_data = attrs.get("variants")
+        # create()/update() apply "variants" *or* "default_variant", never both.
+        default_variant_data = None if variants_data is not None else attrs.get("default_variant")
+
+        # Every variant this request rewrites is excluded from the "already
+        # taken" lookup: the payload describes the state after the write, so a
+        # code that moves between rows of the same product is not a clash.
+        excluded_ids = [data.get("id") for data in (variants_data or []) if data.get("id")]
+        if default_variant_data is not None and self.instance is not None:
+            # ensure_default_variant() writes the default variant, falling back
+            # to the oldest one — the same row this payload will overwrite.
+            existing_default = (
+                self.instance.default_variant
+                or self.instance.variants.order_by("id").first()
+            )
+            if existing_default is not None:
+                excluded_ids.append(existing_default.pk)
+
+        # Every code in the payload paired with where it sits, so the whole
+        # request resolves in one batched lookup instead of two queries a row.
+        entries = [
+            (TARGET_VARIANTS, index, field, value)
+            for index, data in enumerate(variants_data or [])
+            for field in (SKU_FIELD, BARCODE_FIELD)
+            if (value := _normalized_identity(field, data.get(field)))
+        ]
+        if default_variant_data is not None:
+            entries.extend(
+                (TARGET_DEFAULT_VARIANT, None, field, value)
+                for field in (SKU_FIELD, BARCODE_FIELD)
+                if (value := _normalized_identity(field, default_variant_data.get(field)))
+            )
+
+        taken = find_conflicts(
+            skus=[value for _, _, field, value in entries if field == SKU_FIELD],
+            barcodes=[
+                value for _, _, field, value in entries if field == BARCODE_FIELD
+            ],
+            exclude_variant_ids=excluded_ids,
+        )
+
+        conflicts = []
+        seen: dict[tuple[str, str], int] = {}
+        for target, index, field, value in entries:
+            if (field, value) in seen:
+                conflicts.append(
+                    IdentityConflict(
+                        field=field,
+                        value=value,
+                        kind=KIND_PAYLOAD,
+                    ).at(target, index)
+                )
+                continue
+            seen[(field, value)] = index
+            conflict = taken.get((field, value))
+            if conflict is not None:
+                conflicts.append(conflict.at(target, index))
+
+        # A code that resolves to both a variant and a packaging unit is
+        # ambiguous at the scanner, so the two lists in one payload must not
+        # overlap either (the DB half of this lives in _validate_unit_barcodes).
+        unit_barcodes = {
+            normalize_barcode(code)
+            for data in (attrs.get("units") or [])
+            for code in (data.get("barcodes") or [])
+        }
+        for target, index, field, value in entries:
+            if field == BARCODE_FIELD and value in unit_barcodes:
+                conflicts.append(
+                    IdentityConflict(
+                        field=field,
+                        value=value,
+                        kind=KIND_PAYLOAD,
+                    ).at(target, index)
+                )
+        return conflicts
 
     def get_quantity_on_hand(self, product):
         annotated_quantity = getattr(product, "stock_quantity_on_hand", None)
@@ -983,6 +1192,12 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                 return product
         except DjangoValidationError as error:
             raise_serializer_validation(error)
+        except IntegrityError as error:
+            if not raise_identity_conflict_for_integrity_error(
+                error,
+                target=TARGET_VARIANTS,
+            ):
+                raise
 
     def update(self, instance, validated_data):
         categories = validated_data.pop("categories", None)
@@ -1016,6 +1231,12 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                 return instance
         except DjangoValidationError as error:
             raise_serializer_validation(error)
+        except IntegrityError as error:
+            if not raise_identity_conflict_for_integrity_error(
+                error,
+                target=TARGET_VARIANTS,
+            ):
+                raise
 
     def _variant_options_for_payload(
         self,

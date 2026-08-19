@@ -8,6 +8,7 @@ import '../models/analytics_export.dart';
 import '../models/analytics_event.dart';
 import '../models/bill_of_materials.dart';
 import '../models/bought_together_product.dart';
+import '../models/catalog_identity_conflict.dart';
 import '../models/business_alert.dart';
 import '../models/onboarding.dart';
 import '../models/permission_catalog.dart';
@@ -762,6 +763,18 @@ class PosApiService {
     int page = 1,
   }) {
     return _catalog.fetchVariantsForProduct(productId, page: page);
+  }
+
+  Future<CatalogIdentityCheck> checkVariantIdentity({
+    String sku = '',
+    String barcode = '',
+    int? excludeVariantId,
+  }) {
+    return _catalog.checkVariantIdentity(
+      sku: sku,
+      barcode: barcode,
+      excludeVariantId: excludeVariantId,
+    );
   }
 
   Future<ProductVariant> createProductVariant(ProductVariantDraft draft) {

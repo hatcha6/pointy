@@ -1,5 +1,6 @@
 import '../models/attachment_summary.dart';
 import '../models/bought_together_product.dart';
+import '../models/catalog_identity_conflict.dart';
 import '../models/product.dart';
 import '../models/product_category.dart';
 import '../models/product_draft.dart';
@@ -79,7 +80,10 @@ class CatalogApiClient {
 
   Future<Product> createProduct(ProductDraft draft) async {
     final response = await _session.post('products/', body: draft.toJson());
-    _session.ensureSuccess(response, 'Product create failed with status');
+    // throwApiException, not ensureSuccess: a rejected create carries per-field
+    // errors (a duplicate SKU/barcode) in its body, and a plain Exception would
+    // drop them before the form could mark the offending input.
+    _session.throwApiException(response, 'Product create failed with status');
     return Product.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -93,7 +97,7 @@ class CatalogApiClient {
       'products/$id/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(response, 'Product update failed with status');
+    _session.throwApiException(response, 'Product update failed with status');
     return Product.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -284,6 +288,31 @@ class CatalogApiClient {
     );
   }
 
+  /// Asks whether a SKU / barcode is still free — the probe both product
+  /// dialogs run while the user types, so a code already owned by another
+  /// product is named on the field instead of blowing up the save.
+  ///
+  /// Answers about archived products too: their codes stay claimed at the
+  /// unique index even though they never appear in the catalog list.
+  Future<CatalogIdentityCheck> checkVariantIdentity({
+    String sku = '',
+    String barcode = '',
+    int? excludeVariantId,
+  }) async {
+    final response = await _session.get(
+      'product-variants/identity-check/',
+      query: {
+        if (sku.trim().isNotEmpty) 'sku': sku.trim(),
+        if (barcode.trim().isNotEmpty) 'barcode': barcode.trim(),
+        if (excludeVariantId != null) 'exclude_variant': '$excludeVariantId',
+      },
+    );
+    _session.ensureSuccess(response, 'Identity check failed with status');
+    return CatalogIdentityCheck.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<ProductVariantPage> fetchVariantsForProduct(
     int productId, {
     int page = 1,
@@ -306,7 +335,7 @@ class CatalogApiClient {
       'product-variants/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Product variant create failed with status',
     );
@@ -323,7 +352,7 @@ class CatalogApiClient {
       'products/$productId/variants/',
       body: draft.toJson(includeProduct: false),
     );
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Product variant create failed with status',
     );
@@ -340,7 +369,7 @@ class CatalogApiClient {
       'product-variants/$id/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Product variant update failed with status',
     );

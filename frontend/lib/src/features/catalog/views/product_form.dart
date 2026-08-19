@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/parsing.dart';
 import '../../../core/result.dart';
+import '../../../data/models/catalog_identity_conflict.dart';
 import '../../../data/models/modifier_group.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_draft.dart';
@@ -24,6 +25,7 @@ import 'product_image_picker.dart';
 import 'product_units_editor.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
+import 'variant_identity_watcher.dart';
 
 class ProductForm extends StatefulWidget {
   const ProductForm({
@@ -52,6 +54,8 @@ class ProductForm extends StatefulWidget {
 class _ProductFormState extends State<ProductForm> {
   final _parentFormKey = GlobalKey<FormState>();
   final _variantFormKey = GlobalKey<FormState>();
+  final _skuFieldKey = GlobalKey();
+  final _barcodeFieldKey = GlobalKey();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _variantNameController = TextEditingController();
@@ -92,6 +96,14 @@ class _ProductFormState extends State<ProductForm> {
   String? _generationErrorKey;
   var _lastSkuPrefix = '';
   var _lastBasePrice = '';
+  late final VariantIdentityWatcher _identity;
+
+  /// Per-generated-row identity errors, keyed by combination signature then
+  /// field. Generated rows are not watched live (one product can generate
+  /// dozens of them); they collect duplicates found in the form itself and
+  /// whatever the server rejected.
+  final Map<String, Map<CatalogIdentityField, CatalogIdentityConflict>>
+  _generatedConflicts = {};
 
   List<VariantOption> get _selectedVariantOptions {
     return [
@@ -124,6 +136,14 @@ class _ProductFormState extends State<ProductForm> {
     _nameController.addListener(_refreshImageSearchSeed);
     _skuController.addListener(_syncGeneratedSkusFromPrefix);
     _priceController.addListener(_syncGeneratedPricesFromBase);
+    // Watches the single default variant's codes. When the product generates
+    // variants instead, these two inputs become a SKU *prefix* and a base
+    // price, so the watcher is left idle — see _usesGeneratedVariants.
+    _identity = VariantIdentityWatcher(
+      catalogRepository: widget.viewModel.catalogRepository,
+      skuController: _skuController,
+      barcodeController: _barcodeController,
+    );
     _loadVariantOptions();
     _loadModifierGroups();
     _loadUnits();
@@ -154,6 +174,7 @@ class _ProductFormState extends State<ProductForm> {
 
   @override
   void dispose() {
+    _identity.dispose();
     _nameController.removeListener(_refreshImageSearchSeed);
     _nameController.dispose();
     _descriptionController.dispose();
@@ -210,7 +231,7 @@ class _ProductFormState extends State<ProductForm> {
 
   Widget _buildForm(BuildContext context, AppLocalizations l10n) {
     return ListenableBuilder(
-      listenable: widget.viewModel,
+      listenable: Listenable.merge([widget.viewModel, _identity]),
       builder: (context, _) {
         return Material(
           color: context.pointyColors.surface,
@@ -421,6 +442,8 @@ class _ProductFormState extends State<ProductForm> {
                                                 ),
                                             generationErrorText:
                                                 _generationErrorText(context),
+                                            conflictsBySignature:
+                                                _generatedConflicts,
                                           )
                                         else
                                           ProductVariantFormFields(
@@ -457,6 +480,11 @@ class _ProductFormState extends State<ProductForm> {
                                                 ),
                                             showDefaultToggle: false,
                                             showOptionValues: false,
+                                            skuState: _identity.skuState,
+                                            barcodeState:
+                                                _identity.barcodeState,
+                                            skuFieldKey: _skuFieldKey,
+                                            barcodeFieldKey: _barcodeFieldKey,
                                           ),
                                       ],
                                     ),
@@ -468,7 +496,12 @@ class _ProductFormState extends State<ProductForm> {
                           'catalog_create_error') ...[
                         const SizedBox(height: 8),
                         Text(
-                          l10n.productCreateError,
+                          // With a known field conflict the offending input is
+                          // already marked — point at it instead of repeating a
+                          // generic "could not create".
+                          _hasFieldConflict
+                              ? l10n.formFixHighlightedFieldsError
+                              : l10n.productCreateError,
                           style: TextStyle(color: context.pointyColors.danger),
                         ),
                       ],
@@ -532,9 +565,6 @@ class _ProductFormState extends State<ProductForm> {
     if (!isValid) {
       return;
     }
-    if (_variantNameController.text.trim().isEmpty) {
-      _variantNameController.text = '';
-    }
     setState(() => _step = 1);
   }
 
@@ -562,8 +592,15 @@ class _ProductFormState extends State<ProductForm> {
 
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
+    // Settle a code typed in the last few hundred milliseconds before the form
+    // decides whether it is valid.
+    await _identity.refresh();
+    if (!mounted) {
+      return;
+    }
     final isValid = _variantFormKey.currentState?.validate() ?? false;
     if (!isValid) {
+      _scrollToFirstConflict();
       return;
     }
 
@@ -629,8 +666,15 @@ class _ProductFormState extends State<ProductForm> {
       return;
     }
 
+    if (result.outcome == ProductCreateOutcome.failed) {
+      // The server re-checks every write, so a clash it found — including one
+      // that appeared between the live check and the save — lands on its field.
+      _applyServerConflicts(widget.viewModel.saveConflicts);
+      return;
+    }
+
     final createdProduct = result.product;
-    if (result.outcome != ProductCreateOutcome.failed && createdProduct != null) {
+    if (createdProduct != null) {
       ScaffoldMessenger.of(context)
         ..clearSnackBars()
         ..showSnackBar(
@@ -644,6 +688,57 @@ class _ProductFormState extends State<ProductForm> {
         );
       widget.onCreated?.call(createdProduct);
     }
+  }
+
+  /// Routes a rejected save's conflicts to the input that carries the value:
+  /// the single default-variant fields, or the generated row named by the
+  /// conflict's index.
+  void _applyServerConflicts(List<CatalogIdentityConflict> conflicts) {
+    final combinations = _generatedCombinations;
+    final generated = <CatalogIdentityConflict>[];
+    final single = <CatalogIdentityConflict>[];
+    for (final conflict in conflicts) {
+      if (conflict.target == CatalogIdentityTarget.variants) {
+        generated.add(conflict);
+      } else {
+        single.add(conflict);
+      }
+    }
+
+    setState(() {
+      _generatedConflicts.clear();
+      for (final conflict in generated) {
+        final index = conflict.index;
+        if (index == null || index < 0 || index >= combinations.length) {
+          continue;
+        }
+        _generatedConflicts.putIfAbsent(
+          combinations[index].signature,
+          () => {},
+        )[conflict.field] = conflict;
+      }
+    });
+    _identity.applyConflicts(single);
+    _scrollToFirstConflict();
+  }
+
+  /// Brings the first rejected identity field back into view — a long form can
+  /// otherwise mark a field the user cannot see.
+  void _scrollToFirstConflict() {
+    final key = _identity.skuState.isTaken
+        ? _skuFieldKey
+        : _identity.barcodeState.isTaken
+        ? _barcodeFieldKey
+        : null;
+    final target = key?.currentContext;
+    if (target == null) {
+      return;
+    }
+    Scrollable.ensureVisible(
+      target,
+      duration: const Duration(milliseconds: 250),
+      alignment: 0.2,
+    );
   }
 
   Future<void> _loadVariantOptions() async {
@@ -719,8 +814,19 @@ class _ProductFormState extends State<ProductForm> {
       }
       _generationErrorKey = null;
       _syncGeneratedVariantControllers();
+      _syncIdentityWatcher();
     });
   }
+
+  /// The SKU/barcode inputs only describe one real variant while the product
+  /// has no options; once it generates variants they become a prefix and an
+  /// unused field, so checking them would flag phantom duplicates.
+  void _syncIdentityWatcher() {
+    _identity.enabled = !_usesGeneratedVariants;
+  }
+
+  bool get _hasFieldConflict =>
+      _identity.hasConflict || _generatedConflicts.isNotEmpty;
 
   void _toggleOptionValue(VariantOption option, int valueId) {
     setState(() {
@@ -770,6 +876,9 @@ class _ProductFormState extends State<ProductForm> {
     _generatedActiveBySignature.removeWhere(
       (signature, _) => !signatures.contains(signature),
     );
+    _generatedConflicts.removeWhere(
+      (signature, _) => !signatures.contains(signature),
+    );
 
     for (final combination in combinations) {
       _generatedNameControllers.putIfAbsent(
@@ -778,13 +887,18 @@ class _ProductFormState extends State<ProductForm> {
       );
       _generatedSkuControllers.putIfAbsent(
         combination.signature,
-        () => TextEditingController(
+        () => _watchedGeneratedController(
+          combination.signature,
+          CatalogIdentityField.sku,
           text: combination.skuFromBase(_skuController.text),
         ),
       );
       _generatedBarcodeControllers.putIfAbsent(
         combination.signature,
-        () => TextEditingController(),
+        () => _watchedGeneratedController(
+          combination.signature,
+          CatalogIdentityField.barcode,
+        ),
       );
       _generatedPriceControllers.putIfAbsent(
         combination.signature,
@@ -865,25 +979,93 @@ class _ProductFormState extends State<ProductForm> {
       return false;
     }
 
-    final skus = <String>{};
-    for (final combination in combinations) {
-      final sku = _generatedSkuControllers[combination.signature]!.text
-          .trim()
-          .toUpperCase();
-      if (sku.isEmpty) {
-        continue;
-      }
-      if (!skus.add(sku)) {
-        setState(() => _generationErrorKey = 'duplicate_sku');
-        return false;
-      }
-    }
-
+    // Codes repeated across the generated rows are marked on the *second* row
+    // that uses them, so the fix is one field away instead of a hunt through a
+    // long list under a single "duplicate SKU" line.
+    final duplicates = _duplicateGeneratedConflicts(combinations);
     setState(() {
-      _generationErrorKey = null;
+      _generatedConflicts
+        ..clear()
+        ..addAll(duplicates);
+      _generationErrorKey = duplicates.isEmpty ? null : 'duplicate_in_form';
       _valueErrorOptionIds = {};
     });
-    return true;
+    return duplicates.isEmpty;
+  }
+
+  Map<String, Map<CatalogIdentityField, CatalogIdentityConflict>>
+  _duplicateGeneratedConflicts(List<VariantCombination> combinations) {
+    final conflicts =
+        <String, Map<CatalogIdentityField, CatalogIdentityConflict>>{};
+    final seen = <CatalogIdentityField, Map<String, String>>{
+      CatalogIdentityField.sku: {},
+      CatalogIdentityField.barcode: {},
+    };
+    final controllers = {
+      CatalogIdentityField.sku: _generatedSkuControllers,
+      CatalogIdentityField.barcode: _generatedBarcodeControllers,
+    };
+
+    for (final combination in combinations) {
+      for (final field in CatalogIdentityField.values) {
+        final raw = controllers[field]![combination.signature]?.text.trim();
+        if (raw == null || raw.isEmpty) {
+          continue;
+        }
+        // SKUs are stored upper-cased server-side, so "cof-1" and "COF-1" are
+        // the same code; barcodes are compared as typed.
+        final value = field == CatalogIdentityField.sku
+            ? raw.toUpperCase()
+            : raw;
+        final owner = seen[field]![value];
+        if (owner == null) {
+          seen[field]![value] = combination.signature;
+          continue;
+        }
+        conflicts.putIfAbsent(
+          combination.signature,
+          () => {},
+        )[field] = CatalogIdentityConflict(
+          field: field,
+          kind: CatalogIdentityConflictKind.payload,
+          target: CatalogIdentityTarget.variants,
+          value: value,
+        );
+      }
+    }
+    return conflicts;
+  }
+
+  void _clearGeneratedConflict(String signature, CatalogIdentityField field) {
+    if (!mounted) {
+      return;
+    }
+    final row = _generatedConflicts[signature];
+    if (row == null || !row.containsKey(field)) {
+      return;
+    }
+    setState(() {
+      row.remove(field);
+      if (row.isEmpty) {
+        _generatedConflicts.remove(signature);
+      }
+      if (_generatedConflicts.isEmpty &&
+          _generationErrorKey == 'duplicate_in_form') {
+        _generationErrorKey = null;
+      }
+    });
+  }
+
+  TextEditingController _watchedGeneratedController(
+    String signature,
+    CatalogIdentityField field, {
+    String text = '',
+  }) {
+    final controller = TextEditingController(text: text);
+    // Editing a marked row clears its own error immediately, so the red text
+    // never outlives the value it described.
+    controller.addListener(() => _clearGeneratedConflict(signature, field));
+    return controller;
   }
 
   String? _generationErrorText(BuildContext context) {
@@ -893,7 +1075,7 @@ class _ProductFormState extends State<ProductForm> {
     }
     final l10n = AppLocalizations.of(context)!;
     return switch (key) {
-      'duplicate_sku' => l10n.generatedVariantsDuplicateSku,
+      'duplicate_in_form' => l10n.formFixHighlightedFieldsError,
       'too_many' => l10n.generatedVariantsTooMany,
       _ => l10n.generatedVariantsMissingValues,
     };
@@ -918,6 +1100,7 @@ class _ProductFormState extends State<ProductForm> {
       _selectedValueIdsByOption[created.id] = const {};
       _generationErrorKey = null;
       _syncGeneratedVariantControllers();
+      _syncIdentityWatcher();
     });
   }
 
@@ -995,6 +1178,7 @@ class _GeneratedVariantFormStep extends StatelessWidget {
     required this.requiredValidator,
     required this.numberValidator,
     required this.generationErrorText,
+    required this.conflictsBySignature,
   });
 
   final TextEditingController skuController;
@@ -1016,6 +1200,8 @@ class _GeneratedVariantFormStep extends StatelessWidget {
   final FormFieldValidator<String> requiredValidator;
   final FormFieldValidator<String> numberValidator;
   final String? generationErrorText;
+  final Map<String, Map<CatalogIdentityField, CatalogIdentityConflict>>
+  conflictsBySignature;
 
   @override
   Widget build(BuildContext context) {
@@ -1075,6 +1261,7 @@ class _GeneratedVariantFormStep extends StatelessWidget {
           onActiveChanged: onVariantActiveChanged,
           requiredValidator: requiredValidator,
           numberValidator: numberValidator,
+          conflictsBySignature: conflictsBySignature,
         ),
       ],
     );

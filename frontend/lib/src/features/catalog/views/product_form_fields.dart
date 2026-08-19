@@ -3,9 +3,11 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/variant_option_value_picker.dart';
+import 'variant_identity_watcher.dart';
 
 class ProductParentFormFields extends StatelessWidget {
   const ProductParentFormFields({
@@ -158,6 +160,10 @@ class ProductVariantFormFields extends StatelessWidget {
     required this.numberValidator,
     this.showDefaultToggle = true,
     this.showOptionValues = true,
+    this.skuState = const IdentityFieldState(),
+    this.barcodeState = const IdentityFieldState(),
+    this.skuFieldKey,
+    this.barcodeFieldKey,
   });
 
   final TextEditingController variantNameController;
@@ -176,9 +182,20 @@ class ProductVariantFormFields extends StatelessWidget {
   final bool showDefaultToggle;
   final bool showOptionValues;
 
+  /// Live "is this code taken?" state for the two identity fields — drives the
+  /// inline error, the availability hint and the trailing status icon.
+  final IdentityFieldState skuState;
+  final IdentityFieldState barcodeState;
+
+  /// Keys the parent uses to scroll a rejected field into view.
+  final Key? skuFieldKey;
+  final Key? barcodeFieldKey;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final skuError = identityErrorText(l10n, skuState);
+    final barcodeError = identityErrorText(l10n, barcodeState);
 
     final fields = [
       TextFormField(
@@ -191,6 +208,7 @@ class ProductVariantFormFields extends StatelessWidget {
         ),
       ),
       TextFormField(
+        key: skuFieldKey,
         controller: skuController,
         textInputAction: TextInputAction.next,
         textCapitalization: TextCapitalization.characters,
@@ -198,13 +216,21 @@ class ProductVariantFormFields extends StatelessWidget {
           labelText: l10n.skuLabel,
           hintText: l10n.skuHint,
           prefixIcon: const Icon(Icons.qr_code_2),
+          suffixIcon: IdentityStatusIcon(state: skuState, isBarcode: false),
+          helperText: identityHelperText(l10n, skuState, isBarcode: false),
+          // The server error stays visible until the value changes; validator
+          // errors (a blank SKU) still win, so both can never show at once.
+          errorText: skuError,
         ),
-        validator: requiredValidator,
+        validator: (value) => skuError ?? requiredValidator(value),
       ),
       BarcodeInputRow(
+        fieldKey: barcodeFieldKey,
         controller: barcodeController,
         label: l10n.barcodeLabel,
         hint: l10n.barcodeHint,
+        state: barcodeState,
+        errorText: barcodeError,
       ),
       TextFormField(
         controller: priceController,
@@ -259,22 +285,93 @@ class BarcodeInputRow extends StatelessWidget {
     required this.controller,
     required this.label,
     required this.hint,
+    this.fieldKey,
+    this.state = const IdentityFieldState(),
+    this.errorText,
   });
 
   final TextEditingController controller;
   final String label;
   final String hint;
+  final Key? fieldKey;
+  final IdentityFieldState state;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return TextFormField(
+      key: fieldKey,
       controller: controller,
       textInputAction: TextInputAction.next,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         prefixIcon: const Icon(Icons.document_scanner_outlined),
+        suffixIcon: IdentityStatusIcon(state: state, isBarcode: true),
+        helperText: identityHelperText(l10n, state, isBarcode: true),
+        errorText: errorText,
       ),
+      // A barcode is optional, so the only thing that can fail it is a clash —
+      // surfaced through the same validator so Form.validate() blocks the save.
+      validator: (_) => errorText,
     );
   }
+}
+
+/// Trailing marker on an identity field: a spinner while the code is being
+/// looked up, a check once it is confirmed free, a muted cloud when the lookup
+/// could not run. A taken code shows nothing here — the red error text below
+/// the field is the signal.
+class IdentityStatusIcon extends StatelessWidget {
+  const IdentityStatusIcon({
+    super.key,
+    required this.state,
+    required this.isBarcode,
+  });
+
+  final IdentityFieldState state;
+  final bool isBarcode;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    return switch (state.status) {
+      IdentityStatus.checking => const Padding(
+        padding: EdgeInsets.all(14),
+        child: SizedBox.square(
+          dimension: 16,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      ),
+      IdentityStatus.free => Icon(
+        Icons.check_circle_outline,
+        color: colors.success,
+        semanticLabel: isBarcode
+            ? l10n.barcodeAvailableLabel
+            : l10n.skuAvailableLabel,
+      ),
+      IdentityStatus.unavailable => Tooltip(
+        message: l10n.identityCheckUnavailableLabel,
+        child: Icon(Icons.cloud_off_outlined, color: colors.mutedInk),
+      ),
+      IdentityStatus.idle || IdentityStatus.taken => const SizedBox.shrink(),
+    };
+  }
+}
+
+/// Helper line under an identity field. Only ever *reassuring* text: the
+/// negative case is the field's error, which replaces the helper anyway.
+String? identityHelperText(
+  AppLocalizations l10n,
+  IdentityFieldState state, {
+  required bool isBarcode,
+}) {
+  return switch (state.status) {
+    IdentityStatus.checking => l10n.identityCheckingLabel,
+    IdentityStatus.free =>
+      isBarcode ? l10n.barcodeAvailableLabel : l10n.skuAvailableLabel,
+    _ => null,
+  };
 }

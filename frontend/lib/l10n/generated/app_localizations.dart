@@ -9079,17 +9079,95 @@ abstract class AppLocalizations {
   /// **'اختر قيمة واحدة على الأقل لكل خيار.'**
   String get generatedVariantsMissingValues;
 
-  /// No description provided for @generatedVariantsDuplicateSku.
-  ///
-  /// In ar, this message translates to:
-  /// **'رموز الخيارات المولدة يجب أن تكون غير مكررة.'**
-  String get generatedVariantsDuplicateSku;
-
   /// No description provided for @generatedVariantsTooMany.
   ///
   /// In ar, this message translates to:
   /// **'عدد الخيارات المولدة كبير جدًا. قلل القيم المحددة.'**
   String get generatedVariantsTooMany;
+
+  /// Inline error under the SKU field when another product already uses it.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز المنتج مستخدم في \"{owner}\"'**
+  String skuTakenError(String owner);
+
+  /// Inline error under the barcode field when another product already uses it.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباركود مستخدم في \"{owner}\"'**
+  String barcodeTakenError(String owner);
+
+  /// Inline error when a barcode already belongs to a packaging unit of another product.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباركود مسجَّل كباركود عبوة ({unit}) للمنتج \"{owner}\"'**
+  String barcodeTakenByUnitError(String unit, String owner);
+
+  /// No description provided for @skuTakenUnknownOwner.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز المنتج مستخدم في منتج آخر'**
+  String get skuTakenUnknownOwner;
+
+  /// No description provided for @barcodeTakenUnknownOwner.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباركود مستخدم في منتج آخر'**
+  String get barcodeTakenUnknownOwner;
+
+  /// No description provided for @identityArchivedOwnerSuffix.
+  ///
+  /// In ar, this message translates to:
+  /// **'(منتج مؤرشف)'**
+  String get identityArchivedOwnerSuffix;
+
+  /// No description provided for @skuDuplicateInFormError.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز المنتج مكرر داخل هذا النموذج'**
+  String get skuDuplicateInFormError;
+
+  /// No description provided for @barcodeDuplicateInFormError.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباركود مكرر داخل هذا النموذج'**
+  String get barcodeDuplicateInFormError;
+
+  /// No description provided for @identityCodeClaimedDuringSave.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حجز هذا الرمز من جهاز آخر أثناء الحفظ. أعد المحاولة برمز مختلف.'**
+  String get identityCodeClaimedDuringSave;
+
+  /// No description provided for @identityCheckingLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ التحقق...'**
+  String get identityCheckingLabel;
+
+  /// No description provided for @skuAvailableLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرمز متاح'**
+  String get skuAvailableLabel;
+
+  /// No description provided for @barcodeAvailableLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباركود متاح'**
+  String get barcodeAvailableLabel;
+
+  /// No description provided for @identityCheckUnavailableLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر التحقق من التوفر الآن'**
+  String get identityCheckUnavailableLabel;
+
+  /// No description provided for @formFixHighlightedFieldsError.
+  ///
+  /// In ar, this message translates to:
+  /// **'راجع الحقول المعلَّمة بالأحمر ثم أعد المحاولة.'**
+  String get formFixHighlightedFieldsError;
 
   /// No description provided for @generatedVariantsNoMissing.
   ///

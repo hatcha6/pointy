@@ -2938,8 +2938,48 @@
   },
   "generatedVariantNameLabel": "اسم الخيار",
   "generatedVariantsMissingValues": "اختر قيمة واحدة على الأقل لكل خيار.",
-  "generatedVariantsDuplicateSku": "رموز الخيارات المولدة يجب أن تكون غير مكررة.",
   "generatedVariantsTooMany": "عدد الخيارات المولدة كبير جدًا. قلل القيم المحددة.",
+  "skuTakenError": "رمز المنتج مستخدم في \"{owner}\"",
+  "@skuTakenError": {
+    "description": "Inline error under the SKU field when another product already uses it.",
+    "placeholders": {
+      "owner": {
+        "type": "String"
+      }
+    }
+  },
+  "barcodeTakenError": "الباركود مستخدم في \"{owner}\"",
+  "@barcodeTakenError": {
+    "description": "Inline error under the barcode field when another product already uses it.",
+    "placeholders": {
+      "owner": {
+        "type": "String"
+      }
+    }
+  },
+  "barcodeTakenByUnitError": "الباركود مسجَّل كباركود عبوة ({unit}) للمنتج \"{owner}\"",
+  "@barcodeTakenByUnitError": {
+    "description": "Inline error when a barcode already belongs to a packaging unit of another product.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      },
+      "owner": {
+        "type": "String"
+      }
+    }
+  },
+  "skuTakenUnknownOwner": "رمز المنتج مستخدم في منتج آخر",
+  "barcodeTakenUnknownOwner": "الباركود مستخدم في منتج آخر",
+  "identityArchivedOwnerSuffix": "(منتج مؤرشف)",
+  "skuDuplicateInFormError": "رمز المنتج مكرر داخل هذا النموذج",
+  "barcodeDuplicateInFormError": "الباركود مكرر داخل هذا النموذج",
+  "identityCodeClaimedDuringSave": "تم حجز هذا الرمز من جهاز آخر أثناء الحفظ. أعد المحاولة برمز مختلف.",
+  "identityCheckingLabel": "جارٍ التحقق...",
+  "skuAvailableLabel": "الرمز متاح",
+  "barcodeAvailableLabel": "الباركود متاح",
+  "identityCheckUnavailableLabel": "تعذر التحقق من التوفر الآن",
+  "formFixHighlightedFieldsError": "راجع الحقول المعلَّمة بالأحمر ثم أعد المحاولة.",
   "generatedVariantsNoMissing": "كل التركيبات المحددة موجودة بالفعل.",
   "generateVariantsTitle": "توليد الخيارات",
   "generateVariantsButton": "توليد الخيارات",
