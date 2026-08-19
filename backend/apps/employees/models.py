@@ -15,6 +15,10 @@ from apps.core.models import TimeStampedModel
 DEFAULT_OVERTIME_MULTIPLIER = Decimal("1.50")
 DEFAULT_STANDARD_DAILY_HOURS = Decimal("8.00")
 
+# Distinguishes "primed with no payroll lines" from "never primed" -- a real
+# payroll total of zero must not be mistaken for a cache miss.
+_UNPRIMED = object()
+
 
 class Employee(TimeStampedModel):
     class Status(models.TextChoices):
@@ -84,24 +88,31 @@ class Employee(TimeStampedModel):
     def has_system_access(self):
         return self.user_id is not None
 
+    # Both properties below are serialized on every row of ``employee-list`` and
+    # each cost their own query per row. ``EmployeeViewSet.get_queryset`` fills
+    # the caches they read first -- ``_active_plans`` from a filtered prefetch,
+    # ``_payroll_total_amount`` from a subquery on the page query -- so a whole
+    # page costs nothing extra. Only the *fetching* is batched: the selection
+    # rule lives once in ``CompensationPlan.active_as_of`` and the rounding
+    # stays here, so a primed employee and a cold one cannot disagree.
+
     @property
     def active_compensation_plan(self):
-        today = timezone.localdate()
-        return (
-            self.compensation_plans.filter(
-                is_active=True,
-                effective_from__lte=today,
-            )
-            .filter(Q(effective_to__isnull=True) | Q(effective_to__gte=today))
-            .order_by("-effective_from", "-id")
-            .first()
-        )
+        primed = getattr(self, "_active_plans", None)
+        if primed is not None:
+            return primed[0] if primed else None
+        return CompensationPlan.active_as_of(
+            timezone.localdate(),
+            self.compensation_plans.all(),
+        ).first()
 
     @property
     def payroll_total(self):
-        total = self.payroll_lines.exclude(
-            payroll_run__status=PayrollRun.Status.VOID,
-        ).aggregate(total=Sum("net_amount"))["total"]
+        total = getattr(self, "_payroll_total_amount", _UNPRIMED)
+        if total is _UNPRIMED:
+            total = self.payroll_lines.exclude(
+                payroll_run__status=PayrollRun.Status.VOID,
+            ).aggregate(total=Sum("net_amount"))["total"]
         return (total or Decimal("0.00")).quantize(Decimal("0.01"))
 
     def clean(self):
@@ -235,6 +246,23 @@ class CompensationPlan(TimeStampedModel):
 
     def __str__(self):
         return f"{self.employee} - {self.pay_type} {self.amount}"
+
+    @classmethod
+    def active_as_of(cls, today, queryset=None):
+        """The "which plan is in force" rule, in one place.
+
+        ``Employee.active_compensation_plan`` applies it to one employee's
+        relation; ``EmployeeViewSet.get_queryset`` applies it to a whole page as
+        a prefetch, so the per-row and the batched answer cannot drift apart.
+        The ordering matters to both callers: it is what makes ``.first()`` and
+        the prefetch's first-row-per-employee pick the same plan.
+        """
+        rows = cls.objects.all() if queryset is None else queryset
+        return (
+            rows.filter(is_active=True, effective_from__lte=today)
+            .filter(Q(effective_to__isnull=True) | Q(effective_to__gte=today))
+            .order_by("-effective_from", "-id")
+        )
 
     @property
     def resolved_salary_type(self):

@@ -1,5 +1,6 @@
 from django.db import transaction
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, DecimalField, OuterRef, Prefetch, Q, Subquery, Sum
+from django.utils import timezone
 from rest_framework import mixins, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
@@ -52,12 +53,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         "partial_update": ("employees.change_employee",),
         "destroy": ("employees.delete_employee",),
     }
-    queryset = Employee.objects.select_related("user").prefetch_related(
-        Prefetch(
-            "compensation_plans",
-            queryset=CompensationPlan.objects.order_by("-effective_from", "-id"),
-        )
-    )
+    queryset = Employee.objects.select_related("user")
     filterset_fields = ("status", "employment_type", "department", "user")
     search_fields = (
         "employee_number",
@@ -75,6 +71,45 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         "created_at",
         "updated_at",
     )
+
+    def get_queryset(self):
+        """Serve both property-backed row fields from the page query.
+
+        ``active_compensation_plan`` and ``payroll_total`` each used to run a
+        query per row. The prefetch below carries the same selection rule the
+        property uses when cold, and the subquery rides along on the page query
+        that was going to run anyway, so neither field costs a query per row.
+        Built here rather than as a class attribute because the plan filter is
+        relative to *today* -- a module-level queryset would freeze the date at
+        import time and go stale at midnight.
+        """
+        today = timezone.localdate()
+        return (
+            super()
+            .get_queryset()
+            .prefetch_related(
+                Prefetch(
+                    "compensation_plans",
+                    queryset=CompensationPlan.active_as_of(today),
+                    to_attr="_active_plans",
+                )
+            )
+            .annotate(
+                _payroll_total_amount=Subquery(
+                    PayrollLine.objects.filter(employee_id=OuterRef("pk"))
+                    .exclude(payroll_run__status=PayrollRun.Status.VOID)
+                    .values("employee_id")
+                    # PayrollLine's Meta ordering is ``employee__full_name``.
+                    # Django drops the ORDER BY from a grouped subquery but
+                    # keeps the join it needed, so without this the correlated
+                    # subquery re-joins employees once per row for nothing.
+                    .order_by()
+                    .annotate(total=Sum("net_amount"))
+                    .values("total")[:1],
+                    output_field=DecimalField(max_digits=12, decimal_places=2),
+                )
+            )
+        )
 
     def perform_create(self, serializer):
         employee = serializer.save()

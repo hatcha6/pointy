@@ -292,3 +292,52 @@ comes from, never what it says.
 already prefetches (so the prefetch is paid for and ignored), and `payroll_total`
 is a per-row `Sum` aggregate. Measured 14 queries at 5 rows, 24 at 10; a
 50-row page is ~104. Left out to keep this change one subsystem.
+
+## 2026-08-19 - An unused `Prefetch` is a signpost, not a tuned queryset
+
+**Learning:** `EmployeeViewSet` carried
+`Prefetch("compensation_plans", queryset=...order_by("-effective_from", "-id"))`
+— exactly the ordering `Employee.active_compensation_plan` needs — yet the
+property called `self.compensation_plans.filter(...)`, which **builds a new
+queryset and ignores the prefetch cache entirely**. So the page paid for the
+prefetch *and* a query per row, and the endpoint read as already-optimized. The
+`compensation_history` action ignores it too (`.order_by()` on the manager is
+another fresh queryset), so nothing on the viewset ever consumed it. Measured
+`employee-list`: 14 q at 5 rows, 24 at 10, **104 at 50** — 2.0 q/row from this
+plus `payroll_total`'s per-row `Sum`. Flat 4 after.
+**Action:** A `Prefetch` whose `to_attr` is absent and whose relation is only
+reached through `.filter()`/`.order_by()` on the manager is dead weight —
+`grep` the relation name and check every caller uses `.all()` (or the
+`to_attr`). When the consumer is a property with a selection rule, the fix is
+`to_attr` + a shared classmethod (`CompensationPlan.active_as_of`) so the cold
+`.first()` and the prefetch's first row are the same rule, and the property
+still owns the answer.
+
+## 2026-08-19 - A grouped subquery keeps the join its dropped ORDER BY needed
+
+**Learning:** `PayrollLine.Meta.ordering = ["employee__full_name", "id"]`. In a
+correlated `Subquery(... .values("employee_id").annotate(Sum(...)))`, Django
+correctly omits the Meta ORDER BY from the grouped SQL — but it does **not**
+drop the `INNER JOIN employees_employee` that ordering pulled in. The result is
+right and the join is invisible in the ORM code; it just costs an extra join
+inside a subquery that runs once per row of the page. Adding an explicit
+`.order_by()` before the `annotate()` removes it (verified by printing
+`str(qs.query)`: 2 joins -> 1).
+**Action:** Any `values().annotate()` subquery over a model whose `Meta.ordering`
+traverses a relation (`PayrollLine`, `OrderLine`-shaped models here) needs an
+explicit `.order_by()`. A query-count test will **not** catch this — the query
+count is identical either way. Check the generated SQL, not just the count.
+
+## 2026-08-19 - A correct, verified PR still cannot merge from a `bolt/*` branch
+**Learning:** 🛡 Warden merges only PRs whose *head branch* starts with
+`claude/`. The guard fires on the branch name, not authorship, so #36 —
+reviewed clean, no defects found, regression test confirmed failing on `main` —
+sat in the queue being skipped every hourly run. A whole cycle bought nothing.
+🧪 Probe lost a run to the identical wall (#34 → #38), so this is a fleet-wide
+trap, not a one-off. The recovery is cheap but only if you spot it: push the
+same SHA to `claude/<name>` (`git push origin <sha>:refs/heads/claude/<name>`,
+no checkout needed), open the PR there, close the old one.
+**Action:** Name the branch `claude/bolt-<topic>` at creation. Before opening
+any PR, check the prefix — and when an open PR of yours is unlabelled and
+untouched across runs, suspect the branch name before assuming it is merely
+awaiting review.
