@@ -9,6 +9,8 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/services/api_session.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/order/sale_order_details_content.dart';
 import '../../invoices/view_models/invoice_details_view_model.dart';
 
@@ -45,7 +47,17 @@ class _ReturnsExchangeLookupScreenState
   final TextEditingController _receiptController = TextEditingController();
   InvoiceDetailsViewModel? _viewModel;
   bool _searching = false;
-  bool _notFound = false;
+
+  /// The failure behind the last lookup, or null when none failed. A 404
+  /// means the receipt number genuinely matches no invoice; anything else
+  /// (offline, server error) must not be reported as a missing invoice —
+  /// the cashier would tell a customer their real receipt is invalid.
+  Exception? _failure;
+
+  bool get _receiptNotFound {
+    final failure = _failure;
+    return failure is PosApiException && failure.statusCode == 404;
+  }
 
   @override
   void dispose() {
@@ -72,7 +84,7 @@ class _ReturnsExchangeLookupScreenState
     }
     setState(() {
       _searching = true;
-      _notFound = false;
+      _failure = null;
     });
     final result = await widget.saleRepository.lookupByReceipt(receipt);
     if (!mounted) {
@@ -84,10 +96,10 @@ class _ReturnsExchangeLookupScreenState
         case Ok<SaleOrder>(value: final order):
           _viewModel?.dispose();
           _viewModel = _viewModelFor(order);
-        case Error<SaleOrder>():
+        case Error<SaleOrder>(exception: final exception):
           _viewModel?.dispose();
           _viewModel = null;
-          _notFound = true;
+          _failure = exception;
       }
     });
   }
@@ -123,15 +135,27 @@ class _ReturnsExchangeLookupScreenState
                   const SizedBox(width: 8),
                   SizedBox(
                     height: 56,
-                    child: FilledButton.icon(
-                      onPressed: _searching ? null : _lookup,
-                      icon: _searching
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.search),
-                      label: Text(l10n.returnsLookupSearchButton),
+                    // Search stays inert until there is a receipt number to look
+                    // up, so an empty tap reads as "nothing to search yet"
+                    // instead of a frozen screen.
+                    child: ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _receiptController,
+                      builder: (context, value, _) {
+                        final canSearch =
+                            !_searching && value.text.trim().isNotEmpty;
+                        return FilledButton.icon(
+                          onPressed: canSearch ? _lookup : null,
+                          icon: _searching
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.search),
+                          label: Text(l10n.returnsLookupSearchButton),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -166,28 +190,28 @@ class _ReturnsExchangeLookupScreenState
         },
       );
     }
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _notFound
-                  ? Icons.search_off_outlined
-                  : Icons.swap_horiz_outlined,
-              size: 48,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              _notFound ? l10n.returnsLookupNotFound : l10n.returnsLookupEmpty,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-          ],
+    if (_failure != null && !_receiptNotFound) {
+      return PointyErrorState(
+        icon: Icons.cloud_off_outlined,
+        title: l10n.returnsLookupFailedTitle,
+        message: l10n.returnsLookupFailedMessage,
+        action: FilledButton.icon(
+          onPressed: _searching ? null : _lookup,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.retryButton),
         ),
-      ),
+      );
+    }
+    if (_receiptNotFound) {
+      return PointyEmptyState(
+        icon: Icons.search_off_outlined,
+        title: l10n.returnsLookupNotFound,
+        message: l10n.returnsLookupNotFoundHint,
+      );
+    }
+    return PointyEmptyState(
+      icon: Icons.swap_horiz_outlined,
+      title: l10n.returnsLookupEmpty,
     );
   }
 }

@@ -234,7 +234,9 @@ class SalesApiClient {
       'orders/lookup/',
       query: {'receipt': receiptNumber},
     );
-    _session.ensureSuccess(response, 'Invoice lookup failed with status');
+    // Carry the status code out: the returns desk must tell a genuine 404
+    // (no such receipt) apart from an unreachable or failing server.
+    _session.throwApiException(response, 'Invoice lookup failed with status');
     return SaleOrder.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );

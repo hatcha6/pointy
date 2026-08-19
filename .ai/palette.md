@@ -134,3 +134,35 @@ the copy they belong to, so every call site inherits it instead of hand-rolling 
 list is genuinely empty, show the "create one" CTA; when it is merely filtered,
 suppress it — inviting a manager to add a product that already exists behind the
 filter is how you get duplicate SKUs.
+
+## 2026-08-19 - "Not found" vs "we couldn't ask" needs a status code the API layer throws away
+
+**Learning:** `ApiSession.ensureSuccess` (api_session.dart) throws a bare
+`Exception('… failed with status 500')` — the status code survives only inside an
+English string. Every screen whose repository call goes through it therefore collapses
+*404 / 403 / 500 / offline* into one `Error<T>`, and the ones that name the failure pick
+the friendliest guess. The returns desk did exactly that: any lookup failure rendered
+"لا توجد فاتورة بهذا الرقم", so a dropped LAN link told the cashier a real receipt was
+invalid. The sibling `ApiSession.throwApiException` throws `PosApiException` with
+`statusCode`, and `PosApiException implements Exception`, so `Result.guard` keeps
+catching it — swapping one call is enough and nothing downstream changes.
+
+**Action:** Before writing a UX branch that distinguishes "genuinely empty" from
+"we couldn't ask", check which of the two the endpoint's client method calls. If it is
+`ensureSuccess`, switch that one method to `throwApiException` and branch on
+`statusCode` in the view. Pair the empty branch with `PointyEmptyState` and the failure
+branch with `PointyErrorState` + a retry `action:` — a failure state without a retry is
+a dead end, and both components already take `message`/`action`.
+
+## 2026-08-19 - `find.byType(FilledButton)` does not see `FilledButton.icon`
+
+**Learning:** `FilledButton.icon` (and the `.icon` factories on `ElevatedButton`,
+`OutlinedButton`, `TextButton`) build a *private subclass*, while `find.byType` matches
+`runtimeType` exactly. So `find.widgetWithText(FilledButton, 'بحث')` finds nothing for
+the app's most common primary-action button, and a test asserting a disabled state that
+way passes or fails for the wrong reason.
+
+**Action:** Match the supertype instead:
+`find.ancestor(of: find.text(label), matching: find.byWidgetPredicate((w) => w is FilledButton))`,
+then `tester.widget<FilledButton>(…).onPressed` to assert enabled/disabled. This is the
+only way to prove "the button explains itself by being inert" in a widget test.
