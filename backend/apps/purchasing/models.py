@@ -196,6 +196,15 @@ class PurchaseOrder(TimeStampedModel):
             self.extra_discount_amount or Decimal("0.00"),
             max(self.subtotal - self.discount_total, Decimal("0.00")),
         )
+        # ...and pushed down onto the lines too. It is a discount on THESE
+        # goods, so it has to reach every per-line cost figure derived from
+        # net_line_total: net_unit_cost, effective_unit_cost (the cost basis a
+        # margin is measured against) and purchase_adjustment_line_amount (the
+        # credit a supplier owes for a return). Leaving it document-only made
+        # sum(effective_line_total) overshoot the order total by exactly
+        # `extra` — the lines claimed a cost the shop never paid.
+        if extra > Decimal("0.00"):
+            self._apply_extra_discount(lines, extra)
         self.discount_total = (self.discount_total + extra).quantize(
             self.MONEY_PLACES
         )
@@ -244,28 +253,57 @@ class PurchaseOrder(TimeStampedModel):
         self.subtotal = result.subtotal
         self.discount_total = result.discount_total
         for line in lines:
-            discount_amount = allocations[line.pk]
-            net_line_total = (line.line_total - discount_amount).quantize(
-                self.MONEY_PLACES
-            )
-            net_unit_cost = Decimal("0.00")
-            if line.quantity > 0:
-                net_unit_cost = (net_line_total / Decimal(line.quantity)).quantize(
-                    self.MONEY_PLACES,
-                    rounding=ROUND_HALF_UP,
-                )
-            line.discount_amount = discount_amount
-            line.net_line_total = net_line_total
-            line.net_unit_cost = net_unit_cost
-            line.save(
-                update_fields=[
-                    "discount_amount",
-                    "net_line_total",
-                    "net_unit_cost",
-                    "updated_at",
-                ],
-            )
+            self._write_line_net(line, allocations[line.pk])
         return result
+
+    def _write_line_net(self, line, discount_amount):
+        """Persist a line's discount and the net figures derived from it."""
+        net_line_total = (line.line_total - discount_amount).quantize(
+            self.MONEY_PLACES
+        )
+        net_unit_cost = Decimal("0.00")
+        if line.quantity > 0:
+            net_unit_cost = (net_line_total / Decimal(line.quantity)).quantize(
+                self.MONEY_PLACES,
+                rounding=ROUND_HALF_UP,
+            )
+        line.discount_amount = discount_amount
+        line.net_line_total = net_line_total
+        line.net_unit_cost = net_unit_cost
+        line.save(
+            update_fields=[
+                "discount_amount",
+                "net_line_total",
+                "net_unit_cost",
+                "updated_at",
+            ],
+        )
+
+    def _apply_extra_discount(self, lines, extra):
+        """Spread the manual order-level discount over the lines in proportion
+        to what each still costs after the engine's discounts, through the same
+        largest-remainder allocator the engine uses so not one cent is created
+        or lost. Weighting by ``net_line_total`` — whose sum is exactly the
+        amount ``extra`` is already clamped to — is what keeps every share
+        inside its own line, so no line can be discounted below zero."""
+        from apps.discounts.services import allocate_discount_amount
+
+        keys = {line.pk: f"{index:06d}" for index, line in enumerate(lines)}
+        shares = {
+            allocation.line_key: allocation.amount
+            for allocation in allocate_discount_amount(
+                extra,
+                {keys[line.pk]: line.net_line_total for line in lines},
+            )
+        }
+        for line in lines:
+            share = shares.get(keys[line.pk], Decimal("0.00"))
+            if share <= Decimal("0.00"):
+                continue
+            self._write_line_net(
+                line,
+                min(line.discount_amount + share, line.line_total),
+            )
 
     @property
     def landed_cost_total(self):

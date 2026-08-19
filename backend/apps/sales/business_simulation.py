@@ -155,6 +155,40 @@ def allocate_discount_amount(amount: Decimal, weights_by_key: dict) -> dict:
     }
 
 
+def allocate_landed_cost(amount: Decimal, weights_by_line_id: dict) -> dict:
+    """Independent port of ``PurchaseOrder._landed_cost_allocations``.
+
+    Deliberately NOT a call into :func:`allocate_discount_amount`: the purchasing
+    model runs its own allocator, and the two differ in two ways this port has to
+    reproduce — zero-weight lines stay in the divisor set here, and ties on the
+    fractional remainder are broken by ascending integer line id rather than by
+    string key. Returns ``{line_id: amount}`` for every line.
+    """
+    if amount == ZERO:
+        return {line_id: ZERO for line_id in weights_by_line_id}
+
+    weights = dict(weights_by_line_id)
+    total_weight = sum(weights.values(), ZERO)
+    if total_weight == ZERO:
+        return {line_id: ZERO for line_id in weights}
+
+    allocations: dict = {}
+    remainders = []
+    allocated_total = ZERO
+    for line_id, weight in weights.items():
+        exact_share = amount * weight / total_weight
+        rounded_share = exact_share.quantize(CENT, rounding=ROUND_DOWN)
+        allocations[line_id] = rounded_share
+        allocated_total += rounded_share
+        remainders.append((exact_share - rounded_share, line_id))
+
+    remaining_cents = int(((amount - allocated_total) * HUNDRED).to_integral_value())
+    remainders.sort(key=lambda item: (-item[0], item[1]))
+    for _, line_id in remainders[:remaining_cents]:
+        allocations[line_id] += CENT
+    return allocations
+
+
 def refund_tender_allocations(net_by_method: dict, amount: Decimal) -> list:
     """Split ``amount`` across tenders proportional to net paid per method.
 
@@ -457,6 +491,23 @@ class PoLineRec:
     recv_accepted: int = 0
     recv_damaged: int = 0
     recv_cancelled: int = 0
+    # Cost basis, computed by the oracle from the line's own inputs. These are
+    # the numbers a margin is measured against and a supplier return is credited
+    # from, so they are money as much as ``total`` is.
+    discount_amount: Decimal = ZERO
+    net_line_total: Decimal = ZERO
+    net_unit_cost: Decimal = ZERO
+    allocated_landed_cost: Decimal = ZERO
+    landed_unit_cost: Decimal = ZERO
+    effective_unit_cost: Decimal = ZERO
+
+    @property
+    def line_total(self) -> Decimal:
+        return up2(self.unit_cost * Decimal(self.quantity))
+
+    @property
+    def effective_line_total(self) -> Decimal:
+        return even2(self.net_line_total + self.allocated_landed_cost)
 
     @property
     def outstanding(self) -> int:
@@ -473,6 +524,9 @@ class PoRec:
     total: Decimal
     lines: list
     paid: Decimal = ZERO  # excludes supplier_credit
+    subtotal: Decimal = ZERO
+    extra_discount: Decimal = ZERO
+    landed_cost_total: Decimal = ZERO
 
 
 class Oracle:
@@ -1616,15 +1670,42 @@ class Simulation:
                 {"variant": item.variant, "quantity": quantity, "unit_cost": unit_cost}
             )
             line_specs.append((item, quantity, unit_cost))
+        # Freight/customs typed onto the order, and the one-off manual discount
+        # the buyer knocks off the whole thing. Both land on the ORDER but have
+        # to be spread over the LINES, which is where a cost basis lives.
+        landed_entries = [
+            {
+                "name": f"landed {index}",
+                "amount": (Decimal(self.rng.randint(1, 4000)) * CENT).quantize(CENT),
+            }
+            for index in range(self.rng.choice((0, 0, 1, 1, 2)))
+        ]
+        allocation_method = self.rng.choice(
+            [choice[0] for choice in PurchaseOrder.LandedCostAllocationMethod.choices]
+        )
+        subtotal = ZERO
+        for _, quantity, unit_cost in line_specs:
+            subtotal = even2(subtotal + up2(unit_cost * quantity))
+        extra_requested = ZERO
+        if self.rng.random() < 0.3:
+            # Spans the ordinary "shave the fraction off" case and the extreme
+            # one where the manual discount swallows the whole order.
+            ceiling = int(subtotal / CENT)
+            extra_requested = (
+                Decimal(self.rng.randint(1, ceiling + ceiling // 4)) * CENT
+            ).quantize(CENT)
         po = save_purchase_order_with_lines(
-            supplier=supplier, lines_data=lines_data, request=None
+            supplier=supplier,
+            lines_data=lines_data,
+            landed_cost_entries_data=landed_entries or None,
+            extra_discount_amount=extra_requested,
+            landed_cost_allocation_method=allocation_method,
+            request=None,
         )
         submit_purchase_order(po, request=None)
         po_lines = list(po.lines.order_by("pk"))
         line_recs = []
-        total = ZERO
         for (item, quantity, unit_cost), po_line in zip(line_specs, po_lines):
-            total = even2(total + up2(unit_cost * quantity))
             line_recs.append(
                 PoLineRec(
                     line_id=po_line.pk,
@@ -1638,13 +1719,82 @@ class Simulation:
             self.oracle.expected[item.variant_id] = q3(
                 self.oracle.expected[item.variant_id] + base
             )
-        self.oracle.pos[po.pk] = PoRec(
-            po_id=po.pk, supplier_id=supplier.id, total=total, lines=line_recs
+        landed_total = even2(
+            sum((entry["amount"] for entry in landed_entries), ZERO)
         )
+        # No PURCHASING discount rule exists in this world, so the engine's
+        # discount is nil and the manual discount is clamped to the subtotal.
+        extra = min(extra_requested, max(subtotal, ZERO))
+        rec = PoRec(
+            po_id=po.pk,
+            supplier_id=supplier.id,
+            total=even2(subtotal - extra + landed_total),
+            lines=line_recs,
+            subtotal=subtotal,
+            extra_discount=extra,
+            landed_cost_total=landed_total,
+        )
+        self._expect_po_line_costs(
+            rec,
+            allocation_method,
+            {line.line_id: item.variant.unit_price for line, (item, _, _) in
+             zip(line_recs, line_specs)},
+        )
+        self.oracle.pos[po.pk] = rec
         self._assert_po(po.pk, expected_status=PurchaseOrder.Status.SUBMITTED)
         for item, _, _ in line_specs:
             self._assert_variant(item.variant_id)
         return True
+
+    def _expect_po_line_costs(self, rec: PoRec, allocation_method, retail_prices):
+        """Compute every line's cost basis from the order's OWN inputs.
+
+        Nothing here reads a figure back off the purchase order: the manual
+        discount is spread with the ported largest-remainder allocator, the
+        landed costs with the ported purchasing allocator, and the per-unit
+        figures are derived from those. The two conservation laws this makes
+        checkable are that the lines' discounts add up to the order's discount
+        and their effective totals add up to the order's total — the identity
+        that fails the moment an order-level number stops reaching the lines.
+        """
+        # 1. The manual discount, weighted by what each line costs.
+        keys = {line.line_id: f"{index:06d}" for index, line in enumerate(rec.lines)}
+        extra_shares = allocate_discount_amount(
+            rec.extra_discount,
+            {keys[line.line_id]: line.line_total for line in rec.lines},
+        )
+        for line in rec.lines:
+            share = extra_shares.get(keys[line.line_id], ZERO)
+            line.discount_amount = min(share, line.line_total)
+            line.net_line_total = even2(line.line_total - line.discount_amount)
+            line.net_unit_cost = up2(line.net_line_total / Decimal(line.quantity))
+
+        # 2. The landed costs, weighted by the method the order was created with
+        # — read off the post-discount line values, exactly as recalculate()
+        # orders the two steps.
+        Method = PurchaseOrder.LandedCostAllocationMethod
+        if allocation_method == Method.QUANTITY:
+            weights = {ln.line_id: Decimal(ln.quantity) for ln in rec.lines}
+        elif allocation_method == Method.RETAIL_VALUE:
+            weights = {
+                ln.line_id: even2(retail_prices[ln.line_id] * Decimal(ln.quantity))
+                for ln in rec.lines
+            }
+        elif allocation_method == Method.EQUAL:
+            weights = {ln.line_id: Decimal("1.00") for ln in rec.lines}
+        else:
+            weights = {ln.line_id: ln.net_line_total for ln in rec.lines}
+            if sum(weights.values(), ZERO) == ZERO:
+                weights = {ln.line_id: Decimal(ln.quantity) for ln in rec.lines}
+        allocations = allocate_landed_cost(rec.landed_cost_total, weights)
+        for line in rec.lines:
+            line.allocated_landed_cost = allocations.get(line.line_id, ZERO)
+            line.landed_unit_cost = even2(
+                line.allocated_landed_cost / Decimal(line.quantity)
+            )
+            line.effective_unit_cost = even2(
+                line.net_unit_cost + line.landed_unit_cost
+            )
 
     def op_purchase_receive(self) -> bool:
         candidates = [
@@ -2067,6 +2217,51 @@ class Simulation:
         )
         if expected_status is not None:
             self.assert_equal(po.status, expected_status, f"po#{po_id} status")
+        self._assert_po_line_costs(po, rec)
+
+    def _assert_po_line_costs(self, po, rec: PoRec):
+        """The cost basis every line carries, plus the two identities that tie
+        the lines back to the order they belong to."""
+        self.assert_money(po.subtotal, rec.subtotal, f"po#{po.pk} subtotal")
+        self.assert_money(
+            po.discount_total, rec.extra_discount, f"po#{po.pk} discount_total"
+        )
+        self.assert_money(
+            po.landed_cost_total, rec.landed_cost_total, f"po#{po.pk} landed_cost_total"
+        )
+        lines = {line.pk: line for line in po.lines.all()}
+        for expected in rec.lines:
+            line = lines[expected.line_id]
+            tag = f"po#{po.pk} line#{line.pk}"
+            for name in (
+                "discount_amount",
+                "net_line_total",
+                "net_unit_cost",
+                "allocated_landed_cost",
+                "landed_unit_cost",
+                "effective_unit_cost",
+            ):
+                self.assert_money(
+                    getattr(line, name), getattr(expected, name), f"{tag} {name}"
+                )
+            self.assert_money(
+                line.effective_line_total,
+                expected.effective_line_total,
+                f"{tag} effective_line_total",
+            )
+        # Identity 1: the lines' discounts are the order's discount.
+        self.assert_money(
+            even2(sum((line.discount_amount for line in lines.values()), ZERO)),
+            po.discount_total,
+            f"identity: po#{po.pk} line discounts sum to discount_total",
+        )
+        # Identity 2: the lines' cost bases are the order's total. This is the
+        # one that catches an order-level figure that never reached the lines.
+        self.assert_money(
+            even2(sum((line.effective_line_total for line in lines.values()), ZERO)),
+            po.total,
+            f"identity: po#{po.pk} line costs sum to total",
+        )
 
     def full_reconcile(self):
         for item in self.stock_items:

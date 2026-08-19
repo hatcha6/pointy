@@ -45,3 +45,31 @@ register open/close ops already do), and treat "which layer does this operation
 actually enter through?" as part of the modelling decision. A bug found only via
 a new op is worth a *deterministic* regression test at the layer that broke, not
 only a pinned seed — the seed reproduces it, the API test explains it.
+
+## 2026-08-19 - A document-level number that never reaches the lines
+
+**Learning:** `PurchaseOrder.extra_discount_amount` (the manual "knock it off the
+whole order" discount) was folded into `discount_total` and `total` but never
+allocated to the lines. The *money* was therefore right — the balance, the
+supplier payments, the receipt — and every existing test agreed, because they all
+asked the order. What was wrong was the **cost basis**: `net_line_total` and
+`effective_unit_cost` kept quoting the pre-discount cost, so margins were
+understated, the purchase-history cost chart was inflated, and
+`purchase_adjustment_line_amount` credited a supplier return at more than the
+shop ever paid for those units. Discovered by reading, not by a sweep, because
+the simulation created purchase orders with neither landed costs nor a manual
+discount.
+
+**Action:** For any document that carries both an order-level figure and lines,
+the invariant to reach for first is not "is the total right" but **do the lines
+add up to the total** — `sum(effective_line_total) == total`,
+`sum(line.discount_amount) == discount_total`. An order-level adjustment that
+skips the lines passes every total-shaped assertion and fails only this one.
+Pointy has more documents of this shape (`Order` + `OrderLine`,
+`PurchaseOrderAdjustment` + its lines); each is worth the same two-line identity.
+Note the two allocators that both spread money over purchase lines and are NOT
+interchangeable: `apps.discounts.services.allocate_discount_amount` filters
+zero-weight keys and breaks ties on the *string* key, while
+`PurchaseOrder._landed_cost_allocations` keeps them and breaks ties on the
+*integer* pk. The oracle ports them separately on purpose — collapsing them would
+hide a real divergence between the PO preview and the PO that gets saved.
