@@ -302,3 +302,32 @@ stuck on this, do not re-push the old branch or open a second PR beside it —
 cherry-pick onto a correctly-named branch, open the new PR, and close the old
 one, since the one-open-PR-per-routine rule still applies. Re-verify after the
 cherry-pick rather than citing the old review: `main` will have moved.
+
+## 2026-08-19 - A status enum's `canX` getter is the machine-readable "one-way" flag
+
+**Learning:** The "audit by consequence" entry above says to hunt irreversible
+actions by what they commit, not by the verb — but reading every backend service
+to decide what is reversible is slow. This codebase hands you the answer: status
+enums carry a predicate naming the *only* state the action is legal from.
+`EmployeeLoanStatus.canReview => this == EmployeeLoanStatus.requested`
+(`data/models/employee.dart`) says outright that approve and reject are one-way,
+and the backend agrees (`reject_employee_loan`: "Only requested loans can be
+rejected."). Both fired on a single tap, with the danger-coloured رفض sitting
+immediately beside موافقة in a dense row. Grep for `bool get can` across
+`data/models/` and check each call site: a `canX` guarded action whose button has
+no confirmation is a one-way door with no doorstop. Same shape as
+`PayrollStatus.canApprove`/`canPay` — which *are* confirmed, in the payroll
+details screen, which is what makes the loan pair the odd one out.
+
+**Action:** Start the irreversibility audit from `bool get can…` getters rather
+than from verbs or from the backend. Pair the finding with the right dialog:
+`PointyConfirmationDialog` for a commitment (approve), the destructive one for a
+refusal (reject) — both already exported from `shared/components/components.dart`.
+
+**Also, a trap when de-duplicating two call sites into one action widget:** the
+surfaces usually carry *different* `ValueKey`s (`pending_loan_approve_$id` on the
+payroll card, `loan_approve_button_$id` in the list), and an existing test may
+depend on one of them — `widget_test.dart` taps `pending_loan_approve_4`. Give the
+extracted widget a `keyPrefix` and pass each surface's own prefix; hardcoding one
+key silently breaks the other surface's test *and* makes the keys ambiguous if both
+surfaces are ever in the tree at once.
