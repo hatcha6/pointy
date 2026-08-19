@@ -73,3 +73,48 @@ zero-weight keys and breaks ties on the *string* key, while
 `PurchaseOrder._landed_cost_allocations` keeps them and breaks ties on the
 *integer* pk. The oracle ports them separately on purpose — collapsing them would
 hide a real divergence between the PO preview and the PO that gets saved.
+
+## 2026-08-19 - The quantity a document was written for is not the quantity it can credit
+
+**Learning:** `purchase_adjustment_line_amount`'s "these are the last units"
+branch handed back `line.net_line_total` — the discounted value of the whole
+**ordered** line — while the units it is allowed to send back
+(`adjustable_quantity = accepted - adjusted`) are only the **accepted** ones.
+The two are equal on a fully-received order, which is every test the codebase
+had and every case the simulation generates, so the defect was invisible. On a
+short shipment (ordered 10, received 4) returning the 4 minted a 100.00 supplier
+credit for 40.00 of goods, and — because an exchange with no explicit
+replacement prices values incoming stock at `amount / quantity` — walked the
+replacements back in at 25.00 a unit instead of 10.00. Note the *proportional*
+branch was already right (`net_line_total × q / ordered` is the correct per-unit
+share); only the ceiling was wrong. Related but deliberately left alone:
+`payable_balance` still bills the full ordered total on a short shipment.
+
+**Action:** Whenever a per-line money figure is gated by one quantity
+(`adjustable_quantity`, `returnable_qty`, `outstanding_quantity`) but computed
+from another (`line.quantity`), the two are a bug waiting for the first document
+where they diverge — and "fully received / fully delivered" is exactly the case
+every fixture picks, so the divergence never shows up by accident. Grep for
+money that reads `line.quantity` and ask which quantity actually authorises it.
+The same pairing exists on the sales side (`OrderLine.returnable_qty` vs
+`line.quantity`) and is worth the same read. Also: a partial-receipt path is
+reachable two ways — left open (`partially_received`) or closed by cancelling
+the remainder (`received`) — and a fix must cover both, since only the second
+looks "finished".
+
+## 2026-08-19 - An unreceived line is not a returnable line
+
+**Learning:** Tightening the credit ceiling to the accepted quantity broke one
+existing test that computed a return credit on an order it had never submitted
+or received — it now (correctly) got 0.00. The test was not wrong about its own
+invariant, only about its shortcut: production's
+`validate_purchase_order_adjustment_allowed` refuses any adjustment outside
+`partially_received`/`received`, so the state it exercised is unreachable.
+
+**Action:** When a purchasing test needs a line that can be *returned*, receive
+the order first (`submit_purchase_order` then `receive_purchase_order`) rather
+than asserting against a draft. A draft order is fine for testing totals and
+allocation; it is not a valid fixture for anything downstream of receipt. The
+same trap will catch the next tightening of a receipt-gated figure — when such a
+change breaks an old test, check whether the fixture is in a state production
+would ever allow before concluding the change is wrong.

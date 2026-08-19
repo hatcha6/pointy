@@ -1014,12 +1014,35 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
     return locked_order
 
 
+def purchase_adjustable_line_value(line):
+    """The most that can ever be credited back for this line.
+
+    ``net_line_total`` is the discounted value of the whole *ordered* line, but
+    only the units that actually arrived can go back to the supplier
+    (``adjustable_quantity`` counts accepted units). On a line ordered 10 and
+    received 4, the returnable value is the 4 units' share of the line, not all
+    ten. Over-receipts stay capped at the ordered value: the order never billed
+    for the surplus, so it cannot credit for it either.
+    """
+    ordered = Decimal(line.quantity or 0)
+    if ordered <= 0:
+        return Decimal("0.00")
+    accepted = min(Decimal(line.accepted_quantity), ordered)
+    if accepted >= ordered:
+        return line.net_line_total.quantize(Decimal("0.01"))
+    return (line.net_line_total * accepted / ordered).quantize(Decimal("0.01"))
+
+
 def purchase_adjustment_line_amount(line, quantity):
     prior_amount = line.adjustment_lines.aggregate(total=models.Sum("line_amount"))[
         "total"
     ] or Decimal("0.00")
     if quantity >= line.adjustable_quantity:
-        return (line.net_line_total - prior_amount).quantize(Decimal("0.01"))
+        # Last units back: whatever of the returnable value is left unclaimed,
+        # so repeated partial returns always add up to exactly that value.
+        return (purchase_adjustable_line_value(line) - prior_amount).quantize(
+            Decimal("0.01")
+        )
     return (
         line.net_line_total * Decimal(quantity) / Decimal(line.quantity)
     ).quantize(Decimal("0.01"))

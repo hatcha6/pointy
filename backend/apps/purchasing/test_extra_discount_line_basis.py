@@ -21,7 +21,11 @@ from apps.catalog.testing import create_product_with_default_variant
 from apps.discounts.models import DiscountRule
 
 from .models import PurchaseOrder, PurchaseOrderLandedCostEntry, Supplier
-from .services import purchase_adjustment_line_amount
+from .services import (
+    purchase_adjustment_line_amount,
+    receive_purchase_order,
+    submit_purchase_order,
+)
 
 
 class ExtraPurchaseDiscountReachesLinesTests(TestCase):
@@ -63,6 +67,13 @@ class ExtraPurchaseDiscountReachesLinesTests(TestCase):
         )
         order.refresh_from_db()
         return order, list(order.lines.order_by("created_at", "id"))
+
+    def _receive_in_full(self, order):
+        submit_purchase_order(order)
+        order.refresh_from_db()
+        receive_purchase_order(order)
+        order.refresh_from_db()
+        return list(order.lines.order_by("created_at", "id"))
 
     def assert_lines_add_up_to_order(self, order, lines):
         """sum(effective_line_total) == order.total, always."""
@@ -162,6 +173,9 @@ class ExtraPurchaseDiscountReachesLinesTests(TestCase):
         """Returning every unit must credit exactly the order total, not the
         pre-discount subtotal."""
         order, lines = self._order(extra=Decimal("4.00"))
+        # Only received goods can be sent back, so the credit basis is only
+        # meaningful once the order has actually arrived.
+        lines = self._receive_in_full(order)
 
         credit = sum(
             (
