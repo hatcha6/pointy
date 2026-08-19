@@ -190,7 +190,7 @@ class BackupOperationsApiTests(TestCase):
         )
         self.assertEqual(SystemBackupSchedule.load().scheduled_time, time(hour=3, minute=15))
 
-        with mock.patch("apps.core.tasks.run_backup_job.delay") as delay:
+        with mock.patch("apps.core.tasks.run_backup_job.apply_async") as delay:
             backup_response = self.client.post(reverse("backup-operations"), {}, format="json")
 
         self.assertEqual(backup_response.status_code, status.HTTP_202_ACCEPTED)
@@ -205,7 +205,7 @@ class BackupOperationsApiTests(TestCase):
         schedule.save()
         due_at = timezone.make_aware(datetime(2026, 6, 9, 4, 0))
 
-        with mock.patch("apps.core.tasks.run_backup_job.delay") as delay:
+        with mock.patch("apps.core.tasks.run_backup_job.apply_async") as delay:
             job = queue_due_scheduled_backup(due_at)
             second_job = queue_due_scheduled_backup(due_at)
 
@@ -222,7 +222,7 @@ class BackupOperationsApiTests(TestCase):
             content_type="application/zip",
         )
 
-        with mock.patch("apps.core.tasks.run_restore_job.delay") as delay:
+        with mock.patch("apps.core.tasks.run_restore_job.apply_async") as delay:
             response = self.client.post(
                 reverse("backup-restore"),
                 {"file": upload},

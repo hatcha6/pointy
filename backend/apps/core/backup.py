@@ -17,6 +17,7 @@ from django.db import DEFAULT_DB_ALIAS, connections, transaction
 from django.utils import timezone
 from django.utils.text import get_valid_filename
 
+from .dispatch import enqueue_or_raise
 from .models import SystemBackupSchedule, SystemMaintenanceJob
 
 ARCHIVE_ROOT = "pointy-backup"
@@ -315,7 +316,7 @@ def _dispatch_backup_job(job):
     try:
         from .tasks import run_backup_job
 
-        run_backup_job.delay(job.pk)
+        enqueue_or_raise(run_backup_job, job.pk)
     except Exception as exception:
         job.mark_failed("تعذر إرسال النسخ الاحتياطي إلى عامل الخلفية.")
         raise BackupValidationError(str(exception)) from exception
@@ -325,7 +326,7 @@ def _dispatch_restore_job(job):
     try:
         from .tasks import run_restore_job
 
-        run_restore_job.delay(job.pk)
+        enqueue_or_raise(run_restore_job, job.pk)
     except Exception as exception:
         job.mark_failed("تعذر إرسال الاستعادة إلى عامل الخلفية.")
         raise BackupValidationError(str(exception)) from exception

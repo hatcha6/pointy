@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 
 from django.db.models import Count, Sum
@@ -9,6 +10,7 @@ from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.core.dispatch import enqueue_or_raise
 from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
@@ -25,6 +27,8 @@ from .serializers import (
     PaymentCardSerializer,
 )
 from .services import merge_customers
+
+logger = logging.getLogger(__name__)
 
 
 class CustomerEndpointPermission(HasPointyPermission):
@@ -209,7 +213,17 @@ class CustomerViewSet(viewsets.ModelViewSet):
         """
         from .tasks import recompute_customer_segments_task
 
-        async_result = recompute_customer_segments_task.delay()
+        # Bounded, and fail-closed on the answer: this endpoint promises the work
+        # was scheduled, so an unreachable broker must say so rather than park
+        # the manager on a spinner or report a 202 for a message nobody took.
+        try:
+            async_result = enqueue_or_raise(recompute_customer_segments_task)
+        except Exception:
+            logger.warning("could not schedule an RFM re-segmentation", exc_info=True)
+            return Response(
+                {"detail": "لا يمكن جدولة إعادة الحساب الآن. حاول مرة أخرى."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         return Response(
             {"status": "scheduled", "task_id": async_result.id},
             status=status.HTTP_202_ACCEPTED,

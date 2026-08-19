@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import secrets
 
-from celery import current_app
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import viewsets
@@ -12,6 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.dispatch import enqueue_best_effort
 from apps.core.permissions import HasPointyPermission
 
 from .models import MessagingGateway, OutboundMessage
@@ -156,12 +156,16 @@ class InboundWebhookView(APIView):
             provider_message_id=parsed.get("provider_message_id", ""),
         )
         if created:
-            try:
-                # Look the task up by name (no crm import) and .delay() it, which
-                # — unlike send_task — honours task_always_eager for tests.
-                current_app.tasks["crm.route_inbound"].delay(message.id)
-            except Exception:  # a broker hiccup must not drop the stored message
-                logger.exception("failed to dispatch crm.route_inbound for %s", message.id)
+            # Dispatch by *name* (no crm import) through the bounded publisher,
+            # which honours task_always_eager for tests and — unlike the bare
+            # try/except this replaces — also survives a broker that accepts the
+            # connection and then stops answering. The name is passed, not
+            # resolved here, so a registry miss (crm's tasks module not imported
+            # yet) stays inside the publisher's guard. The inbound row is stored
+            # either way; only the routing pass is lost, and the gateway must not
+            # be left holding an open POST for it.
+            if not enqueue_best_effort("crm.route_inbound", message.id):
+                logger.warning("inbound %s stored but not routed", message.id)
         return Response({"ok": True, "id": message.id, "created": created})
 
 

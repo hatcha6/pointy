@@ -14,6 +14,7 @@ from rest_framework.serializers import ValidationError
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.core.dispatch import enqueue_or_raise
 
 from .connectors import get_connector
 from .engine import MigrationEngine
@@ -146,7 +147,7 @@ def _dispatch_run(run: MigrationRun) -> None:
     try:
         from .tasks import run_migration_run
 
-        run_migration_run.delay(run.pk)
+        enqueue_or_raise(run_migration_run, run.pk)
     except Exception as exc:  # noqa: BLE001 - broker unreachable etc.
         run.mark_failed("تعذر إرسال العملية إلى عامل الخلفية.")
         raise ValidationError({"detail": str(exc)}) from exc

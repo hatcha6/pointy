@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.core.roles import ensure_role_groups
+from apps.core.test_broker_timeouts import black_hole_broker
 from apps.customers.models import Customer
 from apps.customers.segmentation import recompute_customer_segments
 from apps.sales.models import Order, OrderAdjustment, RegisterSession
@@ -187,6 +188,18 @@ class SegmentationApiTests(APITestCase):
         self.assertTrue(
             all(row["rfm_segment"] == Customer.Rank.CHAMPION for row in listing.data["results"])
         )
+
+    def test_recompute_segments_says_so_when_the_broker_will_not_answer(self):
+        """A wedged broker must not park the manager, nor claim a 202.
+
+        The endpoint promises the work was scheduled, so it is fail-closed on the
+        answer: an unreachable broker gets a 503 the caller can retry, not a
+        response that never arrives (see apps.core.test_broker_timeouts).
+        """
+        with black_hole_broker():
+            response = self.client.post(reverse("customer-recompute-segments"))
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
     def test_recompute_segments_endpoint_schedules_task(self):
         with self.settings(
