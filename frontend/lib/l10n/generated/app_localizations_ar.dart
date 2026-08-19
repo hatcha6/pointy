@@ -4833,6 +4833,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get queryClearSearchAndFiltersButton => 'مسح البحث والفلاتر';
 
   @override
+  String get queryNoSearchResultsMessage =>
+      'تحقق من الكتابة، أو امسح البحث لعرض القائمة كاملة.';
+
+  @override
+  String get queryClearSearchButton => 'مسح البحث';
+
+  @override
   String catalogNoSearchResultsTitle(String query) {
     return 'لا توجد نتائج لـ «$query»';
   }

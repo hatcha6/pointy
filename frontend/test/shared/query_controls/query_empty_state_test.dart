@@ -48,7 +48,10 @@ void main() {
     // sitting just outside the filter.
     expect(find.text('فاتورة جديدة'), findsNothing);
 
-    await tester.tap(find.text('مسح البحث والفلاتر'));
+    // No filter is narrowing this list, so the escape must not point at the
+    // funnel — the contact pickers do not even have one.
+    expect(find.text('مسح البحث والفلاتر'), findsNothing);
+    await tester.tap(find.text('مسح البحث'));
     expect(cleared, 1);
   });
 
@@ -59,6 +62,7 @@ void main() {
 
     expect(find.text('لا توجد نتائج مطابقة للفلاتر المحددة'), findsOneWidget);
     expect(find.text('مسح البحث والفلاتر'), findsOneWidget);
+    expect(find.text('مسح البحث'), findsNothing);
   });
 
   group('clearing keeps what the user did not set', () {
