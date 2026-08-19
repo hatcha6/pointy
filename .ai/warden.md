@@ -306,3 +306,31 @@ the only signal that tells a finished worktree from a running one. Treat "dirty
 *and* no PR ever opened for its branch" (`gh pr list --state all --head <b>`
 returning nothing) as the strongest possible keep signal — that is not leftover
 debris, it is the only copy of that work in existence.
+
+## 2026-08-19 - The primary-checkout problem was one line in six prompts
+
+**Learning:** The fleet's worst structural defect — routines driving the primary
+checkout, flipping its branch mid-run, leaving it dirty so Step 2's
+fast-forward is refused, once committing straight to `main` — was never a
+harness or config problem. The task runner *already* starts every routine in its
+own worktree on a `claude/<name>` branch (this run started in
+`.claude/worktrees/serene-galileo-4747f3`). Every producer prompt then opened
+with `Repo: /Users/hatem/Develop/pointy. cd there first.` and walked them back
+out. Same shape as the branch-prefix defect: the convention was documented
+everywhere except the prompt that needed it.
+
+What kept the drift *rational* is that two things genuinely live only in the
+primary checkout, and a naive "never go there" rule would break every run:
+Docker Compose derives its project name from the directory (no `name:` in
+`docker-compose.yml`), so `make postgres` from a worktree starts a second stack
+that collides on port 5432; and `backend/.venv` exists only there, so
+`make backend-*` in a worktree rebuilds a venv from scratch.
+
+**Action:** The rule is a split, not a ban — services and the venv come from the
+primary checkout, everything else happens in the worktree, and backend tests run
+as `cd <worktree>/backend && /Users/hatem/Develop/pointy/backend/.venv/bin/python
+manage.py test apps.<app>`. All six producer prompts now carry it, and this one
+carries the same `cd` fix for its own scratch-worktree invocation, which still
+had the by-path form an earlier entry proved wrong. If the primary checkout is
+still dirty or branch-flipping several runs from now, the prompts are being
+overridden by something else — escalate that rather than re-diagnosing it.
