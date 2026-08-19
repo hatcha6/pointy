@@ -47,3 +47,28 @@ class BusinessSimulationTests(TestCase):
         # once; require a healthy spread so the test can't silently degrade into
         # "sales only".
         self.assertGreaterEqual(len(sim.op_counts), 10)
+
+
+class SimulationIgnoresPreExistingDataTests(TestCase):
+    """The run's assertions must describe the run, not the database it ran on.
+
+    ``simulate_business`` is documented as safe against any database, and the
+    high-volume Postgres runs use a dev database that already holds data. A
+    conservation identity that summed *every* payment row read that pre-existing
+    data as the run's own and reported a mismatch that was not one.
+    """
+
+    def test_payment_identity_ignores_payments_the_run_did_not_create(self):
+        from decimal import Decimal
+
+        from apps.payments.models import Payment
+        from apps.sales.models import Order
+
+        sim = run_simulation(seed=13, operations=40, checkpoint_every=20)
+
+        stray = Order.objects.create()
+        Payment.objects.create(
+            order=stray, method=Payment.Method.CASH, amount=Decimal("777.00")
+        )
+
+        sim.reconcile_identities()  # must not see the stray 777.00

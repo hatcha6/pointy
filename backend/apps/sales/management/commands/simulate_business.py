@@ -23,6 +23,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
+from apps.analytics import buffer as analytics_buffer
 from apps.sales.business_simulation import SimulationError, run_simulation
 
 
@@ -69,11 +70,19 @@ class Command(BaseCommand):
         try:
             try:
                 with transaction.atomic():
-                    sim = run_simulation(
-                        seed=seed,
-                        operations=operations,
-                        checkpoint_every=checkpoint,
-                    )
+                    # Every simulated request buffers a backend.request event,
+                    # and the buffer is not transaction-scoped on its own: its
+                    # tail would outlive the rollback below and then fail (or
+                    # orphan rows) at the atexit flush, because the users and
+                    # sessions those events point at are gone. Scoping it here
+                    # keeps the telemetry write path exercised for real while
+                    # tying its rows to this transaction's fate.
+                    with analytics_buffer.transaction_scoped():
+                        sim = run_simulation(
+                            seed=seed,
+                            operations=operations,
+                            checkpoint_every=checkpoint,
+                        )
                     if not commit:
                         raise _Rollback()
             except _Rollback:

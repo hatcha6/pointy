@@ -73,6 +73,7 @@ from apps.purchasing.services import (
 from apps.sales.models import Order, OrderLine, RegisterSession
 from apps.sales.services import (
     convert_quotation_to_sale,
+    exchange_order_items,
     record_customer_account_payment,
     record_customer_payment,
     release_quote_reservations,
@@ -1395,9 +1396,10 @@ class Simulation:
             and any(line.returnable_qty > ZERO for line in o.lines)
         ]
 
-    def _apply_refund(self, rec: OrderRec, refund_lines):
+    def _apply_refund(self, rec: OrderRec, refund_lines) -> Decimal:
         """refund_lines: list of (LineRec, qty). Applies the documented refund
-        arithmetic to the oracle and returns nothing (asserts handled by caller)."""
+        arithmetic to the oracle and returns the refund total (asserts handled
+        by the caller)."""
         total = ZERO
         per_line_refund = []
         for line, qty in refund_lines:
@@ -1426,6 +1428,7 @@ class Simulation:
                 )
         if all(line.returnable_qty <= ZERO for line in rec.lines):
             rec.voided = True
+        return even2(total)
 
     def _line_refund_discount(self, line: LineRec, qty) -> Decimal:
         if line.discount_total <= ZERO:
@@ -2054,7 +2057,11 @@ class Simulation:
             self.assert_money(
                 session.expected_cash, explained, f"identity: session#{session_id} drawer"
             )
-        # 2. Per method across ALL orders, backend net payments == oracle net.
+        # 2. Per method across every order this run created, backend net
+        # payments == oracle net. Scoped to the run's own orders on purpose:
+        # unscoped, the sum also picks up whatever payments the database already
+        # held, so a run against a non-empty database (a dev Postgres, say)
+        # reports an oracle mismatch that is really pre-existing data.
         from apps.payments.models import Payment
 
         for method in self.PAYMENT_METHODS:
@@ -2062,7 +2069,9 @@ class Simulation:
                 sum(
                     (
                         p.amount
-                        for p in Payment.objects.filter(method=method)
+                        for p in Payment.objects.filter(
+                            method=method, order_id__in=list(self.oracle.orders)
+                        )
                     ),
                     ZERO,
                 )
