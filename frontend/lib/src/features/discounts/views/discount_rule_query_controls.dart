@@ -42,6 +42,18 @@ class DiscountRuleQueryControls extends StatelessWidget {
         (query.ordering == DiscountRuleOrdering.priority ? 0 : 1);
   }
 
+  /// Drops the search term and every user-set filter, keeping the chosen
+  /// ordering intact. Ordering is left alone because it reorders the list, it
+  /// never empties it.
+  static DiscountRuleQuery cleared(DiscountRuleQuery query) {
+    return query.copyWith(
+      search: '',
+      status: DiscountRuleStatusFilter.all,
+      channel: DiscountRuleChannelFilter.all,
+      application: DiscountRuleApplicationFilter.all,
+    );
+  }
+
   Future<void> _showFilters(BuildContext context) async {
     final updatedQuery = await showAdaptiveModalBottomSheet<DiscountRuleQuery>(
       context: context,

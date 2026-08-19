@@ -2788,6 +2788,27 @@
   "backTooltip": "رجوع",
   "sampleCatalogNotice": "يتم عرض منتجات تجريبية إلى أن يعمل الخادم.",
   "emptyCatalog": "لا توجد منتجات",
+  "queryNoSearchResultsTitle": "لا توجد نتائج لـ «{query}»",
+  "@queryNoSearchResultsTitle": {
+    "description": "Query-driven list empty state title when a search term returned nothing.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "queryNoFilteredResultsTitle": "لا توجد نتائج مطابقة للفلاتر المحددة",
+  "@queryNoFilteredResultsTitle": {
+    "description": "Query-driven list empty state title when the active filters returned nothing and no search term is set."
+  },
+  "queryNoResultsMessage": "تحقق من الكتابة، أو امسح البحث والفلاتر لعرض القائمة كاملة.",
+  "@queryNoResultsMessage": {
+    "description": "Query-driven list empty state guidance under the no-results title."
+  },
+  "queryClearSearchAndFiltersButton": "مسح البحث والفلاتر",
+  "@queryClearSearchAndFiltersButton": {
+    "description": "Button that clears the search term and every user-set filter on a query-driven list."
+  },
   "catalogNoSearchResultsTitle": "لا توجد نتائج لـ «{query}»",
   "@catalogNoSearchResultsTitle": {
     "description": "Catalog empty state title when a search term returned nothing.",
@@ -5035,7 +5056,7 @@
   "refreshInvoicesTooltip": "تحديث الفواتير",
   "searchInvoicesHint": "ابحث برقم الفاتورة أو المنتج أو SKU أو الباركود",
   "invoicesLoadError": "تعذر تحميل الفواتير.",
-  "emptyInvoices": "لا توجد فواتير تطابق الفلاتر الحالية.",
+  "emptyInvoices": "لا توجد فواتير بعد.",
   "invoiceDetailsTitle": "فاتورة {receiptNumber}",
   "@invoiceDetailsTitle": {
     "description": "Invoice details title.",
@@ -5456,7 +5477,7 @@
   "discountWizardNoLimits": "بدون حدود",
   "discountLoadError": "تعذر تحميل الخصومات.",
   "discountSaveError": "تعذر حفظ الخصم. راجع البيانات وحاول مرة أخرى.",
-  "discountEmptyRules": "لا توجد خصومات مطابقة.",
+  "discountEmptyRules": "لا توجد خصومات بعد.",
   "discountSearchHint": "ابحث باسم الخصم أو الكود",
   "discountStatusFilterLabel": "الحالة",
   "discountFilterAll": "الكل",

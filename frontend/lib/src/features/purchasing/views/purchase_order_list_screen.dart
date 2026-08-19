@@ -12,6 +12,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/query_controls/query_empty_state.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../ai/views/smart_reorder_action.dart';
@@ -152,11 +153,25 @@ class _PurchaseOrderListBody extends StatelessWidget {
               errorBuilder: (context) => PointyErrorState(
                 title: l10n.purchaseOrdersLoadError,
                 icon: Icons.receipt_long_outlined,
+                action: FilledButton.tonalIcon(
+                  onPressed: viewModel.loadOrders,
+                  icon: const Icon(Icons.sync),
+                  label: Text(l10n.retryButton),
+                ),
               ),
-              emptyBuilder: (context) => PointyEmptyState(
+              emptyBuilder: (context) => QueryEmptyState(
                 icon: Icons.receipt_long_outlined,
-                title: l10n.emptyPurchaseOrders,
-                action: capabilities.canCreatePurchaseOrder
+                search: viewModel.query.search,
+                hasFilters:
+                    PurchaseOrderQueryControls.narrowingFilterCount(
+                      viewModel.query,
+                    ) >
+                    0,
+                emptyTitle: l10n.emptyPurchaseOrders,
+                onClear: () => viewModel.applyQuery(
+                  PurchaseOrderQueryControls.cleared(viewModel.query),
+                ),
+                emptyAction: capabilities.canCreatePurchaseOrder
                     ? FilledButton.icon(
                         onPressed: onCreatePurchaseOrder,
                         icon: const Icon(Icons.add),

@@ -41,9 +41,28 @@ class InvoiceQueryControls extends StatelessWidget {
   }
 
   int get _activeFilterCount {
+    return narrowingFilterCount(query) +
+        (query.ordering == SaleOrderOrdering.newest ? 0 : 1);
+  }
+
+  /// How many user-set filters can actually empty the list. Ordering is
+  /// excluded — it reorders, never removes — and so are
+  /// [SaleOrderQuery.productId] / [SaleOrderQuery.variantId], which callers set
+  /// to scope a listing rather than the user.
+  static int narrowingFilterCount(SaleOrderQuery query) {
     return (query.status == SaleOrderStatusFilter.all ? 0 : 1) +
-        (query.ordering == SaleOrderOrdering.newest ? 0 : 1) +
         (query.customerId == null ? 0 : 1);
+  }
+
+  /// Drops the search term and every user-set filter, keeping the caller's
+  /// scope and the chosen ordering intact.
+  static SaleOrderQuery cleared(SaleOrderQuery query) {
+    return query.copyWith(
+      search: '',
+      status: SaleOrderStatusFilter.all,
+      customerId: null,
+      customerName: null,
+    );
   }
 
   Future<void> _showFilters(BuildContext context) async {

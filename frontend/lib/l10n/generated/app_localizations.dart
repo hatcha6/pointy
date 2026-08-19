@@ -8527,6 +8527,30 @@ abstract class AppLocalizations {
   /// **'لا توجد منتجات'**
   String get emptyCatalog;
 
+  /// Query-driven list empty state title when a search term returned nothing.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد نتائج لـ «{query}»'**
+  String queryNoSearchResultsTitle(String query);
+
+  /// Query-driven list empty state title when the active filters returned nothing and no search term is set.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد نتائج مطابقة للفلاتر المحددة'**
+  String get queryNoFilteredResultsTitle;
+
+  /// Query-driven list empty state guidance under the no-results title.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحقق من الكتابة، أو امسح البحث والفلاتر لعرض القائمة كاملة.'**
+  String get queryNoResultsMessage;
+
+  /// Button that clears the search term and every user-set filter on a query-driven list.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح البحث والفلاتر'**
+  String get queryClearSearchAndFiltersButton;
+
   /// Catalog empty state title when a search term returned nothing.
   ///
   /// In ar, this message translates to:
@@ -14846,7 +14870,7 @@ abstract class AppLocalizations {
   /// No description provided for @emptyInvoices.
   ///
   /// In ar, this message translates to:
-  /// **'لا توجد فواتير تطابق الفلاتر الحالية.'**
+  /// **'لا توجد فواتير بعد.'**
   String get emptyInvoices;
 
   /// Invoice details title.
@@ -16010,7 +16034,7 @@ abstract class AppLocalizations {
   /// No description provided for @discountEmptyRules.
   ///
   /// In ar, this message translates to:
-  /// **'لا توجد خصومات مطابقة.'**
+  /// **'لا توجد خصومات بعد.'**
   String get discountEmptyRules;
 
   /// No description provided for @discountSearchHint.
