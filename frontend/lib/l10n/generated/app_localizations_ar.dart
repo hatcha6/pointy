@@ -4817,6 +4817,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get emptyCatalog => 'لا توجد منتجات';
 
   @override
+  String queryNoSearchResultsTitle(String query) {
+    return 'لا توجد نتائج لـ «$query»';
+  }
+
+  @override
+  String get queryNoFilteredResultsTitle =>
+      'لا توجد نتائج مطابقة للفلاتر المحددة';
+
+  @override
+  String get queryNoResultsMessage =>
+      'تحقق من الكتابة، أو امسح البحث والفلاتر لعرض القائمة كاملة.';
+
+  @override
+  String get queryClearSearchAndFiltersButton => 'مسح البحث والفلاتر';
+
+  @override
   String catalogNoSearchResultsTitle(String query) {
     return 'لا توجد نتائج لـ «$query»';
   }
@@ -8495,7 +8511,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get invoicesLoadError => 'تعذر تحميل الفواتير.';
 
   @override
-  String get emptyInvoices => 'لا توجد فواتير تطابق الفلاتر الحالية.';
+  String get emptyInvoices => 'لا توجد فواتير بعد.';
 
   @override
   String invoiceDetailsTitle(String receiptNumber) {
@@ -9146,7 +9162,7 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذر حفظ الخصم. راجع البيانات وحاول مرة أخرى.';
 
   @override
-  String get discountEmptyRules => 'لا توجد خصومات مطابقة.';
+  String get discountEmptyRules => 'لا توجد خصومات بعد.';
 
   @override
   String get discountSearchHint => 'ابحث باسم الخصم أو الكود';

@@ -13,6 +13,7 @@ import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/sale_order_details_content.dart';
+import '../../../shared/query_controls/query_empty_state.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/invoice_list_view_model.dart';
@@ -169,10 +170,22 @@ class _InvoiceListBodyState extends State<_InvoiceListBody> {
               errorBuilder: (context) => PointyErrorState(
                 title: l10n.invoicesLoadError,
                 icon: Icons.receipt_long_outlined,
+                action: FilledButton.tonalIcon(
+                  onPressed: viewModel.loadInvoices,
+                  icon: const Icon(Icons.sync),
+                  label: Text(l10n.retryButton),
+                ),
               ),
-              emptyBuilder: (context) => PointyEmptyState(
+              emptyBuilder: (context) => QueryEmptyState(
                 icon: Icons.receipt_long_outlined,
-                title: l10n.emptyInvoices,
+                search: viewModel.query.search,
+                hasFilters:
+                    InvoiceQueryControls.narrowingFilterCount(viewModel.query) >
+                    0,
+                emptyTitle: l10n.emptyInvoices,
+                onClear: () => viewModel.applyQuery(
+                  InvoiceQueryControls.cleared(viewModel.query),
+                ),
               ),
               itemBuilder: (context, invoice) {
                 return InvoiceTile(

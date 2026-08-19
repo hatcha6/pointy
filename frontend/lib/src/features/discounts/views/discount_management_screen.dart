@@ -9,6 +9,7 @@ import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/query_controls/query_empty_state.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/discount_details_view_model.dart';
@@ -223,11 +224,21 @@ class _DiscountManagementBody extends StatelessWidget {
               errorBuilder: (context) => PointyErrorState(
                 title: l10n.discountLoadError,
                 icon: Icons.local_offer_outlined,
+                action: FilledButton.tonalIcon(
+                  onPressed: viewModel.loadRules,
+                  icon: const Icon(Icons.sync),
+                  label: Text(l10n.retryButton),
+                ),
               ),
-              emptyBuilder: (context) => PointyEmptyState(
+              emptyBuilder: (context) => QueryEmptyState(
                 icon: Icons.local_offer_outlined,
-                title: l10n.discountEmptyRules,
-                action: capabilities.canCreateDiscountRule
+                search: viewModel.query.search,
+                hasFilters: viewModel.query.activeFilterCount > 0,
+                emptyTitle: l10n.discountEmptyRules,
+                onClear: () => viewModel.applyQuery(
+                  DiscountRuleQueryControls.cleared(viewModel.query),
+                ),
+                emptyAction: capabilities.canCreateDiscountRule
                     ? FilledButton.icon(
                         onPressed: onCreateRule,
                         icon: const Icon(Icons.add),

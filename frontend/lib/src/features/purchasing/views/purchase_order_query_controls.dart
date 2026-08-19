@@ -41,9 +41,28 @@ class PurchaseOrderQueryControls extends StatelessWidget {
   }
 
   int get _activeFilterCount {
+    return narrowingFilterCount(query) +
+        (query.ordering == PurchaseOrderOrdering.newest ? 0 : 1);
+  }
+
+  /// How many user-set filters can actually empty the list. Ordering is
+  /// excluded — it reorders, never removes — and so are
+  /// [PurchaseOrderQuery.productId] / [PurchaseOrderQuery.variantId], which
+  /// callers set to scope a listing rather than the user.
+  static int narrowingFilterCount(PurchaseOrderQuery query) {
     return (query.status == PurchaseOrderStatusFilter.all ? 0 : 1) +
-        (query.ordering == PurchaseOrderOrdering.newest ? 0 : 1) +
         (query.supplierId == null ? 0 : 1);
+  }
+
+  /// Drops the search term and every user-set filter, keeping the caller's
+  /// scope and the chosen ordering intact.
+  static PurchaseOrderQuery cleared(PurchaseOrderQuery query) {
+    return query.copyWith(
+      search: '',
+      status: PurchaseOrderStatusFilter.all,
+      supplierId: null,
+      supplierName: null,
+    );
   }
 
   Future<void> _showFilters(BuildContext context) async {
