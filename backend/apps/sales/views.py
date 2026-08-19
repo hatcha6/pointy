@@ -1,7 +1,6 @@
 import logging
 
 from django.db import IntegrityError, transaction
-from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
@@ -10,7 +9,6 @@ from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
-from apps.catalog.models import VariantOptionValue
 from apps.channels.services import require_active_sales_channel
 from apps.core.idempotency import run_idempotent_request
 from apps.core.discovery import request_is_relayed
@@ -76,22 +74,7 @@ class OrderViewSet(
         # for this permission in get_queryset (the verbs keep needing add_order).
         "lookup": ("sales.process_return_lookup",),
     }
-    queryset = Order.objects.select_related(
-        "customer",
-        "register_session",
-        "sales_channel",
-    ).prefetch_related(
-        "lines__variant__product",
-        "lines__adjustment_lines",
-        Prefetch(
-            "lines__variant__option_values",
-            queryset=VariantOptionValue.objects.select_related("option"),
-        ),
-        "payments",
-        "applied_discounts",
-        "exchanges__replacement_order",
-        "exchanges__created_by",
-    )
+    queryset = Order.objects.with_serializer_relations()
     # Dict form (vs a plain tuple) so the date field also exposes range/day
     # lookups (created_at__gte / __lte / __date) — additive, existing exact
     # filters are unchanged. Lets the assistant ask for "today's sales" etc.

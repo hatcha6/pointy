@@ -2,17 +2,26 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.analytics.models import AnalyticsEvent
+from apps.catalog.models import ProductVariant, VariantOption, VariantOptionValue
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import ensure_role_groups
 from apps.customers.models import Customer, PaymentCard
 from apps.inventory.models import StockItem
-from apps.sales.models import Order, RegisterSession
+from apps.sales.models import (
+    Order,
+    OrderAdjustment,
+    OrderAdjustmentLine,
+    OrderLine,
+    RegisterSession,
+)
 
 
 class CustomerApiTests(APITestCase):
@@ -352,3 +361,145 @@ class PaymentCardCustomerTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         card.refresh_from_db()
         self.assertEqual(card.customer_id, second.pk)
+
+
+class CustomerDetailTabQueryCountTests(APITestCase):
+    """The invoices and returns tabs must cost a fixed number of queries.
+
+    Both tabs serialize whole documents (order lines, adjustment lines), and the
+    per-row costs they used to pay were invisible at the call site:
+    ``variant.display_name`` silently queries when ``option_values`` is not
+    prefetched, ``can_void``/``can_return`` read each line's adjustment lines, and
+    ``applied_discounts``/``exchanges`` cost a query per order. These tests
+    compare the count at N rows against 2N — a flat count proves the per-row work
+    is gone, a growing one proves a prefetch went missing again.
+    """
+
+    def setUp(self):
+        groups = ensure_role_groups()
+        self.user = get_user_model().objects.create_user(
+            username="query-count-manager",
+            password="password",
+        )
+        self.user.groups.add(groups["manager"])
+        self.client.force_authenticate(self.user)
+        self.session = RegisterSession.objects.create(
+            owner_key=f"user:{self.user.pk}",
+            opening_cash=Decimal("0.00"),
+        )
+        self.customer = Customer.objects.create(full_name="Query count customer")
+        self.variants = [self._variant_with_options(index) for index in range(2)]
+
+    def _variant_with_options(self, index):
+        """A variant whose label comes from its option values, not its own name.
+
+        That is the real-data shape: a default variant carries no explicit
+        ``name``, so ``display_name`` resolves through ``option_values_label`` —
+        the branch that queries when nothing prefetched it.
+        """
+        product = create_product_with_default_variant(
+            name=f"Query product {index}",
+            sku=f"QC-SKU-{index}",
+            unit_price="5.00",
+        )
+        option = VariantOption.objects.create(code=f"qc-size-{index}", name="Size")
+        value = VariantOptionValue.objects.create(
+            option=option,
+            code=f"qc-large-{index}",
+            name=f"Large {index}",
+        )
+        product.variant_options.add(option)
+        variant = product.variants.get()
+        variant.option_values.set([value])
+        return variant
+
+    def _seed_orders(self, count):
+        for _ in range(count):
+            order = Order.objects.create(
+                register_session=self.session,
+                customer=self.customer,
+                status=Order.Status.PAID,
+                subtotal=Decimal("10.00"),
+                total=Decimal("10.00"),
+            )
+            for variant in self.variants:
+                line = OrderLine.objects.create(
+                    order=order,
+                    variant=variant,
+                    quantity=Decimal("1"),
+                    unit_price=Decimal("5.00"),
+                )
+                adjustment = OrderAdjustment.objects.create(
+                    order=order,
+                    register_session=self.session,
+                    adjustment_type=OrderAdjustment.AdjustmentType.RETURN,
+                    amount=Decimal("5.00"),
+                    created_by=self.user,
+                )
+                OrderAdjustmentLine.objects.create(
+                    adjustment=adjustment,
+                    order_line=line,
+                    variant=variant,
+                    quantity=Decimal("1"),
+                    unit_price=Decimal("5.00"),
+                )
+
+    def _get_counting_queries(self, url):
+        # The first request warms the per-request caches (permissions, shop
+        # settings), so only the second one reports the payload's own cost.
+        self.client.get(url)
+        with CaptureQueriesContext(connection) as context:
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return len(context.captured_queries), response
+
+    def test_customer_orders_query_count_does_not_grow_with_invoices(self):
+        url = reverse("customer-orders", args=[self.customer.pk])
+        self._seed_orders(2)
+        small_count, small_response = self._get_counting_queries(url)
+        self._seed_orders(2)
+        large_count, large_response = self._get_counting_queries(url)
+
+        self.assertEqual(len(small_response.data["results"]), 2)
+        self.assertEqual(len(large_response.data["results"]), 4)
+        self.assertEqual(small_count, large_count)
+
+    def test_customer_adjustments_query_count_does_not_grow_with_rows(self):
+        url = reverse("customer-adjustments", args=[self.customer.pk])
+        self._seed_orders(2)
+        small_count, small_response = self._get_counting_queries(url)
+        self._seed_orders(2)
+        large_count, large_response = self._get_counting_queries(url)
+
+        self.assertEqual(len(small_response.data["results"]), 4)
+        self.assertEqual(len(large_response.data["results"]), 8)
+        self.assertEqual(small_count, large_count)
+
+    def test_prefetched_variant_labels_match_a_cold_read(self):
+        """The prefetch may change where the label comes from, never what it says."""
+        self._seed_orders(1)
+        expected = {
+            variant.pk: ProductVariant.objects.get(pk=variant.pk).display_name
+            for variant in self.variants
+        }
+        self.assertEqual(sorted(expected.values()), ["Size: Large 0", "Size: Large 1"])
+
+        orders_response = self.client.get(
+            reverse("customer-orders", args=[self.customer.pk]),
+        )
+        adjustments_response = self.client.get(
+            reverse("customer-adjustments", args=[self.customer.pk]),
+        )
+
+        served = [
+            (line["variant"], line["variant_name"])
+            for order in orders_response.data["results"]
+            for line in order["lines"]
+        ] + [
+            (line["variant"], line["variant_name"])
+            for adjustment in adjustments_response.data["results"]
+            for line in adjustment["lines"]
+        ]
+        self.assertEqual(len(served), 4)
+        for variant_id, variant_name in served:
+            self.assertEqual(variant_name, expected[variant_id])

@@ -1,7 +1,7 @@
 import logging
 from decimal import Decimal
 
-from django.db.models import Count, Sum
+from django.db.models import Count, Prefetch, Sum
 from django.shortcuts import get_object_or_404
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
@@ -10,6 +10,7 @@ from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.catalog.models import VariantOptionValue
 from apps.core.dispatch import enqueue_or_raise
 from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
@@ -332,10 +333,14 @@ class CustomerViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def orders(self, request, pk=None):
         customer = self.get_object()
+        # The invoices tab renders the FULL order payload, so it needs the same
+        # relations the sales endpoints load. Its own shorter prefetch list cost
+        # ~14 queries per invoice (adjustment lines per line, option values per
+        # line for variant.display_name, plus exchanges and applied discounts per
+        # order); with_serializer_relations keeps that flat and in one place.
         queryset = (
             self._customer_orders(customer)
-            .select_related("customer", "register_session")
-            .prefetch_related("lines__variant__product", "payments")
+            .with_serializer_relations()
             .order_by("-created_at", "-id")
         )
         page = self.paginate_queryset(queryset)
@@ -351,10 +356,19 @@ class CustomerViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"])
     def adjustments(self, request, pk=None):
         customer = self.get_object()
+        # ``variant.display_name`` falls back to a query per line whenever
+        # option_values is not prefetched, so the returns tab paid one query per
+        # adjustment line on top of the product prefetch.
         queryset = (
             self._customer_adjustments(customer)
             .select_related("order", "register_session", "created_by")
-            .prefetch_related("lines__variant__product")
+            .prefetch_related(
+                "lines__variant__product",
+                Prefetch(
+                    "lines__variant__option_values",
+                    queryset=VariantOptionValue.objects.select_related("option"),
+                ),
+            )
             .order_by("-created_at", "-id")
         )
         page = self.paginate_queryset(queryset)

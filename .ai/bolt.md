@@ -366,3 +366,33 @@ the `retrieve` branch. `campaign-list` was 1 q/campaign (23 at 20 rows, 4 after)
 Worth checking before deleting it as "unread": the Flutter model parses neither
 `customers` nor `recipients`, but the AI assistant reads `crm/campaigns` as a
 generic data resource, so both fields do have a live consumer.
+
+## 2026-08-19 - A second endpoint that serializes the same document re-derives the prefetch by hand
+**Learning:** `CustomerViewSet.orders` serializes the *full* `OrderSerializer`
+but assembled its own queryset —
+`select_related("customer","register_session").prefetch_related("lines__variant__product","payments")`
+— which is a plausible-looking subset of `OrderViewSet.queryset`'s eight
+relations. Everything it omitted was invisible at the call site: `option_values`
+(1 q/line via `variant.display_name`), `lines__adjustment_lines`
+(**5** q/line — `can_void`/`can_return`/`can_exchange`/`returned_quantity`/
+`returnable_quantity` each re-read them), `applied_discounts` and `exchanges`
+(1 q/order each). That is 14 queries per invoice: a full 50-invoice page of
+3-line orders was **1012** queries, 16 after. `customer-adjustments` had the
+`display_name` half of the same hole (58 -> 9). The hand-rolled list read as
+deliberate — it names two real relations — which is exactly why nobody
+re-derived it against the serializer.
+**Action:** When one serializer is used by two viewsets, the prefetch shape is
+part of the serializer's contract, not the viewset's: put it on the queryset
+(`OrderQuerySet.with_serializer_relations()`) and have both call it, so a new
+serializer field cannot be fast in one endpoint and an N+1 in the other. Find
+these with `grep -rn "<X>Serializer(" apps/` and diff each caller's queryset
+against the canonical viewset's — a *shorter* list is the tell, and a partial
+one is more suspicious than none at all.
+
+**Next target (measured, unfixed):** `customer-sales-summary` is a flat **18**
+queries, of which ~9 are avoidable: five separate reads over the same order
+queryset (`Sum(total)`, three `COUNT`s, one `values_list` for
+`last_invoice_at`) and six over the same adjustment queryset (three `SUM`s +
+three `COUNT`s), all collapsible into two `aggregate()` calls with `filter=Q(...)`.
+It is flat, so it is not rotting — but it is on the customer detail screen and
+runs again after every debt collection (`record_payment` returns it).
