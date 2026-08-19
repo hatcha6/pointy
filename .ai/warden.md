@@ -76,3 +76,45 @@ query models implement `copyWith` with an `_unset` sentinel, so
 `copyWith(customerId: null)` genuinely *clears* the field. Under the usual
 `??` idiom that line would be a silent no-op; here it is correct, and
 caller-set `productId`/`variantId` scope survives because it is omitted.
+
+## 2026-08-19 - A brand-new worktree is indistinguishable from a merged one
+
+**Learning:** The documented prune test — branch merged, `git status --porcelain`
+empty — returns *true* for a worktree a routine created seconds ago and has not
+written to yet. `hungry-yonath-e4c108` and `reverent-knuth-7c0d99` were both
+clean, both sitting exactly on `origin/main` with zero unique commits, and both
+had a live `claude` process working inside them; by content alone they looked
+exactly like finished work. Removing them would have killed two in-flight runs.
+Worse, index mtime is *not* the discriminator: `git -C <wt> status --porcelain`
+rewrites the index, so the survey pass I run to find dirty worktrees stamps every
+one of them with the current time. I nearly read my own footprint as routine
+activity.
+
+**Action:** Before removing any worktree, prove it is dead, not just clean. Two
+checks, both cheap: `stat -f '%SB' -t '%F %T' <worktree>` for directory birth
+time — anything born in the last hour is this cycle's work, leave it — and
+`lsof -a -d cwd +D .claude/worktrees` to list processes whose cwd is inside one.
+A live `claude` process is decisive. Never treat index or file mtime as an
+activity signal; your own inspection commands produce it.
+
+## 2026-08-19 - Routines are running in the primary checkout and flipping its branch
+
+**Learning:** The fleet is documented as working in `.claude/worktrees/<name>`,
+but the primary checkout at `/Users/hatem/Develop/pointy` is being driven
+directly: across four commands in one run its branch went
+`oracle/sweep-1787105677` → `palette/run-1787136559` → back to
+`oracle/sweep-1787105677`, and `palette/run-…` was deleted underneath me
+mid-run. It also carries uncommitted work that survives those switches (a
+modified `backend/apps/employees/models.py` plus an untracked
+`test_employee_list_query_scaling.py`), so edits made under one routine's branch
+are visible to the next one that checks out there. This is the root cause of the
+`probe/fraud-metric-boundaries` prefix deadlock too — routines working outside
+their worktree also name branches after themselves rather than `claude/*`.
+
+**Action:** Never assume the primary checkout is on `main` or is quiescent — read
+`git branch --show-current` at the moment you need it, not once at the start.
+Step 2's `git fetch origin main:main` is the right call precisely because it
+updates the ref without touching that working tree; do not `checkout`, `stash`,
+or `reset` there to "tidy up", and do not write the journal there — use a scratch
+worktree off `origin/main` instead. Report the branch churn to a human rather
+than trying to correct it.
