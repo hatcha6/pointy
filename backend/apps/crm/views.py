@@ -51,7 +51,10 @@ class ConversationViewSet(viewsets.ReadOnlyModelViewSet):
         if status:
             queryset = queryset.filter(status=status)
         if self.action == "retrieve":
-            queryset = queryset.prefetch_related("messages")
+            # ``outbound`` is read for every message (``get_outbound_status``),
+            # so prefetch it with the thread — otherwise a long conversation
+            # costs one extra query per message it has already sent.
+            queryset = queryset.prefetch_related("messages__outbound")
         return queryset
 
     @action(detail=False, methods=["post"])
@@ -195,9 +198,17 @@ class CampaignViewSet(viewsets.ModelViewSet):
         return CampaignSerializer
 
     def get_queryset(self):
-        queryset = Campaign.objects.all()
+        # ``customers`` (the hand-picked audience) is serialized on every
+        # campaign, list included, so prefetch it here rather than paying a
+        # query per row.
+        queryset = Campaign.objects.prefetch_related("customers")
         if self.action == "retrieve":
-            queryset = queryset.prefetch_related("recipients__customer")
+            # Each recipient renders its ``outbound.status``; without this the
+            # detail payload costs one query per recipient, and a campaign is
+            # expanded to its whole audience.
+            queryset = queryset.prefetch_related(
+                "recipients__customer", "recipients__outbound"
+            )
         status_filter = self.request.query_params.get("status")
         if status_filter:
             queryset = queryset.filter(status=status_filter)

@@ -341,3 +341,28 @@ no checkout needed), open the PR there, close the old one.
 any PR, check the prefix — and when an open PR of yours is unlabelled and
 untouched across runs, suspect the branch name before assuming it is merely
 awaiting review.
+
+## 2026-08-19 - A `SerializerMethodField` guarded by `<fk>_id` is an invisible N+1
+**Learning:** CRM's `get_outbound_status` is `obj.outbound.status if obj.outbound_id
+else ""`. The `_id` guard makes it *look* prefetch-aware — it dodges the query for
+rows with no relation — but every row that *has* one still fires its own
+`.get()`. It reads as defensive code, so nobody re-checks the queryset. Both CRM
+list-of-rows payloads had it (`CampaignRecipientSerializer`,
+`ConversationMessageSerializer`) and both querysets prefetched the *sibling*
+relation only (`recipients__customer`, `messages`) — the half that was obviously
+needed. Measured: `campaign-detail` on a 200-recipient campaign 205 -> 6 queries,
+`conversation-detail` on a 100-message thread 103 -> 4.
+**Action:** Grep `_id else` / `_id and` inside serializer methods when auditing a
+list endpoint — that idiom is where a missing prefetch hides. And when a
+queryset already prefetches `rel__a`, check every field the row serializer reads,
+not just the one the prefetch names; a partial prefetch is the strongest signal
+that the audit stopped early.
+
+**Also:** a writable M2M listed in `Meta.fields` (`Campaign.customers`) is a
+`PrimaryKeyRelatedField(many=True)` and costs 1 query **per row of the list**,
+not just on detail. It is easy to miss because it looks like a plain column in
+the field list and the list viewset's `get_queryset` only ever gets tuned for
+the `retrieve` branch. `campaign-list` was 1 q/campaign (23 at 20 rows, 4 after).
+Worth checking before deleting it as "unread": the Flutter model parses neither
+`customers` nor `recipients`, but the AI assistant reads `crm/campaigns` as a
+generic data resource, so both fields do have a live consumer.
