@@ -237,3 +237,28 @@ got it to 16) and 204,699 -> **23,449** bytes, and the diff got *smaller* — th
 `Prefetch` helper, the stock-rollup annotation and a shared-prefetch extraction
 in `catalog/services.py` all evaporated. What is left is `select_related` for the
 names plus one `variant__option_values__option` prefetch.
+
+## 2026-08-19 - A bulk primer is worth writing when the codebase has already forked the arithmetic
+
+**Learning:** `RegisterSession`'s four drawer aggregates cost 16 queries per
+serialized session (four properties, `expected_cash` re-reading all four,
+`cash_variance` re-reading `expected_cash`, `has_cash_variance` re-reading
+`cash_variance`) — the same composite shape as `Supplier.net_balance`. What made
+it findable was not reading the model but grepping the property *names* across
+the repo: `apps/reports/services.py` and `apps/core/dashboard/helpers.py` had
+each independently **re-implemented** the `expected_cash` sum in bulk SQL, and
+`apps/notifications/services.py` annotates its own `cash_variance_amount` with a
+comment saying the property is "a 4-aggregate Python property". Three
+hand-rolled copies of the same money arithmetic is the loudest possible signal
+that the property is too expensive to call — and each copy is a place the
+drawer math can silently drift from the till.
+
+**Action:** When hunting an N+1 in an unfamiliar subsystem, `grep -rn` the
+property name across *all* apps before reading anything. Callers that annotate
+or re-derive the same value in SQL are pointing at the bottleneck, and they also
+size the win: those workarounds exist because someone already hit it. (Consuming
+the primer from those three duplicates would let them delete their copies — a
+correctness win, not just a speed one, but it needs its own value-equality tests
+per report so it did not ride along here.) Also worth noting: an unbounded
+`sum(1 for x in queryset if x.property)` — as in `_register_session_summary` —
+is worse than a paginated N+1, because nothing caps the row count.
