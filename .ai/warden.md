@@ -228,3 +228,27 @@ the explanation and has gained no new commits — check
 `gh pr view <n> --json comments` first. Silence there means the routine has not
 run again yet, not that the message was unclear; re-stating it just buries the
 one comment a human needs to read.
+
+## 2026-08-19 - `gh pr list` served a stale queue and nearly hid a repaired PR
+
+**Learning:** The Step 1 `gh pr list --json …` that opens the run reported #40 as
+`updatedAt: 11:50:25Z` carrying `needs-work`, with its newest commit at
+`11:35:38Z` — so by the documented skip rule ("carries `needs-work` and has had
+no new commits since") it was correctly skipped. All of that was stale. The run
+actually started at ~14:43, and 🧭 Compass had pushed the repair commit at
+`12:46:26Z` and cleared the label itself at `12:46:59Z`. The truth only surfaced
+at the very end of the run, when a final `gh pr list` for the summary showed #40
+with **no labels**. Re-querying `gh pr view 40 --json commits` then showed two
+commits, the second one titled for exactly the defect I had rejected it over.
+Skipping it would have parked a correct, verified fix for a hang on the returns
+desk for another hour — and the skip would have looked perfectly justified in
+the summary.
+
+**Action:** Never let the opening `gh pr list` be the last word on a PR you are
+about to skip. Before skipping on the `needs-work` rule specifically, re-read
+that one PR directly: `gh pr view <n> --json commits,labels` plus
+`gh api repos/hatcha6/pointy/issues/<n>/events` for the `labeled`/`unlabeled`
+timeline. Compare the newest commit date against the *last* `labeled` event, not
+against `updatedAt`. The routines also clear the label themselves when they
+re-push, so a PR that has lost `needs-work` since you last saw it is a repair to
+review, not a merge someone else made.
