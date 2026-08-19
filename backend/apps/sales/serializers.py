@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.db.models import Manager
 from rest_framework import serializers
 
 from apps.catalog.models import ModifierOption, ProductVariant
@@ -25,6 +26,7 @@ from .models import (
     OrderLine,
     RegisterCashMovement,
     RegisterSession,
+    prime_register_session_cash_totals,
 )
 from .services import (
     assign_credit_invoice_customer,
@@ -50,6 +52,22 @@ from .public_invoices import public_invoice_url_for_order
 
 def sales_discount_rules_active() -> bool:
     return _active_discount_rules_exist(DiscountRule.Channel.SALES)
+
+
+class RegisterSessionListSerializer(serializers.ListSerializer):
+    """Batches the drawer aggregates for a whole page of sessions, so the list
+    costs 3 queries instead of 16 per row."""
+
+    def to_representation(self, data):
+        # Materialise first (mirroring DRF's own Manager handling) and hand the
+        # same list to the parent, so it serializes the instances we primed
+        # rather than re-querying and getting cold ones.
+        rows = data.all() if isinstance(data, Manager) else data
+        if not isinstance(rows, list):
+            rows = list(rows)
+        if "expected_cash" in self.child.fields:
+            prime_register_session_cash_totals(rows)
+        return super().to_representation(rows)
 
 
 class RegisterSessionSerializer(serializers.ModelSerializer):
@@ -104,6 +122,7 @@ class RegisterSessionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RegisterSession
+        list_serializer_class = RegisterSessionListSerializer
         fields = [
             "id",
             "session_number",
@@ -151,6 +170,18 @@ class RegisterSessionSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def to_representation(self, session):
+        # A lone session (retrieve/current/close) still reads eight drawer fields
+        # backed by four aggregates that the composites re-run, so prime it too:
+        # 3 queries, not 16. ``RegisterSessionListSerializer`` primes the whole
+        # page first, making this a no-op for list rows.
+        if (
+            "expected_cash" in self.fields
+            and getattr(session, "_cash_sales_total", None) is None
+        ):
+            prime_register_session_cash_totals([session])
+        return super().to_representation(session)
 
     def get_owner_name(self, session):
         """Who opened the session — the till accountability line. Falls back to

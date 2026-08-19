@@ -32,7 +32,13 @@ from apps.catalog.models import Product
 from apps.expenses.models import Expense
 from apps.payments.models import Payment
 
-from .models import Order, OrderAdjustment, OrderLine, RegisterSession
+from .models import (
+    Order,
+    OrderAdjustment,
+    OrderLine,
+    RegisterSession,
+    prime_register_session_cash_totals,
+)
 
 MONEY = Decimal("0.01")
 QTY = Decimal("0.001")
@@ -107,6 +113,9 @@ def cached_register_session_summary(session: RegisterSession) -> dict:
 
 def build_register_session_summary(session: RegisterSession) -> dict:
     """Aggregate everything a manager needs to review/print a shift."""
+    # The Z-report reads every drawer total plus all three composites, so batch
+    # the four aggregates once up front: 3 queries instead of 16.
+    prime_register_session_cash_totals([session])
     sales, categories = _sales_and_categories(session)
     refunds, refund_by_method = _refunds(session)
     payment_methods, payment_totals = _payment_methods(session, refund_by_method)
