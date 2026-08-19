@@ -51,6 +51,11 @@ class RegisterSessionList extends StatelessWidget {
                 errorBuilder: (context) => PointyErrorState(
                   title: l10n.registerSessionHistoryLoadError,
                   icon: Icons.manage_history_outlined,
+                  action: OutlinedButton.icon(
+                    onPressed: viewModel.loadSessions,
+                    icon: const Icon(Icons.refresh),
+                    label: Text(l10n.retryButton),
+                  ),
                 ),
                 emptyBuilder: (context) => PointyEmptyState(
                   icon: Icons.manage_history_outlined,

@@ -579,6 +579,11 @@ class _SessionSalesList extends StatelessWidget {
             errorBuilder: (context) => PointyErrorState(
               title: l10n.sessionSalesLoadError,
               icon: Icons.receipt_long_outlined,
+              action: OutlinedButton.icon(
+                onPressed: viewModel.retrySelectedSessionOrders,
+                icon: const Icon(Icons.refresh),
+                label: Text(l10n.retryButton),
+              ),
             ),
             emptyBuilder: (context) => PointyEmptyState(
               icon: Icons.receipt_long_outlined,
@@ -674,6 +679,11 @@ class _SessionCashMovementList extends StatelessWidget {
       errorBuilder: (context) => PointyErrorState(
         title: l10n.sessionCashMovementsLoadError,
         icon: Icons.payments_outlined,
+        action: OutlinedButton.icon(
+          onPressed: viewModel.retrySelectedSessionCashMovements,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.retryButton),
+        ),
       ),
       emptyBuilder: (context) => PointyEmptyState(
         icon: Icons.payments_outlined,
