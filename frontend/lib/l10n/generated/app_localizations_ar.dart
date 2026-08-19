@@ -8811,6 +8811,17 @@ class AppLocalizationsAr extends AppLocalizations {
   String get returnsLookupEmpty => 'ابحث عن فاتورة برقمها للبدء.';
 
   @override
+  String get returnsLookupNotFoundHint =>
+      'تأكّد من رقم الفاتورة المطبوع على الإيصال، أو جرّب رقمًا آخر.';
+
+  @override
+  String get returnsLookupFailedTitle => 'تعذّر البحث عن الفاتورة';
+
+  @override
+  String get returnsLookupFailedMessage =>
+      'لم يصل ردّ من الخادم، ولا يعني ذلك أن الفاتورة غير موجودة. تحقّق من الاتصال ثم أعد المحاولة.';
+
+  @override
   String get salePaymentsTitle => 'المدفوعات';
 
   @override

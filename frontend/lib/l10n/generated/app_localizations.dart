@@ -15419,6 +15419,24 @@ abstract class AppLocalizations {
   /// **'ابحث عن فاتورة برقمها للبدء.'**
   String get returnsLookupEmpty;
 
+  /// No description provided for @returnsLookupNotFoundHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكّد من رقم الفاتورة المطبوع على الإيصال، أو جرّب رقمًا آخر.'**
+  String get returnsLookupNotFoundHint;
+
+  /// No description provided for @returnsLookupFailedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر البحث عن الفاتورة'**
+  String get returnsLookupFailedTitle;
+
+  /// No description provided for @returnsLookupFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يصل ردّ من الخادم، ولا يعني ذلك أن الفاتورة غير موجودة. تحقّق من الاتصال ثم أعد المحاولة.'**
+  String get returnsLookupFailedMessage;
+
   /// No description provided for @salePaymentsTitle.
   ///
   /// In ar, this message translates to:

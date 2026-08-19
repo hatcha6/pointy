@@ -5228,6 +5228,9 @@
   "returnsLookupSearchButton": "بحث",
   "returnsLookupNotFound": "لا توجد فاتورة بهذا الرقم.",
   "returnsLookupEmpty": "ابحث عن فاتورة برقمها للبدء.",
+  "returnsLookupNotFoundHint": "تأكّد من رقم الفاتورة المطبوع على الإيصال، أو جرّب رقمًا آخر.",
+  "returnsLookupFailedTitle": "تعذّر البحث عن الفاتورة",
+  "returnsLookupFailedMessage": "لم يصل ردّ من الخادم، ولا يعني ذلك أن الفاتورة غير موجودة. تحقّق من الاتصال ثم أعد المحاولة.",
   "salePaymentsTitle": "المدفوعات",
   "salePaymentCommission": "العمولة {amount} بنسبة {percent}%",
   "@salePaymentCommission": {

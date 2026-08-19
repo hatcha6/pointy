@@ -2444,7 +2444,77 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('لا توجد فاتورة بهذا الرقم.'), findsOneWidget);
+    // The miss also says what to do about it.
+    expect(
+      find.text(
+        'تأكّد من رقم الفاتورة المطبوع على الإيصال، أو جرّب رقمًا آخر.',
+      ),
+      findsOneWidget,
+    );
   });
+
+  testWidgets(
+    'returns/exchange lookup separates a server failure from a missing invoice',
+    (WidgetTester tester) async {
+      var lookups = 0;
+      final apiService = _mockApiService(onSaleLookup: (_) => lookups += 1);
+
+      await tester.pumpWidget(_returnsLookupApp(apiService));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, 'R-500');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pumpAndSettle();
+
+      expect(lookups, 1);
+      // A 500 must never be reported as "no invoice with that number" — the
+      // cashier would tell the customer their real receipt is invalid.
+      expect(find.text('لا توجد فاتورة بهذا الرقم.'), findsNothing);
+      expect(find.text('تعذّر البحث عن الفاتورة'), findsOneWidget);
+      expect(
+        find.text(
+          'لم يصل ردّ من الخادم، ولا يعني ذلك أن الفاتورة غير موجودة. '
+          'تحقّق من الاتصال ثم أعد المحاولة.',
+        ),
+        findsOneWidget,
+      );
+
+      // ...and the failure offers a way forward rather than a dead end.
+      final retry = _filledButtonWithLabel('إعادة المحاولة');
+      expect(retry, findsOneWidget);
+      await tester.tap(retry);
+      await tester.pumpAndSettle();
+      expect(lookups, 2);
+    },
+  );
+
+  testWidgets(
+    'returns/exchange lookup keeps search inert until a receipt is typed',
+    (WidgetTester tester) async {
+      var lookups = 0;
+      final apiService = _mockApiService(onSaleLookup: (_) => lookups += 1);
+
+      await tester.pumpWidget(_returnsLookupApp(apiService));
+      await tester.pumpAndSettle();
+
+      FilledButton searchButton() =>
+          tester.widget<FilledButton>(_filledButtonWithLabel('بحث'));
+
+      expect(searchButton().onPressed, isNull);
+      // Whitespace is not a receipt number either.
+      await tester.enterText(find.byType(TextField).first, '   ');
+      await tester.pump();
+      expect(searchButton().onPressed, isNull);
+
+      await tester.enterText(find.byType(TextField).first, 'R-100');
+      await tester.pump();
+      expect(searchButton().onPressed, isNotNull);
+
+      await tester.tap(_filledButtonWithLabel('بحث'));
+      await tester.pumpAndSettle();
+      expect(lookups, 1);
+    },
+  );
 
   testWidgets(
     'purchase details hide guarded workflow actions without permission',
@@ -4890,6 +4960,44 @@ Widget _localizedTestApp(Widget child) {
   );
 }
 
+/// `FilledButton.icon` builds a private subclass, so `find.byType(FilledButton)`
+/// (which matches the runtime type exactly) misses it — match the supertype.
+Finder _filledButtonWithLabel(String label) {
+  return find.ancestor(
+    of: find.text(label),
+    matching: find.byWidgetPredicate((widget) => widget is FilledButton),
+  );
+}
+
+/// Hosts [ReturnsExchangeLookupScreen] as a returns-desk cashier: the lookup
+/// permission, but no checkout rights.
+Widget _returnsLookupApp(PosApiService apiService) {
+  return MaterialApp(
+    locale: const Locale('ar'),
+    localizationsDelegates: const [
+      AppLocalizations.delegate,
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: ReturnsExchangeLookupScreen(
+      saleRepository: SaleRepository(apiService),
+      printingRepository: PrintingRepository(apiService),
+      shopSettingsRepository: ShopSettingsRepository(apiService),
+      catalogRepository: CatalogRepository(apiService),
+      capabilities: AuthorizationCapabilities.forUser(
+        PosUser.fromJson(
+          _userJson(
+            role: 'cashier',
+            permissions: const ['sales.process_return_lookup'],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 PosApiService _mockApiService({
   bool isAuthenticated = true,
   bool hasOpenSession = false,
@@ -4913,6 +5021,7 @@ PosApiService _mockApiService({
   void Function(http.Request request)? onCashMovement,
   void Function(http.Request request)? onReprint,
   void Function(http.Request request)? onReturn,
+  void Function(http.Request request)? onSaleLookup,
   void Function(http.Request request)? onSaleExchange,
   void Function(http.Request request)? onVoid,
   void Function(http.Request request)? onPrintJobReport,
@@ -5991,7 +6100,16 @@ PosApiService _mockApiService({
       }
 
       if (path.endsWith('/orders/lookup/')) {
-        if (request.url.queryParameters['receipt'] != 'R-100') {
+        onSaleLookup?.call(request);
+        final receipt = request.url.queryParameters['receipt'];
+        if (receipt == 'R-500') {
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({'detail': 'Server error.'})),
+            500,
+            headers: const {'Content-Type': 'application/json; charset=utf-8'},
+          );
+        }
+        if (receipt != 'R-100') {
           return http.Response.bytes(
             utf8.encode(jsonEncode({'detail': 'No invoice matches.'})),
             404,
