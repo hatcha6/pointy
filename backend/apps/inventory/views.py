@@ -1,6 +1,6 @@
 import django_filters
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F
+from django.db.models import Count, F, Prefetch, Q
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
@@ -10,7 +10,10 @@ from rest_framework.response import Response
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
 from apps.catalog.models import ProductVariant
-from apps.catalog.services import category_ids_with_descendants
+from apps.catalog.services import (
+    category_ids_with_descendants,
+    variant_detail_queryset,
+)
 from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
@@ -260,8 +263,17 @@ class StockCountViewSet(
         return StockCountSerializer
 
     def get_queryset(self):
+        # Both counts aggregate the SAME reverse relation, so they share one
+        # join and cannot fan out into a cross product. variance_line_count was
+        # left un-annotated, which made the serializer fall back to a COUNT(*)
+        # per row of the list.
         queryset = super().get_queryset().annotate(
             counted_line_count=Count("lines", distinct=True),
+            variance_line_count=Count(
+                "lines",
+                filter=~Q(lines__counted_quantity=F("lines__expected_quantity")),
+                distinct=True,
+            ),
         )
         # Anyone who can apply counts (managers, supervisors, storekeepers) must
         # be able to see every count to review/apply it; reporting roles get the
@@ -434,15 +446,16 @@ class StockCountViewSet(
     @action(detail=True, methods=["get"])
     def reconciliation(self, request, pk=None):
         stock_count = self.get_object()
-        lines = (
-            stock_count.lines.exclude(counted_quantity=F("expected_quantity"))
-            .select_related("variant", "variant__product")
-            .prefetch_related(
-                "variant__attachments",
-                "variant__product__attachments",
-                "variant__option_values",
-                "variant__option_values__option",
-            )
+        lines = stock_count.lines.exclude(
+            counted_quantity=F("expected_quantity")
+        ).prefetch_related(
+            # variant_detail embeds the full ProductVariantSerializer, whose
+            # relations (the parent product tree, each image's own FKs, the 1:1
+            # stock row) are the serializer's contract — so take them from the
+            # shared queryset rather than re-deriving a subset here. Prefetching
+            # the forward FK (not select_related) also lets that inner queryset
+            # carry its own prefetch chains.
+            Prefetch("variant", queryset=variant_detail_queryset()),
         )
         page = self.paginate_queryset(lines)
         if page is not None:

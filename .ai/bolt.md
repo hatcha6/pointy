@@ -467,3 +467,36 @@ cheapest N+1 in the codebase to find and the easiest to skim past, especially on
 a self-referential FK where `parent` looks like a column. This closed the last
 instance of the two-relations-in-one-`annotate()` shape; the helper now lives in
 `apps/core/aggregates.py::related_count` and discounts consumes it.
+
+## 2026-08-20 - A nested serializer's prefetch list is the SERIALIZER's contract, and the second caller always writes a shorter one
+**Learning:** `StockCountViewSet.reconciliation` embeds the full
+`ProductVariantSerializer` as `variant_detail` and hand-wrote its own prefetch
+list — `variant`, `variant__product`, `variant__attachments`,
+`variant__product__attachments`, `variant__option_values__option`. Five real
+relations, so it reads as deliberate and reviewed. But `ProductVariantViewSet`'s
+own queryset names *eleven*, and every one the copy omitted costs a query per
+row: the product's categories/variant-options/modifier-groups/units (the
+`product_detail` tree), each attachment's own `owner_content_type` /
+`storage_volume` / `created_by` FKs, and the 1:1 `stock` row behind
+`quantity_on_hand`. Measured 15 q/line — 54 queries at 3 lines, 99 at 6, so a
+full 50-line page ≈ 754. This is the same shape as `CustomerViewSet.orders` vs
+`OrderViewSet` (2026-08-19); it is now the *third* instance, so treat "two
+viewsets, one serializer" as a standing audit item rather than a coincidence.
+Note the copy also used `select_related("variant", "variant__product")`, which
+structurally **cannot** carry the nested chains — a `Prefetch` on the same
+forward FK can, because its inner queryset is rooted at `ProductVariant`.
+**Action:** When a serializer is embedded anywhere but its own viewset, move the
+prefetch shape into a shared factory next to the serializer
+(`catalog.services.variant_detail_queryset()`) and have the viewset consume it —
+then a new serializer field cannot be fast in one endpoint and an N+1 in the
+other. Find them with `grep -rn "<X>Serializer(" apps/` and diff each caller's
+relations against the canonical viewset's; a *shorter* list is the tell.
+
+**Also:** a `get_<field>` that reads `getattr(obj, "<name>", None)` and falls
+back to a `.count()` is only fast for the annotation the viewset remembered to
+add. `StockCountViewSet` annotated `counted_line_count` and not
+`variance_line_count`, so the session list paid a COUNT per row (5 q at 1 row,
+10 at 6). Both counts aggregate the **same** reverse relation, so adding the
+second to the existing `annotate()` is safe — the two-relations cross product
+(2026-08-19) needs *different* relations. Grep the annotated names against the
+serializer's fallbacks; the pair almost always drifts apart.
