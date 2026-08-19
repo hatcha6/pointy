@@ -398,3 +398,43 @@ can reuse both without reordering the original's awaits. And note the test trap:
 these panes are `StatelessWidget`s fed a view model by a parent
 `ListenableBuilder` — pump them bare and the retry refetches but never repaints,
 so the test fails for the wrong reason.
+
+## 2026-08-20 - A filters-only surface needs a third branch the shared empty state did not have
+
+**Learning:** `QueryEmptyState` branched two ways — search-only, or "filtered"
+— and the "filtered" branch was really *search + filters*: it showed
+`queryNoResultsMessage` ("تحقق من الكتابة، أو امسح البحث والفلاتر…") and a
+"مسح البحث والفلاتر" button whenever `hasFilters` was true, **regardless of
+whether a search term was set**. So the common case on every list screen — open
+the funnel, pick a status, type nothing — told the user to check their spelling
+and offered to clear a search box they never used. On the Payments hub, which
+has a date-range and a method filter and *no search box at all*, it named a
+control that does not exist on the screen. This is the same defect the
+2026-08-19 "word its escape after what is narrowing" entry fixed one level up:
+fixing it for `hasFilters == false` left the symmetric bug for `search == ''`.
+Its own test asserted the wrong copy (`'مسح البحث والفلاتر'` for
+`search: '', hasFilters: true`), so the suite defended the bug.
+
+**Action:** The state space is `(hasSearch, hasFilters)` — three reachable
+cases, not two. Write it as a `switch ((hasSearch, hasFilters))` over message
+*and* button label so a missing case cannot compile away silently, and cover
+all three in the widget's own test. Before reusing a shared empty state on a
+new surface, list the controls its copy names and check each one exists there;
+`search: ''` is the tell that a surface has no search box, and it must change
+the copy, not just the branch.
+
+**Also — a "clear filters" escape must be one fetch, not N.** The hub's existing
+clear button called `onRangeChanged(null)` then `onMethodChanged(null)`, and
+each setter fires its own `loadXPayments()` — two overlapping requests for the
+same ledger, the second racing the first. Any screen whose filter setters each
+trigger a reload needs a single `clearXFilters()` on the view model that nulls
+every field and reloads once; pointing both the filter bar and the empty state
+at it fixes the existing double-fetch too. Assert it by counting requests
+(`expect(requests.length, before + 1)`), not just by checking the list refilled.
+
+**Test trap:** work started inside `tester.runAsync` must *complete* before the
+callback returns. `runAsync(() => Future.sync(() => vm.setCustomerRange(r)))`
+returns immediately while the http future it kicked off is still pending, and
+the following `pumpAndSettle` then times out. Fire-and-forget view-model setters
+belong outside `runAsync` — call them like a tap and `pumpAndSettle`, which is
+what the retry tests already do successfully with `MockClient`.
