@@ -96,7 +96,11 @@ class MigrationApiClient {
   }
 
   Future<CompatibilityReport> checkCompatibility(int id) async {
-    final response = await _session.post('migration/sources/$id/check/');
+    // Reads the whole legacy database to report what can be imported.
+    final response = await _session.post(
+      'migration/sources/$id/check/',
+      timeout: PosApiSession.longRunningRequestTimeout,
+    );
     _session.ensureSuccess(
       response,
       'Migration compatibility check failed with status',

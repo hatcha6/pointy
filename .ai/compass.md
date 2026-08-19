@@ -94,3 +94,43 @@ take the raw input (a task **name**, a URL string, a key) and do the lookup
 inside its own `try` — never accept the already-resolved object. And when a
 failure depends on import order, inject it explicitly (`mock.patch.dict` over
 `current_app.tasks`) rather than trusting an app-scoped run to expose it.
+
+## 2026-08-20 - The client had no read deadline either
+
+**Learning:** The journal's first entry (a wedged service never raises, so the
+`try/except` around it never fires) is not a backend-only shape — it held on the
+Flutter side too, and worse. `PosApiSession._send` is the single funnel for
+every buffered request in the app, and it awaited `package:http` with no
+`.timeout()`. `dart:io`'s `HttpClient` sets no read deadline, so a backend that
+accepted the connection and went silent (wedged uvicorn, AP roam stranding a
+pooled connection, LAN dropping packets post-handshake) hung a checkout POST
+forever. Everything downstream was already correct — the relay fallback, the
+`onLocalTargetUnreachable` re-discovery hook, the repositories' `on Exception`
+— and none of it ever ran, because nothing ever threw. The printing transports,
+the discovery probe and the self-updater were all bounded; the main API path
+was the one nobody had checked.
+
+**Action:** When a codebase has visibly careful timeouts on its *peripheral*
+I/O, that is not evidence the central path is bounded — check the funnel every
+request goes through, and check the client library's defaults rather than the
+surrounding code. Reproduce with a `MockClient` returning
+`Completer<http.Response>().future`: it is the client-side twin of the
+black-hole listener, needs no sockets, and fails deterministically in a test
+bounded by `expectLater(...).timeout(...)`.
+
+## 2026-08-20 - A timeout is not a connection refusal, on the money path
+
+**Learning:** Adding a deadline silently changed what an exception *means* to
+the retry above it. `_send`'s relay-fallback replay was written for "connection
+refused" — proof the server never saw the request, so replaying is free. A
+`TimeoutException` proves nothing: the sale may already be committed, and the
+same replay would then bill the customer twice. The saving grace was elsewhere:
+`checkoutIdempotencyKeyFor` derives the key from the draft JSON, so it is
+stable across retries of the same cart — the cashier pressing checkout again
+after a timeout is already safe.
+
+**Action:** When introducing a timeout into an existing error path, re-read
+every `catch` above it and ask whether it was written for a failure that proved
+the request never landed. Gate the replay (`replayable`: GETs and keyed writes
+only) rather than widening it. And check that the *user's* natural retry is
+idempotent too — that is the retry that actually happens.

@@ -186,6 +186,8 @@ class ShopSettingsApiClient {
           contentType: upload.contentType,
         ),
       ],
+      // Uploading a whole database dump over a shop LAN.
+      timeout: PosApiSession.longRunningRequestTimeout,
     );
     _session.ensureSuccess(response, 'Backup restore failed with status');
     return SystemMaintenanceJob.fromJson(
