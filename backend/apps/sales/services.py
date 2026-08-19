@@ -45,6 +45,9 @@ from .models import (
 
 
 MONEY_PLACES = Decimal("0.01")
+# OrderLine.quantity's own precision. Mirrored here so expected_order_totals
+# sees the quantity the line will actually store, not the caller's raw input.
+QUANTITY_PLACES = Decimal("0.001")
 
 
 def money(value):
@@ -236,6 +239,50 @@ def discount_allocations_by_line_key(discount_result):
                 allocations.get(allocation.line_key, Decimal("0.00")) + allocation.amount
             )
     return allocations
+
+
+def expected_order_totals(lines_data, discount_result):
+    """``(subtotal, discount_total, total)`` the order for ``lines_data`` will store.
+
+    Deliberately NOT ``discount_result.subtotal/.total``. The two live in
+    different rounding regimes, both correct in their own domain:
+
+    * the discount engine rounds a line with ``discounts.services.money`` —
+      2dp **HALF_UP** — because a discount amount is rounded in the shop's
+      favour by design;
+    * an order line rounds with ``OrderLine.line_subtotal`` and
+      ``Order.recalculate`` — 2dp **HALF_EVEN**, the sales regime.
+
+    For a line whose ``unit_price × quantity`` lands exactly on a half-cent the
+    two disagree by one cent: 0.75 kg at 5.50 is 4.125, which the engine calls
+    4.13 and the order calls 4.12. That is harmless while each number stays in
+    its own domain, and a live failure the moment the engine's figure is used as
+    *the amount to tender* — the order then refuses the payment it was told to
+    ask for ("Payment total cannot exceed the order total") and the sale cannot
+    be rung up at all.
+
+    So: anything that decides what the customer pays, or shows them what they
+    are about to pay, computes it here, in the order's own regime. The engine
+    keeps deciding discount *amounts*; it does not get to decide the total.
+    """
+    discount_by_key = discount_allocations_by_line_key(discount_result)
+    subtotal = Decimal("0.00")
+    discount_total = Decimal("0.00")
+    for line_data in lines_data:
+        # Quantize price and quantity to the line's own field precision first:
+        # Order.recalculate reads the persisted line back, so anything finer
+        # than the column holds is already gone by the time it sums.
+        unit_price = money(
+            line_data.get("effective_unit_price", line_data["variant"].unit_price)
+        )
+        quantity = Decimal(line_data["quantity"]).quantize(QUANTITY_PLACES)
+        subtotal += money(unit_price * quantity)
+        discount_total += discount_by_key.get(
+            checkout_line_key(line_data), Decimal("0.00")
+        )
+    subtotal = money(subtotal)
+    discount_total = min(money(discount_total), subtotal)
+    return subtotal, discount_total, money(subtotal - discount_total)
 
 
 def unapplied_coupon_codes(discount_result, coupon_codes):
@@ -1539,7 +1586,7 @@ def exchange_order_items(
         lines_data=replacement_lines,
         customer=order.customer,
     )
-    replacement_total = money(discount_result.total)
+    _, _, replacement_total = expected_order_totals(replacement_lines, discount_result)
     payments_data = (
         [{"method": settlement_method, "amount": replacement_total}]
         if replacement_total > 0

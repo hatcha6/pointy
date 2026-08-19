@@ -38,6 +38,7 @@ from .services import (
     convert_quotation_to_sale,
     create_order_with_lines,
     exchange_order_items,
+    expected_order_totals,
     record_customer_account_payment,
     record_customer_payment,
     return_order_items,
@@ -916,7 +917,11 @@ class CheckoutSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"coupon_codes": "Coupon code is invalid or unavailable."}
             )
-        total = discount_result.total
+        # The amount to tender is the order's total, not the discount engine's:
+        # the two round a half-cent line differently, and gating payments on the
+        # engine's figure asks for a cent the order then refuses (see
+        # expected_order_totals).
+        _, _, total = expected_order_totals(attrs["lines"], discount_result)
 
         from apps.payments.models import Payment
 
@@ -1196,10 +1201,16 @@ class DiscountPreviewSerializer(serializers.Serializer):
             checkout_line_key(line_data): line_data
             for line_data in self.validated_data["lines"]
         }
+        # The cart figures the cashier reads — and then tenders — must be the
+        # ones the order will store, so the preview can never quote a total
+        # checkout would reject (see expected_order_totals).
+        subtotal, discount_total, total = expected_order_totals(
+            self.validated_data["lines"], discount_result
+        )
         return {
-            "subtotal": f"{discount_result.subtotal:.2f}",
-            "discount_total": f"{discount_result.discount_total:.2f}",
-            "total": f"{discount_result.total:.2f}",
+            "subtotal": f"{subtotal:.2f}",
+            "discount_total": f"{discount_total:.2f}",
+            "total": f"{total:.2f}",
             "applied_discounts": [
                 {
                     "rule_id": application.rule_id,
