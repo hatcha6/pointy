@@ -118,3 +118,32 @@ allocation; it is not a valid fixture for anything downstream of receipt. The
 same trap will catch the next tightening of a receipt-gated figure — when such a
 change breaks an old test, check whether the fixture is in a state production
 would ever allow before concluding the change is wrong.
+
+## 2026-08-19 - The oracle proved every number on a sale except what it cost
+
+**Learning:** `_assert_order` checked six order-level figures and not one line.
+The sales side therefore had *no* cost coverage at all: `OrderLine.unit_cost` —
+the COGS snapshot every margin, every profit report and `returned_cost_total`
+are computed from — could be arbitrarily wrong and every assertion in a
+3500-operation sweep would still pass, because revenue never touches it. The
+chain is three hops, each with its own chance to go wrong: newest non-cancelled
+purchase line → `base_unit_cost` (per *base* unit, the raw price divided by the
+purchase's own `unit_factor`) → `× the sale's unit_factor`. Dropping that last
+multiply is the phantom-loss bug class in its purest form, and nothing in the
+harness would have noticed. Two modelling points that are not guesses: the cost
+is the *raw* purchase price, deliberately not the landed/discounted
+`effective_unit_cost`; and a purchase moves the cost basis the moment its lines
+exist, before receipt — only CANCELLED drops out.
+
+**Action:** When a record carries both a *price* and a *cost*, assume the cost
+is unproven until you have checked it explicitly — revenue assertions cannot
+reach it, so it fails silently and forever. The general shape: any field that
+only ever feeds *reports* (cost, margin, popularity, rank) is invisible to a
+harness built around what the customer paid. Mutation-test any new assertion
+before believing it (break the backend, confirm the sweep dies) — and when the
+expectation can legitimately be zero, count how often it was non-zero and make
+the entry-point test refuse a run that never saw a real value, or the coverage
+is decorative. Still unmodelled on this axis: `returned_cost_total`'s DB-side
+`Sum(quantity * unit_cost)`, whose rounding may differ between sqlite and
+Postgres, and the production-cost fallback (`latest_production_unit_cost`) for
+goods that are made rather than bought.

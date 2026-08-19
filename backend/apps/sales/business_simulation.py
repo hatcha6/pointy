@@ -413,6 +413,10 @@ class LineRec:
     whole_only: bool = True
     returned_qty: Decimal = ZERO  # in the transacted unit
     returned_discount: Decimal = ZERO
+    # Cost of one unit *in the transacted unit*, snapshotted when the sale was
+    # rung up. Predicted from the purchase that set the variant's cost at that
+    # moment, never read back from the order line.
+    unit_cost: Decimal = ZERO
 
     @property
     def line_subtotal(self) -> Decimal:
@@ -421,6 +425,14 @@ class LineRec:
     @property
     def line_total(self) -> Decimal:
         return even2(self.line_subtotal - self.discount_total)
+
+    @property
+    def line_cost(self) -> Decimal:
+        return even2(self.unit_cost * self.quantity)
+
+    @property
+    def line_profit(self) -> Decimal:
+        return even2(self.line_total - self.line_cost)
 
     @property
     def returnable_qty(self) -> Decimal:
@@ -450,6 +462,14 @@ class OrderRec:
     @property
     def balance_due(self) -> Decimal:
         return max(self.total - self.amount_paid, ZERO)
+
+    @property
+    def total_cost(self) -> Decimal:
+        return even2(sum((line.line_cost for line in self.lines), ZERO))
+
+    @property
+    def total_profit(self) -> Decimal:
+        return even2(sum((line.line_profit for line in self.lines), ZERO))
 
     @property
     def status(self) -> str:
@@ -540,6 +560,10 @@ class Oracle:
         self.orders: dict = {}
         self.sessions: dict = {}
         self.pos: dict = {}
+        # Cost basis per BASE unit, keyed by variant: what the next sale of this
+        # variant will snapshot onto its line. Set by the purchases this
+        # simulation issues, from their own inputs.
+        self.base_unit_cost: dict = {}
         # Independent logs that mirror exactly what we instructed the backend to
         # do; the register reconciliation + summary expectations are derived from
         # these, never from backend reads.
@@ -719,6 +743,12 @@ class Simulation:
         self.discount_engine: OracleDiscountEngine | None = None
         self.coupon_codes = ["SAVE3", "HALF"]
         self.op_counts: dict = defaultdict(int)
+        # How much the cost-basis assertions actually got to say. A sale of a
+        # never-purchased variant costs 0.00, which every wrong implementation
+        # also produces, so a run that only ever saw those has proved nothing
+        # about COGS; the entry-point test refuses such a run.
+        self.costed_line_assertions = 0
+        self.multi_unit_costed_line_assertions = 0
 
     # -- helpers ----------------------------------------------------------
 
@@ -1144,6 +1174,24 @@ class Simulation:
         total = even2(subtotal - discount_total)
         return subtotal, discount_total, total
 
+    def _expected_unit_cost(self, variant_id: int, unit_factor: Decimal) -> Decimal:
+        """The cost a sale line for ``variant_id`` must snapshot right now.
+
+        Ported from the documented backend chain, not read back from it: the
+        most recent non-cancelled purchase line for the variant supplies a cost
+        per BASE unit (``PurchaseLine.base_unit_cost``), which the sale scales
+        by the factor of the unit it is transacting in, so
+        ``unit_cost * quantity`` stays the cost of the goods that actually left.
+        A variant nobody has purchased yet costs nothing — this world has no
+        production, so there is no second source to fall back to.
+
+        Note the cost is *not* the effective (landed, discounted) cost: the
+        backend deliberately reads the raw purchase price here, so the oracle
+        must too, and a change to either side has to show up as a divergence.
+        """
+        base_cost = self.oracle.base_unit_cost.get(variant_id, ZERO)
+        return even2(base_cost * unit_factor)
+
     def _build_order_rec(self, order, specs, per_line_discount, sale_type, customer_id):
         subtotal, discount_total, total = self._order_totals(specs, per_line_discount)
         order_lines = list(order.lines.order_by("pk"))
@@ -1163,6 +1211,9 @@ class Simulation:
                     discount_total=per_line_discount.get(str(index), ZERO),
                     tracks_stock=spec["item"].tracks_stock,
                     whole_only=spec["unit"].whole_only,
+                    unit_cost=self._expected_unit_cost(
+                        spec["item"].variant_id, spec["unit"].factor
+                    ),
                 )
             )
         rec = OrderRec(
@@ -1395,6 +1446,13 @@ class Simulation:
                     discount_total=src.discount_total,
                     tracks_stock=src.tracks_stock,
                     whole_only=src.whole_only,
+                    # A conversion rings up a NEW sale through the ordinary
+                    # checkout path, so it takes a fresh cost snapshot: if a
+                    # purchase moved the cost between quoting and converting,
+                    # the sale carries the newer one, not the quote's.
+                    unit_cost=self._expected_unit_cost(
+                        src.variant_id, src.unit_factor
+                    ),
                 )
             )
         rec = OrderRec(
@@ -1706,14 +1764,20 @@ class Simulation:
         po_lines = list(po.lines.order_by("pk"))
         line_recs = []
         for (item, quantity, unit_cost), po_line in zip(line_specs, po_lines):
-            line_recs.append(
-                PoLineRec(
-                    line_id=po_line.pk,
-                    variant_id=item.variant_id,
-                    quantity=quantity,
-                    unit_factor=Decimal("1"),
-                    unit_cost=unit_cost,
-                )
+            po_line_rec = PoLineRec(
+                line_id=po_line.pk,
+                variant_id=item.variant_id,
+                quantity=quantity,
+                unit_factor=Decimal("1"),
+                unit_cost=unit_cost,
+            )
+            line_recs.append(po_line_rec)
+            # The newest purchase line for a variant is the one a sale reads,
+            # whether or not the order has been received yet — only a CANCELLED
+            # order drops out, and this simulation cancels none. Re-expressed
+            # per base unit, exactly as PurchaseLine.base_unit_cost does.
+            self.oracle.base_unit_cost[item.variant_id] = even2(
+                po_line_rec.unit_cost / po_line_rec.unit_factor
             )
             base = q3(Decimal(quantity))
             self.oracle.expected[item.variant_id] = q3(
@@ -2147,7 +2211,10 @@ class Simulation:
         )
 
     def _assert_order(self, rec: OrderRec):
-        order = Order.objects.get(pk=rec.order_id)
+        # Prefetch the lines: the line assertions and the total_cost/total_profit
+        # properties all walk them, and without this each walk is its own query
+        # against every order the run has ever created, at every checkpoint.
+        order = Order.objects.prefetch_related("lines").get(pk=rec.order_id)
         self.assert_money(order.subtotal, rec.subtotal, f"order#{rec.order_id} subtotal")
         self.assert_money(
             order.discount_total, rec.discount_total, f"order#{rec.order_id} discount_total"
@@ -2160,6 +2227,68 @@ class Simulation:
             order.balance_due, rec.balance_due, f"order#{rec.order_id} balance_due"
         )
         self.assert_equal(order.status, rec.status, f"order#{rec.order_id} status")
+        self._assert_order_lines(order, rec)
+
+    def _assert_order_lines(self, order, rec: OrderRec):
+        """Every line's price, discount and COST basis, plus the identities that
+        tie the lines back to the order they belong to.
+
+        The cost basis is what makes this more than a restatement of the totals:
+        an order's money can be entirely right while ``unit_cost`` is wrong, and
+        nothing about revenue would notice — but every margin, every profit
+        report and the credit a return gives back for restocked goods are all
+        computed from this one snapshot.
+        """
+        lines = {line.pk: line for line in order.lines.all()}
+        for expected in rec.lines:
+            line = lines[expected.order_line_id]
+            tag = f"order#{order.pk} line#{line.pk}"
+            self.assert_money(line.unit_price, expected.unit_price, f"{tag} unit_price")
+            self.assert_money(
+                line.discount_total, expected.discount_total, f"{tag} discount_total"
+            )
+            self.assert_money(line.unit_cost, expected.unit_cost, f"{tag} unit_cost")
+            self.assert_money(line.line_total, expected.line_total, f"{tag} line_total")
+            self.assert_money(line.line_cost, expected.line_cost, f"{tag} line_cost")
+            self.assert_money(
+                line.line_profit, expected.line_profit, f"{tag} line_profit"
+            )
+            if expected.unit_cost > ZERO:
+                self.costed_line_assertions += 1
+                if expected.unit_factor != Decimal("1"):
+                    # A box costs twelve pieces: the scaling from the purchase's
+                    # base unit into the sale's transacted unit is exactly the
+                    # step the phantom-loss bug class lives in.
+                    self.multi_unit_costed_line_assertions += 1
+        # Identity 1: the lines' revenue is the order's revenue.
+        self.assert_money(
+            even2(sum((line.line_subtotal for line in lines.values()), ZERO)),
+            order.subtotal,
+            f"identity: order#{order.pk} line subtotals sum to subtotal",
+        )
+        # Identity 2: the lines' discounts are the order's discount. This is the
+        # one an order-level figure that never reached the lines would fail.
+        self.assert_money(
+            even2(sum((line.discount_total for line in lines.values()), ZERO)),
+            order.discount_total,
+            f"identity: order#{order.pk} line discounts sum to discount_total",
+        )
+        # Identity 3: what the lines are worth is what the order charges.
+        self.assert_money(
+            even2(sum((line.line_total for line in lines.values()), ZERO)),
+            order.total,
+            f"identity: order#{order.pk} line totals sum to total",
+        )
+        # Identity 4: the cost basis the reports read is the lines' own.
+        self.assert_money(order.total_cost, rec.total_cost, f"order#{order.pk} total_cost")
+        self.assert_money(
+            order.total_profit, rec.total_profit, f"order#{order.pk} total_profit"
+        )
+        self.assert_money(
+            even2(order.total - order.total_cost),
+            order.total_profit,
+            f"identity: order#{order.pk} profit is revenue minus cost",
+        )
 
     def _assert_session(self, session_id: int):
         session = RegisterSession.objects.get(pk=session_id)
