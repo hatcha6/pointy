@@ -16,6 +16,7 @@ from apps.sales.models import (
     OrderAdjustment,
     RegisterCashMovement,
     RegisterSession,
+    prime_register_session_cash_totals,
 )
 
 
@@ -74,7 +75,9 @@ def build_user_activity(user):
         ],
         "recent_register_sessions": [
             _register_session_data(session)
-            for session in register_sessions.order_by("-opened_at")[:RECENT_LIMIT]
+            for session in prime_register_session_cash_totals(
+                register_sessions.order_by("-opened_at")[:RECENT_LIMIT]
+            )
         ],
         "recent_activity": [
             _activity_event_data(event)
@@ -137,7 +140,14 @@ def _register_session_summary(sessions):
         opening_cash_total=Sum("opening_cash"),
         closing_cash_total=Sum("closing_cash"),
     )
-    variance_count = sum(1 for session in sessions if session.has_cash_variance)
+    # ``has_cash_variance`` walks four aggregates through ``expected_cash``, so
+    # a cashier with a year of shifts used to cost 8 queries per session here.
+    # Prime the whole (already-materialised) set once instead.
+    variance_count = sum(
+        1
+        for session in prime_register_session_cash_totals(sessions)
+        if session.has_cash_variance
+    )
     latest_session = sessions.order_by("-opened_at").first()
 
     return {
