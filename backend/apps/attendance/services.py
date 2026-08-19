@@ -128,6 +128,11 @@ def rebuild_attendance_day(employee, day_date, *, connection=None):
     else:
         expected_start = _aware(day_date, shift_start)
         expected_end = _aware(day_date, shift_end)
+        if shift_end <= shift_start:
+            # A night shift (22:00 -> 06:00) ends the following morning. Without
+            # this the shift would "end" before it started, and every minute
+            # worked in the evening would be counted — and paid — as overtime.
+            expected_end += timedelta(days=1)
         grace_deadline = expected_start + timedelta(minutes=grace_minutes)
         # Arriving past the grace window counts lateness from the shift start.
         late_minutes = (

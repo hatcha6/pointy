@@ -91,3 +91,25 @@ be subtracted from the drawer in the report while the model ignored it.
 **Action:** In `apps/reports`, treat every formula as a fork and diff it against
 the model property it mirrors; the interesting test is "do the two surfaces
 agree", not "does the report return a number".
+
+## 2026-08-20 - A start/end **time-of-day** pair is an interval that can be entered inside-out
+**Learning:** `attendance.rebuild_attendance_day` built the shift window as
+`expected_end = _aware(day_date, shift_end)` on the *same* calendar day.
+`shift_start`/`shift_end` are plain `TimeField`s on `BioTimeConnection` (and
+again as per-employee overrides on `AttendanceProfile`), with no validation and
+a plain Flutter time picker on each — so a night crew's `22:00 → 06:00` is two
+taps away, and it makes the shift "end" sixteen hours before it starts. Every
+evening minute then fell after `expected_end` and was banked as overtime:
+95 minutes actually worked became **1050 minutes of overtime**, and a five-night
+week reached payroll as 87.50 overtime hours (~7,031 of overtime pay on top of
+a 3,000 salary). The reverse direction was silent too — `early_leave` uses the
+same pair and `_minutes_between` returns 0 whenever `end <= start`, so the
+inverted window produced no warning anywhere.
+**Action:** Whenever two `TimeField`s form a window, ask what happens when the
+second is *earlier* than the first — with times (unlike `DateTimeField`s, where
+an inverted range merely yields nothing) the wrap-around is the legitimate,
+common case, not an error. Attendance was the only such pair in the backend when
+I checked; if another appears, test the inverted configuration before the
+ordinary one. And the payoff test is the one at the *money* surface: the rollup
+assertion says "1050 != 0", `apply_attendance_to_run` says "87.50 hours", and
+only the second makes the cost undeniable.
