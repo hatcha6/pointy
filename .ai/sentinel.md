@@ -86,3 +86,46 @@ off fresh `origin/main`, open the replacement, close the original with a pointer
 **Action:** Check `gh pr list --json headRefName` for your own stale PRs at the
 *start* of a run, before picking an audit theme. Clearing a deadlocked
 already-verified fix beats starting a new one.
+
+## 2026-08-20 - Role *reachability* is the check worth running, not role coverage
+**Learning:** The earlier "does every viewset declare a permission" sweep proved
+coverage is fail-closed but says nothing about whether the declared permission is
+the *right* one. Resolving every router route's `permission_map` and intersecting
+it with each role's `*_PERMISSION_CODES` prints exactly what a cashier / auditor /
+clerk can actually reach — a 40-line script, and the only way to see that e.g.
+`OrderViewSet.void` needs merely `sales.add_order`. That one is deliberate: the
+guard is `get_queryset` (own `register_session__owner_key`) plus the fact that a
+void's money posts to the *current open* session, never the closed one it came
+from. Auditor came back strictly read-only. Nothing else was misassigned.
+**Action:** Re-run the reachability intersection rather than re-reading
+`permission_map`s. Note plain `APIView`s are invisible to router introspection —
+walk `get_resolver()` instead, which also surfaces the DRF default
+(`IsAuthenticated` alone) on views that declare no `permission_classes`.
+
+## 2026-08-20 - Enforcement often lives in the service, not the permission class
+**Learning:** Four views that look under-permissioned are not. `ReportRunViewSet`
+is `IsAuthenticated` with no map — but `create` goes through
+`generate_report_payload`, which raises `ReportAccessDenied` per report
+definition, and `get_queryset` narrows to own runs without
+`reports.view_reportrun`. `BusinessNotificationViewSet` gates per-code in
+`visible_notifications_for_user` / `NOTIFICATION_AUDIENCE_RULES`.
+`AiConversationViewSet` filters `user=request.user`. Marketing consent is
+enforced at campaign *expansion* (`campaigns.py` → `can_send`), not at
+`enqueue_message`, which is consent-agnostic on purpose. And transactional SMS
+deliberately ignores `do_not_contact` (`customers/models.py` documents it).
+**Action:** Before flagging a bare `IsAuthenticated`, read the service the action
+delegates to and the `get_queryset`. All five of these are settled — don't
+re-flag them.
+
+## 2026-08-20 - Every hand-rolled `compare_digest` now goes through one helper
+**Learning:** The non-ASCII `TypeError` noted in the connector-heartbeat entry was
+not confined to headers. Three more sites had it — `connector_setup_token_accepted`
+(latin-1 header), `IsGatewayPeer` (UTF-8 `?token=` query param, raising inside
+`has_permission`), and the SMS Gate `X-Signature` HMAC — each letting an
+unauthenticated caller convert a 403 into a 500 at will. All four now call
+`apps.core.credentials.constant_time_secret_equal`, which compares UTF-8 *bytes*
+(never raises, and a non-ASCII stored secret still authenticates) and treats a
+blank side as unequal. `apps.channels.authenticate_api_key` was already clean —
+it compares hex hashes and `.exclude(api_key_hash="")`.
+**Action:** Any new secret comparison uses that helper. A bare `compare_digest`
+on `str` in a credential path is the finding, no further analysis needed.

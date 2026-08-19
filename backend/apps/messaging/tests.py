@@ -9,7 +9,7 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 
@@ -20,6 +20,7 @@ from .segments import count_segments
 from .services import NoGatewayConfigured, deliver_message, enqueue_message
 from .tasks import dispatch_outbound_task
 from .transports import fake
+from .transports.sms_gate import SmsGateDriver
 
 _LOCMEM = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
@@ -275,6 +276,34 @@ class GatewayActivationTests(TestCase):
 
 
 @override_settings(**_LOCMEM, CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+class SmsGateSignatureTests(TestCase):
+    """The HMAC path is the other unauthenticated credential check."""
+
+    def _driver(self):
+        gateway = make_gateway(provider=MessagingGateway.Provider.SMS_GATE)
+        gateway.set_secret("webhook_signing_key", "signing-key")
+        gateway.save()
+        return SmsGateDriver(gateway)
+
+    def _request(self, signature):
+        request = APIRequestFactory().post(
+            "/api/messaging/inbound/1/", {"event": "sms:received"}, format="json"
+        )
+        request.headers = {"X-Signature": signature, "X-Timestamp": "1"}
+        return request
+
+    def test_non_ascii_signature_rejected_instead_of_erroring(self):
+        """A high byte in ``X-Signature`` is a bad signature, not a ``TypeError``.
+
+        Django decodes headers as latin-1, so the caller controls whether the
+        header is a non-ASCII ``str`` — and ``compare_digest`` raises on those.
+        """
+        self.assertFalse(self._driver().verify_inbound(self._request("de\u00e9dbeef")))
+
+    def test_wrong_ascii_signature_still_rejected(self):
+        self.assertFalse(self._driver().verify_inbound(self._request("deadbeef")))
+
+
 class TokenInboundAuthTests(TestCase):
     def setUp(self):
         fake.reset()
@@ -303,6 +332,31 @@ class TokenInboundAuthTests(TestCase):
     def test_wrong_token_rejected(self):
         resp = self.client.post(self._url("nope"), {"id": "t3"}, format="json")
         self.assertEqual(resp.status_code, 403)
+
+    def test_non_ascii_token_rejected_instead_of_erroring(self):
+        """A high byte in ``?token=`` is a rejected credential, not a 500.
+
+        The webhook is unauthenticated by design (LAN + shared token), and the
+        token arrived as a UTF-8-decoded query param compared with
+        ``compare_digest`` on ``str`` — which raises ``TypeError`` on non-ASCII.
+        The raise happened inside ``has_permission``, so any LAN caller could
+        turn a 403 into a 500 (and an error-channel flood) at will.
+        """
+        resp = self.client.post(
+            self._url("secret-webhook-token-xy\u00e9"), {"id": "t4"}, format="json"
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_non_ascii_stored_token_still_authenticates(self):
+        """The rejection above must not become a lockout for a real secret."""
+        self.gateway.set_secret("webhook_token", "\u0631\u0645\u0632-\u0633\u0631\u064a")
+        self.gateway.save()
+        resp = self.client.post(
+            self._url("\u0631\u0645\u0632-\u0633\u0631\u064a"),
+            {"from": "+218912345678", "body": "hi", "id": "t5"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
 
     def test_accepted_even_when_the_crm_task_is_not_registered(self):
         """A registry miss must cost the routing pass, not the whole webhook.
