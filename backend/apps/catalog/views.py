@@ -44,6 +44,7 @@ from apps.attachments.serializers import (
     ProductImageSearchResultSerializer,
 )
 from apps.core import caching
+from apps.core.aggregates import related_count
 from apps.core.permissions import HasPointyPermission
 from .cache import attach_catalog_version, catalog_etag, catalog_version
 from .identity import (
@@ -204,15 +205,27 @@ class ProductCategoryViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     ordering_fields = ("display_order", "name", "created_at", "updated_at")
 
     def get_queryset(self):
-        # distinct=True on both aggregates: counting two separate reverse
-        # relations (children and products) in one query would otherwise
-        # multiply the rows via the join fan-out.
+        # select_related("parent"): the serializer renders parent_name from
+        # parent.name, which is one query per subcategory on the page without it.
+        #
+        # The two counts used to be Count("children", distinct=True) and
+        # Count("products", distinct=True) in the same annotate(). Both are
+        # multi-valued relations, so a single query LEFT JOINs them together and
+        # the database materialises every (child x product) pair per category.
+        # distinct=True corrects the numbers but not the work. A subquery per
+        # relation keeps each count an index scan on its own key, and counting
+        # the categories M2M through-table directly is what the joined form did
+        # anyway (it never reached catalog_product), so archived products keep
+        # counting exactly as before.
         return (
             super()
             .get_queryset()
+            .select_related("parent")
             .annotate(
-                children_count=Count("children", distinct=True),
-                product_count=Count("products", distinct=True),
+                children_count=related_count(ProductCategory, "parent"),
+                product_count=related_count(
+                    Product.categories.through, "productcategory"
+                ),
             )
             .order_by("display_order", "name", "id")
         )
