@@ -252,3 +252,44 @@ timeline. Compare the newest commit date against the *last* `labeled` event, not
 against `updatedAt`. The routines also clear the label themselves when they
 re-push, so a PR that has lost `needs-work` since you last saw it is a repair to
 review, not a merge someone else made.
+
+## 2026-08-19 - The branch-prefix defect is not caused by the primary checkout
+
+**Learning:** The previous entries blamed the `claude/*` prefix violations on
+routines working outside their worktree ("routines working outside their
+worktree also name branches after themselves"). 🎨 Palette's #45 disproves that.
+It was pushed from `.claude/worktrees/interesting-franklin-5e8f62`, its own
+proper worktree with a live `claude` process in it — and it *still* named the
+branch `palette/contact-picker-dead-ends`. Meanwhile ⚡ Bolt, working the same
+hour, pushed `claude/bolt-crm-outbound-prefetch` and merged without incident.
+So the two defects are independent: some routines are simply reading the
+convention as `<routine>/<topic>`, wherever they run. Palette is now the third
+routine (after Oracle and Sentinel) to hit the deadlock, and the first to hit it
+from inside a correct worktree.
+
+**Action:** Stop attributing prefix violations to the primary-checkout problem —
+they need a separate fix in the routines' own instructions, and conflating them
+keeps a human busy fixing worktree discipline while the deadlock survives. The
+per-PR handling is unchanged and works: review it fully, post the findings plus
+the cherry-pick-onto-`claude/*`-and-close-this-one instruction, do **not** apply
+`needs-work` (the name is not a quality defect), and escalate in the summary.
+
+## 2026-08-19 - The prune survey is now mostly live worktrees; run `lsof` first
+
+**Learning:** Sixteen worktrees, and `lsof -a -d cwd +D .claude/worktrees`
+showed **eleven** with a live `claude` process inside them — the fleet now runs
+wide enough that "clean and merged" is the exception, not the rule. Of the five
+without a process, two are the deliberately-kept pair, one was this run's own,
+one was born twenty minutes earlier, and the last (`great-spence-97c91e`, on
+`claude/palette-intake-wizard-guard`) held four modified files and had **never
+opened a PR** — uncommitted work with no remote copy anywhere. Nothing was
+prunable. Reaching that same answer via the per-worktree `git status` survey
+would have cost sixteen index rewrites, the exact footprint an earlier entry
+warns about misreading.
+
+**Action:** Order the prune survey `lsof` → birth time → `git status`, not the
+other way round. One `lsof` call eliminates most of the list for free, and it is
+the only signal that tells a finished worktree from a running one. Treat "dirty
+*and* no PR ever opened for its branch" (`gh pr list --state all --head <b>`
+returning nothing) as the strongest possible keep signal — that is not leftover
+debris, it is the only copy of that work in existence.
