@@ -242,11 +242,33 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
 
+# Every cache call must be BOUNDED. redis-py defaults both socket timeouts to
+# None, which means "block forever": a Redis that *refuses* connections fails
+# fast (ECONNREFUSED) and the fail-open guards in apps.core.caching absorb it,
+# but a Redis that accepts the TCP connection and then stops answering — a box
+# that is swapping, a container wedged mid-restart, a LAN link that drops
+# packets after the handshake — hangs the read with no timeout at all. Sessions,
+# the user row and the permission set are read from Redis on every authenticated
+# request, so that hang is every till in the shop freezing mid-sale with no
+# error and no way forward. Bounded, the same outage is a sub-second stumble
+# that falls through to Postgres. Redis is on the same host or the shop LAN, so
+# a healthy round-trip is sub-millisecond; the defaults leave three orders of
+# magnitude of headroom and are still short enough that a wedged Redis costs a
+# request a fraction of a second rather than its life.
+POINTY_REDIS_SOCKET_TIMEOUT = env.float("POINTY_REDIS_SOCKET_TIMEOUT", default=1.0)
+POINTY_REDIS_SOCKET_CONNECT_TIMEOUT = env.float(
+    "POINTY_REDIS_SOCKET_CONNECT_TIMEOUT", default=1.0
+)
+
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": REDIS_URL,
-        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient"},
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "SOCKET_TIMEOUT": POINTY_REDIS_SOCKET_TIMEOUT,
+            "SOCKET_CONNECT_TIMEOUT": POINTY_REDIS_SOCKET_CONNECT_TIMEOUT,
+        },
     }
 }
 
