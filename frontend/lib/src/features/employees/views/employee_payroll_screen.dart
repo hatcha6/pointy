@@ -14,6 +14,7 @@ import '../../../shared/shell/shell.dart';
 import '../../attendance/view_models/attendance_view_model.dart';
 import '../../attendance/views/attendance_review_tab.dart';
 import '../view_models/employee_payroll_view_model.dart';
+import 'employee_loan_review_actions.dart';
 import 'payroll_forms.dart';
 import 'payroll_labels.dart';
 import 'payroll_run_details_screen.dart';
@@ -723,21 +724,12 @@ class _PendingLoanRow extends StatelessWidget {
           ),
         ),
         SizedBox(width: spacing.sm),
-        TextButton(
-          key: ValueKey('pending_loan_reject_${loan.id}'),
-          onPressed: viewModel.isSaving
-              ? null
-              : () => viewModel.rejectLoan(loan),
-          style: TextButton.styleFrom(foregroundColor: colors.danger),
-          child: Text(l10n.employeeLoanRejectButton),
-        ),
-        SizedBox(width: spacing.xs),
-        FilledButton.tonal(
-          key: ValueKey('pending_loan_approve_${loan.id}'),
-          onPressed: viewModel.isSaving
-              ? null
-              : () => viewModel.approveLoan(loan),
-          child: Text(l10n.employeeLoanApproveButton),
+        EmployeeLoanReviewActions(
+          keyPrefix: 'pending_loan',
+          loan: loan,
+          isSaving: viewModel.isSaving,
+          onApprove: () => viewModel.approveLoan(loan),
+          onReject: () => viewModel.rejectLoan(loan),
         ),
       ],
     );
@@ -939,25 +931,13 @@ class _LoansTab extends StatelessWidget {
             ),
           ],
           actions: [
-            if (canReview) ...[
-              TextButton(
-                key: ValueKey('loan_reject_button_${loan.id}'),
-                onPressed: viewModel.isSaving
-                    ? null
-                    : () => viewModel.rejectLoan(loan),
-                style: TextButton.styleFrom(
-                  foregroundColor: context.pointyColors.danger,
-                ),
-                child: Text(l10n.employeeLoanRejectButton),
+            if (canReview)
+              EmployeeLoanReviewActions(
+                loan: loan,
+                isSaving: viewModel.isSaving,
+                onApprove: () => viewModel.approveLoan(loan),
+                onReject: () => viewModel.rejectLoan(loan),
               ),
-              FilledButton.tonal(
-                key: ValueKey('loan_approve_button_${loan.id}'),
-                onPressed: viewModel.isSaving
-                    ? null
-                    : () => viewModel.approveLoan(loan),
-                child: Text(l10n.employeeLoanApproveButton),
-              ),
-            ],
           ],
         );
       },

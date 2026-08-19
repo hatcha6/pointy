@@ -6213,6 +6213,35 @@
   "employeeLoanApproveButton": "موافقة",
   "employeeLoanRejectButton": "رفض",
   "showAllLoansButton": "عرض كل السلف",
+  "approveEmployeeLoanConfirmTitle": "الموافقة على السلفة؟",
+  "approveEmployeeLoanConfirmMessage": "سيتم اعتماد سلفة {employee} بمبلغ {amount}، ويُخصم {monthly} من الراتب كل شهر حتى السداد. لا يمكن التراجع عن القرار.",
+  "@approveEmployeeLoanConfirmMessage": {
+    "description": "Approve employee loan confirmation body.",
+    "placeholders": {
+      "employee": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "monthly": {
+        "type": "String"
+      }
+    }
+  },
+  "rejectEmployeeLoanConfirmTitle": "رفض طلب السلفة؟",
+  "rejectEmployeeLoanConfirmMessage": "سيتم رفض طلب {employee} بمبلغ {amount}. لا يمكن التراجع عن القرار، وسيلزم تقديم طلب جديد.",
+  "@rejectEmployeeLoanConfirmMessage": {
+    "description": "Reject employee loan confirmation body.",
+    "placeholders": {
+      "employee": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "approvePayrollConfirmTitle": "اعتماد مسير الرواتب؟",
   "approvePayrollConfirmMessage": "سيتم اعتماد رواتب {employees} بإجمالي صافي {amount}. لا يمكن تعديل البنود بعد الاعتماد.",
   "@approvePayrollConfirmMessage": {
