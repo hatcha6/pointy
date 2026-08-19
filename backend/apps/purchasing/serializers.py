@@ -1006,6 +1006,7 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
                 landed_cost_allocation_method=self.validated_data[
                     "landed_cost_allocation_method"
                 ],
+                extra_discount=extra_discount,
             ),
             "applied_discounts": [
                 {
@@ -1088,6 +1089,7 @@ def purchase_preview_line_payloads(
     discount_result,
     landed_cost_total,
     landed_cost_allocation_method,
+    extra_discount=Decimal("0.00"),
 ):
     discounts_by_key = {str(index): Decimal("0.00") for index in range(len(lines))}
     for application in discount_result.applications:
@@ -1107,6 +1109,30 @@ def purchase_preview_line_payloads(
             Decimal("0.01")
         )
         quantities_by_key[key] = Decimal(line["quantity"])
+
+    # The manual order-level discount reaches the lines here exactly as it does
+    # in PurchaseOrder.recalculate(), and before the landed-cost weights are
+    # read — otherwise the preview quotes per-line costs the save then
+    # contradicts.
+    if extra_discount > Decimal("0.00"):
+        padded = {str(index): f"{index:06d}" for index in range(len(lines))}
+        extra_shares = {
+            allocation.line_key: allocation.amount
+            for allocation in allocate_discount_amount(
+                extra_discount,
+                {padded[key]: net for key, net in net_totals_by_key.items()},
+            )
+        }
+        for key in net_totals_by_key:
+            share = extra_shares.get(padded[key], Decimal("0.00"))
+            if share <= Decimal("0.00"):
+                continue
+            discounts_by_key[key] = (discounts_by_key[key] + share).quantize(
+                Decimal("0.01")
+            )
+            net_totals_by_key[key] = (net_totals_by_key[key] - share).quantize(
+                Decimal("0.01")
+            )
 
     if landed_cost_allocation_method == PurchaseOrder.LandedCostAllocationMethod.QUANTITY:
         weights = quantities_by_key
