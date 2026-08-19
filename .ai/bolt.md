@@ -262,3 +262,33 @@ correctness win, not just a speed one, but it needs its own value-equality tests
 per report so it did not ride along here.) Also worth noting: an unbounded
 `sum(1 for x in queryset if x.property)` — as in `_register_session_summary` —
 is worse than a paginated N+1, because nothing caps the row count.
+
+## 2026-08-19 - `variant.display_name` is a hidden per-row query in ~20 serializers
+
+**Learning:** `ProductVariant.display_name` is `name.strip() or option_values_label
+or product.name`, and `option_values_label` only reads a *prefetched*
+`option_values` — otherwise it queries. A default variant has no explicit
+`name`, so on real data the middle branch is the one that runs, and any
+serializer with `source="variant.display_name"` whose queryset forgot
+`option_values` pays 1 query **per line**. It hides well: the queryset looks
+tuned (`materials__variant__product` was prefetched), the field looks like a
+plain `CharField`, and the property's own docstring says it reuses a prefetch —
+which is true only for the callers that supply one. The operations job board was
+3 queries/row for a three-part repair; a 50-job page was 163 queries, 14 after.
+`grep -rn 'variant.display_name'` finds ~20 sites (purchasing has six serializers
+on it, sales two, customers one, plus non-serializer callers in printing,
+price_checker and the dashboard helpers) — each one is a queryset to check.
+
+**Action:** Treat `display_name`/`full_name`/`option_values_label` as
+prefetch-dependent, not free. When auditing any list endpoint that serializes
+lines, check its queryset for
+`Prefetch("<path>__option_values", queryset=VariantOptionValue.objects.select_related("option"))`
+— `OrderViewSet` is the reference. And prove it with value equality against a
+cold variant, not just a query count: the prefetch must change *where* the label
+comes from, never what it says.
+
+**Next target (measured, unfixed):** `employee-list` is 2 queries/row —
+`Employee.active_compensation_plan` re-`filter()`s the relation the viewset
+already prefetches (so the prefetch is paid for and ignored), and `payroll_total`
+is a per-row `Sum` aggregate. Measured 14 queries at 5 rows, 24 at 10; a
+50-row page is ~104. Left out to keep this change one subsystem.
