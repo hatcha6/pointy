@@ -160,7 +160,8 @@ def maybe_sync_business_notifications(now=None):
     Falls back to an inline recompute only when the broker can't be reached
     (Celery not configured / worker+broker down), so the feed still advances in
     that degraded state. Returns the sync result dict only when it recomputed
-    inline (throttle disabled or broker unreachable), else None.
+    inline (throttle disabled or broker unreachable), else None. When the cache
+    itself is unreachable the top-up is skipped entirely — see below.
     """
     throttle_seconds = getattr(
         settings,
@@ -173,7 +174,22 @@ def maybe_sync_business_notifications(now=None):
         return sync_business_notifications(now=now)
     # Only the first caller in the window sets the key and proceeds; the rest see
     # the key already present and short-circuit, serving the last-computed table.
-    if not cache.add(INLINE_SYNC_THROTTLE_CACHE_KEY, "1", timeout=throttle_seconds):
+    # No usable Redis means no usable Celery either (same server is the broker),
+    # so the fallback below cannot help — and running the whole-catalog recompute
+    # inline on every poll from every device would turn a cache outage into a
+    # database one. Skip the top-up instead: the bell keeps serving the
+    # last-computed feed, stale but present, until Redis comes back.
+    try:
+        claimed = cache.add(
+            INLINE_SYNC_THROTTLE_CACHE_KEY, "1", timeout=throttle_seconds
+        )
+    except Exception:  # noqa: BLE001 — redis down/unreachable
+        logger.warning(
+            "notification sync throttle unavailable; skipping the top-up",
+            exc_info=True,
+        )
+        return None
+    if not claimed:
         return None
     from .tasks import sync_business_notifications_task
 
