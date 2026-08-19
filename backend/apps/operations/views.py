@@ -1,12 +1,12 @@
 from django.contrib.auth import get_user_model
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from django.db.models.deletion import ProtectedError
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from apps.catalog.models import BillOfMaterials
+from apps.catalog.models import BillOfMaterials, VariantOptionValue
 from apps.core.discovery import request_is_relayed
 from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
@@ -84,6 +84,21 @@ class JobViewSet(
             "workflow_template__stages",
             "job_assets__asset__customer",
             "materials__variant__product",
+            # ``variant_name``/``output_variant_name`` read
+            # ``ProductVariant.display_name``, which falls back to
+            # ``option_values_label`` whenever the variant has no explicit name
+            # (the common case for default variants). Un-prefetched that is one
+            # query per material line, so a board of jobs with three parts each
+            # cost three queries a row. Same shape as OrderViewSet's
+            # ``lines__variant__option_values`` prefetch.
+            Prefetch(
+                "materials__variant__option_values",
+                queryset=VariantOptionValue.objects.select_related("option"),
+            ),
+            Prefetch(
+                "output_variant__option_values",
+                queryset=VariantOptionValue.objects.select_related("option"),
+            ),
             "stage_events__from_stage",
             "stage_events__to_stage",
             "stage_events__changed_by",
