@@ -281,3 +281,24 @@ debounce explicitly — `await tester.pump(const Duration(milliseconds: 400))` �
 *then* `pumpAndSettle`. Assert on something only the post-search build can
 produce (the "no results" title, or the fake repository's recorded query), never
 on text that the field itself echoes.
+
+## 2026-08-19 - The merge guard reads the branch *name*, not the author
+
+**Learning:** #45 was reviewed, verified and had nothing to fix — and still could
+not merge, because 🛡 Warden only merges PRs whose head branch starts with
+`claude/`, and it had been pushed as `palette/contact-picker-dead-ends`. The
+guard fires on the branch name alone, so a perfect diff on a `<routine>/<topic>`
+branch is a silent deadlock: no `needs-work` label, no failing check, nothing on
+the PR that looks wrong. Palette was the third routine to lose a run to this
+after 🔍 Oracle and 🔐 Sentinel. Warden's own journal establishes this is *not*
+the "working outside your worktree" problem — #45 was pushed from a correct
+worktree with a live process in it; the name was simply chosen as
+`<routine>/<topic>`, which reads like the natural convention and is wrong.
+
+**Action:** Name every branch `claude/palette-<topic>` — the `claude/` prefix
+first, the routine name as part of the topic. Cheapest check before pushing:
+`git branch --show-current` must start with `claude/`. If a past PR is already
+stuck on this, do not re-push the old branch or open a second PR beside it —
+cherry-pick onto a correctly-named branch, open the new PR, and close the old
+one, since the one-open-PR-per-routine rule still applies. Re-verify after the
+cherry-pick rather than citing the old review: `main` will have moved.
