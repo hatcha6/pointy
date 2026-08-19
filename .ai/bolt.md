@@ -430,3 +430,40 @@ peak rows scanned (exactly the cross product). Left out of the discounts PR to
 keep the change one subsystem; the helper needs a field-name parameter to be
 shared, so it wants its own change. Treat a comment that *asserts* a fan-out is
 handled as a reason to measure, not to move on.
+
+## 2026-08-19 - A worktree has no `backend/.env`, so backend tests silently run on SQLite
+**Learning:** The primary checkout has `backend/.env` with
+`DATABASE_URL=postgres://…`; a git worktree does **not** (it is untracked), so
+`manage.py test` there falls back to SQLite. The journal's existing sanity check
+is not enough to catch it: SQLite still prints
+`Creating test database for alias 'default'...` — the `file:memorydb_default`
+tell only shows at `-v 2`. I only noticed because `EXPLAIN (ANALYZE)` is a
+Postgres syntax error. A plain query-count test would have passed happily and I
+would have "measured" the wrong database, and any plan-based test would have
+hit its `connection.vendor != "postgresql"` skip and reported green while
+testing nothing.
+**Action:** Pass the database explicitly from a worktree —
+`DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/pointy' \
+/Users/hatem/Develop/pointy/backend/.venv/bin/python manage.py test apps.<app>`
+— and confirm the run says `('test_pointy')`, not just "alias 'default'". Use
+`--keepdb` on repeats; the migration run is most of the wall clock. Treat a
+`skipTest` on `connection.vendor` as a *failure signal* when you expected
+Postgres, not as a pass.
+
+## 2026-08-19 - A hand-tuned `annotate()` comment stops the audit before `select_related`
+**Learning:** `ProductCategoryViewSet.get_queryset` was ten lines: a comment
+explaining why `distinct=True` was on both counts (it was wrong — see the
+cross-product entry), and the counts. Nobody had noticed that the serializer's
+`parent_name = CharField(source="parent.name")` had no `select_related("parent")`
+next to it, so every subcategory on the page fired its own query. Both defects
+lived in the same expression, and the deliberate-looking comment is why: a
+`get_queryset` that visibly reasons about one cost reads as reviewed for all of
+them. Measured `productcategory-list` at 50 categories: 43 -> **3** queries flat,
+and the cross product 24,040 -> 120 rows scanned (7.94 ms -> 0.51 ms).
+**Action:** When a `get_queryset` carries a performance comment, audit the
+*other* fields anyway — read the serializer's field list against the queryset
+line by line. A dotted `source=` on a plain `CharField`/`IntegerField` is the
+cheapest N+1 in the codebase to find and the easiest to skim past, especially on
+a self-referential FK where `parent` looks like a column. This closed the last
+instance of the two-relations-in-one-`annotate()` shape; the helper now lives in
+`apps/core/aggregates.py::related_count` and discounts consumes it.
