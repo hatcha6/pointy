@@ -166,3 +166,32 @@ way passes or fails for the wrong reason.
 `find.ancestor(of: find.text(label), matching: find.byWidgetPredicate((w) => w is FilledButton))`,
 then `tester.widget<FilledButton>(…).onPressed` to assert enabled/disabled. This is the
 only way to prove "the button explains itself by being inert" in a widget test.
+
+## 2026-08-19 - The filter badge count is the wrong signal for "filtered to nothing"
+
+**Learning:** Every `QueryControlBar` call site already computes an
+`_activeFilterCount` for the funnel badge, and it is tempting to reuse it as the
+"did the user empty this list themselves?" test. It is wrong: all of them count
+a non-default **ordering** as an active filter. Sorting reorders a list, it can
+never empty one — so a shop with no invoices yet, viewed newest-first-changed-to-
+by-total, would be told its filters hid everything and handed a "clear filters"
+button that changes nothing. The badge answers "has the user touched the funnel",
+the empty state needs "is something *removing* rows".
+
+**Action:** Split the two: keep `_activeFilterCount` for the badge, and express it
+as `narrowingFilterCount(query) + (ordering == default ? 0 : 1)` so the narrowing
+half is public and reusable. Put `narrowingFilterCount` / `cleared` as statics on
+the screen's `*QueryControls` class — it already owns the filter semantics and the
+filter sheet — rather than on the query model (which cannot tell a user-set filter
+from a caller-set scope like `productId`/`variantId`) or in the list screen (which
+would hand-roll a `copyWith` per call site). `QueryEmptyState`
+(`lib/src/shared/query_controls/query_empty_state.dart`) is the presentation half:
+it takes `search` + `hasFilters` booleans, never a query object, so it works for
+every list. `CatalogEmptyState` stays separate — it knows about pinned categories
+and the app-set stock filter.
+
+**Also:** an empty-state string worded for the filtered case ("لا توجد فواتير
+تطابق الفلاتر الحالية") is a tell that the screen is collapsing two states into
+one. When you split them, retitle the original to the genuinely-empty wording
+("لا توجد فواتير بعد.") — leaving it is how the fixed screen ends up claiming
+filters are active when none are.
