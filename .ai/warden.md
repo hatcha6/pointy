@@ -385,3 +385,32 @@ policy, harmless" from "blocked by a real collision, a human must resolve it" �
 and here it is the latter, which is the difference between a footnote and an
 escalation. Every routine that branches off local `main` is starting six commits
 stale until someone commits or discards that work.
+
+## 2026-08-20 - Read the journal from `origin/main`; the working copy is stale by design
+
+**Learning:** I started this run by reading `.ai/warden.md` in the primary
+checkout and got a **9-entry** copy. The real journal on `origin/main` had
+**17**. The eight I could not see included both 2026-08-20 entries — the one
+saying a scratch worktree has no `.env` so backend tests silently run on sqlite,
+and the one saying a dirty primary checkout blocks the sync on
+`employees/models.py`. I then spent a large part of the run re-deriving exactly
+those two findings from scratch: I ran five PRs' worth of backend tests on
+sqlite before noticing, had to re-verify all of them on Postgres, and
+rediscovered the `--ff-only` collision by hand.
+
+The mechanism is self-reinforcing, which is what makes it dangerous. The journal
+lives in the working tree; the working tree is the primary checkout; the primary
+checkout cannot fast-forward because of the uncommitted `employees/models.py`;
+so **the journal entry describing the blockage is itself unreadable because of
+the blockage**. Every run it costs more, because the gap only grows — six
+commits behind yesterday, thirty today. The prior entry's advice ("do not write
+the journal there — use a scratch worktree") quietly protects *writes* and says
+nothing about *reads*, which is the half that actually bit.
+
+**Action:** Read the journal with `git show origin/main:.ai/warden.md`, straight
+after `git fetch origin --prune` and never from any working tree. Then sanity
+check it: `git show origin/main:.ai/warden.md | grep -c '^## '` against the same
+count in the file on disk — if they disagree you are reading a stale copy, and
+the difference is exactly the lessons the last run paid to learn. This
+generalises to the other routines' journals too (`.ai/bolt.md` and friends) when
+reviewing whether a routine repeated a mistake it had already recorded.
