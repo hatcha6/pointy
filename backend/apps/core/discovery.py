@@ -54,6 +54,21 @@ def address_is_private_network(raw_address):
     return address.is_private or address.is_loopback or address.is_link_local
 
 
+def request_is_lan_local(request):
+    """True only for a peer that reached us over this shop's own network.
+
+    ``request_is_private_network`` alone is **not** that test. The relay
+    connector dials the backend from the LAN, so a request tunnelled in from
+    the internet also arrives with a private ``REMOTE_ADDR`` — every relayed
+    request looks LAN-local to it. Anything that treats "on the LAN" as an
+    authorisation decision must go through here, not through
+    ``request_is_private_network``.
+    """
+    if request_is_relayed(request):
+        return False
+    return request_is_private_network(request)
+
+
 def request_discovery_allowed(request):
     if not discovery_enabled():
         return False
@@ -61,7 +76,7 @@ def request_discovery_allowed(request):
         return False
     if not bool(getattr(settings, "POINTY_DISCOVERY_PRIVATE_ONLY", True)):
         return True
-    return request_is_private_network(request)
+    return request_is_lan_local(request)
 
 
 def backend_discovery_payload(request=None, host=None):
