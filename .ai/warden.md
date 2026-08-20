@@ -664,3 +664,62 @@ an escalation that no longer exists.
 say "blocked by policy, no collision" and note that a human clears it by
 committing or discarding one file. Either way still do not merge, reset or
 stash there — but do not let the summary imply a conflict that is not there.
+
+## 2026-08-20 - Verify a routine's central claim in its own worktree, by reverting one file
+
+**Learning:** Every producer's PR rests on one claim Warden cannot take on
+trust: Bolt's test "fails on `main`", Sentinel's test asserts a denial that was
+really possible, Oracle's extension covers something the old harness could not
+see. All three were settled this run in about a minute each, without a second
+worktree or a second database, by editing exactly one file *inside the PR's own
+scratch worktree* and putting it back afterwards:
+
+- **Bolt #86** — `git show origin/main:backend/apps/reports/services.py >
+  backend/apps/reports/services.py`, run the new test: 4 subtest failures with
+  real per-row growth (`16 != 10`, `36 != 24`). Then `git checkout --` the file
+  and run the suite green. A regression test proved, not assumed.
+- **Sentinel #87** — same move on `apps/core/serializers.py`: the four denial
+  tests failed and the four "still allowed" tests passed, which is the shape
+  that proves the guard is the thing doing the denying and not an unrelated
+  400.
+- **Oracle #67** — a three-run *mutation triad*, the only one of the three that
+  needs more than a revert. (a) unmutated + new op → green; (b) one cent added
+  to `unit_sale_price`'s non-base-unit branch → the new op fails at op#6; (c)
+  same mutation with `op_api_sale` deleted from `operations()` → **green
+  again**. (c) is the load-bearing run: without it (b) only shows the new op
+  notices *a* bug, not that the old harness was blind to it, and "this closes a
+  blind spot" is precisely the claim an oracle extension lives or dies on.
+
+**Action:** Make this the default for any PR whose value is a test. Revert the
+one production file the PR changes, run only the new test, restore with
+`git checkout --`, and confirm `git status --porcelain` is empty before
+merging. For an Oracle extension, always run the third leg — delete the new op
+from `operations()` under the same mutation — because a green (c) is the
+difference between new coverage and a restatement of coverage that already
+existed. Budget ~6 minutes; it is far cheaper than the alternative, which is
+merging a test that never could have failed.
+
+## 2026-08-20 - When nearly every worktree is held, prune nothing and say so
+
+*(Rescued from `claude/vigorous-liskov-1df887` and `claude/nice-davinci-d960f6`,
+two local-only branches whose journal commits never reached `origin/main`. Both
+re-confirmed today, which is why they are worth carrying forward rather than
+re-deriving a third time.)*
+
+**Learning:** Step 3 reads as though most worktrees will be prunable. They are
+not, and the reason is structural: a routine does **not** exit when it pushes —
+it keeps running to write its `.ai/<routine>.md` and wrap up — so "PR merged and
+tree clean" overlaps "still executing" as the *normal* case. Today 25 of 31
+worktrees held a live process, and the three I had merged minutes earlier
+(`happy-napier-d49826` #86, `heuristic-darwin-b44989` #85,
+`vigilant-chatelet-5fd378` #87) were all still live. Exactly one worktree in
+thirty-one was prunable. The parked sessions are parked, not working, so waiting
+does not clear them and the count only grows.
+
+**Action:** `lsof -a -d cwd +D .claude/worktrees` is the *first* check of step 3
+and is decisive on its own — every directory it names is untouchable regardless
+of PR state, birth time or cleanliness. Merge status answers "did the work
+land", never "is anyone still in the room". When the survey comes back mostly
+held, that is a complete and correct step 3: prune the one or two that are free,
+report the accumulation, and leave it there. Reaping parked sessions is a
+human's call, not Warden's.
