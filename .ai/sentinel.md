@@ -223,3 +223,24 @@ what *else* on that serializer grants the same thing. A per-field guard is a
 smell: the check belongs to the operation, not the field. Self-service edits use
 different serializers (`CurrentUserUpdateSerializer`, `PasswordChangeSerializer`)
 so tightening `PosUserSerializer` cannot break a user editing their own profile.
+
+## 2026-08-20 - A transport that self-declares "trusted" is an auth bypass
+**Learning:** `IsGatewayPeer` authenticates a messaging webhook on the gateway's
+shared `webhook_token` when one is stored, and otherwise **delegates to
+`transport.verify_inbound`** — which makes each driver its own authenticator.
+`base.py` returns False and `sms_gate.py` requires a signing key, but
+`fake.py` returned `True` unconditionally ("tests exercise the routing
+pipeline"). That driver is registered in production (`transports/__init__.py`
+imports it for the `@register` side effect) and `Provider.FAKE` is a real
+model choice, so a gateway created but never activated — no token provisioned —
+accepted an unauthenticated POST from any LAN peer, with a caller-chosen
+`from` number. That routes into `crm.route_inbound`: a forged "STOP" revokes a
+real customer's marketing consent, anything else threads into the conversation
+staff read and reply to. Verified 200 + row stored before the fix.
+**Action:** Two things generalise. (a) When a permission class delegates the
+credential check to pluggable code, audit *every* registered implementation,
+not the base class — the abstract default being fail-closed proves nothing.
+(b) "Test-only" is a claim about intent, not reachability: check whether the
+thing is registered in production and selectable through the API. The new
+`test_no_registered_transport_vouches_for_a_secretless_gateway` asserts the
+invariant over the whole registry so the next driver cannot reopen it.

@@ -39,9 +39,15 @@ class FakeDriver(MessagingTransport):
             {"event": "sms:delivered", "ok": True, "detail": ""},
         ]
 
-    # Inbound is trusted in the fake driver (tests exercise the routing pipeline).
+    # No transport-level trust: a driver that answers True authenticates every
+    # caller, and this one is registered in production code, so a gateway left
+    # on the "fake" provider turned ``IsGatewayPeer`` into an open door — any
+    # LAN peer could post a forged inbound SMS claiming any sender. Inbound to a
+    # fake gateway goes through the shared ``webhook_token`` that activation
+    # provisions, exactly like a real one; there is nothing left for the driver
+    # itself to vouch for.
     def verify_inbound(self, request) -> bool:
-        return True
+        return False
 
     def parse_inbound(self, request) -> dict:
         data = getattr(request, "data", {}) or {}
