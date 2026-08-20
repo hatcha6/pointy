@@ -27,7 +27,9 @@ from .models import (
     ModifierOption,
     Product,
     ProductCategory,
+    ProductUnit,
     ProductVariant,
+    UnitOfMeasure,
 )
 
 
@@ -45,6 +47,14 @@ class CatalogListQueryScalingTests(TestCase):
         self.product_ct = ContentType.objects.get_for_model(Product)
         self.variant_ct = ContentType.objects.get_for_model(ProductVariant)
         self._seq = 0
+        # A packaging unit on every product: ``unit_detail`` nests
+        # UnitOfMeasureSerializer, whose product_count falls back to a COUNT once
+        # per *serialization* -- so without the annotated prefetch this is one
+        # query per row even though every row shares the one unit object.
+        self.pack_unit = UnitOfMeasure.objects.get_or_create(
+            code="scalingbox",
+            defaults={"name": "box"},
+        )[0]
 
     def _add_products(self, count):
         for _ in range(count):
@@ -58,6 +68,11 @@ class CatalogListQueryScalingTests(TestCase):
             product = Product.objects.create(name=f"p{i}", is_active=True)
             product.categories.add(category)
             product.modifier_groups.add(group)
+            ProductUnit.objects.create(
+                product=product,
+                unit=self.pack_unit,
+                factor_to_base=Decimal("12"),
+            )
             self._add_image(self.product_ct, product.id, f"p/{i}.jpg")
             for v in range(2):
                 variant = ProductVariant.objects.create(

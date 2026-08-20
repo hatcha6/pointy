@@ -701,3 +701,32 @@ is the fast way to enumerate the hand-rolled ones; each is its own audit.
 q/row because the permission and content-type queries landed on the smaller
 measurement — the slope only showed as a clean 1.0 after an untimed request
 preceded each `CaptureQueriesContext`.
+
+## 2026-08-20 - An annotation-or-count fallback costs once per SERIALIZATION, not once per instance
+**Learning:** `UnitOfMeasureSerializer.get_product_count` is the familiar
+`getattr(unit, "product_count", None) or unit.product_units.count()` hook, and
+`UnitOfMeasureViewSet` supplies the annotation — so the field greps clean. But
+`unit_detail` is nested under every product's `units`, and a *forward-FK*
+prefetch (`units__unit`) hands every row the **same shared UnitOfMeasure
+object**, which made me expect one COUNT. It is one COUNT per row anyway:
+nothing caches the fallback on the instance, so the serializer re-runs it every
+time it renders that same object. Measured `product-list` at 50 rows with one
+packaging unit each: 67 -> 17 queries; `product-variant-list` 64 -> 14. It hid
+because the existing catalog scaling tests build products with *no*
+`ProductUnit` rows, so the whole branch never ran under test while multi-unit
+products are a shipped feature.
+**Action:** For an annotation-or-fallback field, count the *serializations*, not
+the instances — a shared prefetched object still pays per render. Fix by
+annotating on the prefetch queryset (`Prefetch(lookup, queryset=...annotate())`)
+and have the owning viewset consume the same factory, so primed and cold can't
+drift. And when a scaling test is flat, check its fixture actually populates the
+optional relations: an unpopulated relation makes an N+1 test-invisible.
+
+**Also — the "two viewsets, one serializer" audit item claims its fourth
+instance, and this time the shared factory already existed.**
+`ProductViewSet.variants` (the product-detail screen's variant list) hand-rolled
+five relations while `catalog.services.variant_detail_queryset()` — written for
+exactly this reason, and consumed by `ProductVariantViewSet` and the stock-count
+screen — sat imported in the same file. Measured 15.0 q/variant (72/117/207/327
+at 3/6/12/20 variants), flat 33 after. A shared factory does not close the shape;
+grep every `@action` that builds its own queryset against it.

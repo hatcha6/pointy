@@ -1,9 +1,29 @@
-from django.db.models import Prefetch
+from django.db.models import Count, Prefetch
 
 from apps.attachments.models import Attachment
 
-from .models import ProductCategory, ProductVariant
+from .models import ProductCategory, ProductVariant, UnitOfMeasure
 from .units import prime_base_units
+
+
+def unit_usage_queryset():
+    """``UnitOfMeasure`` rows carrying the ``product_count`` its serializer reads.
+
+    ``UnitOfMeasureSerializer.get_product_count`` prefers an annotation and
+    otherwise counts. The fallback runs once per *serialization*, not once per
+    instance -- so a payload that nests ``unit_detail`` under every product (or
+    every variant of one) pays a COUNT for each row even when the prefetched
+    unit object is shared. Annotating here keeps the count one query for the
+    whole page and leaves the serializer's arithmetic untouched.
+    """
+    return UnitOfMeasure.objects.annotate(
+        product_count=Count("product_units", distinct=True),
+    )
+
+
+def unit_detail_prefetch(lookup):
+    """Prefetch a nested ``unit_detail`` with its usage count already counted."""
+    return Prefetch(lookup, queryset=unit_usage_queryset())
 
 
 def image_attachment_prefetch(lookup):
@@ -45,7 +65,7 @@ def variant_detail_queryset():
     ).prefetch_related(
         image_attachment_prefetch("attachments"),
         image_attachment_prefetch("product__attachments"),
-        "product__units__unit",
+        unit_detail_prefetch("product__units__unit"),
         "product__units__barcodes",
         "option_values",
         "option_values__option",
