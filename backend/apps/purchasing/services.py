@@ -1033,6 +1033,22 @@ def purchase_adjustable_line_value(line):
     return (line.net_line_total * accepted / ordered).quantize(Decimal("0.01"))
 
 
+def purchase_adjustable_unit_span(line):
+    """How many units the line's returnable value is spread across.
+
+    Normally that is the ordered quantity: each of the ten units on a line
+    ordered ten is worth a tenth of it, whether four arrived or all ten did.
+    But a supplier can over-ship, and then ``accepted_quantity`` exceeds
+    ``quantity`` while the returnable value stays capped at what the order
+    actually billed (see :func:`purchase_adjustable_line_value`). Spreading that
+    capped value over the ordered count would price each *arrived* unit above
+    its share, so the span is whichever count is larger.
+    """
+    ordered = Decimal(line.quantity or 0)
+    accepted = Decimal(line.accepted_quantity or 0)
+    return max(ordered, accepted)
+
+
 def purchase_adjustment_line_amount(line, quantity):
     prior_amount = line.adjustment_lines.aggregate(total=models.Sum("line_amount"))[
         "total"
@@ -1043,9 +1059,12 @@ def purchase_adjustment_line_amount(line, quantity):
         return (purchase_adjustable_line_value(line) - prior_amount).quantize(
             Decimal("0.01")
         )
-    return (
-        line.net_line_total * Decimal(quantity) / Decimal(line.quantity)
-    ).quantize(Decimal("0.01"))
+    span = purchase_adjustable_unit_span(line)
+    if span <= 0:
+        return Decimal("0.00")
+    return (line.net_line_total * Decimal(quantity) / span).quantize(
+        Decimal("0.01")
+    )
 
 
 def purchase_adjustment_line_unit_cost(line, quantity):

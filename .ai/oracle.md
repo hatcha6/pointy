@@ -295,3 +295,61 @@ pushing (here: a cent added to `unit_sale_price`'s non-base-unit branch for this
 side, caught at op#41; dropping `* unit_factor` from `OrderLine.unit_cost` for
 #82's, caught at op#203 as `backend=0.40 oracle=9.60`). Losing coverage in a
 merge is invisible in exactly the way losing it in a fix is not.
+
+## 2026-08-20 - The ceiling was right, the slope was wrong
+
+**Learning:** `purchase_adjustable_line_value` correctly caps an over-shipped
+line's returnable value at what the order *billed* (the surplus units were never
+paid for), and `purchase_adjustment_line_amount`'s "last units back" branch
+honours that cap. But its **proportional** branch divided `net_line_total` by
+the **ordered** count while being charged against the **arrived** count. Ordered
+10 at 10.00, supplier ships 12, send 11 back: `100.00 × 11 / 10` = **110.00**
+credited on a line the shop was billed 100.00 for — straight past a ceiling that
+exists three lines above. The twelfth unit then priced at `100.00 - 110.00` =
+−10.00, which `purchase_adjustment_amount` rejects as non-positive, so the last
+unit became unreturnable as well. Note this is the *mirror* of the 2026-08-19
+short-shipment defect: that one read `line.quantity` where an *accepted* count
+authorised the money, this one reads it where an accepted count *divides* it.
+The existing over-receipt test asserted only the whole-line return, which takes
+the ceiling branch and was always right.
+
+**Action:** a clamp and the formula it clamps are two implementations of the
+same intent, and a test that only exercises the clamp proves nothing about the
+formula. Whenever a ceiling function exists next to a proportional one, test the
+proportional branch *against the ceiling* — `partial ≤ ceiling` and
+`Σ partials == ceiling` — not against a hand-computed figure, because a
+hand-computed figure is written by whoever also wrote the formula. Pointy still
+has this pair shape in `OrderLine.returnable_qty` vs the sales refund
+allocation, and in `payable_balance` vs `billable_total`.
+
+**Also — over-receipt is a whole axis the harness never generated.** The
+simulation's receive op drew `accepted` from `randint(1, outstanding)`, so
+`accepted > ordered` was unreachable and the `accepted_overage` arm of
+`_apply_receipt` was dead defensive code. The API derives
+`allowed_over_receipt_quantity` itself from whatever the client types, so this
+is a one-field receipt away in production. Generators bound assertions: before
+believing a money surface is covered, ask which *shipment shapes* the sim can
+produce, not only which operations.
+
+## 2026-08-20 - The purchasing side of the simulation has no packs at all
+
+**Learning:** Found while mutation-testing the new supplier-return assertions.
+Breaking `record_purchase_adjustment_stock_movements` so returned goods leave in
+*packs* instead of base units (dropping `to_base_quantity`) produced **no
+failure at any seed** — the exact bug class the 2026-08-20 exchange entry is
+about, and the harness is blind to it. The reason: `op_purchase_submit` builds
+every `PoLineRec` with `unit_factor=Decimal("1")` and passes no `unit` to
+`save_purchase_order_with_lines`. The simulation has *never* bought anything by
+the carton. So every pack↔base crossing on the purchasing side — receipts,
+returns, `base_unit_cost`, the `expected` stock the order reserves — is
+exercised only at factor 1, where the conversion is the identity and a dropped
+multiply is invisible. (The *sales* side does model multi-unit lines, which is
+why `OrderLine.unit_cost` coverage was reachable.)
+
+**Action:** this is the next extension to make, and it is bigger than it looks —
+`op_purchase_submit` must pass a real `unit`, and `expected` stock accounting
+(`self.oracle.expected[...] += q3(Decimal(quantity))`, no factor) is already
+wrong for anything but factor 1, so it has to move in the same change. Do it on
+its own run: it is not a garnish on another change. Until then, treat every
+purchasing figure that crosses units as **unproven**, whatever a clean sweep
+says.
