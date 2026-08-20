@@ -485,3 +485,46 @@ vanish with the worktree). Sweep `.ai/*.md` the same way when judging whether a
 routine repeated a mistake it had already recorded — its journal may be stranded
 too, and a *closed or absent* PR is exactly when a routine's own lesson goes
 missing.
+
+## 2026-08-20 - A bare `/bin/zsh -l` in a worktree is a live session, not a dead shell
+
+**Learning:** The prune guard I wrote says "a live `claude` process is
+decisive", which reads as *only* a `claude` process counts. That is wrong and it
+nearly cost two live sessions. `reverent-chaum-070e97` (PR #65 **merged**, tree
+clean, 10 hours old) and `youthful-margulis-47a5f1` passed every documented
+prune test and had **no** `claude` process inside them — but `lsof` showed a
+`/bin/zsh -l` holding cwd in each, started 12:23 and 12:24, whose PPID resolves
+to `Claude.app/Contents/Frameworks/Claude Helper.app` (the desktop app's node
+helper). Those are the persistent Bash-tool shells of Claude *Desktop* sessions
+working in those worktrees. A desktop session leaves no `claude` process in the
+tree at all, so filtering `lsof` output for the process name `claude` reports it
+as dead.
+
+**Action:** Treat **any** process with cwd inside a worktree as live, whatever
+its name — `lsof -a -d cwd +D .claude/worktrees` and read every row, do not grep
+for `claude`. When a row is a shell, resolve its parent
+(`ps -o ppid= -p <pid>` then `ps -o command= -p <ppid>`): a `Claude Helper`
+parent means an active desktop session, and removing that worktree pulls the
+floor out from under it. "PR merged + tree clean" is necessary and still not
+sufficient; liveness outranks both.
+
+## 2026-08-20 - Removing a worktree and deleting its branch are separable
+
+**Learning:** Step 3 pairs `git worktree remove` with `git branch -d`, which
+makes every prune decision as irreversible as the branch deletion — so the safe
+answer is always "leave it", and 27 worktrees accumulate. The two halves are
+independent. Committed work lives on the **branch ref**, not in the worktree
+directory; only *uncommitted* changes exist nowhere else. So for a clean,
+non-live worktree, `git worktree remove` **without** `git branch -d` frees the
+directory and loses precisely nothing — the commits stay reachable and a human
+can `git worktree add <path> <branch>` the tree straight back. This is how
+`nice-davinci-d960f6` and `vigorous-liskov-1df887` were finally released this
+run: their stranded journal entries had reached `origin/main` via #71, so the
+worktrees went and the branches stayed.
+
+**Action:** Split the decision. Uncommitted changes → keep the worktree, no
+exceptions. Clean tree, no live process, committed work not yet upstream →
+remove the *worktree*, keep the *branch*, and say so in the summary. Delete the
+branch only once its content is demonstrably on `origin/main`. Back the commits
+up first if you want belt and braces — `git format-patch -1 <sha> --stdout` into
+the scratchpad costs a second.
