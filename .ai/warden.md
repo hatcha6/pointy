@@ -596,3 +596,71 @@ no sense for the diff — dozens of `setUpClass` errors, failures in apps the PR
 never touched — read one full traceback before writing a word of the rejection;
 `grep -c 'does not exist' <log>` settles it in a second. And copy `.env` in
 first: a worktree has none, `.env` is untracked, and the fallback is sqlite.
+
+## 2026-08-20 - A clean, dead worktree with an *open* PR is not prunable
+
+**Learning:** My own "removing a worktree and deleting its branch are separable"
+entry says: clean tree, no live process, committed work not yet upstream →
+remove the worktree, keep the branch. Applied literally this run it would have
+deleted two working trees a routine is actively depending on.
+`beautiful-varahamihira-ce92b3` (`claude/oracle-api-checkout-line-identity`,
+PR #67) and `friendly-euler-63b56a` (`claude/oracle-short-shipment-payable`,
+PR #55) are both clean, both have no process inside them, and both carry one
+committed commit that is not on `origin/main` — a perfect match for that rule.
+Both also have an **open PR carrying `needs-work`**, which is the fleet's repair
+loop: 🔍 Oracle is expected to come back and push a fix *to that same branch*,
+and the between-runs gap when nothing is running is exactly when the prune
+survey sees them. "No live process" means "not running right now", not
+"finished".
+
+**Action:** Add the PR state as a gate before any removal, not just as evidence
+about whether content reached `main`:
+`gh pr list --state all --head <branch> --json number,state`. **OPEN → keep the
+worktree, whatever `lsof` and `git status` say.** The existing categories then
+read: merged → prunable; open PR → keep; no PR + unique commits → keep and
+report; dirty → keep, always. Only a *closed or merged* PR (or none, with the
+content demonstrably upstream) makes a clean, dead worktree removable.
+
+## 2026-08-19 - `git branch -d` answers to local `main`, not `origin/main`
+
+*(Rescued from an uncommitted `.ai/warden.md` edit in the dead worktree
+`elated-fermi-8c7ce5`, which has no branch commit and no PR — it would have
+vanished with the directory. Its companion entry, on scratch worktrees having
+no `.env`, had already reached `origin/main` by another route; this one had
+not.)*
+
+**Learning:** With the primary checkout's `main` behind origin,
+`git branch -d claude/<worktree-name>` refused four leftover branches as "not
+fully merged" — branches just confirmed to carry **zero** unique commits via
+`git log origin/main..<b>`. `-d` measures containment against the current HEAD,
+which is the stale local `main`, so a branch whose every commit is already on
+`origin/main` still looks unmerged. The refusal is an artefact of the failed
+sync, not evidence of unmerged work, and reaching for `-D` to "fix" it would
+discard the one safety check that distinguishes the two cases.
+
+**Action:** Prove emptiness with `git log origin/main..<branch>` and let that be
+the decision; when `-d` then refuses, read it as "local `main` is stale" and
+leave the branch for the next run rather than forcing `-D`. Whenever step 2
+cannot fast-forward, expect step 3 to be partially blocked for this reason and
+say so in the summary instead of re-diagnosing it.
+
+## 2026-08-20 - Re-run the dirty-file collision check; last run's verdict expires
+
+**Learning:** The step-2 blockage looks identical run to run ("main is checked
+out and dirty") and its *character* changes underneath that description.
+Yesterday the dirty file was `backend/apps/employees/models.py`, which one of
+the incoming commits also touched — a real collision a human had to resolve.
+Today the only dirty path is
+`backend/apps/employees/test_employee_list_query_scaling.py`, and the two
+incoming commits touch `.ai/*` and `apps/expenses/*` and nothing else, so
+`git merge --ff-only` would have succeeded on git's own terms; the sync is
+blocked purely by this prompt's stricter "tree must be clean" guard. Inheriting
+the previous run's "blocked by a real collision, escalate" would have reported
+an escalation that no longer exists.
+
+**Action:** Re-derive it every run, it is two commands:
+`git diff --name-only main..origin/main` against
+`git status --porcelain`. Overlap → real collision, escalate. No overlap →
+say "blocked by policy, no collision" and note that a human clears it by
+committing or discarding one file. Either way still do not merge, reset or
+stash there — but do not let the summary imply a conflict that is not there.
