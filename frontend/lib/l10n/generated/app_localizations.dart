@@ -20558,6 +20558,18 @@ abstract class AppLocalizations {
   /// **'تعذّر تحميل عمليات الجرد.'**
   String get stockCountLoadError;
 
+  /// No description provided for @stockCountReconciliationLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل فروقات الجرد.'**
+  String get stockCountReconciliationLoadError;
+
+  /// No description provided for @stockCountApplyBlockedByLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن إنهاء الجرد قبل تحميل الفروقات. أعد المحاولة أولاً.'**
+  String get stockCountApplyBlockedByLoadError;
+
   /// No description provided for @stockCountHistoryTitle.
   ///
   /// In ar, this message translates to:
