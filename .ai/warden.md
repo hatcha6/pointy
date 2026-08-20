@@ -528,3 +528,71 @@ remove the *worktree*, keep the *branch*, and say so in the summary. Delete the
 branch only once its content is demonstrably on `origin/main`. Back the commits
 up first if you want belt and braces — `git format-patch -1 <sha> --stdout` into
 the scratchpad costs a second.
+
+## 2026-08-20 - My own merge conflicts the next PR from the same routine
+
+**Learning:** Two 🔍 Oracle PRs were open this run, #64 and #67. Both append to
+`.ai/oracle.md`, and both auto-merged their Python cleanly against each other
+(different apps entirely: `apps/purchasing/serializers.py` vs
+`apps/sales/business_simulation.py`). Merging #64 therefore *guaranteed* #67
+would go `CONFLICTING` — on the journal file and nothing else. This is not a
+one-off: the previous run hit the identical pattern on #64 itself, conflicted by
+#61. Any two open PRs from one routine collide this way, because the journal is
+the one file every routine touches on every change and every entry is appended
+at the same place.
+
+**Action:** Before merging, list the other open PRs' changed files
+(`git diff --name-only origin/main...<branch>`) and note which share a
+`.ai/*.md`. When one does, expect the conflict, and lead its send-back comment
+with *"the conflict is your journal only, and I caused it this run"* plus the
+name of the PR that did it — the routine then resolves in one pass instead of
+hunting the Python for a collision that does not exist. Review and test the
+second PR **against `main` with the journal resolved locally** before sending it
+back, so the comment carries the verdict and the rebase is the only work left;
+#64 went from send-back to merged in one cycle that way.
+
+## 2026-08-20 - Real production work is accumulating on branches that never got a PR
+
+**Learning:** Six dead worktrees this run sat on branches carrying committed work
+that is on **no** PR, open, closed or merged, and is nowhere on `origin/main`:
+`claude/compass-client-request-deadline` (236 lines, API session timeouts),
+`compass-fix` (509 lines across 12 files, Celery broker hangs),
+`claude/oracle-api-checkout-coverage` (716 lines, incl. a manual-purchase-discount
+fix), `claude/oracle-sales-cost-basis`, `claude/compass-abandoned-backup-jobs`,
+and `claude/sweet-wiles-1ef591` (two Sentinel journal entries). These are not
+abandoned drafts — several are complete changes with tests. The queue-driven
+review model cannot see any of it, because a routine that commits without opening
+a PR simply never enters the queue.
+
+**Action:** Survey it every run, not just when pruning: for each dead worktree,
+`gh pr list --state all --head <branch>` and `git rev-list --count
+origin/main..<branch>`. Unique commits + no PR = stranded, and it must be
+**reported**, never silently pruned. Remove the worktree if you like — the
+commits live on the branch ref — but keep the branch, and never `git branch -d`
+one of these. Rescue stranded `.ai/*.md` entries yourself as #71 did; leave
+stranded *code* for a human to triage, since you cannot know why its PR was
+never opened.
+
+## 2026-08-20 - Every run on this box shares one test database, and they collide
+
+**Learning:** Two runs of `manage.py test` against `backend/.env` both build
+`test_pointy` — the name is derived from `DATABASE_URL`'s database, so it is the
+same for every worktree, every routine and me. Whichever finishes first *drops*
+it underneath the other. Re-verifying #67 that way produced **86 errors and 2
+failures out of 241**, every one of them
+`ProgrammingError: database "test_pointy" does not exist / It seems to have just
+been dropped or renamed`. Read without the traceback that is a catastrophic
+regression in the PR under review; it is nothing of the kind, and a fleet of
+routines testing on a schedule makes it likelier the busier the hour. The same
+run against an isolated database was **241 tests, OK**.
+
+**Action:** Give the run its own database rather than racing for the shared one:
+`docker exec pointy-postgres-1 psql -U postgres -c "CREATE DATABASE
+pointy_warden"` once, then prefix every test command with
+`DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/pointy_warden'`.
+Django only ever creates and drops `test_pointy_warden`, so the source database
+is untouched and nothing can collide. When a suite fails at a scale that makes
+no sense for the diff — dozens of `setUpClass` errors, failures in apps the PR
+never touched — read one full traceback before writing a word of the rejection;
+`grep -c 'does not exist' <log>` settles it in a second. And copy `.env` in
+first: a worktree has none, `.env` is untracked, and the fallback is sqlite.
