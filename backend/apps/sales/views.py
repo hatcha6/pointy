@@ -1,6 +1,7 @@
 import logging
 
 from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
@@ -9,6 +10,7 @@ from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.catalog.models import VariantOptionValue
 from apps.channels.services import require_active_sales_channel
 from apps.core.idempotency import run_idempotent_request
 from apps.core.discovery import request_is_relayed
@@ -548,6 +550,15 @@ class PublicInvoiceView(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
 
     queryset = Order.objects.select_related("customer").prefetch_related(
         "lines__variant__product",
+        # This page builds its own queryset rather than reusing
+        # ``OrderViewSet``'s, so the option-value prefetch that one carries has
+        # to be repeated here: every line renders ``variant.display_name``,
+        # whose ``option_values_label`` fallback queries once per line for the
+        # unnamed variants a normal shop sells almost exclusively.
+        Prefetch(
+            "lines__variant__option_values",
+            queryset=VariantOptionValue.objects.select_related("option"),
+        ),
     )
 
     def get_queryset(self):

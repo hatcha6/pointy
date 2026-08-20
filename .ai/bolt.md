@@ -676,3 +676,28 @@ plain filtered `Prefetch` over `to_attr` when the consumer already discriminates
 crucially `refresh_from_db()` clears `_prefetched_objects_cache` but does **not**
 clear a `to_attr` attribute, so a `to_attr` here would have silently broken the
 three mutation actions that refresh precisely to drop the stale prefetch.
+
+## 2026-08-20 - A custom `@action` hides inside the very viewset whose queryset is tuned
+**Learning:** The `display_name`/`option_values` sweep has now missed the same
+shape four times, and this instance shows why "resolve the symptom to the
+viewset that owns it" (2026-08-20) is still not tight enough.
+`PurchaseOrderViewSet.queryset` prefetches
+`adjustments__lines__variant__option_values__option` **with an explanatory
+comment**, so the class greps clean — but `product-cost-history`,
+`variant-cost-history` and `adjustment-history` are `@action`s *on that same
+class* that each build their own queryset from scratch
+(`PurchaseLine.objects…`, `PurchaseOrderAdjustmentLine.objects…`) and never
+touch it. Same for `PublicInvoiceView`, which re-derives a two-relation subset
+of `OrderViewSet`'s. Measured 1.0 q/row on all three: cost-history 55 → 6 at 50
+rows, adjustment-history 53 → 4, public invoice 28 → 9 at 20 lines. The unit
+that owns a prefetch is a **queryset expression**, not an app, a file, a class
+or a viewset — and a tuned class-level queryset is the strongest camouflage
+there is, because every plausible grep for the cure hits it.
+**Action:** Grep the *symptom* (`source="…display_name"`, `variant.full_name`)
+and resolve each serializer to **every** queryset that feeds it, including
+`@action` bodies and `APIView.get_queryset`. `grep -n "\.objects\." views.py`
+is the fast way to enumerate the hand-rolled ones; each is its own audit.
+**Also:** measure with a warm-up request. The first two attempts here read 0.67
+q/row because the permission and content-type queries landed on the smaller
+measurement — the slope only showed as a clean 1.0 after an untimed request
+preceded each `CaptureQueriesContext`.
