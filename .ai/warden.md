@@ -853,3 +853,110 @@ from `git worktree list --porcelain | grep '^branch ' | sed 's|branch
 refs/heads/||'` and subtract. Never feed `git branch` output straight into a
 loop that deletes; if a run of `rev-list` errors on names you did not expect,
 stop and fix the parse before touching a single `git branch -d`.
+
+## 2026-08-20 - A batching PR skips `post_save`, and on this repo that broke catalog invalidation
+
+**Learning:** Bolt's #101 replaced the checkout path's per-line
+`stock_item.save(update_fields=...)` with
+`StockItem.objects.bulk_update(rows, STOCK_QUANTITY_FIELDS)`
+(`save_stock_item_quantities_bulk()` in `apps/inventory/services.py`, called
+from `apps/sales/services.py`). It handled the *documented* trap --
+`bulk_update` skips `pre_save`, so `updated_at` (`auto_now`) was stamped by hand
+-- and missed the larger one: neither `bulk_update` nor `bulk_create` fires
+`post_save`, and **`StockItem` is a `post_save` receiver**.
+`apps/catalog/signals.py:40-41` wires `post_save`/`post_delete` on `StockItem`
+into `bump_catalog_version()`, and the module docstring four lines above the
+imports says so outright: "StockItem is the one high-frequency sender (one save
+per line per checkout), which is exactly what keeps cached stock quantities
+honest." So this is not a near miss: since #101 merged, **a sale no longer bumps
+the catalog version**. Catalog `ETag`s stay valid, clients keep being served
+`304` with pre-sale quantities until some unrelated catalog write bumps it, and
+POS out-of-stock hiding and the version-keyed price-checker cache both read
+stale. `bump_catalog_version()` is called from exactly two places in the tree --
+`signals.py` and `apps/catalog/popularity.py:90`, the nightly job -- so nothing
+else on the checkout path covers for it. Confirmed by probe on `origin/main`
+with a locmem cache: a per-row `save(update_fields=["quantity_on_hand"])` takes
+the version 5 to 6; `save_stock_item_quantities_bulk([item])` leaves it at 5.
+Re-confirmed still live on `0daac393` (2026-08-20 23:15) -- the function still
+ends at `bulk_update` with no bump.
+
+**Action:** Batching is Bolt's whole lane, so make this a standing pre-test grep
+on every `bulk_update`/`bulk_create` PR, and run it *before* the suite -- the
+failure mode is staleness, never a red test:
+`grep -rn "sender=<Model>" apps/ --include='*.py'` for the batched model (one
+line, and it settles the question), then
+`grep -n "def save" apps/<app>/models.py` for a `save()` override. A hit means
+the batch silently skips work the per-row loop did, and the PR must either call
+the invalidation explicitly after the batch or stay per-row. Never reason from
+"this model probably has no receivers" -- `StockItem` is the highest-frequency
+sender in that file. Zsh eats a bare `--include=*.py`; quote it.
+
+## 2026-08-20 - The Oracle triad's third leg is cheaper as a whole-harness revert
+
+**Learning:** The mutation-triad entry prescribes leg (c) — the load-bearing one
+that proves the *old* harness was blind — as "delete the new op from
+`operations()` under the same mutation". On 🔍 Oracle's #103 the extension was
+not a new op at all but a change in what an existing one (`op_purchase_submit`)
+buys: every purchase line used to be built at `unit_factor=1`, where a dropped
+pack↔base conversion is the identity. There was no op to delete. The equivalent
+move is `git checkout origin/main -- apps/sales/business_simulation.py
+apps/sales/test_business_simulation.py` with the production fix still reverted:
+that restores the old harness verbatim, and it came back **green** while the new
+harness failed at the PR's claimed `seed=13 op#32`. Reverting the entry-point
+test alongside the harness is not optional — it asserts vacuity counters
+(`pack_purchase_line_assertions`) that do not exist on `main`, so leaving it
+yields an `AttributeError` instead of an answer.
+
+**Action:** For any Oracle PR, run leg (c) as a two-file revert of the harness
+plus its entry-point test rather than hand-editing `operations()` — one command,
+it covers extensions that change an op instead of adding one, and a green (c)
+beside a red (b) is the whole proof. Budget one extra suite run (~15s for
+`apps.sales.test_business_simulation` alone).
+
+## 2026-08-20 - Step 2 is usually already done by step 1; check the end state before escalating
+
+**Learning:** Two consecutive runs escalated "`main` is checked out and dirty --
+cannot fast-forward" while the sync had in fact happened. `git merge --ff-only`
+does *not* refuse on a dirty tree -- it refuses only when an incoming file
+collides with a local modification, which is precisely the overlap check this
+journal already prescribes. On top of that, `gh pr merge --squash
+--delete-branch` fast-forwards the local default branch as a side effect, and
+this box also ffs `main` on the hour (`git reflog show main` is a column of
+`Fast-forward` entries at `:04`). This run local `main` was 2 behind at the start
+and sat at `origin/main` (`0daac393`, `0 0`) after the two merges, with the dirty
+file (`backend/apps/employees/test_employee_list_query_scaling.py`) untouched.
+Reporting that as a blocked sync would have been simply false.
+
+**Action:** Do the collision check as prescribed, respect the prompt's
+"do not merge/reset/stash in a dirty primary checkout" guard -- and then
+*measure* the outcome rather than inferring it from the guard:
+`git rev-list --left-right --count main...origin/main`. `0 0` means step 2 is
+satisfied and the summary should say so; only a non-zero right-hand number is an
+actual stale `main` worth escalating. The dirty file is still worth naming in
+the report, because it is somebody's uncommitted work sitting in the shared
+checkout -- but it is a housekeeping note, not a blocked sync.
+
+## 2026-08-20 - A Palette PR whose test imports a new public class cannot be proved by file revert
+
+**Learning:** The one-file-revert non-vacuity proof and its l10n corollary both
+assume the PR's production file can be swapped for `origin/main`'s copy and
+still compile. Palette's #108 broke that a third way: it extracts a new
+**public** widget, `ConversationMessageStatus`, out of `_MessageBubble` in
+`conversations_screen.dart`, and the new test imports that class and matches on
+it (`find.byWidgetPredicate((w) => w is ConversationMessageStatus && ...)`).
+`git checkout origin/main -- .../conversations_screen.dart` deletes the class
+the *test file* names, so the run dies at compile time no matter what you do
+about the ARB and the generated l10n -- the l10n fix from the earlier entry does
+not reach this case.
+
+**Action:** When the diff introduces a public class or getter the test file
+imports, do not revert the file. Mutate its **body** in place and keep the
+shell: restore the old `switch` arms, force the "is this an exception state"
+predicate to `false`, drop the `Tooltip` wrapper and the `semanticLabel`, and
+put the FAB back to disable-only -- that is "old behaviour, new API", exactly
+what #108's body claimed, and it reproduced its stated `+0 -4` with all four new
+tests red. Do it with a scripted `str.replace` that asserts each anchor is
+present, so a silently missed replacement cannot masquerade as a passing revert,
+and restore with `git checkout HEAD -- <path>`. Read the PR body first: a
+routine that states its expected `+0 -N` is telling you which mutation it had in
+mind.
