@@ -492,7 +492,7 @@ class AboGhrisMssqlConnector(BaseConnector):
                 lines.append(
                     canonical.CanonicalPurchaseLine(
                         variant_source_key=str(item_id),
-                        quantity=int(quantity),
+                        quantity=quantity,
                         unit_cost=_to_decimal(item.get("price")),
                     )
                 )

@@ -688,7 +688,7 @@ class FahdSqliteConnector(FahdMssqlConnector):
                 rounded_gross = Decimal("0")
                 true_gross = Decimal("0")
             ser = _clean(row.get("ser"))
-            quantity = int(_to_decimal(row.get("qty")).quantize(Decimal("1"), ROUND_HALF_UP))
+            quantity = _to_decimal(row.get("qty")).quantize(_QTY, rounding=ROUND_HALF_UP)
             if not ser or quantity <= 0:
                 continue
             cost = _money_ceil(_to_decimal(row.get("unit_cost")))

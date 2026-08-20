@@ -1418,3 +1418,194 @@ class FahdSqliteTests(MigrationTestBase):
         self.run_sync(source, IMPORT, options={"stock_source": "snapshot"})
         item = StockItem.objects.get(variant__barcode="1001")
         self.assertEqual(item.quantity_on_hand, Decimal("7"))
+
+
+class PurchaseQuantityFidelityTests(MigrationTestBase):
+    """A historical purchase of a fractional quantity must import as that
+    fraction.
+
+    ``PurchaseLine.quantity`` is ``Decimal(12, 3)`` precisely so a shop can buy
+    half a tray of eggs or 2.5 kg of anything, and the sale side of the importer
+    already carries ``Decimal`` end to end. The purchase side is the odd one
+    out, and every quantity it changes moves money: the line total is
+    ``unit_cost × quantity``, so the invoice total, the supplier payable and the
+    product's purchase history all follow it.
+    """
+
+    def _resolver_with_variant(self, sku="KG-1"):
+        source = self.make_source()
+        run = MigrationRun.objects.create(source=source, mode=IMPORT)
+        resolver = IdentityResolver(source, run, dry_run=False)
+        ProductLoader().load(
+            canonical.CanonicalProduct(source_key="p1", name="Rice"), resolver, dry_run=False
+        )
+        VariantLoader().load(
+            canonical.CanonicalVariant(
+                source_key="v1",
+                product_source_key="p1",
+                sku=sku,
+                unit_price=Decimal("6.00"),
+                is_default=True,
+            ),
+            resolver,
+            dry_run=False,
+        )
+        return resolver
+
+    def test_fractional_purchase_quantity_is_preserved(self):
+        from apps.purchasing.models import PurchaseOrder
+
+        from .loaders.purchasing import PurchaseOrderLoader, SupplierLoader
+
+        resolver = self._resolver_with_variant()
+        SupplierLoader().load(
+            canonical.CanonicalSupplier(source_key="s1", name="Wholesaler"),
+            resolver,
+            dry_run=False,
+        )
+        record = canonical.CanonicalPurchaseOrder(
+            source_key="po-1",
+            supplier_source_key="s1",
+            supplier_invoice_number="FRAC-1",
+            lines=[
+                canonical.CanonicalPurchaseLine(
+                    variant_source_key="v1",
+                    quantity=Decimal("2.5"),
+                    unit_cost=Decimal("4.00"),
+                )
+            ],
+        )
+
+        PurchaseOrderLoader().load(record, resolver, dry_run=False)
+
+        po = PurchaseOrder.objects.get(supplier_invoice_number="FRAC-1")
+        line = po.lines.get()
+        self.assertEqual(line.quantity, Decimal("2.500"))
+        # 2.5 × 4.00 — anything else misstates what the shop owes the supplier.
+        self.assertEqual(line.net_line_total, Decimal("10.00"))
+        self.assertEqual(po.total, Decimal("10.00"))
+
+    def test_sub_unit_purchase_line_is_not_dropped(self):
+        """Half a unit is a real purchase, not a zero one.
+
+        Truncating it to 0 removes the line, and when it is the invoice's only
+        line the whole historical bill is lost with a ``no_lines`` error.
+        """
+        from apps.purchasing.models import PurchaseOrder
+
+        from .loaders.purchasing import PurchaseOrderLoader, SupplierLoader
+
+        resolver = self._resolver_with_variant()
+        SupplierLoader().load(
+            canonical.CanonicalSupplier(source_key="s1", name="Wholesaler"),
+            resolver,
+            dry_run=False,
+        )
+        record = canonical.CanonicalPurchaseOrder(
+            source_key="po-2",
+            supplier_source_key="s1",
+            supplier_invoice_number="FRAC-2",
+            lines=[
+                canonical.CanonicalPurchaseLine(
+                    variant_source_key="v1",
+                    quantity=Decimal("0.5"),
+                    unit_cost=Decimal("30.00"),
+                )
+            ],
+        )
+
+        PurchaseOrderLoader().load(record, resolver, dry_run=False)
+
+        po = PurchaseOrder.objects.get(supplier_invoice_number="FRAC-2")
+        self.assertEqual(po.lines.get().quantity, Decimal("0.500"))
+        self.assertEqual(po.total, Decimal("15.00"))
+
+    def test_zero_quantity_purchase_line_is_still_skipped(self):
+        """Fidelity is not the same as accepting nothing: a genuinely zero (or
+        negative) source quantity remains a skipped line."""
+        from .loaders.purchasing import PurchaseOrderLoader, SupplierLoader
+        from .loaders.base import LoaderError
+
+        resolver = self._resolver_with_variant()
+        SupplierLoader().load(
+            canonical.CanonicalSupplier(source_key="s1", name="Wholesaler"),
+            resolver,
+            dry_run=False,
+        )
+        record = canonical.CanonicalPurchaseOrder(
+            source_key="po-3",
+            supplier_source_key="s1",
+            supplier_invoice_number="FRAC-3",
+            lines=[
+                canonical.CanonicalPurchaseLine(
+                    variant_source_key="v1",
+                    quantity=Decimal("0"),
+                    unit_cost=Decimal("30.00"),
+                )
+            ],
+        )
+
+        with self.assertRaises(LoaderError) as ctx:
+            PurchaseOrderLoader().load(record, resolver, dry_run=False)
+        self.assertEqual(ctx.exception.code, "no_lines")
+
+    def test_sale_loader_already_preserves_fractional_quantity(self):
+        """The control: the sale side has always carried the fraction, which is
+        what makes the purchase side's truncation an asymmetry rather than a
+        product decision."""
+        from apps.sales.models import Order
+
+        from .loaders.sales import SaleLoader
+
+        resolver = self._resolver_with_variant()
+        record = canonical.CanonicalSale(
+            source_key="sale-1",
+            lines=[
+                canonical.CanonicalSaleLine(
+                    variant_source_key="v1",
+                    quantity=Decimal("2.5"),
+                    unit_price=Decimal("4.00"),
+                )
+            ],
+        )
+
+        outcome = SaleLoader().load(record, resolver, dry_run=False)
+
+        order = Order.objects.get(pk=outcome.target_pk)
+        self.assertEqual(order.lines.get().quantity, Decimal("2.500"))
+        self.assertEqual(order.total, Decimal("10.00"))
+
+    def test_aboghris_connector_carries_a_fractional_buy_line(self):
+        """End to end through a real connector: a legacy buy invoice recorded
+        as 2.5 units must arrive as 2.5, not 2."""
+        import sqlite3
+
+        from apps.purchasing.models import PurchaseOrder
+
+        build_aboghris_sample(self.db_path)
+        connection = sqlite3.connect(self.db_path)
+        try:
+            connection.execute(
+                "INSERT INTO BUY_INVOICE VALUES (?, ?, ?, ?, ?)",
+                (2, "2026-05-16 09:00:00", 2, "REF-FRAC", 0),
+            )
+            connection.execute(
+                "INSERT INTO BUY_ITEMS VALUES (?, ?, ?, ?, ?)",
+                (3, 2, 401, 2.5, 4.0),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        source = self.make_source(
+            name="AboGhris",
+            system_key="aboghris_mssql",
+            transport_kind="sqlite",
+            database_name=str(self.db_path),
+        )
+        run = self.run_sync(source, IMPORT)
+
+        self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
+        po = PurchaseOrder.objects.get(supplier_invoice_number="REF-FRAC")
+        self.assertEqual(po.lines.get().quantity, Decimal("2.500"))
+        self.assertEqual(po.total, Decimal("10.00"))
