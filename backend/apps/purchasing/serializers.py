@@ -1928,14 +1928,7 @@ class PurchaseOrderExchangeSerializer(PurchaseOrderAdjustmentInputSerializer):
         replacement_lines = attrs.get("replacement_lines")
         if replacement_lines is None:
             replacement_lines = [
-                {
-                    "variant": line.variant,
-                    "quantity": quantity,
-                    "unit_cost": (
-                        purchase_adjustment_line_amount(line, quantity)
-                        / Decimal(quantity)
-                    ).quantize(Decimal("0.01")),
-                }
+                self._like_for_like_replacement(line, quantity)
                 for line, quantity in attrs["validated_lines"]
             ]
         attrs["validated_replacement_lines"] = [
@@ -1947,6 +1940,30 @@ class PurchaseOrderExchangeSerializer(PurchaseOrderAdjustmentInputSerializer):
             for line_data in replacement_lines
         ]
         return attrs
+
+    @staticmethod
+    def _like_for_like_replacement(line, quantity):
+        """The replacement an exchange sends back when the caller names no prices.
+
+        A replacement line carries no unit — it is keyed by variant alone, and
+        ``record_purchase_replacement_stock_movements`` adds its ``quantity``
+        straight to ``quantity_on_hand``. So both its quantity and its unit cost
+        are **per base unit**, while the outbound purchase line it mirrors is in
+        the line's purchase unit (a carton of 24). Sending the pack figures
+        through unconverted took 24 base units out and put 1 back.
+        """
+        amount = purchase_adjustment_line_amount(line, quantity)
+        base_quantity = line.to_base_quantity(quantity)
+        unit_cost = (
+            (amount / base_quantity).quantize(Decimal("0.01"))
+            if base_quantity > 0
+            else Decimal("0.00")
+        )
+        return {
+            "variant": line.variant,
+            "quantity": base_quantity,
+            "unit_cost": unit_cost,
+        }
 
     def save(self, **kwargs):
         return adjust_purchase_order_items(
