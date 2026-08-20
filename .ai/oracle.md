@@ -353,3 +353,49 @@ wrong for anything but factor 1, so it has to move in the same change. Do it on
 its own run: it is not a garnish on another change. Until then, treat every
 purchasing figure that crosses units as **unproven**, whatever a clean sweep
 says.
+
+## 2026-08-20 - An allocation weight is the one place a unit error hides from every total
+
+**Learning:** The purchasing pack↔base hole the previous entry named is now
+closed — `op_purchase_submit` buys in real packs (carton/box/pack/dozen, and a
+25kg sack over a fractional base), and the three mutations that used to produce
+*no failure at any seed* now die within ~30 operations: dropping
+`to_base_quantity` from the supplier-return movement, from `_add_expected_stock`,
+and from the receipt's accepted branch. What the extension found on its way in
+was a live defect of a shape worth naming separately: `_landed_cost_weights`'
+RETAIL_VALUE arm computed `variant.unit_price * line.quantity` — a **per-base**
+retail price times a **per-pack** count. Five cartons of 24 at 0.50 a piece
+weighed 2.50 instead of 60.00, so freight spread over a mixed order landed
+almost entirely on the loose-piece lines (100.00 of freight splitting 4.00/96.00
+where it should split 50.00/50.00), and `effective_unit_cost` — the cost basis
+every margin and the sell-at-a-loss guard read — went with it. The order's
+`total`, `subtotal`, `discount_total` and landed-cost total are all **identical**
+either way: an allocation only moves money *between* lines, so every
+document-level assertion, and both of the `sum(lines) == document` identities
+from the earlier entries, are blind to it by construction.
+
+**Action:** treat an allocation weight as its own class of unproven arithmetic.
+Totals cannot reach it, the line-sum identities cannot reach it, and — the part
+that matters most — **a single-unit order cannot reach it either**, because a
+largest-remainder allocation is scale-invariant: multiply every weight by the
+same 24 and nothing moves. So the generator has to produce an order that *mixes*
+units before any assertion can fire, and the vacuity guard has to count that
+exact shape (`mixed_unit_retail_landed_orders`), not merely "an order with a
+pack in it". Left to chance the combination (freight + retail-value method +
+mixed units) was ~2% of orders and a 300-op CI run saw none, so
+`op_purchase_submit` now forces the shape on ~18% of orders deliberately, the
+same way it already forces the 11-line wide order. The other weights are worth
+knowing apart: LINE_VALUE and EQUAL never touch a quantity, and QUANTITY is a
+genuine open question (is "حسب الكمية" the buyer's typed packs or the goods
+inside?) rather than an error — it is pinned as-is with a test that says so, so
+whoever changes it does it deliberately.
+
+**Also — the preview was accepting a field it never read.** The PO editor has
+always sent `unit` on every discount-preview line
+(`PurchaseOrderLineDraft.toJson`), and `PurchaseDiscountPreviewLineSerializer`
+simply did not declare it, so DRF discarded it silently. The preview therefore
+could not have converted to base units even after the model was fixed, and would
+have quoted a cost basis the save contradicts — a fresh instance of the
+preview-drift class, created *by* fixing the writer. When fixing a figure in
+`PurchaseOrder`, check what the preview receives before assuming it can compute
+the same thing: a dropped input reads exactly like agreement.

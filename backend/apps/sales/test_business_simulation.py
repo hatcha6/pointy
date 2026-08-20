@@ -60,6 +60,15 @@ class BusinessSimulationTests(TestCase):
         # over-shipped one — has not tested the share at all.
         self.assertGreaterEqual(sim.returned_line_assertions, 1)
         self.assertGreaterEqual(sim.over_received_return_assertions, 1)
+        # And for the purchasing side's pack↔base crossing. Every factor used
+        # to be 1, where a dropped conversion is the identity: a run that never
+        # bought by the carton says nothing about receipts, expected stock, the
+        # per-base cost basis or the landed-cost weights. The mixed-unit guard
+        # is the sharper one — an allocation is scale-invariant, so a weight
+        # that forgot to convert only misallocates on an order whose lines are
+        # bought in different units.
+        self.assertGreaterEqual(sim.pack_purchase_line_assertions, 1)
+        self.assertGreaterEqual(sim.mixed_unit_retail_landed_orders, 1)
 
 
 class SimulationIgnoresPreExistingDataTests(TestCase):

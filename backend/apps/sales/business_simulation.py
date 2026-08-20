@@ -534,7 +534,8 @@ class PoLineRec:
     variant_id: int
     quantity: int  # packs
     unit_factor: Decimal
-    unit_cost: Decimal
+    unit_cost: Decimal  # per PACK (the cost of one carton, not one piece)
+    unit_code: str = ""
     recv_accepted: int = 0
     recv_damaged: int = 0
     recv_cancelled: int = 0
@@ -560,6 +561,22 @@ class PoLineRec:
     @property
     def effective_line_total(self) -> Decimal:
         return even2(self.net_line_total + self.allocated_landed_cost)
+
+    @property
+    def base_quantity(self) -> Decimal:
+        """The line in the only unit stock is ever counted in."""
+        return q3(Decimal(self.quantity) * self.unit_factor)
+
+    @property
+    def base_unit_cost(self) -> Decimal:
+        """What one BASE unit cost — the figure a sale's COGS snapshot and
+        the sell-at-a-loss guard read. A per-pack cost meeting a per-base
+        price without this division is the phantom-loss bug class."""
+        return even2(self.unit_cost / self.unit_factor)
+
+    @property
+    def effective_base_unit_cost(self) -> Decimal:
+        return even2(self.effective_unit_cost / self.unit_factor)
 
     @property
     def outstanding(self) -> int:
@@ -772,7 +789,12 @@ class SaleItem:
     product_id: int
     variant_id: int
     tracks_stock: bool
-    units: list  # list[UnitChoice]
+    units: list  # list[UnitChoice] — units this item may be SOLD in
+    # Units this item may be BOUGHT in. Deliberately a separate list: a shop
+    # routinely buys by the carton and sells by the piece, so a purchasable
+    # pack is not necessarily sellable, and feeding one to a sale line would
+    # only ever produce a 400 the backend is right to return.
+    purchase_units: list  # list[UnitChoice]
     modifier_options: list  # list[(option_id, price_delta)]
 
     def effective_unit_price(self, unit: UnitChoice, modifiers) -> Decimal:
@@ -833,6 +855,16 @@ class Simulation:
         # proves nothing about either and must not pass for coverage.
         self.returned_line_assertions = 0
         self.over_received_return_assertions = 0
+        # Vacuity guards for the purchasing side's pack↔base crossing. At
+        # factor 1 every conversion is the identity, so a dropped multiply is
+        # invisible — which is exactly the state this harness was in.
+        # ``mixed_unit_retail_landed_orders`` is the narrower one: freight
+        # spread BY RETAIL VALUE (the only weight that reads a per-base
+        # catalog price) over lines bought in DIFFERENT units is the one
+        # shape in which a weight that forgot to convert differs from one
+        # that did — scaling every weight alike changes no allocation.
+        self.pack_purchase_line_assertions = 0
+        self.mixed_unit_retail_landed_orders = 0
 
     # -- helpers ----------------------------------------------------------
 
@@ -951,6 +983,7 @@ class Simulation:
             price=Decimal("11.00"), is_sellable=True, is_purchasable=True,
         )
         m0.units.append(UnitChoice("box", Decimal("12"), Decimal("11.00"), True))
+        m0.purchase_units.append(UnitChoice("box", Decimal("12"), None, True))
 
         m1 = self._add_product(
             name="Multi 1", sku="MUL1", unit_price=Decimal("0.50"), base_whole=True
@@ -960,6 +993,47 @@ class Simulation:
             price=None, is_sellable=True, is_purchasable=True,
         )
         m1.units.append(UnitChoice("carton", Decimal("24"), None, True))
+        m1.purchase_units.append(UnitChoice("carton", Decimal("24"), None, True))
+
+        # Purchase-only packs: goods bought by the carton and sold by the
+        # piece, which is how a shop actually buys most of what it stocks.
+        # Without these the purchasing side never crosses a pack↔base boundary
+        # at all — every factor is 1, where a dropped conversion is the
+        # identity and therefore invisible. Spread over several products on
+        # purpose: a landed-cost allocation is scale-invariant, so a defect in
+        # a per-line weight only shows on an order that MIXES units.
+        purchase_packs = [
+            (self.items[1], "carton", Decimal("30")),   # Piece 1
+            (self.items[3], "pack", Decimal("6")),      # Piece 3
+            (self.items[5], "box", Decimal("10")),      # Piece 5
+            (self.items[8], "dozen", Decimal("12")),    # Piece 8
+        ]
+        for item, code, factor in purchase_packs:
+            ProductUnit.objects.create(
+                product=item.variant.product,
+                unit=UnitOfMeasure.objects.get(code=code),
+                factor_to_base=factor,
+                price=None,
+                is_sellable=False,
+                is_purchasable=True,
+            )
+            item.purchase_units.append(UnitChoice(code, factor, None, True))
+        # A fractional base unit bought in a whole pack: 25kg sacks of a
+        # product the shop weighs out. The base quantity is then a multiple of
+        # 25 rather than a small integer, which is where a 3dp quantize and a
+        # per-base cost division have room to disagree.
+        sack_item = self.items[9]  # Weight 0 (kg base)
+        ProductUnit.objects.create(
+            product=sack_item.variant.product,
+            unit=UnitOfMeasure.objects.get(code="bag"),
+            factor_to_base=Decimal("25"),
+            price=None,
+            is_sellable=False,
+            is_purchasable=True,
+        )
+        sack_item.purchase_units.append(
+            UnitChoice("bag", Decimal("25"), None, True)
+        )
 
         # Service products (no stock).
         for i in range(2):
@@ -1031,6 +1105,7 @@ class Simulation:
             variant_id=variant.id,
             tracks_stock=not is_service,
             units=[UnitChoice("", Decimal("1"), None, base_whole)],
+            purchase_units=[UnitChoice("", Decimal("1"), None, base_whole)],
             modifier_options=[],
         )
         self.items.append(item)
@@ -1927,15 +2002,48 @@ class Simulation:
         else:
             line_count = self.rng.randint(1, 3)
         chosen = pool[:line_count]
+        # A deliberate slice of orders in the one shape that separates a
+        # landed-cost weight which converts to base units from one that does
+        # not: freight, spread by RETAIL VALUE (the only weight that reads a
+        # per-base catalog price), over lines bought in DIFFERENT units. An
+        # allocation is scale-invariant, so a single-unit order cannot tell the
+        # two apart however much freight it carries. Left purely to chance the
+        # combination is a couple of percent of orders and a 300-operation run
+        # sees none often enough to make the vacuity guard decorative.
+        packed_item = next((i for i in pool if len(i.purchase_units) > 1), None)
+        plain_item = next((i for i in pool if len(i.purchase_units) == 1), None)
+        force_retail_mix = (
+            self.rng.random() < 0.18
+            and packed_item is not None
+            and plain_item is not None
+        )
+        if force_retail_mix:
+            chosen = [packed_item, plain_item] + [
+                i for i in chosen if i is not packed_item and i is not plain_item
+            ]
         lines_data = []
         line_specs = []
         for item in chosen:
             quantity = self.rng.randint(5, 40)
             unit_cost = (Decimal(self.rng.randint(25, 500)) * CENT).quantize(CENT)
+            # Buy in a pack roughly half the time when the product has one, so
+            # ordinary orders mix units on their own too.
+            unit = item.purchase_units[0]
+            if len(item.purchase_units) > 1 and (
+                (force_retail_mix and item is packed_item)
+                or self.rng.random() < 0.5
+            ):
+                unit = self.rng.choice(item.purchase_units[1:])
             lines_data.append(
-                {"variant": item.variant, "quantity": quantity, "unit_cost": unit_cost}
+                {
+                    "variant": item.variant,
+                    "quantity": quantity,
+                    "unit_cost": unit_cost,
+                    "unit": unit.code,
+                    "unit_factor": unit.factor,
+                }
             )
-            line_specs.append((item, quantity, unit_cost))
+            line_specs.append((item, quantity, unit_cost, unit))
         # Freight/customs typed onto the order, and the one-off manual discount
         # the buyer knocks off the whole thing. Both land on the ORDER but have
         # to be spread over the LINES, which is where a cost basis lives.
@@ -1949,8 +2057,19 @@ class Simulation:
         allocation_method = self.rng.choice(
             [choice[0] for choice in PurchaseOrder.LandedCostAllocationMethod.choices]
         )
+        if force_retail_mix:
+            allocation_method = PurchaseOrder.LandedCostAllocationMethod.RETAIL_VALUE
+            if not landed_entries:
+                landed_entries = [
+                    {
+                        "name": "landed mix",
+                        "amount": (
+                            Decimal(self.rng.randint(1, 4000)) * CENT
+                        ).quantize(CENT),
+                    }
+                ]
         subtotal = ZERO
-        for _, quantity, unit_cost in line_specs:
+        for _, quantity, unit_cost, _unit in line_specs:
             subtotal = even2(subtotal + up2(unit_cost * quantity))
         extra_requested = ZERO
         if self.rng.random() < 0.3:
@@ -1971,13 +2090,14 @@ class Simulation:
         submit_purchase_order(po, request=None)
         po_lines = list(po.lines.order_by("pk"))
         line_recs = []
-        for (item, quantity, unit_cost), po_line in zip(line_specs, po_lines):
+        for (item, quantity, unit_cost, unit), po_line in zip(line_specs, po_lines):
             po_line_rec = PoLineRec(
                 line_id=po_line.pk,
                 variant_id=item.variant_id,
                 quantity=quantity,
-                unit_factor=Decimal("1"),
+                unit_factor=unit.factor,
                 unit_cost=unit_cost,
+                unit_code=unit.code,
             )
             line_recs.append(po_line_rec)
             # The newest purchase line for a variant is the one a sale reads,
@@ -1987,7 +2107,10 @@ class Simulation:
             self.oracle.base_unit_cost[item.variant_id] = even2(
                 po_line_rec.unit_cost / po_line_rec.unit_factor
             )
-            base = q3(Decimal(quantity))
+            # Submitting reserves the goods as EXPECTED stock, and stock is
+            # only ever counted in base units — an order for 5 cartons of 24
+            # promises 120 pieces, not 5.
+            base = q3(Decimal(quantity) * unit.factor)
             self.oracle.expected[item.variant_id] = q3(
                 self.oracle.expected[item.variant_id] + base
             )
@@ -2009,16 +2132,22 @@ class Simulation:
         self._expect_po_line_costs(
             rec,
             allocation_method,
-            {line.line_id: item.variant.unit_price for line, (item, _, _) in
+            {line.line_id: item.variant.unit_price for line, (item, _, _, _) in
              zip(line_recs, line_specs)},
         )
+        if (
+            landed_total > ZERO
+            and allocation_method == PurchaseOrder.LandedCostAllocationMethod.RETAIL_VALUE
+            and len({ln.unit_factor for ln in line_recs}) > 1
+        ):
+            self.mixed_unit_retail_landed_orders += 1
         self.oracle.pos[po.pk] = rec
         self._assert_po(po.pk, expected_status=PurchaseOrder.Status.SUBMITTED)
         self._assert_purchase_preview(
             supplier, lines_data, landed_entries, extra_requested,
             allocation_method, rec,
         )
-        for item, _, _ in line_specs:
+        for item, _, _, _ in line_specs:
             self._assert_variant(item.variant_id)
         return True
 
@@ -2050,6 +2179,10 @@ class Simulation:
                         "variant": line["variant"].pk,
                         "quantity": line["quantity"],
                         "unit_cost": f"{line['unit_cost']:.2f}",
+                        # The unit CODE only — the factor is the server's to
+                        # look up, exactly as the PO editor sends it. Handing
+                        # over the factor would be dictating the answer.
+                        "unit": line["unit"],
                     }
                     for line in lines_data
                 ],
@@ -2115,8 +2248,14 @@ class Simulation:
         if allocation_method == Method.QUANTITY:
             weights = {ln.line_id: Decimal(ln.quantity) for ln in rec.lines}
         elif allocation_method == Method.RETAIL_VALUE:
+            # What the line is worth at retail. ``unit_price`` is per BASE unit,
+            # so the quantity meeting it must be in base units — 5 cartons of 24
+            # at 0.50 a piece is 60.00 of goods, not 2.50. Derived here from the
+            # catalog price and the pack factor the oracle chose, not copied
+            # from the backend's weight function: the whole point of a second
+            # port is that it can disagree.
             weights = {
-                ln.line_id: even2(retail_prices[ln.line_id] * Decimal(ln.quantity))
+                ln.line_id: even2(retail_prices[ln.line_id] * ln.base_quantity)
                 for ln in rec.lines
             }
         elif allocation_method == Method.EQUAL:
@@ -2855,6 +2994,32 @@ class Simulation:
         for expected in rec.lines:
             line = lines[expected.line_id]
             tag = f"po#{po.pk} line#{line.pk}"
+            # The pack the line was bought in, and the two figures that cross
+            # out of it. ``base_quantity`` is what the order reserves and the
+            # receipt moves; ``base_unit_cost`` is what a sale of this variant
+            # snapshots as its COGS. Both are identities at factor 1, which is
+            # every purchase this simulation used to make.
+            self.assert_equal(line.unit, expected.unit_code, f"{tag} unit")
+            self.assert_equal(
+                Decimal(line.unit_factor),
+                Decimal(expected.unit_factor),
+                f"{tag} unit_factor",
+            )
+            self.assert_qty(
+                line.to_base_quantity(line.quantity),
+                expected.base_quantity,
+                f"{tag} base_quantity",
+            )
+            self.assert_money(
+                line.base_unit_cost, expected.base_unit_cost, f"{tag} base_unit_cost"
+            )
+            self.assert_money(
+                line.effective_base_unit_cost,
+                expected.effective_base_unit_cost,
+                f"{tag} effective_base_unit_cost",
+            )
+            if expected.unit_factor != Decimal("1"):
+                self.pack_purchase_line_assertions += 1
             for name in (
                 "discount_amount",
                 "net_line_total",
