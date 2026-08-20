@@ -585,3 +585,35 @@ re-run the single test file, confirm it fails, then `git stash pop`. On this cha
 the pump had failed early; the stash run showed the real failure
 (`Found 0 widgets with text "تعذّر تحميل فروقات الجرد."`) and confirmed the coupling.
 
+
+## 2026-08-20 - Audit the unsaved-changes guard from the *dirty predicate*, not the forms
+
+**Learning:** `PointyUnsavedChangesGuard` wraps only 4 surfaces while ~20 files
+carry a `Form` + `TextEditingController`, so "unguarded form" looks like a huge
+backlog — but most of those are one-field dialogs where the guard is noise. The
+cheap, defensible shortlist comes from the other side: `grep -rn "isDirty\|
+hasChanges\|_formSignature"` and check which predicates *no guard consumes*.
+`UserPermissionsViewModel.hasChanges` was the standout — already written,
+already trusted as the Save button's enable condition, and consulted nowhere on
+the way out, so a manager's whole page of permission toggles vanished on back.
+The second shape is a sibling deviation: `ProductParentEditSheet` and
+`ProductVariantFormSheet` are presented by the same helper in the same file and
+only one was guarded.
+
+**Action:** For a surface with many heterogeneous fields, copy
+`discount_rule_form`'s `_formSignature()` / `_initialSignature` idiom rather
+than hand-rolling a per-field `||` chain — it sidesteps the question of whether
+each model (`ProductUnit` here) implements `==`. **The trap is async loaders:**
+a signature captured in `initState` is only safe if the in-flight loads never
+write to a compared field. Verify that literally (in this sheet `_loadUnits` /
+`_loadVariantOptions` / `_loadModifierGroups` fill only the *available* lists,
+never the selections) and pin it with an "untouched editor leaves without a
+prompt" test that runs after `pumpAndSettle`. Note that test is a **control,
+not proof** — it passes against the unguarded code too, so the non-vacuity
+revert should read `+1 -3`, not `+4 -0`.
+
+**Also:** `showAdaptiveFormSurface` defaults `enableDrag: isDismissible` (true),
+and the guard's own docstring admits drag-to-dismiss can bypass `PopScope` on
+some platforms. Both product sheets now share that caveat; do not "fix" it by
+flipping `isDismissible`, which would also kill the barrier tap the guard *does*
+intercept.
