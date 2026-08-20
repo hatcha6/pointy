@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 
-from django.db.models import Count, DecimalField, F, Q, Sum, Value
+from django.db.models import Count, DecimalField, F, Prefetch, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -15,7 +15,7 @@ ZERO_QTY = Value(Decimal("0"), output_field=QTY_FIELD)
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
-from apps.catalog.models import Product
+from apps.catalog.models import Product, VariantOptionValue
 from apps.core.roles import user_is_manager
 from apps.employees.models import Employee, PayrollLine, PayrollRun
 from apps.expenses.models import Expense
@@ -624,10 +624,12 @@ def _inventory_status_report(user, period):
     )["total"]
     low_stock = stock.filter(quantity_on_hand__lte=F("reorder_level"))
     stock_rows = _bounded_queryset(
-        stock.order_by(
-            "quantity_on_hand",
-            "variant__product__name",
-            "variant__name",
+        _with_variant_labels(
+            stock.order_by(
+                "quantity_on_hand",
+                "variant__product__name",
+                "variant__name",
+            )
         ),
         limit=_section_row_limit("inventory_items"),
     )
@@ -694,7 +696,7 @@ def _stock_movements_report(user, period):
         created_at__lt=period["end"],
     )
     movement_rows = _bounded_queryset(
-        movements.order_by("-created_at", "-id"),
+        _with_variant_labels(movements.order_by("-created_at", "-id")),
         limit=_section_row_limit("stock_movements"),
     )
     rows = [
@@ -787,7 +789,10 @@ def _purchasing_summary_report(user, period):
         )
     )["total"]
     purchase_rows = _bounded_queryset(
-        period_orders.order_by("-created_at"),
+        # Each row reads ``balance_due``, which sums ``supplier_payments`` twice
+        # (paid + credit-applied) in Python — 2 queries per order unless the
+        # payments ride along. Same reason the supplier rows below are primed.
+        period_orders.order_by("-created_at").prefetch_related("supplier_payments"),
         limit=_section_row_limit("purchase_orders"),
     )
     rows = [
@@ -872,10 +877,12 @@ def _reorder_items_report(user, period):
         quantity_on_hand__lte=F("reorder_level"),
     )
     bounded = _bounded_queryset(
-        stock.order_by(
-            "quantity_on_hand",
-            "variant__product__name",
-            "variant__name",
+        _with_variant_labels(
+            stock.order_by(
+                "quantity_on_hand",
+                "variant__product__name",
+                "variant__name",
+            )
         ),
         limit=_section_row_limit("reorder_items"),
     )
@@ -1208,6 +1215,25 @@ def _bounded_queryset(queryset, *, limit):
         rows=list(queryset[:limit]),
         total_count=queryset.count(),
         limit=limit,
+    )
+
+
+def _with_variant_labels(queryset):
+    """Carry the option values that ``ProductVariant.full_name`` reads.
+
+    A product's default variant has an empty ``name``, so ``full_name`` falls
+    through to ``option_values_label`` — which queries ``option_values`` unless
+    they are already prefetched. That is one query per detail row (a report
+    section runs to ``DEFAULT_DETAIL_ROW_LIMIT``), and it is invisible in the
+    report code because it hides behind a plain attribute read. The inner
+    ``select_related("option")`` matters too: the prefetched branch of
+    ``option_values_label`` reads each value's ``option`` to build its label.
+    """
+    return queryset.prefetch_related(
+        Prefetch(
+            "variant__option_values",
+            queryset=VariantOptionValue.objects.select_related("option"),
+        )
     )
 
 
