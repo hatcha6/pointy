@@ -23,6 +23,10 @@ String weekdayLabel(AppLocalizations l10n, int weekday) {
   };
 }
 
+/// Which of the two connection actions the manager started. `isMutating` is
+/// shared by both, so it alone cannot say which button to show as running.
+enum _ConnectionAction { save, test }
+
 class AttendanceSettingsPage extends StatefulWidget {
   const AttendanceSettingsPage({super.key, required this.viewModel});
 
@@ -38,6 +42,7 @@ class _AttendanceSettingsPageState extends State<AttendanceSettingsPage> {
   final _passwordController = TextEditingController();
   final _graceController = TextEditingController();
   var _seededFromConfig = false;
+  _ConnectionAction? _pendingAction;
   var _isEnabled = false;
   var _workdays = <int>{};
   TimeOfDay _shiftStart = const TimeOfDay(hour: 9, minute: 0);
@@ -231,25 +236,41 @@ class _AttendanceSettingsPageState extends State<AttendanceSettingsPage> {
                 : (value) => setState(() => _isEnabled = value),
           ),
           SizedBox(height: spacing.sm),
+          // Both buttons share `isMutating`, so pressing either greys out both.
+          // Spinner + label on whichever one is running says which, and by
+          // implication why its neighbour went inert — the connection test
+          // reaches an external BioTime server and can take a while.
           Row(
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: viewModel.isMutating
-                      ? null
-                      : () => _save(context),
-                  icon: const Icon(Icons.save_outlined),
-                  label: Text(l10n.saveSettingsButton),
+                  key: const ValueKey('attendance_save_button'),
+                  onPressed: viewModel.isMutating ? null : () => _save(context),
+                  icon: _isPending(_ConnectionAction.save)
+                      ? const _ActionSpinner()
+                      : const Icon(Icons.save_outlined),
+                  label: Text(
+                    _isPending(_ConnectionAction.save)
+                        ? l10n.attendanceSaveInProgressButton
+                        : l10n.saveSettingsButton,
+                  ),
                 ),
               ),
               SizedBox(width: spacing.sm),
               Expanded(
                 child: OutlinedButton.icon(
+                  key: const ValueKey('attendance_test_button'),
                   onPressed: viewModel.isMutating
                       ? null
                       : () => _testConnection(context),
-                  icon: const Icon(Icons.network_check_outlined),
-                  label: Text(l10n.attendanceTestConnectionButton),
+                  icon: _isPending(_ConnectionAction.test)
+                      ? const _ActionSpinner()
+                      : const Icon(Icons.network_check_outlined),
+                  label: Text(
+                    _isPending(_ConnectionAction.test)
+                        ? l10n.attendanceTestInProgressButton
+                        : l10n.attendanceTestConnectionButton,
+                  ),
                 ),
               ),
             ],
@@ -388,10 +409,7 @@ class _AttendanceSettingsPageState extends State<AttendanceSettingsPage> {
                 ? null
                 : () => _syncNow(context),
             icon: viewModel.isSyncing
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const _ActionSpinner()
                 : const Icon(Icons.sync),
             label: Text(
               viewModel.isSyncing
@@ -465,21 +483,31 @@ class _AttendanceSettingsPageState extends State<AttendanceSettingsPage> {
     );
   }
 
+  bool _isPending(_ConnectionAction action) => _pendingAction == action;
+
   Future<void> _save(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final saved = await widget.viewModel.saveConfig(
-      AttendanceConfigDraft(
-        baseUrl: _urlController.text.trim(),
-        username: _usernameController.text.trim(),
-        password: _passwordController.text,
-        isEnabled: _isEnabled,
-        workdays: _workdays.toList()..sort(),
-        shiftStart: _timeParam(_shiftStart),
-        shiftEnd: _timeParam(_shiftEnd),
-        graceMinutes: int.tryParse(_graceController.text.trim()) ?? 15,
-      ),
-    );
+    setState(() => _pendingAction = _ConnectionAction.save);
+    final bool saved;
+    try {
+      saved = await widget.viewModel.saveConfig(
+        AttendanceConfigDraft(
+          baseUrl: _urlController.text.trim(),
+          username: _usernameController.text.trim(),
+          password: _passwordController.text,
+          isEnabled: _isEnabled,
+          workdays: _workdays.toList()..sort(),
+          shiftStart: _timeParam(_shiftStart),
+          shiftEnd: _timeParam(_shiftEnd),
+          graceMinutes: int.tryParse(_graceController.text.trim()) ?? 15,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _pendingAction = null);
+      }
+    }
     if (!mounted) {
       return;
     }
@@ -496,7 +524,15 @@ class _AttendanceSettingsPageState extends State<AttendanceSettingsPage> {
   Future<void> _testConnection(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final count = await widget.viewModel.testConnection();
+    setState(() => _pendingAction = _ConnectionAction.test);
+    final int? count;
+    try {
+      count = await widget.viewModel.testConnection();
+    } finally {
+      if (mounted) {
+        setState(() => _pendingAction = null);
+      }
+    }
     if (!mounted) {
       return;
     }
@@ -571,6 +607,19 @@ class _AttendanceSettingsPageState extends State<AttendanceSettingsPage> {
     await widget.viewModel.updateProfile(
       profile,
       bioTimeEmpCode: newCode.trim(),
+    );
+  }
+}
+
+/// The in-button spinner this page uses to mark a request as still in flight.
+class _ActionSpinner extends StatelessWidget {
+  const _ActionSpinner();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.square(
+      dimension: 18,
+      child: CircularProgressIndicator(strokeWidth: 2),
     );
   }
 }

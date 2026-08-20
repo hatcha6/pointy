@@ -43,7 +43,36 @@ SaleOrder _creditInvoice({
   );
 }
 
+SaleOrder _standardInvoice({
+  required String status,
+  required double returnedQuantity,
+}) {
+  return SaleOrder(
+    id: 9,
+    receiptNumber: 'R20260701000009',
+    status: status,
+    lines: [
+      SaleOrderLine(
+        id: 1,
+        productId: 4,
+        variantId: 4,
+        productName: 'شاي',
+        quantity: 2,
+        returnedQuantity: returnedQuantity,
+        returnableQuantity: 2 - returnedQuantity,
+        unitPrice: 5,
+        total: 10,
+      ),
+    ],
+    payments: const [],
+    subtotal: 10,
+    total: 10,
+    paymentStatus: 'paid',
+  );
+}
+
 const _assignButton = ValueKey('assign_invoice_customer_button');
+const _voidedCallout = ValueKey('voided_invoice_callout');
 
 void main() {
   group('SaleOrder.fromJson', () {
@@ -135,5 +164,46 @@ void main() {
 
       expect(find.byKey(_assignButton), findsNothing);
     });
+  });
+
+  group('SaleOrderDetailsContent voided callout', () {
+    testWidgets('explains why a voided invoice offers no return', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          SaleOrderDetailsContent(
+            order: _standardInvoice(status: 'void', returnedQuantity: 2),
+            onReturn: (_, _, _) async => true,
+            onVoid: (_, _) async => true,
+          ),
+        ),
+      );
+
+      // The three adjustment actions drop out of the bar on a voided invoice…
+      expect(find.text('إرجاع منتجات'), findsNothing);
+      expect(find.text('إلغاء الفاتورة'), findsNothing);
+      // …so the callout has to say why, instead of leaving a blank action bar.
+      expect(find.byKey(_voidedCallout), findsOneWidget);
+      expect(find.text('لا يمكن الإرجاع من هذه الفاتورة'), findsOneWidget);
+    });
+
+    testWidgets(
+      'stays out of the way of an invoice that can still be returned',
+      (tester) async {
+        await tester.pumpWidget(
+          _wrap(
+            SaleOrderDetailsContent(
+              order: _standardInvoice(status: 'paid', returnedQuantity: 0),
+              onReturn: (_, _, _) async => true,
+              onVoid: (_, _) async => true,
+            ),
+          ),
+        );
+
+        expect(find.byKey(_voidedCallout), findsNothing);
+        expect(find.text('إرجاع منتجات'), findsOneWidget);
+      },
+    );
   });
 }

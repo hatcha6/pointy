@@ -59,7 +59,39 @@ def _base_code(product: Product) -> str:
     return product.unit or Product.Unit.PIECE
 
 
+# Set by ``prime_base_units``; ``_base_uom`` reads it before querying so the
+# primed and unprimed paths always resolve the same row.
+_BASE_UOM_ATTR = "_pointy_base_uom"
+_UNPRIMED = object()
+
+
+def prime_base_units(products) -> None:
+    """Resolve the base unit-of-measure of every product in ``products`` at once.
+
+    ``_base_uom`` runs once per line that is sold or purchased in its base unit
+    — the overwhelmingly common case — so a cart of N lines fired N identical
+    single-row lookups of a table that holds a handful of seeded rows. This
+    stashes the row ``_base_uom`` reads first; it changes nothing about which
+    row is chosen, only how many queries finding it costs.
+    """
+    pending = [
+        product
+        for product in products
+        if getattr(product, _BASE_UOM_ATTR, _UNPRIMED) is _UNPRIMED
+    ]
+    if not pending:
+        return
+    by_code = UnitOfMeasure.objects.in_bulk(
+        {_base_code(product) for product in pending}, field_name="code"
+    )
+    for product in pending:
+        setattr(product, _BASE_UOM_ATTR, by_code.get(_base_code(product)))
+
+
 def _base_uom(product: Product) -> UnitOfMeasure | None:
+    primed = getattr(product, _BASE_UOM_ATTR, _UNPRIMED)
+    if primed is not _UNPRIMED:
+        return primed
     return UnitOfMeasure.objects.filter(code=_base_code(product)).first()
 
 

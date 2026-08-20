@@ -45,6 +45,7 @@ from decimal import ROUND_DOWN, ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.urls import reverse
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.test import APIClient
@@ -155,7 +156,11 @@ def allocate_discount_amount(amount: Decimal, weights_by_key: dict) -> dict:
     }
 
 
-def allocate_landed_cost(amount: Decimal, weights_by_line_id: dict) -> dict:
+def allocate_landed_cost(
+    amount: Decimal,
+    weights_by_line_id: dict,
+    fallback_weights_by_line_id: dict | None = None,
+) -> dict:
     """Independent port of ``PurchaseOrder._landed_cost_allocations``.
 
     Deliberately NOT a call into :func:`allocate_discount_amount`: the purchasing
@@ -163,6 +168,11 @@ def allocate_landed_cost(amount: Decimal, weights_by_line_id: dict) -> dict:
     reproduce — zero-weight lines stay in the divisor set here, and ties on the
     fractional remainder are broken by ascending integer line id rather than by
     string key. Returns ``{line_id: amount}`` for every line.
+
+    The model's zero-weight fallback belongs here too, and it is easy to put in
+    the wrong place: when the chosen method weighs the whole order at zero the
+    model re-weights by quantity rather than dropping the landed cost, and it
+    does so for *every* allocation method, not only the cost one.
     """
     if amount == ZERO:
         return {line_id: ZERO for line_id in weights_by_line_id}
@@ -170,7 +180,10 @@ def allocate_landed_cost(amount: Decimal, weights_by_line_id: dict) -> dict:
     weights = dict(weights_by_line_id)
     total_weight = sum(weights.values(), ZERO)
     if total_weight == ZERO:
-        return {line_id: ZERO for line_id in weights}
+        weights = dict(fallback_weights_by_line_id or {})
+        total_weight = sum(weights.values(), ZERO)
+    if total_weight == ZERO:
+        return {line_id: ZERO for line_id in weights_by_line_id}
 
     allocations: dict = {}
     remainders = []
@@ -837,11 +850,15 @@ class Simulation:
         carton = UnitOfMeasure.objects.get(code="carton")
 
         # Piece products (whole quantities, base unit).
-        for i in range(6):
+        piece_prices = [
+            "2.00", "3.50", "1.25", "4.00", "0.75", "9.99",
+            "6.40", "0.30", "12.75",
+        ]
+        for i, price in enumerate(piece_prices):
             self._add_product(
                 name=f"Piece {i}",
                 sku=f"PCE{i}",
-                unit_price=Decimal(["2.00", "3.50", "1.25", "4.00", "0.75", "9.99"][i]),
+                unit_price=Decimal(price),
                 base_whole=True,
             )
         # Weight products (fractional kg base unit).
@@ -1718,7 +1735,15 @@ class Simulation:
         supplier = self.rng.choice(self.suppliers)
         pool = list(self.stock_items)
         self.rng.shuffle(pool)
-        chosen = pool[: self.rng.randint(1, 3)]
+        # Usually a handful of lines. Sometimes a wide order, because the
+        # leftover cents of a largest-remainder allocation only reach past the
+        # first few lines when there are enough of them — and that is exactly
+        # where two allocators that break their ties differently diverge.
+        if self.rng.random() < 0.12 and len(pool) >= 11:
+            line_count = self.rng.randint(11, len(pool))
+        else:
+            line_count = self.rng.randint(1, 3)
+        chosen = pool[:line_count]
         lines_data = []
         line_specs = []
         for item in chosen:
@@ -1806,9 +1831,76 @@ class Simulation:
         )
         self.oracle.pos[po.pk] = rec
         self._assert_po(po.pk, expected_status=PurchaseOrder.Status.SUBMITTED)
+        self._assert_purchase_preview(
+            supplier, lines_data, landed_entries, extra_requested,
+            allocation_method, rec,
+        )
         for item, _, _ in line_specs:
             self._assert_variant(item.variant_id)
         return True
+
+    def _assert_purchase_preview(
+        self, supplier, lines_data, landed_entries, extra_requested,
+        allocation_method, rec: PoRec,
+    ):
+        """The buyer decides from the preview, so the preview owes the same
+        numbers as the order it is about to save.
+
+        Checked against the ORACLE's line costs, never against the purchase
+        order that was just written — comparing the two backend surfaces to
+        each other would only prove they agree, including on being wrong
+        together. ``rec`` was computed in :meth:`_expect_po_line_costs` from the
+        order's inputs alone.
+        """
+        response = self.client.post(
+            reverse("purchaseorder-discount-preview"),
+            {
+                "supplier": supplier.id,
+                "landed_cost_allocation_method": allocation_method,
+                "extra_discount_amount": f"{extra_requested:.2f}",
+                "landed_cost_entries": [
+                    {"name": entry["name"], "amount": f"{entry['amount']:.2f}"}
+                    for entry in landed_entries
+                ],
+                "lines": [
+                    {
+                        "variant": line["variant"].pk,
+                        "quantity": line["quantity"],
+                        "unit_cost": f"{line['unit_cost']:.2f}",
+                    }
+                    for line in lines_data
+                ],
+            },
+            format="json",
+        )
+        if response.status_code != 200:
+            self.fail(f"purchase preview HTTP {response.status_code}: {response.data}")
+        data = response.data
+        self.assert_money(data["subtotal"], rec.subtotal, "preview subtotal")
+        self.assert_money(
+            data["discount_total"], rec.extra_discount, "preview discount_total"
+        )
+        self.assert_money(
+            data["landed_cost_total"], rec.landed_cost_total,
+            "preview landed_cost_total",
+        )
+        self.assert_money(data["total"], rec.total, "preview total")
+        # Preview lines come back in payload order, which is the order the
+        # oracle recorded them in.
+        for index, (payload, expected) in enumerate(zip(data["lines"], rec.lines)):
+            tag = f"preview line#{index}"
+            for name in (
+                "discount_amount",
+                "net_line_total",
+                "net_unit_cost",
+                "allocated_landed_cost",
+                "landed_unit_cost",
+                "effective_unit_cost",
+                "effective_line_total",
+            ):
+                self.assert_money(
+                    Decimal(payload[name]), getattr(expected, name), f"{tag} {name}"
+                )
 
     def _expect_po_line_costs(self, rec: PoRec, allocation_method, retail_prices):
         """Compute every line's cost basis from the order's OWN inputs.
@@ -1848,9 +1940,11 @@ class Simulation:
             weights = {ln.line_id: Decimal("1.00") for ln in rec.lines}
         else:
             weights = {ln.line_id: ln.net_line_total for ln in rec.lines}
-            if sum(weights.values(), ZERO) == ZERO:
-                weights = {ln.line_id: Decimal(ln.quantity) for ln in rec.lines}
-        allocations = allocate_landed_cost(rec.landed_cost_total, weights)
+        allocations = allocate_landed_cost(
+            rec.landed_cost_total,
+            weights,
+            {ln.line_id: Decimal(ln.quantity) for ln in rec.lines},
+        )
         for line in rec.lines:
             line.allocated_landed_cost = allocations.get(line.line_id, ZERO)
             line.landed_unit_cost = even2(

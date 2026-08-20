@@ -91,3 +91,87 @@ be subtracted from the drawer in the report while the model ignored it.
 **Action:** In `apps/reports`, treat every formula as a fork and diff it against
 the model property it mirrors; the interesting test is "do the two surfaces
 agree", not "does the report return a number".
+
+## 2026-08-20 - A start/end **time-of-day** pair is an interval that can be entered inside-out
+**Learning:** `attendance.rebuild_attendance_day` built the shift window as
+`expected_end = _aware(day_date, shift_end)` on the *same* calendar day.
+`shift_start`/`shift_end` are plain `TimeField`s on `BioTimeConnection` (and
+again as per-employee overrides on `AttendanceProfile`), with no validation and
+a plain Flutter time picker on each — so a night crew's `22:00 → 06:00` is two
+taps away, and it makes the shift "end" sixteen hours before it starts. Every
+evening minute then fell after `expected_end` and was banked as overtime:
+95 minutes actually worked became **1050 minutes of overtime**, and a five-night
+week reached payroll as 87.50 overtime hours (~7,031 of overtime pay on top of
+a 3,000 salary). The reverse direction was silent too — `early_leave` uses the
+same pair and `_minutes_between` returns 0 whenever `end <= start`, so the
+inverted window produced no warning anywhere.
+**Action:** Whenever two `TimeField`s form a window, ask what happens when the
+second is *earlier* than the first — with times (unlike `DateTimeField`s, where
+an inverted range merely yields nothing) the wrap-around is the legitimate,
+common case, not an error. Attendance was the only such pair in the backend when
+I checked; if another appears, test the inverted configuration before the
+ordinary one. And the payoff test is the one at the *money* surface: the rollup
+assertion says "1050 != 0", `apply_attendance_to_run` says "87.50 hours", and
+only the second makes the cost undeniable.
+
+## 2026-08-20 - A per-row `continue` inside a bounded batch is a starvation bug, not a filter
+**Learning:** `messaging.dispatch_outbound_task` pulled the 50 oldest due rows
+and then skipped marketing ones in the loop when the gateway was inside quiet
+hours. With two messages (all the existing test had) that reads as "marketing is
+held, transactional still flows". With a campaign of ≥50 held rows it means the
+batch is *entirely* held rows on every tick for the whole 10-hour window, and
+every transactional message queued behind it — invoice, debt reminder, OTP —
+never enters a batch at all. `sweep_stuck_task` then expires any of them
+carrying an `expires_at`, so an OTP is not merely late, it is destroyed. The
+docstring's promise ("transactional messages ignore quiet hours") was true of
+the `if` and false of the system.
+**Action:** Whenever a worker takes `qs[:N]` and then `continue`s past rows it
+declines to process, ask what happens when the declined rows outnumber N — the
+skip has to move into the queryset, not the loop. Same shape to check in any
+other paced drain (printing spool, notification fan-out, analytics ingest). And
+when a test exercises a batching path, size the fixture past the batch bound;
+two rows prove the branch, not the behaviour.
+
+## 2026-08-20 - Quiet hours: the wrap-around window was correct but only the same-day one was tested
+**Learning:** `in_quiet_hours` handles `22:00 → 08:00` properly, yet the only
+test used `00:00 → 23:59` — a window that never reaches the wrap-around branch,
+so the branch every real shop depends on was unproven. Times are compared in
+`business_timezone()` (Africa/Tripoli, UTC+2, no DST), so a fixed UTC instant is
+a stable way to assert a local time-of-day without freezing the clock.
+**Action:** For any time-of-day window, the same-day case is the one nobody
+configures. Test the wrapping one first, and pick the UTC instant that lands on
+the local boundary (start is inclusive, end is exclusive).
+
+## 2026-08-20 - A reservation is only as safe as its release path — enumerate all three
+**Learning:** `reserve_stock_for_quote` bumps `StockItem.quantity_committed`,
+which is what the POS sells against (`on_hand - committed`), so every held unit
+is a unit nobody else can buy. There are exactly three ways a hold is ever
+freed: conversion (`consume_quote_reservations`), the nightly sweep
+(`release_expired_quote_reservations`), and a direct service call. The sweep
+filters `valid_until__isnull=False, valid_until__lt=today`, and an OPEN
+quotation cannot be voided because `validate_order_adjustment_allowed` requires
+`Status.PAID` — so a hold placed on a quotation with **no** `valid_until` had no
+release path at all and froze the units permanently. `CheckoutSerializer`
+declared `valid_until` `required=False, allow_null=True` and `reserve_stock` as
+an unrelated boolean, with no cross-field validation, even though
+`Order.reserves_stock`'s own docstring says the units are held "until
+`valid_until`".
+**Action:** For any hold/lock/reservation, don't ask "is it created correctly" —
+enumerate every code path that *releases* it and check each one's filter for a
+case it silently excludes (NULL is the usual one). Where two fields only make
+sense together, grep the serializer for cross-field `validate`; Pointy's
+checkout serializer validates plenty but had no tie between these two.
+
+## 2026-08-20 - The Flutter UI holding an invariant is not the invariant being held
+**Learning:** The POS payment sheet auto-fills a default `valid_until` the
+moment the reserve-stock toggle goes on, so the Flutter client never sends the
+bad combination — which is exactly why the backend hole survived. The live
+caller that *did* reach it was `apps/ai/tools.py`: `create_sale` exposes
+`reserve_stock` and `valid_until` as independent optional arguments with
+`required: ["lines"]`, and the schema described the date as "(اختياري)". A user
+asking GPT to quote and hold stock without naming a date produced the stranded
+hold directly.
+**Action:** When a backend rule is only enforced by widget code, check the AI
+tool schemas in `apps/ai/tools.py` before concluding it is unreachable — they
+are a second, looser client over the same viewsets, and their JSON-schema
+`required` lists rarely mirror the serializer's cross-field rules.

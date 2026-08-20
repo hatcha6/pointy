@@ -334,3 +334,197 @@ carries the same `cd` fix for its own scratch-worktree invocation, which still
 had the by-path form an earlier entry proved wrong. If the primary checkout is
 still dirty or branch-flipping several runs from now, the prompts are being
 overridden by something else — escalate that rather than re-diagnosing it.
+
+## 2026-08-20 - `cd` into the worktree is necessary but *not* sufficient: it has no `.env`
+
+**Learning:** This corrects the "run backend tests from inside the worktree"
+entry above, which got the mechanism half right and the facts backwards. The
+primary checkout's `backend/.env` is **Postgres**
+(`DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/pointy`), not sqlite.
+`.env` is untracked, so **a git worktree has none at all** — and the settings
+fallback is sqlite. So `cd /tmp/warden-pr-N/backend && … manage.py test` , the
+exact command the task prescribes, silently ran ⚡ Bolt's #53 on
+`file:memorydb_default`. 466 tests came back green in 57s and I nearly merged on
+that. The documented sanity check does not catch it: at default verbosity sqlite
+*also* prints `Creating test database for alias 'default'...`, with no database
+name. The `file:memorydb_default` tell only appears at `-v 2`. Worse, the
+failure is silent in the direction that matters — the plan-based scaling test
+carries `skipTest` on `connection.vendor != "postgresql"`, so on sqlite the one
+test that proves the fix reports as a *skip inside a passing run*. Bolt
+independently hit this same trap and journalled it, which is corroboration, not
+coincidence.
+
+**Action:** Copy the database config into every scratch worktree before testing —
+`cp /Users/hatem/Develop/pointy/backend/.env /tmp/warden-pr-N/backend/.env` —
+and confirm the run says `('test_pointy')`, not the bare `alias 'default'`.
+Grep the log for `memorydb`: zero hits is the pass. Treat a `skipTest` on
+`connection.vendor` in a run you expected to be Postgres as a **failure**, never
+as a pass. Two mechanical follow-ons: pass `--noinput`, because a run killed
+early leaves `test_pointy` behind and the next one blocks on an interactive
+"delete it?" prompt that dies as `EOFError`; and redirect output to a file
+instead of piping to `head`, since SIGPIPE is what kills the run early in the
+first place.
+
+## 2026-08-20 - A dirty primary checkout can block the sync in a way `--ff-only` hides
+
+**Learning:** Step 2's guard — fast-forward only when `git status --porcelain`
+is empty — read like pure caution until the collision was real. Local `main` was
+six commits behind with **zero** unique commits (a clean fast-forward on paper),
+and the working tree was dirty with exactly one modified file,
+`backend/apps/employees/models.py`. That file is also touched by one of the six
+incoming commits (`0af97289`, Bolt's #41), so `git merge --ff-only` would have
+refused on its own, and forcing past it would have destroyed uncommitted work
+that exists nowhere else. The uncommitted pair
+(`employees/models.py` + an untracked `test_employee_list_query_scaling.py`) has
+now survived several runs untouched, so it is not transient.
+
+**Action:** When reporting a blocked sync, run
+`git log --oneline main..origin/main -- <each dirty path>` and say whether the
+dirty files actually collide with the incoming commits. It separates "blocked by
+policy, harmless" from "blocked by a real collision, a human must resolve it" —
+and here it is the latter, which is the difference between a footnote and an
+escalation. Every routine that branches off local `main` is starting six commits
+stale until someone commits or discards that work.
+
+## 2026-08-20 - Read the journal from `origin/main`; the working copy is stale by design
+
+**Learning:** I started this run by reading `.ai/warden.md` in the primary
+checkout and got a **9-entry** copy. The real journal on `origin/main` had
+**17**. The eight I could not see included both 2026-08-20 entries — the one
+saying a scratch worktree has no `.env` so backend tests silently run on sqlite,
+and the one saying a dirty primary checkout blocks the sync on
+`employees/models.py`. I then spent a large part of the run re-deriving exactly
+those two findings from scratch: I ran five PRs' worth of backend tests on
+sqlite before noticing, had to re-verify all of them on Postgres, and
+rediscovered the `--ff-only` collision by hand.
+
+The mechanism is self-reinforcing, which is what makes it dangerous. The journal
+lives in the working tree; the working tree is the primary checkout; the primary
+checkout cannot fast-forward because of the uncommitted `employees/models.py`;
+so **the journal entry describing the blockage is itself unreadable because of
+the blockage**. Every run it costs more, because the gap only grows — six
+commits behind yesterday, thirty today. The prior entry's advice ("do not write
+the journal there — use a scratch worktree") quietly protects *writes* and says
+nothing about *reads*, which is the half that actually bit.
+
+**Action:** Read the journal with `git show origin/main:.ai/warden.md`, straight
+after `git fetch origin --prune` and never from any working tree. Then sanity
+check it: `git show origin/main:.ai/warden.md | grep -c '^## '` against the same
+count in the file on disk — if they disagree you are reading a stale copy, and
+the difference is exactly the lessons the last run paid to learn. This
+generalises to the other routines' journals too (`.ai/bolt.md` and friends) when
+reviewing whether a routine repeated a mistake it had already recorded.
+
+## 2026-08-20 - Committed-but-unsubmitted branches are a third prune category
+
+**Learning:** *(Rescued from `claude/nice-davinci-d960f6`, a local-only branch
+that never opened a PR — see the stranded-journal entry below. Re-verified
+today.)* The prune rule sorts worktrees into "merged, clean → remove" and
+"dirty → keep". A large middle category fits neither, and it is where the
+accumulation actually lives: clean tree, no live process, hours old, **unique
+commits not on `origin/main` and no PR at all**. Today that category was five of
+twelve non-live worktrees (`claude/compass-client-request-deadline`,
+`compass-fix`, `claude/oracle-sales-cost-basis`,
+`claude/oracle-api-checkout-coverage`, `claude/vigorous-liskov-1df887`) — the
+same five the original entry named, still sitting there a day later. These are
+routines that committed, then died or were interrupted before opening a PR. A
+clean `git status` makes them look finished; they are the opposite.
+
+**Action:** Before removing, ask `git log --oneline origin/main..<branch>` and
+`git cherry -v origin/main <branch>`. A `+` patch means the content is not
+upstream. Unique commits + no PR + local-only is unrecoverable work — leave it
+and report it, never prune it. Unique commits + no PR + pushed to origin is
+recoverable, but still not *finished*: leave the worktree and say so. Only
+remove when the content demonstrably reached `origin/main`. Do **not** use
+`git diff origin/main..<branch>` to judge this — a branch that is merely
+*behind* main shows main's newer files as thousands of deleted lines, which
+reads exactly like a huge unmerged change.
+
+## 2026-08-20 - The routines branch off `origin/main`, not the local `main`
+
+**Learning:** *(Also rescued from `claude/nice-davinci-d960f6`; re-verified
+today with different numbers, which is what makes it trustworthy.)* Step 2
+exists because "the routines branch new work off the **local** `main`", so a
+stale local `main` should poison the next hour's work. It does not, and I nearly
+escalated a false alarm on it. The primary checkout sat on `main` **33 commits
+behind `origin/main`**, fast-forward blocked by dirty files — and yet every
+worktree created during that window was based on current `origin/main`: the
+live cohort measured 0–9 commits behind, never 33. The producers evidently
+fetch and branch from `origin/main` themselves.
+
+**Action:** When the step-2 fast-forward is refused, do not escalate it as
+"next hour's work starts from the wrong base" without measuring it:
+`git rev-list --count <worktree-HEAD>..origin/main` on the newest worktrees
+tells you the base the routines actually used. Report the blocked sync as repo
+hygiene. Check the blocking dirty files against `origin/main` before calling
+them irreplaceable work-in-progress — today's untracked
+`backend/apps/employees/test_employee_list_query_scaling.py` is **already a
+tracked file on `origin/main`** (`git ls-tree origin/main -- <path>`), and only
+looks untracked because local `main` is 33 commits stale.
+
+## 2026-08-20 - Journal entries stranded on local-only branches are invisible to `origin/main`
+
+**Learning:** PR #70 fixed reading the journal from the working tree by
+prescribing `git show origin/main:.ai/warden.md`. That is necessary and still
+not sufficient. Two of the most useful entries Warden has ever written — the two
+rescued above, which answer the exact prune question this run was stuck on —
+existed on **neither** the working tree nor `origin/main`. They sat in commits
+`e8ddf184` and `da91564b` on `claude/nice-davinci-d960f6` and
+`claude/vigorous-liskov-1df887`: committed, never pushed, no PR, in worktrees
+whose routine had already exited. So the run that learned the lesson paid for
+it, and every run after it paid again. I re-derived the prune categories by hand
+before finding them. The same failure has stranded a 🔐 Sentinel journal commit
+(`bd77a219`, two entries) on `claude/sweet-wiles-1ef591`.
+
+**Action:** After reading `origin/main:.ai/warden.md`, sweep for stranded
+entries before starting the queue:
+`for b in $(git branch --list 'claude/*'); do git log --oneline origin/main..$b -- .ai/warden.md; done`
+Anything it prints is a lesson you are about to re-learn. Rescue it into your
+own journal PR rather than leaving it (the branch may be local-only, so it can
+vanish with the worktree). Sweep `.ai/*.md` the same way when judging whether a
+routine repeated a mistake it had already recorded — its journal may be stranded
+too, and a *closed or absent* PR is exactly when a routine's own lesson goes
+missing.
+
+## 2026-08-20 - A bare `/bin/zsh -l` in a worktree is a live session, not a dead shell
+
+**Learning:** The prune guard I wrote says "a live `claude` process is
+decisive", which reads as *only* a `claude` process counts. That is wrong and it
+nearly cost two live sessions. `reverent-chaum-070e97` (PR #65 **merged**, tree
+clean, 10 hours old) and `youthful-margulis-47a5f1` passed every documented
+prune test and had **no** `claude` process inside them — but `lsof` showed a
+`/bin/zsh -l` holding cwd in each, started 12:23 and 12:24, whose PPID resolves
+to `Claude.app/Contents/Frameworks/Claude Helper.app` (the desktop app's node
+helper). Those are the persistent Bash-tool shells of Claude *Desktop* sessions
+working in those worktrees. A desktop session leaves no `claude` process in the
+tree at all, so filtering `lsof` output for the process name `claude` reports it
+as dead.
+
+**Action:** Treat **any** process with cwd inside a worktree as live, whatever
+its name — `lsof -a -d cwd +D .claude/worktrees` and read every row, do not grep
+for `claude`. When a row is a shell, resolve its parent
+(`ps -o ppid= -p <pid>` then `ps -o command= -p <ppid>`): a `Claude Helper`
+parent means an active desktop session, and removing that worktree pulls the
+floor out from under it. "PR merged + tree clean" is necessary and still not
+sufficient; liveness outranks both.
+
+## 2026-08-20 - Removing a worktree and deleting its branch are separable
+
+**Learning:** Step 3 pairs `git worktree remove` with `git branch -d`, which
+makes every prune decision as irreversible as the branch deletion — so the safe
+answer is always "leave it", and 27 worktrees accumulate. The two halves are
+independent. Committed work lives on the **branch ref**, not in the worktree
+directory; only *uncommitted* changes exist nowhere else. So for a clean,
+non-live worktree, `git worktree remove` **without** `git branch -d` frees the
+directory and loses precisely nothing — the commits stay reachable and a human
+can `git worktree add <path> <branch>` the tree straight back. This is how
+`nice-davinci-d960f6` and `vigorous-liskov-1df887` were finally released this
+run: their stranded journal entries had reached `origin/main` via #71, so the
+worktrees went and the branches stayed.
+
+**Action:** Split the decision. Uncommitted changes → keep the worktree, no
+exceptions. Clean tree, no live process, committed work not yet upstream →
+remove the *worktree*, keep the *branch*, and say so in the summary. Delete the
+branch only once its content is demonstrably on `origin/main`. Back the commits
+up first if you want belt and braces — `git format-patch -1 <sha> --stdout` into
+the scratchpad costs a second.

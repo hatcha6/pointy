@@ -130,6 +130,10 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
             ),
             const SizedBox(height: 12),
           ],
+          if (_isVoided) ...[
+            const _VoidedOrderCallout(),
+            const SizedBox(height: 12),
+          ],
           if (_isCreditWithBalance) ...[
             _CreditBalanceCallout(
               order: order,
@@ -219,6 +223,11 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
   bool get _canAssignCustomer {
     return widget.onAssignCustomer != null && widget.order.canAssignCustomer;
   }
+
+  /// A voided invoice has no returnable quantity left on any line, so return,
+  /// exchange and void all drop out of the action bar. Say so where they would
+  /// have been — otherwise the returns desk reads as a screen with no actions.
+  bool get _isVoided => widget.order.status == 'void';
 
   bool get _isCreditWithBalance {
     return widget.order.saleType == SaleType.credit &&
@@ -1170,6 +1179,25 @@ class _ExchangeNetSummary extends StatelessWidget {
           fontWeight: FontWeight.w700,
         ),
       ),
+    );
+  }
+}
+
+/// Names the reason the adjustment actions are missing on a voided invoice,
+/// the way the purchase-order details screen calls out a cancelled order.
+class _VoidedOrderCallout extends StatelessWidget {
+  const _VoidedOrderCallout();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
+    return PointyDetailCallout(
+      key: const ValueKey('voided_invoice_callout'),
+      icon: Icons.block_outlined,
+      tone: PointyCalloutTone.neutral,
+      title: l10n.invoiceVoidedCalloutTitle,
+      message: l10n.invoiceVoidedCalloutBody,
     );
   }
 }

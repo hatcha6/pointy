@@ -11,7 +11,6 @@ from django.db.models import (
     Exists,
     F,
     OuterRef,
-    Prefetch,
     ProtectedError,
     Q,
     Sum,
@@ -44,6 +43,7 @@ from apps.attachments.serializers import (
     ProductImageSearchResultSerializer,
 )
 from apps.core import caching
+from apps.core.aggregates import related_count
 from apps.core.permissions import HasPointyPermission
 from .cache import attach_catalog_version, catalog_etag, catalog_version
 from .identity import (
@@ -77,27 +77,11 @@ from .serializers import (
     VariantOptionValueSerializer,
 )
 from .search_filters import CatalogRelevanceFilter, VariantRelevanceFilter
-from .services import category_ids_with_descendants
-
-
-def _image_attachment_prefetch(lookup):
-    """Prefetch product/variant image attachments with their serialized FKs.
-
-    AttachmentSummarySerializer reads storage_volume.name, created_by.username
-    and owner_content_type (via owner_type). A bare string prefetch leaves those
-    FKs unfetched, so every image on a catalog page fired three extra queries —
-    the dominant catalog-list N+1 (~three quarters of product-list's queries).
-    select_related pulls them in with the prefetch; the default ordering is
-    unchanged, so owner_attachments still picks the primary image the same way.
-    """
-    return Prefetch(
-        lookup,
-        queryset=Attachment.objects.select_related(
-            "owner_content_type",
-            "storage_volume",
-            "created_by",
-        ),
-    )
+from .services import (
+    category_ids_with_descendants,
+    image_attachment_prefetch,
+    variant_detail_queryset,
+)
 
 
 def _within_upload_limit(uploaded_file) -> bool:
@@ -204,15 +188,27 @@ class ProductCategoryViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     ordering_fields = ("display_order", "name", "created_at", "updated_at")
 
     def get_queryset(self):
-        # distinct=True on both aggregates: counting two separate reverse
-        # relations (children and products) in one query would otherwise
-        # multiply the rows via the join fan-out.
+        # select_related("parent"): the serializer renders parent_name from
+        # parent.name, which is one query per subcategory on the page without it.
+        #
+        # The two counts used to be Count("children", distinct=True) and
+        # Count("products", distinct=True) in the same annotate(). Both are
+        # multi-valued relations, so a single query LEFT JOINs them together and
+        # the database materialises every (child x product) pair per category.
+        # distinct=True corrects the numbers but not the work. A subquery per
+        # relation keeps each count an index scan on its own key, and counting
+        # the categories M2M through-table directly is what the joined form did
+        # anyway (it never reached catalog_product), so archived products keep
+        # counting exactly as before.
         return (
             super()
             .get_queryset()
+            .select_related("parent")
             .annotate(
-                children_count=Count("children", distinct=True),
-                product_count=Count("products", distinct=True),
+                children_count=related_count(ProductCategory, "parent"),
+                product_count=related_count(
+                    Product.categories.through, "productcategory"
+                ),
             )
             .order_by("display_order", "name", "id")
         )
@@ -255,12 +251,12 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         "bought_together": ("catalog.view_product",),
     }
     queryset = Product.objects.prefetch_related(
-        _image_attachment_prefetch("attachments"),
+        image_attachment_prefetch("attachments"),
         "categories",
         "units__unit",
         "units__barcodes",
         "variants",
-        _image_attachment_prefetch("variants__attachments"),
+        image_attachment_prefetch("variants__attachments"),
         "variants__option_values",
         "variants__option_values__option",
         # Each variant serializes its on-hand quantity (variant.stock is a 1:1);
@@ -884,28 +880,9 @@ class ProductVariantViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         # Read-only "is this code taken" probe behind the same view permission.
         "identity_check": ("catalog.view_productvariant",),
     }
-    queryset = ProductVariant.objects.select_related(
-        "product",
-        # quantity_on_hand reads the 1:1 stock row; without this it queried
-        # inventory once per variant.
-        "stock",
-    ).prefetch_related(
-        _image_attachment_prefetch("attachments"),
-        _image_attachment_prefetch("product__attachments"),
-        "product__units__unit",
-        "product__units__barcodes",
-        "option_values",
-        "option_values__option",
-        # product_detail (ProductCatalogSummarySerializer) serializes the parent
-        # product's categories, variant options and modifier groups; prefetch
-        # those chains so each doesn't fire once per variant.
-        Prefetch(
-            "product__categories",
-            queryset=ProductCategory.objects.select_related("parent"),
-        ),
-        "product__variant_options__values",
-        "product__modifier_group_links__group__options",
-    )
+    # The prefetch shape lives with the serializer (catalog.services) because the
+    # stock-count reconciliation screen embeds the same serializer.
+    queryset = variant_detail_queryset()
     # Same relevance search as the POS catalog: VariantRelevanceFilter replaces
     # the stock SearchFilter/OrderingFilter so purchasing and the stock-count
     # item picker get ranked, trigram-accelerated results instead of a plain

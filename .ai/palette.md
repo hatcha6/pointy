@@ -331,3 +331,216 @@ depend on one of them — `widget_test.dart` taps `pending_loan_approve_4`. Give
 extracted widget a `keyPrefix` and pass each surface's own prefix; hardcoding one
 key silently breaks the other surface's test *and* makes the keys ambiguous if both
 surfaces are ever in the tree at once.
+
+## 2026-08-19 - The pending-affordance idiom is repo-wide; audit for deviations, not for absence
+
+**Learning:** Four seams I expected to be productive were already fully covered,
+and checking them cost most of the run: every `IconButton` in `lib/src` has a
+`tooltip:` or an enclosing `Tooltip(` (a balanced-paren audit returned **zero**
+candidates); every delete/archive path routes through a confirmation dialog;
+`stock_count_reconciliation_screen.dart` and `register_session_gate.dart` are
+exemplary (confirm + guard + spinner + a `PointyInlineMessage` explaining the
+permission lock); and the POS payment sheet already names its blocker via
+`_summaryErrorMessage`, as the purchase draft pane does with three stacked
+`PointyInlineMessage.warning`s. Do **not** re-audit these from scratch.
+
+What is still productive is auditing for *deviation from an idiom the repo
+already applies elsewhere*. The idiom here is
+`onPressed: isX ? null : run` **plus** `icon: isX ? spinner : Icon(...)` **plus**
+`label: Text(isX ? inProgressCopy : copy)` — used in the register gate, the POS
+checkout footer, the purchase draft submit/save, the attendance sync button and
+(best of all) `reports_screen.dart`, which adds a `_ReportActionProgress` banner
+naming *which* action is running. Grep for buttons that have the first line and
+not the other two: that shortlist is short, real and defensible, because the fix
+is "match the neighbour", never a subjective addition.
+
+**Action:** Audit by *inconsistency with a sibling*, ideally one in the same
+file — that makes the change self-justifying to review. Two traps when the flag
+is shared: (1) one `isMutating` driving two buttons cannot say which is running,
+so track the pressed action in the `State` (a private enum) rather than adding
+view-model flags — smaller diff, no VM churn; (2) set it with `setState` and
+clear it in a `finally`, or a failed request leaves the row spinning forever —
+assert that failure path explicitly, it is the one a network timeout actually
+hits. Also note the payoff: showing *which* action is running is simultaneously
+the fix for "this control is disabled and won't say why", because the spinner on
+the neighbour is the explanation.
+
+**Verify non-vacuity by reverting only the production file** (keep the generated
+l10n so it still compiles) and re-running: the run should report `+0 -N`. A
+pending-state test that never pumps the in-flight frame passes against the old
+code too.
+
+## 2026-08-20 - `PointyErrorState` without `action:` is a scannable dead-end class
+
+**Learning:** A balanced-paren scan for `PointyErrorState(` bodies that never
+mention `action:` found **17** call sites across the app, against 34 that do —
+so "a failure state with no way to re-ask" is a real, enumerable backlog rather
+than a one-off. The repo's own idiom is unambiguous (`action: FilledButton.icon`
+or `OutlinedButton.icon` → `onPressed: viewModel.loadX`, `Icons.sync`/`refresh`,
+`l10n.retryButton`, which already exists in `app_ar.arb` — these fixes need no
+new string). The register-session history was the sharpest case: its *summary*
+tab retried, while the sales tab, the cash-movements tab and the session list
+beside it did not, so the fix was literally "match the sibling in this file".
+Remaining after this run: `payments_hub_screen` (×2), `employee_payroll_screen`
+(×3), `payroll_run_details_screen`, `user_management_screen`,
+`device_settings_screen`, `product_document_history_section` (×2),
+`discount_details_screen`, `shop_settings_screen`, `shop_backup_widgets`,
+`payment_sheet` (that one is a *config* gap, not a fetch — no retry applies).
+
+**Action:** Scan with balanced parens, not `grep -A5` — these calls span 3–12
+lines. Before adding a view-model method, check for a private reloader: the
+retry usually already exists (`_reloadOrdersForSelectedSession`) and only needs
+a thin public wrapper that no-ops when nothing is selected. Do **not** reuse a
+broad `selectSession`-style entry point as the retry — it re-emits analytics and
+resets sibling panes. When one reloader is embedded in a bigger "reload
+everything" method, split it into `_resetX()` + `_fetchX(session)` so the retry
+can reuse both without reordering the original's awaits. And note the test trap:
+these panes are `StatelessWidget`s fed a view model by a parent
+`ListenableBuilder` — pump them bare and the retry refetches but never repaints,
+so the test fails for the wrong reason.
+
+## 2026-08-20 - A filters-only surface needs a third branch the shared empty state did not have
+
+**Learning:** `QueryEmptyState` branched two ways — search-only, or "filtered"
+— and the "filtered" branch was really *search + filters*: it showed
+`queryNoResultsMessage` ("تحقق من الكتابة، أو امسح البحث والفلاتر…") and a
+"مسح البحث والفلاتر" button whenever `hasFilters` was true, **regardless of
+whether a search term was set**. So the common case on every list screen — open
+the funnel, pick a status, type nothing — told the user to check their spelling
+and offered to clear a search box they never used. On the Payments hub, which
+has a date-range and a method filter and *no search box at all*, it named a
+control that does not exist on the screen. This is the same defect the
+2026-08-19 "word its escape after what is narrowing" entry fixed one level up:
+fixing it for `hasFilters == false` left the symmetric bug for `search == ''`.
+Its own test asserted the wrong copy (`'مسح البحث والفلاتر'` for
+`search: '', hasFilters: true`), so the suite defended the bug.
+
+**Action:** The state space is `(hasSearch, hasFilters)` — three reachable
+cases, not two. Write it as a `switch ((hasSearch, hasFilters))` over message
+*and* button label so a missing case cannot compile away silently, and cover
+all three in the widget's own test. Before reusing a shared empty state on a
+new surface, list the controls its copy names and check each one exists there;
+`search: ''` is the tell that a surface has no search box, and it must change
+the copy, not just the branch.
+
+**Also — a "clear filters" escape must be one fetch, not N.** The hub's existing
+clear button called `onRangeChanged(null)` then `onMethodChanged(null)`, and
+each setter fires its own `loadXPayments()` — two overlapping requests for the
+same ledger, the second racing the first. Any screen whose filter setters each
+trigger a reload needs a single `clearXFilters()` on the view model that nulls
+every field and reloads once; pointing both the filter bar and the empty state
+at it fixes the existing double-fetch too. Assert it by counting requests
+(`expect(requests.length, before + 1)`), not just by checking the list refilled.
+
+**Test trap:** work started inside `tester.runAsync` must *complete* before the
+callback returns. `runAsync(() => Future.sync(() => vm.setCustomerRange(r)))`
+returns immediately while the http future it kicked off is still pending, and
+the following `pumpAndSettle` then times out. Fire-and-forget view-model setters
+belong outside `runAsync` — call them like a tap and `pumpAndSettle`, which is
+what the retry tests already do successfully with `MockClient`.
+
+## 2026-08-20 - Asserting a retry inside a `PointyDataList` needs two scroll-aware finders
+
+**Learning:** The `PointyErrorState`-without-`action:` backlog is mostly
+mechanical — `PointyDataList.errorBuilder` sites whose view model *already*
+exposes the public reload (`loadEmployees`/`loadPayrollRuns`/`loadLoans` were all
+public, so the payroll route's four dead-ends cost 24 purely additive lines and no
+view-model change at all). The cost is entirely in the test, and two failures
+there look like product bugs but are not. (1) When the pane has a header — the
+payroll tab puts the month workflow card above the history list — the retry is in
+the tree and `findsOneWidget` passes, but `tester.tap` silently *misses* it
+(`warnIfMissed`) because it starts below the 800×600 test viewport, and the
+request-count assertion then fails with an off-by-one that reads like the button
+not being wired. (2) After `ensureVisible` scrolls to it, the refilled row is
+pushed offstage, so `find.textContaining('PR7')` finds nothing even though the
+list loaded correctly.
+
+**Action:** For any retry inside a scrollable pane: `await
+tester.ensureVisible(retry)` + `pumpAndSettle()` before `tap`, and assert the
+refilled content with `skipOffstage: false`. Assert *both* that the request count
+went up by exactly one and that the error text is gone — the count alone passes if
+the retry fires twice, and the text alone passes if the pane merely rebuilt.
+A fake that fails only the **first** request to one path and serves normally after
+is the right shape: it is the LAN blip that makes retry the correct affordance,
+and it makes the test fail loudly if the retry is wired to the wrong loader.
+
+**Remaining in the no-retry backlog** after this run (payroll route is now clear):
+`product_document_history_section` (×2), `device_settings_screen`,
+`discount_details_screen`, `shop_settings_screen`, `shop_backup_widgets`,
+`user_management_screen`. `payment_sheet` stays excluded — it is a *config* gap
+("no payment methods enabled"), not a fetch, so no retry applies.
+
+## 2026-08-20 - A disabled-control audit is blind to the control that was removed
+
+**Learning:** The "disabled control that won't say why" seam has a second half
+that no `onPressed: .* null` grep can reach: the control that is *conditionally
+absent*. `SaleOrderDetailsContent` builds its action bar as `if (canReturn)
+OutlinedButton…`, so on a voided invoice return, exchange and void simply are
+not in the tree — nothing greys out, nothing is there to carry an explanation.
+The returns desk was the sharp case: look up a receipt, get a correct-looking
+invoice, and there is no إرجاع button and no sentence saying why. The state
+*was* on screen — `الحالة: ملغاة` as a grey `_DetailRow` inside the summary
+section — but far below the actions and never causally linked to them.
+
+Two things made the finding defensible rather than subjective. (a) The backend
+settles the semantics: `void_order` and the full-return path in
+`sales/services.py` both flip `Order.Status` to `VOID` once no line has
+`returnable_quantity`, so `status == 'void'` **is** "nothing left to return" —
+one predicate, no guessing, and `status == 'paid' && !hasReturnableItems` is
+unreachable. (b) The sibling already exists: `_PurchaseOrderStatusCallout` in
+`purchase_order_details_screen.dart` states a cancelled PO's dead state in plain
+language, so the sales side was the odd one out.
+
+**Action:** Audit the *gating predicate* (`if (canX)`, `_canX`,
+`hasReturnableItems`), not `onPressed: null` — grep `if (can` in action bars.
+When you find one, check whether a backend status makes the reason unambiguous
+before writing copy; a callout that guesses wrong is worse than silence. Gate
+the explanation on **status, not on the callback**: `invoice_details_screen`
+already passes `onReturn: null` for a voided order, so keying off the callback
+would have hidden the explanation on the screen where a manager most often
+lands on one. `PointyDetailCallout` + `PointyCalloutTone.neutral` is the house
+component for this and was already imported in the file.
+
+**Also — a scripted insert before a `class` steals its docstring.** Anchoring a
+Python/sed insert on `class _CreditBalanceCallout extends StatelessWidget {`
+placed the new class *between* that class and its `///` comment, silently
+re-homing the doc onto the new widget. The analyzer is happy; only `git diff`
+catches it. Anchor on the doc comment's first line, or re-read the diff around
+every inserted class.
+
+## 2026-08-20 - An all-conditional `PopupMenuButton` is an enabled button that does nothing
+
+**Learning:** Flutter's `PopupMenuButton.showButtonMenu()` guards with
+`if (items.isNotEmpty)` — literally commented "Only show the menu if there is
+something to show". So a menu whose `itemBuilder` returns `[]` renders a normal,
+enabled, tappable ⋮ that opens nothing at all: no menu, no snackbar, no
+explanation. This is the *third* shape of the absent-control seam (after
+`if (canX) Button` and `onPressed: null`), and unlike those two it is invisible
+to every existing audit, because the control is present and looks live.
+
+An 11-site sweep of `PopupMenuButton` in `lib/src` found exactly **one**
+deviation, which is what makes it defensible: `invoice_list_screen` and
+`purchase_order_list_screen` both already guard the render
+(`if (onPrint != null || onShare != null || onEdit != null)`), and the other
+eight have at least one unconditional entry, so they can never be empty. Only
+`job_details_screen` had all three entries conditional behind
+`if (job != null)` — empty exactly when `status != open && !canReopenJobs`,
+i.e. any technician opening a finished job.
+
+**Action:** Audit `PopupMenuButton` by asking "can `itemBuilder` return an empty
+list?", not by reading `enabled:`. When it can, hoist the items into a named
+method and render `if (items.isNotEmpty)` — the repo's own idiom, and it keeps
+`onSelected`'s switch and the items in one place. Two notes for the test:
+`OperationsJobStatus.fromJson` falls through to `open` for any unknown string,
+so a `'closed'` fixture silently tests the *open* case and every assertion
+inverts — use the real enum values (`completed`/`cancelled`). And the job number
+renders in both the app bar and the header card, so `find.text(jobNumber)` needs
+`findsWidgets`, not `findsOneWidget`.
+
+**Also — `PopupMenuButton` was outside the icon-button tooltip audit.** The
+2026-08-19 entry's "every `IconButton` has a tooltip" sweep did not cover it,
+and a `PopupMenuButton` with no `tooltip:` falls back to
+`MaterialLocalizations.showMenuTooltip` ("إظهار القائمة") rather than naming what
+the menu does. Still unlabelled after this run: `recipes_page.dart:102`,
+`sales_channels_page.dart:318`, `payments_hub_screen.dart:627`. `moreActionsTooltip`
+("إجراءات") already exists and needs no new string.

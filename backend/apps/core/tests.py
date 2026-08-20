@@ -1152,6 +1152,44 @@ class RelayBackendApiTests(TestCase):
         self.assertEqual(RelayInstallation.objects.count(), 0)
 
     @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
+    def test_connector_credentials_reject_non_ascii_instead_of_erroring(self):
+        """A high byte in a credential header is a rejection, not a 500.
+
+        Django decodes request headers as latin-1, so an unauthenticated caller
+        can put a non-ASCII character in either connector header. Both secrets
+        were compared with ``compare_digest`` on ``str``, which raises
+        ``TypeError`` on non-ASCII — the raise escaped the view as an
+        unauthenticated, remotely-triggerable 500 (and a 5xx the caller can
+        emit at will) where a 403 belonged.
+        """
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            connector_token="ptc1.installation-1.connector-secret",
+        )
+        fake_relay = FakeRelayControlClient()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch(
+                "apps.core.relay.RelayControlClient",
+                return_value=fake_relay,
+            ):
+                bad_setup_token = APIClient().post(
+                    reverse("relay-connector-config"),
+                    {},
+                    format="json",
+                    HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secr\u00e9t",
+                )
+                bad_connector_token = APIClient().post(
+                    reverse("relay-connector-heartbeat"),
+                    {},
+                    format="json",
+                    HTTP_X_POINTY_CONNECTOR_TOKEN="ptc1.installation-1.connector-secr\u00e9t",
+                )
+
+        self.assertEqual(bad_setup_token.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(bad_connector_token.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
     def test_connector_config_requires_setup_token(self):
         fake_relay = FakeRelayControlClient()
 

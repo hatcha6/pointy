@@ -8044,14 +8044,14 @@ abstract class AppLocalizations {
   /// No description provided for @printerBarcodeLabelPdfSizeHelper.
   ///
   /// In ar, this message translates to:
-  /// **'شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الافتراضي ملصق 40×22 مم، ويمكن اختيار لفة 50/70/80 مم أو ورقة A4 بشبكة ملصقات. يتكيّف الملصق تلقائيًا مع الحجم المختار.'**
+  /// **'شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الملصق المقصوص يُطبع بمقاس العرض والارتفاع المحددين أدناه بالضبط، فلا يدور ولا تخرج ملصقات فارغة بعده. على ويندوز اضبط المقاس نفسه في تعريف الطابعة.'**
   String get printerBarcodeLabelPdfSizeHelper;
 
-  /// No description provided for @printerBarcodeLabelPdfSizeSticker40x22.
+  /// No description provided for @printerBarcodeLabelPdfSizeSticker.
   ///
   /// In ar, this message translates to:
-  /// **'ملصق 40×22 مم (الافتراضي)'**
-  String get printerBarcodeLabelPdfSizeSticker40x22;
+  /// **'ملصق مقصوص (بمقاس الملصق أدناه)'**
+  String get printerBarcodeLabelPdfSizeSticker;
 
   /// No description provided for @printerBarcodeLabelPdfSizeRoll50.
   ///
@@ -8077,6 +8077,84 @@ abstract class AppLocalizations {
   /// **'A4 (شبكة ملصقات)'**
   String get printerBarcodeLabelPdfSizeA4;
 
+  /// No description provided for @printerBarcodeLabelCalibrationTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'معايرة مقاس الملصق'**
+  String get printerBarcodeLabelCalibrationTitle;
+
+  /// No description provided for @printerBarcodeLabelCalibrationHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'اطبع مسطرة على الملصقات واقرأ الأرقام منها بدل التخمين: المسطرة العرضية تعطيك الإزاحة من اليسار وعرض الملصق، ومسطرة التغذية تعطيك الإزاحة من الأعلى وارتفاع الملصق، والمشط يعطيك المسافة بين الملصقات (العمود الذي يبقى في نفس الارتفاع على كل ملصق هو الصحيح).'**
+  String get printerBarcodeLabelCalibrationHelper;
+
+  /// No description provided for @printerBarcodeLabelCalibrationAcross.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسطرة عرضية'**
+  String get printerBarcodeLabelCalibrationAcross;
+
+  /// No description provided for @printerBarcodeLabelCalibrationFeed.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسطرة التغذية'**
+  String get printerBarcodeLabelCalibrationFeed;
+
+  /// No description provided for @printerBarcodeLabelCalibrationCombCoarse.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشط المسافة (خشن)'**
+  String get printerBarcodeLabelCalibrationCombCoarse;
+
+  /// No description provided for @printerBarcodeLabelCalibrationCombFine.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشط المسافة (دقيق)'**
+  String get printerBarcodeLabelCalibrationCombFine;
+
+  /// No description provided for @printerBarcodeLabelOffsetYLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزاحة الملصق من الأعلى مم'**
+  String get printerBarcodeLabelOffsetYLabel;
+
+  /// No description provided for @printerBarcodeLabelOffsetYHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'المسافة من بداية الطباعة إلى الحافة العليا للملصق، في اتجاه التغذية.'**
+  String get printerBarcodeLabelOffsetYHelper;
+
+  /// No description provided for @printerBarcodeLabelPitchLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المسافة بين الملصقات مم'**
+  String get printerBarcodeLabelPitchLabel;
+
+  /// No description provided for @printerBarcodeLabelPitchHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'من بداية ملصق إلى بداية الذي يليه (الملصق + الفاصل). تُطبع الدفعة كشريط متصل بهذه المسافة، فلا تنزلق الملصقات مع الطباعة المتتابعة. يقبل الكسور مثل 24.8.'**
+  String get printerBarcodeLabelPitchHelper;
+
+  /// No description provided for @printerBarcodeLabelOffsetXLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزاحة الملصق من اليسار مم'**
+  String get printerBarcodeLabelOffsetXLabel;
+
+  /// No description provided for @printerBarcodeLabelOffsetXHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'المسافة من بداية طباعة الرأس إلى الحافة اليسرى للملصق. اضبطها إذا كانت لفة الملصقات أضيق من عرض الطابعة أو غير محاذية للطرف، فتُطبع الملصقات مزاحة أو مقصوصة.'**
+  String get printerBarcodeLabelOffsetXHelper;
+
+  /// No description provided for @printerBarcodeLabelMediaHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'مقاس الملصق كما هو محمّل في الطابعة: العرض بعرض الملصق، والارتفاع من بداية ملصق إلى بداية الذي يليه (الملصق + الفاصل) حتى تتقدّم الطابعة ملصقًا واحدًا في كل مرة.'**
+  String get printerBarcodeLabelMediaHelper;
+
   /// No description provided for @printerBarcodeLabelRotationLabel.
   ///
   /// In ar, this message translates to:
@@ -8086,7 +8164,7 @@ abstract class AppLocalizations {
   /// No description provided for @printerBarcodeLabelRotationHelper.
   ///
   /// In ar, this message translates to:
-  /// **'دوّر الملصق إذا كانت الطابعة تُغذّي الملصقات بالعرض.'**
+  /// **'يدوّر محتوى الملصق داخل الملصق نفسه، إذا كانت الطابعة تُغذّي الملصقات بالعرض.'**
   String get printerBarcodeLabelRotationHelper;
 
   /// No description provided for @printerBarcodeLabelRotation0.
@@ -8550,6 +8628,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مسح البحث والفلاتر'**
   String get queryClearSearchAndFiltersButton;
+
+  /// Query-driven list empty state guidance when filters alone emptied the list and no search term is set. Names no search box, so it also reads correctly on surfaces that have none.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح الفلاتر لعرض القائمة كاملة.'**
+  String get queryNoFiltersResultsMessage;
+
+  /// Button that clears only the user-set filters, on a list with no search term set.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح الفلاتر'**
+  String get queryClearFiltersButton;
 
   /// Query-driven list empty state guidance when the search term is the only thing narrowing the list.
   ///
@@ -15137,6 +15227,18 @@ abstract class AppLocalizations {
   /// **'المدفوع حتى الآن: {amount}'**
   String invoiceCreditBalancePaidValue(String amount);
 
+  /// Callout title shown on a voided invoice, explaining why the return, exchange and void actions are absent.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن الإرجاع من هذه الفاتورة'**
+  String get invoiceVoidedCalloutTitle;
+
+  /// Callout body on a voided invoice: nothing is left to return or exchange.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الفاتورة ملغاة: أُرجعت أصنافها أو أُلغيت بالكامل، ولم يتبقَّ صنف قابل للإرجاع أو الاستبدال.'**
+  String get invoiceVoidedCalloutBody;
+
   /// No description provided for @invoicePaymentTitle.
   ///
   /// In ar, this message translates to:
@@ -19370,6 +19472,12 @@ abstract class AppLocalizations {
   /// **'اختبار الاتصال'**
   String get attendanceTestConnectionButton;
 
+  /// Label on the BioTime test-connection button while the test request is in flight.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الاختبار...'**
+  String get attendanceTestInProgressButton;
+
   /// Snack message after a successful BioTime connection test.
   ///
   /// In ar, this message translates to:
@@ -19495,6 +19603,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'في BioTime بدون ربط ({count})'**
   String attendanceUnmatchedTitle(int count);
+
+  /// Label on the attendance settings save button while the save request is in flight.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار الحفظ...'**
+  String get attendanceSaveInProgressButton;
 
   /// No description provided for @attendanceSettingsSaved.
   ///

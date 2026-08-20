@@ -415,16 +415,49 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
   /// Re-reads everything the detail pane renders for [session] — its sales, its
   /// cash movements and the summary the totals and Z-Report come from.
   Future<void> _reloadSelectedSessionDetail(RegisterSession session) async {
+    _resetCashMovements();
+
+    final summaryFuture = _loadSummary(session.id);
+    await _reloadOrdersForSelectedSession(session);
+    await _fetchCashMovementsForSelectedSession(session);
+
+    await summaryFuture;
+  }
+
+  /// Re-fetch the selected session's sales (to retry a failed load). No-op when
+  /// nothing is selected.
+  Future<void> retrySelectedSessionOrders() async {
+    final session = _selectedSession;
+    if (session == null) {
+      return;
+    }
+    await _reloadOrdersForSelectedSession(session);
+  }
+
+  /// Re-fetch the selected session's cash movements (to retry a failed load).
+  /// No-op when nothing is selected.
+  Future<void> retrySelectedSessionCashMovements() async {
+    final session = _selectedSession;
+    if (session == null) {
+      return;
+    }
+    _resetCashMovements();
+    notifyListeners();
+    await _fetchCashMovementsForSelectedSession(session);
+  }
+
+  void _resetCashMovements() {
     _cashMovements = [];
     _isLoadingCashMovements = true;
     _isLoadingMoreCashMovements = false;
     _hasCashMovementLoadError = false;
     _hasMoreCashMovements = true;
     _nextCashMovementCursor = null;
+  }
 
-    final summaryFuture = _loadSummary(session.id);
-    await _reloadOrdersForSelectedSession(session);
-
+  Future<void> _fetchCashMovementsForSelectedSession(
+    RegisterSession session,
+  ) async {
     final movementResult = await _registerSessionRepository
         .loadCashMovementsForSession(session.id);
     // The reviewer may have moved to another shift while this was in flight;
@@ -445,8 +478,6 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     }
     _isLoadingCashMovements = false;
     notifyListeners();
-
-    await summaryFuture;
   }
 
   Future<void> _reloadOrdersForSelectedSession(RegisterSession session) async {

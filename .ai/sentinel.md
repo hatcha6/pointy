@@ -86,3 +86,82 @@ off fresh `origin/main`, open the replacement, close the original with a pointer
 **Action:** Check `gh pr list --json headRefName` for your own stale PRs at the
 *start* of a run, before picking an audit theme. Clearing a deadlocked
 already-verified fix beats starting a new one.
+
+## 2026-08-20 - Role *reachability* is the check worth running, not role coverage
+**Learning:** The earlier "does every viewset declare a permission" sweep proved
+coverage is fail-closed but says nothing about whether the declared permission is
+the *right* one. Resolving every router route's `permission_map` and intersecting
+it with each role's `*_PERMISSION_CODES` prints exactly what a cashier / auditor /
+clerk can actually reach — a 40-line script, and the only way to see that e.g.
+`OrderViewSet.void` needs merely `sales.add_order`. That one is deliberate: the
+guard is `get_queryset` (own `register_session__owner_key`) plus the fact that a
+void's money posts to the *current open* session, never the closed one it came
+from. Auditor came back strictly read-only. Nothing else was misassigned.
+**Action:** Re-run the reachability intersection rather than re-reading
+`permission_map`s. Note plain `APIView`s are invisible to router introspection —
+walk `get_resolver()` instead, which also surfaces the DRF default
+(`IsAuthenticated` alone) on views that declare no `permission_classes`.
+
+## 2026-08-20 - Enforcement often lives in the service, not the permission class
+**Learning:** Four views that look under-permissioned are not. `ReportRunViewSet`
+is `IsAuthenticated` with no map — but `create` goes through
+`generate_report_payload`, which raises `ReportAccessDenied` per report
+definition, and `get_queryset` narrows to own runs without
+`reports.view_reportrun`. `BusinessNotificationViewSet` gates per-code in
+`visible_notifications_for_user` / `NOTIFICATION_AUDIENCE_RULES`.
+`AiConversationViewSet` filters `user=request.user`. Marketing consent is
+enforced at campaign *expansion* (`campaigns.py` → `can_send`), not at
+`enqueue_message`, which is consent-agnostic on purpose. And transactional SMS
+deliberately ignores `do_not_contact` (`customers/models.py` documents it).
+**Action:** Before flagging a bare `IsAuthenticated`, read the service the action
+delegates to and the `get_queryset`. All five of these are settled — don't
+re-flag them.
+
+## 2026-08-20 - Every hand-rolled `compare_digest` now goes through one helper
+**Learning:** The non-ASCII `TypeError` noted in the connector-heartbeat entry was
+not confined to headers. Three more sites had it — `connector_setup_token_accepted`
+(latin-1 header), `IsGatewayPeer` (UTF-8 `?token=` query param, raising inside
+`has_permission`), and the SMS Gate `X-Signature` HMAC — each letting an
+unauthenticated caller convert a 403 into a 500 at will. All four now call
+`apps.core.credentials.constant_time_secret_equal`, which compares UTF-8 *bytes*
+(never raises, and a non-ASCII stored secret still authenticates) and treats a
+blank side as unequal. `apps.channels.authenticate_api_key` was already clean —
+it compares hex hashes and `.exclude(api_key_hash="")`.
+**Action:** Any new secret comparison uses that helper. A bare `compare_digest`
+on `str` in a credential path is the finding, no further analysis needed.
+
+## 2026-08-20 - "Private REMOTE_ADDR" is not "on the LAN" — the connector is on the LAN
+**Learning:** The relay connector dials the local backend from the shop's own
+network, so **every** request tunnelled in from the internet arrives with a
+private `REMOTE_ADDR`. `request_is_private_network()` therefore returns True for
+remote callers, and is not by itself an authorisation gate.
+`request_discovery_allowed` knew this (it rejects `request_is_relayed` first) and
+the client-installer views inherited the fix by reusing it — but the two
+hand-rolled copies did not: `price_checker.IsPrivateNetworkOrAuthenticated` and
+`messaging.IsGatewayPeer` called `request_is_private_network` directly. The
+price-checker pair was genuinely reachable (`relayTarget` proxies any `/api/…`
+path on the access token alone), giving anyone holding the shop's *device-level*
+relay token an unauthenticated catalogue read and kiosk-registration write with
+no user session. All three now go through `request_is_lan_local()`.
+**Action:** Treat `request_is_private_network` as a plumbing primitive, not a
+gate — a new caller of it in a permission class is the finding. This is the same
+"duplication is the tell" shape as the `compare_digest` sweep: the LAN check had
+drifted into three copies and only the original stayed correct.
+
+## 2026-08-20 - Surface 5 (injection / input handling) audited; nothing found
+**Learning:** Swept it end to end and it is clean, so don't re-derive: the only
+non-migration `RawSQL`/`cursor.execute` sites build identifiers from
+`_meta.db_table` + `connection.ops.quote_name` (`analytics/export.py`) or are
+transport code that parameterises values and quotes identifiers
+(`migration/transports/sql_base.py`). Both URL fetchers are hardened and
+documented — `AiFaviconView` only ever fetches a fixed Google endpoint with the
+host as a *query param*, and `attachments/image_search.py` has a real SSRF guard
+(scheme/credential/hostname checks plus `getaddrinfo` → private/loopback/
+link-local/multicast/reserved rejection) that is re-applied on every redirect via
+`ValidatingRedirectHandler`. Attachment storage paths are `uuid4().hex` with a
+regex-validated extension — the uploaded filename never reaches the path. The
+restore-archive reader (`core/backup.py`) requires a `pointy-backup/` first
+component and rejects absolute paths and `..`.
+**Action:** Skip this surface as a run theme. Re-check only a *newly added*
+outbound fetch (does it call `validate_remote_image_url`?) or a new writer that
+derives a path from user input.

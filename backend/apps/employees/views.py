@@ -381,10 +381,29 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
             )
         return super().perform_destroy(instance)
 
+    def _serialized_run(self, payroll_run):
+        """Serialize a just-mutated run from the annotated, prefetched queryset.
+
+        The services return a run re-read with a bare ``.get(pk=...)``, so
+        serializing it directly costs three queries per line (employee,
+        compensation plan, adjustments) plus a COUNT for ``line_count``. Read it
+        back through ``self.queryset`` instead, which carries the same prefetch
+        the list endpoint uses.
+
+        ``self.queryset`` rather than ``get_queryset()``: the latter applies the
+        ``?employee=`` / ``?period_start=`` filters, which would drop the run
+        from its own response if the client happened to send them on the POST.
+        """
+        payroll_run = self.queryset.all().get(pk=payroll_run.pk)
+        return PayrollRunSerializer(
+            payroll_run,
+            context=self.get_serializer_context(),
+        ).data
+
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         payroll_run = approve_payroll_run(self.get_object(), request=request)
-        return Response(PayrollRunSerializer(payroll_run, context=self.get_serializer_context()).data)
+        return Response(self._serialized_run(payroll_run))
 
     @action(
         detail=True,
@@ -445,13 +464,7 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
                 "manual_deduction_amount": float(line.manual_deduction_amount),
             },
         )
-        payroll_run = self.get_queryset().get(pk=payroll_run.pk)
-        return Response(
-            PayrollRunSerializer(
-                payroll_run,
-                context=self.get_serializer_context(),
-            ).data
-        )
+        return Response(self._serialized_run(payroll_run))
 
     @action(detail=True, methods=["post"], url_path="apply-attendance")
     def apply_attendance(self, request, pk=None):
@@ -459,13 +472,9 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
 
         payroll_run = self.get_object()
         result = apply_attendance_to_run(payroll_run, request=request)
-        payroll_run = self.get_queryset().get(pk=payroll_run.pk)
         return Response(
             {
-                **PayrollRunSerializer(
-                    payroll_run,
-                    context=self.get_serializer_context(),
-                ).data,
+                **self._serialized_run(payroll_run),
                 "attendance": result,
             }
         )
@@ -554,13 +563,7 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
             },
             metrics={"amount": float(amount)},
         )
-        payroll_run = self.get_queryset().get(pk=payroll_run.pk)
-        return Response(
-            PayrollRunSerializer(
-                payroll_run,
-                context=self.get_serializer_context(),
-            ).data
-        )
+        return Response(self._serialized_run(payroll_run))
 
     @action(detail=False, methods=["post"], url_path="draft-monthly")
     def draft_monthly(self, request):
@@ -580,10 +583,7 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
             {
                 "created": created,
                 "payroll_run": (
-                    PayrollRunSerializer(
-                        payroll_run,
-                        context=self.get_serializer_context(),
-                    ).data
+                    self._serialized_run(payroll_run)
                     if payroll_run is not None
                     else None
                 ),
@@ -602,9 +602,9 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
             payment_date=payment_date,
             request=request,
         )
-        return Response(PayrollRunSerializer(payroll_run, context=self.get_serializer_context()).data)
+        return Response(self._serialized_run(payroll_run))
 
     @action(detail=True, methods=["post"])
     def void(self, request, pk=None):
         payroll_run = void_payroll_run(self.get_object(), request=request)
-        return Response(PayrollRunSerializer(payroll_run, context=self.get_serializer_context()).data)
+        return Response(self._serialized_run(payroll_run))

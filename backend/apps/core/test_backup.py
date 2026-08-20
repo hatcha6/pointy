@@ -1,4 +1,5 @@
 import os
+import stat as stat_module
 import tempfile
 import zipfile
 from datetime import datetime
@@ -15,6 +16,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from . import backup as backup_module
 from .backup import (
     BackupValidationError,
     backup_destination_options,
@@ -243,4 +245,126 @@ class BackupOperationsApiTests(TestCase):
                 destination["path"] == backup_root
                 for destination in response.data["destinations"]
             )
+        )
+
+
+class BackupDurabilityTests(TestCase):
+    """A backup that is only in the page cache is not a backup.
+
+    Shops run this to a USB stick on mains power that cuts. Closing the archive
+    hands its bytes to the OS and nothing more, so a cut inside the writeback
+    window leaves the final filename pointing at a truncated (or empty) file —
+    while retention has already unlinked the previous, good archives, because
+    unlinks are journaled metadata that survive a cut the archive's data does
+    not. The job row still reports SUCCEEDED, with a sha256 computed from the
+    same page cache, so the loss is silent until someone needs to restore.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.root = Path(self.temp_dir.name)
+        self.media_root = self.root / "media"
+        self.backup_root = self.root / "usb"
+        self.staging_root = self.root / "staging"
+        self.media_root.mkdir()
+        self.backup_root.mkdir()
+        self.override = override_settings(
+            MEDIA_ROOT=self.media_root,
+            POINTY_BACKUP_ALLOWED_ROOTS=[str(self.backup_root)],
+            POINTY_BACKUP_STAGING_ROOT=self.staging_root,
+        )
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+
+    def test_archive_and_its_rename_are_flushed_before_retention_prunes(self):
+        ShopSettings.load()
+        schedule = SystemBackupSchedule.load()
+        schedule.destination_path = str(self.backup_root)
+        schedule.retention_count = 1
+        schedule.save()
+        old_backup_dir = self.backup_root / "pointy-backups"
+        old_backup_dir.mkdir()
+        old_backup = old_backup_dir / "pointy-backup-20000101-000000.zip"
+        old_backup.write_bytes(b"old")
+
+        # Stand in for the platter: record which inode each durability primitive
+        # was aimed at, and when, relative to the rename and the pruning.
+        events = []
+        real_fsync = os.fsync
+        real_replace = os.replace
+        real_delete_old_backups = backup_module._delete_old_backups
+
+        def recording_fsync(fd):
+            try:
+                events.append(("fsync", os.fstat(fd).st_ino))
+            except OSError:  # pragma: no cover - defensive
+                events.append(("fsync", None))
+            return real_fsync(fd)
+
+        def recording_replace(source, destination):
+            events.append(("replace", str(destination)))
+            return real_replace(source, destination)
+
+        def recording_delete_old_backups(backup_dir, *, keep_count):
+            events.append(("prune", str(backup_dir)))
+            return real_delete_old_backups(backup_dir, keep_count=keep_count)
+
+        job = queue_backup_job(dispatch=False)
+        with mock.patch("os.fsync", recording_fsync), mock.patch(
+            "os.replace", recording_replace
+        ), mock.patch(
+            "apps.core.backup._delete_old_backups", recording_delete_old_backups
+        ):
+            run_backup(job.pk)
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, SystemMaintenanceJob.Status.SUCCEEDED)
+        archive_path = Path(job.backup_file_path)
+        # rename() keeps the inode, so this is the temp file that was written.
+        archive_inode = archive_path.stat().st_ino
+        directory_inode = archive_path.parent.stat().st_ino
+
+        replace_index = events.index(("replace", str(archive_path)))
+        prune_index = events.index(("prune", str(archive_path.parent)))
+
+        self.assertIn(
+            ("fsync", archive_inode),
+            events[:replace_index],
+            "the archive's bytes were never forced to disk before the rename "
+            "published it under its final name",
+        )
+        self.assertIn(
+            ("fsync", directory_inode),
+            events[replace_index:prune_index],
+            "the rename was never made durable before retention unlinked the "
+            "previous backups",
+        )
+        self.assertFalse(old_backup.exists())
+
+    def test_a_backup_that_cannot_be_flushed_fails_instead_of_reporting_success(self):
+        ShopSettings.load()
+        schedule = SystemBackupSchedule.load()
+        schedule.destination_path = str(self.backup_root)
+        schedule.save()
+
+        real_fsync = os.fsync
+
+        def failing_file_fsync(fd):
+            if stat_module.S_ISREG(os.fstat(fd).st_mode):
+                raise OSError(5, "Input/output error")
+            return real_fsync(fd)
+
+        job = queue_backup_job(dispatch=False)
+        with mock.patch("os.fsync", failing_file_fsync):
+            with self.assertRaises(OSError):
+                run_backup(job.pk)
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, SystemMaintenanceJob.Status.FAILED)
+        backup_dir = self.backup_root / "pointy-backups"
+        self.assertEqual(
+            sorted(path.name for path in backup_dir.glob("*")),
+            [],
+            "a half-written archive was left behind under a name a restore would offer",
         )

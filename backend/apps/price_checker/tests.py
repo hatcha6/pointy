@@ -504,6 +504,57 @@ class RegisterApiTests(TestCase):
         self.assertEqual(event.result, PriceCheckEvent.Result.FOUND)
 
 
+
+class RelayedLanGateTests(TestCase):
+    """The LAN gate must not treat a relay-tunnelled request as LAN-local.
+
+    The connector dials the backend from the shop's own network, so a request
+    that came in from the internet over the relay still arrives with a private
+    ``REMOTE_ADDR``. Without the relayed check, the price-checker's
+    "LAN hardware or a signed-in user" gate degrades to "anyone holding the
+    shop's relay access token", with no user session at all.
+    """
+
+    RELAYED = {"HTTP_X_POINTY_RELAYED_REQUEST": "1"}
+    DENIED = (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+
+    def setUp(self):
+        self.client = APIClient()
+        self.lookup_url = reverse("price-checker-lookup")
+        self.register_url = reverse("price-checker-register")
+        self.product = make_product(price="20.00")
+
+    def test_relayed_anonymous_lookup_is_refused(self):
+        response = self.client.get(
+            self.lookup_url, {"barcode": BARCODE}, **self.RELAYED
+        )
+        # 401 rather than 403: DRF challenges an anonymous caller. Either way
+        # the lookup is refused and no catalogue row is disclosed.
+        self.assertIn(response.status_code, self.DENIED)
+        self.assertEqual(PriceCheckEvent.objects.count(), 0)
+
+    def test_relayed_anonymous_register_is_refused(self):
+        response = self.client.post(
+            self.register_url,
+            {"identifier": "k1", "name": "Kiosk"},
+            format="json",
+            **self.RELAYED,
+        )
+        self.assertIn(response.status_code, self.DENIED)
+        self.assertEqual(PriceCheckerDevice.objects.count(), 0)
+
+    def test_relayed_signed_in_staff_still_allowed(self):
+        User = get_user_model()
+        staff = User.objects.create_user("pc-remote", password="x")
+        signed_in = APIClient()
+        signed_in.force_authenticate(staff)
+        response = signed_in.get(
+            self.lookup_url, {"barcode": BARCODE}, **self.RELAYED
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.json()["found"])
+
+
 class DeviceApiTests(TestCase):
     def setUp(self):
         User = get_user_model()

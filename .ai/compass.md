@@ -94,3 +94,98 @@ take the raw input (a task **name**, a URL string, a key) and do the lookup
 inside its own `try` — never accept the already-resolved object. And when a
 failure depends on import order, inject it explicitly (`mock.patch.dict` over
 `current_app.tasks`) rather than trusting an app-scoped run to expose it.
+
+## 2026-08-20 - The client had no read deadline either
+
+**Learning:** The journal's first entry (a wedged service never raises, so the
+`try/except` around it never fires) is not a backend-only shape — it held on the
+Flutter side too, and worse. `PosApiSession._send` is the single funnel for
+every buffered request in the app, and it awaited `package:http` with no
+`.timeout()`. `dart:io`'s `HttpClient` sets no read deadline, so a backend that
+accepted the connection and went silent (wedged uvicorn, AP roam stranding a
+pooled connection, LAN dropping packets post-handshake) hung a checkout POST
+forever. Everything downstream was already correct — the relay fallback, the
+`onLocalTargetUnreachable` re-discovery hook, the repositories' `on Exception`
+— and none of it ever ran, because nothing ever threw. The printing transports,
+the discovery probe and the self-updater were all bounded; the main API path
+was the one nobody had checked.
+
+**Action:** When a codebase has visibly careful timeouts on its *peripheral*
+I/O, that is not evidence the central path is bounded — check the funnel every
+request goes through, and check the client library's defaults rather than the
+surrounding code. Reproduce with a `MockClient` returning
+`Completer<http.Response>().future`: it is the client-side twin of the
+black-hole listener, needs no sockets, and fails deterministically in a test
+bounded by `expectLater(...).timeout(...)`.
+
+## 2026-08-20 - A timeout is not a connection refusal, on the money path
+
+**Learning:** Adding a deadline silently changed what an exception *means* to
+the retry above it. `_send`'s relay-fallback replay was written for "connection
+refused" — proof the server never saw the request, so replaying is free. A
+`TimeoutException` proves nothing: the sale may already be committed, and the
+same replay would then bill the customer twice. The saving grace was elsewhere:
+`checkoutIdempotencyKeyFor` derives the key from the draft JSON, so it is
+stable across retries of the same cart — the cashier pressing checkout again
+after a timeout is already safe.
+
+**Action:** When introducing a timeout into an existing error path, re-read
+every `catch` above it and ask whether it was written for a failure that proved
+the request never landed. Gate the replay (`replayable`: GETs and keyed writes
+only) rather than widening it. And check that the *user's* natural retry is
+idempotent too — that is the retry that actually happens.
+
+## 2026-08-20 - `os.replace` is atomic against a crash, not against a power cut
+
+**Learning:** `apps/core/backup.py` wrote the nightly archive to `.name.tmp` and
+`os.replace`d it into place — the textbook atomic-publish shape, and it *looks*
+finished. It is only half of the recipe: closing the `ZipFile` hands the bytes
+to the page cache and nothing more, so a mains cut inside the writeback window
+leaves the final filename pointing at a truncated or zero-length file. Three
+things then conspire to make the loss total and silent — `_delete_old_backups`
+unlinks the previous good archives immediately after (unlinks are journaled
+metadata and *do* survive the cut the data did not), `_sha256_file` reads the
+same page cache so the recorded checksum always matches, and the job row is
+marked SUCCEEDED. The destination is a USB stick in a shop whose power is not
+dependable, which is the exact hardware where write-back caching is longest.
+The whole backend contained no `os.fsync` call at all; the Flutter side already
+had this right (`sqlite_key_value_store.dart`, WAL + `synchronous=FULL`).
+
+**Action:** Treat "temp file + atomic rename" as an *incomplete* durability
+guard until you see `fsync(file)` before the rename and `fsync(dir)` after it —
+grep for `os.replace`/`shutil.move`/`.rename(` and check each for a neighbouring
+fsync. Ask what runs *after* the publish: a prune, a retention sweep or a
+cleanup that destroys the previous good copy turns a survivable partial write
+into total loss. To test durability without a real power cut, wrap `os.fsync`
+(record `os.fstat(fd).st_ino`), `os.replace` and the prune, then assert the
+*ordering* of inodes — rename preserves the inode, so the temp file is
+identifiable from the final path afterwards.
+
+## 2026-08-20 - A persistent connection outlives the server it points at
+
+**Learning:** `CONN_MAX_AGE=120` (what on-prem runs) means each worker keeps a
+Postgres connection across requests, and nothing in Django notices when the
+*server* end goes away — a Postgres or PgBouncer restart after a mains blip, a
+container recycle, an update flip. `close_old_connections` on `request_started`
+only closes connections that are obsolete by age or that have **already**
+errored, so a connection inside its window that has never failed is handed
+straight to the view and raises on its first query: one 500 per pooled
+connection after every restart, and one of them can be a checkout. Same shape
+as this journal's Redis entries — the recovery path existed (Django reconnects
+the moment the connection is closed) and simply never ran, because nobody
+looked. `CONN_HEALTH_CHECKS` was never set. It also made `/readyz/` report a
+perfectly healthy database as down, which is the signal compose's healthcheck
+and the update-agent's auto-rollback read — a DB restart could therefore roll
+an update back on its own.
+
+**Action:** Whenever a resource is *pooled or cached across requests*, ask what
+proves it is still alive, not just what happens when it dies. For Django
+specifically: `CONN_MAX_AGE > 0` without `CONN_HEALTH_CHECKS = True` is always
+a bug. Two test traps here: (1) `ClientHandler` deliberately disconnects
+`close_old_connections`, so the test client never fires the request boundary —
+call `close_old_connections()` by hand or the health check is skipped and the
+test lies; (2) the runner leaves `CONN_MAX_AGE` at 0, so the failure cannot
+reproduce until the connection is put into production shape
+(`close()`, set `CONN_MAX_AGE`, `connect()`). Inject the failure with
+`pg_terminate_backend(pid)` from a second connection — the server-side twin of
+the black-hole listener, and literally what a restart does.

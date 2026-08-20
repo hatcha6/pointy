@@ -465,11 +465,27 @@ class PayrollRun(TimeStampedModel):
         if self.period_end < self.period_start:
             raise ValidationError({"period_end": "Period end cannot be before start."})
 
+    def _lines_for_recalculation(self):
+        """Read the run's lines with the relations ``recalculate`` will touch.
+
+        ``PayrollLine.recalculate`` reads ``compensation_plan`` (for the rate,
+        the overtime multiplier and the standard daily hours) and walks
+        ``adjustments``, so a bare ``self.lines.all()`` costs two extra queries
+        per line -- on a 12-line run that is 24 queries every time a payroll run
+        is approved, drafted or re-costed from attendance.
+
+        Reuse the caller's prefetch cache when it is already warm (the payroll
+        viewset prefetches both relations), otherwise fetch them in one pass.
+        """
+        if "lines" in getattr(self, "_prefetched_objects_cache", {}):
+            return self.lines.all()
+        return self.lines.select_related("compensation_plan").prefetch_related("adjustments")
+
     def recalculate(self, *, save_lines=False):
         gross_total = Decimal("0.00")
         additions_total = Decimal("0.00")
         deductions_total = Decimal("0.00")
-        for line in self.lines.all():
+        for line in self._lines_for_recalculation():
             line.recalculate(save=save_lines)
             gross_total += line.gross_amount
             additions_total += line.additions_amount
