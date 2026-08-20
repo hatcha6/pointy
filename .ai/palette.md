@@ -438,3 +438,34 @@ returns immediately while the http future it kicked off is still pending, and
 the following `pumpAndSettle` then times out. Fire-and-forget view-model setters
 belong outside `runAsync` — call them like a tap and `pumpAndSettle`, which is
 what the retry tests already do successfully with `MockClient`.
+
+## 2026-08-20 - Asserting a retry inside a `PointyDataList` needs two scroll-aware finders
+
+**Learning:** The `PointyErrorState`-without-`action:` backlog is mostly
+mechanical — `PointyDataList.errorBuilder` sites whose view model *already*
+exposes the public reload (`loadEmployees`/`loadPayrollRuns`/`loadLoans` were all
+public, so the payroll route's four dead-ends cost 24 purely additive lines and no
+view-model change at all). The cost is entirely in the test, and two failures
+there look like product bugs but are not. (1) When the pane has a header — the
+payroll tab puts the month workflow card above the history list — the retry is in
+the tree and `findsOneWidget` passes, but `tester.tap` silently *misses* it
+(`warnIfMissed`) because it starts below the 800×600 test viewport, and the
+request-count assertion then fails with an off-by-one that reads like the button
+not being wired. (2) After `ensureVisible` scrolls to it, the refilled row is
+pushed offstage, so `find.textContaining('PR7')` finds nothing even though the
+list loaded correctly.
+
+**Action:** For any retry inside a scrollable pane: `await
+tester.ensureVisible(retry)` + `pumpAndSettle()` before `tap`, and assert the
+refilled content with `skipOffstage: false`. Assert *both* that the request count
+went up by exactly one and that the error text is gone — the count alone passes if
+the retry fires twice, and the text alone passes if the pane merely rebuilt.
+A fake that fails only the **first** request to one path and serves normally after
+is the right shape: it is the LAN blip that makes retry the correct affordance,
+and it makes the test fail loudly if the retry is wired to the wrong loader.
+
+**Remaining in the no-retry backlog** after this run (payroll route is now clear):
+`product_document_history_section` (×2), `device_settings_screen`,
+`discount_details_screen`, `shop_settings_screen`, `shop_backup_widgets`,
+`user_management_screen`. `payment_sheet` stays excluded — it is a *config* gap
+("no payment methods enabled"), not a fetch, so no retry applies.
