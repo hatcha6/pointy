@@ -723,3 +723,51 @@ land", never "is anyone still in the room". When the survey comes back mostly
 held, that is a complete and correct step 3: prune the one or two that are free,
 report the accumulation, and leave it there. Reaping parked sessions is a
 human's call, not Warden's.
+
+## 2026-08-20 - An `initState` dirty signature is only as safe as what the loaders write
+
+**Learning:** 🎨 Palette's #89 detects unsaved edits by hashing every editable
+field into a `_formSignature()` string in `initState` and comparing it live on
+exit. The whole design rests on one thing being true: no async loader may write
+a field that the signature reads, or an *untouched* sheet turns dirty a few
+hundred milliseconds after it opens and prompts everyone on the way out. In
+`product_parent_edit_sheet.dart` the signature reads `_units` and the sheet also
+runs `_loadUnits()` from `initState` — which looks exactly like that bug. It is
+not: `_loadUnits()` writes `_availableUnits` (the catalogue of unit codes to
+pick from), while `_units` is the product's own unit rows, seeded from
+`product.units` and changed only by the user through `onUnitsChanged`. Same for
+`_loadVariantOptions`/`_availableVariantOptions` and
+`_loadModifierGroups`/`_availableModifierGroups`. The `_available*` vs bare
+naming is the whole distinction, and the widget test cannot settle it either
+way — a mocked repository often returns an empty list, so a loader that *did*
+clobber the selection would still leave the test green.
+
+**Action:** For any dirty-check captured at init, list the fields the signature
+reads and grep each async loader for assignments to them
+(`grep -n "_selected\|_units\s*=" <file>`) — read the loader bodies, do not
+trust the field names or the PR's comment. Passing "untouched sheet leaves
+silently" tests are not evidence here; the loader has to be read. The inverse
+trap is just as real: a signature that omits a field the user *can* edit
+silently discards that edit with no prompt, so check the signature covers every
+`setState` target in the build method too.
+
+## 2026-08-20 - A guard PR's revert proof is supposed to fail only partially
+
+**Learning:** The one-file-revert proof (previous entry) has a clean pass/fail
+shape for a Bolt or Sentinel PR: revert, everything new goes red. For a
+"warn before discarding" PR it does not, and the difference is easy to misread
+as a flaky or vacuous suite. Reverting both production files on #89 gave
+`+3 -5` — five failures and three passes out of eight new tests. The three
+passes are the deliberate negative controls ("an untouched sheet leaves with no
+prompt", "toggling a box on and off again leaves silently"), which pass against
+unguarded code *by construction*: with no guard at all, nothing ever prompts.
+A suite where all eight went red would actually be the suspicious result — it
+would mean the controls assert nothing about absence.
+
+**Action:** Before running the revert, read the PR body for a per-file expected
+split (#89 stated "the product sheet reads `+1 -3` and the permissions screen
+`+2 -2`") and check the observed numbers against it, then confirm the surviving
+test *names* are the no-prompt controls
+(`grep -o 'The test description was: .*' <log> | sort -u`). Names, not counts,
+are what proves the right half failed. A routine that cannot state which of its
+tests should survive the revert has not thought about its own negative controls.
