@@ -175,3 +175,40 @@ hold directly.
 tool schemas in `apps/ai/tools.py` before concluding it is unreachable — they
 are a second, looser client over the same viewsets, and their JSON-schema
 `required` lists rarely mirror the serializer's cross-field rules.
+
+## 2026-08-20 - One fact recorded in two tables stays true only if *every* writer updates both
+**Learning:** A drawer-paid `Expense` writes the same fact twice — the expense
+row says how much money left the shop, its linked `RegisterCashMovement`
+PAY_OUT says how much left the till. `create_expense` set both; the edit path
+set only the first. `ExpenseSerializer.update` even carried a comment
+sanctioning it ("editing an expense never re-books or unwinds a pay-out that
+already happened") — which is true of the *linkage decision* and quietly false
+of the *amount*. Correcting a mistyped 30 to 300 left the till expecting 270 it
+no longer had, so the cashier wore the shortage at close. Switching the method
+from cash to transfer was worse: the pay-out survived, and because the ledger
+hides an expense's own pay-out to avoid double counting
+(`_register_payout_rows` filters `expense__isnull=True`), **no ledger row
+anywhere said cash had left the drawer** — 30 vanished from the books while
+still missing from the till.
+**Action:** When a service writes a second row to mirror a first, don't stop at
+"does create do both". Enumerate every later writer — `update`, `destroy`, and
+the DRF `ModelViewSet` default that gives you all of them for free — and ask
+what each does to the mirror. A comment explaining why an edit *doesn't* touch
+the other side is a signal to test, not a reason to skip it. Note the deletion
+direction was already right for a non-obvious reason worth pinning: the cash
+really did leave, so the orphaned pay-out must survive, and it self-heals into
+the ledger as a standalone `register_payout` the moment the expense that hid it
+is gone.
+
+## 2026-08-20 - A mirrored row that a *closed* register owns must be refused, not synced
+**Learning:** The obvious fix — always keep the pay-out equal to the expense —
+is wrong once the session has closed. `expected_cash` is derived live from the
+movements, so re-booking one retroactively turns a balanced, signed-off close
+into a variance nobody can explain, and the printed Z-report stops matching the
+database. The correct rule is state-dependent: sync while the session is OPEN
+(the till has not been counted, so correcting is the point), refuse afterwards.
+**Action:** Before writing a "keep these two in sync" fix, ask whether anything
+has already *read and committed* the derived value. In Pointy that question is
+almost always "has the register session closed" — `RegisterSession.expected_cash`
+is a property over live rows, with no snapshot, so any backdated movement edits
+history. The same shape will recur for anything else feeding a Z-report.
