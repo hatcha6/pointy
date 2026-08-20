@@ -19850,12 +19850,6 @@ abstract class AppLocalizations {
   /// **'لا توجد مصروفات في هذه الفترة.'**
   String get expensesEmptyMessage;
 
-  /// No description provided for @expensesNoMatchingMessage.
-  ///
-  /// In ar, this message translates to:
-  /// **'لا توجد بنود مطابقة للتصفية.'**
-  String get expensesNoMatchingMessage;
-
   /// No description provided for @expensesPreviousMonth.
   ///
   /// In ar, this message translates to:

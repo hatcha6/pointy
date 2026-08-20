@@ -11465,9 +11465,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get expensesEmptyMessage => 'لا توجد مصروفات في هذه الفترة.';
 
   @override
-  String get expensesNoMatchingMessage => 'لا توجد بنود مطابقة للتصفية.';
-
-  @override
   String get expensesPreviousMonth => 'الشهر السابق';
 
   @override

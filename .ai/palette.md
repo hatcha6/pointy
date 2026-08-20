@@ -656,3 +656,40 @@ return the tall branch, reusing a height the function already returns rather tha
 inventing a constant. Prove it with a third test at the tightest width (390) that
 asserts `tester.takeException()` is null — an overflow is reported as a thrown
 `FlutterError`, so a test that only checks `find.text` passes straight through one.
+
+## 2026-08-20 - `find.widgetWithText(FilledButton, …)` never matches a `.icon` button
+
+**Learning:** `FilledButton.icon` / `TextButton.icon` / `OutlinedButton.icon` do
+not build a `FilledButton` — they build a private `_FilledButtonWithIcon`
+subclass. `find.byType` matches `runtimeType` *exactly*, so
+`find.widgetWithText(FilledButton, 'إضافة مصروف')` finds zero widgets even when
+the button is right there on screen. A `findsOneWidget` assertion fails loudly,
+which is fine; the danger is the `findsNothing` direction — "the wrong action is
+no longer offered" passes vacuously against code that still offers it, so the
+whole proof of a corrected empty state evaporates. Every empty/error state in
+this app builds its `action:` with a `.icon` constructor.
+
+**Action:** Assert on the label with `find.text('…')`, not on the button type.
+When a test asserts a control is *absent*, always run the reverse check
+(temporarily restore the old widget and confirm the test fails) — the expected
+shape is `+1 -1`, the control passing and the behaviour test failing.
+
+## 2026-08-20 - A view-model escape hatch with no call site is the real dead end
+
+**Learning:** `ExpensesViewModel.showAllSources()` existed, was covered by a
+view-model test, and was called from **no** widget — the same shape as
+`PointyEmptyState.action` in the earlier entry. Meanwhile the expenses empty
+state offered "إضافة مصروف" whether the month was genuinely empty or the five
+source chips had hidden every row, and that action provably cannot fix the
+filtered case: the new expense files itself under the hidden `expense` chip and
+the list stays blank.
+
+**Action:** Grep the view model for public methods no view calls before hunting
+for new widgets to write — a tested-but-uncalled `clear…()`/`showAll…()` names
+an escape the UI forgot to offer. `QueryEmptyState` takes `search: ''`, so it
+fits a filter-only surface with no search box and needs **no new l10n keys**
+(`queryNoFilteredResultsTitle` / `queryNoFiltersResultsMessage` /
+`queryClearFiltersButton` are worded for exactly that case). Blame the filters
+only when `hidden.isNotEmpty && ledger.entries.isNotEmpty` — otherwise an
+untouched month with no spending gets told to clear filters that are hiding
+nothing.
