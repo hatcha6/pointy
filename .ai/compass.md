@@ -189,3 +189,37 @@ reproduce until the connection is put into production shape
 (`close()`, set `CONN_MAX_AGE`, `connect()`). Inject the failure with
 `pg_terminate_backend(pid)` from a second connection — the server-side twin of
 the black-hole listener, and literally what a restart does.
+
+## 2026-08-20 - The thing that saves the cart is the thing that double-bills it
+
+**Learning:** `pos_persistence.dart` snapshots the POS carts to disk expressly
+so "a crash or restart never loses a sale" — and that feature is what turns a
+mains cut into a double sale. The idempotency key lived only in
+`_PosSaleSession._checkoutIdempotencyKeysBySignature`, an in-memory map that
+was never part of the snapshot. Cut the power in the window between the backend
+committing the sale and the till reading the response, and the next launch
+restores the *cart* without the *key*: the cashier sees the same basket, presses
+checkout, a fresh random key is minted, and the same sale is billed, de-stocked
+and rung into the till twice. Two further traps sat behind it. (1) The key was
+memoized but not derived — it is a random UUID, so nothing else can reconstruct
+it; the journal's earlier note that it was "derived from the draft JSON" was
+wrong, and the safety it credited only ever held inside one process lifetime.
+(2) The memo key was the *whole* draft JSON including `print_invoice`, so a
+printer that resolved differently between two attempts — the shop settings
+failing to reload during the very outage that swallowed the first response
+clears the manual print toggle — rotated the key on its own, no power cut
+needed. Writing the snapshot is debounced 500ms, so simply persisting the key
+was not enough either: it has to be flushed *before* the request goes out.
+
+**Action:** When a client-side guard is a *memo* rather than a *derivation*,
+ask what happens to the process holding it — a random value cached in RAM is
+not a guarantee, it is a guarantee for as long as nothing restarts. Whenever a
+feature restores user state after a crash, enumerate what is restored *with* it:
+restoring an action's inputs without restoring its de-duplication token invites
+the user to repeat it. And check the memo's cache key for fields that are not
+part of the operation's identity (routing, presentation, device config) — they
+turn an unrelated failure into a rotated token. Reproduce with two view models
+sharing one `MemoryScopedJsonStorage`: let the debounce flush the cart, fail the
+first checkout, then build a second view model and `restorePersistedSessions` —
+on `main` the cart comes back and the keys differ, which is exactly the shape
+of the bug.
