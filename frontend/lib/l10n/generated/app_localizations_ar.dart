@@ -8673,6 +8673,13 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get invoiceVoidedCalloutTitle => 'لا يمكن الإرجاع من هذه الفاتورة';
+
+  @override
+  String get invoiceVoidedCalloutBody =>
+      'هذه الفاتورة ملغاة: أُرجعت أصنافها أو أُلغيت بالكامل، ولم يتبقَّ صنف قابل للإرجاع أو الاستبدال.';
+
+  @override
   String get invoicePaymentTitle => 'تسجيل دفعة على الفاتورة';
 
   @override

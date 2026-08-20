@@ -15149,6 +15149,18 @@ abstract class AppLocalizations {
   /// **'المدفوع حتى الآن: {amount}'**
   String invoiceCreditBalancePaidValue(String amount);
 
+  /// Callout title shown on a voided invoice, explaining why the return, exchange and void actions are absent.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن الإرجاع من هذه الفاتورة'**
+  String get invoiceVoidedCalloutTitle;
+
+  /// Callout body on a voided invoice: nothing is left to return or exchange.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الفاتورة ملغاة: أُرجعت أصنافها أو أُلغيت بالكامل، ولم يتبقَّ صنف قابل للإرجاع أو الاستبدال.'**
+  String get invoiceVoidedCalloutBody;
+
   /// No description provided for @invoicePaymentTitle.
   ///
   /// In ar, this message translates to:
