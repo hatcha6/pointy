@@ -113,3 +113,31 @@ I checked; if another appears, test the inverted configuration before the
 ordinary one. And the payoff test is the one at the *money* surface: the rollup
 assertion says "1050 != 0", `apply_attendance_to_run` says "87.50 hours", and
 only the second makes the cost undeniable.
+
+## 2026-08-20 - A per-row `continue` inside a bounded batch is a starvation bug, not a filter
+**Learning:** `messaging.dispatch_outbound_task` pulled the 50 oldest due rows
+and then skipped marketing ones in the loop when the gateway was inside quiet
+hours. With two messages (all the existing test had) that reads as "marketing is
+held, transactional still flows". With a campaign of ≥50 held rows it means the
+batch is *entirely* held rows on every tick for the whole 10-hour window, and
+every transactional message queued behind it — invoice, debt reminder, OTP —
+never enters a batch at all. `sweep_stuck_task` then expires any of them
+carrying an `expires_at`, so an OTP is not merely late, it is destroyed. The
+docstring's promise ("transactional messages ignore quiet hours") was true of
+the `if` and false of the system.
+**Action:** Whenever a worker takes `qs[:N]` and then `continue`s past rows it
+declines to process, ask what happens when the declined rows outnumber N — the
+skip has to move into the queryset, not the loop. Same shape to check in any
+other paced drain (printing spool, notification fan-out, analytics ingest). And
+when a test exercises a batching path, size the fixture past the batch bound;
+two rows prove the branch, not the behaviour.
+
+## 2026-08-20 - Quiet hours: the wrap-around window was correct but only the same-day one was tested
+**Learning:** `in_quiet_hours` handles `22:00 → 08:00` properly, yet the only
+test used `00:00 → 23:59` — a window that never reaches the wrap-around branch,
+so the branch every real shop depends on was unproven. Times are compared in
+`business_timezone()` (Africa/Tripoli, UTC+2, no DST), so a fixed UTC instant is
+a stable way to assert a local time-of-day without freezing the clock.
+**Action:** For any time-of-day window, the same-day case is the one nobody
+configures. Test the wrapping one first, and pick the UTC instant that lands on
+the local boundary (start is inclusive, end is exclusive).
