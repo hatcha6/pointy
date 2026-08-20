@@ -175,3 +175,36 @@ only had 10 stock items, so widening the world (9 piece products, and a 12%
 branch that orders 11+ lines) was a prerequisite for the check, not a garnish.
 Before adding an invariant, ask what the generators would have to produce for it
 to fire, and widen them in the same change.
+
+## 2026-08-20 - The unit travels with the line, never with the variant
+
+**Learning:** A purchase *line* knows its unit (`unit`, `unit_factor`,
+`to_base_quantity`). A `PurchaseOrderAdjustmentReplacementLine` does not — it is
+keyed by variant alone, because a replacement may be a different product
+entirely, so `record_purchase_replacement_stock_movements` adds its `quantity`
+straight to `quantity_on_hand`. Replacement quantities and unit costs are
+therefore **base units, always**. The exchange serializer's like-for-like
+default (an exchange posted with no `replacement_lines`) copied the *line's*
+pack figures across unconverted: exchanging one carton of 24 took 24 bottles out
+and put 1 back, and did it while reporting `outbound 48.00 / replacement 48.00 /
+net 0.00`. Every money assertion in the codebase agreed, because the money *was*
+right — 1 × 48.00 and 24 × 2.00 are the same number. Only the stock was wrong.
+
+**Action:** When a quantity moves between two models, ask **which of them
+carries the unit**. If one has `unit_factor` and the other does not, the one
+without it is base-unit by definition and the crossing needs
+`to_base_quantity` — and the money is no help in spotting the omission, because
+`amount / packs × packs` and `amount / base × base` are equal. The invariant that
+*does* catch it is conservation: a like-for-like exchange must leave
+`quantity_on_hand` exactly where it found it. Reach for a conservation law
+whenever a bug could be unit-shaped; totals are blind to it. Sibling crossings
+still worth the same read: `PurchaseOrderAdjustmentLine.unit_cost` (per pack,
+matching `adjusted_quantity`/`accepted_quantity`, and consumed by nothing that
+wants base units — currently consistent), and the exchange dialog, which asks for
+the outbound quantity in packs and the replacement quantity in base units with
+nothing on screen saying so.
+
+**Also:** the business simulation models no supplier return, refund or exchange
+at all — `PurchaseOrderAdjustment` appears nowhere in it. That is why this, like
+the two `purchase_adjustment_line_amount` defects before it, had to be found by
+reading. It is the largest remaining hole in the oracle's reach.
