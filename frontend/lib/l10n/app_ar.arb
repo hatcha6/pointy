@@ -7068,7 +7068,6 @@
   "expenseAddButton": "إضافة مصروف",
   "expensesLoadError": "تعذّر تحميل المصروفات.",
   "expensesEmptyMessage": "لا توجد مصروفات في هذه الفترة.",
-  "expensesNoMatchingMessage": "لا توجد بنود مطابقة للتصفية.",
   "expensesPreviousMonth": "الشهر السابق",
   "expensesNextMonth": "الشهر التالي",
   "expensesPeriodTotal": "الإجمالي: {total}",
