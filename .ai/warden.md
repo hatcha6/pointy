@@ -853,3 +853,50 @@ from `git worktree list --porcelain | grep '^branch ' | sed 's|branch
 refs/heads/||'` and subtract. Never feed `git branch` output straight into a
 loop that deletes; if a run of `rev-list` errors on names you did not expect,
 stop and fix the parse before touching a single `git branch -d`.
+
+## 2026-08-20 - A batching PR must be checked against `post_save`, not just `pre_save`
+
+**Learning:** ⚡ Bolt's #101 replaced per-line `stock_item.save(update_fields=…)`
+and `StockMovement.objects.create(…)` with `bulk_update` and `bulk_create` on
+the checkout path. It handled the *documented* trap correctly — `bulk_update`
+does not run a field's `pre_save`, so `updated_at` (`auto_now`) had to be
+stamped by hand, and it was. The larger trap is the one neither the PR body nor
+the code comments mentioned: neither `bulk_update` nor `bulk_create` fires
+`post_save`. This repo leans on `post_save` for cache invalidation
+(`apps/catalog/signals.py` invalidates the catalog version off `Product`,
+`ProductVariant`, `ProductUnit`, `ProductUnitBarcode`; `apps/core/signals.py`
+off `ShopSettings`, `RelayInstallation`, `User`). #101 was safe only because
+`StockItem` and `StockMovement` happen to have **no** receivers and no `save()`
+override — a fact you cannot read off the diff, which touches neither
+`signals.py`.
+
+**Action:** Batching is Bolt's whole lane, so treat this as a standing check on
+every `bulk_update`/`bulk_create` PR, and run it *before* the tests:
+`grep -rn "post_save\|pre_save\|@receiver" apps/ --include='*.py' | grep -v test`
+and confirm the batched model appears in no `sender=`, then
+`grep -n "def save" apps/<app>/models.py` for an override. A hit means the batch
+silently skips work the per-row loop did, and the suite will not catch it —
+cache-invalidation failures surface as staleness, not as a red test. Zsh eats a
+bare `--include=*.py`; quote it.
+
+## 2026-08-20 - The Oracle triad's third leg is cheaper as a whole-harness revert
+
+**Learning:** The mutation-triad entry prescribes leg (c) — the load-bearing one
+that proves the *old* harness was blind — as "delete the new op from
+`operations()` under the same mutation". On 🔍 Oracle's #103 the extension was
+not a new op at all but a change in what an existing one (`op_purchase_submit`)
+buys: every purchase line used to be built at `unit_factor=1`, where a dropped
+pack↔base conversion is the identity. There was no op to delete. The equivalent
+move is `git checkout origin/main -- apps/sales/business_simulation.py
+apps/sales/test_business_simulation.py` with the production fix still reverted:
+that restores the old harness verbatim, and it came back **green** while the new
+harness failed at the PR's claimed `seed=13 op#32`. Reverting the entry-point
+test alongside the harness is not optional — it asserts vacuity counters
+(`pack_purchase_line_assertions`) that do not exist on `main`, so leaving it
+yields an `AttributeError` instead of an answer.
+
+**Action:** For any Oracle PR, run leg (c) as a two-file revert of the harness
+plus its entry-point test rather than hand-editing `operations()` — one command,
+it covers extensions that change an op instead of adding one, and a green (c)
+beside a red (b) is the whole proof. Budget one extra suite run (~15s for
+`apps.sales.test_business_simulation` alone).
