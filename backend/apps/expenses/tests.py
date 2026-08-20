@@ -272,3 +272,167 @@ class ExpenseReportingTests(ExpensesTestMixin, TestCase):
             user=self.manager,
         )
         self.assertEqual(payload["summary"]["ad_hoc_expense_total"], "60.00")
+
+
+class DrawerPaidExpenseEditTests(ExpensesTestMixin, TestCase):
+    """A drawer-paid expense and its ``PAY_OUT`` are one fact recorded twice: the
+    expense says how much money left the shop, the movement says how much left
+    the till. An edit that changes one and not the other makes the drawer
+    disagree with the books, and the cashier wears the difference at close.
+    """
+
+    def _drawer_paid_expense(self, amount=Decimal("30.00"), opening=Decimal("500.00")):
+        session = self.open_session(self.manager, opening_cash=opening)
+        expense = create_expense(
+            user=self.manager,
+            pay_from_register=True,
+            category=self.category,
+            description="كهرباء",
+            amount=amount,
+            payment_method=Expense.PaymentMethod.CASH,
+        )
+        self.assertIsNotNone(expense.cash_movement_id)
+        return session, expense
+
+    def _patch(self, expense, payload):
+        return self.manager_client.patch(
+            reverse("expense-detail", args=[expense.pk]),
+            payload,
+            format="json",
+        )
+
+    def test_correcting_the_amount_re_books_the_linked_pay_out(self):
+        # A manager fixes a mistyped 30 that was really 300. The till gave up
+        # 300, so the drawer must expect 500 - 300, not 500 - 30.
+        session, expense = self._drawer_paid_expense()
+
+        response = self._patch(expense, {"amount": "300.00"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        expense.refresh_from_db()
+        session.refresh_from_db()
+        self.assertEqual(expense.amount, Decimal("300.00"))
+        self.assertEqual(expense.cash_movement.amount, Decimal("300.00"))
+        self.assertEqual(session.pay_out_total, Decimal("300.00"))
+        self.assertEqual(session.expected_cash, Decimal("200.00"))
+
+    def test_the_pay_out_reason_follows_the_corrected_description(self):
+        _, expense = self._drawer_paid_expense()
+
+        self.assertEqual(
+            self._patch(expense, {"description": "فاتورة كهرباء يوليو"}).status_code,
+            status.HTTP_200_OK,
+        )
+
+        expense.refresh_from_db()
+        self.assertIn("فاتورة كهرباء يوليو", expense.cash_movement.reason)
+
+    def test_switching_off_cash_gives_the_drawer_its_money_back(self):
+        # Recorded as cash by mistake; it was a bank transfer. Nothing left the
+        # till, so no pay-out may remain against it.
+        session, expense = self._drawer_paid_expense()
+
+        response = self._patch(expense, {"payment_method": "transfer"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        expense.refresh_from_db()
+        session.refresh_from_db()
+        self.assertIsNone(expense.cash_movement_id)
+        self.assertIsNone(expense.register_session_id)
+        self.assertEqual(RegisterCashMovement.objects.count(), 0)
+        self.assertEqual(session.expected_cash, Decimal("500.00"))
+
+    def test_ledger_never_reports_more_cash_out_than_the_drawer_gave(self):
+        # The ledger hides an expense's own pay-out to avoid double counting, so
+        # a stale movement would be invisible there while still shorting the
+        # till. Both surfaces have to agree on the corrected figure.
+        session, expense = self._drawer_paid_expense()
+        self._patch(expense, {"amount": "300.00"})
+
+        session.refresh_from_db()
+        data = self.manager_client.get(reverse("expense-ledger")).data
+        self.assertEqual(data["totals"]["expense"], "300.00")
+        self.assertEqual(data["totals"]["register_payout"], "0.00")
+        self.assertEqual(session.pay_out_total, Decimal("300.00"))
+
+    def test_amount_and_method_are_frozen_once_the_session_is_closed(self):
+        session, expense = self._drawer_paid_expense()
+        session.closing_cash = session.expected_cash
+        session.status = RegisterSession.Status.CLOSED
+        session.closed_at = timezone.now()
+        session.save(update_fields=["closing_cash", "status", "closed_at"])
+
+        amount_response = self._patch(expense, {"amount": "300.00"})
+        self.assertEqual(amount_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("amount", amount_response.data)
+
+        method_response = self._patch(expense, {"payment_method": "transfer"})
+        self.assertEqual(method_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("payment_method", method_response.data)
+
+        expense.refresh_from_db()
+        session.refresh_from_db()
+        self.assertEqual(expense.amount, Decimal("30.00"))
+        self.assertEqual(expense.cash_movement.amount, Decimal("30.00"))
+        # The counted till is untouched: 500 opening - 30 paid out.
+        self.assertEqual(session.expected_cash, Decimal("470.00"))
+
+    def test_a_closed_session_still_allows_the_descriptive_fields(self):
+        session, expense = self._drawer_paid_expense()
+        session.status = RegisterSession.Status.CLOSED
+        session.closed_at = timezone.now()
+        session.save(update_fields=["status", "closed_at"])
+
+        response = self._patch(expense, {"description": "كهرباء المخزن", "notes": "ن"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        expense.refresh_from_db()
+        self.assertEqual(expense.description, "كهرباء المخزن")
+
+    def test_resending_the_same_amount_on_a_closed_session_is_not_an_edit(self):
+        session, expense = self._drawer_paid_expense()
+        session.status = RegisterSession.Status.CLOSED
+        session.closed_at = timezone.now()
+        session.save(update_fields=["status", "closed_at"])
+
+        response = self._patch(expense, {"amount": "30.00", "description": "كهرباء ٢"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_an_expense_with_no_drawer_link_is_freely_editable(self):
+        response = self.manager_client.post(
+            reverse("expense-list"),
+            {
+                "category": self.category.pk,
+                "description": "إنترنت",
+                "amount": "45.00",
+                "payment_method": "transfer",
+            },
+            format="json",
+        )
+        expense = Expense.objects.get(pk=response.data["id"])
+
+        self.assertEqual(
+            self._patch(expense, {"amount": "50.00"}).status_code,
+            status.HTTP_200_OK,
+        )
+        expense.refresh_from_db()
+        self.assertEqual(expense.amount, Decimal("50.00"))
+        self.assertEqual(RegisterCashMovement.objects.count(), 0)
+
+    def test_deleting_a_drawer_paid_expense_leaves_the_cash_accounted_for(self):
+        # The money really did leave the till, so the movement must survive the
+        # expense — and, no longer hidden behind an expense row, it resurfaces
+        # in the ledger as a standalone pay-out rather than vanishing.
+        session, expense = self._drawer_paid_expense()
+
+        response = self.manager_client.delete(
+            reverse("expense-detail", args=[expense.pk])
+        )
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        session.refresh_from_db()
+        self.assertEqual(session.expected_cash, Decimal("470.00"))
+
+        data = self.manager_client.get(reverse("expense-ledger")).data
+        self.assertEqual(data["totals"]["expense"], "0.00")
+        self.assertEqual(data["totals"]["register_payout"], "30.00")
+        self.assertEqual(data["summary"]["total"], "30.00")
