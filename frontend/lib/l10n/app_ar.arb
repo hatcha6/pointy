@@ -5191,6 +5191,14 @@
       }
     }
   },
+  "invoiceVoidedCalloutTitle": "لا يمكن الإرجاع من هذه الفاتورة",
+  "@invoiceVoidedCalloutTitle": {
+    "description": "Callout title shown on a voided invoice, explaining why the return, exchange and void actions are absent."
+  },
+  "invoiceVoidedCalloutBody": "هذه الفاتورة ملغاة: أُرجعت أصنافها أو أُلغيت بالكامل، ولم يتبقَّ صنف قابل للإرجاع أو الاستبدال.",
+  "@invoiceVoidedCalloutBody": {
+    "description": "Callout body on a voided invoice: nothing is left to return or exchange."
+  },
   "invoicePaymentTitle": "تسجيل دفعة على الفاتورة",
   "invoicePaymentAmountLabel": "المبلغ",
   "invoicePaymentReferenceLabel": "مرجع اختياري",
