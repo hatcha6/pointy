@@ -568,3 +568,30 @@ data. The same suite on a fresh database was 993 tests, OK.
 the database (`--noinput`, no `--keepdb`) for the verification run — and when a
 keepdb run fails in code you never touched, suspect the kept database before the
 diff.
+
+## 2026-08-20 - When an endpoint scales with a dimension its operation never touches, the RESPONSE is the whole N+1
+**Learning:** `order-return-items` returning ONE line cost 74 q on a 3-line
+invoice and 119 q on a 12-line one. The return itself does identical work in
+both cases, so every one of those 45 extra queries was the *response* — 5.0
+q/line, from `OrderSerializer` reading `variant.display_name` (option labels)
+plus the five affordance properties (`can_void`/`can_return`/`can_exchange`/
+`returned_quantity`/`returnable_quantity`) that each re-read
+`adjustment_lines`. `order.refresh_from_db()` is what stripped the prefetch
+cache `get_object()` had filled. Measured the halves separately: serializing
+the refreshed instance was 36/51/81 q at 3/6/12 lines, the same order re-read
+through `Order.objects.with_serializer_relations()` a flat **12**.
+The trap is that this was *already* a known-and-fixed shape here — `_checkout`
+carries a comment explaining the exact fix — and the purchasing lifecycle
+actions were later fixed by copying it. Nobody re-read the six sibling actions
+in the same file (`return_items`, `void`, `exchange_items`, `record_payment`,
+`assign_customer`, `convert`), all of which kept `refresh_from_db()` + a bare
+serialize. Also found while there: `_checkout` re-read via `get_queryset()`,
+whose `?product=`/`?variant=` filters can filter a just-mutated order out of
+its own response — `self.queryset` is the right handle.
+**Action:** Before profiling a mutation endpoint, ask which dimension the
+*operation* actually scales in. If the measured slope follows a dimension the
+write does not touch (invoice line count for a one-line return), stop and
+measure the serialization alone — one `CaptureQueriesContext` around the whole
+request hides which half bleeds. And when you find a fix-with-a-comment on one
+action, grep the *file* for its siblings before moving on; a comment explaining
+a fix is evidence the file was read once, not that it was read through.

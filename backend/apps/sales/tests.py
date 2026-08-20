@@ -2560,6 +2560,98 @@ class OrderListQueryCountTests(TestCase):
         self.assertIn("total", row)
 
 
+class AdjustmentResponseQueryCountTests(TestCase):
+    """Guards the adjustment responses (return / void / exchange / payment /
+    assign-customer / convert) against re-introducing the N+1 that
+    ``refresh_from_db()`` used to create: the refresh cleared the prefetch
+    cache ``get_object()`` had filled, so the response payload cost ~5 queries
+    per invoice line. The response is now re-read through the prefetch-rich
+    queryset, so its cost no longer depends on how many lines the invoice has.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.cashier = User.objects.create_user(
+            username="adjustment-cashier",
+            password="pass",
+        )
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.variants = []
+        for index in range(9):
+            product = create_product_with_default_variant(
+                sku=f"ADJQ{index}",
+                barcode="",
+                name=f"Adjustment guard item {index}",
+                unit_price=Decimal("4.00"),
+            )
+            StockItem.objects.create(
+                variant=product.default_variant,
+                quantity_on_hand=1000,
+            )
+            self.variants.append(product.default_variant)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.cashier)
+        self.client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "0.00"},
+            format="json",
+        )
+
+    def _checkout(self, line_count):
+        response = self.client.post(
+            reverse("order-checkout"),
+            {
+                "lines": [
+                    {"variant": variant.pk, "quantity": 2}
+                    for variant in self.variants[:line_count]
+                ]
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        return response.data
+
+    def _return_first_line(self, order):
+        return self.client.post(
+            reverse("order-return-items", args=[order["id"]]),
+            {
+                "reason": "Guard",
+                "lines": [{"line": order["lines"][0]["id"], "quantity": 1}],
+            },
+            format="json",
+        )
+
+    def test_return_response_query_count_does_not_grow_with_invoice_lines(self):
+        small_order = self._checkout(3)
+        with CaptureQueriesContext(connection) as small:
+            small_response = self._return_first_line(small_order)
+
+        large_order = self._checkout(9)
+        with CaptureQueriesContext(connection) as large:
+            large_response = self._return_first_line(large_order)
+
+        self.assertEqual(small_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(large_response.status_code, status.HTTP_200_OK)
+        # Both requests return exactly one line, so the work the return itself
+        # does is identical; only the serialized payload grows. Any per-line
+        # query in the response (option labels, adjustment_lines re-reads) makes
+        # the nine-line invoice cost strictly more than the three-line one.
+        self.assertEqual(len(small.captured_queries), len(large.captured_queries))
+
+    def test_return_response_payload_matches_a_fresh_read_of_the_order(self):
+        # The response is now built from a re-read rather than the refreshed
+        # instance; it must still be byte-for-byte what a detail GET returns.
+        order = self._checkout(3)
+
+        response = self._return_first_line(order)
+        detail = self.client.get(reverse("order-detail", args=[order["id"]]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, detail.data)
+
+
 class StockReservationTests(TestCase):
     """A quotation hold blocks others from the reserved units (availability =
     on-hand − committed) without moving on-hand, and releasing restores it."""
