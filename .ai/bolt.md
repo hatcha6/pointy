@@ -517,3 +517,54 @@ the app clean; the hole is per-*viewset*.
 it, not for the *cure* (`option_values`) at app or file granularity. A file with
 several viewsets where one is visibly tuned is the highest-yield place to look —
 the tuned one is why nobody re-read the others.
+
+## 2026-08-20 - A line's per-line reads happen in the CHILD serializer, so a parent-level preload is always too late
+**Learning:** `apps/sales/services.py::checkout_order` calls
+`preload_line_variants` with a comment saying it batches "the per-line product /
+categories / option_values reads below" — and `prepare_discount_lines` has a
+matching comment saying `.all()` "reuses the preloaded prefetch". Both were dead
+on the checkout path: DRF validates a `many=True` child **before** the parent's
+`validate()` runs, and `CheckoutLineSerializer.validate` is where the per-line
+reads actually live (`product.modifier_groups.filter(is_active=True)`,
+`resolve_unit` → `product.units` and `_base_uom`). By the time either the parent
+or the service could preload, every line had already paid. Measured on
+`order-checkout`: 8.0 q/line, of which 3 were catalog reads
+(`unitofmeasure` + `modifiergroup` + `productcategory`, 1 each per line). The
+same child serializer backs `order-discount-preview`, which the POS fires on
+**every cart edit** — 4.0 q/line there (51 queries on a 12-line cart).
+The fix is a `Meta.list_serializer_class` whose `to_internal_value` bulk-loads
+the cart's variants *before* `super()` runs the children, and a child `validate`
+that swaps in the enriched instance. Checkout 8.0 → 5.0 q/line (161 → 128 at 12
+lines), preview 4.0 → 1.0 (51 → 21); what is left is the `PrimaryKeyRelatedField`
+floor plus the genuine per-line writes.
+**Action:** When a document endpoint has per-line reads, find out *which*
+serializer level runs them before deciding where to batch. If they are in the
+child's `validate`, the only hook early enough is the ListSerializer's
+`to_internal_value`. And check the comments: two separate ones here asserted a
+prefetch was being reused that could not possibly be live on that path.
+
+**Also — a global lookup is not fixed by a prefetch.** `catalog/units.py::_base_uom`
+is `UnitOfMeasure.objects.filter(code=…).first()`, a lookup of a *tiny seeded
+table* that runs once per line resolved in its base unit (i.e. almost every
+line, in both sales and purchasing). No relation prefetch can reach it; it
+needed its own bulk primer (`prime_base_units`) stashing the row the function
+reads first.
+
+**And gate the primer on the cart size.** The bulk load costs ~6 queries however
+small the cart, replacing 3/line — so it breaks even at 2 lines and *regresses*
+a one-line sale, the commonest sale at a till (preview 7 → 10 q before I added
+the threshold). `preload_line_variants` had no such gate either, so it was
+already a net loss on one-line checkouts: gating it there took a one-line
+checkout 75 → 72. Measure at n=1 and n=2, not just at n=8.
+
+## 2026-08-20 - `--keepdb` reports a cascade of phantom failures after a TransactionTestCase run
+**Learning:** A broad `manage.py test … --keepdb` run reported 52 errors, all
+`UnitOfMeasure.DoesNotExist` in tests I had not touched. Nothing was wrong: this
+suite contains `TransactionTestCase`-based tests (the business simulation) which
+truncate every table on teardown and do not restore rows created by *data
+migrations*, so a kept database is left permanently missing its seeded reference
+data. The same suite on a fresh database was 993 tests, OK.
+**Action:** `--keepdb` is safe for iterating on one app's tests, but re-create
+the database (`--noinput`, no `--keepdb`) for the verification run — and when a
+keepdb run fails in code you never touched, suspect the kept database before the
+diff.

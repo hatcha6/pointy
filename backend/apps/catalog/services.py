@@ -3,6 +3,7 @@ from django.db.models import Prefetch
 from apps.attachments.models import Attachment
 
 from .models import ProductCategory, ProductVariant
+from .units import prime_base_units
 
 
 def image_attachment_prefetch(lookup):
@@ -80,25 +81,71 @@ def category_ids_with_descendants(category_ids):
     return category_ids
 
 
-def preload_line_variants(lines_data, *, key="variant"):
-    """Load every line's variant once with the relations the callers read per
-    line, then swap the enriched instances into ``lines_data``.
+# Marks an instance that came out of ``load_line_variants`` so a second,
+# defensive preload of the same lines is a no-op instead of a repeat bulk load.
+_LINE_PRELOADED_ATTR = "_pointy_line_preloaded"
+
+# A bulk load costs a handful of queries however small the document is, so
+# batching a *single* line is a regression: its two or three cold reads are
+# cheaper than the load that would replace them. One-line sales are the
+# commonest of all at a till, so both entry points share this threshold.
+MIN_LINES_TO_PRELOAD = 2
+
+
+def load_line_variants(variant_ids):
+    """``{pk: variant}`` for ``variant_ids``, carrying every relation a document
+    line's validation, pricing and discounting read.
 
     Document APIs resolve each line's variant with its own ``.get(pk=...)``
     (DRF ``PrimaryKeyRelatedField``), so the instances arrive bare: touching
-    ``variant.product`` (a query), ``product.categories`` (discount
-    eligibility) and ``variant.option_values`` (the display name) then costs a
-    query each, per line. One bulk load with those relations preloaded turns
-    3 queries/line into 3 for the whole request.
+    ``product.categories`` (discount eligibility), ``product.modifier_groups``
+    (per-line modifier pricing), ``product.units`` (unit conversion) or
+    ``variant.option_values`` (the display name) then costs a query each, per
+    line. One bulk load turns all of that into a constant few queries.
+
+    Both many-to-many relations are filtered in Python by their callers — a
+    ``.filter()`` on the manager builds a fresh queryset and ignores this
+    prefetch.
     """
-    variant_ids = {line_data[key].pk for line_data in lines_data}
+    variant_ids = set(variant_ids)
     if not variant_ids:
-        return
+        return {}
     enriched = (
         ProductVariant.objects.select_related("product")
-        .prefetch_related("option_values__option", "product__categories")
+        .prefetch_related(
+            "option_values__option",
+            "product__categories",
+            "product__modifier_groups",
+            "product__units__unit",
+        )
         .in_bulk(variant_ids)
     )
+    # The base unit is resolved once per line by ``resolve_unit``; prime it for
+    # the whole cart in one query rather than one lookup per line.
+    prime_base_units([variant.product for variant in enriched.values()])
+    for variant in enriched.values():
+        setattr(variant, _LINE_PRELOADED_ATTR, True)
+    return enriched
+
+
+def preload_line_variants(lines_data, *, key="variant"):
+    """Swap the enriched instances from :func:`load_line_variants` into
+    ``lines_data``.
+
+    Lines validated through ``CheckoutLineSerializer`` arrive preloaded already
+    — its list serializer loads them *before* the lines validate, the only point
+    early enough for the per-line reads inside ``validate`` — so this is the
+    safety net for entry points that hand over bare rows, and skips the load
+    when every line is already enriched.
+    """
+    pending_ids = {
+        line_data[key].pk
+        for line_data in lines_data
+        if not getattr(line_data[key], _LINE_PRELOADED_ATTR, False)
+    }
+    if len(pending_ids) < MIN_LINES_TO_PRELOAD:
+        return
+    enriched = load_line_variants(pending_ids)
     for line_data in lines_data:
         preloaded = enriched.get(line_data[key].pk)
         if preloaded is not None:
