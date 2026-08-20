@@ -150,6 +150,18 @@ class PaymentsHubViewModel extends ChangeNotifier {
     loadCustomerPayments();
   }
 
+  /// Drops the date window and the method filter together, then reloads once.
+  /// Calling the two setters in turn would fire two overlapping requests for
+  /// the same ledger.
+  void clearCustomerFilters() {
+    if (_customerRange == null && _customerMethod == null) {
+      return;
+    }
+    _customerRange = null;
+    _customerMethod = null;
+    loadCustomerPayments();
+  }
+
   // ----- Supplier money-OUT ------------------------------------------------
 
   Future<void> loadSupplierPayments() async {
@@ -215,6 +227,16 @@ class PaymentsHubViewModel extends ChangeNotifier {
 
   void setSupplierMethod(SupplierPaymentMethod? method) {
     _supplierMethod = method;
+    loadSupplierPayments();
+  }
+
+  /// Supplier-side counterpart of [clearCustomerFilters].
+  void clearSupplierFilters() {
+    if (_supplierRange == null && _supplierMethod == null) {
+      return;
+    }
+    _supplierRange = null;
+    _supplierMethod = null;
     loadSupplierPayments();
   }
 

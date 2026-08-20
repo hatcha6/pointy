@@ -2809,6 +2809,14 @@
   "@queryClearSearchAndFiltersButton": {
     "description": "Button that clears the search term and every user-set filter on a query-driven list."
   },
+  "queryNoFiltersResultsMessage": "امسح الفلاتر لعرض القائمة كاملة.",
+  "@queryNoFiltersResultsMessage": {
+    "description": "Query-driven list empty state guidance when filters alone emptied the list and no search term is set. Names no search box, so it also reads correctly on surfaces that have none."
+  },
+  "queryClearFiltersButton": "مسح الفلاتر",
+  "@queryClearFiltersButton": {
+    "description": "Button that clears only the user-set filters, on a list with no search term set."
+  },
   "queryNoSearchResultsMessage": "تحقق من الكتابة، أو امسح البحث لعرض القائمة كاملة.",
   "@queryNoSearchResultsMessage": {
     "description": "Query-driven list empty state guidance when the search term is the only thing narrowing the list."

@@ -8551,6 +8551,18 @@ abstract class AppLocalizations {
   /// **'مسح البحث والفلاتر'**
   String get queryClearSearchAndFiltersButton;
 
+  /// Query-driven list empty state guidance when filters alone emptied the list and no search term is set. Names no search box, so it also reads correctly on surfaces that have none.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح الفلاتر لعرض القائمة كاملة.'**
+  String get queryNoFiltersResultsMessage;
+
+  /// Button that clears only the user-set filters, on a list with no search term set.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح الفلاتر'**
+  String get queryClearFiltersButton;
+
   /// Query-driven list empty state guidance when the search term is the only thing narrowing the list.
   ///
   /// In ar, this message translates to:

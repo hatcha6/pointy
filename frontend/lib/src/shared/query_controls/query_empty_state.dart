@@ -23,6 +23,7 @@ class QueryEmptyState extends StatelessWidget {
     required this.hasFilters,
     required this.emptyTitle,
     required this.onClear,
+    this.emptyMessage,
     this.emptyAction,
   });
 
@@ -38,6 +39,11 @@ class QueryEmptyState extends StatelessWidget {
   final bool hasFilters;
 
   final String emptyTitle;
+
+  /// Optional supporting line for the genuinely-empty case only. The filtered
+  /// case words its own message after whatever is narrowing the list, so a
+  /// "records will show up here" line would contradict it.
+  final String? emptyMessage;
 
   /// Clears the search term and every user-set filter.
   final VoidCallback onClear;
@@ -56,32 +62,38 @@ class QueryEmptyState extends StatelessWidget {
       return PointyEmptyState(
         icon: icon,
         title: emptyTitle,
+        message: emptyMessage,
         action: emptyAction,
       );
     }
 
-    // Only name the funnel when a filter is actually narrowing the list. The
-    // contact pickers have no funnel at all, and on the list screens it is
-    // usually untouched — telling the user to clear filters they never set
-    // points at a control that will not change anything.
+    // Name only what is actually narrowing the list. Three cases, not two:
+    // the funnel alone, the search term alone, or both. Collapsing the first
+    // into "both" tells someone who typed nothing to check their spelling and
+    // offers to clear a search box that, on the payments hub and the contact
+    // pickers, does not exist at all.
+    final hasSearch = term.isNotEmpty;
+
     return PointyEmptyState(
       icon: Icons.search_off,
-      title: term.isEmpty
-          ? l10n.queryNoFilteredResultsTitle
-          : l10n.queryNoSearchResultsTitle(term),
-      message: hasFilters
-          ? l10n.queryNoResultsMessage
-          : l10n.queryNoSearchResultsMessage,
+      title: hasSearch
+          ? l10n.queryNoSearchResultsTitle(term)
+          : l10n.queryNoFilteredResultsTitle,
+      message: switch ((hasSearch, hasFilters)) {
+        (true, true) => l10n.queryNoResultsMessage,
+        (true, false) => l10n.queryNoSearchResultsMessage,
+        (false, _) => l10n.queryNoFiltersResultsMessage,
+      },
       action: FilledButton.tonalIcon(
         onPressed: onClear,
         icon: Icon(
           hasFilters ? Icons.filter_alt_off_outlined : Icons.search_off,
         ),
-        label: Text(
-          hasFilters
-              ? l10n.queryClearSearchAndFiltersButton
-              : l10n.queryClearSearchButton,
-        ),
+        label: Text(switch ((hasSearch, hasFilters)) {
+          (true, true) => l10n.queryClearSearchAndFiltersButton,
+          (true, false) => l10n.queryClearSearchButton,
+          (false, _) => l10n.queryClearFiltersButton,
+        }),
       ),
     );
   }

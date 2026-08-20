@@ -4833,6 +4833,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get queryClearSearchAndFiltersButton => 'مسح البحث والفلاتر';
 
   @override
+  String get queryNoFiltersResultsMessage => 'امسح الفلاتر لعرض القائمة كاملة.';
+
+  @override
+  String get queryClearFiltersButton => 'مسح الفلاتر';
+
+  @override
   String get queryNoSearchResultsMessage =>
       'تحقق من الكتابة، أو امسح البحث لعرض القائمة كاملة.';
 
