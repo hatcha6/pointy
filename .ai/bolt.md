@@ -730,3 +730,35 @@ exactly this reason, and consumed by `ProductVariantViewSet` and the stock-count
 screen — sat imported in the same file. Measured 15.0 q/variant (72/117/207/327
 at 3/6/12/20 variants), flat 33 after. A shared factory does not close the shape;
 grep every `@action` that builds its own queryset against it.
+
+## 2026-08-20 - Diff the query-shape HISTOGRAM at N and 2N, not the total
+**Learning:** `order-checkout` had a documented per-line floor of 5 queries,
+annotated in `test_checkout_line_preload.py` as "the `PrimaryKeyRelatedField`
+floor plus the genuine per-line writes" — which reads like nothing is left to
+take. Bucketing the captured SQL by `verb + table` and diffing the counts
+between a 2-line and an 8-line cart showed the floor was actually five *distinct*
+shapes at exactly 1.00/line each, and three of them were the stock write:
+`SELECT inventory_stockitem FOR UPDATE`, `UPDATE inventory_stockitem`,
+`INSERT INTO inventory_stockmovement`. All three batch trivially
+(`variant_id__in` lock, `bulk_update`, `bulk_create`) because
+`prepare_sale_stock_adjustments` has already aggregated the cart to one entry
+per distinct variant. Measured: 4.67 -> 1.67 q/line, 167 -> 110 on a 20-line
+cart. A total-count scaling test cannot tell "one irreducible read per line"
+from "five things, three of them batchable"; the histogram can, and it took
+about ten lines of `re` + `Counter` in a throwaway test.
+**Action:** When a scaling test is *already passing* at a bound someone wrote
+down, print the per-shape slope before believing the bound. And on the write
+side specifically: a per-line INSERT/UPDATE loop is invisible to every
+serializer/prefetch audit in this journal, so it survives long after the reads
+are clean.
+
+**Also — a batched `select_for_update()` must carry its own `order_by()`.**
+`StockItem.Meta.ordering` is `["variant__product__name", "variant__name"]`, so a
+bare `StockItem.objects.select_for_update().filter(variant_id__in=…)` would join
+`catalog_productvariant` + `catalog_product` into the lock and take row locks on
+the catalog too. `.order_by("variant_id")` drops the joins *and* preserves the
+ascending-id lock ordering the per-row loop relied on for deadlock avoidance
+(Postgres puts LockRows above Sort, so rows are locked in output order).
+And `bulk_update` does not run field `pre_save`, so an `auto_now` column has to
+be stamped by hand — the per-row `save(update_fields=[..., "updated_at"])` it
+replaces did refresh it.

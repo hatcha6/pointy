@@ -1,6 +1,17 @@
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import StockBatch, StockItem, StockMovement
+
+# The quantity columns a stock write touches, plus the timestamp that has to
+# move with them. Shared by the single-row save and the batched one so the two
+# can never write different field sets.
+STOCK_QUANTITY_FIELDS = [
+    "quantity_on_hand",
+    "quantity_committed",
+    "quantity_expected",
+    "updated_at",
+]
 
 
 def lock_stock_item(*, variant):
@@ -12,6 +23,38 @@ def lock_stock_item(*, variant):
     return stock_item
 
 
+def lock_stock_items(variants):
+    """Lock a whole document's stock rows in one query, keyed by variant id.
+
+    Locking row-by-row costs a ``SELECT ... FOR UPDATE`` per line on the busiest
+    write path in the shop. One ``variant_id__in`` statement does the same work
+    once. Two details are load-bearing:
+
+    * ``order_by("variant_id")`` replaces ``StockItem.Meta.ordering``, which
+      sorts through ``variant__product__name`` — that would join the catalog
+      tables into a ``FOR UPDATE`` and lock their rows too. It also keeps the
+      ascending-variant-id lock order the per-row loop established, which is
+      what stops two concurrent carts deadlocking on a shared product.
+    * A variant that has never held stock has no row yet, so those fall back to
+      ``lock_stock_item`` (which creates one) — still ascending, and normally
+      not reached at all.
+    """
+    variants_by_id = {variant.pk: variant for variant in variants if variant is not None}
+    ordered_ids = sorted(variants_by_id)
+    if not ordered_ids:
+        return {}
+    locked = {
+        stock_item.variant_id: stock_item
+        for stock_item in StockItem.objects.select_for_update()
+        .filter(variant_id__in=ordered_ids)
+        .order_by("variant_id")
+    }
+    for variant_id in ordered_ids:
+        if variant_id not in locked:
+            locked[variant_id] = lock_stock_item(variant=variants_by_id[variant_id])
+    return locked
+
+
 def stock_snapshot(stock_item):
     return {
         "on_hand": stock_item.quantity_on_hand,
@@ -21,17 +64,26 @@ def stock_snapshot(stock_item):
 
 
 def save_stock_item_quantities(stock_item):
-    stock_item.save(
-        update_fields=[
-            "quantity_on_hand",
-            "quantity_committed",
-            "quantity_expected",
-            "updated_at",
-        ],
-    )
+    stock_item.save(update_fields=STOCK_QUANTITY_FIELDS)
 
 
-def create_stock_movement(
+def save_stock_item_quantities_bulk(stock_items):
+    """Write a whole document's adjusted stock rows in one UPDATE.
+
+    ``bulk_update`` does not run a field's ``pre_save``, so ``updated_at``
+    (``auto_now``) has to be stamped here — otherwise the batched write would
+    leave the timestamp stale where the per-row save refreshes it.
+    """
+    rows = [stock_item for stock_item in stock_items if stock_item is not None]
+    if not rows:
+        return
+    now = timezone.now()
+    for stock_item in rows:
+        stock_item.updated_at = now
+    StockItem.objects.bulk_update(rows, STOCK_QUANTITY_FIELDS)
+
+
+def build_stock_movement(
     *,
     stock_item,
     movement_type,
@@ -41,6 +93,13 @@ def create_stock_movement(
     before,
     variant=None,
 ):
+    """The unsaved ledger row for one stock change, or ``None`` for a no-op.
+
+    ``create_stock_movement`` saves it immediately; a multi-line document
+    collects the instances instead and inserts them with
+    ``create_stock_movements``. Both build the row here, so a batched write and
+    a single one can never record different history.
+    """
     variant = variant or stock_item.variant
     if variant is None:
         raise serializers.ValidationError({"variant": "Variant is required."})
@@ -50,7 +109,7 @@ def create_stock_movement(
         )
     if quantity <= 0:
         return None
-    return StockMovement.objects.create(
+    return StockMovement(
         variant=variant,
         stock_item=stock_item,
         movement_type=movement_type,
@@ -64,6 +123,21 @@ def create_stock_movement(
         expected_before=before["expected"],
         expected_after=stock_item.quantity_expected,
     )
+
+
+def create_stock_movement(**kwargs):
+    movement = build_stock_movement(**kwargs)
+    if movement is not None:
+        movement.save()
+    return movement
+
+
+def create_stock_movements(movements):
+    """Insert a batch of built movements in one statement."""
+    rows = [movement for movement in movements if movement is not None]
+    if not rows:
+        return []
+    return StockMovement.objects.bulk_create(rows)
 
 
 def create_expiring_stock_batch(*, receipt_line, expiry_date, quantity):
