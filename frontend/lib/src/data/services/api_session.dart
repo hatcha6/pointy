@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -90,9 +91,39 @@ class _ConditionalCacheEntry {
 }
 
 class PosApiSession {
-  PosApiSession({required this.client, required String baseUrl})
-    : _baseUrl = _normalizeBaseUrl(baseUrl);
+  PosApiSession({
+    required this.client,
+    required String baseUrl,
+    this.requestTimeout = defaultRequestTimeout,
+  }) : _baseUrl = _normalizeBaseUrl(baseUrl);
 
+  /// How long a request may stay unanswered before it is abandoned.
+  ///
+  /// A backend that refuses the connection throws immediately, and everything
+  /// downstream — the relay fallback, [onLocalTargetUnreachable], the screen's
+  /// error state — is built to handle that. A backend that *accepts* the
+  /// connection and then goes silent throws nothing at all: `dart:io` sets no
+  /// read deadline, so the future never completes and the cashier watches a
+  /// spinner through a sale. That is a wedged uvicorn, an AP roam that
+  /// stranded a pooled connection, or a LAN dropping packets after the
+  /// handshake — all routine in a shop. This bound turns that silence into the
+  /// transport failure the rest of the app already knows how to handle.
+  ///
+  /// Matched to the relay's own `relayRequestTimeout` (60s) so a relayed
+  /// request is never cut client-side before the relay itself would have
+  /// answered with a 504.
+  ///
+  /// Abandoning the future does not close the socket — `package:http` has no
+  /// per-request cancel — so the stranded connection lingers until the OS or
+  /// the pool reaps it. That is the cheap half of the trade: the app is
+  /// unblocked, and one dead socket per wedged request is survivable.
+  static const Duration defaultRequestTimeout = Duration(seconds: 60);
+
+  /// The deadline a genuinely long server-side job needs — a database backup,
+  /// a legacy-data import, an attendance pull off the fingerprint device.
+  static const Duration longRunningRequestTimeout = Duration(minutes: 10);
+
+  final Duration requestTimeout;
   final http.Client client;
   ApiPerformanceRecorder? performanceRecorder;
   final Map<String, String> _cookies = {};
@@ -292,12 +323,17 @@ class PosApiSession {
     Object? body,
     bool includeCsrf = true,
     String? idempotencyKey,
+    Duration? timeout,
   }) async {
     final encodedBody = body == null ? null : jsonEncode(body);
     return _send(
       method: 'POST',
       path: path,
       requestSizeBytes: _encodedSize(encodedBody),
+      timeout: timeout,
+      // Only a keyed POST can be safely repeated: the backend recognises the
+      // key and returns the original outcome instead of recording a second one.
+      replayable: (idempotencyKey?.trim() ?? '').isNotEmpty,
       request: () => client.post(
         uri(path),
         headers: headers(
@@ -381,6 +417,7 @@ class PosApiSession {
     String path, {
     Map<String, String> fields = const {},
     List<ApiMultipartFile> files = const [],
+    Duration? timeout,
   }) async {
     final requestSizeBytes =
         fields.entries.fold<int>(
@@ -393,6 +430,8 @@ class PosApiSession {
       method: 'POST',
       path: path,
       requestSizeBytes: requestSizeBytes,
+      timeout: timeout,
+      replayable: false,
       request: () async {
         final request = http.MultipartRequest('POST', uri(path));
         request.fields.addAll(fields);
@@ -519,7 +558,11 @@ class PosApiSession {
     required String path,
     required Future<http.Response> Function() request,
     int requestSizeBytes = 0,
+    Duration? timeout,
+    bool replayable = true,
   }) async {
+    final deadline = timeout ?? requestTimeout;
+    Future<http.Response> attempt() => request().timeout(deadline);
     if (method != 'GET') {
       // A write is about to change server state: GETs issued from here on
       // must not join responses computed before it.
@@ -528,7 +571,7 @@ class PosApiSession {
     final stopwatch = Stopwatch()..start();
     final bool wasLocal = !usesRelay;
     try {
-      final response = await request();
+      final response = await attempt();
       stopwatch.stop();
       captureResponseState(response);
       _recordPerformance(
@@ -541,7 +584,14 @@ class PosApiSession {
       );
       return response;
     } on Exception catch (exception) {
-      if (_fallbackTarget != null && _fallbackTarget!.isUsable) {
+      // A connection that never opened proves the server never saw the
+      // request, so replaying it on the relay is free. A request that timed
+      // out proves nothing: the sale may already be recorded. Replay those
+      // only when the server can recognise the repeat — a GET, or a write
+      // carrying an idempotency key — and otherwise surface the timeout so
+      // the cashier decides, rather than risk billing the customer twice.
+      final mayReplay = replayable || exception is! TimeoutException;
+      if (mayReplay && _fallbackTarget != null && _fallbackTarget!.isUsable) {
         final fallback = _fallbackTarget!;
         _fallbackTarget = null;
         configureConnectionTarget(
@@ -549,7 +599,7 @@ class PosApiSession {
           relayToken: fallback.relayToken,
         );
         try {
-          final response = await request();
+          final response = await attempt();
           stopwatch.stop();
           captureResponseState(response);
           _recordPerformance(
@@ -565,7 +615,7 @@ class PosApiSession {
           // Record the original failure below; it is usually the LAN failure
           // that caused routing to fall back.
         }
-      } else if (_fallbackTarget != null) {
+      } else if (mayReplay && _fallbackTarget != null) {
         _fallbackTarget = null;
       }
       stopwatch.stop();
