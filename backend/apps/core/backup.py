@@ -118,7 +118,42 @@ def latest_maintenance_job(operation=None):
     return queryset.order_by("-created_at").first()
 
 
+def reap_abandoned_maintenance_jobs(now=None):
+    """Fail maintenance jobs whose worker died without unwinding.
+
+    ``run_backup``/``run_restore`` only mark a job failed from their ``except``
+    block, so anything that kills the process outright — a power cut, a container
+    restart, an OOM kill, celery's hard ``time_limit`` — leaves the row in
+    ``running`` for good. A ``queued`` job is lost the same way when the broker
+    restarts empty and the task is never delivered. Either way the row keeps
+    ``active_maintenance_job()`` truthy, which silently disables every future
+    backup: the scheduled one no-ops each minute and the manual one 400s with
+    "another job is already running", with no way out of the UI. On this
+    deployment — on-prem, unreliable mains — that is the shop losing its backups
+    to the exact outage backups exist for.
+
+    Celery hard-kills a maintenance task at ``POINTY_BACKUP_TASK_TIME_LIMIT``, so
+    a job that has not checked in since then provably cannot still be running;
+    ``updated_at`` is the heartbeat, refreshed by every ``update_progress`` call.
+    Failing it explicitly (rather than just ignoring it) also replaces the UI's
+    permanent "backup running" spinner with an honest outcome.
+    """
+    cutoff = (now or timezone.now()) - timedelta(
+        seconds=settings.POINTY_BACKUP_TASK_TIME_LIMIT
+    )
+    abandoned = SystemMaintenanceJob.objects.filter(
+        status__in=[
+            SystemMaintenanceJob.Status.QUEUED,
+            SystemMaintenanceJob.Status.RUNNING,
+        ],
+        updated_at__lte=cutoff,
+    )
+    for job in abandoned:
+        job.mark_failed("توقفت العملية قبل أن تكتمل (توقف الخادم أثناء التنفيذ).")
+
+
 def active_maintenance_job():
+    reap_abandoned_maintenance_jobs()
     return (
         SystemMaintenanceJob.objects.filter(
             status__in=[
