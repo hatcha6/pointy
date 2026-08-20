@@ -813,3 +813,43 @@ flat and a per-row slope will call it cheap. Scale the collection itself. And
 check the embedded copy's permission: a nested read-only relation inherits the
 parent's permission map, so embedding an audit trail is also a quiet way around
 its own `view_` gate.
+
+## 2026-08-21 - The hottest path is the one nobody re-derives the prefetch for
+**Learning:** `ProductCategorySerializer.parent_name` is `parent.name`, so every
+payload embedding it pays one query per *sub*category. Two of the three callers
+already knew: `ProductCategoryViewSet.get_queryset` `select_related("parent")`
+with a comment naming the N+1, and `catalog.services.variant_detail_queryset()`
+carries `Prefetch("product__categories", queryset=…select_related("parent"))`
+with its own comment. The third — `ProductViewSet.queryset`, the POS catalog
+list, the single hottest read in the app — had the bare string `"categories"`,
+sandwiched between two *correct* helper-built prefetches
+(`image_attachment_prefetch`, `unit_detail_prefetch`). Measured on 50 products
+with two subcategories each: **113 → 13 queries**, a clean 2.00/row → 0
+(23/33/63/113 at 5/10/25/50 before, flat 13 after). `product-variant-list` was
+already 10 and stayed 10, which is the whole point.
+**Action:** Two things kept it alive and both are checkable. (1) The existing
+scaling test built *root* categories only (`ProductCategory.objects.create(
+name=f"cat{i}")` with no parent), so the branch that queries never ran under
+test — a fixture whose optional relation is unpopulated makes an N+1
+test-invisible, same as the missing `ProductUnit` rows in the units case.
+Nesting one line of fixture made the existing `small == large` assertion fail on
+`main` with no new test needed. (2) Reach for the *static* diff before
+measuring: enumerating `router.registry`, walking each `serializer_class`'s
+fields for dotted `source=` / nested serializers, and subtracting the queryset's
+`select_related`/`_prefetch_related_lookups` shortlists every missing relation in
+the whole API in one pass (~40 lines of throwaway script). It found five, of
+which this was the hot one. Do that first next time — it is strictly cheaper
+than reading viewsets one by one.
+
+**Next targets (found by that scan, unfixed):** `payroll-run-list` is 2.0
+queries/run — `approved_by_username`/`paid_by_username` traverse two FKs the
+viewset never `select_related`s (measured 15 q at 4 runs, 23 at 8);
+`discount-rules` serializes `tiers` with no prefetch. Both are cold-ish admin
+screens, which is why they stayed out of this change.
+
+**Also — a real flake, pre-existing on `main`:**
+`test_product_variants_action_scaling.test_payload_matches_an_unprefetched_serialization`
+fails 3/3 on a clean tree. The primed and cold payloads differ only in the
+rotating signed image token (`…1wxAvd:jJba…` vs `…1wxAvf:nAvd…`), which is
+regenerated per serialization from the clock. Any future payload-equality test
+against an attachment URL has to strip or freeze that token.
