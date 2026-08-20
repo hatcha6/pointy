@@ -606,7 +606,7 @@ class _PosSaleSession {
   final List<CartLine> cart = [];
   Customer? selectedCustomer;
   String couponCode = '';
-  final Map<String, String> _checkoutIdempotencyKeysBySignature = {};
+  final Map<String, _PosCheckoutAttempt> _checkoutAttemptsBySignature = {};
   SaleDiscountPreview? discountPreview;
   bool isLoadingDiscountPreview = false;
   bool hasDiscountPreviewError = false;
@@ -618,14 +618,76 @@ class _PosSaleSession {
 
   void touch() {
     updatedAt = DateTime.now();
-    _checkoutIdempotencyKeysBySignature.clear();
+    // The cart changed, so whatever was minted for the previous contents is no
+    // longer this sale. A completed checkout drops the whole session, so the
+    // cashier ringing the same basket twice in a row still gets a fresh key.
+    _checkoutAttemptsBySignature.clear();
   }
 
-  String checkoutIdempotencyKeyFor(SaleCheckoutDraft draft) {
-    return _checkoutIdempotencyKeysBySignature.putIfAbsent(
+  /// The idempotency key — and the exact invoice-print routing — to send for
+  /// [draft]. Memoized per commercial signature so every retry of the same sale
+  /// reaches the backend as a byte-identical request and replays instead of
+  /// booking a second sale.
+  _PosCheckoutAttempt checkoutAttemptFor(SaleCheckoutDraft draft) {
+    return _checkoutAttemptsBySignature.putIfAbsent(
       _checkoutSignature(draft),
-      _newCheckoutIdempotencyKey,
+      () => _PosCheckoutAttempt(
+        idempotencyKey: _newCheckoutIdempotencyKey(),
+        invoicePrinterConfig: draft.invoicePrinterConfig,
+      ),
     );
+  }
+
+  List<Object?> checkoutAttemptsToJson() {
+    return [
+      for (final entry in _checkoutAttemptsBySignature.entries)
+        entry.value.toJson(entry.key),
+    ];
+  }
+
+  void restoreCheckoutAttempts(Object? json) {
+    if (json is! List) {
+      return;
+    }
+    for (final item in json) {
+      if (item is! Map) {
+        continue;
+      }
+      final map = item.cast<String, Object?>();
+      final signature = map['signature'];
+      final key = map['key'];
+      if (signature is! String || key is! String || key.isEmpty) {
+        continue;
+      }
+      final printerJson = map['printer'];
+      _checkoutAttemptsBySignature[signature] = _PosCheckoutAttempt(
+        idempotencyKey: key,
+        invoicePrinterConfig: printerJson is Map
+            ? PrinterConfig.fromJson(printerJson.cast<String, Object?>())
+            : null,
+      );
+    }
+  }
+}
+
+/// One checkout request the cashier has already sent (or is about to send) for
+/// the current cart: the key that makes it idempotent, plus the print routing
+/// that was in the body, so a retry can reproduce the same body.
+class _PosCheckoutAttempt {
+  const _PosCheckoutAttempt({
+    required this.idempotencyKey,
+    required this.invoicePrinterConfig,
+  });
+
+  final String idempotencyKey;
+  final PrinterConfig? invoicePrinterConfig;
+
+  Map<String, Object?> toJson(String signature) {
+    return {
+      'signature': signature,
+      'key': idempotencyKey,
+      'printer': invoicePrinterConfig?.toJson(),
+    };
   }
 }
 
@@ -633,6 +695,16 @@ String _newCheckoutIdempotencyKey() {
   return 'checkout:${generateAnalyticsEventId()}';
 }
 
+/// The sale's commercial identity — the lines, payments, customer, coupon and
+/// sale type the backend actually records.
+///
+/// `print_invoice` is deliberately left out. Which printer the receipt goes to
+/// does not make it a different sale, and while it was part of the signature a
+/// printer config that resolved differently between two attempts (the shop
+/// settings failing to reload during the very outage that made the first
+/// attempt time out, clearing the manual print toggle) rotated the idempotency
+/// key and booked the sale twice.
 String _checkoutSignature(SaleCheckoutDraft draft) {
-  return jsonEncode(draft.toJson());
+  final body = draft.toJson()..remove('print_invoice');
+  return jsonEncode(body);
 }
