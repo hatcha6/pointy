@@ -500,3 +500,20 @@ add. `StockCountViewSet` annotated `counted_line_count` and not
 second to the existing `annotate()` is safe — the two-relations cross product
 (2026-08-19) needs *different* relations. Grep the annotated names against the
 serializer's fallbacks; the pair almost always drifts apart.
+
+## 2026-08-20 - A correct prefetch elsewhere in the same FILE is what hides the missing one
+**Learning:** The `variant.display_name` sweep (2026-08-19) looked finished:
+every app whose serializers carry a `display_name` source — customers,
+inventory, purchasing, sales, operations — greps positive for an
+`option_values` prefetch. But `apps/operations/views.py` holds *five* viewsets,
+and only `JobViewSet` had it. `BillOfMaterialsViewSet`, 300 lines below in the
+same file, prefetched `lines__component_variant__product` — a real relation, so
+it reads as deliberate — and paid 1 query for the output variant plus 1 per
+component line. Measured `bom-list` with 4 components a recipe: 31 q at 5
+recipes, 56 at 10, **256 at 50**; flat 8 after. A per-app grep for the fix marks
+the app clean; the hole is per-*viewset*.
+**Action:** When checking whether a known N+1 shape is fixed, grep for the
+*symptom* (the serializer's `source=`) and resolve it to the viewset that owns
+it, not for the *cure* (`option_values`) at app or file granularity. A file with
+several viewsets where one is visibly tuned is the highest-yield place to look —
+the tuned one is why nobody re-read the others.
