@@ -205,3 +205,21 @@ section individually, with all revenue/profit sections behind
 `get_required_permissions` is a cheap, high-signal 2-minute check. Treat a hit
 as a finding *only* if the handler does not scope to `request.user` — but a
 newly added empty tuple with no such scoping is a genuine hole.
+
+## 2026-08-20 - The escalation guard covered `extra_permissions` but not `role`
+**Learning:** `PosUserSerializer.validate_extra_permissions` has an explicit
+"you can only grant what you hold" rule — and the two adjacent fields that grant
+just as much had none. `role` is a `ChoiceField` over `ROLE_GROUPS` with no
+guard, and `manager` resolves to `role_permission_codes(...) is None` = every
+permission; `password` lets an actor take over any account outright. Both
+`auth.add_user` and `auth.change_user` are in `PERMISSION_CATALOG`, so a manager
+delegating staff-account upkeep to a cashier handed them a one-request path to
+`role: manager` (or to resetting the manager's own password and logging in).
+Guards now sit in `validate_role` + `validate()`, keyed on
+`role_permission_codes(resolved_role) is None` so a manager/superuser
+short-circuits and the default configuration is unchanged.
+**Action:** When one field on a serializer carries an authorization check, ask
+what *else* on that serializer grants the same thing. A per-field guard is a
+smell: the check belongs to the operation, not the field. Self-service edits use
+different serializers (`CurrentUserUpdateSerializer`, `PasswordChangeSerializer`)
+so tightening `PosUserSerializer` cannot break a user editing their own profile.
