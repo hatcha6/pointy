@@ -67,35 +67,26 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         final l10n = AppLocalizations.of(context)!;
         final viewModel = widget.viewModel;
         final job = viewModel.job;
+        final menuItems = job == null
+            ? const <PopupMenuEntry<String>>[]
+            : _menuItems(l10n, job);
 
         return PointyScaffold(
           appBar: PointyAppBar(
             title: Text(job?.jobNumber ?? l10n.jobDetailsTitle),
             isLoading: viewModel.isLoading || viewModel.isMutating,
             actions: [
-              if (job != null)
+              // Every entry is conditional, so a completed or cancelled job
+              // seen by someone without reopen permission leaves the menu
+              // empty — and a PopupMenuButton with no items looks enabled but
+              // does nothing when tapped. Hide it instead, like the invoice
+              // and purchase order row menus do.
+              if (job != null && menuItems.isNotEmpty)
                 PopupMenuButton<String>(
                   enabled: !viewModel.isMutating,
+                  tooltip: l10n.moreActionsTooltip,
                   onSelected: (action) => _onMenuAction(action, job),
-                  itemBuilder: (menuContext) => [
-                    if (job.status == OperationsJobStatus.open)
-                      PopupMenuItem(
-                        value: 'move',
-                        child: Text(l10n.jobMoveToStageAction),
-                      ),
-                    if (job.status == OperationsJobStatus.open &&
-                        job.order == null)
-                      PopupMenuItem(
-                        value: 'cancel',
-                        child: Text(l10n.jobCancelAction),
-                      ),
-                    if (job.status != OperationsJobStatus.open &&
-                        widget.capabilities.canReopenJobs)
-                      PopupMenuItem(
-                        value: 'reopen',
-                        child: Text(l10n.jobReopenAction),
-                      ),
-                  ],
+                  itemBuilder: (menuContext) => menuItems,
                 ),
             ],
           ),
@@ -123,6 +114,23 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         );
       },
     );
+  }
+
+  /// The overflow-menu entries available for [job]. May be empty, in which
+  /// case the caller must not render the menu button at all.
+  List<PopupMenuEntry<String>> _menuItems(
+    AppLocalizations l10n,
+    OperationsJob job,
+  ) {
+    final isOpen = job.status == OperationsJobStatus.open;
+    return [
+      if (isOpen)
+        PopupMenuItem(value: 'move', child: Text(l10n.jobMoveToStageAction)),
+      if (isOpen && job.order == null)
+        PopupMenuItem(value: 'cancel', child: Text(l10n.jobCancelAction)),
+      if (!isOpen && widget.capabilities.canReopenJobs)
+        PopupMenuItem(value: 'reopen', child: Text(l10n.jobReopenAction)),
+    ];
   }
 
   Future<void> _onMenuAction(String action, OperationsJob job) async {

@@ -507,3 +507,40 @@ placed the new class *between* that class and its `///` comment, silently
 re-homing the doc onto the new widget. The analyzer is happy; only `git diff`
 catches it. Anchor on the doc comment's first line, or re-read the diff around
 every inserted class.
+
+## 2026-08-20 - An all-conditional `PopupMenuButton` is an enabled button that does nothing
+
+**Learning:** Flutter's `PopupMenuButton.showButtonMenu()` guards with
+`if (items.isNotEmpty)` — literally commented "Only show the menu if there is
+something to show". So a menu whose `itemBuilder` returns `[]` renders a normal,
+enabled, tappable ⋮ that opens nothing at all: no menu, no snackbar, no
+explanation. This is the *third* shape of the absent-control seam (after
+`if (canX) Button` and `onPressed: null`), and unlike those two it is invisible
+to every existing audit, because the control is present and looks live.
+
+An 11-site sweep of `PopupMenuButton` in `lib/src` found exactly **one**
+deviation, which is what makes it defensible: `invoice_list_screen` and
+`purchase_order_list_screen` both already guard the render
+(`if (onPrint != null || onShare != null || onEdit != null)`), and the other
+eight have at least one unconditional entry, so they can never be empty. Only
+`job_details_screen` had all three entries conditional behind
+`if (job != null)` — empty exactly when `status != open && !canReopenJobs`,
+i.e. any technician opening a finished job.
+
+**Action:** Audit `PopupMenuButton` by asking "can `itemBuilder` return an empty
+list?", not by reading `enabled:`. When it can, hoist the items into a named
+method and render `if (items.isNotEmpty)` — the repo's own idiom, and it keeps
+`onSelected`'s switch and the items in one place. Two notes for the test:
+`OperationsJobStatus.fromJson` falls through to `open` for any unknown string,
+so a `'closed'` fixture silently tests the *open* case and every assertion
+inverts — use the real enum values (`completed`/`cancelled`). And the job number
+renders in both the app bar and the header card, so `find.text(jobNumber)` needs
+`findsWidgets`, not `findsOneWidget`.
+
+**Also — `PopupMenuButton` was outside the icon-button tooltip audit.** The
+2026-08-19 entry's "every `IconButton` has a tooltip" sweep did not cover it,
+and a `PopupMenuButton` with no `tooltip:` falls back to
+`MaterialLocalizations.showMenuTooltip` ("إظهار القائمة") rather than naming what
+the menu does. Still unlabelled after this run: `recipes_page.dart:102`,
+`sales_channels_page.dart:318`, `payments_hub_screen.dart:627`. `moreActionsTooltip`
+("إجراءات") already exists and needs no new string.
