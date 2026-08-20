@@ -595,3 +595,36 @@ measure the serialization alone — one `CaptureQueriesContext` around the whole
 request hides which half bleeds. And when you find a fix-with-a-comment on one
 action, grep the *file* for its siblings before moving on; a comment explaining
 a fix is evidence the file was read once, not that it was read through.
+
+## 2026-08-20 - A model's `recalculate()` loop is an N+1 no viewset prefetch can reach
+**Learning:** `PayrollRun.recalculate()` iterates `self.lines.all()` and each
+`line.recalculate()` reads `compensation_plan` (rate, overtime multiplier,
+daily hours) and walks `adjustments` — 2 queries per line on the **write** path,
+in a method called from six places (approve, both draft services,
+apply-attendance, bulk-adjustments, line-adjustments). `PayrollRunViewSet`
+already prefetches `lines__employee/compensation_plan/adjustments`, but the
+services re-read the run with a bare `PayrollRun.objects.select_for_update()
+.get(pk=…)`, so the object reaching `recalculate()` has an empty prefetch cache
+and the viewset's tuning is invisible to it. `payroll-run-approve` on a 50-line
+run: 314 queries / 123 ms, of which only 50 were the genuine line UPDATEs.
+The fix is a `_lines_for_recalculation()` guard — reuse `self.lines.all()` when
+`"lines" in self._prefetched_objects_cache`, otherwise
+`select_related("compensation_plan").prefetch_related("adjustments")`. The guard
+matters: unconditionally building a fresh queryset would *discard* a warm cache
+and make the already-tuned callers slower.
+**Action:** Grep models for `for <x> in self.<related>.all():` where the loop
+body touches each child's own FK or reverse relation. Those are invisible to
+every viewset audit — the cost is in the model layer, on writes, and the
+serializer looks clean. Fix inside the model with a cache-aware accessor, never
+by prefetching at one call site.
+
+**Also — this is the fourth "mutation serializes a bare object", and the sibling
+fix was already present.** Three of `PayrollRunViewSet`'s six lifecycle actions
+already re-read via `self.get_queryset().get(pk=…)` before serializing; the
+other three (`approve`, `mark_paid`, `void`) did not, and `draft_monthly` never
+did. So the counter-signal is not only "a fix with a comment" (2026-08-20) — an
+*uncommented* fix present in half a file's actions propagates even less. Extract
+it into one helper the moment you find the second copy. And prefer
+`self.queryset.all()` over `get_queryset()` there: `get_queryset()` applies the
+`?employee=` / `?period_start=` filters, which can filter a just-mutated run out
+of its own response (`.get()` → `DoesNotExist` → 500).
