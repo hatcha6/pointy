@@ -134,3 +134,29 @@ every `catch` above it and ask whether it was written for a failure that proved
 the request never landed. Gate the replay (`replayable`: GETs and keyed writes
 only) rather than widening it. And check that the *user's* natural retry is
 idempotent too — that is the retry that actually happens.
+
+## 2026-08-20 - `os.replace` is atomic against a crash, not against a power cut
+
+**Learning:** `apps/core/backup.py` wrote the nightly archive to `.name.tmp` and
+`os.replace`d it into place — the textbook atomic-publish shape, and it *looks*
+finished. It is only half of the recipe: closing the `ZipFile` hands the bytes
+to the page cache and nothing more, so a mains cut inside the writeback window
+leaves the final filename pointing at a truncated or zero-length file. Three
+things then conspire to make the loss total and silent — `_delete_old_backups`
+unlinks the previous good archives immediately after (unlinks are journaled
+metadata and *do* survive the cut the data did not), `_sha256_file` reads the
+same page cache so the recorded checksum always matches, and the job row is
+marked SUCCEEDED. The destination is a USB stick in a shop whose power is not
+dependable, which is the exact hardware where write-back caching is longest.
+The whole backend contained no `os.fsync` call at all; the Flutter side already
+had this right (`sqlite_key_value_store.dart`, WAL + `synchronous=FULL`).
+
+**Action:** Treat "temp file + atomic rename" as an *incomplete* durability
+guard until you see `fsync(file)` before the rename and `fsync(dir)` after it —
+grep for `os.replace`/`shutil.move`/`.rename(` and check each for a neighbouring
+fsync. Ask what runs *after* the publish: a prune, a retention sweep or a
+cleanup that destroys the previous good copy turns a survivable partial write
+into total loss. To test durability without a real power cut, wrap `os.fsync`
+(record `os.fstat(fd).st_ino`), `os.replace` and the prune, then assert the
+*ordering* of inodes — rename preserves the inode, so the temp file is
+identifiable from the final path afterwards.
