@@ -64,7 +64,14 @@ from apps.discounts.models import DiscountRule
 from apps.expenses.models import Expense, ExpenseCategory
 from apps.expenses.services import create_expense
 from apps.inventory.models import StockItem, StockMovement
-from apps.purchasing.models import PurchaseOrder, Supplier, SupplierPayment
+from apps.purchasing.models import (
+    PurchaseLine,
+    PurchaseOrder,
+    PurchaseOrderAdjustment,
+    PurchaseOrderAdjustmentLine,
+    Supplier,
+    SupplierPayment,
+)
 from apps.purchasing.services import (
     create_supplier_payment,
     receive_purchase_order,
@@ -540,6 +547,11 @@ class PoLineRec:
     allocated_landed_cost: Decimal = ZERO
     landed_unit_cost: Decimal = ZERO
     effective_unit_cost: Decimal = ZERO
+    # What supplier returns have already taken off this line: packs sent back,
+    # and the money credited for them. Both are the oracle's own running totals,
+    # accumulated from the quantities it asked for and the amounts it computed.
+    adjusted_packs: int = 0
+    adjusted_value: Decimal = ZERO
 
     @property
     def line_total(self) -> Decimal:
@@ -555,6 +567,50 @@ class PoLineRec:
             self.quantity - (self.recv_accepted + self.recv_damaged + self.recv_cancelled),
             0,
         )
+
+    @property
+    def adjustable(self) -> int:
+        """Packs that can still go back to the supplier: what arrived, less
+        what has already been returned. Damaged and cancelled units never
+        arrived, so they are not in it."""
+        return max(self.recv_accepted - self.adjusted_packs, 0)
+
+    @property
+    def unit_span(self) -> int:
+        """The number of units the returnable value is spread across.
+
+        The ordered count normally, because each ordered unit is worth the same
+        share of the line whether it arrived or not — but an over-shipped line
+        caps its returnable value at what was billed, so that capped value has
+        to be divided by the units that actually arrived instead. Divide by the
+        ordered count there and each arrived unit is priced above its share.
+        """
+        return max(self.quantity, self.recv_accepted)
+
+    @property
+    def returnable_value(self) -> Decimal:
+        """The most this line can ever credit back, all returns added up: the
+        arrived units' share of what the order billed, capped at the whole
+        line (the surplus of an over-shipment was never billed for)."""
+        if self.quantity <= 0:
+            return ZERO
+        arrived = min(self.recv_accepted, self.quantity)
+        if arrived >= self.quantity:
+            return even2(self.net_line_total)
+        return even2(self.net_line_total * Decimal(arrived) / Decimal(self.quantity))
+
+    def return_credit(self, packs: int) -> Decimal:
+        """What the supplier owes for ``packs`` going back, computed from this
+        line's own inputs — never read back from the backend.
+
+        Two branches, mirroring the two questions being asked. The last units
+        off the line settle up: they claim whatever of ``returnable_value``
+        earlier returns left behind, so repeated partial returns always add to
+        exactly that value. Anything earlier takes its proportional share.
+        """
+        if packs >= self.adjustable:
+            return even2(self.returnable_value - self.adjusted_value)
+        return even2(self.net_line_total * Decimal(packs) / Decimal(self.unit_span))
 
 
 @dataclass
@@ -584,6 +640,9 @@ class Oracle:
         # variant will snapshot onto its line. Set by the purchases this
         # simulation issues, from their own inputs.
         self.base_unit_cost: dict = {}
+        # Open supplier credit per supplier, accumulated from the returns this
+        # simulation issued and the amounts the oracle computed for them.
+        self.supplier_credit: dict = defaultdict(lambda: ZERO)
         # Independent logs that mirror exactly what we instructed the backend to
         # do; the register reconciliation + summary expectations are derived from
         # these, never from backend reads.
@@ -769,6 +828,11 @@ class Simulation:
         # about COGS; the entry-point test refuses such a run.
         self.costed_line_assertions = 0
         self.multi_unit_costed_line_assertions = 0
+        # Vacuity guards for the supplier-return assertions: a run that never
+        # sent goods back, or never sent back part of an over-shipped line,
+        # proves nothing about either and must not pass for coverage.
+        self.returned_line_assertions = 0
+        self.over_received_return_assertions = 0
 
     # -- helpers ----------------------------------------------------------
 
@@ -2090,8 +2154,15 @@ class Simulation:
             if outstanding <= 0:
                 continue
             mode = self.rng.random()
-            if mode < 0.6:
+            if mode < 0.55:
                 accepted, damaged, cancelled = outstanding, 0, 0
+            elif mode < 0.68:
+                # The supplier shipped more than was ordered. The order never
+                # billed for the surplus, so every figure derived from the line
+                # has to decide whether it follows the ordered count or the
+                # arrived one — which is exactly where they can disagree.
+                accepted = outstanding + self.rng.randint(1, 3)
+                damaged = cancelled = 0
             elif mode < 0.8:
                 accepted = self.rng.randint(1, outstanding)
                 damaged = cancelled = 0
@@ -2110,6 +2181,9 @@ class Simulation:
                     "accepted_quantity": accepted,
                     "damaged_quantity": damaged,
                     "cancelled_quantity": cancelled,
+                    "allowed_over_receipt_quantity": max(
+                        accepted + damaged - outstanding, 0
+                    ),
                 }
             )
             plan.append((line, accepted, damaged, cancelled))
@@ -2174,6 +2248,162 @@ class Simulation:
         rec.paid = even2(rec.paid + amount)
         self._assert_po(rec.po_id)
         return True
+
+    def op_purchase_return(self) -> bool:
+        """Send goods back to the supplier.
+
+        Entered through the DRF endpoint on purpose: the client sends a line id
+        and a quantity and nothing else, so every figure asserted below — the
+        credit, the unit cost, the settlement — is the backend's own answer,
+        not a number this simulation handed it. What the oracle supplies is only
+        *which* units go back.
+        """
+        candidates = []
+        for rec in self.oracle.pos.values():
+            if not any(
+                line.recv_accepted + line.recv_damaged + line.recv_cancelled > 0
+                for line in rec.lines
+            ):
+                continue  # nothing received yet: the backend refuses to adjust
+            for line in rec.lines:
+                if line.adjustable > 0:
+                    candidates.append((rec, line))
+        if not candidates:
+            return False
+        self.rng.shuffle(candidates)
+        if self.rng.random() < 0.5:
+            # Half the time, go for an over-shipped line first. Left to chance
+            # these are rare enough that a few hundred operations often see
+            # none, and they are the whole reason the per-unit share and the
+            # returnable ceiling can disagree.
+            candidates.sort(key=lambda pair: pair[1].recv_accepted <= pair[1].quantity)
+
+        for rec, line in candidates:
+            adjustable = line.adjustable
+            if adjustable >= 2 and self.rng.random() < 0.5:
+                packs = self.rng.randint(1, adjustable - 1)
+            else:
+                packs = adjustable
+            base_quantity = q3(Decimal(packs) * line.unit_factor)
+            # The goods have to still be on the shelf, and not promised to an
+            # open quotation — a return that ate reserved stock would strand a
+            # conversion later and confuse the failure it caused.
+            if self.oracle.available(line.variant_id) < base_quantity:
+                continue
+            amount = line.return_credit(packs)
+            if amount <= ZERO:
+                # The backend refuses a non-positive adjustment, so there is no
+                # request to make. Legitimately reachable two ways: the line's
+                # value was swallowed whole by the order's manual discount, or
+                # earlier returns already claimed all of it. Note the blind
+                # spot this leaves — a backend that credited something here
+                # would go unseen — but it is bounded to sub-cent line values,
+                # and the ceiling assertion below catches any over-credit the
+                # moment a return does go through.
+                continue
+            break
+        else:
+            return False
+
+        refund = self.rng.random() < 0.4
+        url = reverse(
+            "purchaseorder-refund-items" if refund else "purchaseorder-return-items",
+            args=[rec.po_id],
+        )
+        response = self.client.post(
+            url,
+            {
+                "lines": [{"line": line.line_id, "quantity": str(packs)}],
+                "reason": "مرتجع مورد",
+            },
+            format="json",
+        )
+        if response.status_code not in (200, 201):
+            self.fail(
+                f"po#{rec.po_id} line#{line.line_id} return of {packs} rejected: "
+                f"{response.status_code} {response.data}"
+            )
+
+        # -- oracle state, from the quantities we asked for ------------------
+        line.adjusted_packs += packs
+        line.adjusted_value = even2(line.adjusted_value + amount)
+        self.oracle.on_hand[line.variant_id] = q3(
+            self.oracle.on_hand[line.variant_id] - base_quantity
+        )
+        if refund:
+            # Settled as a refund: a supplier payment, so it counts against
+            # what the shop still owes on the order.
+            rec.paid = even2(rec.paid + amount)
+        else:
+            self.oracle.supplier_credit[rec.supplier_id] = even2(
+                self.oracle.supplier_credit[rec.supplier_id] + amount
+            )
+
+        self._assert_purchase_return(rec, line, packs, amount, refund=refund)
+        self._assert_variant(line.variant_id)
+        self._assert_po(rec.po_id)
+        self._assert_supplier_credit(rec.supplier_id)
+        return True
+
+    def _assert_purchase_return(self, rec: PoRec, line: PoLineRec, packs, amount, *, refund):
+        po_line = PurchaseLine.objects.get(pk=line.line_id)
+        tag = f"po#{rec.po_id} line#{line.line_id} return"
+        self.assert_qty(
+            po_line.adjusted_quantity, Decimal(line.adjusted_packs), f"{tag} adjusted_quantity"
+        )
+        self.assert_qty(
+            po_line.adjustable_quantity, Decimal(line.adjustable), f"{tag} adjustable_quantity"
+        )
+
+        adjustment = (
+            PurchaseOrderAdjustment.objects.filter(purchase_order_id=rec.po_id)
+            .order_by("-created_at", "-pk")
+            .first()
+        )
+        self.assert_money(adjustment.outbound_amount, amount, f"{tag} outbound_amount")
+        self.assert_money(adjustment.amount, amount, f"{tag} amount")
+        adj_line = adjustment.lines.get()
+        self.assert_qty(adj_line.quantity, Decimal(packs), f"{tag} line quantity")
+        self.assert_money(adj_line.line_amount, amount, f"{tag} line_amount")
+        self.assert_money(
+            adj_line.unit_cost, even2(amount / Decimal(packs)), f"{tag} line unit_cost"
+        )
+
+        # The invariant the per-return amounts exist to satisfy: every credit
+        # this line will ever produce adds up to the value of the units that
+        # arrived — no more, and once they have all gone back, no less.
+        credited = even2(
+            sum(
+                (
+                    adjline.line_amount
+                    for adjline in PurchaseOrderAdjustmentLine.objects.filter(
+                        purchase_line_id=line.line_id
+                    )
+                ),
+                ZERO,
+            )
+        )
+        self.assert_money(credited, line.adjusted_value, f"{tag} credited to date")
+        if credited > line.returnable_value:
+            self.fail(
+                f"{tag} credited {credited} for a line worth {line.returnable_value} "
+                f"(ordered {line.quantity}, arrived {line.recv_accepted})"
+            )
+        if line.adjustable == 0:
+            self.assert_money(
+                credited, line.returnable_value, f"{tag} fully returned line credit"
+            )
+        self.returned_line_assertions += 1
+        if line.recv_accepted > line.quantity:
+            self.over_received_return_assertions += 1
+
+    def _assert_supplier_credit(self, supplier_id: int):
+        supplier = Supplier.objects.get(pk=supplier_id)
+        self.assert_money(
+            supplier.credit_balance,
+            self.oracle.supplier_credit[supplier_id],
+            f"supplier#{supplier_id} credit_balance",
+        )
 
     def op_expense_payout(self) -> bool:
         amount = (Decimal(self.rng.randint(100, 5000)) * CENT).quantize(CENT)
@@ -2366,6 +2596,7 @@ class Simulation:
             (self.op_purchase_submit, 7),
             (self.op_purchase_receive, 7),
             (self.op_supplier_payment, 5),
+            (self.op_purchase_return, 5),
             (self.op_expense_payout, 3),
             (self.op_cash_movement, 4),
             (self.op_stock_count, 3),

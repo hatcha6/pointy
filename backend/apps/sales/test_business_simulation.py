@@ -54,6 +54,12 @@ class BusinessSimulationTests(TestCase):
         # to be scaled into the unit the sale transacted in.
         self.assertGreaterEqual(sim.costed_line_assertions, 1)
         self.assertGreaterEqual(sim.multi_unit_costed_line_assertions, 1)
+        # Same rule for supplier returns. The credit for a line returned whole
+        # is right under every implementation of the per-unit share, so a run
+        # that only ever returned whole lines — or never returned part of an
+        # over-shipped one — has not tested the share at all.
+        self.assertGreaterEqual(sim.returned_line_assertions, 1)
+        self.assertGreaterEqual(sim.over_received_return_assertions, 1)
 
 
 class SimulationIgnoresPreExistingDataTests(TestCase):
