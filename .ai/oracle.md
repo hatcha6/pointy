@@ -237,3 +237,61 @@ is decorative. Still unmodelled on this axis: `returned_cost_total`'s DB-side
 `Sum(quantity * unit_cost)`, whose rounding may differ between sqlite and
 Postgres, and the production-cost fallback (`latest_production_unit_cost`) for
 goods that are made rather than bought.
+## 2026-08-20 - A value the simulation supplies is a value nobody is testing
+
+**Learning:** Every sale the simulation rang up called `checkout_order`
+directly **and handed it the price to charge** — `effective_unit_price` rides in
+on `lines_data`, because that is the service's contract. So the oracle was
+asserting that the backend stored the number the oracle itself had just given
+it. `unit_sale_price` — the server's own answer to "what does one carton cost",
+custom per-unit price or base price × factor — was therefore never under test at
+all, in 3500-op sweeps that looked exhaustive. Adding one cent to its
+non-base-unit branch and running 300 ops: **clean, no failure**. The same
+mutation through the DRF checkout endpoint dies at op#2, because there the
+client sends a variant id, a quantity and a unit code, and the server decides
+the price. The two entry points also genuinely *disagree* on coupons — the
+service silently ignores a coupon that applies to nothing, the serializer
+refuses the whole sale (`unapplied_coupon_codes`) — so modelling the API meant
+teaching the oracle to predict **which** coupons its engine applied, not merely
+what they were worth.
+
+**Action:** Whenever an operation hands the backend a value the backend is
+capable of deriving itself, that value is not being verified — it is being
+dictated, and every assertion about it is circular. Read each op's payload and
+ask which fields a real client would *not* send: `effective_unit_price`,
+`unit_factor` and `unit_cost` are all in this category on the sales side, and
+the purchasing ops have the same shape. The fix is never another assertion on
+the same path; it is entering through the layer that performs the computation.
+`op_api_sale` does this for sales; purchasing (`/api/purchase-orders/`) and the
+returns/exchange endpoints are the same trade waiting to be made.
+
+**Also:** `_assert_order` checked only the order's three totals, which — per the
+2026-08-19 entry on document-level figures — is satisfiable while no line agrees
+with them. `_assert_order_lines` now pins each line's unit price, quantity, unit
+factor, base quantity and discount against the oracle plus the
+`sum(lines) == document` identity. Note it is *not* a blindness the old harness
+had entirely: a corrupt line snapshot did surface a few operations later, as a
+stock or `amount_paid` divergence on some *other* entity. What the identity buys
+is the failure being reported at the operation that caused it, naming the line.
+
+**And a coordination hazard, found resolving this branch's rebase.** Two Oracle
+runs independently invented `_assert_order_lines` on the same method name — this
+one (price, quantity, unit factor, base quantity, discount, and the
+`sum(lines) == document` identities) and #82's (the per-line **cost** basis and
+its vacuity counters). They assert disjoint things, so the obvious conflict
+resolutions — take HEAD, take mine — each silently delete half the coverage and
+leave a suite that is green *and* green for the wrong reason. Nothing in the
+test output would have said so. The merged method keeps both, and the clamp
+question the two disagreed on resolves in favour of the clamp: `recalculate`
+(`apps/sales/models.py`) sets `discount_total = min(sum_of_line_discounts,
+subtotal)`, so the unclamped identity would have reported an over-discounted
+order as a defect the backend does not have — while `sum(line_total) ==
+order.total` is only true *unclamped* and is now guarded accordingly.
+
+**Action:** after any conflict in `business_simulation.py`, do not trust a green
+run to prove the resolution kept what was there — a deleted assertion cannot
+fail. Mutation-test **one assertion from each side** of the conflict before
+pushing (here: a cent added to `unit_sale_price`'s non-base-unit branch for this
+side, caught at op#41; dropping `* unit_factor` from `OrderLine.unit_cost` for
+#82's, caught at op#203 as `backend=0.40 oracle=9.60`). Losing coverage in a
+merge is invisible in exactly the way losing it in a fix is not.
