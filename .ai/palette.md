@@ -693,3 +693,35 @@ fits a filter-only surface with no search box and needs **no new l10n keys**
 only when `hidden.isNotEmpty && ledger.entries.isNotEmpty` — otherwise an
 untouched month with no spending gets told to clear filters that are hiding
 nothing.
+
+## 2026-08-20 - A filter with a non-null default breaks the usual `hasFilters` test
+
+**Learning:** `QueryEmptyState`'s `hasFilters` is usually "any filter is
+non-null", but the jobs board defaults `statusFilter` to
+`OperationsJobStatus.open` rather than null. Testing it against null would have
+flagged the *pristine* board as filtered, so a brand-new shop with no jobs at
+all gets "لا توجد نتائج مطابقة للفلاتر / امسح الفلاتر" instead of the onboarding
+copy that explains what a job is — the exact false positive the expenses entry
+warns about, arriving through a different door. The predicate has to be
+**default-relative** (`_statusFilter != _defaultStatusFilter`), and `clearFilters()`
+must restore that same default, not the widest view: the widget renders three
+different labels for one `onClear`, so a clear that also widened the status would
+make the "مسح البحث" (clear the search) branch silently change a filter the user
+never touched. Extract the default as a named constant so the predicate and the
+reset cannot drift apart.
+
+**Action:** Before reusing `QueryEmptyState`, read the view model's field
+*initializers*, not just its types — `T? x = someDefault` needs a
+default-relative predicate. Residual worth naming in the PR rather than hiding:
+this correctly stops lying about *why* the board is blank, but a technician
+searching for a completed repair still has to widen the status segment by hand.
+
+**Also — a screen-owned `TextEditingController` does not follow the view model.**
+`DebouncedSearchField` syncs its text from `widget.value`, so clearing the query
+clears the box for free (the catalog entry relies on this). A plain `TextField` +
+`_searchController` in the State, as on the jobs board, does **not**: clearing
+only `viewModel.searchQuery` leaves the dead term visible, and the still-pending
+400ms `_searchDebounce` then re-applies it a moment later. `onClear` must cancel
+the timer and clear the controller before delegating. Pin it with
+`tester.widget<TextField>(…).controller?.text` — asserting only on the view model
+passes straight through this bug.
