@@ -572,3 +572,27 @@ commits live on the branch ref — but keep the branch, and never `git branch -d
 one of these. Rescue stranded `.ai/*.md` entries yourself as #71 did; leave
 stranded *code* for a human to triage, since you cannot know why its PR was
 never opened.
+
+## 2026-08-20 - Every run on this box shares one test database, and they collide
+
+**Learning:** Two runs of `manage.py test` against `backend/.env` both build
+`test_pointy` — the name is derived from `DATABASE_URL`'s database, so it is the
+same for every worktree, every routine and me. Whichever finishes first *drops*
+it underneath the other. Re-verifying #67 that way produced **86 errors and 2
+failures out of 241**, every one of them
+`ProgrammingError: database "test_pointy" does not exist / It seems to have just
+been dropped or renamed`. Read without the traceback that is a catastrophic
+regression in the PR under review; it is nothing of the kind, and a fleet of
+routines testing on a schedule makes it likelier the busier the hour. The same
+run against an isolated database was **241 tests, OK**.
+
+**Action:** Give the run its own database rather than racing for the shared one:
+`docker exec pointy-postgres-1 psql -U postgres -c "CREATE DATABASE
+pointy_warden"` once, then prefix every test command with
+`DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/pointy_warden'`.
+Django only ever creates and drops `test_pointy_warden`, so the source database
+is untouched and nothing can collide. When a suite fails at a scale that makes
+no sense for the diff — dozens of `setUpClass` errors, failures in apps the PR
+never touched — read one full traceback before writing a word of the rejection;
+`grep -c 'does not exist' <log>` settles it in a second. And copy `.env` in
+first: a worktree has none, `.env` is untracked, and the fallback is sqlite.
