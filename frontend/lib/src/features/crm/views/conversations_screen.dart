@@ -107,8 +107,20 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   onPressed: widget.viewModel.isStarting
                       ? null
                       : () => _startNewConversation(context),
-                  icon: const Icon(Icons.add_comment_outlined),
-                  label: Text(l10n.newConversationTitle),
+                  icon: widget.viewModel.isStarting
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.add_comment_outlined),
+                  label: Text(
+                    widget.viewModel.isStarting
+                        ? l10n.newConversationStarting
+                        : l10n.newConversationTitle,
+                  ),
                 )
               : null,
           body: _buildBody(context, l10n),
@@ -353,8 +365,9 @@ class _MessageBubble extends StatelessWidget {
               style: textTheme.bodyMedium?.copyWith(color: textColor),
             ),
             SizedBox(height: spacing.xs),
-            Row(
-              mainAxisSize: MainAxisSize.min,
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: spacing.xs,
               children: [
                 if (message.createdAt != null)
                   Text(
@@ -363,16 +376,11 @@ class _MessageBubble extends StatelessWidget {
                       color: textColor.withValues(alpha: 0.75),
                     ),
                   ),
-                if (outbound) ...[
-                  SizedBox(width: spacing.xs),
-                  Icon(
-                    _statusIcon(message.outboundStatus),
-                    size: 14,
-                    color: message.outboundStatus == 'failed'
-                        ? colors.danger
-                        : textColor.withValues(alpha: 0.75),
+                if (outbound)
+                  ConversationMessageStatus(
+                    status: message.outboundStatus,
+                    foreground: textColor,
                   ),
-                ],
               ],
             ),
           ],
@@ -380,15 +388,104 @@ class _MessageBubble extends StatelessWidget {
       ),
     );
   }
+}
 
-  IconData _statusIcon(String status) {
+/// The delivery state of one outbound SMS, said in words rather than left as a
+/// bare glyph.
+///
+/// The bubble used to render a 14px icon with no label at all, and collapsed
+/// every state it did not recognise onto one clock — so `cancelled` and
+/// `expired`, which will never arrive, looked exactly like a message still on
+/// its way. Each state now carries its Arabic name as a tooltip and a semantics
+/// label; the states that need someone to act (a failure, a cancellation, an
+/// expiry, or a customer who opted out) also spell themselves out, following
+/// the catalog cards' exception-only status idiom.
+class ConversationMessageStatus extends StatelessWidget {
+  const ConversationMessageStatus({
+    super.key,
+    required this.status,
+    required this.foreground,
+  });
+
+  /// The backend `outbound_status` string (apps.messaging `OutboundMessage.Status`).
+  final String status;
+
+  /// The bubble's text colour, so the label sits on it legibly.
+  final Color foreground;
+
+  /// States the reader has to do something about, and which therefore earn a
+  /// visible label instead of an icon alone.
+  static bool isException(String status) {
+    return const {
+      'failed',
+      'cancelled',
+      'blocked_consent',
+      'expired',
+    }.contains(status);
+  }
+
+  static IconData _icon(String status) {
     return switch (status) {
       'delivered' => Icons.done_all,
       'sent' => Icons.check,
+      'sending' => Icons.outgoing_mail,
+      'scheduled' => Icons.schedule_send_outlined,
       'failed' => Icons.error_outline,
       'blocked_consent' => Icons.block,
+      'cancelled' => Icons.cancel_outlined,
+      'expired' => Icons.timer_off_outlined,
       _ => Icons.schedule,
     };
+  }
+
+  static String _label(String status, AppLocalizations l10n) {
+    return switch (status) {
+      'delivered' => l10n.conversationMessageStatusDelivered,
+      'sent' => l10n.conversationMessageStatusSent,
+      'sending' => l10n.conversationMessageStatusSending,
+      'scheduled' => l10n.conversationMessageStatusScheduled,
+      'failed' => l10n.conversationMessageStatusFailed,
+      'blocked_consent' => l10n.conversationMessageStatusBlocked,
+      'cancelled' => l10n.conversationMessageStatusCancelled,
+      'expired' => l10n.conversationMessageStatusExpired,
+      _ => l10n.conversationMessageStatusQueued,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+    final textTheme = Theme.of(context).textTheme;
+    final label = _label(status, l10n);
+    final spelled = isException(status);
+
+    return Tooltip(
+      message: label,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            _icon(status),
+            size: 14,
+            // Spelled-out states already carry the label as text beside the
+            // icon; repeating it here would read it out twice.
+            semanticLabel: spelled ? null : label,
+            color: status == 'failed'
+                ? colors.danger
+                : foreground.withValues(alpha: 0.75),
+          ),
+          if (spelled) ...[
+            SizedBox(width: spacing.xs),
+            Text(
+              label,
+              style: textTheme.labelSmall?.copyWith(color: foreground),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 
