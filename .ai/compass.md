@@ -223,3 +223,31 @@ sharing one `MemoryScopedJsonStorage`: let the debounce flush the cart, fail the
 first checkout, then build a second view model and `restorePersistedSessions` —
 on `main` the cart comes back and the keys differ, which is exactly the shape
 of the bug.
+
+## 2026-08-20 - A 503 on a health endpoint is an action, not a report
+
+**Learning:** Every request path in this backend is fail-open on Redis (see the
+entries above), and `/readyz/` still counted the cache as a *required*
+dependency. That endpoint is not diagnostics: it is the compose healthcheck
+(`deploy/onprem/docker-compose.yml`), so a sustained Redis outage marked the
+backend unhealthy, and `deploy/onprem/watchdog.sh` "heals" an unhealthy
+container by `docker restart` — SIGTERMing a backend that was serving every
+till correctly, once per cycle, for as long as Redis stayed down. `celery-worker`,
+`celery-beat` and the relay `connector` all gate on `backend: service_healthy`,
+and the zero-downtime flip only moves traffic to a container that answered
+`/readyz/`. The same assumption sat one layer earlier:
+`backend/docker/wait_for_services.py` waited on Redis before starting *anything*
+and `SystemExit(75)` when it did not answer, so a shop rebooting after a power
+cut onto a Redis with a corrupt dump could never bring the POS up at all —
+with a perfectly healthy Postgres behind it.
+
+**Action:** For every health/readiness check, ask *who acts on the answer* before
+asking whether the answer is accurate — a restart loop, a `depends_on` gate and
+an update rollback are all downstream of one boolean. Split checks into required
+vs optional explicitly (`OPTIONAL_CHECKS` in `pointy/health.py`) rather than
+`all(...)`, and keep reporting the optional failure in the payload so it is
+visible without being actionable. The general shape: whenever the codebase has
+worked hard to make a dependency survivable at request time, grep for the places
+that still treat it as fatal — startup waiters, healthchecks, `depends_on`,
+readiness probes. `deploy/onprem/README.md` still says `/readyz/` "verifies
+database and Redis access"; left alone deliberately (deploy/** escalates).
