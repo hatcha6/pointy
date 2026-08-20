@@ -771,3 +771,44 @@ test *names* are the no-prompt controls
 (`grep -o 'The test description was: .*' <log> | sort -u`). Names, not counts,
 are what proves the right half failed. A routine that cannot state which of its
 tests should survive the revert has not thought about its own negative controls.
+
+## 2026-08-20 - The stash stack is repo-global; `git stash` in a scratch worktree reaches into the primary checkout
+
+**Learning:** To prove 🧭 Compass's #95 non-vacuous I reached for
+`git stash push -- <three production files>` in `/tmp/warden-pr-95`. It answered
+**"No local changes to save"** — obviously, the PR's files are *committed*, not
+modified — and the test run that followed passed, which for one moment read as
+"the regression test passes on `main`". The stash then did real damage: `git
+stash pop` is not a no-op after a failed push, because the stash stack is a
+**repo-level ref**, shared by every worktree. It popped `stash@{0}`, someone
+else's pre-existing *"pre-existing employees work (not mine)"*, into my scratch
+tree and left `UU backend/apps/employees/models.py`. The entry survived only
+because the conflict made git keep it.
+
+**Action:** Never use `git stash` anywhere in this repo — not in a scratch
+worktree, not in the primary checkout. The revert idiom for a non-vacuity proof
+is `git checkout origin/main -- <paths>`, then `git checkout HEAD -- <paths>` to
+restore; both are worktree-local and leave the stash stack alone. If a stash
+command has already run, do not `git stash drop` to tidy up: confirm with
+`git stash list` (from either tree — they show the same stack) that the entry is
+still there, and reset only the working-tree files with
+`git checkout HEAD -- <path>`. Related tell worth keeping: "No local changes to
+save" against a PR you are trying to revert means you reached for the wrong verb,
+not that the diff was empty.
+
+## 2026-08-20 - An open PR's worktree and a merged PR's worktree both look prunable
+
+**Learning:** `friendly-euler-63b56a` was the only *clean* non-live worktree in a
+survey of 38, which by the documented "merged and clean" test is the textbook
+prune. It holds `claude/oracle-short-shipment-payable` — the branch of **#55,
+still open** and carrying `needs-work`. Removing it would have deleted the
+working copy 🔍 Oracle needs to push its repair to, turning a one-hour repair loop
+into a permanent stall. Its cleanliness is precisely *because* the work is
+committed and pushed, which is what a finished worktree looks like too.
+
+**Action:** Before removing any worktree, resolve its branch against the **open**
+queue, not just against `origin/main`:
+`gh pr list --state open --head $(git -C <wt> branch --show-current)`. A hit is a
+hard keep, whatever `git status` says. This run that check plus `lsof` left
+nothing prunable out of 38 — five without a live process, and every one of them
+kept: two deliberate, two dirty-with-no-remote-copy, one holding an open PR.
