@@ -69,6 +69,14 @@ class BusinessSimulationTests(TestCase):
         # bought in different units.
         self.assertGreaterEqual(sim.pack_purchase_line_assertions, 1)
         self.assertGreaterEqual(sim.mixed_unit_retail_landed_orders, 1)
+        # And for the sales refund document. ``returned_cost_total`` is the one
+        # figure on it that no revenue assertion can reach, and it is 0.00 both
+        # for a refund of never-purchased goods and for every implementation
+        # that gets the reversal wrong — so a run whose refunds all cost nothing
+        # has not tested it. The multi-unit guard is the sharper one: at unit
+        # factor 1 the pack↔base scaling in the reversal is the identity.
+        self.assertGreaterEqual(sim.costed_refund_assertions, 1)
+        self.assertGreaterEqual(sim.multi_unit_costed_refund_assertions, 1)
 
 
 class SimulationIgnoresPreExistingDataTests(TestCase):
