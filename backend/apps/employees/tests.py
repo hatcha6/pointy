@@ -7,7 +7,9 @@ from django.contrib.auth.models import Group
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.paginator import UnorderedObjectListWarning
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -1251,3 +1253,125 @@ class OperationsCommissionPayrollTests(TestCase):
         )
         with self.assertRaises(ValidationError):
             plan.full_clean()
+
+
+class PayrollRunQueryCountTests(TestCase):
+    """The payroll lifecycle actions must not scale their reads with line count.
+
+    Approving, paying or voting a run does the same work whether it covers three
+    employees or fifty, so any growth in the query count with the number of
+    lines is either the response re-reading each line's relations one at a time
+    or ``PayrollRun.recalculate`` doing the same on the write path.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.accountant = User.objects.create_user(username="acc-perf", password="pass")
+        self.accountant.groups.add(Group.objects.get(name=ACCOUNTANT_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.accountant)
+        # Warm the permission cache so the first request under measurement does
+        # not carry the auth lookups the later ones are served from cache.
+        self.client.get(reverse("payroll-run-list"))
+
+    def create_run(self, line_count, *, adjustments_per_line=1):
+        today = timezone.localdate()
+        payroll_run = PayrollRun.objects.create(
+            period_start=today.replace(day=1),
+            period_end=today,
+        )
+        for index in range(line_count):
+            employee = Employee.objects.create(
+                full_name=f"موظف {index}",
+                hire_date=today.replace(day=1),
+            )
+            plan = CompensationPlan.objects.create(
+                employee=employee,
+                pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+                salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED,
+                amount=Decimal("900.00"),
+                effective_from=today.replace(day=1),
+            )
+            line = payroll_run.lines.create(
+                employee=employee,
+                compensation_plan=plan,
+                units=Decimal("1.00"),
+                rate=Decimal("900.00"),
+            )
+            for _ in range(adjustments_per_line):
+                PayrollAdjustment.objects.create(
+                    payroll_line=line,
+                    direction=PayrollAdjustment.Direction.ADDITION,
+                    adjustment_type=PayrollAdjustment.AdjustmentType.BONUS,
+                    amount=Decimal("10.00"),
+                )
+        payroll_run.recalculate(save_lines=True)
+        payroll_run.save()
+        return payroll_run
+
+    def approve_queries(self, line_count):
+        payroll_run = self.create_run(line_count)
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.post(
+                reverse("payroll-run-approve", args=[payroll_run.pk])
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["lines"]), line_count)
+        self.assertEqual(response.data["line_count"], line_count)
+        self.assertEqual(response.data["status"], PayrollRun.Status.APPROVED)
+        return len(captured)
+
+    def test_approve_reads_do_not_scale_with_line_count(self):
+        small = self.approve_queries(3)
+        large = self.approve_queries(12)
+
+        # Approving saves every line (``recalculate(save_lines=True)``), so the
+        # nine extra lines are allowed nine extra UPDATEs and nothing else. Any
+        # further growth is a per-line read: before the prefetch on
+        # ``PayrollRun.recalculate`` and the re-read in ``_serialized_run`` this
+        # was 34 -> 86 queries, a slope of ~5.8 per line.
+        self.assertLessEqual(
+            large - small,
+            9,
+            f"approve scales with line count: {small} queries at 3 lines, "
+            f"{large} at 12",
+        )
+
+    def test_mark_paid_and_void_do_not_scale_with_line_count(self):
+        counts = {}
+        for line_count in (3, 12):
+            payroll_run = self.create_run(line_count)
+            self.client.post(reverse("payroll-run-approve", args=[payroll_run.pk]))
+
+            with CaptureQueriesContext(connection) as captured:
+                paid = self.client.post(
+                    reverse("payroll-run-mark-paid", args=[payroll_run.pk])
+                )
+            self.assertEqual(paid.status_code, status.HTTP_200_OK)
+            self.assertEqual(len(paid.data["lines"]), line_count)
+            counts[("paid", line_count)] = len(captured)
+
+            # A paid run cannot be voided, so void gets its own approved run.
+            voidable = self.create_run(line_count)
+            self.client.post(reverse("payroll-run-approve", args=[voidable.pk]))
+            with CaptureQueriesContext(connection) as captured:
+                voided = self.client.post(
+                    reverse("payroll-run-void", args=[voidable.pk])
+                )
+            self.assertEqual(voided.status_code, status.HTTP_200_OK)
+            self.assertEqual(len(voided.data["lines"]), line_count)
+            counts[("void", line_count)] = len(captured)
+
+        # Neither action writes to the lines, so both are pure response cost and
+        # must be completely flat. Before the fix mark-paid was 23 -> 50.
+        self.assertEqual(
+            counts[("paid", 3)],
+            counts[("paid", 12)],
+            f"mark-paid scales with line count: {counts}",
+        )
+        self.assertEqual(
+            counts[("void", 3)],
+            counts[("void", 12)],
+            f"void scales with line count: {counts}",
+        )
