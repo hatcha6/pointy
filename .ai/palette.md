@@ -544,3 +544,44 @@ and a `PopupMenuButton` with no `tooltip:` falls back to
 the menu does. Still unlabelled after this run: `recipes_page.dart:102`,
 `sales_channels_page.dart:318`, `payments_hub_screen.dart:627`. `moreActionsTooltip`
 ("إجراءات") already exists and needs no new string.
+
+## 2026-08-20 - An error state that clears the list makes "empty" and "failed" the same state
+
+**Learning:** The sharpest shape of the dead-end seam is not a missing retry — it is
+a *footer computed from `list.length`* while the error path clears that list.
+`StockCountReconciliationViewModel.load()` does `_lines.clear(); _hasLoadError = true`
+on failure, and `_buildBottom` takes `lines.length` as its only input. So a failed
+load produced `hasVariances == false`, which is the **matched-count** branch: a green
+`check_circle_outline` FilledButton labelled "إنهاء الجرد" — offering to finalize a
+count whose variances were never fetched — sitting directly under the error text that
+said loading failed. The two states are byte-identical downstream of the view model;
+only `hasLoadError` tells them apart, and nothing read it.
+
+This generalises: any screen whose action bar branches on emptiness (`items.isEmpty`,
+`count == 0`, `hasX = list.isNotEmpty`) will render its *success* affordance on a load
+failure, because failure and emptiness both produce an empty list. The body showing an
+error does not save it — the footer is a separate subtree and contradicts it.
+
+**Action:** When auditing a list screen, don't stop at "does the error state have a
+retry?". Ask **"what else reads `lines`/`items`?"** — grep the file for the collection
+and check every consumer for a `hasLoadError` guard. Fix both halves: swap
+`PointyEmptyState` for `PointyErrorState` (danger-toned, takes `action:`) with a retry
+calling the view model's `load()`, *and* short-circuit the action bar with
+`PointyInlineMessage.error` before the emptiness branch. Place that guard **after** the
+capability gate, so a staff member still gets the "manager only" message rather than a
+retry hint for a button they could never press.
+
+**Two traps.** (a) The reconciliation screen reused `stockCountLoadError`
+("تعذّر تحميل عمليات الجرد." — failed to load stock count *sessions*), copy written for
+the sessions list; an error string shared across screens usually names the wrong noun on
+one of them, so read the Arabic before reusing the key. (b) A stub repository field named
+`loadCount` collides with `StockCountRepository.loadCount(int)` and fails compilation with
+"Can't declare a member that conflicts with an inherited one" — name retry counters
+`loadAttempts`.
+
+**Also — prove the test is not vacuous.** `git stash push -- <the production file>`,
+re-run the single test file, confirm it fails, then `git stash pop`. On this change the
+`findsNothing` assertions would have passed against the old code for the wrong reason if
+the pump had failed early; the stash run showed the real failure
+(`Found 0 widgets with text "تعذّر تحميل فروقات الجرد."`) and confirmed the coupling.
+

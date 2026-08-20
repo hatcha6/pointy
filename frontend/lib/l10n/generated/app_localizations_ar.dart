@@ -11852,6 +11852,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get stockCountLoadError => 'تعذّر تحميل عمليات الجرد.';
 
   @override
+  String get stockCountReconciliationLoadError => 'تعذّر تحميل فروقات الجرد.';
+
+  @override
+  String get stockCountApplyBlockedByLoadError =>
+      'لا يمكن إنهاء الجرد قبل تحميل الفروقات. أعد المحاولة أولاً.';
+
+  @override
   String get stockCountHistoryTitle => 'سجل عمليات الجرد';
 
   @override

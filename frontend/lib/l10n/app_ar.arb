@@ -7232,6 +7232,8 @@
   "stockCountCancelConfirm": "إلغاء الجرد",
   "stockCountEmpty": "لا توجد عمليات جرد بعد.",
   "stockCountLoadError": "تعذّر تحميل عمليات الجرد.",
+  "stockCountReconciliationLoadError": "تعذّر تحميل فروقات الجرد.",
+  "stockCountApplyBlockedByLoadError": "لا يمكن إنهاء الجرد قبل تحميل الفروقات. أعد المحاولة أولاً.",
   "stockCountHistoryTitle": "سجل عمليات الجرد",
   "stockCountStatusInProgress": "قيد التنفيذ",
   "stockCountStatusApplied": "مطبّق",

@@ -158,9 +158,13 @@ class _StockCountSessionsScreenState extends State<StockCountSessionsScreen> {
               ),
               emptyBuilder: (context) =>
                   _HistoryEmpty(showFrame: current != null),
-              errorBuilder: (context) => PointyEmptyState(
-                icon: Icons.error_outline,
+              errorBuilder: (context) => PointyErrorState(
                 title: l10n.stockCountLoadError,
+                action: OutlinedButton.icon(
+                  onPressed: vm.load,
+                  icon: const Icon(Icons.refresh),
+                  label: Text(l10n.retryButton),
+                ),
               ),
               itemBuilder: (context, session) => _SessionHistoryTile(
                 session: session,
