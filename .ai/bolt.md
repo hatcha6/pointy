@@ -651,3 +651,28 @@ below the unprimed PO rows, and `_register_closure_report` in the same file is
 a textbook bulk-primer — a file can be visibly tuned in most of its functions
 and still leak in the rest. Report *services* are a blind spot generally:
 serializer N+1 audits never reach them.
+
+## 2026-08-20 - A flat query count can still hide a cost that scales — count ROWS, not statements
+**Learning:** The notification feed (the bell/badge poll every signed-in device
+makes) prefetched `user_states` unfiltered, so it loaded **every member of
+staff's** state for every alert and then discarded all but one —
+`_state_for_user` is the only reader and it wants exactly the viewer's row. The
+endpoint already carried a passing test asserting the statement count does not
+grow with alert count, and that test is green **with or without** the fix: the
+prefetch is one statement either way. The cost scales in *headcount*, a
+dimension the request does not depend on. Measured on a full 50-alert page with
+10 staff: **500 → 50** `BusinessNotificationUserState` instances materialized,
+14.3 → 11.1 ms; the growth was exactly linear in staff (20/40/80/160 rows at
+1/2/4/8 staff for 20 alerts). This is the mirror image of the two-`Count`
+cross-product entry (2026-08-19): there the *plan* was quadratic at a constant
+statement count; here the *result set* is. Both are invisible to
+`CaptureQueriesContext`.
+**Action:** When an endpoint already has a query-count test, that is a reason to
+measure a *different* axis, not a sign it was audited. Count rows materialized
+by patching `Model.from_db` with a counter and scaling the dimension the
+request should not care about (staff, devices, sibling rows). Also: prefer the
+plain filtered `Prefetch` over `to_attr` when the consumer already discriminates
+(`state.user_id == user.id` here) — it needed **zero** logic change, and
+crucially `refresh_from_db()` clears `_prefetched_objects_cache` but does **not**
+clear a `to_attr` attribute, so a `to_attr` here would have silently broken the
+three mutation actions that refresh precisely to drop the stale prefetch.
