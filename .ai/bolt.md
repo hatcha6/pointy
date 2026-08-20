@@ -628,3 +628,26 @@ it into one helper the moment you find the second copy. And prefer
 `self.queryset.all()` over `get_queryset()` there: `get_queryset()` applies the
 `?employee=` / `?period_start=` filters, which can filter a just-mutated run out
 of its own response (`.get()` → `DoesNotExist` → 500).
+
+## 2026-08-20 - `variant.full_name` is a hidden query on every default variant
+**Learning:** `ProductVariant.full_name` reads `self.name.strip() or
+self.option_values_label`, and `create_product_with_default_variant` makes the
+default variant with `name=""` — so for the *simple* product that a normal shop
+sells almost exclusively, `full_name` always falls through to
+`option_values_label`, which is a query. It reads as a plain attribute, so it
+never looks like a relation traversal a `select_related` audit would catch.
+Measured on `apps/reports/services.py` at the real 120-row section cap:
+inventory-status **128 q / 65 ms**, stock-movements 127 / 64, reorder-items
+124 / 62 — flat 9 / 8 / 5 and ~10 ms once `variant__option_values` (with an
+inner `select_related("option")`, which the prefetched branch needs) rides
+along. Same file, same function: `purchase_rows` read `order.balance_due`,
+which sums `supplier_payments` **twice** in Python (paid + credit-applied), for
+252 q / 98 ms at 120 orders → 13.
+**Action:** Treat `full_name` / `display_name` / `option_values_label` on a
+variant as a query, not an attribute, wherever rows are built outside a
+serializer that already prefetches. And note the counter-signal again: the
+purchasing function had `prime_supplier_balances` with a comment three lines
+below the unprimed PO rows, and `_register_closure_report` in the same file is
+a textbook bulk-primer — a file can be visibly tuned in most of its functions
+and still leak in the rest. Report *services* are a blind spot generally:
+serializer N+1 audits never reach them.
