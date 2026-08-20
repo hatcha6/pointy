@@ -47,6 +47,13 @@ class BusinessSimulationTests(TestCase):
         # once; require a healthy spread so the test can't silently degrade into
         # "sales only".
         self.assertGreaterEqual(len(sim.op_counts), 10)
+        # The cost-basis assertions must have had something to bite on: a sale
+        # of a never-purchased variant snapshots 0.00, and 0.00 agrees with
+        # every broken implementation too. Require lines with a real cost, and
+        # some sold in a non-base unit, where the purchase's per-piece cost has
+        # to be scaled into the unit the sale transacted in.
+        self.assertGreaterEqual(sim.costed_line_assertions, 1)
+        self.assertGreaterEqual(sim.multi_unit_costed_line_assertions, 1)
 
 
 class SimulationIgnoresPreExistingDataTests(TestCase):
