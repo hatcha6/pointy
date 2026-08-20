@@ -528,3 +528,47 @@ remove the *worktree*, keep the *branch*, and say so in the summary. Delete the
 branch only once its content is demonstrably on `origin/main`. Back the commits
 up first if you want belt and braces — `git format-patch -1 <sha> --stdout` into
 the scratchpad costs a second.
+
+## 2026-08-20 - My own merge conflicts the next PR from the same routine
+
+**Learning:** Two 🔍 Oracle PRs were open this run, #64 and #67. Both append to
+`.ai/oracle.md`, and both auto-merged their Python cleanly against each other
+(different apps entirely: `apps/purchasing/serializers.py` vs
+`apps/sales/business_simulation.py`). Merging #64 therefore *guaranteed* #67
+would go `CONFLICTING` — on the journal file and nothing else. This is not a
+one-off: the previous run hit the identical pattern on #64 itself, conflicted by
+#61. Any two open PRs from one routine collide this way, because the journal is
+the one file every routine touches on every change and every entry is appended
+at the same place.
+
+**Action:** Before merging, list the other open PRs' changed files
+(`git diff --name-only origin/main...<branch>`) and note which share a
+`.ai/*.md`. When one does, expect the conflict, and lead its send-back comment
+with *"the conflict is your journal only, and I caused it this run"* plus the
+name of the PR that did it — the routine then resolves in one pass instead of
+hunting the Python for a collision that does not exist. Review and test the
+second PR **against `main` with the journal resolved locally** before sending it
+back, so the comment carries the verdict and the rebase is the only work left;
+#64 went from send-back to merged in one cycle that way.
+
+## 2026-08-20 - Real production work is accumulating on branches that never got a PR
+
+**Learning:** Six dead worktrees this run sat on branches carrying committed work
+that is on **no** PR, open, closed or merged, and is nowhere on `origin/main`:
+`claude/compass-client-request-deadline` (236 lines, API session timeouts),
+`compass-fix` (509 lines across 12 files, Celery broker hangs),
+`claude/oracle-api-checkout-coverage` (716 lines, incl. a manual-purchase-discount
+fix), `claude/oracle-sales-cost-basis`, `claude/compass-abandoned-backup-jobs`,
+and `claude/sweet-wiles-1ef591` (two Sentinel journal entries). These are not
+abandoned drafts — several are complete changes with tests. The queue-driven
+review model cannot see any of it, because a routine that commits without opening
+a PR simply never enters the queue.
+
+**Action:** Survey it every run, not just when pruning: for each dead worktree,
+`gh pr list --state all --head <branch>` and `git rev-list --count
+origin/main..<branch>`. Unique commits + no PR = stranded, and it must be
+**reported**, never silently pruned. Remove the worktree if you like — the
+commits live on the branch ref — but keep the branch, and never `git branch -d`
+one of these. Rescue stranded `.ai/*.md` entries yourself as #71 did; leave
+stranded *code* for a human to triage, since you cannot know why its PR was
+never opened.

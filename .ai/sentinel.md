@@ -165,3 +165,43 @@ component and rejects absolute paths and `..`.
 **Action:** Skip this surface as a run theme. Re-check only a *newly added*
 outbound fetch (does it call `validate_remote_image_url`?) or a new writer that
 derives a path from user input.
+
+## 2026-08-20 - The relay trust boundary audited end to end; nothing found
+**Learning:** Audited surface 3 (the Go relay) fully and it is clean. Specifics
+worth not re-deriving: every route in `ServeHTTP`'s switch carries an explicit
+`RouteMode` gate *plus* an auth wrapper, and all three wrappers are fail-closed
+on an unset secret — `withAdmin` 401s when `AdminToken == ""` (unless the
+explicit `AllowOpenAdmin` dev flag), `withNodeProxy` 404s when `NodeProxyToken`
+is blank. The scoped-vs-fleet split holds: `handleInstallationRoutes` computes
+`selfServiceable` from (path-part count, method) and then requires
+`ValidateAccessTokenIdentity(...).ID == id`, so an installation token reaches
+only its own GET / connector-certificate / metadata routes and every other
+sub-route falls through to `withAdmin`. No handler anywhere takes an
+installation id from a body or query field — `handleAgentManifest`,
+`handleAgentStatus`, `handleAIUsage`, `handleListHolidays` all derive it from
+the validated token (the only `FormValue("installation_id")` is the
+admin-gated console form). Artifact traversal is closed twice over:
+`handleAgentArtifact` rejects any `/` in the version and `artifacts.safeVersion`
+is a character allow-list that additionally rejects `..`.
+**Action:** Do not re-audit relay routing, wrapper fail-closure, scoped-token
+containment or artifact path handling. Re-check only if a *new* route is added
+to the `ServeHTTP` switch — the thing to verify then is that it has both a
+`RouteMode` gate and a wrapper, since the switch is hand-maintained.
+## 2026-08-20 - An empty permission tuple means "any authenticated user"
+**Learning:** `HasPointyPermission` has three outcomes, not two:
+`_required_permissions` returning `None` denies (the unmapped case, already
+journaled), but returning an **empty** tuple hits `if not required_permissions:
+return True` — authenticated-only, no permission required. So `"action": ()` in
+a `permission_map`, or a `get_required_permissions` that returns `()`, is a
+real open door that the "is every action mapped?" check does not catch. All
+three current uses are legitimately scoped *inside* the handler, and each is a
+false positive: `EmployeeLoanViewSet.mine` filters `Employee.objects.filter(
+user=request.user)`; `request_loan` delegates to `EmployeeLoanRequestSerializer`,
+which has no `employee` field and calls `request_employee_loan(user=request.user)`
+so the loan can only ever be bound to the caller; and `DashboardView` gates every
+section individually, with all revenue/profit sections behind
+`reports.view_reportrun` and row scope behind `user_has_full_visibility`.
+**Action:** `grep -rn ': ()' apps/*/views.py` plus a scan of every
+`get_required_permissions` is a cheap, high-signal 2-minute check. Treat a hit
+as a finding *only* if the handler does not scope to `request.user` — but a
+newly added empty tuple with no such scoping is a genuine hole.
