@@ -8,6 +8,7 @@ import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/printer_config.dart';
 import '../../../data/repositories/printing_repository.dart';
+import '../../../data/services/barcode_label_calibration.dart';
 import '../../../data/services/print_transport.dart';
 
 enum PrinterTestOutcome {
@@ -290,6 +291,39 @@ class PrintingSettingsViewModel extends ChangeNotifier {
     );
   }
 
+  void updateLabelPdfOffsetX(String value) {
+    _updateConfig(
+      _config.copyWith(
+        endpoint: _config.endpoint.copyWith(
+          labelPdfOffsetXMm:
+              int.tryParse(value) ?? _config.endpoint.labelPdfOffsetXMm,
+        ),
+      ),
+    );
+  }
+
+  void updateLabelPdfPitch(String value) {
+    _updateConfig(
+      _config.copyWith(
+        endpoint: _config.endpoint.copyWith(
+          labelPdfPitchMm:
+              double.tryParse(value) ?? _config.endpoint.labelPdfPitchMm,
+        ),
+      ),
+    );
+  }
+
+  void updateLabelPdfOffsetY(String value) {
+    _updateConfig(
+      _config.copyWith(
+        endpoint: _config.endpoint.copyWith(
+          labelPdfOffsetYMm:
+              int.tryParse(value) ?? _config.endpoint.labelPdfOffsetYMm,
+        ),
+      ),
+    );
+  }
+
   void updateLabelGap(String value) {
     _updateConfig(
       _config.copyWith(
@@ -405,6 +439,34 @@ class PrintingSettingsViewModel extends ChangeNotifier {
         : PrinterTestOutcome.barcodeLabelFailed;
     _updateConnectionStateFromPrintResult(result);
     _trackPrinterTest(result, name: 'printing.printer.barcode_label_tested');
+    _isTesting = false;
+    _isTestingBarcodeLabelPrinter = false;
+    notifyListeners();
+  }
+
+  /// Prints a calibration sheet so the die-cut settings can be read off the
+  /// sticker rather than guessed at.
+  Future<void> printBarcodeLabelCalibration(
+    BarcodeLabelCalibrationSheet sheet,
+  ) async {
+    if (_isTesting || !hasConfiguredPrinter) {
+      return;
+    }
+
+    _isTesting = true;
+    _isTestingBarcodeLabelPrinter = true;
+    _testOutcome = PrinterTestOutcome.none;
+    notifyListeners();
+
+    final result = await _repository.printBarcodeLabelCalibration(
+      _config,
+      sheet,
+    );
+    _testOutcome = result.isSuccess
+        ? PrinterTestOutcome.barcodeLabelSuccess
+        : PrinterTestOutcome.barcodeLabelFailed;
+    _updateConnectionStateFromPrintResult(result);
+    _trackPrinterTest(result, name: 'printing.printer.label_calibrated');
     _isTesting = false;
     _isTestingBarcodeLabelPrinter = false;
     notifyListeners();
