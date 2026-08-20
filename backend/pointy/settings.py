@@ -185,6 +185,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "pointy.wsgi.application"
 
+# Names the engine every test run is actually on. A git worktree has no `.env`
+# (it is untracked) and `.env.example` points at sqlite, so a worktree silently
+# tests on sqlite while the primary checkout tests on Postgres -- and the
+# Postgres-only guards skip instead of failing, so the run looks green. Set
+# POINTY_REQUIRE_POSTGRES=1 to make that an error rather than a warning.
+TEST_RUNNER = "apps.core.test_runner.PointyTestRunner"
+
 DATABASES = {
     "default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
 }
