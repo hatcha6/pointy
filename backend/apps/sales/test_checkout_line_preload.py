@@ -34,9 +34,11 @@ from apps.sales.models import Order
 # The only read that may still scale with the cart is DRF resolving each line's
 # variant (``PrimaryKeyRelatedField`` does its own ``.get(pk=...)``); the
 # product's units, modifier groups and categories must not. Checkout also still
-# inserts the line, locks and updates stock, and writes the stock movement.
+# inserts the line — but no longer the stock work: the lock, the quantity update
+# and the ledger movement are batched for the whole cart (see
+# test_checkout_stock_batching), which is what took this bound from 5 to 2.
 MAX_PREVIEW_QUERIES_PER_EXTRA_LINE = 1
-MAX_CHECKOUT_QUERIES_PER_EXTRA_LINE = 5
+MAX_CHECKOUT_QUERIES_PER_EXTRA_LINE = 2
 
 CACHE_SETTINGS = {
     "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}

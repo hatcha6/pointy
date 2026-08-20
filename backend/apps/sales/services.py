@@ -27,10 +27,14 @@ from apps.catalog.services import preload_line_variants
 from apps.catalog.units import quantize_quantity
 from apps.inventory.models import StockMovement
 from apps.inventory.services import (
+    build_stock_movement,
     consume_expiring_stock_batches,
     create_stock_movement,
+    create_stock_movements,
     lock_stock_item,
+    lock_stock_items,
     save_stock_item_quantities,
+    save_stock_item_quantities_bulk,
     stock_snapshot,
 )
 from .models import (
@@ -644,10 +648,14 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None):
 
     stock_adjustments = []
     shortages = []
+    # One locking statement for the whole cart instead of one per line — the
+    # cashier waits on this. ``lock_stock_items`` keeps the ascending-variant-id
+    # lock order the loop below used to establish.
+    locked_items = lock_stock_items(variants_by_id.values())
     for variant_id in sorted(quantities_by_variant):
         variant = variants_by_id[variant_id]
         quantity = quantities_by_variant[variant_id]
-        stock_item = lock_stock_item(variant=variant)
+        stock_item = locked_items[variant_id]
         # Sellable = on-hand minus stock held by quotation reservations
         # (quantity_committed). A reservation blocks others from dipping into the
         # held units even though those units are still physically on hand.
@@ -696,22 +704,34 @@ def prepare_sale_stock_adjustments_for_order(order):
 
 
 def record_sale_stock_movements(order, stock_adjustments, *, request=None):
+    # Deduct every line's stock and write its ledger row in two statements
+    # rather than two per line: this runs inside the cashier's checkout, and a
+    # 12-line cart used to pay 24 round trips here. The per-line arithmetic is
+    # unchanged — each movement is still built from the snapshot taken before
+    # that line's deduction, so the before/after history reads identically.
     created_by = adjustment_created_by(request)
+    adjusted_items = []
+    movements = []
 
     for variant, stock_item, quantity in stock_adjustments:
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand -= quantity
-        save_stock_item_quantities(stock_item)
+        adjusted_items.append(stock_item)
         consume_expiring_stock_batches(variant=variant, quantity=quantity)
-        create_stock_movement(
-            variant=variant,
-            stock_item=stock_item,
-            movement_type=StockMovement.Type.DECREASE,
-            quantity=quantity,
-            note=f"بيع {order.receipt_number}",
-            created_by=created_by,
-            before=before,
+        movements.append(
+            build_stock_movement(
+                variant=variant,
+                stock_item=stock_item,
+                movement_type=StockMovement.Type.DECREASE,
+                quantity=quantity,
+                note=f"بيع {order.receipt_number}",
+                created_by=created_by,
+                before=before,
+            )
         )
+
+    save_stock_item_quantities_bulk(adjusted_items)
+    create_stock_movements(movements)
 
 
 def reserve_stock_for_quote(order, *, settings=None):
