@@ -764,3 +764,33 @@ error flag rather than trusting the empty-state constant (the empty state has no
 button and often no second title line). Pin it with a test at a **narrow** viewport
 (~420pt) as well as a wide one — the title wraps to two lines there and the wide
 case alone passes vacuously.
+
+## 2026-08-20 - A `_ =>` arm over a backend enum string hides states, and looks total
+
+**Learning:** `conversations_screen.dart` mapped `outbound_status` to an icon with a
+Dart `switch` whose default arm was `_ => Icons.schedule`. It reads as exhaustive —
+it is not: the backend (`apps/messaging/models.py`, `OutboundMessage.Status`) has
+nine states, the widget named four, and the other five (`queued`, `scheduled`,
+`sending`, `cancelled`, `expired`) all landed on the same clock. So a message that
+had been cancelled or had expired — one that will *never* arrive — was drawn
+identically to one still waiting its turn. Dart cannot warn here because the
+subject is a `String`, not an enum: `outbound_status` crosses the wire as text and
+the client never mints an enum for it.
+
+**Action:** Whenever a widget switches on a raw backend status string, read the
+matching `TextChoices` / `models.py` block and enumerate every value before judging
+the mapping — the `_` arm is where the missing states hide, and a state that means
+"this is over" collapsing into one that means "this is pending" is the failure mode
+to look for. Test it by asserting the *distinctness* of the icons
+(`expect(iconFor('cancelled'), isNot(iconFor('queued')))`) rather than pinning each
+one, so the assertion survives an icon change but still fails on a re-merge.
+
+**Two presentation notes from the same fix.** (1) A tooltip is not enough on a
+cashier tablet — nobody long-presses a 14px glyph. Split by consequence: states the
+reader must act on (failed / cancelled / expired / opted-out) get their Arabic name
+as *visible* text; the rest keep icon-plus-tooltip, or the thread becomes a wall of
+status labels. When the label is visible, pass `semanticLabel: null` on the icon or
+a screen reader reads it twice. (2) Adding text to a metadata line built as
+`Row(mainAxisSize: min)` inside a width-capped bubble will overflow on a narrow
+phone — switch that line to `Wrap`, which gives the label its own line instead of a
+yellow-and-black stripe, and needs no ellipsis or `Flexible`.

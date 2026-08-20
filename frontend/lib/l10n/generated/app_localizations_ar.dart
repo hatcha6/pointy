@@ -13508,7 +13508,37 @@ class AppLocalizationsAr extends AppLocalizations {
   String get conversationReadOnly => 'ليس لديك صلاحية الرد على المحادثات';
 
   @override
+  String get conversationMessageStatusQueued => 'بانتظار الإرسال';
+
+  @override
+  String get conversationMessageStatusScheduled => 'مُجدولة';
+
+  @override
+  String get conversationMessageStatusSending => 'جارٍ الإرسال';
+
+  @override
+  String get conversationMessageStatusSent => 'أُرسلت';
+
+  @override
+  String get conversationMessageStatusDelivered => 'وصلت';
+
+  @override
+  String get conversationMessageStatusFailed => 'لم تُرسل';
+
+  @override
+  String get conversationMessageStatusBlocked => 'موقوفة: ألغى الاشتراك';
+
+  @override
+  String get conversationMessageStatusCancelled => 'أُلغيت';
+
+  @override
+  String get conversationMessageStatusExpired => 'انتهت مهلتها';
+
+  @override
   String get newConversationTitle => 'محادثة جديدة';
+
+  @override
+  String get newConversationStarting => 'جارٍ فتح المحادثة…';
 
   @override
   String get newConversationCustomerLabel => 'العميل';

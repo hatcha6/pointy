@@ -23474,11 +23474,71 @@ abstract class AppLocalizations {
   /// **'ليس لديك صلاحية الرد على المحادثات'**
   String get conversationReadOnly;
 
+  /// No description provided for @conversationMessageStatusQueued.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار الإرسال'**
+  String get conversationMessageStatusQueued;
+
+  /// No description provided for @conversationMessageStatusScheduled.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُجدولة'**
+  String get conversationMessageStatusScheduled;
+
+  /// No description provided for @conversationMessageStatusSending.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ الإرسال'**
+  String get conversationMessageStatusSending;
+
+  /// No description provided for @conversationMessageStatusSent.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسلت'**
+  String get conversationMessageStatusSent;
+
+  /// No description provided for @conversationMessageStatusDelivered.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصلت'**
+  String get conversationMessageStatusDelivered;
+
+  /// No description provided for @conversationMessageStatusFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُرسل'**
+  String get conversationMessageStatusFailed;
+
+  /// No description provided for @conversationMessageStatusBlocked.
+  ///
+  /// In ar, this message translates to:
+  /// **'موقوفة: ألغى الاشتراك'**
+  String get conversationMessageStatusBlocked;
+
+  /// No description provided for @conversationMessageStatusCancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغيت'**
+  String get conversationMessageStatusCancelled;
+
+  /// No description provided for @conversationMessageStatusExpired.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت مهلتها'**
+  String get conversationMessageStatusExpired;
+
   /// No description provided for @newConversationTitle.
   ///
   /// In ar, this message translates to:
   /// **'محادثة جديدة'**
   String get newConversationTitle;
+
+  /// No description provided for @newConversationStarting.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ فتح المحادثة…'**
+  String get newConversationStarting;
 
   /// No description provided for @newConversationCustomerLabel.
   ///
