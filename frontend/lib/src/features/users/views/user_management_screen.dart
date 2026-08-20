@@ -196,6 +196,12 @@ class _UserManagementBody extends StatelessWidget {
               errorBuilder: (context) => PointyErrorState(
                 title: l10n.usersLoadError,
                 icon: Icons.group_outlined,
+                action: FilledButton.icon(
+                  key: const ValueKey('users_retry_button'),
+                  onPressed: viewModel.loadUsers,
+                  icon: const Icon(Icons.sync),
+                  label: Text(l10n.retryButton),
+                ),
               ),
               emptyBuilder: (context) => PointyEmptyState(
                 icon: Icons.group_outlined,
