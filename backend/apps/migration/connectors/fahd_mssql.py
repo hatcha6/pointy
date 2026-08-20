@@ -453,7 +453,7 @@ class FahdMssqlConnector(BaseConnector):
                 lines.append(
                     canonical.CanonicalPurchaseLine(
                         variant_source_key=ser,
-                        quantity=int(quantity),
+                        quantity=quantity,
                         unit_cost=cost,
                     )
                 )

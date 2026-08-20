@@ -212,3 +212,26 @@ has already *read and committed* the derived value. In Pointy that question is
 almost always "has the register session closed" — `RegisterSession.expected_cash`
 is a property over live rows, with no snapshot, so any backdated movement edits
 history. The same shape will recur for anything else feeding a Z-report.
+
+## 2026-08-20 - An importer's job is fidelity, and a type on the IR is where fidelity is lost
+**Learning:** `apps/migration` carried purchase quantities as `int` on the
+canonical IR (`CanonicalPurchaseLine.quantity: int = 1`) while
+`CanonicalSaleLine.quantity` was `Decimal` — even though `PurchaseLine.quantity`
+has been `Decimal(12, 3)` since the Fahd fractional-units work, and its own
+field docstring says "half an egg". Four separate places re-applied the
+truncation (`int(quantity)` in `aboghris_mssql` and `fahd_mssql`,
+`int(...quantize(1, ROUND_HALF_UP))` in `fahd_sqlite`, `int(to_decimal(...))` in
+the loader), so no single fix would have been enough. A 2.5 kg purchase imported
+as 2.000 — the line total is `unit_cost × quantity`, so the invoice total, the
+supplier payable and the product's purchase history all shrank with it. Worse,
+plain `int()` truncates toward zero: a 0.5 line became 0, the loader's
+`if quantity <= 0: continue` dropped it, and when it was the invoice's only line
+the whole historical bill died as a `no_lines` error. `reconstruct.py` was
+already `to_decimal`-clean, which is what made the truncation look deliberate.
+**Action:** When one side of a paired concept (sale/purchase, in/out,
+debit/credit) is `Decimal` and the other is `int`, that is a bug, not a design —
+diff the two dataclasses field by field. And for any importer, the correctness
+question is never "does it import" but "does it import *what the source said*";
+the giveaway is a coercion (`int()`, `round()`, `[:120]`) sitting between the
+source value and the column. Every existing purchase fixture in this repo used
+whole quantities, which is exactly why 43 green tests never saw it.
