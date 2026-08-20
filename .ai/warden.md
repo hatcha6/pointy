@@ -414,3 +414,74 @@ count in the file on disk — if they disagree you are reading a stale copy, and
 the difference is exactly the lessons the last run paid to learn. This
 generalises to the other routines' journals too (`.ai/bolt.md` and friends) when
 reviewing whether a routine repeated a mistake it had already recorded.
+
+## 2026-08-20 - Committed-but-unsubmitted branches are a third prune category
+
+**Learning:** *(Rescued from `claude/nice-davinci-d960f6`, a local-only branch
+that never opened a PR — see the stranded-journal entry below. Re-verified
+today.)* The prune rule sorts worktrees into "merged, clean → remove" and
+"dirty → keep". A large middle category fits neither, and it is where the
+accumulation actually lives: clean tree, no live process, hours old, **unique
+commits not on `origin/main` and no PR at all**. Today that category was five of
+twelve non-live worktrees (`claude/compass-client-request-deadline`,
+`compass-fix`, `claude/oracle-sales-cost-basis`,
+`claude/oracle-api-checkout-coverage`, `claude/vigorous-liskov-1df887`) — the
+same five the original entry named, still sitting there a day later. These are
+routines that committed, then died or were interrupted before opening a PR. A
+clean `git status` makes them look finished; they are the opposite.
+
+**Action:** Before removing, ask `git log --oneline origin/main..<branch>` and
+`git cherry -v origin/main <branch>`. A `+` patch means the content is not
+upstream. Unique commits + no PR + local-only is unrecoverable work — leave it
+and report it, never prune it. Unique commits + no PR + pushed to origin is
+recoverable, but still not *finished*: leave the worktree and say so. Only
+remove when the content demonstrably reached `origin/main`. Do **not** use
+`git diff origin/main..<branch>` to judge this — a branch that is merely
+*behind* main shows main's newer files as thousands of deleted lines, which
+reads exactly like a huge unmerged change.
+
+## 2026-08-20 - The routines branch off `origin/main`, not the local `main`
+
+**Learning:** *(Also rescued from `claude/nice-davinci-d960f6`; re-verified
+today with different numbers, which is what makes it trustworthy.)* Step 2
+exists because "the routines branch new work off the **local** `main`", so a
+stale local `main` should poison the next hour's work. It does not, and I nearly
+escalated a false alarm on it. The primary checkout sat on `main` **33 commits
+behind `origin/main`**, fast-forward blocked by dirty files — and yet every
+worktree created during that window was based on current `origin/main`: the
+live cohort measured 0–9 commits behind, never 33. The producers evidently
+fetch and branch from `origin/main` themselves.
+
+**Action:** When the step-2 fast-forward is refused, do not escalate it as
+"next hour's work starts from the wrong base" without measuring it:
+`git rev-list --count <worktree-HEAD>..origin/main` on the newest worktrees
+tells you the base the routines actually used. Report the blocked sync as repo
+hygiene. Check the blocking dirty files against `origin/main` before calling
+them irreplaceable work-in-progress — today's untracked
+`backend/apps/employees/test_employee_list_query_scaling.py` is **already a
+tracked file on `origin/main`** (`git ls-tree origin/main -- <path>`), and only
+looks untracked because local `main` is 33 commits stale.
+
+## 2026-08-20 - Journal entries stranded on local-only branches are invisible to `origin/main`
+
+**Learning:** PR #70 fixed reading the journal from the working tree by
+prescribing `git show origin/main:.ai/warden.md`. That is necessary and still
+not sufficient. Two of the most useful entries Warden has ever written — the two
+rescued above, which answer the exact prune question this run was stuck on —
+existed on **neither** the working tree nor `origin/main`. They sat in commits
+`e8ddf184` and `da91564b` on `claude/nice-davinci-d960f6` and
+`claude/vigorous-liskov-1df887`: committed, never pushed, no PR, in worktrees
+whose routine had already exited. So the run that learned the lesson paid for
+it, and every run after it paid again. I re-derived the prune categories by hand
+before finding them. The same failure has stranded a 🔐 Sentinel journal commit
+(`bd77a219`, two entries) on `claude/sweet-wiles-1ef591`.
+
+**Action:** After reading `origin/main:.ai/warden.md`, sweep for stranded
+entries before starting the queue:
+`for b in $(git branch --list 'claude/*'); do git log --oneline origin/main..$b -- .ai/warden.md; done`
+Anything it prints is a lesson you are about to re-learn. Rescue it into your
+own journal PR rather than leaving it (the branch may be local-only, so it can
+vanish with the worktree). Sweep `.ai/*.md` the same way when judging whether a
+routine repeated a mistake it had already recorded — its journal may be stranded
+too, and a *closed or absent* PR is exactly when a routine's own lesson goes
+missing.
