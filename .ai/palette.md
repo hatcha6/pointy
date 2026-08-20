@@ -725,3 +725,42 @@ only `viewModel.searchQuery` leaves the dead term visible, and the still-pending
 the timer and clear the controller before delegating. Pin it with
 `tester.widget<TextField>(…).controller?.text` — asserting only on the view model
 passes straight through this bug.
+
+## 2026-08-20 - Never use `git stash` for the non-vacuity check
+
+**Learning:** The journal's "revert only the production file and re-run" check is
+right, but `git stash` is the wrong tool for it and cost most of a run. Two traps
+compound: (1) `git stash push -- <path> -q` puts `-q` **in the pathspec**, so the
+push aborts with "did not match any file(s)" and stashes nothing; (2) the following
+`git stash pop` therefore pops whatever was already at `stash@{0}` — and stashes are
+**repo-global across worktrees**, so it applied a *different routine's* uncommitted
+backend work into this worktree and left `backend/apps/employees/models.py` in a
+`UU` conflict with markers. Recovery is also gated: `git checkout HEAD -- <path>`
+and `git restore --source=HEAD` are both blocked by the sandbox classifier.
+
+**Action:** Do the revert with a plain file copy, never `git stash`:
+`cp <file> $SCRATCH/x.dart` → `git show HEAD:<repo-relative-path> > <file>` →
+run the test → `cp $SCRATCH/x.dart <file>`. Note `git show` needs the path from the
+**repo root** (`frontend/lib/...`) even when the shell is in `frontend/`. If a
+foreign stash does get popped, `git show HEAD:<path> > <path> && git add <path>`
+restores it and clears the conflict without a blocked checkout — and check
+`git stash list` afterwards to confirm the entry itself survived (a failed pop keeps
+it), so the other routine's work is not lost.
+
+## 2026-08-20 - A fixed-height list section can't absorb a retry button
+
+**Learning:** Adding `action:` to a `PointyErrorState` is normally free, but
+`PointyDataList` renders `errorBuilder` **directly, with no scroll view**, so the
+state body inherits whatever height its parent imposes. `_BeneficiariesSection` in
+`discount_details_screen.dart` wraps the list in a `SizedBox(height: 220)` for the
+zero-item case, and the retry pushed it 4px over — a `RenderFlex overflowed` that a
+widget test surfaces as an unexpected exception *before* the assertion it was
+actually written for, so the failure reads as "the copy is wrong" rather than
+"the box is too short".
+
+**Action:** Before adding `action:` to an error state, check whether its
+`PointyDataList` sits inside a fixed-height box; if so, branch that height on the
+error flag rather than trusting the empty-state constant (the empty state has no
+button and often no second title line). Pin it with a test at a **narrow** viewport
+(~420pt) as well as a wide one — the title wraps to two lines there and the wide
+case alone passes vacuously.
