@@ -762,3 +762,28 @@ ascending-id lock ordering the per-row loop relied on for deadlock avoidance
 And `bulk_update` does not run field `pre_save`, so an `auto_now` column has to
 be stamped by hand — the per-row `save(update_fields=[..., "updated_at"])` it
 replaces did refresh it.
+
+## 2026-08-20 - A "flat" endpoint can still be thirteen round trips over two tables
+**Learning:** Every N+1 hunt in this journal asks "does the count grow with N?".
+`customer-sales-summary` answers *no* — and was still asking `sales_order` seven
+separate questions and `sales_orderadjustment` six, because the view built one
+queryset per figure (`orders.count()`, `orders.filter(status=PAID).count()`,
+`adjustments.filter(type=RETURN).aggregate(Sum)`, …). A scaling test is blind to
+this by construction, and so is every "slope per row" measurement in this file.
+Folding them into one `aggregate()` per table with `Count/Sum(filter=Q(...))` took
+19 -> 8 queries and 7.6 -> 4.7 ms median wall time (400 invoices / 100
+adjustments, localhost Postgres — on-prem through PgBouncer the round trips cost
+more). Safe here specifically because each aggregate reads **one** table with no
+joined multi-valued relation, so the two-`Count` cross product (2026-08-19) can't
+bite; the adjustments query joins `sales_order` but only through a forward FK.
+**Action:** Add "how many statements does this endpoint issue *at all*" to the
+audit, not just "how many per row". The tell is a view body with several
+`.count()` / `.aggregate()` calls over sibling filters of one base queryset.
+Fold them, but keep the filter definition shared — `transactional_sale_q()`
+already existed as the `Q` mirror of `OrderQuerySet.transactional`, precisely so
+a `Count(filter=...)` cannot become a second definition of "what counts as a
+sale". If no such mirror exists, write it before folding, not a copy of the
+predicate. **Also:** a query-count test wants `FROM "<table>"`, not a substring
+match — an aggregate that *joins* the table you are counting will otherwise mask
+the very difference you are measuring (it read 3 instead of 2 until I anchored
+on `FROM`).
