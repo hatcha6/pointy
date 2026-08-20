@@ -8745,6 +8745,11 @@ class AppLocalizationsAr extends AppLocalizations {
       'أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقّي.';
 
   @override
+  String recordPaymentAmountMaxError(String amount) {
+    return 'أدخل مبلغًا أكبر من صفر ولا يتجاوز $amount.';
+  }
+
+  @override
   String get invoicePaymentSuccess => 'تم تسجيل الدفعة على الفاتورة.';
 
   @override
