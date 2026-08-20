@@ -142,6 +142,32 @@ class OrderViewSet(
             return queryset
         return queryset.filter(register_session__owner_key=register_session_owner_key(self.request))
 
+    def _adjusted_order_response(self, order_pk, *, status_code):
+        """Serialize a just-mutated order through the prefetch-rich queryset.
+
+        Every adjustment action used to answer with the bare instance it had
+        just ``refresh_from_db()``-ed — and that call *clears*
+        ``_prefetched_objects_cache``, so the rich object ``get_object()``
+        returned came back empty-handed. ``OrderSerializer`` then paid ~5
+        queries per line for the response alone (option labels via
+        ``variant.display_name``, plus ``can_void`` / ``can_return`` /
+        ``can_exchange`` / ``returned_quantity`` / ``returnable_quantity``
+        each re-reading ``adjustment_lines``). Re-reading instead of
+        refreshing gives the same payload at a fixed query count.
+
+        Uses ``self.queryset`` rather than ``get_queryset()``: the order is
+        already authorized by the ``get_object()`` that opened the action, and
+        ``get_queryset()``'s ``?product=`` / ``?variant=`` filters would
+        happily filter the just-mutated order out of its own response.
+        """
+        return Response(
+            OrderSerializer(
+                self.queryset.get(pk=order_pk),
+                context={"request": self.request},
+            ).data,
+            status=status_code,
+        )
+
     def _open_register_session(self, request):
         return RegisterSession.objects.filter(
             owner_key=register_session_owner_key(request),
@@ -192,7 +218,7 @@ class OrderViewSet(
         # prefetches instead of firing a query per line (the checkout response
         # N+1). The bare `order` is kept for the print/kitchen steps below.
         response_data = OrderSerializer(
-            self.get_queryset().get(pk=order.pk),
+            self.queryset.get(pk=order.pk),
             context={"request": request},
         ).data
 
@@ -271,10 +297,9 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        order.refresh_from_db()
-        return Response(
-            OrderSerializer(order, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
+        return self._adjusted_order_response(
+            order.pk,
+            status_code=status.HTTP_201_CREATED,
         )
 
     @action(detail=True, methods=["post"], url_path="assign-customer")
@@ -294,10 +319,9 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        order.refresh_from_db()
-        return Response(
-            OrderSerializer(order, context={"request": request}).data,
-            status=status.HTTP_200_OK,
+        return self._adjusted_order_response(
+            order.pk,
+            status_code=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["post"])
@@ -325,9 +349,9 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         new_order = serializer.save()
-        return Response(
-            OrderSerializer(new_order, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
+        return self._adjusted_order_response(
+            new_order.pk,
+            status_code=status.HTTP_201_CREATED,
         )
 
     @action(detail=True, methods=["post"])
@@ -370,11 +394,10 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        order.refresh_from_db()
         schedule_targeted_sweep()
-        return Response(
-            OrderSerializer(order, context={"request": request}).data,
-            status=status.HTTP_200_OK,
+        return self._adjusted_order_response(
+            order.pk,
+            status_code=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["post"])
@@ -396,11 +419,10 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        order.refresh_from_db()
         schedule_targeted_sweep()
-        return Response(
-            OrderSerializer(order, context={"request": request}).data,
-            status=status.HTTP_200_OK,
+        return self._adjusted_order_response(
+            order.pk,
+            status_code=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["post"], url_path="exchange-items")
@@ -427,11 +449,10 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        order.refresh_from_db()
         schedule_targeted_sweep()
-        return Response(
-            OrderSerializer(order, context={"request": request}).data,
-            status=status.HTTP_200_OK,
+        return self._adjusted_order_response(
+            order.pk,
+            status_code=status.HTTP_200_OK,
         )
 
     @action(detail=False, methods=["get"])
