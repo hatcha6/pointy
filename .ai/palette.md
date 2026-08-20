@@ -617,3 +617,42 @@ and the guard's own docstring admits drag-to-dismiss can bypass `PopScope` on
 some platforms. Both product sheets now share that caveat; do not "fix" it by
 flipping `isDismissible`, which would also kill the barrier tap the guard *does*
 intercept.
+
+## 2026-08-20 - A screen-level refresh action makes an actionless error state a false positive
+
+**Learning:** The `PointyErrorState`-without-`action:` backlog from the previous
+entry is not a to-do list. Re-scanned it shrank 17 → 8, and of those 8 only
+**one** file was a genuine dead end. `device_settings_screen`,
+`discount_details_screen`, `user_management_screen` and `shop_backup_widgets` all
+carry an `IconButton(icon: Icon(Icons.sync))` in the app bar that calls the very
+loader the inline retry would call — the user already has a way to re-ask, one
+that is *more* discoverable than a button buried in a section. Adding an inline
+retry there is churn, not a fix. `shop_settings_screen`'s is a *save* failure and
+`payment_sheet`'s is a config gap, so neither takes a reload retry at all.
+
+**Action:** Before adding a retry, grep the host screen for `Icons.sync` /
+`Icons.refresh` / `RefreshIndicator` and check the handler reloads the same thing
+the error state covers. Only report a dead end when nothing on the screen re-asks.
+`product_document_history_section.dart` qualified because
+`product_details_screen.dart` has **no** refresh anywhere — its app-bar actions are
+edit / archive / print-label only, so a blinked LAN stranded both history lists
+until the manager backed out of the product and reopened it.
+
+## 2026-08-20 - `PointyDataList` hands its error state to the parent unwrapped
+
+**Learning:** With `header == null`, `PointyDataList.build` returns
+`errorBuilder(context)` **directly** — no `ListView`, no scroll view (see
+`pointy_data_list.dart`, the `stateBody` branch). Where the parent is a fixed
+-height `SizedBox` — as both product history lists are, sized by
+`_documentHistoryListHeight` — growing the error state by adding an `action:`
+button is a hard render overflow, not a scroll. The empty state fit in the 220px
+"nothing here" height; the error state plus a retry button does not, and the
+Arabic titles wrap to two lines at phone width, which is where it bites first.
+
+**Action:** When adding `action:` to a `PointyErrorState`, look *up* for a
+`SizedBox(height:)` / `SizedBox.square` / aspect-ratio parent before assuming the
+change is presentation-only. Thread the error flag into the height helper and
+return the tall branch, reusing a height the function already returns rather than
+inventing a constant. Prove it with a third test at the tightest width (390) that
+asserts `tester.takeException()` is null — an overflow is reported as a thrown
+`FlutterError`, so a test that only checks `find.text` passes straight through one.
