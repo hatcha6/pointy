@@ -881,6 +881,18 @@ class PurchaseDiscountPreviewLineSerializer(serializers.Serializer):
         decimal_places=2,
         min_value=Decimal("0.00"),
     )
+    # The purchase unit the buyer is typing in — blank for the product's base
+    # unit. The editor has always sent it; the preview used to drop it on the
+    # floor, which left every figure that crosses into base units unable to
+    # tell a carton from a piece. Resolved to a factor by the PARENT
+    # serializer, after the variants are bulk-loaded, so previewing a wide
+    # order does not cost a product query per line.
+    unit = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        trim_whitespace=True,
+    )
 
     def validate(self, attrs):
         variant = attrs.get("variant")
@@ -935,6 +947,7 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
         # purchase_preview_line_payloads) are bulk-loaded once up front instead
         # of costing 3 queries per line.
         preload_line_variants(attrs["lines"])
+        resolve_preview_line_units(attrs["lines"])
         discount_lines = tuple(
             DiscountLineInput(
                 key=str(index),
@@ -1083,6 +1096,48 @@ def unapplied_purchase_discount_codes(discount_result, discount_codes):
     return sorted(requested_codes - applied_codes)
 
 
+def resolve_preview_line_units(lines):
+    """Snapshot each preview line's base-conversion factor.
+
+    ``PurchaseLineSerializer`` does this for a line that is actually saved; the
+    preview needs the same snapshot or it cannot answer any question that
+    crosses into base units, and quotes a figure the saved order contradicts.
+    Called from the parent serializer *after* ``preload_line_variants``, so
+    ``variant.product`` is already in memory.
+    """
+    # Reported per line and aligned by index, the way the save endpoint reports
+    # the same rejection, so the editor can reuse its line-error handling.
+    line_errors = [{} for _ in lines]
+    for index, line in enumerate(lines):
+        code = (line.get("unit") or "").strip()
+        if not code:
+            # Base unit: the overwhelmingly common case, and the one the
+            # editor sends nothing for. Short-circuited so a plain preview
+            # never reads ``variant.product`` just to learn the base code.
+            line["unit"] = ""
+            line["unit_factor"] = Decimal("1")
+            continue
+        try:
+            resolved = resolve_unit(
+                line["variant"].product, code, field="unit", for_purchase=True
+            )
+        except UnitConversionError as error:
+            line_errors[index] = {error.field: error.message}
+            continue
+        line["unit"] = resolved.code
+        line["unit_factor"] = resolved.factor
+    if any(line_errors):
+        raise serializers.ValidationError({"lines": line_errors})
+
+
+def preview_line_base_quantity(line):
+    """A preview line's quantity in base units, rounded exactly as
+    ``PurchaseLine.to_base_quantity`` rounds it — the preview and the writer
+    have to agree digit for digit, not merely in intent."""
+    factor = line.get("unit_factor") or Decimal("1")
+    return (Decimal(line["quantity"]) * factor).quantize(Decimal("0.001"))
+
+
 def purchase_preview_line_payloads(
     *,
     lines,
@@ -1147,9 +1202,14 @@ def purchase_preview_line_payloads(
         landed_cost_allocation_method
         == PurchaseOrder.LandedCostAllocationMethod.RETAIL_VALUE
     ):
+        # ``unit_price`` is per BASE unit, so the quantity meeting it has to be
+        # in base units too — mirroring PurchaseOrder._landed_cost_weights()
+        # down to the 3dp intermediate, since a preview that rounds differently
+        # from the writer is the same defect in a nicer disguise.
         weights = {
-            str(index): (line["variant"].unit_price * Decimal(line["quantity"]))
-            .quantize(Decimal("0.01"))
+            str(index): (
+                line["variant"].unit_price * preview_line_base_quantity(line)
+            ).quantize(Decimal("0.01"))
             for index, line in enumerate(lines)
         }
     elif landed_cost_allocation_method == PurchaseOrder.LandedCostAllocationMethod.EQUAL:
