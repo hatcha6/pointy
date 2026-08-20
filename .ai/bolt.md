@@ -787,3 +787,29 @@ predicate. **Also:** a query-count test wants `FROM "<table>"`, not a substring
 match — an aggregate that *joins* the table you are counting will otherwise mask
 the very difference you are measuring (it read 3 instead of 2 until I anchored
 on `FROM`).
+
+## 2026-08-20 - Measure the dimension the CALLER controls, not the one the row count suggests
+**Learning:** `PrintJobSerializer` embedded `events`, the job's audit trail, and
+that trail's serializer reads `agent.identifier` + `user.username` — so a job
+payload cost 1 query for the trail plus 2 per event. Every N+1 habit in this
+journal would size that as "small": a healthy job has 3 events. But the axis is
+not rows on a page, it is **how many times this job has already been tried** —
+`create_job_event` appends on every claim, requeue, failure and print, so a
+printer that is jamming makes each new failure report slower than the last, at
+exactly the moment the till is already waiting on it. Measured
+`printjob-failed` at 2/4/8/16 prior events: 19/23/31/47 queries, a clean
+2.0/event, and 1141 → 4215 bytes. And nothing reads it — the Flutter `PrintJob`
+model parses none of the field, no backend test asserts it, the relay never sees
+it, and a dedicated `/print-jobs/<pk>/events/` action already serves the trail
+(gated on `printing.view_printjobevent`, which the embedded copy quietly
+bypassed). Deleting the field beat prefetching it on every axis, as with
+`stock-movements`' `product_detail`: flat **9** queries at any attempt count,
+436 bytes, `print-job-list` at 20 jobs × 3 events 6 → 3 queries and 21,078 →
+8,298 bytes, and the viewset's `events__agent`/`events__user` prefetch got to go
+with it.
+**Action:** When a nested collection grows with *retries*, *attempts* or
+*history* rather than with page rows, a scaling test over row count will call it
+flat and a per-row slope will call it cheap. Scale the collection itself. And
+check the embedded copy's permission: a nested read-only relation inherits the
+parent's permission map, so embedding an audit trail is also a quiet way around
+its own `view_` gate.

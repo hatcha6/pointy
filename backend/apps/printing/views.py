@@ -259,16 +259,16 @@ class PrintJobViewSet(
         "failed": ("printing.change_printjob",),
         "report": ("printing.change_printjob",),
     }
-    queryset = (
-        PrintJob.objects.select_related(
-            "order",
-            "template_version",
-            "printer_profile",
-            "claimed_by",
-        )
-        .prefetch_related("events__agent", "events__user")
-        .all()
-    )
+    # No ``events`` prefetch: the job payload no longer embeds its audit trail
+    # (see PrintJobSerializer), and the ``events`` action below prefetches its
+    # own labels. Re-adding it here would load the trail for every row of the
+    # list and throw it away.
+    queryset = PrintJob.objects.select_related(
+        "order",
+        "template_version",
+        "printer_profile",
+        "claimed_by",
+    ).all()
     filterset_fields = ("job_type", "status", "order", "printer_profile", "claimed_by")
     search_fields = ("idempotency_key", "order__receipt_number", "error_message")
     ordering_fields = ("created_at", "updated_at", "priority", "attempts")
