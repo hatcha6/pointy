@@ -469,3 +469,41 @@ and it makes the test fail loudly if the retry is wired to the wrong loader.
 `discount_details_screen`, `shop_settings_screen`, `shop_backup_widgets`,
 `user_management_screen`. `payment_sheet` stays excluded — it is a *config* gap
 ("no payment methods enabled"), not a fetch, so no retry applies.
+
+## 2026-08-20 - A disabled-control audit is blind to the control that was removed
+
+**Learning:** The "disabled control that won't say why" seam has a second half
+that no `onPressed: .* null` grep can reach: the control that is *conditionally
+absent*. `SaleOrderDetailsContent` builds its action bar as `if (canReturn)
+OutlinedButton…`, so on a voided invoice return, exchange and void simply are
+not in the tree — nothing greys out, nothing is there to carry an explanation.
+The returns desk was the sharp case: look up a receipt, get a correct-looking
+invoice, and there is no إرجاع button and no sentence saying why. The state
+*was* on screen — `الحالة: ملغاة` as a grey `_DetailRow` inside the summary
+section — but far below the actions and never causally linked to them.
+
+Two things made the finding defensible rather than subjective. (a) The backend
+settles the semantics: `void_order` and the full-return path in
+`sales/services.py` both flip `Order.Status` to `VOID` once no line has
+`returnable_quantity`, so `status == 'void'` **is** "nothing left to return" —
+one predicate, no guessing, and `status == 'paid' && !hasReturnableItems` is
+unreachable. (b) The sibling already exists: `_PurchaseOrderStatusCallout` in
+`purchase_order_details_screen.dart` states a cancelled PO's dead state in plain
+language, so the sales side was the odd one out.
+
+**Action:** Audit the *gating predicate* (`if (canX)`, `_canX`,
+`hasReturnableItems`), not `onPressed: null` — grep `if (can` in action bars.
+When you find one, check whether a backend status makes the reason unambiguous
+before writing copy; a callout that guesses wrong is worse than silence. Gate
+the explanation on **status, not on the callback**: `invoice_details_screen`
+already passes `onReturn: null` for a voided order, so keying off the callback
+would have hidden the explanation on the screen where a manager most often
+lands on one. `PointyDetailCallout` + `PointyCalloutTone.neutral` is the house
+component for this and was already imported in the file.
+
+**Also — a scripted insert before a `class` steals its docstring.** Anchoring a
+Python/sed insert on `class _CreditBalanceCallout extends StatelessWidget {`
+placed the new class *between* that class and its `///` comment, silently
+re-homing the doc onto the new widget. The analyzer is happy; only `git diff`
+catches it. Anchor on the doc comment's first line, or re-read the diff around
+every inserted class.
