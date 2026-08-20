@@ -233,7 +233,17 @@ class PrintJobEventSerializer(serializers.ModelSerializer):
 
 
 class PrintJobSerializer(serializers.ModelSerializer):
-    events = PrintJobEventSerializer(many=True, read_only=True)
+    """A print job as the agent and the till read it.
+
+    The job's audit trail is deliberately NOT embedded here. Nesting it made
+    every job payload cost one query for the events plus one each for their
+    ``agent``/``user`` labels — a cost that grows with how many times the job
+    has already been tried, so a printer that keeps failing makes each new
+    failure report slower than the last. No client reads it (``PrintJob`` in
+    the Flutter app parses none of it), and the trail has its own endpoint,
+    ``/print-jobs/<pk>/events/``, which is separately gated on
+    ``printing.view_printjobevent``.
+    """
 
     class Meta:
         model = PrintJob
@@ -254,7 +264,6 @@ class PrintJobSerializer(serializers.ModelSerializer):
             "printed_at",
             "failed_at",
             "error_message",
-            "events",
             "created_at",
             "updated_at",
         ]
@@ -267,7 +276,6 @@ class PrintJobSerializer(serializers.ModelSerializer):
             "printed_at",
             "failed_at",
             "error_message",
-            "events",
             "created_at",
             "updated_at",
         )
