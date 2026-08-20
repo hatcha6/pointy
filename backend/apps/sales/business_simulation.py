@@ -383,15 +383,20 @@ class OracleDiscountEngine:
         return amount, allocations
 
     def calculate(self, lines: list, customer_id=None, coupon_codes=()):
-        """Return ``(per_line_discount: dict, discount_total: Decimal)``.
+        """Return ``(per_line_discount, discount_total, applied_coupon_codes)``.
 
         ``per_line_discount`` is keyed by the line key (``str(index)``); the sum
-        equals ``discount_total``.
+        equals ``discount_total``. ``applied_coupon_codes`` names the coupons
+        that actually produced an application — a coupon can be eligible and
+        still contribute nothing (its rule caps out, or an exclusive rule ahead
+        of it takes the whole cart), and the checkout API refuses a sale whose
+        coupon changed nothing rather than silently pocketing it.
         """
         remaining = {line.key: line.subtotal for line in lines}
         per_line = defaultdict(lambda: ZERO)
         total = ZERO
         applications = 0
+        applied_codes = set()
         for rule in self._eligible(lines, customer_id, coupon_codes):
             if rule.exclusive and applications:
                 continue
@@ -400,13 +405,15 @@ class OracleDiscountEngine:
                 continue
             amount, allocations = result
             applications += 1
+            if rule.application_type == "coupon_code":
+                applied_codes.update(_normalize_codes([rule.coupon_code]))
             total = up2(total + amount)
             for key, alloc in allocations.items():
                 per_line[key] = up2(per_line[key] + alloc)
                 remaining[key] = up2(remaining[key] - alloc)
             if rule.exclusive:
                 break
-        return dict(per_line), total
+        return dict(per_line), total, applied_codes
 
 
 # ---------------------------------------------------------------------------
@@ -1168,6 +1175,12 @@ class Simulation:
         return lines_data
 
     def _compute_discounts(self, specs, customer_id, coupon_codes):
+        per_line, total, _ = self._compute_discounts_detail(
+            specs, customer_id, coupon_codes
+        )
+        return per_line, total
+
+    def _compute_discounts_detail(self, specs, customer_id, coupon_codes):
         discount_lines = [
             DiscountLine(
                 key=str(index),
@@ -1277,6 +1290,112 @@ class Simulation:
             coupon_codes=coupon_codes,
             sale_type=Order.SaleType.STANDARD,
             request=None,
+        )
+        rec = self._build_order_rec(
+            order, specs, per_line_discount, Order.SaleType.STANDARD, customer_id
+        )
+        self._apply_sale_stock(specs)
+        for method, amount in payments:
+            self.record_order_payment(rec, method, amount)
+        self._assert_order(rec)
+        self._assert_touched(specs)
+        self._assert_session(self.current_session_id)
+        return True
+
+    def op_api_sale(self) -> bool:
+        """A standard sale rung up through the DRF checkout endpoint.
+
+        ``op_standard_sale`` calls the ``checkout_order`` service directly *and
+        tells it the unit price to charge*, so two things stay unproven: whatever
+        the API layer decides on the way in, and the server's own per-unit
+        pricing. This op posts what a POS actually sends — a variant id, a
+        quantity, a unit code and modifier option ids — and lets the backend
+        price the cart itself.
+
+        Every expected figure is still the oracle's own, computed from the inputs
+        it put in the request: its port of ``unit_sale_price`` (the unit's custom
+        price if set, else the base price scaled by the factor) plus the modifier
+        deltas it chose, run through its own discount engine and its own
+        rounding. Nothing is read back from the response to decide what to
+        expect; the response is only ever asserted against.
+        """
+        specs = self._choose_lines(include_service=self.rng.random() < 0.25)
+        if not specs:
+            return False
+        customer = self.rng.choice(self.customers) if self.rng.random() < 0.5 else None
+        customer_id = customer.id if customer else None
+        coupon_codes = self._random_coupons()
+        per_line_discount, _, applied_codes = self._compute_discounts_detail(
+            specs, customer_id, coupon_codes
+        )
+        # The API refuses a sale carrying a coupon that changed nothing (the
+        # service path silently ignores it). The oracle predicts which coupons
+        # its own engine applied, so it knows which answer to demand.
+        unapplied = sorted(_normalize_codes(coupon_codes) - applied_codes)
+        subtotal, discount_total, total = self._order_totals(specs, per_line_discount)
+        if total <= ZERO:
+            return False
+        payments = self.split_amount(total, list(self.PAYMENT_METHODS))
+        payload = {
+            "lines": [
+                {
+                    "variant": spec["item"].variant_id,
+                    "quantity": str(spec["quantity"]),
+                    "unit": spec["unit"].code,
+                    "modifiers": [
+                        {"option": option.pk, "quantity": qty}
+                        for option, _, qty in spec["modifiers"]
+                    ],
+                }
+                for spec in specs
+            ],
+            "payments": [{"method": m, "amount": str(a)} for m, a in payments],
+            "sale_type": str(Order.SaleType.STANDARD),
+        }
+        if customer_id is not None:
+            payload["customer"] = customer_id
+        if coupon_codes:
+            payload["coupon_codes"] = list(coupon_codes)
+        order_count_before = Order.objects.count()
+        response = self.client.post("/api/orders/checkout/", payload, format="json")
+        if unapplied:
+            # A coupon the engine could not apply must be refused outright, and
+            # nothing may be written — a sale that quietly drops the coupon
+            # charges the customer a price the cashier did not agree to.
+            if response.status_code != 400:
+                self.fail(
+                    f"api checkout accepted unapplied coupons {unapplied}: "
+                    f"{response.status_code}"
+                )
+            if "coupon_codes" not in response.data:
+                self.fail(
+                    f"api checkout rejected {unapplied} without naming the coupon: "
+                    f"{response.data}"
+                )
+            if Order.objects.count() != order_count_before:
+                self.fail("rejected api checkout still created an order")
+            return True
+        if response.status_code != 201:
+            # The tender offered is exactly the total the oracle says is owed. A
+            # rejection here means the API is demanding a different number from
+            # the one the order would go on to store.
+            self.fail(
+                f"api checkout rejected a correct tender of {total}: "
+                f"{response.status_code} {response.data}"
+            )
+        order = Order.objects.get(pk=response.data["id"])
+        # The response body is the receipt, the drawer screen and the customer's
+        # copy — assert it, not only the row it wrote.
+        self.assert_money(
+            Decimal(str(response.data["subtotal"])), subtotal, "api sale response subtotal"
+        )
+        self.assert_money(
+            Decimal(str(response.data["discount_total"])),
+            discount_total,
+            "api sale response discount_total",
+        )
+        self.assert_money(
+            Decimal(str(response.data["total"])), total, "api sale response total"
         )
         rec = self._build_order_rec(
             order, specs, per_line_discount, Order.SaleType.STANDARD, customer_id
@@ -2233,7 +2352,8 @@ class Simulation:
 
     def operations(self):
         return [
-            (self.op_standard_sale, 28),
+            (self.op_standard_sale, 22),
+            (self.op_api_sale, 8),
             (self.op_credit_sale, 10),
             (self.op_customer_payment, 8),
             (self.op_customer_account_payment, 4),
@@ -2324,22 +2444,53 @@ class Simulation:
         self._assert_order_lines(order, rec)
 
     def _assert_order_lines(self, order, rec: OrderRec):
-        """Every line's price, discount and COST basis, plus the identities that
-        tie the lines back to the order they belong to.
+        """Every stored line is the line the oracle priced and costed, plus the
+        identities that tie the lines back to the document they belong to.
 
-        The cost basis is what makes this more than a restatement of the totals:
-        an order's money can be entirely right while ``unit_cost`` is wrong, and
-        nothing about revenue would notice — but every margin, every profit
-        report and the credit a return gives back for restocked goods are all
-        computed from this one snapshot.
+        Two things are proven here that the order's own totals cannot reach.
+        The **cost basis** is invisible to revenue: an order's money can be
+        entirely right while ``unit_cost`` is wrong, and every margin, every
+        profit report and the credit a return gives back for restocked goods are
+        computed from that one snapshot. The **line identities** close the other
+        gap — asking an order for its three totals is satisfiable without any
+        line agreeing with them, which is exactly how an order-level figure that
+        never reached the lines stayed invisible on the purchasing side.
+
+        Every per-line expectation is the oracle's own (the unit price it
+        derived from the catalog, the quantity it asked for, the allocation its
+        own discount engine made, the cost it predicted from the purchase
+        ledger); nothing is read back from the order to decide what to expect.
         """
         lines = {line.pk: line for line in order.lines.all()}
+        if len(lines) != len(rec.lines):
+            # A backend line the oracle never asked for is as wrong as a missing
+            # one, and looking each row up by id below would not notice it.
+            self.fail(
+                f"order#{rec.order_id} line count: backend={len(lines)} "
+                f"oracle={len(rec.lines)}"
+            )
         for expected in rec.lines:
             line = lines[expected.order_line_id]
             tag = f"order#{order.pk} line#{line.pk}"
             self.assert_money(line.unit_price, expected.unit_price, f"{tag} unit_price")
+            self.assert_qty(line.quantity, expected.quantity, f"{tag} quantity")
+            self.assert_equal(
+                Decimal(line.unit_factor),
+                Decimal(expected.unit_factor),
+                f"{tag} unit_factor",
+            )
             self.assert_money(
                 line.discount_total, expected.discount_total, f"{tag} discount_total"
+            )
+            # base_quantity is what stock was actually moved in; a line that
+            # prices in cartons and decrements in pieces has to agree here.
+            self.assert_qty(
+                line.base_quantity,
+                q3(expected.quantity * expected.unit_factor),
+                f"{tag} base_quantity",
+            )
+            self.assert_money(
+                line.line_subtotal, expected.line_subtotal, f"{tag} line_subtotal"
             )
             self.assert_money(line.unit_cost, expected.unit_cost, f"{tag} unit_cost")
             self.assert_money(line.line_total, expected.line_total, f"{tag} line_total")
@@ -2354,25 +2505,42 @@ class Simulation:
                     # base unit into the sale's transacted unit is exactly the
                     # step the phantom-loss bug class lives in.
                     self.multi_unit_costed_line_assertions += 1
+        subtotal_sum = even2(sum((line.line_subtotal for line in lines.values()), ZERO))
+        discount_sum = even2(sum((line.discount_total for line in lines.values()), ZERO))
+        # ``Order.recalculate`` clamps the discount to the subtotal
+        # (apps/sales/models.py), so the clamp belongs in the expectation too —
+        # without it an over-discounted order would be reported as a defect the
+        # backend does not have.
+        clamped_discount = min(discount_sum, subtotal_sum)
         # Identity 1: the lines' revenue is the order's revenue.
         self.assert_money(
-            even2(sum((line.line_subtotal for line in lines.values()), ZERO)),
+            subtotal_sum,
             order.subtotal,
             f"identity: order#{order.pk} line subtotals sum to subtotal",
         )
         # Identity 2: the lines' discounts are the order's discount. This is the
         # one an order-level figure that never reached the lines would fail.
         self.assert_money(
-            even2(sum((line.discount_total for line in lines.values()), ZERO)),
+            clamped_discount,
             order.discount_total,
             f"identity: order#{order.pk} line discounts sum to discount_total",
         )
         # Identity 3: what the lines are worth is what the order charges.
         self.assert_money(
-            even2(sum((line.line_total for line in lines.values()), ZERO)),
+            even2(subtotal_sum - clamped_discount),
             order.total,
-            f"identity: order#{order.pk} line totals sum to total",
+            f"identity: order#{order.pk} subtotal less discount is total",
         )
+        if discount_sum <= subtotal_sum:
+            # Unclamped, the lines' own net value must also land on the total.
+            # Under the clamp it cannot: the order forgives the excess discount
+            # while the lines keep it, so this is the one identity that is
+            # genuinely conditional rather than merely restated.
+            self.assert_money(
+                even2(sum((line.line_total for line in lines.values()), ZERO)),
+                order.total,
+                f"identity: order#{order.pk} line totals sum to total",
+            )
         # Identity 4: the cost basis the reports read is the lines' own.
         self.assert_money(order.total_cost, rec.total_cost, f"order#{order.pk} total_cost")
         self.assert_money(
@@ -2645,13 +2813,13 @@ def self_test_arithmetic():
 
     # (A) document percentage 10 over two lines.
     engine = OracleDiscountEngine([_doc_rule(1, VT.PERCENTAGE, "10")])
-    per_line, total = engine.calculate([_line(0, 1, 2, "10.00"), _line(1, 2, 1, "20.00")])
+    per_line, total, _ = engine.calculate([_line(0, 1, 2, "10.00"), _line(1, 2, 1, "20.00")])
     check("A.total", total, Decimal("4.00"))
     check("A.lines", per_line, {"0": Decimal("2.00"), "1": Decimal("2.00")})
 
     # (C) document percentage 10, three lines, indivisible cent -> largest key.
     engine = OracleDiscountEngine([_doc_rule(1, VT.PERCENTAGE, "10")])
-    per_line, total = engine.calculate(
+    per_line, total, _ = engine.calculate(
         [_line(0, 1, 1, "3.34"), _line(1, 2, 1, "3.34"), _line(2, 3, 1, "3.34")]
     )
     check("C.total", total, Decimal("1.00"))
@@ -2662,7 +2830,7 @@ def self_test_arithmetic():
         [_doc_rule(1, VT.FIXED_UNIT_AMOUNT, "1.50", scope=SC.LINE,
                    min_line_quantity=2, product_ids=frozenset({1}))]
     )
-    per_line, total = engine.calculate([_line(0, 1, 2, "10.00"), _line(1, 2, 1, "10.00")])
+    per_line, total, _ = engine.calculate([_line(0, 1, 2, "10.00"), _line(1, 2, 1, "10.00")])
     check("D.total", total, Decimal("3.00"))
     check("D.lines", per_line, {"0": Decimal("3.00")})
 
@@ -2670,16 +2838,16 @@ def self_test_arithmetic():
     engine = OracleDiscountEngine(
         [_doc_rule(1, VT.FIXED_PRICE, "7.50", scope=SC.LINE, product_ids=frozenset({1}))]
     )
-    per_line, total = engine.calculate([_line(0, 1, 2, "10.00")])
+    per_line, total, _ = engine.calculate([_line(0, 1, 2, "10.00")])
     check("E.total", total, Decimal("5.00"))
 
     # (G) coupon fixed_amount only applies with the code.
     engine = OracleDiscountEngine(
         [_doc_rule(1, VT.FIXED_AMOUNT, "5", application_type=AT.COUPON_CODE, coupon_code="SAVE5")]
     )
-    _, total_without = engine.calculate([_line(0, 1, 4, "10.00")])
+    _, total_without, _ = engine.calculate([_line(0, 1, 4, "10.00")])
     check("G.without", total_without, Decimal("0.00"))
-    _, total_with = engine.calculate([_line(0, 1, 4, "10.00")], coupon_codes=("save5",))
+    _, total_with, _ = engine.calculate([_line(0, 1, 4, "10.00")], coupon_codes=("save5",))
     check("G.with", total_with, Decimal("5.00"))
 
     # (H) two non-exclusive line fixed_amount rules stack down to the line floor.
@@ -2691,7 +2859,7 @@ def self_test_arithmetic():
                       product_ids=frozenset({1})),
         ]
     )
-    per_line, total = engine.calculate([_line(0, 1, 2, "10.00")])
+    per_line, total, _ = engine.calculate([_line(0, 1, 2, "10.00")])
     check("H.total", total, Decimal("20.00"))
     check("H.lines", per_line, {"0": Decimal("20.00")})
 
@@ -2700,11 +2868,11 @@ def self_test_arithmetic():
         [_doc_rule(1, VT.PERCENTAGE, "50", min_order_subtotal=Decimal("40.00"),
                    max_discount_amount=Decimal("3.33"))]
     )
-    per_line, total = engine.calculate([_line(0, 1, 1, "20.00"), _line(1, 2, 1, "20.00")])
+    per_line, total, _ = engine.calculate([_line(0, 1, 1, "20.00"), _line(1, 2, 1, "20.00")])
     check("B.total", total, Decimal("3.33"))
     check("B.lines", per_line, {"0": Decimal("1.67"), "1": Decimal("1.66")})
     # below threshold -> nothing
-    _, total_low = engine.calculate([_line(0, 1, 1, "19.99"), _line(1, 2, 1, "19.99")])
+    _, total_low, _ = engine.calculate([_line(0, 1, 1, "19.99"), _line(1, 2, 1, "19.99")])
     check("B.below", total_low, Decimal("0.00"))
 
     # (J) automatic percentage then non-exclusive coupon, stacked on remaining.
@@ -2715,8 +2883,35 @@ def self_test_arithmetic():
                       coupon_code="SAVE2", priority=2),
         ]
     )
-    _, total = engine.calculate([_line(0, 1, 2, "12.00")], coupon_codes=("SAVE2",))
+    _, total, _ = engine.calculate([_line(0, 1, 2, "12.00")], coupon_codes=("SAVE2",))
     check("J.total", total, Decimal("4.40"))
+
+    # (K) which coupons actually applied. The checkout API refuses a sale whose
+    # coupon contributed nothing (``unapplied_coupon_codes``), so the port has to
+    # predict that too: an exclusive automatic rule ahead of the coupon leaves
+    # the coupon eligible but unapplied, and the code must NOT be reported.
+    engine = OracleDiscountEngine(
+        [
+            _doc_rule(1, VT.PERCENTAGE, "50", priority=1, exclusive=True),
+            _doc_rule(2, VT.FIXED_AMOUNT, "2", application_type=AT.COUPON_CODE,
+                      coupon_code="SAVE2", priority=2),
+        ]
+    )
+    _, total, applied = engine.calculate(
+        [_line(0, 1, 1, "20.00")], coupon_codes=("save2",)
+    )
+    check("K.total", total, Decimal("10.00"))
+    check("K.applied", applied, set())
+    # …and when nothing pre-empts it, the (case-normalized) code is reported.
+    engine = OracleDiscountEngine(
+        [_doc_rule(1, VT.FIXED_AMOUNT, "2", application_type=AT.COUPON_CODE,
+                   coupon_code="SAVE2")]
+    )
+    _, total, applied = engine.calculate(
+        [_line(0, 1, 1, "20.00")], coupon_codes=("save2",)
+    )
+    check("K.applied.total", total, Decimal("2.00"))
+    check("K.applied.codes", applied, {"SAVE2"})
 
     # exclusivity short-circuits a lower-priority rule.
     engine = OracleDiscountEngine(
@@ -2725,7 +2920,7 @@ def self_test_arithmetic():
             _doc_rule(2, VT.PERCENTAGE, "10", priority=2, exclusive=False),
         ]
     )
-    _, total = engine.calculate([_line(0, 1, 1, "20.00")])
+    _, total, _ = engine.calculate([_line(0, 1, 1, "20.00")])
     check("excl.total", total, Decimal("10.00"))  # only the 50% rule, not 50%+10%
 
     # allocate_discount_amount tie-break (ascending string key).
