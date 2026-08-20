@@ -160,3 +160,32 @@ into total loss. To test durability without a real power cut, wrap `os.fsync`
 (record `os.fstat(fd).st_ino`), `os.replace` and the prune, then assert the
 *ordering* of inodes — rename preserves the inode, so the temp file is
 identifiable from the final path afterwards.
+
+## 2026-08-20 - A persistent connection outlives the server it points at
+
+**Learning:** `CONN_MAX_AGE=120` (what on-prem runs) means each worker keeps a
+Postgres connection across requests, and nothing in Django notices when the
+*server* end goes away — a Postgres or PgBouncer restart after a mains blip, a
+container recycle, an update flip. `close_old_connections` on `request_started`
+only closes connections that are obsolete by age or that have **already**
+errored, so a connection inside its window that has never failed is handed
+straight to the view and raises on its first query: one 500 per pooled
+connection after every restart, and one of them can be a checkout. Same shape
+as this journal's Redis entries — the recovery path existed (Django reconnects
+the moment the connection is closed) and simply never ran, because nobody
+looked. `CONN_HEALTH_CHECKS` was never set. It also made `/readyz/` report a
+perfectly healthy database as down, which is the signal compose's healthcheck
+and the update-agent's auto-rollback read — a DB restart could therefore roll
+an update back on its own.
+
+**Action:** Whenever a resource is *pooled or cached across requests*, ask what
+proves it is still alive, not just what happens when it dies. For Django
+specifically: `CONN_MAX_AGE > 0` without `CONN_HEALTH_CHECKS = True` is always
+a bug. Two test traps here: (1) `ClientHandler` deliberately disconnects
+`close_old_connections`, so the test client never fires the request boundary —
+call `close_old_connections()` by hand or the health check is skipped and the
+test lies; (2) the runner leaves `CONN_MAX_AGE` at 0, so the failure cannot
+reproduce until the connection is put into production shape
+(`close()`, set `CONN_MAX_AGE`, `connect()`). Inject the failure with
+`pg_terminate_backend(pid)` from a second connection — the server-side twin of
+the black-hole listener, and literally what a restart does.

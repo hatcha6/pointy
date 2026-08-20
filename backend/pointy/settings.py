@@ -189,6 +189,15 @@ DATABASES = {
     "default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
 }
 DATABASES["default"]["CONN_MAX_AGE"] = env("DATABASE_CONN_MAX_AGE")
+# A persistent connection can be alive on our side and long dead on the server's:
+# Postgres or PgBouncer restarting after a power blip, or the LAN resetting an idle
+# socket, leaves every worker holding a handle that only fails on its next query.
+# Without a health check Django hands that handle to the view, so the first request
+# on each pooled connection 500s (and /readyz/ reports a perfectly healthy database
+# as down) even though a reconnect would have worked. Django defers the ping to the
+# first query of a request and skips it on a freshly opened connection, so this
+# costs nothing when CONN_MAX_AGE is 0 and one round trip per request otherwise.
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 # On-prem serves through PgBouncer in transaction-pooling mode, where server-side
 # prepared statements cannot be shared across pooled backends. Turn off psycopg3's
 # auto-prepare so pooled connections never hit "prepared statement ... does not
