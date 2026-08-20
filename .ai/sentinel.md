@@ -129,3 +129,39 @@ blank side as unequal. `apps.channels.authenticate_api_key` was already clean �
 it compares hex hashes and `.exclude(api_key_hash="")`.
 **Action:** Any new secret comparison uses that helper. A bare `compare_digest`
 on `str` in a credential path is the finding, no further analysis needed.
+
+## 2026-08-20 - "Private REMOTE_ADDR" is not "on the LAN" — the connector is on the LAN
+**Learning:** The relay connector dials the local backend from the shop's own
+network, so **every** request tunnelled in from the internet arrives with a
+private `REMOTE_ADDR`. `request_is_private_network()` therefore returns True for
+remote callers, and is not by itself an authorisation gate.
+`request_discovery_allowed` knew this (it rejects `request_is_relayed` first) and
+the client-installer views inherited the fix by reusing it — but the two
+hand-rolled copies did not: `price_checker.IsPrivateNetworkOrAuthenticated` and
+`messaging.IsGatewayPeer` called `request_is_private_network` directly. The
+price-checker pair was genuinely reachable (`relayTarget` proxies any `/api/…`
+path on the access token alone), giving anyone holding the shop's *device-level*
+relay token an unauthenticated catalogue read and kiosk-registration write with
+no user session. All three now go through `request_is_lan_local()`.
+**Action:** Treat `request_is_private_network` as a plumbing primitive, not a
+gate — a new caller of it in a permission class is the finding. This is the same
+"duplication is the tell" shape as the `compare_digest` sweep: the LAN check had
+drifted into three copies and only the original stayed correct.
+
+## 2026-08-20 - Surface 5 (injection / input handling) audited; nothing found
+**Learning:** Swept it end to end and it is clean, so don't re-derive: the only
+non-migration `RawSQL`/`cursor.execute` sites build identifiers from
+`_meta.db_table` + `connection.ops.quote_name` (`analytics/export.py`) or are
+transport code that parameterises values and quotes identifiers
+(`migration/transports/sql_base.py`). Both URL fetchers are hardened and
+documented — `AiFaviconView` only ever fetches a fixed Google endpoint with the
+host as a *query param*, and `attachments/image_search.py` has a real SSRF guard
+(scheme/credential/hostname checks plus `getaddrinfo` → private/loopback/
+link-local/multicast/reserved rejection) that is re-applied on every redirect via
+`ValidatingRedirectHandler`. Attachment storage paths are `uuid4().hex` with a
+regex-validated extension — the uploaded filename never reaches the path. The
+restore-archive reader (`core/backup.py`) requires a `pointy-backup/` first
+component and rejects absolute paths and `..`.
+**Action:** Skip this surface as a run theme. Re-check only a *newly added*
+outbound fetch (does it call `validate_remote_image_url`?) or a new writer that
+derives a path from user input.
