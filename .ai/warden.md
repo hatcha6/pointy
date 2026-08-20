@@ -812,3 +812,44 @@ queue, not just against `origin/main`:
 hard keep, whatever `git status` says. This run that check plus `lsof` left
 nothing prunable out of 38 — five without a live process, and every one of them
 kept: two deliberate, two dirty-with-no-remote-copy, one holding an open PR.
+
+## 2026-08-20 - Reverting a Palette screen alone breaks the build, because the ARB key went with it
+
+**Learning:** The one-file-revert non-vacuity proof assumes the production file
+can be swapped for `origin/main`'s copy and still compile. For a 🎨 Palette PR it
+usually cannot. #97 replaced `PointyEmptyState` with `QueryEmptyState` on the
+expenses ledger and **deleted** the now-unused `expensesNoMatchingMessage` from
+`app_ar.arb` plus both generated files. `git checkout origin/main --
+…/expenses_screen.dart` therefore produced
+`Error: The getter 'expensesNoMatchingMessage' isn't defined for the type
+'AppLocalizations'` and `+0 -1` — a *compile* failure at load time, which reads
+exactly like "this PR's own test is broken" if you only look at the counts. The
+PR's claimed `+1 -1` was correct; my revert was wrong.
+
+**Action:** For a Palette PR, revert the screen **and** the two generated l10n
+files (`lib/l10n/generated/app_localizations.dart`,
+`app_localizations_ar.dart`) together — that restores the deleted getter so the
+old branch compiles. Leave the *view model* on the PR's version: the new test
+references its new getter (`isFilteredToNothing` here), so reverting it breaks
+the test file instead of the widget. Rule of thumb: revert exactly the widget
+layer plus whatever l10n the widget layer needs, never the API the test calls.
+A `+0 -1` with an `Error:` line above it is a bad revert, not a bad PR — read the
+compiler output before writing a word of the rejection.
+
+## 2026-08-20 - `git branch --list` marks worktree-held branches with `+`, not `*`
+
+**Learning:** Building the "branches with no worktree" set with
+`git branch --list 'claude/*' | tr -d ' *'` silently produced 40 entries named
+`+claude/…`. Git marks the *current* branch with `*` but a branch checked out in
+**another worktree** with `+`, and this repo is 41 worktrees, so `+` is the
+common case and `*` the rare one. Every `git rev-list --count origin/main..$b`
+then died with `ambiguous argument`, and — the part that matters — the surviving
+clean names were exactly the branches that are **not** held by a worktree, so
+the corrupted list is wrong in the dangerous direction: it makes every live,
+worktree-held branch look unreferenced.
+
+**Action:** Strip both markers — `tr -d ' *+'` — or better, take the held set
+from `git worktree list --porcelain | grep '^branch ' | sed 's|branch
+refs/heads/||'` and subtract. Never feed `git branch` output straight into a
+loop that deletes; if a run of `rev-list` errors on names you did not expect,
+stop and fix the parse before touching a single `git branch -d`.
