@@ -968,6 +968,25 @@ class CheckoutSerializer(serializers.Serializer):
                 {"customer": "A customer is required for a quotation or debt invoice."}
             )
 
+        # A stock hold must be bounded. ``release_expired_quote_reservations``
+        # only ever sees quotations with a ``valid_until`` in the past, and an
+        # OPEN quotation cannot be voided, so a hold placed without a deadline
+        # has no release path at all — the quoted units stay committed, and
+        # therefore unsellable, forever. Refuse it here rather than strand it.
+        if (
+            sale_type == Order.SaleType.QUOTATION
+            and attrs.get("reserve_stock")
+            and attrs.get("valid_until") is None
+        ):
+            raise serializers.ValidationError(
+                {
+                    "valid_until": (
+                        "A quotation that reserves stock must set valid_until: "
+                        "the hold is released when the offer lapses."
+                    )
+                }
+            )
+
         payments = attrs.get("payments")
         if payments is None:
             payment_method = attrs.get("payment_method", Payment.Method.CASH)

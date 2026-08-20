@@ -2937,13 +2937,19 @@ def action_tool_definitions():
                         },
                         "valid_until": {
                             "type": "string",
-                            "description": "تاريخ صلاحية العرض/الحجز YYYY-MM-DD (اختياري).",
+                            "description": (
+                                "تاريخ صلاحية العرض/الحجز YYYY-MM-DD (اختياري، "
+                                "إلا أنه مطلوب مع reserve_stock=true)."
+                            ),
                         },
                         "reserve_stock": {
                             "type": "boolean",
                             "description": (
                                 "لعرض السعر فقط: احجز الكميات حتى valid_until "
-                                "(افتراضيًا false)."
+                                "(افتراضيًا false). الحجز يجعل الكميات غير قابلة "
+                                "للبيع حتى ينقضي التاريخ، لذا يجب تحديد "
+                                "valid_until معه — اسأل المستخدم عن التاريخ إن لم "
+                                "يذكره."
                             ),
                         },
                         "confirm": {

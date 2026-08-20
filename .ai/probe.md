@@ -141,3 +141,37 @@ a stable way to assert a local time-of-day without freezing the clock.
 **Action:** For any time-of-day window, the same-day case is the one nobody
 configures. Test the wrapping one first, and pick the UTC instant that lands on
 the local boundary (start is inclusive, end is exclusive).
+
+## 2026-08-20 - A reservation is only as safe as its release path — enumerate all three
+**Learning:** `reserve_stock_for_quote` bumps `StockItem.quantity_committed`,
+which is what the POS sells against (`on_hand - committed`), so every held unit
+is a unit nobody else can buy. There are exactly three ways a hold is ever
+freed: conversion (`consume_quote_reservations`), the nightly sweep
+(`release_expired_quote_reservations`), and a direct service call. The sweep
+filters `valid_until__isnull=False, valid_until__lt=today`, and an OPEN
+quotation cannot be voided because `validate_order_adjustment_allowed` requires
+`Status.PAID` — so a hold placed on a quotation with **no** `valid_until` had no
+release path at all and froze the units permanently. `CheckoutSerializer`
+declared `valid_until` `required=False, allow_null=True` and `reserve_stock` as
+an unrelated boolean, with no cross-field validation, even though
+`Order.reserves_stock`'s own docstring says the units are held "until
+`valid_until`".
+**Action:** For any hold/lock/reservation, don't ask "is it created correctly" —
+enumerate every code path that *releases* it and check each one's filter for a
+case it silently excludes (NULL is the usual one). Where two fields only make
+sense together, grep the serializer for cross-field `validate`; Pointy's
+checkout serializer validates plenty but had no tie between these two.
+
+## 2026-08-20 - The Flutter UI holding an invariant is not the invariant being held
+**Learning:** The POS payment sheet auto-fills a default `valid_until` the
+moment the reserve-stock toggle goes on, so the Flutter client never sends the
+bad combination — which is exactly why the backend hole survived. The live
+caller that *did* reach it was `apps/ai/tools.py`: `create_sale` exposes
+`reserve_stock` and `valid_until` as independent optional arguments with
+`required: ["lines"]`, and the schema described the date as "(اختياري)". A user
+asking GPT to quote and hold stock without naming a date produced the stranded
+hold directly.
+**Action:** When a backend rule is only enforced by widget code, check the AI
+tool schemas in `apps/ai/tools.py` before concluding it is unreachable — they
+are a second, looser client over the same viewsets, and their JSON-schema
+`required` lists rarely mirror the serializer's cross-field rules.
