@@ -118,3 +118,60 @@ allocation; it is not a valid fixture for anything downstream of receipt. The
 same trap will catch the next tightening of a receipt-gated figure — when such a
 change breaks an old test, check whether the fixture is in a state production
 would ever allow before concluding the change is wrong.
+
+## 2026-08-20 - A preview is a second port of the arithmetic, and it drifts in three places at once
+
+**Learning:** `purchase_preview_line_payloads` re-implements what
+`PurchaseOrder.recalculate()` does, because the preview has no order to read
+from. Three independent drifts had accumulated in that one function, all
+invisible to the document-level totals — subtotal, discount_total and total
+agreed in every case:
+(1) the zero-weight fallback was applied to the **cost** method only, while the
+model's lives in `_landed_cost_allocations` and therefore covers **every**
+method — so a retail-value order whose variants are all priced 0.00 (samples, or
+stock not priced yet) previewed *no landed cost at all* and then saved with the
+whole of it on the lines: 1.00 a unit on screen, 17.67 written;
+(2) landed costs were allocated on unpadded `str(index)` keys, and
+`allocate_discount_amount` breaks a remainder tie on the key *as a string*, so
+"10" sorts ahead of "2" — the manual-discount block three lines above already
+padded to `f"{index:06d}"` for exactly this reason, and the landed-cost block
+below it did not;
+(3) `net_unit_cost` used a bare `.quantize()` (half-even) where the model rounds
+that one figure `ROUND_HALF_UP`.
+The oracle's own port had drift (1) too, in the same shape — it had copied the
+structure of `_landed_cost_weights` (per-method) rather than of
+`_landed_cost_allocations` (where the fallback actually sits).
+
+**Action:** Wherever a preview/quote/estimate endpoint exists, treat it as a
+*second implementation* and diff it against the writer line by line, not
+total by total — every one of these survived because the totals matched. Three
+specific things to check on any such pair: which function owns a fallback (a
+fallback hoisted one level up in the writer is silently method-specific in the
+copy), whether every allocator key sorts in the same order as the writer's
+(string keys and integer pks diverge from index 10 onwards, so nothing under 11
+lines will ever show it), and whether each `.quantize()` names the same rounding
+— Pointy rounds `net_unit_cost` half-up and its neighbours `landed_unit_cost` /
+`effective_unit_cost` half-even, so "copy the quantize from the line above" is
+wrong half the time. Pointy's other preview surfaces still unaudited on this
+axis: `apps/price_checker/pricing.py` (`final_price`) and the POS cart preview.
+
+## 2026-08-20 - Put the API layer under the oracle, but never let it grade itself
+
+**Learning:** The previous entry predicted the simulation was blind to the API
+layer; this run closed part of that. `op_purchase_submit` now also POSTs the
+same payload to `purchaseorder-discount-preview` and checks the returned lines —
+and it found drift (3) immediately, at a seed whose 4000-op sweep had been
+clean minutes earlier. The tempting shape is to assert preview == saved order:
+it is one line, and it is worthless, because two backend surfaces agreeing says
+nothing about either being right (here they would have agreed on drift (1) if
+the fallback had been wrong in the model instead of the copy). The assertion is
+against `rec`, the oracle's own line costs, computed from the payload's inputs.
+
+**Action:** When adding an API-layer check, assert the response against the
+oracle record that already exists for that document, never against the object
+the request created. Also: the simulation's own generators bound what any new
+assertion can reach — the tie-break drift needed **11+ lines** and the catalog
+only had 10 stock items, so widening the world (9 piece products, and a 12%
+branch that orders 11+ lines) was a prerequisite for the check, not a garnish.
+Before adding an invariant, ask what the generators would have to produce for it
+to fire, and widen them in the same change.
