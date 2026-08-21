@@ -251,3 +251,30 @@ worked hard to make a dependency survivable at request time, grep for the places
 that still treat it as fatal — startup waiters, healthchecks, `depends_on`,
 readiness probes. `deploy/onprem/README.md` still says `/readyz/` "verifies
 database and Redis access"; left alone deliberately (deploy/** escalates).
+
+## 2026-08-21 - A `try/except` inside a transaction is decoration for DB errors
+
+**Learning:** Checkout's kitchen-chit enqueue was already wrapped in
+`try/except Exception` with the comment "must never fail or roll back a
+completed, paid sale". It cannot do that. `run_idempotent_request` wraps the
+whole checkout in one `transaction.atomic()`, and a step that fails on a
+*database* error aborts the entire Postgres transaction — so swallowing it only
+defers the failure to the next query (the idempotency record's own `save()`),
+which raises `InFailedSqlTransaction` and rolls the sale back anyway. Only a
+savepoint (`with transaction.atomic():` *inside* the `try`) actually recovers.
+The receipt claim next to it had no guard at all — despite the kitchen comment
+claiming it "mirrors the receipt enqueue" — so *any* printing fault, DB or not,
+discarded a completed, paid, de-stocked sale and 500'd the cashier, identically
+on every retry. Note which calls do and don't get a savepoint for free:
+`get_or_create` and `claim_print_job` have their own `atomic()`, but the bare
+`.save()`/`.create()` in `create_job_event` and the enqueue paths do not.
+
+**Action:** This is the transaction-shaped twin of the journal's first entry
+("does the failure it catches actually raise?"): ask instead **"is the
+transaction still usable after this `except`?"**. Any `try/except` around DB
+work inside an outer `atomic()` needs its own `transaction.atomic()` savepoint
+or it is decoration. And when a comment says a guard mirrors another one, go
+read the other one — here the model being mirrored didn't exist. Reproduce
+without mocking a driver: patch the fragile step to run
+`cursor.execute("SELECT 1 / 0")`. That is a real aborted transaction, and it
+only reproduces on Postgres — sqlite will pass and lie.
