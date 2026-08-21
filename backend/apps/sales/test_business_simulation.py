@@ -84,6 +84,14 @@ class BusinessSimulationTests(TestCase):
         # pass with or without the cap, and prove nothing either way.
         self.assertGreaterEqual(sim.fully_discounted_line_assertions, 1)
         self.assertGreaterEqual(sim.half_cent_fully_discounted_lines, 1)
+        # And for the shop-wide P&L. The aggregate figures are only evidence for
+        # the property that matters — an order handed back in full contributes
+        # exactly nothing to reported profit — and that identity holds under
+        # every implementation unless some line's gross or cost carries more
+        # precision than the cent the line stores. A run whose voided orders
+        # were all whole units at 2dp prices proves nothing about it.
+        self.assertGreaterEqual(sim.undone_orders_reconciled, 1)
+        self.assertGreaterEqual(sim.rounding_sensitive_undone_orders, 1)
 
 
 class SimulationIgnoresPreExistingDataTests(TestCase):

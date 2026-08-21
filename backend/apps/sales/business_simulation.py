@@ -448,6 +448,7 @@ class RefundRec:
     cash_amount: Decimal
     primary_method: str
     lines: list
+    order_id: int = 0
 
     @property
     def cost_total(self) -> Decimal:
@@ -702,6 +703,12 @@ class Oracle:
         self.payments_log = []  # (session_id, method, amount>0, commission)
         self.adjustments_log = []  # (session_id, refund_method, amount, cash_amount)
         self.cash_moves_log = []  # (session_id, movement_type, amount)
+        # Every refund document the oracle predicted, kept whole. The per-refund
+        # assertions consume a ``RefundRec`` and drop it; the shop-wide P&L
+        # reconciliation needs the *cost* side of each one, and a cost summed
+        # per document then re-summed is not the same number as one raw sum over
+        # every returned line — which is exactly what the reports compute.
+        self.refunds = []  # RefundRec
 
     # -- stock --
     def available(self, variant_id: int) -> Decimal:
@@ -917,6 +924,16 @@ class Simulation:
         # without the cap, every line agrees.
         self.fully_discounted_line_assertions = 0
         self.half_cent_fully_discounted_lines = 0
+        # Vacuity guard for the shop-wide P&L reconciliation. Reported profit
+        # only diverges from the documents on a line whose gross carries more
+        # precision than the cent the line stores — a whole-unit sale at a 2dp
+        # price is identical under every implementation. Counted over orders
+        # that were fully handed back, because that is where the divergence
+        # stops being a rounding preference and becomes a conservation failure:
+        # a sale that was entirely undone must leave profit exactly where it
+        # found it.
+        self.undone_orders_reconciled = 0
+        self.rounding_sensitive_undone_orders = 0
 
     # -- helpers ----------------------------------------------------------
 
@@ -1961,6 +1978,14 @@ class Simulation:
         self.oracle.adjustments_log.append(
             (self.current_session_id, primary_method, even2(total), even2(cash_amount))
         )
+        refund = RefundRec(
+            total=even2(total),
+            cash_amount=even2(cash_amount),
+            primary_method=primary_method,
+            lines=per_line_refund,
+            order_id=rec.order_id,
+        )
+        self.oracle.refunds.append(refund)
         for line, qty, refund_discount in per_line_refund:
             line.returned_qty = line.returned_qty + Decimal(qty)
             line.returned_discount = even2(line.returned_discount + refund_discount)
@@ -1971,12 +1996,7 @@ class Simulation:
                 )
         if all(line.returnable_qty <= ZERO for line in rec.lines):
             rec.voided = True
-        return RefundRec(
-            total=even2(total),
-            cash_amount=even2(cash_amount),
-            primary_method=primary_method,
-            lines=per_line_refund,
-        )
+        return refund
 
     def _line_refund_discount(self, line: LineRec, qty) -> Decimal:
         if line.discount_total <= ZERO:
@@ -2151,10 +2171,33 @@ class Simulation:
             self._assert_customer(customer_id)
         return True
 
+    def _rounding_sensitive(self, rec: OrderRec) -> bool:
+        """Does any line on ``rec`` carry more precision than the cent it stores?
+
+        This is the only shape in which reported profit can diverge from the
+        documents, so it is what the P&L reconciliation needs a void of. A whole
+        unit at a 2dp price is exact under every implementation.
+        """
+        return any(
+            even2(line.unit_price * line.quantity) != line.unit_price * line.quantity
+            or even2(line.unit_cost * line.quantity) != line.unit_cost * line.quantity
+            for line in rec.lines
+        )
+
     def op_void_order(self) -> bool:
         candidates = self._refundable_orders()
         if not candidates:
             return False
+        # Once the run has one such void the choice goes back to being random;
+        # until then, prefer an order the identity can actually bite on. Left to
+        # chance it is a coin flip — roughly one seed in twelve reached 300
+        # operations without ever voiding a weighed sale, and that run passes the
+        # conservation identity with or without the defect it exists to catch.
+        # The same trick ``op_purchase_submit`` uses to force its 11-line order.
+        if self.rounding_sensitive_undone_orders == 0:
+            preferred = [rec for rec in candidates if self._rounding_sensitive(rec)]
+            if preferred:
+                candidates = preferred
         rec = self.rng.choice(candidates)
         refund_lines = [
             (line, line.returnable_qty) for line in rec.lines if line.returnable_qty > ZERO
@@ -2980,6 +3023,7 @@ class Simulation:
         for item in self.stock_items:
             self._assert_ledger(item.variant_id)
         self.reconcile_summaries()
+        self.reconcile_reports()
         self.reconcile_identities()
         return executed
 
@@ -3453,6 +3497,169 @@ class Simulation:
                 self.oracle.session_expected_cash(session_id),
                 f"summary#{session_id} cash.expected_cash",
             )
+
+    def reconcile_reports(self):
+        """The shop-wide P&L the owner reads must be the shop's own documents.
+
+        Every per-order figure is already proved line by line, but nothing
+        reached the *aggregations* — and an aggregate is its own implementation.
+        The reports layer answers "what did the shop sell, and what did it make"
+        with SQL over the whole period, and the dashboard answers it again; a
+        figure can be right on all 200 invoices and wrong the moment they are
+        added up, which is precisely how the purchasing side's payable stayed
+        broken across five read paths (see .ai/oracle.md).
+
+        Every expectation below is built from the oracle's own records — the
+        totals it derived when each sale was rung up, the refunds it computed,
+        the per-line costs it predicted from the purchase ledger. Nothing is
+        read back from an order, an adjustment or another endpoint to decide
+        what to expect, and in particular the report is never compared against
+        the dashboard: two backend surfaces agreeing says nothing about either
+        being right.
+
+        The one thing borrowed from production is the *scope* — which orders
+        count as transactional. That is a definition, not an answer.
+        """
+        txn = [
+            rec
+            for rec in self.oracle.orders.values()
+            if rec.sale_type != Order.SaleType.QUOTATION
+            and (
+                rec.status in (Order.Status.PAID, Order.Status.VOID)
+                or (
+                    rec.sale_type == Order.SaleType.CREDIT
+                    and rec.status == Order.Status.OPEN
+                )
+            )
+        ]
+        gross_sales = even2(sum((rec.subtotal for rec in txn), ZERO))
+        discount_total = even2(sum((rec.discount_total for rec in txn), ZERO))
+        # Revenue is the documents': what the customers were actually charged.
+        revenue = even2(sum((rec.total for rec in txn), ZERO))
+        refund_total = even2(sum((r.total for r in self.oracle.refunds), ZERO))
+        net_sales = even2(revenue - refund_total)
+        # Cost of goods sold and cost of goods handed back are summed raw and
+        # rounded once — the same convention on both sides, so the cost a sale
+        # takes out of profit is exactly the cost its return puts back. Both
+        # are the oracle's own per-line costs times the quantities it asked for.
+        sold_cost = even2(
+            sum(
+                (line.unit_cost * line.quantity for rec in txn for line in rec.lines),
+                ZERO,
+            )
+        )
+        returned_cost = even2(
+            sum(
+                (
+                    line.unit_cost * Decimal(qty)
+                    for refund in self.oracle.refunds
+                    for line, qty, _ in refund.lines
+                ),
+                ZERO,
+            )
+        )
+        gross_profit = even2(revenue - sold_cost - refund_total + returned_cost)
+
+        summary = self._report_summary("sales_summary")
+        self.assert_money(summary["gross_sales"], gross_sales, "report gross_sales")
+        self.assert_money(
+            summary["discount_total"], discount_total, "report discount_total"
+        )
+        self.assert_money(summary["refund_total"], refund_total, "report refund_total")
+        self.assert_money(summary["net_sales"], net_sales, "report net_sales")
+        self.assert_money(summary["gross_profit"], gross_profit, "report gross_profit")
+        self.assert_equal(
+            summary["paid_order_count"],
+            sum(1 for rec in txn if rec.status == Order.Status.PAID),
+            "report paid_order_count",
+        )
+        self.assert_equal(
+            summary["voided_order_count"],
+            sum(1 for rec in txn if rec.status == Order.Status.VOID),
+            "report voided_order_count",
+        )
+        # The second implementation of the same question, on its own endpoint.
+        profit_costs = self._report_summary("profit_costs")
+        self.assert_money(
+            profit_costs["gross_profit"], gross_profit, "profit_costs gross_profit"
+        )
+        self.assert_money(
+            profit_costs["purchase_spend_total"],
+            even2(sum((po.total for po in self.oracle.pos.values()), ZERO)),
+            "profit_costs purchase_spend_total",
+        )
+
+        # Conservation, stated without reference to any rounding convention:
+        # an order that was handed back in full took exactly as much revenue and
+        # exactly as much cost back out as it ever put in, so its contribution
+        # to reported profit is exactly nothing. This is the property the
+        # aggregate figures above are only *evidence* for, and it is the one a
+        # shop would notice — profit left behind on goods it no longer sold.
+        refunds_by_order = defaultdict(list)
+        for refund in self.oracle.refunds:
+            refunds_by_order[refund.order_id].append(refund)
+        for rec in txn:
+            if not rec.voided:
+                continue
+            docs = refunds_by_order.get(rec.order_id, [])
+            # Restricted to an order taken back whole in ONE document — every
+            # void, and a return that happens to close the order in one go.
+            # Split back over several documents the identity does NOT hold, and
+            # that is deliberate, not an oversight: each part rounds its own
+            # gross, so 0.5 + 0.5 of a line at 3.33 credits 3.32 (recorded in
+            # .ai/oracle.md). Asserting it there would report a defect the
+            # backend does not have.
+            if len(docs) != 1:
+                continue
+            refund = docs[0]
+            if len(refund.lines) != len(rec.lines):
+                continue
+            if any(Decimal(qty) != line.quantity for line, qty, _ in refund.lines):
+                continue
+            cost_back = even2(
+                sum(
+                    (line.unit_cost * Decimal(qty) for line, qty, _ in refund.lines),
+                    ZERO,
+                )
+            )
+            own_cost = even2(
+                sum((line.unit_cost * line.quantity for line in rec.lines), ZERO)
+            )
+            self.assert_money(
+                even2(rec.total - own_cost - refund.total + cost_back),
+                ZERO,
+                f"identity: order#{rec.order_id} was undone in full but still "
+                "contributes profit",
+            )
+            self.undone_orders_reconciled += 1
+            if self._rounding_sensitive(rec):
+                # Without a line whose gross or cost carries more precision than
+                # the cent it stores, the identity holds under every
+                # implementation and proves nothing.
+                self.rounding_sensitive_undone_orders += 1
+
+    def _report_summary(self, report_type: str) -> dict:
+        """Run a production report through its own endpoint and hand back the
+        summary block. Deliberately the API and not the service function: the
+        report a shop reads is the one that came through here."""
+        today = timezone.localdate()
+        response = self.client.post(
+            "/api/reports/",
+            {
+                "report_type": report_type,
+                "params": {
+                    "start_date": (today - timedelta(days=1)).isoformat(),
+                    "end_date": (today + timedelta(days=1)).isoformat(),
+                },
+                "output_format": "json",
+            },
+            format="json",
+        )
+        if response.status_code != 201:
+            self.fail(
+                f"report {report_type} failed: {response.status_code} {response.data}"
+            )
+        return response.data["payload"]["summary"]
 
     def reconcile_identities(self):
         """Global conservation identities that must hold across the whole run."""

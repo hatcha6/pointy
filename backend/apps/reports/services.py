@@ -33,7 +33,8 @@ from apps.sales.models import (
     OrderLine,
     RegisterCashMovement,
     RegisterSession,
-    returned_cost_total,
+    SOLD_COST_EXPRESSION,
+    gross_profit_total,
 )
 
 from .models import ReportRun
@@ -301,23 +302,21 @@ def _sales_summary_report(user, period):
     )
     line_values = OrderLine.objects.filter(order__in=orders).aggregate(
         items_sold=Coalesce(Sum("quantity"), ZERO_QTY),
-        profit=Coalesce(
-            Sum(
-                F("quantity") * (F("unit_price") - F("unit_cost"))
-                - F("discount_total"),
-                output_field=MONEY_FIELD,
-            ),
+        sold_cost=Coalesce(
+            Sum(SOLD_COST_EXPRESSION, output_field=MONEY_FIELD),
             Value(Decimal("0.00")),
             output_field=MONEY_FIELD,
         ),
     )
     net_sales = order_values["order_total"] - adjustment_values["refund_total"]
-    # A refund reverses margin, not margin *plus* cost: the goods are restocked,
-    # so their cost comes back with them.
-    profit = (
-        line_values["profit"]
-        - adjustment_values["refund_total"]
-        + returned_cost_total(adjustments)
+    # Revenue comes from the same ``Sum(Order.total)`` ``net_sales`` is built
+    # from, so the report states one revenue rather than two; a refund reverses
+    # margin, not margin *plus* cost, because the goods are restocked.
+    profit = gross_profit_total(
+        revenue=order_values["order_total"],
+        sold_cost=line_values["sold_cost"],
+        refund_total=adjustment_values["refund_total"],
+        adjustments=adjustments,
     )
     top_products = _product_sales_rows(orders)
     recent_orders = _bounded_queryset(
@@ -1075,19 +1074,27 @@ def _profit_costs_report(user, period):
             output_field=MONEY_FIELD,
         )
     )["total"]
-    line_profit = OrderLine.objects.filter(order__in=orders).aggregate(
+    revenue = orders.aggregate(
         total=Coalesce(
-            Sum(
-                F("quantity") * (F("unit_price") - F("unit_cost"))
-                - F("discount_total"),
-                output_field=MONEY_FIELD,
-            ),
+            Sum("total"),
+            Value(Decimal("0.00")),
+            output_field=MONEY_FIELD,
+        )
+    )["total"]
+    sold_cost = OrderLine.objects.filter(order__in=orders).aggregate(
+        total=Coalesce(
+            Sum(SOLD_COST_EXPRESSION, output_field=MONEY_FIELD),
             Value(Decimal("0.00")),
             output_field=MONEY_FIELD,
         )
     )["total"]
     # Restocked returns give their cost back, so only the margin is reversed.
-    gross_profit = line_profit - refund_total + returned_cost_total(adjustments)
+    gross_profit = gross_profit_total(
+        revenue=revenue,
+        sold_cost=sold_cost,
+        refund_total=refund_total,
+        adjustments=adjustments,
+    )
 
     payroll_paid = PayrollRun.objects.filter(
         status=PayrollRun.Status.PAID,
