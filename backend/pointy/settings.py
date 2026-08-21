@@ -205,6 +205,17 @@ DATABASES["default"]["CONN_MAX_AGE"] = env("DATABASE_CONN_MAX_AGE")
 # first query of a request and skips it on a freshly opened connection, so this
 # costs nothing when CONN_MAX_AGE is 0 and one round trip per request otherwise.
 DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+# How long a money write (checkout, return, void, register operation) may wait on
+# a row lock before giving up. Postgres defaults to 0 = wait forever, so a till
+# meeting a lock held by a bulk reprice, a stock-count apply, an import — or a
+# session left idle in transaction by a worker that died mid-flight — hangs until
+# the client's own 60s deadline expires, which cannot say whether the sale
+# committed. Applied per-transaction via SET LOCAL (see apps/core/db_locks.py),
+# so background work, migrations and reports keep waiting as long as they need.
+# 0 disables the bound.
+POINTY_DB_LOCK_WAIT_TIMEOUT_SECONDS = env.float(
+    "POINTY_DB_LOCK_WAIT_TIMEOUT_SECONDS", default=10.0
+)
 # On-prem serves through PgBouncer in transaction-pooling mode, where server-side
 # prepared statements cannot be shared across pooled backends. Turn off psycopg3's
 # auto-prepare so pooled connections never hit "prepared statement ... does not

@@ -12,6 +12,7 @@ from django.utils import timezone
 from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.response import Response
 
+from .db_locks import bounded_lock_wait
 from .models import IdempotencyRecord
 
 
@@ -48,43 +49,51 @@ def run_idempotent_request(request, handler):
     request_hash = idempotency_request_hash(request)
 
     with transaction.atomic():
-        record, created = IdempotencyRecord.objects.select_for_update().get_or_create(
-            **lookup,
-            defaults={"request_hash": request_hash},
-        )
-        if not created:
-            if record.request_hash != request_hash:
-                raise IdempotencyConflict()
-            if record.response_status_code is None:
-                raise IdempotencyInProgress()
-            IdempotencyRecord.objects.filter(pk=record.pk).update(
-                replay_count=F("replay_count") + 1,
-                updated_at=timezone.now(),
+        # This transaction is the shop's money path: the locks taken below and
+        # inside ``handler()`` (stock rows, the order, the register session) are
+        # the ones a cashier waits on. Bound the wait so a stuck holder fails the
+        # request in seconds instead of hanging it past the client's own
+        # deadline, where "did the sale go through?" has no answer.
+        with bounded_lock_wait():
+            record, created = IdempotencyRecord.objects.select_for_update().get_or_create(
+                **lookup,
+                defaults={"request_hash": request_hash},
             )
-            response = Response(
-                record.response_data,
-                status=record.response_status_code,
-            )
-            response[IDEMPOTENCY_REPLAYED_HEADER] = "true"
-            return response
+            if not created:
+                if record.request_hash != request_hash:
+                    raise IdempotencyConflict()
+                if record.response_status_code is None:
+                    raise IdempotencyInProgress()
+                IdempotencyRecord.objects.filter(pk=record.pk).update(
+                    replay_count=F("replay_count") + 1,
+                    updated_at=timezone.now(),
+                )
+                response = Response(
+                    record.response_data,
+                    status=record.response_status_code,
+                )
+                response[IDEMPOTENCY_REPLAYED_HEADER] = "true"
+                return response
 
-        response = handler()
-        if 200 <= response.status_code < 300:
-            record.response_status_code = response.status_code
-            record.response_data = normalize_json_value(getattr(response, "data", None))
-            record.completed_at = timezone.now()
-            record.save(
-                update_fields=[
-                    "response_status_code",
-                    "response_data",
-                    "completed_at",
-                    "updated_at",
-                ]
-            )
-            response[IDEMPOTENCY_REPLAYED_HEADER] = "false"
-        else:
-            record.delete()
-        return response
+            response = handler()
+            if 200 <= response.status_code < 300:
+                record.response_status_code = response.status_code
+                record.response_data = normalize_json_value(
+                    getattr(response, "data", None)
+                )
+                record.completed_at = timezone.now()
+                record.save(
+                    update_fields=[
+                        "response_status_code",
+                        "response_data",
+                        "completed_at",
+                        "updated_at",
+                    ]
+                )
+                response[IDEMPOTENCY_REPLAYED_HEADER] = "false"
+            else:
+                record.delete()
+            return response
 
 
 def idempotency_key(request):
