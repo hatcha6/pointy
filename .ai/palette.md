@@ -856,3 +856,26 @@ a `greaterThan` assertion on dy fails, and a `dx` assertion would encode RTL.
 Assert on the bar's own list instead:
 `tester.widget<ResponsiveActionBar>(find.byType(ResponsiveActionBar)).actions.last.key`.
 Direction-independent, and it states the actual contract (last = primary).
+
+## 2026-08-21 - An `InfiniteScrollList` that fails sets `hasMore: false`, so nothing can ask again
+
+**Learning:** `_AsyncMultiSelectPickerSheet` (the shared picker behind product,
+category, discount, activity-log, payroll and bulk-action selection) reported a
+load failure as a red line *above* the list while the list itself rendered its
+`emptyBuilder` — so a network failure showed "لا توجد نتائج" **and** an error
+at once, the journal's empty-vs-failed collapse in a shared component. The
+sharper half is the escape: the `catch` also set `_hasMore = false` (correctly —
+otherwise the scroll list re-fires the same broken request forever), and
+`onLoadMore` is the *only* thing that calls `_load` again. With the list already
+empty there is nothing to scroll, so the sole remaining path back was editing the
+search text. A user who had typed exactly the query they wanted had to corrupt it
+and retype it.
+
+**Action:** When a paginated list disables its own load-more on failure, the
+retry must be a **separate** entry point, not the list's trigger — and it has to
+restore `hasMore` before asking for the same page again, or the guard clause
+swallows it. Two branches, not one: an empty list becomes a `PointyErrorState`
+with a primary retry (replacing the list, so the misleading empty copy never
+renders); a *non-empty* list keeps its rows and gets an inline banner with its own
+retry. Grep shape for the next audit: a `catch` that writes `hasMore = false`
+alongside an error flag, in a widget whose reload is reachable only from scroll.
