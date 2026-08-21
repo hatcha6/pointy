@@ -1222,3 +1222,56 @@ is normal, a subset is the thing to worry about. (Do not tighten this into
 "re-run it": the sibling assertion's outcome is timing-dependent — the
 sold-nothing test happened to pass on `main` because it reads stock before the
 stranded thread commits.)
+
+## 2026-08-21 - Falsify an oracle's "independent expectation" claim by tracing the field, not reading the prose
+
+**Learning:** The binding rule for 🔍 Oracle is that an extension must compute
+its expectation independently rather than read the backend's own answer, and
+#131's docstring asserted exactly that in four confident sentences. Prose is not
+evidence — the whole defect class is a *tautological* expectation, which reads
+identically to a sound one. The check is mechanical and took two greps:
+`reconcile_reports` builds revenue from `sum(rec.total for rec in txn)`, so
+follow `OrderRec.total` to its constructors (`grep -n "OrderRec(" -A 14`). Both
+sites feed it from `self._order_totals(specs, …)`, which derives
+`even2(subtotal - discount_total)` from the oracle's own specs and its own
+discount port; the quotation-conversion site's `quote` is another `OrderRec`,
+not a backend row. Only `order.pk` and the line pks are read back, and an
+identity is not an answer. Same for `unit_cost` → `_expected_unit_cost` → the
+oracle's purchase ledger.
+
+**Action:** For any oracle extension, pick each expectation's top-level term,
+trace the dataclass field it reads to every `XxxRec(` construction site, and
+confirm the value is *derived* there rather than assigned from a response or a
+`.refresh_from_db()`. Fields sourced from the backend should be pks and nothing
+else. This is faster than reasoning about the docstring and it is the only thing
+that distinguishes a real oracle from a mirror. Corroborate it afterwards the
+cheap way: revert the production files, keep the harness, and confirm the
+reconciliation *fires* — #131 gave `[seed=13 op#40] report gross_profit:
+backend=582.10 oracle=582.09`, which a mirror can never produce.
+
+## 2026-08-21 - `Order.total` carries no tax or fees, so a revenue-basis swap here is pure rounding
+
+**Learning:** #131 replaced `Sum(F("quantity") * (F("unit_price") -
+F("unit_cost")) - F("discount_total"))` with `Sum(Order.total) - Sum(qty*cost)`
+in all three places gross profit is stated. Swapping the revenue basis of a
+profit figure is normally a semantic change to escalate over — if `Order.total`
+carried tax, a delivery fee or a service charge, reported profit would silently
+absorb it and every historical number would move. On this repo it does not:
+`Order.recalculate` (`backend/apps/sales/models.py:398`) is exactly
+`total = subtotal - discount_total`, with `subtotal = Σ line.line_subtotal`, and
+the model has no tax/fee/shipping column at all. So the swap moves only two
+things — per-line rounding of `line_subtotal`, and the `min(discount_total,
+subtotal)` cap that stops an over-discounted order reporting negative revenue —
+both of which are corrections. The other half of the symmetry is worth the same
+30 seconds: `returned_cost_total` is a raw `Sum(qty * unit_cost)` rounded once
+at the end, and the new `SOLD_COST_EXPRESSION` is the identical expression on
+the sale side, so a full void cancels term for term.
+
+**Action:** Before escalating a reports/dashboard PR that changes what revenue
+or cost is summed *from*, read `Order.recalculate` and the model's field list
+rather than reasoning about what an order total usually contains. If the
+document total is just `subtotal - discount_total`, the change is a
+rounding-regime port and belongs in the ordinary review. Then check the two
+sides round the same way — `even2` per line on one side and a raw sum rounded
+once on the other is the bug this class of PR exists to fix, and it is also the
+bug a careless fix reintroduces on the opposite side.
