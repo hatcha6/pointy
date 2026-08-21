@@ -499,6 +499,7 @@ def _purchase_order_balance_rows(orders):
             "supplier__name",
             "due_date",
             "total",
+            "cancelled_total",
         )
         .annotate(
             dashboard_paid_total=Coalesce(
@@ -524,8 +525,14 @@ def _purchase_order_balance_rows(orders):
 
 
 def _purchase_order_balance_due(row):
+    # ``cancelled_total`` is the goods a receipt closed as never-arriving; the
+    # order cannot bill for them, so the dashboard's payables must agree with
+    # ``PurchaseOrder.raw_balance_due`` and drop them too.
     return max(
-        row["total"] - row["dashboard_paid_total"] - row["dashboard_credit_total"],
+        row["total"]
+        - row["cancelled_total"]
+        - row["dashboard_paid_total"]
+        - row["dashboard_credit_total"],
         Decimal("0.00"),
     )
 
