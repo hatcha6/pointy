@@ -278,3 +278,34 @@ read the other one — here the model being mirrored didn't exist. Reproduce
 without mocking a driver: patch the fragile step to run
 `cursor.execute("SELECT 1 / 0")`. That is a real aborted transaction, and it
 only reproduces on Postgres — sqlite will pass and lie.
+
+## 2026-08-21 - Every `select_for_update` in this repo waited forever
+
+**Learning:** Postgres' `lock_timeout` defaults to `0` — *wait forever* — and
+nothing in this backend ever set it, so all ~40 `select_for_update` sites were
+unbounded waits. The journal's recurring shape again: the failure never raises,
+so no guard fires. What made it a money bug rather than a slowness bug is where
+the wait ends. `run_idempotent_request` opens the transaction that wraps every
+checkout/return/void/register operation, and the till's own deadline
+(`ApiSession.defaultRequestTimeout`, 60s) is what actually expires — and a
+client-side timeout on a money write is precisely the failure that *cannot say
+whether the sale committed* (see the 2026-08-20 entry). A server-side bound
+converts an unknown outcome into a known one: lock never taken → transaction
+rolled back → nothing sold → retry is safe. Realistic holders are ordinary shop
+work (bulk reprice/archive over thousands of products, a stock-count apply, a
+legacy import) plus the unbounded one: a session left *idle in transaction* by a
+worker blocked or killed mid-flight.
+
+**Action:** Use `SET LOCAL lock_timeout` (never plain `SET`) at the top of the
+one transaction that matters — it is transaction-scoped, so it is safe under
+PgBouncer transaction pooling and leaves migrations, backups and reports with
+their unlimited wait, which they need. Detect it by SQLSTATE `55P03` on the
+wrapped driver error (`exc.__cause__.sqlstate`), not by message; `57014` is
+`statement_timeout`, a different and far riskier knob that this repo should keep
+unset. Do NOT reach for a connection-level `options: -c statement_timeout=...`:
+it lands on `manage.py migrate` and the analytics export too. To test an
+unbounded wait, hold the row from a *second real connection* (`connections.
+create_connection("default")`, `set_autocommit(False)`, `SELECT ... FOR UPDATE`)
+under `TransactionTestCase`, and run the request on a `threading.Thread` with a
+`join(deadline)` — otherwise "hangs forever" wedges the runner instead of
+failing it.
