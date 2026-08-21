@@ -284,3 +284,29 @@ the `LicenseGateMiddleware` exempt prefixes.
 **Action:** Treat surface 2 as closed. Re-check only a *newly added* route that
 declares `AllowAny` or a new `get_permissions` override — the resolver walk that
 finds both takes about two minutes.
+
+## 2026-08-21 - The sibling that scopes is the proof the other one should
+**Learning:** `PrintAuditEventViewSet.get_queryset` carefully re-derives the
+sales row scope (drop SALE_ORDER rows without `sales.view_order`; without
+`user_has_full_visibility` narrow to the caller's own
+`sale_order__register_session__owner_key`). `PrintJobViewSet`, twenty lines
+below it in the same file, had **no** `get_queryset` at all — and a `PrintJob`
+carries `payload`, the *whole rendered receipt* (lines, totals, applied
+discounts, the public-invoice token URL, the owning session's `owner_key`),
+where an audit event carries only a document number. Cashier holds
+`printing.view_printjob` and not `reports.view_reportrun`, so
+`GET /api/print-jobs/?order=<id>` (or `?search=<receipt number>`) returned any
+sale in the shop, defeating `OrderViewSet`'s own-session scoping. The Flutter
+client never calls the list endpoint — `loadPrintJobs` has zero consumers — so
+this was pure attack surface. Two things generalise. (a) When one viewset in a
+file re-derives another app's row scope by hand, every *other* viewset in that
+file over the same parent is a candidate; the careful one is the tell that the
+scope matters. (b) Scope the **read** verbs only: `claim`/`requeue`/`printed`
+go through `get_object()` too, and one agent drives a shared printer whichever
+till rang the sale, so scoping those would break shared-printer shops.
+**Action:** For any model whose rows embed a *rendered copy* of a scoped
+document (print payloads, cached exports, notification bodies, queued message
+bodies), check the viewset scope against the source document's viewset, not
+against the model's own `view_*` permission. Also keep order-less rows visible
+where an existing test relies on it — `PrintingPermissionTests` retrieves a
+manually created, order-less job as a cashier.
