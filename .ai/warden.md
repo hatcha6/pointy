@@ -1053,3 +1053,67 @@ the roles dump before merging (`for g in Group.objects.all(): print(g.name,
 p.codename.startswith('view_')])`) and check the nullability of whatever column
 the new filter keys on. Two minutes, and it converts "the tests pass" into
 "nobody who should see this stops seeing it".
+
+## 2026-08-21 - A dirty primary checkout blocks the sync only when the paths actually collide
+
+**Learning:** Two prior entries land on opposite advice — one says a dirty tree
+can hide a *real* collision, the other says step 2 is usually already done. This
+run was the third case, and neither covered it: local `main` was genuinely
+**3 behind** `origin/main` (`git rev-list --left-right --count` gave `0 3`, so
+step 1's merges had not fast-forwarded it), *and* the tree was dirty with the
+same long-lived `backend/apps/employees/test_employee_list_query_scaling.py`.
+`git log --oneline main..origin/main -- <that path>` came back **empty** — none
+of the three incoming commits touched it — so `git merge --ff-only` was not
+merely permitted, it was the only thing that would put the routines back on a
+current base. It succeeded, and the dirty file was byte-identical afterwards.
+
+**Action:** Never decide step 2 from `git status` alone. Measure the gap, run
+the per-path collision check, and if it is empty, fast-forward — `--ff-only` is
+not `reset`/`stash`/`force`: git aborts rather than clobbering, so the guard the
+prompt is protecting is already enforced by the command. Make it provable rather
+than assumed: `shasum` every dirty path before and after and state in the
+summary that the hashes match. Only a non-empty collision list is an escalation.
+
+## 2026-08-21 - Zero prunable worktrees can still mean twenty-six prunable branches
+
+**Learning:** The "when nearly every worktree is held, prune nothing and say so"
+entry is right about worktrees and, read as all of step 3, it ends the step
+early. Today 15 of 20 worktrees held a live cwd and **all five** that did not
+were dirty, so exactly zero were removable — the entry's scenario. The *branch*
+list told a completely different story: 26 local branches were provably safe to
+delete (14 worktree-named strays with `origin/main..<b>` == 0 commits and no PR
+ever, plus 12 whose PR is `MERGED`). They accumulate faster than worktrees
+because `gh pr merge --delete-branch` cannot delete a branch a live worktree
+still holds, so *every* merge leaves one behind for a later run to collect.
+
+**Action:** Run the branch sweep as its own pass every run, independent of
+whether any worktree was removable, and bucket it by evidence rather than name:
+delete when `git rev-list --count origin/main..<b>` is `0` (nothing unique to
+lose) or when the branch's PR is `MERGED` (`git branch -D`, since squash merges
+defeat `-d`). Leave every branch that has unique commits and no merged PR —
+today that was ten, including four whose PR is `CLOSED`; that is unsubmitted or
+rejected work and reaping it is a human's call.
+
+## 2026-08-21 - Batching a permission lookup with two `__in` lists is safe here, and one query proves it
+
+**Learning:** ⚡ Bolt's #120 replaces 211 per-code
+`Permission.objects.filter(app_label=…, codename=…).first()` calls with one
+query filtered by `content_type__app_label__in={…}` AND `codename__in={…}`,
+keyed into a map by the exact `app_label.codename` string. That deliberately
+over-fetches a cross product, which is harmless *only* while no two permission
+rows share an `app_label.codename` — otherwise the map keeps the last row the
+cursor yields while `.first()` kept the first, and a role could silently swap
+one `Permission` for another with every test still green. Django's uniqueness
+is `(content_type, codename)`, not `(app_label, codename)`, so two models in one
+app can collide in principle. On this repo they do not: zero duplicate keys
+across all 482 rows.
+
+**Action:** For any PR that swaps N keyed lookups for one over-fetching query,
+name the key and prove it is unique with SQL rather than reasoning from the
+model's `unique_together` — here
+`SELECT ct.app_label||'.'||p.codename, count(*) FROM auth_permission p JOIN
+django_content_type ct ON ct.id=p.content_type_id GROUP BY 1 HAVING count(*)>1;`
+against the dev database, which must return no rows. Credit where due: #120 also
+shipped an equivalence test that re-implements the old per-code resolution
+locally and compares pk sets per role, which catches the same class of bug from
+the other side — that is the shape to ask for.
