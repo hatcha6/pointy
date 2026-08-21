@@ -47,6 +47,10 @@ from apps.sales.models import (
     RegisterSession,
     SOLD_COST_EXPRESSION,
     gross_profit_total,
+    net_line_rollups,
+    net_product_rollups,
+    rank_rollups,
+    returned_items_total,
 )
 
 MONEY_PLACES = Decimal("0.01")
@@ -65,9 +69,10 @@ __all__ = [
     "MONEY_PLACES", "MONEY_FIELD", "QTY_FIELD", "ZERO_QTY",
     "DASHBOARD_SECTION_CACHE_SECONDS", "DASHBOARD_WARM_CACHE_SECONDS",
     "DASHBOARD_CACHE_VERSION",
-    "_sales_summary", "_sales_trend", "_hourly_sales", "_top_products",
-    "_sales_reports", "_product_sales_report", "_variant_sales_report",
-    "_variant_full_name", "_sales_report_ordering", "_top_categories",
+    "_sales_summary", "_sales_trend", "_hourly_sales",
+    "_sales_reports", "_sales_rankings", "_product_rows", "_variant_rows",
+    "_rank",
+    "_variant_full_name", "_top_categories",
     "_recent_orders", "_register_summary", "_register_variance_summary",
     "_register_cash_movement_totals", "_totals_by_key",
     "_purchase_order_balance_rows", "_purchase_order_balance_due",
@@ -97,12 +102,15 @@ def _sales_summary(orders, adjustments):
         ),
     )
     line_values = OrderLine.objects.filter(order__in=orders).aggregate(
-        items_sold=Coalesce(Sum("quantity"), ZERO_QTY),
+        items_rung_up=Coalesce(Sum("quantity"), ZERO_QTY),
         sold_cost=Coalesce(
             Sum(SOLD_COST_EXPRESSION, output_field=MONEY_FIELD),
             Value(Decimal("0.00")),
             output_field=MONEY_FIELD,
         ),
+    )
+    items_sold = (line_values["items_rung_up"] or Decimal("0")) - returned_items_total(
+        adjustments
     )
     net_sales = order_values["order_total"] - adjustment_values["refund_total"]
     # Revenue comes from the same ``Sum(Order.total)`` ``net_sales`` is built
@@ -125,7 +133,7 @@ def _sales_summary(orders, adjustments):
         "profit_margin_percent": _percent(profit, net_sales),
         "order_count": order_count,
         "average_order_value": _money(net_sales / order_count if order_count else Decimal("0.00")),
-        "items_sold": line_values["items_sold"] or 0,
+        "items_sold": items_sold,
         "void_count": adjustment_values["void_count"],
         "return_count": adjustment_values["return_count"],
     }
@@ -177,95 +185,55 @@ def _hourly_sales(orders):
     return [{"hour": hour, "net_sales": _money(total)} for hour, total in hourly.items()]
 
 
-def _top_products(orders):
-    return _product_sales_report(orders, order_by="-revenue", limit=8)
+def _sales_rankings(orders, adjustments):
+    """The top-products card and the six ranking tables, from one pass.
+
+    Each grain is rolled up ONCE and ranked several ways in Python: seven
+    rankings over four aggregate queries, where the seven separate ``ORDER BY
+    … LIMIT`` queries they replace could not net returns out at all (see
+    ``rank_rollups``).
+    """
+    products = _product_rows(orders, adjustments)
+    variants = _variant_rows(orders, adjustments)
+    return (
+        _rank(products, order_by="-revenue", limit=8),
+        _sales_reports(products, variants),
+    )
 
 
-def _sales_reports(orders):
+def _sales_reports(products, variants):
     return {
         "products": {
-            "top_sold": _product_sales_report(orders, order_by="-quantity", limit=24),
-            "revenue": _product_sales_report(orders, order_by="-revenue", limit=24),
-            "profit": _product_sales_report(orders, order_by="-profit", limit=24),
+            "top_sold": _rank(products, order_by="-quantity", limit=24),
+            "revenue": _rank(products, order_by="-revenue", limit=24),
+            "profit": _rank(products, order_by="-profit", limit=24),
         },
         "variants": {
-            "top_sold": _variant_sales_report(orders, order_by="-quantity", limit=24),
-            "revenue": _variant_sales_report(orders, order_by="-revenue", limit=24),
-            "profit": _variant_sales_report(orders, order_by="-profit", limit=24),
+            "top_sold": _rank(variants, order_by="-quantity", limit=24),
+            "revenue": _rank(variants, order_by="-revenue", limit=24),
+            "profit": _rank(variants, order_by="-profit", limit=24),
         },
     }
 
 
-def _product_sales_report(orders, *, order_by, limit):
-    revenue_expr = F("quantity") * F("unit_price") - F("discount_total")
-    profit_expr = F("quantity") * (F("unit_price") - F("unit_cost")) - F("discount_total")
-    rows = (
-        OrderLine.objects.filter(order__in=orders)
-        .values(
-            "variant__product_id",
-            "variant__product__name",
-        )
-        .annotate(
-            units_sold=Coalesce(Sum("quantity"), ZERO_QTY),
-            revenue=Coalesce(
-                Sum(revenue_expr, output_field=MONEY_FIELD),
-                Value(Decimal("0.00")),
-                output_field=MONEY_FIELD,
-            ),
-            profit=Coalesce(
-                Sum(profit_expr, output_field=MONEY_FIELD),
-                Value(Decimal("0.00")),
-                output_field=MONEY_FIELD,
-            ),
-            variant_count=Count("variant_id", distinct=True),
-        )
-        .order_by(_sales_report_ordering(order_by), "variant__product__name")[:limit]
-    )
+def _product_rows(orders, adjustments):
     return [
-        {
-            "product_id": row["variant__product_id"],
-            "product_name": row["variant__product__name"],
-            "sku": "",
-            "quantity": row["units_sold"],
-            "revenue": _money(row["revenue"]),
-            "profit": _money(row["profit"]),
-            "variant_count": row["variant_count"],
-        }
-        for row in rows
+        {**row, "sku": ""} for row in net_product_rollups(orders, adjustments)
     ]
 
 
-def _variant_sales_report(orders, *, order_by, limit):
-    revenue_expr = F("quantity") * F("unit_price") - F("discount_total")
-    profit_expr = F("quantity") * (F("unit_price") - F("unit_cost")) - F("discount_total")
-    rows = (
-        OrderLine.objects.filter(order__in=orders)
-        .values(
+def _variant_rows(orders, adjustments):
+    rows = net_line_rollups(
+        orders,
+        adjustments,
+        "variant_id",
+        labels=(
             "variant__product_id",
-            "variant_id",
             "variant__product__name",
             "variant__name",
             "variant__sku",
             "variant__barcode",
-        )
-        .annotate(
-            units_sold=Coalesce(Sum("quantity"), ZERO_QTY),
-            revenue=Coalesce(
-                Sum(revenue_expr, output_field=MONEY_FIELD),
-                Value(Decimal("0.00")),
-                output_field=MONEY_FIELD,
-            ),
-            profit=Coalesce(
-                Sum(profit_expr, output_field=MONEY_FIELD),
-                Value(Decimal("0.00")),
-                output_field=MONEY_FIELD,
-            ),
-        )
-        .order_by(
-            _sales_report_ordering(order_by),
-            "variant__product__name",
-            "variant__name",
-        )[:limit]
+        ),
     )
     return [
         {
@@ -279,11 +247,27 @@ def _variant_sales_report(orders, *, order_by, limit):
             "variant_name": row["variant__name"] or row["variant__product__name"],
             "sku": row["variant__sku"],
             "barcode": row["variant__barcode"],
-            "quantity": row["units_sold"],
-            "revenue": _money(row["revenue"]),
-            "profit": _money(row["profit"]),
+            "quantity": row["quantity"],
+            "revenue": row["revenue"],
+            "profit": row["profit"],
+            "sort_name": (
+                (row["variant__product__name"] or ""),
+                (row["variant__name"] or ""),
+            ),
         }
         for row in rows
+    ]
+
+
+def _rank(rows, *, order_by, limit):
+    """Rank, then drop the sort key and round the money once."""
+    return [
+        {
+            name: (_money(value) if name in ("revenue", "profit") else value)
+            for name, value in row.items()
+            if name != "sort_name"
+        }
+        for row in rank_rollups(rows, order_by=order_by, limit=limit)
     ]
 
 
@@ -292,10 +276,6 @@ def _variant_full_name(product_name, variant_name):
     if not variant_name:
         return product_name
     return f"{product_name} - {variant_name}"
-
-
-def _sales_report_ordering(order_by):
-    return order_by.replace("quantity", "units_sold")
 
 
 def _top_categories(orders):
@@ -499,6 +479,7 @@ def _purchase_order_balance_rows(orders):
             "supplier__name",
             "due_date",
             "total",
+            "cancelled_total",
         )
         .annotate(
             dashboard_paid_total=Coalesce(
@@ -524,8 +505,14 @@ def _purchase_order_balance_rows(orders):
 
 
 def _purchase_order_balance_due(row):
+    # ``cancelled_total`` is the goods a receipt closed as never-arriving; the
+    # order cannot bill for them, so the dashboard's payables must agree with
+    # ``PurchaseOrder.raw_balance_due`` and drop them too.
     return max(
-        row["total"] - row["dashboard_paid_total"] - row["dashboard_credit_total"],
+        row["total"]
+        - row["cancelled_total"]
+        - row["dashboard_paid_total"]
+        - row["dashboard_credit_total"],
         Decimal("0.00"),
     )
 

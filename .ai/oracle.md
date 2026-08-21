@@ -593,3 +593,112 @@ stream, so those two flip on unrelated changes and read like regressions.
 the raw expression. They group by product, so there is no document revenue to
 reach for, and they are rankings rather than money the shop banks — but they
 still will not sum to the top line, and nothing asserts them.
+
+## 2026-08-21 - The aggregate was proved; its breakdowns were a third implementation
+
+**Learning:** The previous entry's rule — "after proving a document, ask who
+adds the documents up" — stopped one layer too early. Below the shop-wide P&L
+sit the *breakdowns* of the same lines: top products, top variants, top
+categories, `items_sold`. They are not slices of the total that was just proved;
+each is its own `GROUP BY` over `OrderLine`, written before refunds existed as a
+concept, and **not one of them subtracted anything that came back**. The whole
+netting apparatus that makes `net_sales` and `gross_profit` correct —
+`OrderAdjustment.amount`, `returned_cost_total` — is simply absent from them.
+So one report block stated `net_sales 0.00`, `gross_profit 0.00`,
+`items_sold 5`, and directly beneath it ranked the wholly voided sale as the
+shop's best seller. Four read paths, all wrong the same way, all sitting under a
+figure that was right.
+
+**Action:** an aggregate has a *shape*, not just a value. Having proved the
+total, enumerate what else is computed from the same rows — every breakdown,
+ranking, per-entity row and count — and ask each one separately whether the
+correcting term reaches it. "It is derived from lines I already proved" is not
+an argument: the netting lives in the aggregation, not in the lines. Still
+unaudited on this axis: `_top_categories` (same defect, deliberately left —
+the simulation creates no categories, so the oracle cannot yet prove it, and an
+unprovable fix riding along in a correctness PR is exactly what should not
+happen), and the per-session Z-Report's `items_sold`/category rollup, which
+excludes voided orders wholesale rather than netting and so has a different
+model again.
+
+**Also — a LIMIT cannot stay in front of a netting.** The obvious fix is to
+subtract the returned figures from the rows the query already returned. It is
+wrong, and silently: netting lowers every row, but by different amounts, so the
+*gross* top-N is not a superset of the *netted* top-N — 100 sold and returned in
+full ranks below 90 sold and kept, and no fixed window of gross candidates is
+guaranteed to contain the answer. The `ORDER BY … LIMIT` has to move behind the
+netting, which here meant materialising one row per product sold in the period
+and ranking in Python (bounded by the assortment, not the transaction volume —
+the trade `register_summary` already makes). Rank on the figure the row
+*displays*, not the raw sum: ordering on unrounded aggregates lets a difference
+far below a cent decide which of two rows showing the same money comes first,
+and decide it differently on SQLite than on Postgres.
+
+**Also — the cheapest way to make a conservation law exact is to state both
+sides with the same expression.** `OrderAdjustmentLine` snapshots the sale
+line's own `unit_price` and its share of `discount_total`, and reaches cost
+through `order_line__unit_cost`. Write the returned side as literally the same
+arithmetic over those columns and a line handed back in full cancels its sale
+term for term, whatever the figures were — no rounding convention has to be
+argued for, because nothing is rounded until the caller rounds once at the end.
+Reach for that before reasoning about which regime an aggregate "should" use.
+
+**Also — `multi_unit_costed_refund_assertions` joins the seed-flaky guards.**
+Measured on `main`: it is 0 on roughly 2 seeds in 6 at the default 300
+operations, which is worse than the ~1-in-12 already recorded for
+`mixed_unit_retail_landed_orders` and `over_received_return_assertions`. CI's
+default seed passes, so CI is green. Note that an extension which adds no RNG
+draws (a reconciliation that runs after the operation stream, like
+`reconcile_product_rankings`) leaves the stream identical, so these guards
+cannot flip because of it — if one fails after such a change, check the same
+seed on `main` before believing it is yours.
+
+## 2026-08-20 - The oracle can inherit the backend's model, and then it proves nothing
+
+**Learning:** A short shipment kept billing for goods that never arrived.
+``receive_purchase_order`` records ``cancelled_quantity`` — units the supplier
+could not supply, or the shop rejected at the door — closes the order as
+``received``, and never touches the money: ``balance_due`` and
+``Supplier.payable_balance`` still quoted the whole *ordered* total. Nothing
+downstream could clear it either, because a supplier return credits
+``adjustable_quantity``, which counts *accepted* units, so the phantom payable
+was permanent and the payables list carried the row forever. The part worth
+recording is why 3500 clean operations never saw it: the simulation *does*
+generate cancellations, and ``_assert_po`` asserted
+``balance_due == total - paid`` — the oracle had ported the backend's model of
+what an order owes rather than deriving it. Both sides agreed, and agreement is
+all a tautology ever produces.
+
+**Action:** The rule "never read a number back from the backend" is not enough —
+an expectation can be independent in its *arithmetic* and still borrowed in its
+*model*. When adding or reviewing an assertion, ask what real-world quantity it
+claims (here: "what does the shop owe this supplier?") and derive it from the
+transaction inputs, rather than restating the formula the backend happens to
+use. A good smell test: if the assertion would still pass after deleting a whole
+category of event the simulation generates (cancellations, in this case), it is
+describing the code, not the business. Where a number has several backend ports
+— ``raw_balance_due``, ``Supplier.payable_balance``, ``prime_supplier_balances``
+and the dashboard's row pass are four ports of *one* question — assert the
+oracle's figure against each of them; ``_assert_supplier_ap`` now checks the
+cold and primed paths against the same independently derived total.
+
+## 2026-08-20 - Inserting a helper above a function steals its decorator
+
+**Learning:** Adding ``purchase_order_cancelled_total`` immediately before
+``receive_purchase_order`` put the new function underneath the existing
+``@transaction.atomic`` line, so the *helper* became atomic and the receipt —
+which writes stock movements, receipt lines, expected-quantity adjustments and
+the order's status in one go — silently stopped being. The whole 174-test
+purchasing suite passed, because nothing in it forces a mid-receipt failure; a
+partial receipt would have half-applied under any real error. That is a worse
+money bug than the one the change was fixing, and it came from where the text
+was inserted, not from anything the change said.
+
+**Action:** After inserting a top-level function, read the two lines *above*
+the insertion point, not just the diff hunk for the new code — a decorator, and
+in this codebase that usually means ``@transaction.atomic``, sits on its own
+line and belongs to whatever follows it. ``git diff`` shows this clearly: if a
+hunk adding a new function opens with an unchanged ``@transaction.atomic``
+context line, the decorator has changed owner. Prefer appending after the end of
+the function you are working near, and check that the diff contains no
+decorator lines you did not intend to move.

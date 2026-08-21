@@ -92,6 +92,12 @@ class BusinessSimulationTests(TestCase):
         # were all whole units at 2dp prices proves nothing about it.
         self.assertGreaterEqual(sim.undone_orders_reconciled, 1)
         self.assertGreaterEqual(sim.rounding_sensitive_undone_orders, 1)
+        # And for the rankings the same lines are rolled up into. Every row is
+        # checked, but a row nothing ever came back from reads the same gross or
+        # net — only a row a void or a return actually reduced can tell the two
+        # implementations apart.
+        self.assertGreaterEqual(sim.ranking_rows_reconciled, 1)
+        self.assertGreaterEqual(sim.returned_ranking_rows, 1)
 
 
 class SimulationIgnoresPreExistingDataTests(TestCase):

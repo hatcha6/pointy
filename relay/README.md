@@ -531,6 +531,12 @@ relay turns, continuation turns pass `"count_usage": false` so only the
 user-initiated turn charges the usage windows above — one question never drains
 the quota by the number of tool rounds.
 
+`count_usage` comes from the caller, so the relay treats it as a claim rather
+than a fact: continuation turns draw on their own per-shop window sized at 20x
+the 5h limit. A legitimate agentic loop (Django caps a question at ten tool
+rounds) never approaches it, but a token holder that marks every turn a
+continuation is bounded instead of unmetered.
+
 ### Entitlement
 
 AI is its own entitlement, separate from remote access. `POST /v1/ai/chat`

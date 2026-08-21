@@ -2083,6 +2083,7 @@
   "intakeCustomerNameLabel": "اسم الزبون",
   "intakeCustomerPhoneLabel": "رقم الهاتف",
   "intakeCustomerRequired": "اختر زبونًا للمتابعة.",
+  "intakeCustomerCreateError": "تعذّر إنشاء الزبون. تحقّق من الاتصال ثم حاول مرة أخرى.",
   "intakeSelectAssetHint": "اختر جهاز الزبون أو أضف جهازًا جديدًا. يساعدك هذا لاحقًا في معرفة تاريخ كل جهاز.",
   "intakeNewAssetButton": "جهاز جديد",
   "intakeSkipAssetButton": "متابعة بدون جهاز",

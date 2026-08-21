@@ -4,6 +4,7 @@ import tempfile
 import zipfile
 from datetime import datetime
 from datetime import time
+from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -368,3 +369,84 @@ class BackupDurabilityTests(TestCase):
             [],
             "a half-written archive was left behind under a name a restore would offer",
         )
+
+
+class AbandonedMaintenanceJobTests(TestCase):
+    """A backup worker that dies without unwinding — power cut, container
+    restart, OOM kill, celery's hard ``time_limit``, or a Redis restart that
+    drops the queued task — leaves its job row in ``queued``/``running``
+    forever, because only ``run_backup``'s ``except`` marks it failed.
+    ``active_maintenance_job()`` gates every future backup on that row, so one
+    abandoned job silently disables backups for good.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.backup_root = Path(self.temp_dir.name) / "usb"
+        self.backup_root.mkdir()
+        self.override = override_settings(
+            POINTY_BACKUP_ALLOWED_ROOTS=[str(self.backup_root)]
+        )
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+
+        schedule = SystemBackupSchedule.load()
+        schedule.enabled = True
+        schedule.destination_path = str(self.backup_root)
+        schedule.scheduled_time = time(hour=3, minute=15)
+        schedule.save()
+
+    def _abandon_backup(self, *, last_touched, status_value):
+        """The row a killed worker leaves behind: it never reached mark_failed,
+        so nothing has touched it since the process died."""
+        job = SystemMaintenanceJob.objects.create(
+            operation=SystemMaintenanceJob.Operation.BACKUP,
+            status=status_value,
+            destination_path=str(self.backup_root),
+            started_at=last_touched,
+            metadata={"source": "schedule"},
+        )
+        # auto_now/auto_now_add: backdate the heartbeat the way a dead worker would.
+        SystemMaintenanceJob.objects.filter(pk=job.pk).update(
+            created_at=last_touched, updated_at=last_touched
+        )
+        return job
+
+    def test_abandoned_running_job_does_not_block_the_next_scheduled_backup(self):
+        due_at = timezone.make_aware(datetime(2026, 6, 9, 4, 0))
+        self._abandon_backup(
+            last_touched=due_at - timedelta(days=1),
+            status_value=SystemMaintenanceJob.Status.RUNNING,
+        )
+
+        with mock.patch("apps.core.tasks.run_backup_job.apply_async"):
+            job = queue_due_scheduled_backup(due_at)
+
+        self.assertIsNotNone(
+            job,
+            "a backup abandoned a day ago must not disable scheduled backups forever",
+        )
+
+    def test_abandoned_queued_job_does_not_block_a_manual_backup(self):
+        self._abandon_backup(
+            last_touched=timezone.now() - timedelta(days=1),
+            status_value=SystemMaintenanceJob.Status.QUEUED,
+        )
+
+        with mock.patch("apps.core.tasks.run_backup_job.apply_async"):
+            job = queue_backup_job(source="manual")
+
+        self.assertIsNotNone(job)
+
+    def test_a_live_backup_still_blocks_a_second_one(self):
+        """The staleness bound must not weaken the concurrency guard: a backup
+        that is still checking in owns the lock, however long it takes."""
+        self._abandon_backup(
+            last_touched=timezone.now(),
+            status_value=SystemMaintenanceJob.Status.RUNNING,
+        )
+
+        with self.assertRaises(BackupValidationError):
+            queue_backup_job(source="manual")

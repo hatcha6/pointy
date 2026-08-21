@@ -541,11 +541,11 @@ func TestHandleAIChatSkipsTitleWhenNotRequested(t *testing.T) {
 
 func TestCleanTitle(t *testing.T) {
 	cases := map[string]string{
-		`"أكثر المنتجات مبيعًا"`:    "أكثر المنتجات مبيعًا",
-		"Title: Sales report":      "Sales report",
-		"  spaced   out  title  ":  "spaced out title",
-		"line one\nline two":       "line one",
-		"trailing punctuation.":    "trailing punctuation",
+		`"أكثر المنتجات مبيعًا"`:  "أكثر المنتجات مبيعًا",
+		"Title: Sales report":     "Sales report",
+		"  spaced   out  title  ": "spaced out title",
+		"line one\nline two":      "line one",
+		"trailing punctuation.":   "trailing punctuation",
 	}
 	for in, want := range cases {
 		if got := cleanTitle(in); got != want {
@@ -844,6 +844,67 @@ func TestHandleAIChatCountUsageFalseSkipsCharge(t *testing.T) {
 	}
 	if code := send("true"); code != http.StatusTooManyRequests {
 		t.Fatalf("second count_usage=true (over limit) expected 429, got %d", code)
+	}
+}
+
+// TestHandleAIChatContinuationBudgetIsBounded pins the ceiling on the unmetered
+// path. count_usage is set by the caller — the shop's own on-prem backend — so a
+// token holder can mark every turn a "continuation" and never charge a usage
+// unit. Before the continuation window existed that made the per-shop 5h and
+// weekly limits opt-out: this same loop returned 200 forever on the relay's
+// OpenRouter key. It must now stop at a known multiple of the metered limit.
+func TestHandleAIChatContinuationBudgetIsBounded(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionAIInstallation(t, now)
+	openrouter := stubOpenRouterServer(t, "smart")
+	defer openrouter.Close()
+	server := newAITestServer(t, store, openrouter.URL)
+	server.RateLimiter = ratelimit.NewMemoryLimiter(func() time.Time { return now })
+	server.AILimit5H = ratelimit.Policy{Limit: 1, Window: time.Hour}
+
+	send := func() int {
+		body := strings.NewReader(`{"messages":[{"role":"user","content":"hi"}],"count_usage":false}`)
+		req := httptest.NewRequest(http.MethodPost, "http://relay.test/v1/ai/chat", body)
+		req.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+		rec := httptest.NewRecorder()
+		server.ServeHTTP(rec, req)
+		return rec.Result().StatusCode
+	}
+
+	// A real agentic loop (Django caps one question at MAX_TOOL_ITERS = 10
+	// continuations) stays comfortably inside the window.
+	budget := server.AILimit5H.Limit * aiContinuationBudgetMultiple
+	for i := 0; i < budget; i++ {
+		if code := send(); code != http.StatusOK {
+			t.Fatalf("continuation %d within budget expected 200, got %d", i, code)
+		}
+	}
+	// Past it the unmetered path is refused instead of running forever.
+	if code := send(); code != http.StatusTooManyRequests {
+		t.Fatalf("continuation past budget expected 429, got %d", code)
+	}
+}
+
+// A shop on an unlimited plan (metering disabled) keeps its previous behaviour:
+// the continuation window is derived from the metered one, so it is off too.
+func TestHandleAIChatContinuationUnboundedWhenMeteringDisabled(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionAIInstallation(t, now)
+	openrouter := stubOpenRouterServer(t, "smart")
+	defer openrouter.Close()
+	server := newAITestServer(t, store, openrouter.URL)
+	server.RateLimiter = ratelimit.NewMemoryLimiter(func() time.Time { return now })
+	server.AILimit5H = ratelimit.Policy{}
+
+	for i := 0; i < 25; i++ {
+		body := strings.NewReader(`{"messages":[{"role":"user","content":"hi"}],"count_usage":false}`)
+		req := httptest.NewRequest(http.MethodPost, "http://relay.test/v1/ai/chat", body)
+		req.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+		rec := httptest.NewRecorder()
+		server.ServeHTTP(rec, req)
+		if code := rec.Result().StatusCode; code != http.StatusOK {
+			t.Fatalf("continuation %d with metering disabled expected 200, got %d", i, code)
+		}
 	}
 }
 

@@ -3526,6 +3526,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get intakeCustomerRequired => 'اختر زبونًا للمتابعة.';
 
   @override
+  String get intakeCustomerCreateError =>
+      'تعذّر إنشاء الزبون. تحقّق من الاتصال ثم حاول مرة أخرى.';
+
+  @override
   String get intakeSelectAssetHint =>
       'اختر جهاز الزبون أو أضف جهازًا جديدًا. يساعدك هذا لاحقًا في معرفة تاريخ كل جهاز.';
 
