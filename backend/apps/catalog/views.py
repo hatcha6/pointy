@@ -308,7 +308,28 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             context["catalog_summary"] = True
         return context
 
+    # Detail actions that only need the product's *identity*. Each of them
+    # either answers about a related collection (``attachments``), re-queries
+    # from scratch (``variants`` builds ``variant_detail_queryset()``), or uses
+    # nothing but the row itself (``bought_together``, ``image_import``) --
+    # none of them serializes the product with ``ProductCatalogSerializer``.
+    # ``get_object()`` runs ``get_queryset()`` regardless, so those tabs each
+    # paid the whole catalog prefetch tree (variants, their option values,
+    # stock, categories, units, barcodes, modifier groups, image attachments)
+    # only to throw every prefetched row away. ``archive``/``restore``/
+    # ``set_variant_prices`` are deliberately NOT here: they return the product
+    # through ``self.get_serializer(...)`` and do need the tree.
+    identity_only_actions = frozenset(
+        {"attachments", "bought_together", "image_import", "variants"}
+    )
+
     def get_queryset(self):
+        queryset = self._catalog_queryset()
+        if getattr(self, "action", None) in self.identity_only_actions:
+            return queryset.prefetch_related(None)
+        return queryset
+
+    def _catalog_queryset(self):
         queryset = self._with_variant_rollups(super().get_queryset())
         queryset = self._filter_by_category(queryset)
         queryset = self._filter_by_barcode(queryset)
