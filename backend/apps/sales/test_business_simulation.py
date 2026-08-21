@@ -77,6 +77,13 @@ class BusinessSimulationTests(TestCase):
         # factor 1 the pack↔base scaling in the reversal is the identity.
         self.assertGreaterEqual(sim.costed_refund_assertions, 1)
         self.assertGreaterEqual(sim.multi_unit_costed_refund_assertions, 1)
+        # And for the cap that keeps a line's discount inside the line's own
+        # rounding regime. The engine's cap and the order line's subtotal agree
+        # everywhere except on a line the discounts consumed ENTIRELY whose
+        # gross lands on a half-cent — so a run that never rang that up would
+        # pass with or without the cap, and prove nothing either way.
+        self.assertGreaterEqual(sim.fully_discounted_line_assertions, 1)
+        self.assertGreaterEqual(sim.half_cent_fully_discounted_lines, 1)
 
 
 class SimulationIgnoresPreExistingDataTests(TestCase):
