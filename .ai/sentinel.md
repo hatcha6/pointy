@@ -244,3 +244,43 @@ not the base class — the abstract default being fail-closed proves nothing.
 thing is registered in production and selectable through the API. The new
 `test_no_registered_transport_vouches_for_a_secretless_gateway` asserts the
 invariant over the whole registry so the next driver cannot reopen it.
+
+## 2026-08-21 - A generic sub-resource endpoint can drop half a two-permission gate
+**Learning:** `PurchaseOrderViewSet.attachments` deliberately requires BOTH
+`purchasing.view_purchaseorder` AND `attachments.view_attachment`. The generic
+`AttachmentViewSet` asked only for the second half and its `get_queryset` did no
+owner scoping at all, so `technician` — the *only* stock role holding
+`attachments.view_attachment`, and one with zero purchasing permissions — could
+list and download every supplier invoice scan (costs, suppliers, terms) the shop
+had filed. Two things generalise. (a) When a nested action names two permissions,
+the second one usually belongs to a generic viewset that names it alone; that
+generic viewset is the bypass. (b) The reachability intersection journaled on
+2026-08-20 cannot see this — it proves *which* permission guards a route, not
+whether that permission is sufficient for the rows the route returns.
+**Action:** For any generic viewset over a `GenericForeignKey` owner, ask what
+the owning app requires. The fix pattern now in `_scoped_to_viewable_owners`
+derives the allowed owner content types from the caller's own `view_*`
+permissions (zero extra queries — `get_all_permissions()` is already warm), with
+an explicit manager short-circuit, because the manager group is
+`app_label__in=MANAGER_PERMISSION_DOMAINS`, not literally every permission.
+Note the token-addressed `content` action must be exempted: kiosks and POS image
+loads call it with no session, and the signed token is a strictly narrower
+authorization than any owner rule.
+
+## 2026-08-21 - Surface 2 (unauthenticated) is fully enumerated; don't re-sweep it
+**Learning:** Walking the resolver for every route whose `permission_classes`
+lack `IsAuthenticated` yields exactly 20 non-admin routes, and every one is now
+accounted for by a journal entry: the AI favicon, login/setup/enrollment status
+(throttled + `initial_admin_setup_required`), discovery, the two public
+token pages, the three client-installer views, both messaging webhooks, the two
+price-checker LAN endpoints, schema/docs, and the four relay views — of which
+`RelayDiagnosticsAnalyticsExportView` correctly uses the shared
+`connector_token_accepted` helper. Also checked and clean: the only three
+`get_permissions` overrides in the codebase (`AttachmentViewSet` narrows to a
+signed token, `AnalyticsEventViewSet` *adds* `IsManager`, one serializer method
+of the same name), `POINTY_ALLOW_PRIVATE_HOSTS` (policy is private/loopback/
+link-local IPs plus explicit names; CORS is an allow-list, not `ALLOW_ALL`), and
+the `LicenseGateMiddleware` exempt prefixes.
+**Action:** Treat surface 2 as closed. Re-check only a *newly added* route that
+declares `AllowAny` or a new `get_permissions` override — the resolver walk that
+finds both takes about two minutes.
