@@ -6255,6 +6255,12 @@ abstract class AppLocalizations {
   /// **'اختر زبونًا للمتابعة.'**
   String get intakeCustomerRequired;
 
+  /// No description provided for @intakeCustomerCreateError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إنشاء الزبون. تحقّق من الاتصال ثم حاول مرة أخرى.'**
+  String get intakeCustomerCreateError;
+
   /// No description provided for @intakeSelectAssetHint.
   ///
   /// In ar, this message translates to:

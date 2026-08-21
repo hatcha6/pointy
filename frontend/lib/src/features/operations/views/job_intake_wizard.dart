@@ -30,6 +30,10 @@ String assetTypeLabel(AppLocalizations l10n, CustomerAssetType type) {
   };
 }
 
+/// The warranty field ships pre-filled, so it only counts as an unsaved edit
+/// once it differs from this.
+const _defaultWarrantyDays = '0';
+
 /// Three guided steps — customer → device → details — so counter staff can
 /// take in a repair without knowing anything about the data model.
 class JobIntakeWizard extends StatefulWidget {
@@ -63,6 +67,7 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
   final _newCustomerNameController = TextEditingController();
   final _newCustomerPhoneController = TextEditingController();
   var _showCustomerValidation = false;
+  var _customerCreateFailed = false;
 
   // Step 2 — device.
   List<CustomerAsset> _customerAssets = const [];
@@ -79,7 +84,9 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
   // Step 3 — details.
   final _symptomsController = TextEditingController();
   final _quotedPriceController = TextEditingController();
-  final _warrantyDaysController = TextEditingController(text: '0');
+  final _warrantyDaysController = TextEditingController(
+    text: _defaultWarrantyDays,
+  );
   var _priority = OperationsJobPriority.normal;
   DateTime? _dueAt;
 
@@ -108,8 +115,38 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
     super.dispose();
   }
 
+  /// Everything the clerk typed or picked that leaving would throw away.
+  /// The customer search box is deliberately excluded — a stray query is not
+  /// work worth stopping for — and the warranty field only counts once it
+  /// differs from the value it ships with.
+  bool get _isDirty =>
+      _selectedCustomer != null ||
+      _newCustomerNameController.text.trim().isNotEmpty ||
+      _newCustomerPhoneController.text.trim().isNotEmpty ||
+      _selectedAsset != null ||
+      _newAssetBrandController.text.trim().isNotEmpty ||
+      _newAssetModelController.text.trim().isNotEmpty ||
+      _newAssetSerialController.text.trim().isNotEmpty ||
+      _newAssetImeiController.text.trim().isNotEmpty ||
+      _newAssetColorController.text.trim().isNotEmpty ||
+      _symptomsController.text.trim().isNotEmpty ||
+      _quotedPriceController.text.trim().isNotEmpty ||
+      _warrantyDaysController.text.trim() != _defaultWarrantyDays ||
+      _priority != OperationsJobPriority.normal ||
+      _dueAt != null;
+
   @override
   Widget build(BuildContext context) {
+    // A three-step intake is the longest thing counter staff type into this
+    // app; an accidental back must not silently bin it. Saving pops directly,
+    // so a successful create is never intercepted.
+    return PointyUnsavedChangesGuard(
+      isDirty: () => _isDirty,
+      child: _buildWizard(context),
+    );
+  }
+
+  Widget _buildWizard(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
 
@@ -173,6 +210,7 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
 
   Future<void> _onPrimaryPressed() async {
     if (_step == 0) {
+      setState(() => _customerCreateFailed = false);
       final customer = await _resolveCustomer();
       if (customer == null) {
         setState(() => _showCustomerValidation = true);
@@ -227,7 +265,12 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
           },
         ),
         SizedBox(height: spacing.sm),
-        if (_showCustomerValidation &&
+        if (_customerCreateFailed)
+          PointyInlineMessage.error(
+            message: l10n.intakeCustomerCreateError,
+            icon: Icons.cloud_off_outlined,
+          )
+        else if (_showCustomerValidation &&
             _selectedCustomer == null &&
             !_creatingCustomer)
           PointyInlineMessage.error(
@@ -339,10 +382,17 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
     if (mounted) {
       setState(() => _isWorking = false);
     }
-    return switch (result) {
-      Ok<Customer>(value: final customer) => customer,
-      Error<Customer>() => null,
-    };
+    switch (result) {
+      case Ok<Customer>(value: final customer):
+        return customer;
+      case Error<Customer>():
+        // The clerk filled the form correctly; the server is what failed.
+        // Falling through to "pick a customer" would blame them for it.
+        if (mounted) {
+          setState(() => _customerCreateFailed = true);
+        }
+        return null;
+    }
   }
 
   // -------------------------------------------------------------------------
