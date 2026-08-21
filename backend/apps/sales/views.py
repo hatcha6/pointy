@@ -44,6 +44,31 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
+def _best_effort_print_step(description, step):
+    """Run one of checkout's print steps so no printing fault can undo the sale.
+
+    ``run_idempotent_request`` wraps the whole checkout — validation, stock
+    deduction, payments *and* these steps — in a single transaction, so anything
+    that raises here does not merely lose a receipt: it rolls the sale back and
+    hands the cashier a 500 with the customer still standing there, again on
+    every retry for as long as the fault lasts. Printing is a nice-to-have; the
+    sale is not.
+
+    The savepoint is what makes the ``except`` real. A step that fails on a
+    *database* error — a statement timeout, a lost connection, a constraint hit
+    by one of the bare ``.save()`` calls in the enqueue path — aborts the whole
+    Postgres transaction, so catching it alone just defers the 500 to the next
+    query. Rolling back to a savepoint leaves the sale intact and the
+    transaction usable.
+    """
+    try:
+        with transaction.atomic():
+            return step()
+    except Exception:
+        logger.exception("Failed to enqueue %s; the sale is unaffected.", description)
+        return None
+
+
 class OrderViewSet(
     mixins.CreateModelMixin,
     mixins.RetrieveModelMixin,
@@ -498,6 +523,14 @@ class OrderViewSet(
         if action_serializer is None:
             return None
 
+        # Best-effort: a receipt-printing fault must never fail or roll back a
+        # completed, paid sale (the kitchen enqueue below is the same deal).
+        return _best_effort_print_step(
+            f"receipt print job for order {order.pk}",
+            lambda: self._claim_invoice_print_job(order, action_serializer, request),
+        )
+
+    def _claim_invoice_print_job(self, order, action_serializer, request):
         from apps.core.models import ShopSettings
         from apps.printing.services import (
             claim_print_job,
@@ -531,14 +564,11 @@ class OrderViewSet(
 
         # Best-effort: a kitchen-printing misconfiguration must never fail or
         # roll back a completed, paid sale (mirrors the receipt enqueue).
-        try:
-            return enqueue_kitchen_print_jobs(order.pk)
-        except Exception:
-            logger.exception(
-                "Failed to enqueue kitchen tickets for order %s; the sale is unaffected.",
-                order.pk,
-            )
-            return []
+        jobs = _best_effort_print_step(
+            f"kitchen tickets for order {order.pk}",
+            lambda: enqueue_kitchen_print_jobs(order.pk),
+        )
+        return jobs or []
 
 
 class PublicInvoiceView(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
