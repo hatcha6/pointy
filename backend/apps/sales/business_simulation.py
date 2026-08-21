@@ -78,7 +78,13 @@ from apps.purchasing.services import (
     save_purchase_order_with_lines,
     submit_purchase_order,
 )
-from apps.sales.models import Order, OrderLine, RegisterSession
+from apps.sales.models import (
+    Order,
+    OrderAdjustmentLine,
+    OrderLine,
+    RegisterSession,
+    returned_cost_total,
+)
 from apps.sales.services import (
     convert_quotation_to_sale,
     exchange_order_items,
@@ -426,6 +432,36 @@ class OracleDiscountEngine:
 # ---------------------------------------------------------------------------
 # Oracle state records
 # ---------------------------------------------------------------------------
+
+
+@dataclass
+class RefundRec:
+    """Everything the oracle predicts about one refund document, computed from
+    the operation's own inputs before the backend is asked anything.
+
+    ``lines`` is ``[(LineRec, quantity, refund_discount)]`` — one entry per
+    sale line this refund takes back, so the document *and* each of its lines
+    can be checked against a figure derived here rather than against each other.
+    """
+
+    total: Decimal
+    cash_amount: Decimal
+    primary_method: str
+    lines: list
+
+    @property
+    def cost_total(self) -> Decimal:
+        """Cost of the goods this refund puts back on the shelf.
+
+        The backend answers this with a database-side
+        ``Sum(quantity * order_line__unit_cost)`` (``sales.models``); the oracle
+        answers it from the cost *it* predicted for each sale line when the sale
+        was rung up, times the quantity *it* asked to send back. Rounded once at
+        the end, like the backend's single trailing ``quantize``, not per line.
+        """
+        return even2(
+            sum((line.unit_cost * Decimal(qty) for line, qty, _ in self.lines), ZERO)
+        )
 
 
 @dataclass
@@ -865,6 +901,13 @@ class Simulation:
         # that did — scaling every weight alike changes no allocation.
         self.pack_purchase_line_assertions = 0
         self.mixed_unit_retail_landed_orders = 0
+        # Vacuity guards for the sales refund document. A refund of goods that
+        # were never purchased reverses a cost of 0.00, which every broken
+        # implementation of the COGS reversal also produces; and at unit factor
+        # 1 the pack↔base crossing in that reversal is the identity. A run that
+        # only ever saw those has proved nothing about ``returned_cost_total``.
+        self.costed_refund_assertions = 0
+        self.multi_unit_costed_refund_assertions = 0
 
     # -- helpers ----------------------------------------------------------
 
@@ -1783,10 +1826,11 @@ class Simulation:
             and any(line.returnable_qty > ZERO for line in o.lines)
         ]
 
-    def _apply_refund(self, rec: OrderRec, refund_lines) -> Decimal:
+    def _apply_refund(self, rec: OrderRec, refund_lines) -> RefundRec:
         """refund_lines: list of (LineRec, qty). Applies the documented refund
-        arithmetic to the oracle and returns the refund total (asserts handled
-        by the caller)."""
+        arithmetic to the oracle and returns the :class:`RefundRec` describing
+        the document the backend should now have written (asserts handled by
+        the caller)."""
         total = ZERO
         per_line_refund = []
         for line, qty in refund_lines:
@@ -1815,7 +1859,12 @@ class Simulation:
                 )
         if all(line.returnable_qty <= ZERO for line in rec.lines):
             rec.voided = True
-        return even2(total)
+        return RefundRec(
+            total=even2(total),
+            cash_amount=even2(cash_amount),
+            primary_method=primary_method,
+            lines=per_line_refund,
+        )
 
     def _line_refund_discount(self, line: LineRec, qty) -> Decimal:
         if line.discount_total <= ZERO:
@@ -1843,14 +1892,15 @@ class Simulation:
             api_lines.append((OrderLine.objects.get(pk=line.order_line_id), qty))
         if not refund_lines:
             return False
-        return_order_items(
+        adjustment = return_order_items(
             order=Order.objects.get(pk=rec.order_id),
             lines=api_lines,
             reason="sim return",
             register_session=self._register_session_obj(),
             request=None,
         )
-        self._apply_refund(rec, refund_lines)
+        refund = self._apply_refund(rec, refund_lines)
+        self._assert_adjustment(adjustment, refund)
         self._assert_order(rec)
         for line, _ in refund_lines:
             self._assert_variant(line.variant_id)
@@ -1916,7 +1966,9 @@ class Simulation:
         )
         # Apply the two legs to the oracle in the order the backend applies
         # them: refund first (restocks, reverses tenders), then the new sale.
-        outbound_total = self._apply_refund(rec, outbound)
+        refund = self._apply_refund(rec, outbound)
+        outbound_total = refund.total
+        self._assert_adjustment(exchange.return_adjustment, refund)
         replacement_rec = self._build_order_rec(
             exchange.replacement_order,
             specs,
@@ -1962,13 +2014,14 @@ class Simulation:
         refund_lines = [
             (line, line.returnable_qty) for line in rec.lines if line.returnable_qty > ZERO
         ]
-        void_order(
+        adjustment = void_order(
             order=Order.objects.get(pk=rec.order_id),
             reason="sim void",
             register_session=self._register_session_obj(),
             request=None,
         )
-        self._apply_refund(rec, refund_lines)
+        refund = self._apply_refund(rec, refund_lines)
+        self._assert_adjustment(adjustment, refund)
         rec.voided = True
         self._assert_order(rec)
         for line, _ in refund_lines:
@@ -2793,6 +2846,105 @@ class Simulation:
             stock.quantity_expected, self.oracle.expected[variant_id],
             f"variant {variant_id} expected",
         )
+
+    def _assert_adjustment(self, adjustment, refund: RefundRec):
+        """The refund *document* — the row a return receipt is printed from and
+        the row every profit report reverses margin through.
+
+        Nothing here was reachable before. ``_apply_refund`` fed its figures
+        into the session/drawer aggregates only, so the ``OrderAdjustment`` and
+        its lines were the one document class in the simulation that the oracle
+        created and then never looked at. Three things ride on them:
+
+        * ``cash_amount`` decides how much of a split-tender refund leaves the
+          drawer, and ``refund_method`` is what the shop sees the money went
+          back on;
+        * the per-line ``quantity``/``unit_price``/``discount_total`` snapshot is
+          what the customer's return receipt shows, and ``discount_total`` is
+          also what the *next* partial return of the same line subtracts from
+          its remaining discount (``line_refund_discount``), so an error here
+          compounds instead of staying put;
+        * ``returned_cost_total`` is the cost of the restocked goods, which the
+          dashboard and both profit reports add back so a refund reverses margin
+          rather than margin *plus* the cost of goods that never left the shop.
+          It only ever feeds reports, so revenue assertions cannot reach it.
+
+        Every expectation is ``refund``'s — the oracle's own refund arithmetic
+        and its own predicted cost basis. Nothing is read back off the order,
+        the order line or the adjustment to decide what to expect.
+        """
+        tag = f"adjustment#{adjustment.pk}"
+        self.assert_money(adjustment.amount, refund.total, f"{tag} amount")
+        self.assert_money(
+            adjustment.cash_amount, refund.cash_amount, f"{tag} cash_amount"
+        )
+        self.assert_equal(
+            adjustment.refund_method, refund.primary_method, f"{tag} refund_method"
+        )
+        rows = list(
+            OrderAdjustmentLine.objects.filter(adjustment=adjustment).order_by("pk")
+        )
+        # Matched by the sale line each row refunds, not by position: a void
+        # walks the order's lines in pk order while a return walks whichever
+        # ones this operation happened to pick, and neither ordering is the
+        # thing under test.
+        expected_by_line = {
+            line.order_line_id: (line, qty, refund_discount)
+            for line, qty, refund_discount in refund.lines
+        }
+        if len(rows) != len(expected_by_line):
+            self.fail(
+                f"{tag} line count: backend={len(rows)} "
+                f"oracle={len(expected_by_line)}"
+            )
+        for row in rows:
+            if row.order_line_id not in expected_by_line:
+                self.fail(
+                    f"{tag} refunds order line {row.order_line_id}, "
+                    "which this operation never asked to return"
+                )
+            line, qty, refund_discount = expected_by_line.pop(row.order_line_id)
+            row_tag = f"{tag} line#{row.pk}"
+            self.assert_equal(row.variant_id, line.variant_id, f"{row_tag} variant")
+            # The returned quantity is stored in the sale line's *transacted*
+            # unit (cartons, not bottles) — that is the unit ``unit_price`` and
+            # ``unit_cost`` are both denominated in, so the three multiply
+            # directly and a base-unit quantity here would silently inflate both.
+            self.assert_qty(row.quantity, Decimal(qty), f"{row_tag} quantity")
+            self.assert_money(row.unit_price, line.unit_price, f"{row_tag} unit_price")
+            self.assert_money(
+                row.discount_total, refund_discount, f"{row_tag} discount_total"
+            )
+            if Decimal(qty) == line.quantity and line.returned_qty == Decimal(qty):
+                # A line taken back whole, in one go, credits exactly what the
+                # sale charged for it — the oracle's own ``line_total``, not
+                # another backend figure. Deliberately *not* asserted for a line
+                # returned in pieces: each part's gross rounds on its own, so
+                # 0.5 + 0.5 of a line at 3.33 credits 3.32, and demanding
+                # otherwise would report a defect the backend does not have.
+                self.assert_money(
+                    row.line_total, line.line_total, f"{row_tag} credits the sale line"
+                )
+        # Identity: the lines of the refund document are worth what the document
+        # refunds. The document-level ``amount`` above is satisfiable while no
+        # line agrees with it (see the purchasing-side entries in .ai/oracle.md),
+        # and this is the only assertion that would notice.
+        self.assert_money(
+            even2(sum((row.line_total for row in rows), ZERO)),
+            adjustment.amount,
+            f"identity: {tag} line totals sum to amount",
+        )
+        expected_cost = refund.cost_total
+        self.assert_money(
+            returned_cost_total([adjustment]), expected_cost, f"{tag} returned_cost"
+        )
+        if expected_cost > ZERO:
+            self.costed_refund_assertions += 1
+            if any(line.unit_factor != Decimal("1") for line, _, _ in refund.lines):
+                # A carton going back has to credit twenty-four pieces of cost,
+                # not one — the same pack/base crossing the phantom-loss class
+                # lives in, on the one figure no revenue assertion can see.
+                self.multi_unit_costed_refund_assertions += 1
 
     def _assert_order(self, rec: OrderRec):
         # Prefetch the lines: the line assertions and the total_cost/total_profit

@@ -399,3 +399,51 @@ have quoted a cost basis the save contradicts — a fresh instance of the
 preview-drift class, created *by* fixing the writer. When fixing a figure in
 `PurchaseOrder`, check what the preview receives before assuming it can compute
 the same thing: a dropped input reads exactly like agreement.
+
+## 2026-08-20 - The refund document was the one document nobody looked at
+
+**Learning:** `_apply_refund` computed a whole refund — its total, its tender
+split, its per-line discounts — and then fed *only* the drawer/session
+aggregates. The `OrderAdjustment` row and its lines were the one document class
+the simulation created and never asserted. Adding `_assert_adjustment` found a
+defect at op#33 of the first seed it ran: `OrderAdjustmentLine.line_total`
+computed `(unit_price × quantity − discount).quantize()` off an **unrounded**
+gross, where the money actually paid out (`services.line_refund_amount`) and the
+price the sale charged in the first place (`OrderLine.line_subtotal →
+line_total`) both round the gross to the cent *first*. On 0.750 kg at 5.50 —
+4.125, the same worked example as the rounding-regime entry above — the refund
+paid 3.71 and the receipt line said 3.72. Two things follow. The customer's
+returns history (`lines[].line_total` next to `amount`,
+`apps/customers/serializers.py`) does not add up. And the line is credited more
+than the sale ever charged for it, always in that direction, because the
+half-cent it keeps is one the sale had already rounded away.
+
+**Action:** a `sum(lines) == document` identity is worth writing even for a
+document you did not think had arithmetic in it — this one has exactly one
+multiplication and one subtraction, and it still drifted, because it was the
+only one of *four* implementations of "gross minus discount" that ordered the
+two operations differently. When a figure exists in several places (here:
+`OrderLine.line_total`, `OrderAdjustmentLine.line_total`,
+`services.line_refund_amount`, `register_summary._sales_and_categories`), check
+the **order of rounding and subtraction**, not just the rounding mode — the
+regime entry above is about HALF_UP vs HALF_EVEN, and this is the other half of
+the same family, where both sides round identically and disagree anyway.
+
+**And an invariant that looks true and is not.** "Returning a line in pieces
+credits what returning it whole would" does **not** hold, and must not be
+asserted: each part's gross is rounded on its own, so 0.5 + 0.5 of a line at
+3.33 refunds 1.66 + 1.66 = 3.32 against a whole-line 3.33. The invariant that
+*does* hold, and is now pinned, is the narrower one — a return of the **whole**
+remaining line credits exactly `OrderLine.line_total`.
+
+**Also — what the refund document newly proves.** `returned_cost_total` is the
+COGS the dashboard and both profit reports add back so a refund reverses margin
+and not margin *plus* the cost of goods still on the shelf. It only ever feeds
+reports, so no revenue assertion could reach it, and the oracle now predicts it
+from `LineRec.unit_cost` (its own cost basis) rather than from anything the
+backend stored. Mutation-tested: crediting the whole sale line's cost on a
+partial return dies at op#24, and multiplying the reversal by `unit_factor` dies
+at op#220 — *only* op#220, because a refund of a line bought by the carton is
+rare enough that `multi_unit_costed_refund_assertions` was 2 in a 300-op run.
+That guard is not decorative; without it the pack↔base crossing in the reversal
+is untested most of the time.

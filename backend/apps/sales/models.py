@@ -661,8 +661,22 @@ class OrderAdjustmentLine(TimeStampedModel):
 
     @property
     def line_total(self):
-        gross_total = self.unit_price * self.quantity
-        return (gross_total - self.discount_total).quantize(Decimal("0.01"))
+        """What this refund line is worth.
+
+        Rounds the gross to the cent *before* taking the discount off, which is
+        both what the refund is actually paid out with
+        (``services.line_refund_amount``) and what the sale charged in the first
+        place (``OrderLine.line_subtotal`` → ``OrderLine.line_total``).
+
+        Subtracting from an *unrounded* gross instead diverges by a cent
+        whenever ``unit_price × quantity`` lands on a half-cent — 0.750 kg at
+        5.50 is 4.125, which rounds to 4.12 on its own but carries the extra
+        half-cent up through the subtraction — so an itemised return receipt
+        stopped adding up to the money that left the drawer, and credited the
+        line more than the sale had ever charged for it.
+        """
+        line_subtotal = (self.unit_price * self.quantity).quantize(Decimal("0.01"))
+        return (line_subtotal - self.discount_total).quantize(Decimal("0.01"))
 
 
 def returned_cost_total(adjustments) -> Decimal:
