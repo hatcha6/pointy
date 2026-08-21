@@ -256,6 +256,39 @@ class PosUserSerializer(serializers.ModelSerializer):
     def validate_username(self, value):
         return value.strip()
 
+    # A role is a bundle of permissions and every field on this serializer can
+    # hand control of an account over, so both are bound by the same rule that
+    # already governs ``extra_permissions``: an actor may only grant what they
+    # hold themselves. In the default configuration only managers can manage
+    # users at all, and a manager holds everything, so these guards bite only
+    # once ``auth.add_user`` / ``auth.change_user`` has been delegated to a
+    # narrower role — which is exactly when they are needed.
+    def _actor(self):
+        return getattr(self.context.get("request"), "user", None)
+
+    def _holds_every_permission(self, user):
+        """True for a manager or superuser — ``role_permission_codes`` reports
+        their role as unbounded, so there is nothing left to escalate to."""
+        return role_permission_codes(self._resolved_role(user)) is None
+
+    def _effective_permission_codes(self, user):
+        """Every code ``user`` holds, or ``None`` when they hold all of them."""
+        role_codes = role_permission_codes(self._resolved_role(user))
+        if role_codes is None:
+            return None
+        return set(role_codes) | set(self._extra_permission_codes(user))
+
+    def validate_role(self, value):
+        actor = self._actor()
+        if actor is None or self._holds_every_permission(actor):
+            return value
+        role_codes = role_permission_codes(value)
+        if role_codes is None or not set(role_codes) <= actor.get_all_permissions():
+            raise serializers.ValidationError(
+                "You can only assign a role whose permissions you hold yourself."
+            )
+        return value
+
     def validate_extra_permissions(self, value):
         codes, seen = [], set()
         for raw in value:
@@ -288,6 +321,20 @@ class PosUserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"password": "Password is required."})
         if self.instance is None and not attrs.get("role"):
             raise serializers.ValidationError({"role": "Role is required."})
+        # Editing a more privileged account is escalation by another route: the
+        # password field alone would let a delegate take a manager's account
+        # over and log in as them.
+        actor = self._actor()
+        if (
+            self.instance is not None
+            and actor is not None
+            and not self._holds_every_permission(actor)
+        ):
+            target_codes = self._effective_permission_codes(self.instance)
+            if target_codes is None or not target_codes <= actor.get_all_permissions():
+                raise serializers.ValidationError(
+                    "You cannot edit a user who holds permissions you do not."
+                )
         return attrs
 
     # -- persistence ----------------------------------------------------------

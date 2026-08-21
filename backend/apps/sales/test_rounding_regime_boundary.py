@@ -30,13 +30,14 @@ from rest_framework.test import APIClient
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import ShopSettings
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
+from apps.discounts.models import DiscountRule
 from apps.inventory.models import StockItem
 
-from .models import Order, OrderLine, RegisterSession
+from .models import Order, OrderAdjustment, OrderLine, RegisterSession
 from .services import calculate_sales_discounts, exchange_order_items
 
 
-class HalfCentLineTestCase(TestCase):
+class HalfCentFixture:
     """A 0.75 quantity at 5.50 — exactly 4.125, the half-cent boundary."""
 
     def setUp(self):
@@ -62,6 +63,10 @@ class HalfCentLineTestCase(TestCase):
         )
         self.client = APIClient()
         self.client.force_authenticate(self.user)
+
+
+class HalfCentLineTests(HalfCentFixture, TestCase):
+    """Selling on the boundary: the engine's total is not the order's total."""
 
     def test_the_two_regimes_really_do_disagree_on_this_line(self):
         """Guards the premise. If this stops holding the rest proves nothing."""
@@ -148,3 +153,78 @@ class HalfCentLineTestCase(TestCase):
         self.assertEqual(exchange.outbound_amount, Decimal("5.50"))
         # The customer is owed the difference, not charged it.
         self.assertEqual(exchange.net_amount, Decimal("-1.38"))
+
+
+class HalfCentRefundLineTests(HalfCentFixture, TestCase):
+    """The same half-cent line, coming back.
+
+    A refund is paid out with ``services.line_refund_amount``, which rounds the
+    gross to the cent and *then* takes the discount off — the order's own
+    arithmetic, and exactly what ``OrderLine.line_subtotal`` →
+    ``OrderLine.line_total`` charged for the line in the first place.
+    ``OrderAdjustmentLine.line_total`` — the per-item breakdown on the return
+    receipt and in the customer's returns history — used to subtract from an
+    *unrounded* gross instead, so on this line it reported a cent more than the
+    drawer gave back and a cent more than the sale had ever charged.
+    """
+
+    def setUp(self):
+        super().setUp()
+        DiscountRule.objects.create(
+            name="Ten percent off everything",
+            channel=DiscountRule.Channel.SALES,
+            value_type=DiscountRule.ValueType.PERCENTAGE,
+            value=Decimal("10.00"),
+        )
+
+    def _sell_and_return_the_whole_line(self):
+        checkout = self.client.post(
+            "/api/orders/checkout/",
+            {
+                "register_session": self.session.pk,
+                "lines": [{"variant": self.variant.pk, "quantity": "0.75"}],
+                "payment_method": "cash",
+            },
+            format="json",
+        )
+        self.assertEqual(checkout.status_code, 201, checkout.data)
+        order = Order.objects.get(pk=checkout.data["id"])
+        line = order.lines.get()
+        returned = self.client.post(
+            f"/api/orders/{order.pk}/return-items/",
+            {"lines": [{"line": line.pk, "quantity": "0.75"}]},
+            format="json",
+        )
+        self.assertEqual(returned.status_code, 200, returned.data)
+        return order, line, OrderAdjustment.objects.get(order=order)
+
+    def test_the_sale_line_lands_on_the_half_cent_with_a_discount(self):
+        """Guards the premise: 4.125 gross, rounded to 4.12, less 0.41."""
+        _, line, _ = self._sell_and_return_the_whole_line()
+        self.assertEqual(line.line_subtotal, Decimal("4.12"))
+        self.assertEqual(line.discount_total, Decimal("0.41"))
+        self.assertEqual(line.line_total, Decimal("3.71"))
+
+    def test_the_refund_line_is_worth_what_the_refund_paid_out(self):
+        _, _, adjustment = self._sell_and_return_the_whole_line()
+        refund_line = adjustment.lines.get()
+        self.assertEqual(adjustment.amount, Decimal("3.71"))
+        # Was 3.72: ``(4.125 - 0.41).quantize()`` rounds 3.715 up.
+        self.assertEqual(refund_line.line_total, Decimal("3.71"))
+
+    def test_the_refund_lines_add_up_to_the_refund(self):
+        """The identity an itemised return receipt has to satisfy."""
+        _, _, adjustment = self._sell_and_return_the_whole_line()
+        self.assertEqual(
+            sum(
+                (line.line_total for line in adjustment.lines.all()),
+                Decimal("0.00"),
+            ),
+            adjustment.amount,
+        )
+
+    def test_returning_a_line_whole_credits_what_the_sale_charged(self):
+        """A full return gives back the line's value, never more."""
+        _, line, adjustment = self._sell_and_return_the_whole_line()
+        self.assertEqual(adjustment.lines.get().line_total, line.line_total)
+        self.assertEqual(adjustment.amount, line.line_total)

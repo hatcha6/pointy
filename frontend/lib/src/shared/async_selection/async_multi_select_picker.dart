@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../components/pointy_error_state.dart';
 import '../design/design.dart';
 import '../infinite_scroll_grid.dart';
 import '../query_controls/debounced_search_field.dart';
@@ -151,6 +153,7 @@ class _AsyncMultiSelectPickerSheetState<T extends Object>
   @override
   Widget build(BuildContext context) {
     final strings = widget.strings;
+    final l10n = AppLocalizations.of(context)!;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -205,46 +208,75 @@ class _AsyncMultiSelectPickerSheetState<T extends Object>
               ],
             ),
           ],
-          if (_hasError)
+          // A failed *next* page keeps the results already on screen, so the
+          // failure is reported inline — but with its own retry, because the
+          // load-more trigger is switched off once a page fails.
+          if (_hasError && _options.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                strings.loadErrorText,
-                style: TextStyle(color: context.pointyColors.danger),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      strings.loadErrorText,
+                      style: TextStyle(color: context.pointyColors.danger),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _isLoadingMore ? null : _retry,
+                    child: Text(l10n.retryButton),
+                  ),
+                ],
               ),
             ),
           const SizedBox(height: 8),
           Expanded(
-            child: InfiniteScrollList<AsyncSelectionOption<T>>(
-              items: _options,
-              onLoadMore: () => _load(reset: false),
-              hasMore: _hasMore,
-              isLoadingInitial: _isLoading,
-              isLoadingMore: _isLoadingMore,
-              emptyBuilder: (context) => Center(child: Text(strings.emptyText)),
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, option) {
-                final isSelected = _selected.containsKey(option.id);
-                return CheckboxListTile(
-                  key: widget.optionKeyForId?.call(option.id),
-                  value: isSelected,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  title: Text(
-                    option.displayLabel(strings.fallbackLabelForId),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: option.subtitle.isEmpty
-                      ? null
-                      : Text(
-                          option.subtitle,
+            // A failed first page empties the list, so the list's own empty
+            // state would say "no results" — telling the user their search
+            // matched nothing when the truth is we never got to ask. Report
+            // the failure instead, and offer the retry: without it the only
+            // way to load again is to edit the search text.
+            child: _hasError && _options.isEmpty
+                ? PointyErrorState(
+                    icon: Icons.cloud_off_outlined,
+                    title: strings.loadErrorText,
+                    action: FilledButton.icon(
+                      onPressed: _isLoading ? null : _retry,
+                      icon: const Icon(Icons.refresh),
+                      label: Text(l10n.retryButton),
+                    ),
+                  )
+                : InfiniteScrollList<AsyncSelectionOption<T>>(
+                    items: _options,
+                    onLoadMore: () => _load(reset: false),
+                    hasMore: _hasMore,
+                    isLoadingInitial: _isLoading,
+                    isLoadingMore: _isLoadingMore,
+                    emptyBuilder: (context) =>
+                        Center(child: Text(strings.emptyText)),
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, option) {
+                      final isSelected = _selected.containsKey(option.id);
+                      return CheckboxListTile(
+                        key: widget.optionKeyForId?.call(option.id),
+                        value: isSelected,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(
+                          option.displayLabel(strings.fallbackLabelForId),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                  onChanged: (_) => _toggle(option),
-                );
-              },
-            ),
+                        subtitle: option.subtitle.isEmpty
+                            ? null
+                            : Text(
+                                option.subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                        onChanged: (_) => _toggle(option),
+                      );
+                    },
+                  ),
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
@@ -258,6 +290,19 @@ class _AsyncMultiSelectPickerSheetState<T extends Object>
         ],
       ),
     );
+  }
+
+  /// Re-runs the load that failed. A first page that failed left the list
+  /// empty, so it restarts from page one; a failed *next* page keeps what is
+  /// already on screen and asks for that page again — which needs [_hasMore]
+  /// switched back on, since the failure turned it off to stop the list
+  /// re-triggering the same broken request.
+  Future<void> _retry() async {
+    final reset = _options.isEmpty;
+    if (!reset) {
+      setState(() => _hasMore = true);
+    }
+    await _load(reset: reset);
   }
 
   Future<void> _load({required bool reset}) async {
@@ -290,6 +335,11 @@ class _AsyncMultiSelectPickerSheetState<T extends Object>
         _options = reset ? page.options : [..._options, ...page.options];
         _hasMore = page.hasMore;
         _nextPage += 1;
+        // A page that just arrived clears the previous failure, whichever
+        // path asked for it: without this a successful mid-list retry
+        // appends its rows while the red failure line stays above them,
+        // so the screen reports a failure and its result at once.
+        _hasError = false;
         _isLoading = false;
         _isLoadingMore = false;
       });

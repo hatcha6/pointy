@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Manager, Sum
@@ -881,6 +881,18 @@ class PurchaseDiscountPreviewLineSerializer(serializers.Serializer):
         decimal_places=2,
         min_value=Decimal("0.00"),
     )
+    # The purchase unit the buyer is typing in — blank for the product's base
+    # unit. The editor has always sent it; the preview used to drop it on the
+    # floor, which left every figure that crosses into base units unable to
+    # tell a carton from a piece. Resolved to a factor by the PARENT
+    # serializer, after the variants are bulk-loaded, so previewing a wide
+    # order does not cost a product query per line.
+    unit = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        trim_whitespace=True,
+    )
 
     def validate(self, attrs):
         variant = attrs.get("variant")
@@ -935,6 +947,7 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
         # purchase_preview_line_payloads) are bulk-loaded once up front instead
         # of costing 3 queries per line.
         preload_line_variants(attrs["lines"])
+        resolve_preview_line_units(attrs["lines"])
         discount_lines = tuple(
             DiscountLineInput(
                 key=str(index),
@@ -1083,6 +1096,48 @@ def unapplied_purchase_discount_codes(discount_result, discount_codes):
     return sorted(requested_codes - applied_codes)
 
 
+def resolve_preview_line_units(lines):
+    """Snapshot each preview line's base-conversion factor.
+
+    ``PurchaseLineSerializer`` does this for a line that is actually saved; the
+    preview needs the same snapshot or it cannot answer any question that
+    crosses into base units, and quotes a figure the saved order contradicts.
+    Called from the parent serializer *after* ``preload_line_variants``, so
+    ``variant.product`` is already in memory.
+    """
+    # Reported per line and aligned by index, the way the save endpoint reports
+    # the same rejection, so the editor can reuse its line-error handling.
+    line_errors = [{} for _ in lines]
+    for index, line in enumerate(lines):
+        code = (line.get("unit") or "").strip()
+        if not code:
+            # Base unit: the overwhelmingly common case, and the one the
+            # editor sends nothing for. Short-circuited so a plain preview
+            # never reads ``variant.product`` just to learn the base code.
+            line["unit"] = ""
+            line["unit_factor"] = Decimal("1")
+            continue
+        try:
+            resolved = resolve_unit(
+                line["variant"].product, code, field="unit", for_purchase=True
+            )
+        except UnitConversionError as error:
+            line_errors[index] = {error.field: error.message}
+            continue
+        line["unit"] = resolved.code
+        line["unit_factor"] = resolved.factor
+    if any(line_errors):
+        raise serializers.ValidationError({"lines": line_errors})
+
+
+def preview_line_base_quantity(line):
+    """A preview line's quantity in base units, rounded exactly as
+    ``PurchaseLine.to_base_quantity`` rounds it — the preview and the writer
+    have to agree digit for digit, not merely in intent."""
+    factor = line.get("unit_factor") or Decimal("1")
+    return (Decimal(line["quantity"]) * factor).quantize(Decimal("0.001"))
+
+
 def purchase_preview_line_payloads(
     *,
     lines,
@@ -1110,12 +1165,19 @@ def purchase_preview_line_payloads(
         )
         quantities_by_key[key] = Decimal(line["quantity"])
 
+    # Line keys are stringified indices, but allocate_discount_amount breaks a
+    # remainder tie on the key *as a string*, so "10" sorts ahead of "2" and the
+    # leftover cents settle on different lines than PurchaseOrder's own
+    # allocator, which ties on the integer pk. Pad to a fixed width so string
+    # order is index order — for the landed costs as much as the manual
+    # discount, since both are spread by the same allocator.
+    padded = {str(index): f"{index:06d}" for index in range(len(lines))}
+
     # The manual order-level discount reaches the lines here exactly as it does
     # in PurchaseOrder.recalculate(), and before the landed-cost weights are
     # read — otherwise the preview quotes per-line costs the save then
     # contradicts.
     if extra_discount > Decimal("0.00"):
-        padded = {str(index): f"{index:06d}" for index in range(len(lines))}
         extra_shares = {
             allocation.line_key: allocation.amount
             for allocation in allocate_discount_amount(
@@ -1140,20 +1202,37 @@ def purchase_preview_line_payloads(
         landed_cost_allocation_method
         == PurchaseOrder.LandedCostAllocationMethod.RETAIL_VALUE
     ):
+        # ``unit_price`` is per BASE unit, so the quantity meeting it has to be
+        # in base units too — mirroring PurchaseOrder._landed_cost_weights()
+        # down to the 3dp intermediate, since a preview that rounds differently
+        # from the writer is the same defect in a nicer disguise.
         weights = {
-            str(index): (line["variant"].unit_price * Decimal(line["quantity"]))
-            .quantize(Decimal("0.01"))
+            str(index): (
+                line["variant"].unit_price * preview_line_base_quantity(line)
+            ).quantize(Decimal("0.01"))
             for index, line in enumerate(lines)
         }
     elif landed_cost_allocation_method == PurchaseOrder.LandedCostAllocationMethod.EQUAL:
         weights = {str(index): Decimal("1.00") for index in range(len(lines))}
     else:
         weights = net_totals_by_key
-        if sum(weights.values(), Decimal("0.00")) == Decimal("0.00"):
-            weights = quantities_by_key
-    landed_allocations = {
+    # PurchaseOrder._landed_cost_allocations() falls back to quantity weights
+    # whenever the chosen method weighs the whole order at zero, whichever
+    # method that is. Applying the fallback to the cost method alone left a
+    # retail-value order whose variants are every one priced 0.00 previewing no
+    # landed cost at all, and then saving with the whole of it on the lines.
+    if sum(weights.values(), Decimal("0.00")) == Decimal("0.00"):
+        weights = quantities_by_key
+    landed_by_padded = {
         allocation.line_key: allocation.amount
-        for allocation in allocate_discount_amount(landed_cost_total, weights)
+        for allocation in allocate_discount_amount(
+            landed_cost_total,
+            {padded[key]: weight for key, weight in weights.items()},
+        )
+    }
+    landed_allocations = {
+        key: landed_by_padded.get(pad, Decimal("0.00"))
+        for key, pad in padded.items()
     }
 
     payloads = []
@@ -1166,7 +1245,13 @@ def purchase_preview_line_payloads(
         discount_amount = discounts_by_key[key]
         net_line_total = net_totals_by_key[key]
         allocated_landed_cost = landed_allocations.get(key, Decimal("0.00"))
-        net_unit_cost = (net_line_total / quantity).quantize(Decimal("0.01"))
+        # ROUND_HALF_UP, matching PurchaseOrder.recalculate() — this is the one
+        # per-unit figure the model rounds half-up rather than half-even, and a
+        # bare quantize() here previewed a net unit cost a cent under the one the
+        # save then wrote whenever the division landed on a half-cent.
+        net_unit_cost = (net_line_total / quantity).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
         landed_unit_cost = (allocated_landed_cost / quantity).quantize(Decimal("0.01"))
         effective_unit_cost = (net_unit_cost + landed_unit_cost).quantize(
             Decimal("0.01")
@@ -1906,14 +1991,7 @@ class PurchaseOrderExchangeSerializer(PurchaseOrderAdjustmentInputSerializer):
         replacement_lines = attrs.get("replacement_lines")
         if replacement_lines is None:
             replacement_lines = [
-                {
-                    "variant": line.variant,
-                    "quantity": quantity,
-                    "unit_cost": (
-                        purchase_adjustment_line_amount(line, quantity)
-                        / Decimal(quantity)
-                    ).quantize(Decimal("0.01")),
-                }
+                self._like_for_like_replacement(line, quantity)
                 for line, quantity in attrs["validated_lines"]
             ]
         attrs["validated_replacement_lines"] = [
@@ -1925,6 +2003,30 @@ class PurchaseOrderExchangeSerializer(PurchaseOrderAdjustmentInputSerializer):
             for line_data in replacement_lines
         ]
         return attrs
+
+    @staticmethod
+    def _like_for_like_replacement(line, quantity):
+        """The replacement an exchange sends back when the caller names no prices.
+
+        A replacement line carries no unit — it is keyed by variant alone, and
+        ``record_purchase_replacement_stock_movements`` adds its ``quantity``
+        straight to ``quantity_on_hand``. So both its quantity and its unit cost
+        are **per base unit**, while the outbound purchase line it mirrors is in
+        the line's purchase unit (a carton of 24). Sending the pack figures
+        through unconverted took 24 base units out and put 1 back.
+        """
+        amount = purchase_adjustment_line_amount(line, quantity)
+        base_quantity = line.to_base_quantity(quantity)
+        unit_cost = (
+            (amount / base_quantity).quantize(Decimal("0.01"))
+            if base_quantity > 0
+            else Decimal("0.00")
+        )
+        return {
+            "variant": line.variant,
+            "quantity": base_quantity,
+            "unit_cost": unit_cost,
+        }
 
     def save(self, **kwargs):
         return adjust_purchase_order_items(

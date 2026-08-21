@@ -91,3 +91,192 @@ be subtracted from the drawer in the report while the model ignored it.
 **Action:** In `apps/reports`, treat every formula as a fork and diff it against
 the model property it mirrors; the interesting test is "do the two surfaces
 agree", not "does the report return a number".
+
+## 2026-08-20 - A start/end **time-of-day** pair is an interval that can be entered inside-out
+**Learning:** `attendance.rebuild_attendance_day` built the shift window as
+`expected_end = _aware(day_date, shift_end)` on the *same* calendar day.
+`shift_start`/`shift_end` are plain `TimeField`s on `BioTimeConnection` (and
+again as per-employee overrides on `AttendanceProfile`), with no validation and
+a plain Flutter time picker on each — so a night crew's `22:00 → 06:00` is two
+taps away, and it makes the shift "end" sixteen hours before it starts. Every
+evening minute then fell after `expected_end` and was banked as overtime:
+95 minutes actually worked became **1050 minutes of overtime**, and a five-night
+week reached payroll as 87.50 overtime hours (~7,031 of overtime pay on top of
+a 3,000 salary). The reverse direction was silent too — `early_leave` uses the
+same pair and `_minutes_between` returns 0 whenever `end <= start`, so the
+inverted window produced no warning anywhere.
+**Action:** Whenever two `TimeField`s form a window, ask what happens when the
+second is *earlier* than the first — with times (unlike `DateTimeField`s, where
+an inverted range merely yields nothing) the wrap-around is the legitimate,
+common case, not an error. Attendance was the only such pair in the backend when
+I checked; if another appears, test the inverted configuration before the
+ordinary one. And the payoff test is the one at the *money* surface: the rollup
+assertion says "1050 != 0", `apply_attendance_to_run` says "87.50 hours", and
+only the second makes the cost undeniable.
+
+## 2026-08-20 - A per-row `continue` inside a bounded batch is a starvation bug, not a filter
+**Learning:** `messaging.dispatch_outbound_task` pulled the 50 oldest due rows
+and then skipped marketing ones in the loop when the gateway was inside quiet
+hours. With two messages (all the existing test had) that reads as "marketing is
+held, transactional still flows". With a campaign of ≥50 held rows it means the
+batch is *entirely* held rows on every tick for the whole 10-hour window, and
+every transactional message queued behind it — invoice, debt reminder, OTP —
+never enters a batch at all. `sweep_stuck_task` then expires any of them
+carrying an `expires_at`, so an OTP is not merely late, it is destroyed. The
+docstring's promise ("transactional messages ignore quiet hours") was true of
+the `if` and false of the system.
+**Action:** Whenever a worker takes `qs[:N]` and then `continue`s past rows it
+declines to process, ask what happens when the declined rows outnumber N — the
+skip has to move into the queryset, not the loop. Same shape to check in any
+other paced drain (printing spool, notification fan-out, analytics ingest). And
+when a test exercises a batching path, size the fixture past the batch bound;
+two rows prove the branch, not the behaviour.
+
+## 2026-08-20 - Quiet hours: the wrap-around window was correct but only the same-day one was tested
+**Learning:** `in_quiet_hours` handles `22:00 → 08:00` properly, yet the only
+test used `00:00 → 23:59` — a window that never reaches the wrap-around branch,
+so the branch every real shop depends on was unproven. Times are compared in
+`business_timezone()` (Africa/Tripoli, UTC+2, no DST), so a fixed UTC instant is
+a stable way to assert a local time-of-day without freezing the clock.
+**Action:** For any time-of-day window, the same-day case is the one nobody
+configures. Test the wrapping one first, and pick the UTC instant that lands on
+the local boundary (start is inclusive, end is exclusive).
+
+## 2026-08-20 - A reservation is only as safe as its release path — enumerate all three
+**Learning:** `reserve_stock_for_quote` bumps `StockItem.quantity_committed`,
+which is what the POS sells against (`on_hand - committed`), so every held unit
+is a unit nobody else can buy. There are exactly three ways a hold is ever
+freed: conversion (`consume_quote_reservations`), the nightly sweep
+(`release_expired_quote_reservations`), and a direct service call. The sweep
+filters `valid_until__isnull=False, valid_until__lt=today`, and an OPEN
+quotation cannot be voided because `validate_order_adjustment_allowed` requires
+`Status.PAID` — so a hold placed on a quotation with **no** `valid_until` had no
+release path at all and froze the units permanently. `CheckoutSerializer`
+declared `valid_until` `required=False, allow_null=True` and `reserve_stock` as
+an unrelated boolean, with no cross-field validation, even though
+`Order.reserves_stock`'s own docstring says the units are held "until
+`valid_until`".
+**Action:** For any hold/lock/reservation, don't ask "is it created correctly" —
+enumerate every code path that *releases* it and check each one's filter for a
+case it silently excludes (NULL is the usual one). Where two fields only make
+sense together, grep the serializer for cross-field `validate`; Pointy's
+checkout serializer validates plenty but had no tie between these two.
+
+## 2026-08-20 - The Flutter UI holding an invariant is not the invariant being held
+**Learning:** The POS payment sheet auto-fills a default `valid_until` the
+moment the reserve-stock toggle goes on, so the Flutter client never sends the
+bad combination — which is exactly why the backend hole survived. The live
+caller that *did* reach it was `apps/ai/tools.py`: `create_sale` exposes
+`reserve_stock` and `valid_until` as independent optional arguments with
+`required: ["lines"]`, and the schema described the date as "(اختياري)". A user
+asking GPT to quote and hold stock without naming a date produced the stranded
+hold directly.
+**Action:** When a backend rule is only enforced by widget code, check the AI
+tool schemas in `apps/ai/tools.py` before concluding it is unreachable — they
+are a second, looser client over the same viewsets, and their JSON-schema
+`required` lists rarely mirror the serializer's cross-field rules.
+
+## 2026-08-20 - One fact recorded in two tables stays true only if *every* writer updates both
+**Learning:** A drawer-paid `Expense` writes the same fact twice — the expense
+row says how much money left the shop, its linked `RegisterCashMovement`
+PAY_OUT says how much left the till. `create_expense` set both; the edit path
+set only the first. `ExpenseSerializer.update` even carried a comment
+sanctioning it ("editing an expense never re-books or unwinds a pay-out that
+already happened") — which is true of the *linkage decision* and quietly false
+of the *amount*. Correcting a mistyped 30 to 300 left the till expecting 270 it
+no longer had, so the cashier wore the shortage at close. Switching the method
+from cash to transfer was worse: the pay-out survived, and because the ledger
+hides an expense's own pay-out to avoid double counting
+(`_register_payout_rows` filters `expense__isnull=True`), **no ledger row
+anywhere said cash had left the drawer** — 30 vanished from the books while
+still missing from the till.
+**Action:** When a service writes a second row to mirror a first, don't stop at
+"does create do both". Enumerate every later writer — `update`, `destroy`, and
+the DRF `ModelViewSet` default that gives you all of them for free — and ask
+what each does to the mirror. A comment explaining why an edit *doesn't* touch
+the other side is a signal to test, not a reason to skip it. Note the deletion
+direction was already right for a non-obvious reason worth pinning: the cash
+really did leave, so the orphaned pay-out must survive, and it self-heals into
+the ledger as a standalone `register_payout` the moment the expense that hid it
+is gone.
+
+## 2026-08-20 - A mirrored row that a *closed* register owns must be refused, not synced
+**Learning:** The obvious fix — always keep the pay-out equal to the expense —
+is wrong once the session has closed. `expected_cash` is derived live from the
+movements, so re-booking one retroactively turns a balanced, signed-off close
+into a variance nobody can explain, and the printed Z-report stops matching the
+database. The correct rule is state-dependent: sync while the session is OPEN
+(the till has not been counted, so correcting is the point), refuse afterwards.
+**Action:** Before writing a "keep these two in sync" fix, ask whether anything
+has already *read and committed* the derived value. In Pointy that question is
+almost always "has the register session closed" — `RegisterSession.expected_cash`
+is a property over live rows, with no snapshot, so any backdated movement edits
+history. The same shape will recur for anything else feeding a Z-report.
+
+## 2026-08-20 - An importer's job is fidelity, and a type on the IR is where fidelity is lost
+**Learning:** `apps/migration` carried purchase quantities as `int` on the
+canonical IR (`CanonicalPurchaseLine.quantity: int = 1`) while
+`CanonicalSaleLine.quantity` was `Decimal` — even though `PurchaseLine.quantity`
+has been `Decimal(12, 3)` since the Fahd fractional-units work, and its own
+field docstring says "half an egg". Four separate places re-applied the
+truncation (`int(quantity)` in `aboghris_mssql` and `fahd_mssql`,
+`int(...quantize(1, ROUND_HALF_UP))` in `fahd_sqlite`, `int(to_decimal(...))` in
+the loader), so no single fix would have been enough. A 2.5 kg purchase imported
+as 2.000 — the line total is `unit_cost × quantity`, so the invoice total, the
+supplier payable and the product's purchase history all shrank with it. Worse,
+plain `int()` truncates toward zero: a 0.5 line became 0, the loader's
+`if quantity <= 0: continue` dropped it, and when it was the invoice's only line
+the whole historical bill died as a `no_lines` error. `reconstruct.py` was
+already `to_decimal`-clean, which is what made the truncation look deliberate.
+**Action:** When one side of a paired concept (sale/purchase, in/out,
+debit/credit) is `Decimal` and the other is `int`, that is a bug, not a design —
+diff the two dataclasses field by field. And for any importer, the correctness
+question is never "does it import" but "does it import *what the source said*";
+the giveaway is a coercion (`int()`, `round()`, `[:120]`) sitting between the
+source value and the column. Every existing purchase fixture in this repo used
+whole quantities, which is exactly why 43 green tests never saw it.
+
+## 2026-08-21 - A rule enforced only at 100% is a cliff, and the cliff is where the bug is
+**Learning:** `employees._commissionable_sales_total` values a cashier's period
+as `Sum(Order.total)` over `committed_sales()`. That queryset excludes VOID, and
+a *full* return flips the order to VOID (`return_order_items` voids once every
+line's `returnable_quantity` hits 0) — so the code already states the policy
+"goods that came back earn no commission". It just implements it at exactly one
+point on the scale: a partial return leaves the order PAID and never touches
+`Order.total`, so returning three of four units still paid commission on four,
+and refunding everything *but one line* kept the full commission that a complete
+return would have removed. The same shape sat in `_commissionable_jobs_total`'s
+`order_total` base, only worse: `Sum("order__total")` off the job rows applied no
+status filter at all, so a fully **voided** repair invoice still paid the
+technician.
+**Action:** When a behaviour is right in the all-or-nothing case, don't record it
+as covered — that is the case the implementation gets for free from a status
+flag. Ask what the *partial* case does, and whether the two ends agree. And note
+the general shape: an aggregate reached through a related model
+(`Sum("order__total")` from `Job`) silently skips whatever manager/queryset
+filtering the owning model's own aggregates apply — `Order.objects` is a
+`committed_sales`-aware manager, `job.order__total` is not.
+
+## 2026-08-21 - Netting a mirror table into an aggregate needs a second query, not a join
+**Learning:** The obvious one-query fix — `aggregate(total=Sum("total"),
+refunded=Sum("adjustments__amount"))` — is wrong: the join fans each order row
+out once per adjustment, so `Sum("total")` multiplies by the number of returns
+against it. Two orders with two returns each report double the sales. Same trap
+as any "sum two different one-to-many branches in one aggregate".
+**Action:** Whenever an aggregate needs a figure from a second one-to-many
+relation, run it as its own `aggregate` over the same filtered queryset
+(`Model.objects.filter(order__in=orders)`), not as a second `Sum` in the first
+call. It costs one extra query and is the only correct form.
+
+## 2026-08-21 - The shared test database is contended; give your run its own
+**Learning:** `manage.py test` from a worktree against the primary `.env` targets
+`test_pointy`, which another routine's run holds open — the run dies with
+"database is being accessed by other users" and it looks like an environment
+fault. Pointing `DATABASE_URL` at a *nonexistent* database name works fine:
+Django creates the test DB through the `postgres` maintenance connection and
+never touches the named one.
+**Action:** Run backend tests as
+`DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/pointy_probe'
+POINTY_REQUIRE_POSTGRES=1 <venv>/bin/python manage.py test --noinput …` — own
+database (`test_pointy_probe`), still real Postgres, no collision with the fleet.
+`--noinput` matters too: without it the clobber prompt hits EOF and the run dies.

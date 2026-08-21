@@ -1,7 +1,7 @@
 import logging
 from decimal import Decimal
 
-from django.db.models import Count, Prefetch, Sum
+from django.db.models import Count, Max, Prefetch, Q, Sum
 from django.shortcuts import get_object_or_404
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
@@ -16,7 +16,12 @@ from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_has_full_visibility
-from apps.sales.models import Order, OrderAdjustment, RegisterSession
+from apps.sales.models import (
+    Order,
+    OrderAdjustment,
+    RegisterSession,
+    transactional_sale_q,
+)
 from apps.sales.serializers import (
     CustomerAccountPaymentSerializer,
     OrderSerializer,
@@ -274,27 +279,43 @@ class CustomerViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="sales-summary")
     def sales_summary(self, request, pk=None):
         customer = self.get_object()
-        orders = self._customer_orders(customer)
-        adjustments = self._customer_adjustments(customer)
-        return_adjustments = adjustments.filter(
-            adjustment_type=OrderAdjustment.AdjustmentType.RETURN,
+        # Every count/sum below reads one table with no joined multi-valued
+        # relation, so they all fold into a single pass per table instead of the
+        # thirteen round trips the separate .count()/.aggregate() calls cost.
+        # ``transactional_sale_q`` is the same Q that ``OrderQuerySet.transactional``
+        # is built from, so "which orders count as sales" still has one definition.
+        transactional = transactional_sale_q()
+        order_totals = self._customer_order_scope(customer).aggregate(
+            invoice_count=Count("pk", filter=transactional),
+            paid_invoice_count=Count(
+                "pk", filter=transactional & Q(status=Order.Status.PAID)
+            ),
+            void_invoice_count=Count(
+                "pk", filter=transactional & Q(status=Order.Status.VOID)
+            ),
+            quotation_count=Count(
+                "pk", filter=Q(sale_type=Order.SaleType.QUOTATION)
+            ),
+            total_invoiced=Sum("total", filter=transactional),
+            # Same value as the old "newest first, take created_at" read: the
+            # ordering tie-break on -id cannot change which timestamp is largest.
+            last_invoice_at=Max("created_at", filter=transactional),
         )
-        void_adjustments = adjustments.filter(
-            adjustment_type=OrderAdjustment.AdjustmentType.VOID,
+        is_return = Q(adjustment_type=OrderAdjustment.AdjustmentType.RETURN)
+        is_void = Q(adjustment_type=OrderAdjustment.AdjustmentType.VOID)
+        adjustment_totals = self._customer_adjustments(customer).aggregate(
+            refund_count=Count("pk"),
+            refund_total=Sum("amount"),
+            return_count=Count("pk", filter=is_return),
+            return_total=Sum("amount", filter=is_return),
+            void_count=Count("pk", filter=is_void),
+            void_total=Sum("amount", filter=is_void),
         )
-        total_invoiced = _sum_money(orders.aggregate(total=Sum("total"))["total"])
-        return_total = _sum_money(
-            return_adjustments.aggregate(total=Sum("amount"))["total"],
-        )
-        void_total = _sum_money(
-            void_adjustments.aggregate(total=Sum("amount"))["total"],
-        )
-        refund_total = _sum_money(adjustments.aggregate(total=Sum("amount"))["total"])
-        last_invoice_at = (
-            orders.order_by("-created_at", "-id")
-            .values_list("created_at", flat=True)
-            .first()
-        )
+        total_invoiced = _sum_money(order_totals["total_invoiced"])
+        return_total = _sum_money(adjustment_totals["return_total"])
+        void_total = _sum_money(adjustment_totals["void_total"])
+        refund_total = _sum_money(adjustment_totals["refund_total"])
+        last_invoice_at = order_totals["last_invoice_at"]
         # Outstanding receivable: the balance still owed across the customer's
         # open debt (آجل) invoices.
         # The customer's FULL open debt across all sessions — a cashier
@@ -311,13 +332,13 @@ class CustomerViewSet(viewsets.ModelViewSet):
         return Response(
             {
                 "customer": customer.pk,
-                "invoice_count": orders.count(),
-                "paid_invoice_count": orders.filter(status=Order.Status.PAID).count(),
-                "void_invoice_count": orders.filter(status=Order.Status.VOID).count(),
-                "quotation_count": self._customer_quotations(customer).count(),
-                "return_count": return_adjustments.count(),
-                "void_count": void_adjustments.count(),
-                "refund_count": adjustments.count(),
+                "invoice_count": order_totals["invoice_count"],
+                "paid_invoice_count": order_totals["paid_invoice_count"],
+                "void_invoice_count": order_totals["void_invoice_count"],
+                "quotation_count": order_totals["quotation_count"],
+                "return_count": adjustment_totals["return_count"],
+                "void_count": adjustment_totals["void_count"],
+                "refund_count": adjustment_totals["refund_count"],
                 "exchange_count": 0,
                 "total_invoiced": _money_string(total_invoiced),
                 "return_total": _money_string(return_total),
@@ -381,21 +402,22 @@ class CustomerViewSet(viewsets.ModelViewSet):
             return self.get_paginated_response(serializer.data)
         return Response(serializer.data)
 
-    def _customer_orders(self, customer):
-        queryset = customer.orders.transactional()
+    def _customer_order_scope(self, customer):
+        """The customer's orders this user may see, before any sale-type filter.
+
+        Kept separate from ``_customer_orders`` so the summary can count sales
+        and quotations in one aggregate over the same rows; the visibility rule
+        stays in exactly one place.
+        """
+        queryset = customer.orders.all()
         if user_has_full_visibility(self.request.user):
             return queryset
         return queryset.filter(
             register_session__owner_key=f"user:{self.request.user.pk}",
         )
 
-    def _customer_quotations(self, customer):
-        queryset = customer.orders.quotations()
-        if user_has_full_visibility(self.request.user):
-            return queryset
-        return queryset.filter(
-            register_session__owner_key=f"user:{self.request.user.pk}",
-        )
+    def _customer_orders(self, customer):
+        return self._customer_order_scope(customer).transactional()
 
     def _customer_adjustments(self, customer):
         queryset = OrderAdjustment.objects.filter(order__customer=customer)

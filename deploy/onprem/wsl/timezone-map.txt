@@ -1,0 +1,83 @@
+# Windows time-zone id | IANA zone
+#
+# A freshly imported WSL distro is UTC. That is not cosmetic here: Z-report
+# boundaries, day rollups, shift attribution and holiday tagging are all
+# business-local, so an unset zone files the evening's sales on the wrong day.
+# bootstrap-wsl.ps1 reads the host's zone and looks it up here.
+#
+# Add a line if a shop's zone is missing — the installer warns and leaves the
+# distro on UTC rather than guessing.
+
+Libya Standard Time|Africa/Tripoli
+Egypt Standard Time|Africa/Cairo
+Morocco Standard Time|Africa/Casablanca
+South Africa Standard Time|Africa/Johannesburg
+W. Central Africa Standard Time|Africa/Lagos
+E. Africa Standard Time|Africa/Nairobi
+Sudan Standard Time|Africa/Khartoum
+Namibia Standard Time|Africa/Windhoek
+
+Arabic Standard Time|Asia/Baghdad
+Arab Standard Time|Asia/Riyadh
+Arabian Standard Time|Asia/Dubai
+Israel Standard Time|Asia/Jerusalem
+Jordan Standard Time|Asia/Amman
+Middle East Standard Time|Asia/Beirut
+Syria Standard Time|Asia/Damascus
+West Asia Standard Time|Asia/Tashkent
+Iran Standard Time|Asia/Tehran
+Afghanistan Standard Time|Asia/Kabul
+Pakistan Standard Time|Asia/Karachi
+India Standard Time|Asia/Kolkata
+Sri Lanka Standard Time|Asia/Colombo
+Nepal Standard Time|Asia/Kathmandu
+Bangladesh Standard Time|Asia/Dhaka
+Myanmar Standard Time|Asia/Yangon
+SE Asia Standard Time|Asia/Bangkok
+China Standard Time|Asia/Shanghai
+North Asia Standard Time|Asia/Krasnoyarsk
+Singapore Standard Time|Asia/Singapore
+Taipei Standard Time|Asia/Taipei
+Tokyo Standard Time|Asia/Tokyo
+Korea Standard Time|Asia/Seoul
+Turkey Standard Time|Europe/Istanbul
+
+GMT Standard Time|Europe/London
+Greenwich Standard Time|Atlantic/Reykjavik
+W. Europe Standard Time|Europe/Berlin
+Central Europe Standard Time|Europe/Budapest
+Central European Standard Time|Europe/Warsaw
+Romance Standard Time|Europe/Paris
+E. Europe Standard Time|Europe/Chisinau
+GTB Standard Time|Europe/Bucharest
+FLE Standard Time|Europe/Kiev
+Russian Standard Time|Europe/Moscow
+Belarus Standard Time|Europe/Minsk
+Kaliningrad Standard Time|Europe/Kaliningrad
+
+Eastern Standard Time|America/New_York
+US Eastern Standard Time|America/Indiana/Indianapolis
+Central Standard Time|America/Chicago
+Central Standard Time (Mexico)|America/Mexico_City
+Mountain Standard Time|America/Denver
+US Mountain Standard Time|America/Phoenix
+Pacific Standard Time|America/Los_Angeles
+Alaskan Standard Time|America/Anchorage
+Hawaiian Standard Time|Pacific/Honolulu
+Atlantic Standard Time|America/Halifax
+SA Pacific Standard Time|America/Bogota
+SA Western Standard Time|America/La_Paz
+SA Eastern Standard Time|America/Cayenne
+E. South America Standard Time|America/Sao_Paulo
+Argentina Standard Time|America/Argentina/Buenos_Aires
+Pacific SA Standard Time|America/Santiago
+
+AUS Eastern Standard Time|Australia/Sydney
+AUS Central Standard Time|Australia/Darwin
+E. Australia Standard Time|Australia/Brisbane
+W. Australia Standard Time|Australia/Perth
+Cen. Australia Standard Time|Australia/Adelaide
+New Zealand Standard Time|Pacific/Auckland
+
+UTC|Etc/UTC
+Coordinated Universal Time|Etc/UTC

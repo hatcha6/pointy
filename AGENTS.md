@@ -100,6 +100,14 @@ It supports two complementary modes via a `?screen=` query param:
 - Keep Django apps grouped by domain: catalog, inventory, sales, payments, and core.
 - Use DRF serializers/viewsets for API endpoints unless a workflow clearly needs a custom API view.
 - Keep Redis usage explicit for cache, Celery broker/result backend, or short-lived operational state.
+- Run backend tests on **Postgres**, not sqlite. `backend/.env` is untracked, so a
+  `git worktree` has none and `.env.example` points at sqlite — both `manage.py test`
+  and `make backend-test` will therefore run a worktree's suite on sqlite, where the
+  query-scaling guards, the PgBouncer settings tests, dead-connection recovery and
+  trigram search all **skip** and the run still reports success. Every run now prints
+  `[pointy] test database: <engine> '<name>'`; check it. When the result has to prove
+  something, use `make backend-test-pg`, or set `POINTY_REQUIRE_POSTGRES=1` to turn a
+  sqlite fallback into an error instead of a silent pass.
 
 ## Developer Experience
 

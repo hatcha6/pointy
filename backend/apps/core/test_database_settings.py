@@ -32,6 +32,13 @@ class PgBouncerDatabaseSettingsTests(SimpleTestCase):
             True,
         )
 
+    def test_connection_health_checks_enabled(self):
+        # On-prem holds connections for 120s, so a Postgres/PgBouncer restart
+        # leaves every worker with a socket that only fails on its next query.
+        # Health checks make Django reconnect instead of 500ing the request that
+        # happens to be next (apps/core/test_dead_connection_recovery.py).
+        self.assertIs(settings.DATABASES["default"].get("CONN_HEALTH_CHECKS"), True)
+
     def test_prepared_statements_disabled_on_postgres(self):
         if not self._is_postgres():
             self.skipTest("only applies to the postgresql engine")

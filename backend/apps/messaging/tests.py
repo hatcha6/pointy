@@ -9,7 +9,7 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils import timezone
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 
@@ -19,7 +19,8 @@ from .secrets import decrypt_secrets, encrypt_secrets
 from .segments import count_segments
 from .services import NoGatewayConfigured, deliver_message, enqueue_message
 from .tasks import dispatch_outbound_task
-from .transports import fake
+from .transports import fake, registered_providers, transport_for
+from .transports.sms_gate import SmsGateDriver
 
 _LOCMEM = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
@@ -275,6 +276,115 @@ class GatewayActivationTests(TestCase):
 
 
 @override_settings(**_LOCMEM, CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
+class SmsGateSignatureTests(TestCase):
+    """The HMAC path is the other unauthenticated credential check."""
+
+    def _driver(self):
+        gateway = make_gateway(provider=MessagingGateway.Provider.SMS_GATE)
+        gateway.set_secret("webhook_signing_key", "signing-key")
+        gateway.save()
+        return SmsGateDriver(gateway)
+
+    def _request(self, signature):
+        request = APIRequestFactory().post(
+            "/api/messaging/inbound/1/", {"event": "sms:received"}, format="json"
+        )
+        request.headers = {"X-Signature": signature, "X-Timestamp": "1"}
+        return request
+
+    def test_non_ascii_signature_rejected_instead_of_erroring(self):
+        """A high byte in ``X-Signature`` is a bad signature, not a ``TypeError``.
+
+        Django decodes headers as latin-1, so the caller controls whether the
+        header is a non-ASCII ``str`` — and ``compare_digest`` raises on those.
+        """
+        self.assertFalse(self._driver().verify_inbound(self._request("de\u00e9dbeef")))
+
+    def test_wrong_ascii_signature_still_rejected(self):
+        self.assertFalse(self._driver().verify_inbound(self._request("deadbeef")))
+
+
+class SecretlessGatewayInboundAuthTests(TestCase):
+    """A gateway holding no webhook secret must authenticate nobody.
+
+    ``IsGatewayPeer`` gates on the shared ``webhook_token`` when one is stored
+    and otherwise delegates to ``transport.verify_inbound``. Delegation makes
+    the driver the authenticator, and the fake driver — registered in
+    production code, selectable as a ``Provider`` choice — answered True for
+    every caller. A gateway created but not yet activated (so no token has been
+    provisioned) therefore accepted an unauthenticated POST from any LAN peer,
+    who could forge an inbound SMS carrying any sender number: a "STOP" that
+    revokes a real customer's marketing consent, or a message threaded into the
+    conversation staff read and reply to.
+    """
+
+    def setUp(self):
+        fake.reset()
+        self.client = APIClient()
+
+    def _post(self, gateway, **payload):
+        return self.client.post(
+            f"/api/messaging/inbound/{gateway.id}/",
+            {"from": "+218912345678", "body": "STOP", "id": "forged", **payload},
+            format="json",
+        )
+
+    def test_secretless_fake_gateway_rejects_unauthenticated_inbound(self):
+        gateway = make_gateway(name="Demo phone")
+        self.assertFalse(gateway.has_secret("webhook_token"))
+
+        response = self._post(gateway)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(
+            InboundMessage.objects.filter(provider_message_id="forged").exists(),
+            "a forged inbound must not be stored, let alone routed to consent handling",
+        )
+
+    def test_secretless_sms_gate_gateway_rejects_unauthenticated_inbound(self):
+        gateway = make_gateway(
+            name="Unconfigured phone",
+            provider=MessagingGateway.Provider.SMS_GATE,
+            is_default=False,
+        )
+
+        self.assertEqual(self._post(gateway).status_code, 403)
+
+    def test_no_registered_transport_vouches_for_a_secretless_gateway(self):
+        """The invariant, over the whole registry rather than one driver.
+
+        Authentication is delegated per transport, so each new driver gets its
+        own chance to answer True unconditionally. Assert the discipline once
+        here: with no secret configured, nobody is a gateway peer.
+        """
+        request = APIRequestFactory().post("/api/messaging/inbound/1/", {}, format="json")
+        for provider in registered_providers():
+            with self.subTest(provider=provider):
+                gateway = make_gateway(
+                    name=f"Secretless {provider}",
+                    provider=provider,
+                    is_default=False,
+                )
+                self.assertFalse(
+                    transport_for(gateway).verify_inbound(request),
+                    f"{provider} authenticates an unsigned webhook with no secret stored",
+                )
+
+    def test_activated_fake_gateway_still_accepts_its_own_token(self):
+        """Closing the door must not lock out a legitimately paired gateway."""
+        gateway = make_gateway(name="Paired phone")
+        gateway.set_secret("webhook_token", "provisioned-token")
+        gateway.save()
+
+        response = self.client.post(
+            f"/api/messaging/inbound/{gateway.id}/?token=provisioned-token",
+            {"from": "+218912345678", "body": "hi", "id": "paired"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+
+
 class TokenInboundAuthTests(TestCase):
     def setUp(self):
         fake.reset()
@@ -303,6 +413,31 @@ class TokenInboundAuthTests(TestCase):
     def test_wrong_token_rejected(self):
         resp = self.client.post(self._url("nope"), {"id": "t3"}, format="json")
         self.assertEqual(resp.status_code, 403)
+
+    def test_non_ascii_token_rejected_instead_of_erroring(self):
+        """A high byte in ``?token=`` is a rejected credential, not a 500.
+
+        The webhook is unauthenticated by design (LAN + shared token), and the
+        token arrived as a UTF-8-decoded query param compared with
+        ``compare_digest`` on ``str`` — which raises ``TypeError`` on non-ASCII.
+        The raise happened inside ``has_permission``, so any LAN caller could
+        turn a 403 into a 500 (and an error-channel flood) at will.
+        """
+        resp = self.client.post(
+            self._url("secret-webhook-token-xy\u00e9"), {"id": "t4"}, format="json"
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_non_ascii_stored_token_still_authenticates(self):
+        """The rejection above must not become a lockout for a real secret."""
+        self.gateway.set_secret("webhook_token", "\u0631\u0645\u0632-\u0633\u0631\u064a")
+        self.gateway.save()
+        resp = self.client.post(
+            self._url("\u0631\u0645\u0632-\u0633\u0631\u064a"),
+            {"from": "+218912345678", "body": "hi", "id": "t5"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.content)
 
     def test_accepted_even_when_the_crm_task_is_not_registered(self):
         """A registry miss must cost the routing pass, not the whole webhook.

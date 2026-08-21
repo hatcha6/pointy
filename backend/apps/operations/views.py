@@ -365,7 +365,23 @@ class BillOfMaterialsViewSet(viewsets.ModelViewSet):
     queryset = BillOfMaterials.objects.select_related(
         "variant",
         "variant__product",
-    ).prefetch_related("lines__component_variant__product")
+    ).prefetch_related(
+        "lines__component_variant__product",
+        # ``variant_name``/``component_name`` read ``ProductVariant.display_name``,
+        # which falls back to ``option_values_label`` whenever the variant has no
+        # explicit name (the common case for default variants). Un-prefetched
+        # that is one query for the output variant plus one per component line,
+        # so a page of recipes cost (1 + lines) queries a row. Same shape as the
+        # job board's ``materials__variant__option_values`` prefetch above.
+        Prefetch(
+            "variant__option_values",
+            queryset=VariantOptionValue.objects.select_related("option"),
+        ),
+        Prefetch(
+            "lines__component_variant__option_values",
+            queryset=VariantOptionValue.objects.select_related("option"),
+        ),
+    )
     filterset_fields = ("variant", "is_active")
     search_fields = ("name", "variant__product__name")
 

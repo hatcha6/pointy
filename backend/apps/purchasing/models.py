@@ -406,10 +406,16 @@ class PurchaseOrder(TimeStampedModel):
             self.landed_cost_allocation_method
             == self.LandedCostAllocationMethod.RETAIL_VALUE
         ):
+            # ``unit_price`` is per BASE unit (per egg, never per tray), while
+            # ``quantity`` is in the line's purchase unit. Multiplying them
+            # directly values a line of 5 cartons of 24 at five eggs' retail,
+            # so on a mixed-unit order the freight lands almost entirely on the
+            # loose-piece lines. Convert to base units first — the same rule
+            # ``effective_base_unit_cost`` documents for the other direction.
             return {
-                line.pk: (line.variant.unit_price * line.quantity).quantize(
-                    self.MONEY_PLACES
-                )
+                line.pk: (
+                    line.variant.unit_price * line.to_base_quantity(line.quantity)
+                ).quantize(self.MONEY_PLACES)
                 for line in lines
             }
         if (

@@ -21,7 +21,7 @@ def _png_logo_bytes(width=64, height=64):
     return buffer.getvalue()
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
@@ -1150,6 +1150,44 @@ class RelayBackendApiTests(TestCase):
         self.assertEqual(response.data["reason"], "relay_requires_lan_pairing")
         self.assertIsNone(fake_relay.issued_ticket_request)
         self.assertEqual(RelayInstallation.objects.count(), 0)
+
+    @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
+    def test_connector_credentials_reject_non_ascii_instead_of_erroring(self):
+        """A high byte in a credential header is a rejection, not a 500.
+
+        Django decodes request headers as latin-1, so an unauthenticated caller
+        can put a non-ASCII character in either connector header. Both secrets
+        were compared with ``compare_digest`` on ``str``, which raises
+        ``TypeError`` on non-ASCII — the raise escaped the view as an
+        unauthenticated, remotely-triggerable 500 (and a 5xx the caller can
+        emit at will) where a 403 belonged.
+        """
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            connector_token="ptc1.installation-1.connector-secret",
+        )
+        fake_relay = FakeRelayControlClient()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch(
+                "apps.core.relay.RelayControlClient",
+                return_value=fake_relay,
+            ):
+                bad_setup_token = APIClient().post(
+                    reverse("relay-connector-config"),
+                    {},
+                    format="json",
+                    HTTP_X_POINTY_CONNECTOR_SETUP_TOKEN="setup-secr\u00e9t",
+                )
+                bad_connector_token = APIClient().post(
+                    reverse("relay-connector-heartbeat"),
+                    {},
+                    format="json",
+                    HTTP_X_POINTY_CONNECTOR_TOKEN="ptc1.installation-1.connector-secr\u00e9t",
+                )
+
+        self.assertEqual(bad_setup_token.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(bad_connector_token.status_code, status.HTTP_403_FORBIDDEN)
 
     @override_settings(POINTY_RELAY_CONNECTOR_SETUP_TOKEN="setup-secret")
     def test_connector_config_requires_setup_token(self):
@@ -2913,6 +2951,103 @@ class ExtraPermissionGrantTests(TestCase):
         # No N+1: doubling the user set must not change the query count.
         self.assertEqual(first, second)
         self.assertLessEqual(second, 4)
+
+
+class RoleAssignmentEscalationTests(TestCase):
+    """``role`` is a permission grant like any other: assigning one hands the
+    target every code that role carries, so it is bound by the same rule as
+    ``extra_permissions`` — an actor may only assign what they already hold."""
+
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(username="manager", password="pass")
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.cashier = User.objects.create_user(username="cashier", password="pass")
+        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        # A user-management delegate: a cashier a manager handed
+        # auth.view/add/change_user so they can maintain staff accounts.
+        self.delegate = User.objects.create_user(username="delegate", password="pass")
+        self.delegate.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.delegate.user_permissions.add(
+            *Permission.objects.filter(
+                content_type__app_label="auth",
+                codename__in=("view_user", "add_user", "change_user"),
+            )
+        )
+
+    def _client(self, actor):
+        client = APIClient()
+        client.force_authenticate(user=actor)
+        return client
+
+    def _patch(self, actor, target, body):
+        return self._client(actor).patch(
+            reverse("pos-user-detail", args=[target.pk]), body, format="json"
+        )
+
+    def test_delegate_cannot_promote_themselves_to_manager(self):
+        response = self._patch(self.delegate, self.delegate, {"role": MANAGER_GROUP})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.delegate.refresh_from_db()
+        self.assertNotIn(
+            MANAGER_GROUP, set(self.delegate.groups.values_list("name", flat=True))
+        )
+        # The permissions the manager role carries stay out of reach.
+        self.assertNotIn("sales.void_order", self.delegate.get_all_permissions())
+
+    def test_delegate_cannot_promote_another_user_to_a_richer_role(self):
+        response = self._patch(self.delegate, self.cashier, {"role": ACCOUNTANT_GROUP})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.cashier.refresh_from_db()
+        self.assertNotIn(
+            "employees.approve_payrollrun", self.cashier.get_all_permissions()
+        )
+
+    def test_delegate_cannot_create_a_manager_account(self):
+        response = self._client(self.delegate).post(
+            reverse("pos-user-list"),
+            {
+                "username": "back-door",
+                "password": "new-secret-pass",
+                "role": MANAGER_GROUP,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(
+            get_user_model().objects.filter(username="back-door").exists()
+        )
+
+    def test_delegate_may_still_assign_a_role_within_their_own_permissions(self):
+        response = self._patch(self.delegate, self.cashier, {"role": CASHIER_GROUP})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["assigned_role"], CASHIER_GROUP)
+
+    def test_delegate_cannot_reset_a_managers_password(self):
+        # Resetting the credentials of a richer account is escalation by
+        # another route: the delegate would simply log in as the manager.
+        response = self._patch(
+            self.delegate, self.manager, {"password": "hijacked-pass-123"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.manager.refresh_from_db()
+        self.assertFalse(self.manager.check_password("hijacked-pass-123"))
+
+    def test_delegate_may_still_edit_a_peer_level_account(self):
+        response = self._patch(self.delegate, self.cashier, {"first_name": "سالم"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.cashier.refresh_from_db()
+        self.assertEqual(self.cashier.first_name, "سالم")
+
+    def test_delegate_may_still_edit_their_own_account(self):
+        response = self._patch(self.delegate, self.delegate, {"first_name": "هدى"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_manager_may_still_assign_any_role(self):
+        response = self._patch(self.manager, self.cashier, {"role": MANAGER_GROUP})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["assigned_role"], MANAGER_GROUP)
 
 
 class SupervisorVisibilityTests(TestCase):

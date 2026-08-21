@@ -6,12 +6,10 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction
 from django.db.models import (
     BooleanField,
-    Count,
     DecimalField,
     Exists,
     F,
     OuterRef,
-    Prefetch,
     ProtectedError,
     Q,
     Sum,
@@ -44,6 +42,7 @@ from apps.attachments.serializers import (
     ProductImageSearchResultSerializer,
 )
 from apps.core import caching
+from apps.core.aggregates import related_count
 from apps.core.permissions import HasPointyPermission
 from .cache import attach_catalog_version, catalog_etag, catalog_version
 from .identity import (
@@ -77,27 +76,14 @@ from .serializers import (
     VariantOptionValueSerializer,
 )
 from .search_filters import CatalogRelevanceFilter, VariantRelevanceFilter
-from .services import category_ids_with_descendants
-
-
-def _image_attachment_prefetch(lookup):
-    """Prefetch product/variant image attachments with their serialized FKs.
-
-    AttachmentSummarySerializer reads storage_volume.name, created_by.username
-    and owner_content_type (via owner_type). A bare string prefetch leaves those
-    FKs unfetched, so every image on a catalog page fired three extra queries —
-    the dominant catalog-list N+1 (~three quarters of product-list's queries).
-    select_related pulls them in with the prefetch; the default ordering is
-    unchanged, so owner_attachments still picks the primary image the same way.
-    """
-    return Prefetch(
-        lookup,
-        queryset=Attachment.objects.select_related(
-            "owner_content_type",
-            "storage_volume",
-            "created_by",
-        ),
-    )
+from .services import (
+    category_detail_prefetch,
+    category_ids_with_descendants,
+    image_attachment_prefetch,
+    unit_detail_prefetch,
+    unit_usage_queryset,
+    variant_detail_queryset,
+)
 
 
 def _within_upload_limit(uploaded_file) -> bool:
@@ -204,15 +190,27 @@ class ProductCategoryViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     ordering_fields = ("display_order", "name", "created_at", "updated_at")
 
     def get_queryset(self):
-        # distinct=True on both aggregates: counting two separate reverse
-        # relations (children and products) in one query would otherwise
-        # multiply the rows via the join fan-out.
+        # select_related("parent"): the serializer renders parent_name from
+        # parent.name, which is one query per subcategory on the page without it.
+        #
+        # The two counts used to be Count("children", distinct=True) and
+        # Count("products", distinct=True) in the same annotate(). Both are
+        # multi-valued relations, so a single query LEFT JOINs them together and
+        # the database materialises every (child x product) pair per category.
+        # distinct=True corrects the numbers but not the work. A subquery per
+        # relation keeps each count an index scan on its own key, and counting
+        # the categories M2M through-table directly is what the joined form did
+        # anyway (it never reached catalog_product), so archived products keep
+        # counting exactly as before.
         return (
             super()
             .get_queryset()
+            .select_related("parent")
             .annotate(
-                children_count=Count("children", distinct=True),
-                product_count=Count("products", distinct=True),
+                children_count=related_count(ProductCategory, "parent"),
+                product_count=related_count(
+                    Product.categories.through, "productcategory"
+                ),
             )
             .order_by("display_order", "name", "id")
         )
@@ -255,12 +253,12 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         "bought_together": ("catalog.view_product",),
     }
     queryset = Product.objects.prefetch_related(
-        _image_attachment_prefetch("attachments"),
-        "categories",
-        "units__unit",
+        image_attachment_prefetch("attachments"),
+        category_detail_prefetch("categories"),
+        unit_detail_prefetch("units__unit"),
         "units__barcodes",
         "variants",
-        _image_attachment_prefetch("variants__attachments"),
+        image_attachment_prefetch("variants__attachments"),
         "variants__option_values",
         "variants__option_values__option",
         # Each variant serializes its on-hand quantity (variant.stock is a 1:1);
@@ -310,7 +308,28 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             context["catalog_summary"] = True
         return context
 
+    # Detail actions that only need the product's *identity*. Each of them
+    # either answers about a related collection (``attachments``), re-queries
+    # from scratch (``variants`` builds ``variant_detail_queryset()``), or uses
+    # nothing but the row itself (``bought_together``, ``image_import``) --
+    # none of them serializes the product with ``ProductCatalogSerializer``.
+    # ``get_object()`` runs ``get_queryset()`` regardless, so those tabs each
+    # paid the whole catalog prefetch tree (variants, their option values,
+    # stock, categories, units, barcodes, modifier groups, image attachments)
+    # only to throw every prefetched row away. ``archive``/``restore``/
+    # ``set_variant_prices`` are deliberately NOT here: they return the product
+    # through ``self.get_serializer(...)`` and do need the tree.
+    identity_only_actions = frozenset(
+        {"attachments", "bought_together", "image_import", "variants"}
+    )
+
     def get_queryset(self):
+        queryset = self._catalog_queryset()
+        if getattr(self, "action", None) in self.identity_only_actions:
+            return queryset.prefetch_related(None)
+        return queryset
+
+    def _catalog_queryset(self):
         queryset = self._with_variant_rollups(super().get_queryset())
         queryset = self._filter_by_category(queryset)
         queryset = self._filter_by_barcode(queryset)
@@ -483,14 +502,16 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         if request.method.lower() == "post":
             return self._create_variant_for_product(request, product)
 
+        # The prefetch shape belongs to ProductVariantSerializer, not to this
+        # action: the hand-rolled list above named four real relations and still
+        # left the 1:1 stock row, the parent product's categories/units/
+        # variant-options/modifier groups and each attachment's own FKs to fire
+        # once per variant (15 queries/variant, measured). Reuse the same
+        # factory ProductVariantViewSet does so a new serializer field cannot be
+        # fast on one endpoint and an N+1 on the other.
         queryset = (
-            product.variants.select_related("product")
-            .prefetch_related(
-                "attachments",
-                "product__attachments",
-                "option_values",
-                "option_values__option",
-            )
+            variant_detail_queryset()
+            .filter(product=product)
             .order_by("-is_default", "name", "id")
         )
         page = self.paginate_queryset(queryset)
@@ -884,28 +905,9 @@ class ProductVariantViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         # Read-only "is this code taken" probe behind the same view permission.
         "identity_check": ("catalog.view_productvariant",),
     }
-    queryset = ProductVariant.objects.select_related(
-        "product",
-        # quantity_on_hand reads the 1:1 stock row; without this it queried
-        # inventory once per variant.
-        "stock",
-    ).prefetch_related(
-        _image_attachment_prefetch("attachments"),
-        _image_attachment_prefetch("product__attachments"),
-        "product__units__unit",
-        "product__units__barcodes",
-        "option_values",
-        "option_values__option",
-        # product_detail (ProductCatalogSummarySerializer) serializes the parent
-        # product's categories, variant options and modifier groups; prefetch
-        # those chains so each doesn't fire once per variant.
-        Prefetch(
-            "product__categories",
-            queryset=ProductCategory.objects.select_related("parent"),
-        ),
-        "product__variant_options__values",
-        "product__modifier_group_links__group__options",
-    )
+    # The prefetch shape lives with the serializer (catalog.services) because the
+    # stock-count reconciliation screen embeds the same serializer.
+    queryset = variant_detail_queryset()
     # Same relevance search as the POS catalog: VariantRelevanceFilter replaces
     # the stock SearchFilter/OrderingFilter so purchasing and the stock-count
     # item picker get ranked, trigram-accelerated results instead of a plain
@@ -1036,9 +1038,7 @@ class UnitOfMeasureViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         "partial_update": ("catalog.change_unitofmeasure",),
         "destroy": ("catalog.delete_unitofmeasure",),
     }
-    queryset = UnitOfMeasure.objects.annotate(
-        product_count=Count("product_units", distinct=True),
-    ).order_by("display_order", "name", "id")
+    queryset = unit_usage_queryset().order_by("display_order", "name", "id")
     filterset_fields = ("is_active", "dimension", "is_system")
     search_fields = ("code", "name", "abbreviation")
     ordering_fields = ("display_order", "name", "dimension", "created_at")

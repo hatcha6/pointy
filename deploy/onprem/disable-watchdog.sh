@@ -2,7 +2,6 @@
 #
 # Disables the Pointy uptime watchdog on Linux: stops the systemd timer and
 # disables it so it never runs at boot or on its 5-minute schedule again.
-# Mirrors disable-watchdog.ps1.
 #
 # NOTE — the interval outages were NOT caused by the watchdog (see
 # fix-backend-outages.sh: the ASGI workers were self-terminating on a request

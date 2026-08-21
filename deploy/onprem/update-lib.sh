@@ -219,11 +219,21 @@ pu_install_file() {
   mv -f "${dest}.pointy-new" "$dest"
 }
 
-POINTY_ADOPT_FILES="docker-compose.yml install.sh install.ps1 watchdog.sh watchdog.ps1
-register-autostart.sh register-autostart.ps1 update.sh update.ps1
-update-agent.sh update-agent.ps1 update-lib.sh update-lib.ps1
-discovery-responder.py discovery-responder.ps1 migrate-fahd.sh migrate-fahd.ps1
-disable-watchdog.sh disable-watchdog.ps1 fix-backend-outages.sh fix-backend-outages.ps1
+# Files a new bundle replaces in this deploy directory. Everything stateful —
+# .env, the volumes, the backups, the front door's upstream pointer — is
+# deliberately absent.
+#
+# wsl/bootstrap-wsl.ps1 is here for a reason that is easy to miss: on a Windows
+# host it owns the LAN bridge (the netsh portproxy that lets the tills reach the
+# NAT'd WSL VM at all). If updates did not carry it, a shop would keep whatever
+# bootstrap it was installed with forever, and no fix to the bridge could ever
+# reach it. The distro rootfs is NOT adopted — it is a one-time install input,
+# it is enormous, and the distro it produced already exists.
+POINTY_ADOPT_FILES="docker-compose.yml install.sh watchdog.sh
+register-autostart.sh update.sh update-agent.sh update-lib.sh
+discovery-responder.py migrate-fahd.sh
+disable-watchdog.sh fix-backend-outages.sh
+wsl/bootstrap-wsl.ps1 wsl/timezone-map.txt
 .env.example VERSION.txt INSTALL.md README.md"
 
 # Which strategy the release itself asks for. A release whose migrations cannot
@@ -246,7 +256,11 @@ pu_bundle_strategy() {
 pu_adopt_bundle() {
   local dir="$1" assigned="$2" file
   for file in $POINTY_ADOPT_FILES; do
-    [ -f "${dir}/${file}" ] && pu_install_file "${dir}/${file}" "./${file}"
+    [ -f "${dir}/${file}" ] || continue
+    # Some entries live in a subdirectory (wsl/), which a deployment installed
+    # from an older bundle does not have yet.
+    case "$file" in */*) mkdir -p "./${file%/*}" ;; esac
+    pu_install_file "${dir}/${file}" "./${file}"
   done
   # The front door's own config travels inside its image; only the "which
   # backend is live" pointer lives here, and it is state — it must survive the

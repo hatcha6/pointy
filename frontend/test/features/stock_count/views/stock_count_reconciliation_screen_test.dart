@@ -45,12 +45,22 @@ StockCountLine _line(int id, double expected, double counted) {
 }
 
 class _StubStockCountRepository extends StockCountRepository {
-  _StubStockCountRepository(this._lines) : super(PosApiService());
+  _StubStockCountRepository(this._lines, {this.failuresBeforeSuccess = 0})
+    : super(PosApiService());
 
   final List<StockCountLine> _lines;
 
+  /// How many `loadReconciliation` calls fail before the stub starts serving
+  /// [_lines]; lets a test drive the retry path.
+  final int failuresBeforeSuccess;
+  int loadAttempts = 0;
+
   @override
   Future<Result<List<StockCountLine>>> loadReconciliation(int countId) async {
+    loadAttempts++;
+    if (loadAttempts <= failuresBeforeSuccess) {
+      return Error(Exception('offline'));
+    }
     return Ok(_lines);
   }
 }
@@ -123,4 +133,47 @@ void main() {
     expect(find.text('كل شيء مطابق'), findsOneWidget);
     expect(find.text('إنهاء الجرد'), findsOneWidget);
   });
+
+  testWidgets(
+    'a failed load offers a retry instead of a confident Finish action',
+    (tester) async {
+      final repo = _StubStockCountRepository([
+        _line(1, 24, 19),
+      ], failuresBeforeSuccess: 1);
+
+      await tester.pumpWidget(
+        _wrap(
+          StockCountReconciliationScreen(
+            session: _session,
+            stockCountRepository: repo,
+            capabilities: _managerCaps,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The error names what failed here — the variances — not the session list.
+      expect(find.text('تعذّر تحميل فروقات الجرد.'), findsOneWidget);
+      expect(find.text('إعادة المحاولة'), findsOneWidget);
+
+      // A failed load empties the lines just like a matched count does, so the
+      // footer must not offer to finish a count nobody has seen.
+      expect(find.text('إنهاء الجرد'), findsNothing);
+      expect(find.text('تطبيق التعديلات'), findsNothing);
+      expect(
+        find.text(
+          'لا يمكن إنهاء الجرد قبل تحميل الفروقات. أعد المحاولة أولاً.',
+        ),
+        findsOneWidget,
+      );
+
+      // Retrying recovers in place — no backing out of the session.
+      await tester.tap(find.text('إعادة المحاولة'));
+      await tester.pumpAndSettle();
+
+      expect(repo.loadAttempts, 2);
+      expect(find.text('تعذّر تحميل فروقات الجرد.'), findsNothing);
+      expect(find.text('تطبيق التعديلات'), findsOneWidget);
+    },
+  );
 }

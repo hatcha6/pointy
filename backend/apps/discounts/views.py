@@ -1,5 +1,3 @@
-from django.db.models import Count, IntegerField, OuterRef, Subquery
-from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -8,42 +6,11 @@ from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.core.aggregates import related_count
 from apps.core.permissions import HasPointyPermission
 from .analytics import discount_rule_beneficiaries, discount_rule_performance
 from .models import AppliedDiscount, DiscountRedemption, DiscountRule
 from .serializers import DiscountRuleSerializer
-
-
-def _usage_count(model):
-    """Count a rule's rows in ``model`` as an independent subquery.
-
-    These two counts used to be ``Count("redemptions", distinct=True)`` and
-    ``Count("applied_discounts", distinct=True)`` on the same ``annotate()``.
-    Both are multi-valued reverse relations, so a single query LEFT JOINs them
-    together and the database materialises the *cross product* — every
-    redemption paired with every applied discount, per rule. ``distinct=True``
-    corrects the number but not the work: rows scanned grow as
-    redemptions x applied_discounts, and the GROUP BY runs over the whole table
-    before pagination can trim it. ``AppliedDiscount`` gains a row for every
-    discounted line ever sold, so that product only ever grows.
-
-    A subquery per relation keeps each count an index scan on ``rule_id``, so
-    the row count stays linear in the number of rules. The explicit
-    ``order_by()`` drops the model's ``Meta.ordering`` from the grouped
-    subquery, and ``Coalesce`` preserves the LEFT JOIN's 0 for a rule that has
-    never been used.
-    """
-    return Coalesce(
-        Subquery(
-            model.objects.filter(rule=OuterRef("pk"))
-            .order_by()
-            .values("rule")
-            .annotate(usage_count=Count("pk"))
-            .values("usage_count")[:1],
-            output_field=IntegerField(),
-        ),
-        0,
-    )
 
 
 class DiscountRuleViewSet(viewsets.ModelViewSet):
@@ -93,8 +60,8 @@ class DiscountRuleViewSet(viewsets.ModelViewSet):
                 "tiers",
             )
             .annotate(
-                redemption_count=_usage_count(DiscountRedemption),
-                applied_count=_usage_count(AppliedDiscount),
+                redemption_count=related_count(DiscountRedemption, "rule"),
+                applied_count=related_count(AppliedDiscount, "rule"),
             )
         )
 

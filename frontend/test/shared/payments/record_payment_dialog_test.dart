@@ -59,6 +59,71 @@ void main() {
     );
   });
 
+  testWidgets(
+    'the rejected amount error names the ceiling, not just "too big"',
+    (tester) async {
+      await _pumpHost(tester, onResult: (_) {});
+      await tester.tap(find.byKey(const ValueKey('open')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('record_payment_amount_field')),
+        '50.00',
+      );
+      await tester.tap(find.byType(FilledButton));
+      await tester.pumpAndSettle();
+
+      // The cashier is told the exact maximum (the 20.00 balance passed in), so
+      // the correction is one edit away instead of a guess.
+      expect(find.textContaining('20.00'), findsOneWidget);
+      expect(find.textContaining('لا يتجاوز'), findsOneWidget);
+    },
+  );
+
+  testWidgets('a supplier pay-out over the balance is told the balance', (
+    tester,
+  ) async {
+    await _pumpSupplierHost(tester, onResult: (_) {});
+    await tester.tap(find.byKey(const ValueKey('open')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('record_payment_amount_field')),
+      '250',
+    );
+    await tester.tap(find.byType(FilledButton));
+    await tester.pumpAndSettle();
+
+    // The supplier call site passes no balance line, so the error is the only
+    // place the 100.00 outstanding is ever named.
+    expect(find.textContaining('100.00'), findsOneWidget);
+  });
+
+  testWidgets('the amount error clears as soon as the amount is edited', (
+    tester,
+  ) async {
+    await _pumpHost(tester, onResult: (_) {});
+    await tester.tap(find.byKey(const ValueKey('open')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('record_payment_amount_field')),
+      '50.00',
+    );
+    await tester.tap(find.byType(FilledButton));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('لا يتجاوز'), findsOneWidget);
+
+    // Correcting the amount takes the error down with it — a stale red line
+    // under a now-valid amount reads as "still wrong".
+    await tester.enterText(
+      find.byKey(const ValueKey('record_payment_amount_field')),
+      '5.00',
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('لا يتجاوز'), findsNothing);
+  });
+
   testWidgets('offers every method passed in (cash, card, transfer)', (
     tester,
   ) async {

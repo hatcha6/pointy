@@ -44,22 +44,25 @@ def dispatch_outbound_task():
             continue
         if not within_daily_cap(gateway, now=now):
             continue
-        due = list(
+        due_qs = (
             OutboundMessage.objects.filter(
                 gateway=gateway,
                 status__in=[OutboundMessage.Status.QUEUED, OutboundMessage.Status.SCHEDULED],
             )
             .filter(Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=now))
             .filter(Q(not_before__isnull=True) | Q(not_before__lte=now))
-            .order_by("created_at")[:_DISPATCH_BATCH]
         )
+        if in_quiet_hours(gateway, now):
+            # Hold marketing out of the *batch*, not just out of the send: a
+            # campaign larger than _DISPATCH_BATCH would otherwise fill every
+            # tick's batch for the whole window and starve the transactional
+            # messages queued behind it — the very messages quiet hours exempts.
+            due_qs = due_qs.exclude(consent_class=OutboundMessage.ConsentClass.MARKETING)
+        due = list(due_qs.order_by("created_at")[:_DISPATCH_BATCH])
         for message in due:
             if message.expires_at and message.expires_at <= now:
                 _expire(message)
                 continue
-            marketing = message.consent_class == OutboundMessage.ConsentClass.MARKETING
-            if marketing and in_quiet_hours(gateway, now):
-                continue  # hold until the window opens
             if not within_daily_cap(gateway, now=now):
                 break
             if not take_minute_slot(gateway, now=now):

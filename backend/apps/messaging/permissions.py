@@ -1,8 +1,7 @@
-import hmac
-
 from rest_framework.permissions import BasePermission
 
-from apps.core.discovery import request_is_private_network
+from apps.core.credentials import constant_time_secret_equal
+from apps.core.discovery import request_is_lan_local
 
 from .models import MessagingGateway
 from .transports import UnknownProvider, transport_for
@@ -22,7 +21,10 @@ class IsGatewayPeer(BasePermission):
     """
 
     def has_permission(self, request, view):
-        if not request_is_private_network(request):
+        # LAN-local, not merely a private peer address: the relay connector
+        # dials the backend from the LAN, so a relayed request would otherwise
+        # clear this gate. The paired phone is always on the shop's network.
+        if not request_is_lan_local(request):
             return False
         gateway = MessagingGateway.objects.filter(
             pk=view.kwargs.get("gateway_id"), is_active=True
@@ -33,7 +35,7 @@ class IsGatewayPeer(BasePermission):
         expected_token = gateway.get_secret("webhook_token")
         if expected_token:
             provided = request.query_params.get("token", "")
-            if not hmac.compare_digest(expected_token, provided or ""):
+            if not constant_time_secret_equal(provided, expected_token):
                 return False
             view.gateway = gateway
             return True

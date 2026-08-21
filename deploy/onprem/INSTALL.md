@@ -14,19 +14,20 @@ only Docker.
 ```
 docker-compose.yml      The on-prem stack (images only; no build step)
 .env.example            Configuration template — copy to .env and edit
-install.sh              Installer for Linux / macOS hosts
-install.ps1             Installer for Windows hosts (Docker Desktop)
-register-autostart.ps1  Registers the watchdog + discovery responder (Windows)
-register-autostart.sh   Registers the watchdog + discovery responder (Linux / systemd)
-watchdog.ps1            Keeps the stack up + heals it (Windows; run by the task)
-watchdog.sh             Keeps the stack up + heals it (Linux; run by the timer)
-discovery-responder.ps1 Answers POS clients' LAN discovery probes (Windows host)
-discovery-responder.py  Answers POS clients' LAN discovery probes (Linux host)
-update.sh / update.ps1  Applies a newer release bundle to this install (manual)
-update-agent.sh / .ps1  Applies relay-assigned updates automatically
-update-lib.sh / .ps1    Shared update engine used by both of the above
+install.sh              Installer (Linux, macOS, and Windows-inside-WSL)
+register-autostart.sh   Registers the watchdog + update agent + discovery (systemd)
+watchdog.sh             Keeps the stack up + heals it (run by the systemd timer)
+discovery-responder.py  Answers POS clients' LAN discovery probes
+update.sh               Applies a newer release bundle to this install (manual)
+update-agent.sh         Applies relay-assigned updates automatically
+update-lib.sh           Shared update engine used by both of the above
 edge/                   The LAN front door's config (baked into its image)
-migrate-fahd.sh / .ps1  One-shot legacy-data import for shops coming from Fahd
+migrate-fahd.sh         One-shot legacy-data import for shops coming from Fahd
+wsl/                    The Windows install path — see "Windows hosts" below
+  bootstrap-wsl.ps1       The ONLY PowerShell we ship (installs WSL, hands off)
+  pointy-wsl-rootfs.tar.gz  The Linux server image, Docker already inside
+  wsl.<version>.x64.msi     WSL itself, so the install needs no internet
+  timezone-map.txt          Windows time zone -> IANA zone
 README.md               Full operations / hardening / backup guide
 VERSION.txt             The Pointy version this bundle was built from
 images/                 Saved Docker images (loaded by the installer)
@@ -44,9 +45,11 @@ The installer sets up Docker for you — if Docker isn't already installed it
 downloads and installs it automatically (run as **root** on Linux / **elevated**
 PowerShell on Windows, with internet access). You only need:
 
-- **Windows host (typical):** Docker Desktop runs the Linux-containers engine.
-  Give the Docker VM at least 4 GB (tiny pilot) or 6 GB+ (recommended 8 GB host).
-  A one-time sign-out/reboot may be needed right after a fresh Docker install.
+- **Windows host (typical):** 64-bit Windows 10 build 19041 (2004) or newer,
+  with hardware virtualization enabled in the BIOS/UEFI. Everything runs inside
+  a WSL2 distro that this bundle ships pre-built, so nothing is downloaded
+  during the install. 8 GB of RAM recommended (the installer gives the VM half
+  the host's RAM, capped at 8 GB); 20 GB free on `C:`.
 - **Linux host:** Docker Engine + the Compose v2 plugin (the installer uses
   Docker's official install script).
 
@@ -58,17 +61,21 @@ PowerShell on Windows, with internet access). You only need:
 2. **Drop in your license key (optional — off for now).** Licensing is currently
    disabled so shops with no internet can run offline, so the installer no longer
    requires a `license.key`. If your provider gave you one, put it **in this bundle
-   folder** next to `install.sh` / `install.ps1` and the installer records it for
+   folder** next to `install.sh` and the installer records it for
    later; if not, the installer proceeds without it.
 
 3. **Run the installer.** It loads the bundled images, generates the local
    secrets, records your license key if present, and starts the stack — no `.env`
    editing:
 
-   - Windows (PowerShell):
+   - Windows (**elevated** PowerShell):
      ```powershell
-     powershell -ExecutionPolicy Bypass -File .\install.ps1
+     powershell -ExecutionPolicy Bypass -File .\wsl\bootstrap-wsl.ps1
      ```
+     This enables the Windows virtualization features, installs WSL, imports the
+     bundled Linux distro, and then runs `install.sh` **inside it**. If Windows
+     asks for a reboot to finish enabling the features, reboot and run the exact
+     same command again — it picks up where it left off.
    - Linux / macOS:
      ```sh
      bash install.sh
@@ -78,16 +85,20 @@ PowerShell on Windows, with internet access). You only need:
    fully offline — no relay round-trip needed. (When licensing is later enabled,
    the backend redeems the license with the relay on first boot, which needs
    internet once, then runs offline.) You do **not** edit `.env` for secrets — the
-   installer fills them. (On Windows you may still point the backup-drive paths in
-   `.env` at real folders, e.g. `D:/`, `E:/PointyBackups`.)
+   installer fills them. (You may still point the backup-drive
+   paths in `.env` at real folders. On Windows use the WSL form — `D:/` is
+   `/mnt/d` — and see the warning in `.env.example`.)
 
    You also do **not** need the server's LAN IP — tills find the backend by UDP
    discovery. A static IP (DHCP reservation) is recommended for stability but not
    required.
 
-4. **Open the firewall** for inbound **TCP 8000** (API), **UDP 47777**
-   (LAN discovery), and **TCP 80** (browser access) so cashier devices can reach
-   the server.
+4. **Open the firewall** for inbound **TCP 8000** (API) and **TCP 80** (browser
+   access) so cashier devices can reach the server. On Windows,
+   `bootstrap-wsl.ps1` adds both rules for you. **UDP 47777** (LAN discovery)
+   is worth opening on Linux hosts; on Windows it cannot help, because
+   broadcasts do not cross the WSL VM's NAT — the tills fall back to an HTTP
+   subnet sweep instead and find the server anyway.
 
 The backend runs migrations on startup, then serves the API on port 8000 (and
 redeems the license first when licensing is enabled). Celery and the relay
@@ -177,44 +188,80 @@ that happen:
 1. **`restart: always`** on every service — Docker restarts a crashed container
    in place, instantly, and brings the whole stack back when the Docker engine
    starts.
-2. **A watchdog** (`watchdog.ps1` / `watchdog.sh`) that runs at boot and every
-   5 minutes. It waits for Docker, runs `docker compose up -d` (which
-   **recreates any container that was destroyed/removed or left stopped**), and
-   **restarts any container that is running but stuck "unhealthy"** — something
-   Docker's restart policy does not do on its own.
+2. **A watchdog** (`watchdog.sh`) that runs at boot and every 5 minutes. It
+   waits for Docker, runs `docker compose up -d` (which **recreates any
+   container that was destroyed/removed or left stopped**), and **restarts any
+   container that is running but stuck "unhealthy"** — something Docker's
+   restart policy does not do on its own.
 3. **Auto-start registration** so the watchdog itself runs unattended — a
-   Windows Scheduled Task or a Linux systemd timer.
+   systemd timer, on Linux hosts and inside the Windows distro alike.
 
-`install.ps1` / `install.sh` register the watchdog automatically **when run with
-admin/root rights**. If they could not, register it once yourself:
+`install.sh` registers the watchdog automatically **when run as root**. If it
+could not, register it once yourself:
 
-- Windows (elevated PowerShell):
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File .\register-autostart.ps1
-  ```
-- Linux:
-  ```sh
-  sudo bash register-autostart.sh
-  ```
+```sh
+sudo bash register-autostart.sh
+```
 
-### Windows: the one manual step that matters most
+### Windows hosts
 
-Docker Desktop **only runs inside a logged-in Windows session**. If the server
-reboots after a power cut and no one signs in, Docker never starts and the till
-stays down — no restart policy can help, because the engine isn't running. So on
-a Windows server you must:
+The whole stack runs inside a WSL2 distro named `Pointy`. The Linux scripts
+above are the real ones; there is no parallel set of Windows scripts to keep in
+step. Only two jobs cannot be done from Linux, and both live in the single
+`wsl/bootstrap-wsl.ps1`:
 
-1. **Enable automatic logon** for the dedicated POS user. Run `netplwiz`, untick
-   *"Users must enter a user name and password to use this computer"*, and enter
-   the password. (Equivalent registry keys: `AutoAdminLogon`, `DefaultUserName`,
-   `DefaultPassword` under
-   `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon`.)
-2. **Set Docker Desktop to start at login** — Docker Desktop → Settings →
-   General → *Start Docker Desktop when you sign in*. `register-autostart.ps1`
-   also tries to set this for you.
+- the **first install** (enable the Windows features, install WSL, import the
+  distro, register the boot task), and
+- a **boot-time reconcile** (`-Boot`), which starts the distro and re-points the
+  LAN bridge at it.
 
-With auto-logon on, a reboot logs the POS user in, Docker Desktop starts, the
-scheduled task fires, and the stack is back — hands-off.
+One Windows scheduled task, `PointyWSL`, runs the reconcile at startup and every
+5 minutes. Everything else — the watchdog, the update agent, the discovery
+responder — is a systemd unit inside the distro.
+
+**No automatic logon is needed.** This is the main operational gain over the old
+Docker Desktop install: Docker Desktop only ran inside a logged-in Windows
+session, which forced every shop to enable Windows auto-logon and store the POS
+user's password in clear text under `Winlogon`. The `PointyWSL` task runs
+without an interactive session, so a machine can reboot after a power cut,
+reach the logon screen with nobody there, and still bring the tills back.
+
+> If the task fails to register with `LogonType=S4U`, the bootstrap retries with
+> a stored password and tells you. If both fail, create the task by hand with
+> *Run whether user is logged on or not* + *Run with highest privileges*, as the
+> **same Windows user that ran the bootstrap** — WSL distros are registered per
+> user and `SYSTEM` cannot see them.
+
+#### Windows: how the tills reach the stack
+
+A WSL2 VM sits behind a NAT with a **new IP every time it starts**, and WSL's
+`localhostForwarding` only covers the Windows loopback — not the LAN. So
+`bootstrap-wsl.ps1 -Boot` forwards TCP 8000 and 80 from the host into the VM
+with `netsh interface portproxy`, and re-points them whenever the VM's IP
+changes. That is why the task repeats every 5 minutes.
+
+Two consequences worth knowing:
+
+- **UDP broadcast discovery does not work** on Windows: broadcasts do not cross
+  the NAT. The tills race three discovery paths — the stored IP, UDP, and an
+  HTTP `/24` subnet sweep — and the sweep finds the server at the Windows host's
+  LAN address. First pairing takes a couple of seconds longer; nothing else
+  changes.
+- **The backend sees the Windows host, not the till, as the client IP**, because
+  a portproxy hop does not preserve the source address. Per-user limits are
+  unaffected, but the per-IP login throttle (`DJANGO_THROTTLE_LOGIN`, default
+  `30/min`) becomes a *shop-wide* ceiling instead of a per-device one. Raise it
+  in `.env` for a busy shop with many tills.
+
+#### Windows: useful commands
+
+```powershell
+wsl -d Pointy -u root --cd /opt/pointy                       # shell into the server
+wsl -d Pointy -u root --cd /opt/pointy -- docker compose ps  # stack status
+wsl -d Pointy -u root -- journalctl -u pointy-watchdog -f    # watchdog log
+netsh interface portproxy show v4tov4                        # the LAN bridge
+Get-Content $env:ProgramData\Pointy\logs\bootstrap.log -Tail 50
+```
 
 ### Linux
 
@@ -231,11 +278,14 @@ Because everything self-heals, a manual `docker compose stop`/`down` will be
 undone within ~5 minutes. To stop the stack on purpose, first pause the
 watchdog:
 
-- Windows: `Disable-ScheduledTask -TaskName PointyAutostart`
-- Linux: `sudo systemctl stop pointy-watchdog.timer`
+```sh
+sudo systemctl stop pointy-watchdog.timer
+```
 
-Re-enable it (`Enable-ScheduledTask` / `systemctl start pointy-watchdog.timer`)
-when you are done.
+Re-enable it with `systemctl start pointy-watchdog.timer` when you are done. On
+Windows run that inside the distro (`wsl -d Pointy -u root -- systemctl stop
+pointy-watchdog.timer`); you do **not** need to touch the `PointyWSL` scheduled
+task, which only manages the distro and the LAN bridge, never the containers.
 
 ## Updating to a newer bundle
 
@@ -243,8 +293,15 @@ Updates are applied **live** — you do not have to close the shop, and you do n
 have to wait for closing time.
 
 ```sh
-bash update.sh /path/to/pointy-onprem-1.5.0.zip          # Linux / macOS
-powershell -ExecutionPolicy Bypass -File .\update.ps1 C:\path\pointy-onprem-1.5.0.zip
+# Linux / macOS, from the deploy directory:
+bash update.sh /path/to/pointy-onprem-1.5.0.zip
+```
+
+```powershell
+# Windows: the same script, run inside the distro. Copy the bundle in first —
+# updating from /mnt/c works, but is far slower than the distro's own disk.
+wsl -d Pointy -u root -- cp /mnt/c/Users/POS/Downloads/pointy-onprem-1.5.0.zip /tmp/
+wsl -d Pointy -u root --cd /opt/pointy -- bash update.sh /tmp/pointy-onprem-1.5.0.zip
 ```
 
 Run it from the current deploy directory (next to `docker-compose.yml` and

@@ -235,6 +235,31 @@ class OrderQuerySet(models.QuerySet):
     def quotations(self):
         return self.filter(sale_type=Order.SaleType.QUOTATION)
 
+    def with_list_serializer_relations(self):
+        """Load everything ``OrderListSerializer`` reads, in a fixed query count.
+
+        The row serializers (the invoices list and the register-session strip)
+        show a line COUNT plus totals/profit and the returnable flag, never the
+        line items — so ``lines`` is prefetched *light*, without the heavy
+        variant/product/option trees that ``with_serializer_relations`` adds.
+        Everything else the rows read is here, and every one of these costs a
+        query **per row** when a caller hand-rolls a shorter list instead:
+        ``sales_channel_name``/``_slug`` traverse the FK,
+        ``can_void``/``can_return`` read ``adjustment_lines`` per line, and
+        ``applied_discounts``/``exchanges`` are a query each per order.
+        """
+        return self.select_related(
+            "customer",
+            "register_session",
+            "sales_channel",
+        ).prefetch_related(
+            "lines__adjustment_lines",
+            "payments",
+            "applied_discounts",
+            "exchanges__replacement_order",
+            "exchanges__created_by",
+        )
+
     def with_serializer_relations(self):
         """Load everything ``OrderSerializer`` reads, in a fixed query count.
 
@@ -247,21 +272,12 @@ class OrderQuerySet(models.QuerySet):
         ``applied_discounts``/``exchanges`` cost a query per order. Extend this
         method — not a caller's own list — when the serializer grows a field.
         """
-        return self.select_related(
-            "customer",
-            "register_session",
-            "sales_channel",
-        ).prefetch_related(
+        return self.with_list_serializer_relations().prefetch_related(
             "lines__variant__product",
-            "lines__adjustment_lines",
             Prefetch(
                 "lines__variant__option_values",
                 queryset=VariantOptionValue.objects.select_related("option"),
             ),
-            "payments",
-            "applied_discounts",
-            "exchanges__replacement_order",
-            "exchanges__created_by",
         )
 
 
@@ -661,8 +677,22 @@ class OrderAdjustmentLine(TimeStampedModel):
 
     @property
     def line_total(self):
-        gross_total = self.unit_price * self.quantity
-        return (gross_total - self.discount_total).quantize(Decimal("0.01"))
+        """What this refund line is worth.
+
+        Rounds the gross to the cent *before* taking the discount off, which is
+        both what the refund is actually paid out with
+        (``services.line_refund_amount``) and what the sale charged in the first
+        place (``OrderLine.line_subtotal`` → ``OrderLine.line_total``).
+
+        Subtracting from an *unrounded* gross instead diverges by a cent
+        whenever ``unit_price × quantity`` lands on a half-cent — 0.750 kg at
+        5.50 is 4.125, which rounds to 4.12 on its own but carries the extra
+        half-cent up through the subtraction — so an itemised return receipt
+        stopped adding up to the money that left the drawer, and credited the
+        line more than the sale had ever charged for it.
+        """
+        line_subtotal = (self.unit_price * self.quantity).quantize(Decimal("0.01"))
+        return (line_subtotal - self.discount_total).quantize(Decimal("0.01"))
 
 
 def returned_cost_total(adjustments) -> Decimal:
@@ -685,6 +715,42 @@ def returned_cost_total(adjustments) -> Decimal:
         )
     )["total"]
     return (total or Decimal("0.00")).quantize(Decimal("0.01"))
+
+
+# Cost of one sold line, for aggregation. Kept next to ``returned_cost_total``
+# because the two answer opposite halves of the same question and must use the
+# same convention: raw product, summed, rounded once at the end. If a sale
+# subtracted a per-line-rounded cost while its return added back a raw-summed
+# one, undoing the sale would not return profit to where it started.
+SOLD_COST_EXPRESSION = models.F("quantity") * models.F("unit_cost")
+
+
+def gross_profit_total(*, revenue, sold_cost, refund_total, adjustments) -> Decimal:
+    """Gross profit over a period: revenue less the cost of the goods sold, less
+    the margin (not the cost) of whatever was handed back.
+
+    ``revenue`` must be the **documents'** revenue — ``Sum(Order.total)``, the
+    money the customers were actually charged — and not a re-derivation of it
+    from raw line arithmetic. The two are different numbers on any line whose
+    gross does not land on a whole cent (0.750 kg at 5.50 is a gross of 4.1250:
+    the line stores 4.12, the raw product keeps 4.1250), and the refund that
+    reverses a sale is always the document's own ``OrderAdjustment.amount``. Mix
+    the two and a sale that is entirely undone leaves a residue of profit behind
+    on goods the shop no longer sold — and the same report ends up stating two
+    different revenues, so ``net_sales - gross_profit`` is not the cost of
+    anything.
+
+    ``sold_cost`` is the raw ``Sum(SOLD_COST_EXPRESSION)`` the caller already
+    aggregated alongside its other line figures; it is rounded here, once, so it
+    matches ``returned_cost_total`` term for term.
+    """
+    cost = (Decimal(sold_cost or 0)).quantize(Decimal("0.01"))
+    return (
+        Decimal(revenue or 0)
+        - cost
+        - Decimal(refund_total or 0)
+        + returned_cost_total(adjustments)
+    ).quantize(Decimal("0.01"))
 
 
 class OrderExchange(TimeStampedModel):

@@ -430,3 +430,528 @@ peak rows scanned (exactly the cross product). Left out of the discounts PR to
 keep the change one subsystem; the helper needs a field-name parameter to be
 shared, so it wants its own change. Treat a comment that *asserts* a fan-out is
 handled as a reason to measure, not to move on.
+
+## 2026-08-19 - A worktree has no `backend/.env`, so backend tests silently run on SQLite
+**Learning:** The primary checkout has `backend/.env` with
+`DATABASE_URL=postgres://…`; a git worktree does **not** (it is untracked), so
+`manage.py test` there falls back to SQLite. The journal's existing sanity check
+is not enough to catch it: SQLite still prints
+`Creating test database for alias 'default'...` — the `file:memorydb_default`
+tell only shows at `-v 2`. I only noticed because `EXPLAIN (ANALYZE)` is a
+Postgres syntax error. A plain query-count test would have passed happily and I
+would have "measured" the wrong database, and any plan-based test would have
+hit its `connection.vendor != "postgresql"` skip and reported green while
+testing nothing.
+**Action:** Pass the database explicitly from a worktree —
+`DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/pointy' \
+/Users/hatem/Develop/pointy/backend/.venv/bin/python manage.py test apps.<app>`
+— and confirm the run says `('test_pointy')`, not just "alias 'default'". Use
+`--keepdb` on repeats; the migration run is most of the wall clock. Treat a
+`skipTest` on `connection.vendor` as a *failure signal* when you expected
+Postgres, not as a pass.
+
+## 2026-08-19 - A hand-tuned `annotate()` comment stops the audit before `select_related`
+**Learning:** `ProductCategoryViewSet.get_queryset` was ten lines: a comment
+explaining why `distinct=True` was on both counts (it was wrong — see the
+cross-product entry), and the counts. Nobody had noticed that the serializer's
+`parent_name = CharField(source="parent.name")` had no `select_related("parent")`
+next to it, so every subcategory on the page fired its own query. Both defects
+lived in the same expression, and the deliberate-looking comment is why: a
+`get_queryset` that visibly reasons about one cost reads as reviewed for all of
+them. Measured `productcategory-list` at 50 categories: 43 -> **3** queries flat,
+and the cross product 24,040 -> 120 rows scanned (7.94 ms -> 0.51 ms).
+**Action:** When a `get_queryset` carries a performance comment, audit the
+*other* fields anyway — read the serializer's field list against the queryset
+line by line. A dotted `source=` on a plain `CharField`/`IntegerField` is the
+cheapest N+1 in the codebase to find and the easiest to skim past, especially on
+a self-referential FK where `parent` looks like a column. This closed the last
+instance of the two-relations-in-one-`annotate()` shape; the helper now lives in
+`apps/core/aggregates.py::related_count` and discounts consumes it.
+
+## 2026-08-20 - A nested serializer's prefetch list is the SERIALIZER's contract, and the second caller always writes a shorter one
+**Learning:** `StockCountViewSet.reconciliation` embeds the full
+`ProductVariantSerializer` as `variant_detail` and hand-wrote its own prefetch
+list — `variant`, `variant__product`, `variant__attachments`,
+`variant__product__attachments`, `variant__option_values__option`. Five real
+relations, so it reads as deliberate and reviewed. But `ProductVariantViewSet`'s
+own queryset names *eleven*, and every one the copy omitted costs a query per
+row: the product's categories/variant-options/modifier-groups/units (the
+`product_detail` tree), each attachment's own `owner_content_type` /
+`storage_volume` / `created_by` FKs, and the 1:1 `stock` row behind
+`quantity_on_hand`. Measured 15 q/line — 54 queries at 3 lines, 99 at 6, so a
+full 50-line page ≈ 754. This is the same shape as `CustomerViewSet.orders` vs
+`OrderViewSet` (2026-08-19); it is now the *third* instance, so treat "two
+viewsets, one serializer" as a standing audit item rather than a coincidence.
+Note the copy also used `select_related("variant", "variant__product")`, which
+structurally **cannot** carry the nested chains — a `Prefetch` on the same
+forward FK can, because its inner queryset is rooted at `ProductVariant`.
+**Action:** When a serializer is embedded anywhere but its own viewset, move the
+prefetch shape into a shared factory next to the serializer
+(`catalog.services.variant_detail_queryset()`) and have the viewset consume it —
+then a new serializer field cannot be fast in one endpoint and an N+1 in the
+other. Find them with `grep -rn "<X>Serializer(" apps/` and diff each caller's
+relations against the canonical viewset's; a *shorter* list is the tell.
+
+**Also:** a `get_<field>` that reads `getattr(obj, "<name>", None)` and falls
+back to a `.count()` is only fast for the annotation the viewset remembered to
+add. `StockCountViewSet` annotated `counted_line_count` and not
+`variance_line_count`, so the session list paid a COUNT per row (5 q at 1 row,
+10 at 6). Both counts aggregate the **same** reverse relation, so adding the
+second to the existing `annotate()` is safe — the two-relations cross product
+(2026-08-19) needs *different* relations. Grep the annotated names against the
+serializer's fallbacks; the pair almost always drifts apart.
+
+## 2026-08-20 - A correct prefetch elsewhere in the same FILE is what hides the missing one
+**Learning:** The `variant.display_name` sweep (2026-08-19) looked finished:
+every app whose serializers carry a `display_name` source — customers,
+inventory, purchasing, sales, operations — greps positive for an
+`option_values` prefetch. But `apps/operations/views.py` holds *five* viewsets,
+and only `JobViewSet` had it. `BillOfMaterialsViewSet`, 300 lines below in the
+same file, prefetched `lines__component_variant__product` — a real relation, so
+it reads as deliberate — and paid 1 query for the output variant plus 1 per
+component line. Measured `bom-list` with 4 components a recipe: 31 q at 5
+recipes, 56 at 10, **256 at 50**; flat 8 after. A per-app grep for the fix marks
+the app clean; the hole is per-*viewset*.
+**Action:** When checking whether a known N+1 shape is fixed, grep for the
+*symptom* (the serializer's `source=`) and resolve it to the viewset that owns
+it, not for the *cure* (`option_values`) at app or file granularity. A file with
+several viewsets where one is visibly tuned is the highest-yield place to look —
+the tuned one is why nobody re-read the others.
+
+## 2026-08-20 - A line's per-line reads happen in the CHILD serializer, so a parent-level preload is always too late
+**Learning:** `apps/sales/services.py::checkout_order` calls
+`preload_line_variants` with a comment saying it batches "the per-line product /
+categories / option_values reads below" — and `prepare_discount_lines` has a
+matching comment saying `.all()` "reuses the preloaded prefetch". Both were dead
+on the checkout path: DRF validates a `many=True` child **before** the parent's
+`validate()` runs, and `CheckoutLineSerializer.validate` is where the per-line
+reads actually live (`product.modifier_groups.filter(is_active=True)`,
+`resolve_unit` → `product.units` and `_base_uom`). By the time either the parent
+or the service could preload, every line had already paid. Measured on
+`order-checkout`: 8.0 q/line, of which 3 were catalog reads
+(`unitofmeasure` + `modifiergroup` + `productcategory`, 1 each per line). The
+same child serializer backs `order-discount-preview`, which the POS fires on
+**every cart edit** — 4.0 q/line there (51 queries on a 12-line cart).
+The fix is a `Meta.list_serializer_class` whose `to_internal_value` bulk-loads
+the cart's variants *before* `super()` runs the children, and a child `validate`
+that swaps in the enriched instance. Checkout 8.0 → 5.0 q/line (161 → 128 at 12
+lines), preview 4.0 → 1.0 (51 → 21); what is left is the `PrimaryKeyRelatedField`
+floor plus the genuine per-line writes.
+**Action:** When a document endpoint has per-line reads, find out *which*
+serializer level runs them before deciding where to batch. If they are in the
+child's `validate`, the only hook early enough is the ListSerializer's
+`to_internal_value`. And check the comments: two separate ones here asserted a
+prefetch was being reused that could not possibly be live on that path.
+
+**Also — a global lookup is not fixed by a prefetch.** `catalog/units.py::_base_uom`
+is `UnitOfMeasure.objects.filter(code=…).first()`, a lookup of a *tiny seeded
+table* that runs once per line resolved in its base unit (i.e. almost every
+line, in both sales and purchasing). No relation prefetch can reach it; it
+needed its own bulk primer (`prime_base_units`) stashing the row the function
+reads first.
+
+**And gate the primer on the cart size.** The bulk load costs ~6 queries however
+small the cart, replacing 3/line — so it breaks even at 2 lines and *regresses*
+a one-line sale, the commonest sale at a till (preview 7 → 10 q before I added
+the threshold). `preload_line_variants` had no such gate either, so it was
+already a net loss on one-line checkouts: gating it there took a one-line
+checkout 75 → 72. Measure at n=1 and n=2, not just at n=8.
+
+## 2026-08-20 - `--keepdb` reports a cascade of phantom failures after a TransactionTestCase run
+**Learning:** A broad `manage.py test … --keepdb` run reported 52 errors, all
+`UnitOfMeasure.DoesNotExist` in tests I had not touched. Nothing was wrong: this
+suite contains `TransactionTestCase`-based tests (the business simulation) which
+truncate every table on teardown and do not restore rows created by *data
+migrations*, so a kept database is left permanently missing its seeded reference
+data. The same suite on a fresh database was 993 tests, OK.
+**Action:** `--keepdb` is safe for iterating on one app's tests, but re-create
+the database (`--noinput`, no `--keepdb`) for the verification run — and when a
+keepdb run fails in code you never touched, suspect the kept database before the
+diff.
+
+## 2026-08-20 - When an endpoint scales with a dimension its operation never touches, the RESPONSE is the whole N+1
+**Learning:** `order-return-items` returning ONE line cost 74 q on a 3-line
+invoice and 119 q on a 12-line one. The return itself does identical work in
+both cases, so every one of those 45 extra queries was the *response* — 5.0
+q/line, from `OrderSerializer` reading `variant.display_name` (option labels)
+plus the five affordance properties (`can_void`/`can_return`/`can_exchange`/
+`returned_quantity`/`returnable_quantity`) that each re-read
+`adjustment_lines`. `order.refresh_from_db()` is what stripped the prefetch
+cache `get_object()` had filled. Measured the halves separately: serializing
+the refreshed instance was 36/51/81 q at 3/6/12 lines, the same order re-read
+through `Order.objects.with_serializer_relations()` a flat **12**.
+The trap is that this was *already* a known-and-fixed shape here — `_checkout`
+carries a comment explaining the exact fix — and the purchasing lifecycle
+actions were later fixed by copying it. Nobody re-read the six sibling actions
+in the same file (`return_items`, `void`, `exchange_items`, `record_payment`,
+`assign_customer`, `convert`), all of which kept `refresh_from_db()` + a bare
+serialize. Also found while there: `_checkout` re-read via `get_queryset()`,
+whose `?product=`/`?variant=` filters can filter a just-mutated order out of
+its own response — `self.queryset` is the right handle.
+**Action:** Before profiling a mutation endpoint, ask which dimension the
+*operation* actually scales in. If the measured slope follows a dimension the
+write does not touch (invoice line count for a one-line return), stop and
+measure the serialization alone — one `CaptureQueriesContext` around the whole
+request hides which half bleeds. And when you find a fix-with-a-comment on one
+action, grep the *file* for its siblings before moving on; a comment explaining
+a fix is evidence the file was read once, not that it was read through.
+
+## 2026-08-20 - A model's `recalculate()` loop is an N+1 no viewset prefetch can reach
+**Learning:** `PayrollRun.recalculate()` iterates `self.lines.all()` and each
+`line.recalculate()` reads `compensation_plan` (rate, overtime multiplier,
+daily hours) and walks `adjustments` — 2 queries per line on the **write** path,
+in a method called from six places (approve, both draft services,
+apply-attendance, bulk-adjustments, line-adjustments). `PayrollRunViewSet`
+already prefetches `lines__employee/compensation_plan/adjustments`, but the
+services re-read the run with a bare `PayrollRun.objects.select_for_update()
+.get(pk=…)`, so the object reaching `recalculate()` has an empty prefetch cache
+and the viewset's tuning is invisible to it. `payroll-run-approve` on a 50-line
+run: 314 queries / 123 ms, of which only 50 were the genuine line UPDATEs.
+The fix is a `_lines_for_recalculation()` guard — reuse `self.lines.all()` when
+`"lines" in self._prefetched_objects_cache`, otherwise
+`select_related("compensation_plan").prefetch_related("adjustments")`. The guard
+matters: unconditionally building a fresh queryset would *discard* a warm cache
+and make the already-tuned callers slower.
+**Action:** Grep models for `for <x> in self.<related>.all():` where the loop
+body touches each child's own FK or reverse relation. Those are invisible to
+every viewset audit — the cost is in the model layer, on writes, and the
+serializer looks clean. Fix inside the model with a cache-aware accessor, never
+by prefetching at one call site.
+
+**Also — this is the fourth "mutation serializes a bare object", and the sibling
+fix was already present.** Three of `PayrollRunViewSet`'s six lifecycle actions
+already re-read via `self.get_queryset().get(pk=…)` before serializing; the
+other three (`approve`, `mark_paid`, `void`) did not, and `draft_monthly` never
+did. So the counter-signal is not only "a fix with a comment" (2026-08-20) — an
+*uncommented* fix present in half a file's actions propagates even less. Extract
+it into one helper the moment you find the second copy. And prefer
+`self.queryset.all()` over `get_queryset()` there: `get_queryset()` applies the
+`?employee=` / `?period_start=` filters, which can filter a just-mutated run out
+of its own response (`.get()` → `DoesNotExist` → 500).
+
+## 2026-08-20 - `variant.full_name` is a hidden query on every default variant
+**Learning:** `ProductVariant.full_name` reads `self.name.strip() or
+self.option_values_label`, and `create_product_with_default_variant` makes the
+default variant with `name=""` — so for the *simple* product that a normal shop
+sells almost exclusively, `full_name` always falls through to
+`option_values_label`, which is a query. It reads as a plain attribute, so it
+never looks like a relation traversal a `select_related` audit would catch.
+Measured on `apps/reports/services.py` at the real 120-row section cap:
+inventory-status **128 q / 65 ms**, stock-movements 127 / 64, reorder-items
+124 / 62 — flat 9 / 8 / 5 and ~10 ms once `variant__option_values` (with an
+inner `select_related("option")`, which the prefetched branch needs) rides
+along. Same file, same function: `purchase_rows` read `order.balance_due`,
+which sums `supplier_payments` **twice** in Python (paid + credit-applied), for
+252 q / 98 ms at 120 orders → 13.
+**Action:** Treat `full_name` / `display_name` / `option_values_label` on a
+variant as a query, not an attribute, wherever rows are built outside a
+serializer that already prefetches. And note the counter-signal again: the
+purchasing function had `prime_supplier_balances` with a comment three lines
+below the unprimed PO rows, and `_register_closure_report` in the same file is
+a textbook bulk-primer — a file can be visibly tuned in most of its functions
+and still leak in the rest. Report *services* are a blind spot generally:
+serializer N+1 audits never reach them.
+
+## 2026-08-20 - A flat query count can still hide a cost that scales — count ROWS, not statements
+**Learning:** The notification feed (the bell/badge poll every signed-in device
+makes) prefetched `user_states` unfiltered, so it loaded **every member of
+staff's** state for every alert and then discarded all but one —
+`_state_for_user` is the only reader and it wants exactly the viewer's row. The
+endpoint already carried a passing test asserting the statement count does not
+grow with alert count, and that test is green **with or without** the fix: the
+prefetch is one statement either way. The cost scales in *headcount*, a
+dimension the request does not depend on. Measured on a full 50-alert page with
+10 staff: **500 → 50** `BusinessNotificationUserState` instances materialized,
+14.3 → 11.1 ms; the growth was exactly linear in staff (20/40/80/160 rows at
+1/2/4/8 staff for 20 alerts). This is the mirror image of the two-`Count`
+cross-product entry (2026-08-19): there the *plan* was quadratic at a constant
+statement count; here the *result set* is. Both are invisible to
+`CaptureQueriesContext`.
+**Action:** When an endpoint already has a query-count test, that is a reason to
+measure a *different* axis, not a sign it was audited. Count rows materialized
+by patching `Model.from_db` with a counter and scaling the dimension the
+request should not care about (staff, devices, sibling rows). Also: prefer the
+plain filtered `Prefetch` over `to_attr` when the consumer already discriminates
+(`state.user_id == user.id` here) — it needed **zero** logic change, and
+crucially `refresh_from_db()` clears `_prefetched_objects_cache` but does **not**
+clear a `to_attr` attribute, so a `to_attr` here would have silently broken the
+three mutation actions that refresh precisely to drop the stale prefetch.
+
+## 2026-08-20 - A custom `@action` hides inside the very viewset whose queryset is tuned
+**Learning:** The `display_name`/`option_values` sweep has now missed the same
+shape four times, and this instance shows why "resolve the symptom to the
+viewset that owns it" (2026-08-20) is still not tight enough.
+`PurchaseOrderViewSet.queryset` prefetches
+`adjustments__lines__variant__option_values__option` **with an explanatory
+comment**, so the class greps clean — but `product-cost-history`,
+`variant-cost-history` and `adjustment-history` are `@action`s *on that same
+class* that each build their own queryset from scratch
+(`PurchaseLine.objects…`, `PurchaseOrderAdjustmentLine.objects…`) and never
+touch it. Same for `PublicInvoiceView`, which re-derives a two-relation subset
+of `OrderViewSet`'s. Measured 1.0 q/row on all three: cost-history 55 → 6 at 50
+rows, adjustment-history 53 → 4, public invoice 28 → 9 at 20 lines. The unit
+that owns a prefetch is a **queryset expression**, not an app, a file, a class
+or a viewset — and a tuned class-level queryset is the strongest camouflage
+there is, because every plausible grep for the cure hits it.
+**Action:** Grep the *symptom* (`source="…display_name"`, `variant.full_name`)
+and resolve each serializer to **every** queryset that feeds it, including
+`@action` bodies and `APIView.get_queryset`. `grep -n "\.objects\." views.py`
+is the fast way to enumerate the hand-rolled ones; each is its own audit.
+**Also:** measure with a warm-up request. The first two attempts here read 0.67
+q/row because the permission and content-type queries landed on the smaller
+measurement — the slope only showed as a clean 1.0 after an untimed request
+preceded each `CaptureQueriesContext`.
+
+## 2026-08-20 - An annotation-or-count fallback costs once per SERIALIZATION, not once per instance
+**Learning:** `UnitOfMeasureSerializer.get_product_count` is the familiar
+`getattr(unit, "product_count", None) or unit.product_units.count()` hook, and
+`UnitOfMeasureViewSet` supplies the annotation — so the field greps clean. But
+`unit_detail` is nested under every product's `units`, and a *forward-FK*
+prefetch (`units__unit`) hands every row the **same shared UnitOfMeasure
+object**, which made me expect one COUNT. It is one COUNT per row anyway:
+nothing caches the fallback on the instance, so the serializer re-runs it every
+time it renders that same object. Measured `product-list` at 50 rows with one
+packaging unit each: 67 -> 17 queries; `product-variant-list` 64 -> 14. It hid
+because the existing catalog scaling tests build products with *no*
+`ProductUnit` rows, so the whole branch never ran under test while multi-unit
+products are a shipped feature.
+**Action:** For an annotation-or-fallback field, count the *serializations*, not
+the instances — a shared prefetched object still pays per render. Fix by
+annotating on the prefetch queryset (`Prefetch(lookup, queryset=...annotate())`)
+and have the owning viewset consume the same factory, so primed and cold can't
+drift. And when a scaling test is flat, check its fixture actually populates the
+optional relations: an unpopulated relation makes an N+1 test-invisible.
+
+**Also — the "two viewsets, one serializer" audit item claims its fourth
+instance, and this time the shared factory already existed.**
+`ProductViewSet.variants` (the product-detail screen's variant list) hand-rolled
+five relations while `catalog.services.variant_detail_queryset()` — written for
+exactly this reason, and consumed by `ProductVariantViewSet` and the stock-count
+screen — sat imported in the same file. Measured 15.0 q/variant (72/117/207/327
+at 3/6/12/20 variants), flat 33 after. A shared factory does not close the shape;
+grep every `@action` that builds its own queryset against it.
+
+## 2026-08-20 - Diff the query-shape HISTOGRAM at N and 2N, not the total
+**Learning:** `order-checkout` had a documented per-line floor of 5 queries,
+annotated in `test_checkout_line_preload.py` as "the `PrimaryKeyRelatedField`
+floor plus the genuine per-line writes" — which reads like nothing is left to
+take. Bucketing the captured SQL by `verb + table` and diffing the counts
+between a 2-line and an 8-line cart showed the floor was actually five *distinct*
+shapes at exactly 1.00/line each, and three of them were the stock write:
+`SELECT inventory_stockitem FOR UPDATE`, `UPDATE inventory_stockitem`,
+`INSERT INTO inventory_stockmovement`. All three batch trivially
+(`variant_id__in` lock, `bulk_update`, `bulk_create`) because
+`prepare_sale_stock_adjustments` has already aggregated the cart to one entry
+per distinct variant. Measured: 4.67 -> 1.67 q/line, 167 -> 110 on a 20-line
+cart. A total-count scaling test cannot tell "one irreducible read per line"
+from "five things, three of them batchable"; the histogram can, and it took
+about ten lines of `re` + `Counter` in a throwaway test.
+**Action:** When a scaling test is *already passing* at a bound someone wrote
+down, print the per-shape slope before believing the bound. And on the write
+side specifically: a per-line INSERT/UPDATE loop is invisible to every
+serializer/prefetch audit in this journal, so it survives long after the reads
+are clean.
+
+**Also — a batched `select_for_update()` must carry its own `order_by()`.**
+`StockItem.Meta.ordering` is `["variant__product__name", "variant__name"]`, so a
+bare `StockItem.objects.select_for_update().filter(variant_id__in=…)` would join
+`catalog_productvariant` + `catalog_product` into the lock and take row locks on
+the catalog too. `.order_by("variant_id")` drops the joins *and* preserves the
+ascending-id lock ordering the per-row loop relied on for deadlock avoidance
+(Postgres puts LockRows above Sort, so rows are locked in output order).
+And `bulk_update` does not run field `pre_save`, so an `auto_now` column has to
+be stamped by hand — the per-row `save(update_fields=[..., "updated_at"])` it
+replaces did refresh it.
+
+## 2026-08-20 - A "flat" endpoint can still be thirteen round trips over two tables
+**Learning:** Every N+1 hunt in this journal asks "does the count grow with N?".
+`customer-sales-summary` answers *no* — and was still asking `sales_order` seven
+separate questions and `sales_orderadjustment` six, because the view built one
+queryset per figure (`orders.count()`, `orders.filter(status=PAID).count()`,
+`adjustments.filter(type=RETURN).aggregate(Sum)`, …). A scaling test is blind to
+this by construction, and so is every "slope per row" measurement in this file.
+Folding them into one `aggregate()` per table with `Count/Sum(filter=Q(...))` took
+19 -> 8 queries and 7.6 -> 4.7 ms median wall time (400 invoices / 100
+adjustments, localhost Postgres — on-prem through PgBouncer the round trips cost
+more). Safe here specifically because each aggregate reads **one** table with no
+joined multi-valued relation, so the two-`Count` cross product (2026-08-19) can't
+bite; the adjustments query joins `sales_order` but only through a forward FK.
+**Action:** Add "how many statements does this endpoint issue *at all*" to the
+audit, not just "how many per row". The tell is a view body with several
+`.count()` / `.aggregate()` calls over sibling filters of one base queryset.
+Fold them, but keep the filter definition shared — `transactional_sale_q()`
+already existed as the `Q` mirror of `OrderQuerySet.transactional`, precisely so
+a `Count(filter=...)` cannot become a second definition of "what counts as a
+sale". If no such mirror exists, write it before folding, not a copy of the
+predicate. **Also:** a query-count test wants `FROM "<table>"`, not a substring
+match — an aggregate that *joins* the table you are counting will otherwise mask
+the very difference you are measuring (it read 3 instead of 2 until I anchored
+on `FROM`).
+
+## 2026-08-20 - Measure the dimension the CALLER controls, not the one the row count suggests
+**Learning:** `PrintJobSerializer` embedded `events`, the job's audit trail, and
+that trail's serializer reads `agent.identifier` + `user.username` — so a job
+payload cost 1 query for the trail plus 2 per event. Every N+1 habit in this
+journal would size that as "small": a healthy job has 3 events. But the axis is
+not rows on a page, it is **how many times this job has already been tried** —
+`create_job_event` appends on every claim, requeue, failure and print, so a
+printer that is jamming makes each new failure report slower than the last, at
+exactly the moment the till is already waiting on it. Measured
+`printjob-failed` at 2/4/8/16 prior events: 19/23/31/47 queries, a clean
+2.0/event, and 1141 → 4215 bytes. And nothing reads it — the Flutter `PrintJob`
+model parses none of the field, no backend test asserts it, the relay never sees
+it, and a dedicated `/print-jobs/<pk>/events/` action already serves the trail
+(gated on `printing.view_printjobevent`, which the embedded copy quietly
+bypassed). Deleting the field beat prefetching it on every axis, as with
+`stock-movements`' `product_detail`: flat **9** queries at any attempt count,
+436 bytes, `print-job-list` at 20 jobs × 3 events 6 → 3 queries and 21,078 →
+8,298 bytes, and the viewset's `events__agent`/`events__user` prefetch got to go
+with it.
+**Action:** When a nested collection grows with *retries*, *attempts* or
+*history* rather than with page rows, a scaling test over row count will call it
+flat and a per-row slope will call it cheap. Scale the collection itself. And
+check the embedded copy's permission: a nested read-only relation inherits the
+parent's permission map, so embedding an audit trail is also a quiet way around
+its own `view_` gate.
+
+## 2026-08-21 - The hottest path is the one nobody re-derives the prefetch for
+**Learning:** `ProductCategorySerializer.parent_name` is `parent.name`, so every
+payload embedding it pays one query per *sub*category. Two of the three callers
+already knew: `ProductCategoryViewSet.get_queryset` `select_related("parent")`
+with a comment naming the N+1, and `catalog.services.variant_detail_queryset()`
+carries `Prefetch("product__categories", queryset=…select_related("parent"))`
+with its own comment. The third — `ProductViewSet.queryset`, the POS catalog
+list, the single hottest read in the app — had the bare string `"categories"`,
+sandwiched between two *correct* helper-built prefetches
+(`image_attachment_prefetch`, `unit_detail_prefetch`). Measured on 50 products
+with two subcategories each: **113 → 13 queries**, a clean 2.00/row → 0
+(23/33/63/113 at 5/10/25/50 before, flat 13 after). `product-variant-list` was
+already 10 and stayed 10, which is the whole point.
+**Action:** Two things kept it alive and both are checkable. (1) The existing
+scaling test built *root* categories only (`ProductCategory.objects.create(
+name=f"cat{i}")` with no parent), so the branch that queries never ran under
+test — a fixture whose optional relation is unpopulated makes an N+1
+test-invisible, same as the missing `ProductUnit` rows in the units case.
+Nesting one line of fixture made the existing `small == large` assertion fail on
+`main` with no new test needed. (2) Reach for the *static* diff before
+measuring: enumerating `router.registry`, walking each `serializer_class`'s
+fields for dotted `source=` / nested serializers, and subtracting the queryset's
+`select_related`/`_prefetch_related_lookups` shortlists every missing relation in
+the whole API in one pass (~40 lines of throwaway script). It found five, of
+which this was the hot one. Do that first next time — it is strictly cheaper
+than reading viewsets one by one.
+
+**Next targets (found by that scan, unfixed):** `payroll-run-list` is 2.0
+queries/run — `approved_by_username`/`paid_by_username` traverse two FKs the
+viewset never `select_related`s (measured 15 q at 4 runs, 23 at 8);
+`discount-rules` serializes `tiers` with no prefetch. Both are cold-ish admin
+screens, which is why they stayed out of this change.
+
+**Also — a real flake, pre-existing on `main`:**
+`test_product_variants_action_scaling.test_payload_matches_an_unprefetched_serialization`
+fails 3/3 on a clean tree. The primed and cold payloads differ only in the
+rotating signed image token (`…1wxAvd:jJba…` vs `…1wxAvf:nAvd…`), which is
+regenerated per serialization from the clock. Any future payload-equality test
+against an attachment URL has to strip or freeze that token.
+
+## 2026-08-21 - Probe the ABSOLUTE query count of every list endpoint in one pass
+**Learning:** A ~40-line throwaway test that walks `router.registry`, reverses
+`<basename>-list` and counts queries against an *empty* database prices the
+whole API's fixed overhead in one run. Every endpoint came back 2-6 — except
+`/api/users/` at **233 queries with one user row**. The cause was not the
+serializer at all: `PosUserViewSet.initial` calls `ensure_role_groups()` on
+every request (list, retrieve, permission catalog, every write), and that
+re-sync resolved each of its 211 `app_label.codename` strings with its own
+`Permission.objects.filter(...).first()`. Batching them into one keyed map took
+the idempotent re-sync 228 -> 18 queries and 108 -> 18 ms, the endpoint 233 ->
+23 and 117 -> 29 ms. Note the viewset's `get_queryset` already carried a comment
+promising "list/retrieve stay O(1) queries" — and it was telling the truth about
+the *queryset*; the cost was in `initial()`, one method above it.
+**Action:** Run the empty-DB absolute probe before hunting slopes — it is
+cheaper than the static prefetch scan and finds a different bug class entirely
+(fixed overhead, which every scaling test reports as perfectly flat: this one
+measured 233 at 1, 5 and 20 users). And when a probe indicts an endpoint, price
+`initial()`/`dispatch()`/middleware before the serializer: an idempotent
+"ensure the world is set up" call on a read path is invisible to every audit
+that starts at `get_queryset`. For batching code -> row lookups, prefer two flat
+`__in` lists plus a dict keyed on the exact composite string over an OR of
+per-pair `Q`s — the over-fetched cross product is never looked up, and the
+planner gets one index scan instead of 200 OR branches.
+
+## 2026-08-21 - Probe every `@action` at once by driving `run_simulation()`, then reversing the router
+**Learning:** The empty-DB list probe (2026-08-21) reported every list endpoint
+at 2-6 queries and looked like the API was clean. It was measuring the wrong
+surface: **detail routes and custom `@action`s are most of the read surface and
+none of them appear in `router.registry`'s list URLs**. Populating a test
+database with `apps.sales.business_simulation.run_simulation(seed=7,
+operations=250)` — real orders, sessions, POs, stock, payments — and then, for
+each registered viewset, reversing `<basename>-detail` plus every attribute
+whose `.mapping` contains `"get"` (that is how DRF marks an `@action`), prices
+~120 endpoints in one ~10s run. It immediately indicted
+`register-session-orders` at **117 queries / 130 ms / 93 KB**, three times the
+next worst; the whole list surface was clean. Cost me one throwaway test file.
+**Action:** Probe `-detail` + `@action` routes over simulated data before
+hunting slopes; `getattr(fn, "mapping", None)` and `getattr(fn, "url_name", …)`
+are all the enumeration needs, and the simulation gives fixtures for free. Sort
+by query count and read the top five — everything below ~15 is noise.
+
+## 2026-08-21 - A shared prefetch factory that is too HEAVY is why the second caller still hand-rolls
+**Learning:** `OrderQuerySet.with_serializer_relations()` exists precisely to
+stop callers writing their own list (its docstring says so), and
+`RegisterSessionViewSet.orders` still hand-rolled
+`select_related("customer","register_session").prefetch_related(
+"lines__adjustment_lines","payments")` — because it serializes the *trimmed*
+`OrderSessionSerializer`, and adopting the full factory would have pulled in the
+per-line variant/product/option trees the strip never renders. So the author
+wrote a subset, and lost `sales_channel`, `applied_discounts` and `exchanges`:
+3.00 q/order (24 q at 5 orders, 69 at 20; 117 on a full 50-row page). The tell
+was sitting in the other viewset — `OrderViewSet._list_summary_queryset` was
+already the correct list shape, one method above the one everybody greps. The
+fix is to split the factory rather than subset it at the call site:
+`with_list_serializer_relations()` (what `OrderListSerializer` reads) and
+`with_serializer_relations()` = that + the line trees. Flat **11** queries after,
+and the endpoint went 130 -> 52 ms on the simulated shop.
+**Action:** This is the fifth "two callers, one serializer". New rule for it: if
+a caller serializes a *lighter* variant of the serializer, the shared factory
+needs a lighter variant too — check whether some other viewset has already
+written that shape privately (a `_list_…_queryset` helper is the giveaway)
+before assuming the hand-rolled subset was a considered choice.
+**Also — an EMPTY reverse/generic relation still costs its query per row.**
+There were no discounts and no exchanges anywhere in the fixture and
+`applied_discounts`/`exchanges` were still 1.00 q/order each. That is the
+opposite of the `display_name`/`ProductUnit` fixture trap: a *property that
+branches* goes quiet when its relation is unpopulated, but a serializer field
+backed by a relation queries regardless. Don't skip an N+1 because the fixture
+has none of the child rows.
+
+## 2026-08-21 - A detail `@action` pays the viewset's whole prefetch tree, even when it only needs the row's id
+**Learning:** `get_object()` runs `get_queryset()`, so *every* detail route
+inherits the prefetch tree the detail/list serializer needs — including side-tab
+actions that never serialize the object at all. `ProductViewSet.attachments`
+reads `product.attachments` (a related-manager `.active()` call, which bypasses
+the prefetch cache anyway), `variants` rebuilds `variant_detail_queryset()`,
+`bought_together` uses `product.id`; all three loaded variants, option values,
+stock, categories, units, barcodes, modifier groups and image attachments and
+threw every row away. Measured on a simulated shop: `product-attachments`
+**13 → 3**, `product-variants` 21 → 11, `product-bought-together` 17 → 7,
+`purchaseorder-attachments` **16 → 3**. The Flutter product-details screen fires
+the first three on open: 51 → 21 queries per product opened.
+**Action:** The tell is a **big absolute query count against a tiny payload** —
+17 queries for a 2-byte `[]`. No scaling test sees it (flat in every dimension)
+and the empty-DB list probe misses it (these are detail routes). Probe
+`-detail` + `@action` routes over simulated data and sort by *queries per byte*.
+Fix by naming the identity-only actions and returning `.prefetch_related(None)`
+for them — and be strict about membership: `archive`/`restore`/
+`set_variant_prices` answer with `ProductCatalogSerializer`, so adding them
+would trade 13 prefetches for an N+1 per variant. Ship a guard test for that
+direction too. **Test technique:** rather than a fixture-specific magic number,
+`patch.object(ViewSet, "identity_only_actions", frozenset(), create=True)`
+re-measures the same request with the tree forced on and the test asserts the
+difference; `create=True` makes it a clean assertion failure (not an
+`AttributeError`) on a tree without the fix, and both payloads can be compared
+for equality in the same pass — strip `?token=` first, attachment `content_url`s
+re-sign per serialization.
+**Next targets (measured, unfixed):** `pos-user-activity` 45 q for 4.6 KB and
+`pos-user-detail` 22 q for 239 B, both dominated by `PosUserViewSet.initial`'s
+`ensure_role_groups()` re-sync — 18 queries on *every* users request, writes
+included; caching the "already synced" verdict is the next step.

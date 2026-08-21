@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 
-from django.db.models import Count, DecimalField, F, Q, Sum, Value
+from django.db.models import Count, DecimalField, F, Prefetch, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -15,7 +15,7 @@ ZERO_QTY = Value(Decimal("0"), output_field=QTY_FIELD)
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
-from apps.catalog.models import Product
+from apps.catalog.models import Product, VariantOptionValue
 from apps.core.roles import user_is_manager
 from apps.employees.models import Employee, PayrollLine, PayrollRun
 from apps.expenses.models import Expense
@@ -33,7 +33,8 @@ from apps.sales.models import (
     OrderLine,
     RegisterCashMovement,
     RegisterSession,
-    returned_cost_total,
+    SOLD_COST_EXPRESSION,
+    gross_profit_total,
 )
 
 from .models import ReportRun
@@ -301,23 +302,21 @@ def _sales_summary_report(user, period):
     )
     line_values = OrderLine.objects.filter(order__in=orders).aggregate(
         items_sold=Coalesce(Sum("quantity"), ZERO_QTY),
-        profit=Coalesce(
-            Sum(
-                F("quantity") * (F("unit_price") - F("unit_cost"))
-                - F("discount_total"),
-                output_field=MONEY_FIELD,
-            ),
+        sold_cost=Coalesce(
+            Sum(SOLD_COST_EXPRESSION, output_field=MONEY_FIELD),
             Value(Decimal("0.00")),
             output_field=MONEY_FIELD,
         ),
     )
     net_sales = order_values["order_total"] - adjustment_values["refund_total"]
-    # A refund reverses margin, not margin *plus* cost: the goods are restocked,
-    # so their cost comes back with them.
-    profit = (
-        line_values["profit"]
-        - adjustment_values["refund_total"]
-        + returned_cost_total(adjustments)
+    # Revenue comes from the same ``Sum(Order.total)`` ``net_sales`` is built
+    # from, so the report states one revenue rather than two; a refund reverses
+    # margin, not margin *plus* cost, because the goods are restocked.
+    profit = gross_profit_total(
+        revenue=order_values["order_total"],
+        sold_cost=line_values["sold_cost"],
+        refund_total=adjustment_values["refund_total"],
+        adjustments=adjustments,
     )
     top_products = _product_sales_rows(orders)
     recent_orders = _bounded_queryset(
@@ -624,10 +623,12 @@ def _inventory_status_report(user, period):
     )["total"]
     low_stock = stock.filter(quantity_on_hand__lte=F("reorder_level"))
     stock_rows = _bounded_queryset(
-        stock.order_by(
-            "quantity_on_hand",
-            "variant__product__name",
-            "variant__name",
+        _with_variant_labels(
+            stock.order_by(
+                "quantity_on_hand",
+                "variant__product__name",
+                "variant__name",
+            )
         ),
         limit=_section_row_limit("inventory_items"),
     )
@@ -694,7 +695,7 @@ def _stock_movements_report(user, period):
         created_at__lt=period["end"],
     )
     movement_rows = _bounded_queryset(
-        movements.order_by("-created_at", "-id"),
+        _with_variant_labels(movements.order_by("-created_at", "-id")),
         limit=_section_row_limit("stock_movements"),
     )
     rows = [
@@ -787,7 +788,10 @@ def _purchasing_summary_report(user, period):
         )
     )["total"]
     purchase_rows = _bounded_queryset(
-        period_orders.order_by("-created_at"),
+        # Each row reads ``balance_due``, which sums ``supplier_payments`` twice
+        # (paid + credit-applied) in Python — 2 queries per order unless the
+        # payments ride along. Same reason the supplier rows below are primed.
+        period_orders.order_by("-created_at").prefetch_related("supplier_payments"),
         limit=_section_row_limit("purchase_orders"),
     )
     rows = [
@@ -872,10 +876,12 @@ def _reorder_items_report(user, period):
         quantity_on_hand__lte=F("reorder_level"),
     )
     bounded = _bounded_queryset(
-        stock.order_by(
-            "quantity_on_hand",
-            "variant__product__name",
-            "variant__name",
+        _with_variant_labels(
+            stock.order_by(
+                "quantity_on_hand",
+                "variant__product__name",
+                "variant__name",
+            )
         ),
         limit=_section_row_limit("reorder_items"),
     )
@@ -1068,19 +1074,27 @@ def _profit_costs_report(user, period):
             output_field=MONEY_FIELD,
         )
     )["total"]
-    line_profit = OrderLine.objects.filter(order__in=orders).aggregate(
+    revenue = orders.aggregate(
         total=Coalesce(
-            Sum(
-                F("quantity") * (F("unit_price") - F("unit_cost"))
-                - F("discount_total"),
-                output_field=MONEY_FIELD,
-            ),
+            Sum("total"),
+            Value(Decimal("0.00")),
+            output_field=MONEY_FIELD,
+        )
+    )["total"]
+    sold_cost = OrderLine.objects.filter(order__in=orders).aggregate(
+        total=Coalesce(
+            Sum(SOLD_COST_EXPRESSION, output_field=MONEY_FIELD),
             Value(Decimal("0.00")),
             output_field=MONEY_FIELD,
         )
     )["total"]
     # Restocked returns give their cost back, so only the margin is reversed.
-    gross_profit = line_profit - refund_total + returned_cost_total(adjustments)
+    gross_profit = gross_profit_total(
+        revenue=revenue,
+        sold_cost=sold_cost,
+        refund_total=refund_total,
+        adjustments=adjustments,
+    )
 
     payroll_paid = PayrollRun.objects.filter(
         status=PayrollRun.Status.PAID,
@@ -1208,6 +1222,25 @@ def _bounded_queryset(queryset, *, limit):
         rows=list(queryset[:limit]),
         total_count=queryset.count(),
         limit=limit,
+    )
+
+
+def _with_variant_labels(queryset):
+    """Carry the option values that ``ProductVariant.full_name`` reads.
+
+    A product's default variant has an empty ``name``, so ``full_name`` falls
+    through to ``option_values_label`` — which queries ``option_values`` unless
+    they are already prefetched. That is one query per detail row (a report
+    section runs to ``DEFAULT_DETAIL_ROW_LIMIT``), and it is invisible in the
+    report code because it hides behind a plain attribute read. The inner
+    ``select_related("option")`` matters too: the prefetched branch of
+    ``option_values_label`` reads each value's ``option`` to build its label.
+    """
+    return queryset.prefetch_related(
+        Prefetch(
+            "variant__option_values",
+            queryset=VariantOptionValue.objects.select_related("option"),
+        )
     )
 
 

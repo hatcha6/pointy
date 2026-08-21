@@ -16,6 +16,7 @@ import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/units.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/query_controls/query_empty_state.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/jobs_board_view_model.dart';
@@ -176,11 +177,19 @@ class _JobsScreenState extends State<JobsScreen> {
     final showBoard = viewModel.statusFilter == OperationsJobStatus.open;
 
     if (viewModel.jobs.isEmpty && !viewModel.isLoading) {
-      return PointyEmptyState(
+      // The board is filtered four ways, so a blank result is far more often
+      // the technician's own search or filter than a shop with no work at all.
+      // `QueryEmptyState` names whichever is hiding the job and offers the one
+      // tap that brings it back; the "new job" invitation is reserved for the
+      // genuinely-empty board, where creating one is the only way forward.
+      return QueryEmptyState(
         icon: Icons.handyman_outlined,
-        title: l10n.jobsEmptyTitle,
-        message: l10n.jobsEmptyMessage,
-        action:
+        search: viewModel.searchQuery,
+        hasFilters: viewModel.hasActiveFilters,
+        emptyTitle: l10n.jobsEmptyTitle,
+        emptyMessage: l10n.jobsEmptyMessage,
+        onClear: _clearFilters,
+        emptyAction:
             widget.capabilities.canCreateJobs &&
                 viewModel.enabledTemplates.isNotEmpty
             ? FilledButton.icon(
@@ -328,6 +337,15 @@ class _JobsScreenState extends State<JobsScreen> {
     _searchDebounce = Timer(const Duration(milliseconds: 400), () {
       widget.viewModel.searchQuery = value;
     });
+  }
+
+  void _clearFilters() {
+    // The search box holds its own controller rather than reading back from the
+    // view model, so clearing the query there would leave the cleared term
+    // still visible — and the pending debounce would then re-apply it.
+    _searchDebounce?.cancel();
+    _searchController.clear();
+    widget.viewModel.clearFilters();
   }
 
   Future<void> _advanceJob(OperationsJob job) async {

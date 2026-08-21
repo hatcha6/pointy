@@ -47,6 +47,51 @@ class BusinessSimulationTests(TestCase):
         # once; require a healthy spread so the test can't silently degrade into
         # "sales only".
         self.assertGreaterEqual(len(sim.op_counts), 10)
+        # The cost-basis assertions must have had something to bite on: a sale
+        # of a never-purchased variant snapshots 0.00, and 0.00 agrees with
+        # every broken implementation too. Require lines with a real cost, and
+        # some sold in a non-base unit, where the purchase's per-piece cost has
+        # to be scaled into the unit the sale transacted in.
+        self.assertGreaterEqual(sim.costed_line_assertions, 1)
+        self.assertGreaterEqual(sim.multi_unit_costed_line_assertions, 1)
+        # Same rule for supplier returns. The credit for a line returned whole
+        # is right under every implementation of the per-unit share, so a run
+        # that only ever returned whole lines — or never returned part of an
+        # over-shipped one — has not tested the share at all.
+        self.assertGreaterEqual(sim.returned_line_assertions, 1)
+        self.assertGreaterEqual(sim.over_received_return_assertions, 1)
+        # And for the purchasing side's pack↔base crossing. Every factor used
+        # to be 1, where a dropped conversion is the identity: a run that never
+        # bought by the carton says nothing about receipts, expected stock, the
+        # per-base cost basis or the landed-cost weights. The mixed-unit guard
+        # is the sharper one — an allocation is scale-invariant, so a weight
+        # that forgot to convert only misallocates on an order whose lines are
+        # bought in different units.
+        self.assertGreaterEqual(sim.pack_purchase_line_assertions, 1)
+        self.assertGreaterEqual(sim.mixed_unit_retail_landed_orders, 1)
+        # And for the sales refund document. ``returned_cost_total`` is the one
+        # figure on it that no revenue assertion can reach, and it is 0.00 both
+        # for a refund of never-purchased goods and for every implementation
+        # that gets the reversal wrong — so a run whose refunds all cost nothing
+        # has not tested it. The multi-unit guard is the sharper one: at unit
+        # factor 1 the pack↔base scaling in the reversal is the identity.
+        self.assertGreaterEqual(sim.costed_refund_assertions, 1)
+        self.assertGreaterEqual(sim.multi_unit_costed_refund_assertions, 1)
+        # And for the cap that keeps a line's discount inside the line's own
+        # rounding regime. The engine's cap and the order line's subtotal agree
+        # everywhere except on a line the discounts consumed ENTIRELY whose
+        # gross lands on a half-cent — so a run that never rang that up would
+        # pass with or without the cap, and prove nothing either way.
+        self.assertGreaterEqual(sim.fully_discounted_line_assertions, 1)
+        self.assertGreaterEqual(sim.half_cent_fully_discounted_lines, 1)
+        # And for the shop-wide P&L. The aggregate figures are only evidence for
+        # the property that matters — an order handed back in full contributes
+        # exactly nothing to reported profit — and that identity holds under
+        # every implementation unless some line's gross or cost carries more
+        # precision than the cent the line stores. A run whose voided orders
+        # were all whole units at 2dp prices proves nothing about it.
+        self.assertGreaterEqual(sim.undone_orders_reconciled, 1)
+        self.assertGreaterEqual(sim.rounding_sensitive_undone_orders, 1)
 
 
 class SimulationIgnoresPreExistingDataTests(TestCase):

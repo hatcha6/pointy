@@ -339,6 +339,14 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     # serializer and the trimmed prefetches below.
     _list_shaped_actions = ("list", "outstanding_received_not_paid")
 
+    # The attachments tab needs the order's *identity* and nothing else -- it
+    # serializes ``purchase_order.attachments`` with its own queryset -- yet
+    # ``get_object()`` runs ``get_queryset()`` regardless, so opening it pulled
+    # the whole document tree above (lines, receipts, adjustments, audit
+    # events, payments and every variant/option chain under them) and threw
+    # every row away.
+    _identity_only_actions = ("attachments",)
+
     def get_serializer_class(self):
         if self.action in self._list_shaped_actions:
             return PurchaseOrderListSerializer
@@ -372,6 +380,8 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                     )
                 )
             )
+        elif self.action in self._identity_only_actions:
+            queryset = queryset.prefetch_related(None)
         product_id = self.request.query_params.get("product")
         variant_id = self.request.query_params.get("variant")
         if product_id:
@@ -438,6 +448,18 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             PurchaseLine.objects.filter(variant__product=product)
             .exclude(purchase_order__status=PurchaseOrder.Status.CANCELLED)
             .select_related("purchase_order__supplier", "variant", "variant__product")
+            # This action builds its own queryset rather than going through
+            # ``PurchaseOrderViewSet.queryset``, so the option-value prefetch that
+            # queryset carries has to be repeated here: every row renders
+            # ``variant.display_name``, which falls back to
+            # ``option_values_label`` — a query per row — for the unnamed variants
+            # a normal shop sells almost exclusively.
+            .prefetch_related(
+                Prefetch(
+                    "variant__option_values",
+                    queryset=VariantOptionValue.objects.select_related("option"),
+                ),
+            )
             .order_by("-created_at", "-id")
         )
         if variant is not None:
@@ -598,6 +620,15 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                 "purchase_line",
                 "variant",
                 "variant__product",
+            )
+            # Same as ``_cost_history_response``: ``variant_name`` is
+            # ``variant.display_name``, whose ``option_values_label`` fallback
+            # queries once per row unless the option values are prefetched.
+            .prefetch_related(
+                Prefetch(
+                    "variant__option_values",
+                    queryset=VariantOptionValue.objects.select_related("option"),
+                ),
             )
             .filter(
                 adjustment__adjustment_type__in=(
