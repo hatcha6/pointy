@@ -8,6 +8,7 @@ import '../../../data/models/product_update_draft.dart';
 import '../../../data/models/unit_of_measure.dart';
 import '../../../data/models/variant_option.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/product_details_view_model.dart';
@@ -58,6 +59,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
   late String _unit;
   late bool _isService;
   late bool _isPrepared;
+  late final String _initialSignature;
 
   List<VariantOption> get _selectedVariantOptions {
     return [
@@ -95,6 +97,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
     _defaultSaleUnit = product.defaultSaleUnit;
     _defaultPurchaseUnit = product.defaultPurchaseUnit;
     _nameController.addListener(_refreshImageSearchSeed);
+    _initialSignature = _formSignature();
     _loadVariantOptions();
     _loadModifierGroups();
     _loadUnits();
@@ -114,10 +117,59 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
     }
   }
 
+  /// A stable string of every editable field, compared against
+  /// [_initialSignature] to detect unsaved edits. The async loaders only fill
+  /// the *available* option/unit lists, never the selections below, so a load
+  /// completing can never make the sheet look dirty on its own.
+  String _formSignature() {
+    String sortedIds(Iterable<int> ids) => (ids.toList()..sort()).join(',');
+    return <Object?>[
+      _nameController.text,
+      _descriptionController.text,
+      sortedIds(_selectedCategories.map((category) => category.id)),
+      sortedIds(_selectedVariantOptionIds),
+      sortedIds(_selectedModifierGroupIds),
+      _selectedImage != null,
+      _isActive,
+      _tracksExpiry,
+      _unit,
+      _isService,
+      _isPrepared,
+      _defaultSaleUnit,
+      _defaultPurchaseUnit,
+      _units
+          .map(
+            (unit) => [
+              unit.code,
+              unit.factorToBase,
+              unit.price,
+              unit.isSellable,
+              unit.isPurchasable,
+              unit.displayOrder,
+              unit.barcodes.join('/'),
+            ].join(':'),
+          )
+          .join(','),
+    ].join('|');
+  }
+
+  /// Anything the user would lose on an accidental dismiss. Evaluated fresh on
+  /// every back/dismiss attempt, so text typed without a rebuild still counts.
+  bool get _isDirty => _formSignature() != _initialSignature;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
+    // The save path pops through onSaved (an explicit Navigator.pop), which
+    // PopScope does not intercept — so saving still closes normally.
+    return PointyUnsavedChangesGuard(
+      isDirty: () => _isDirty,
+      child: _buildSheet(context, l10n),
+    );
+  }
+
+  Widget _buildSheet(BuildContext context, AppLocalizations l10n) {
     return ListenableBuilder(
       listenable: widget.viewModel,
       builder: (context, _) {

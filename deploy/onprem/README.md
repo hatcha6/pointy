@@ -12,10 +12,13 @@ it is down, the tills are unaffected.
 
 ## First Install
 
-1. Docker is installed for you — `install.sh` / `install.ps1` download and install
-   it automatically if it's missing (run as root on Linux / elevated on Windows).
-2. On Windows give the Docker VM at least 4GB memory for tiny pilots or 6GB+ for
-   the recommended 8GB host profile.
+1. Docker is installed for you — on Linux `install.sh` downloads and installs it
+   (run as root); on Windows the bundled WSL distro already has Docker Engine
+   inside it, so nothing is downloaded at all.
+2. On Windows run `wsl\bootstrap-wsl.ps1` from an **elevated** PowerShell. It
+   installs WSL, imports the distro, and runs `install.sh` inside it. The VM gets
+   half the host's RAM capped at 8GB; 8GB of host RAM is the recommended
+   profile, 4GB the floor for a tiny pilot.
 3. Copy `deploy/onprem/.env.example` to `deploy/onprem/.env`.
 4. Replace every secret and every `192.168.1.50` example with the Windows
    host's static LAN IP.
@@ -52,9 +55,9 @@ and Redis access.
 
 ### Remote (no site visit)
 
-Once `register-autostart.sh` (Linux) / `register-autostart.ps1` (Windows) has run,
-a host-level **update agent** (`update-agent.sh` / `update-agent.ps1`) runs on a
-timer alongside the watchdog. Each run it asks the relay which version this shop
+Once `register-autostart.sh` has run, an **update agent** (`update-agent.sh`)
+runs on a systemd timer alongside the watchdog — inside the WSL distro on
+Windows hosts, exactly as on Linux. Each run it asks the relay which version this shop
 should run (`POINTY_RELAY_PUBLIC_API_URL` in `.env`, authenticated with the shop's
 connector token), and when a newer one is assigned it downloads the bundle **from
 the relay**, verifies its sha256, backs up the database, applies it **live**
@@ -102,8 +105,7 @@ is just changing `POINTY_BACKEND_IMAGE` or `POINTY_RELAY_IMAGE` and running
 
 ### Zero-downtime updates (how, and what a release must honour)
 
-`update.sh` / `update.ps1` / the agent all share one engine (`update-lib.sh`,
-`update-lib.ps1`). It starts the new backend **beside** the running one, lets it
+`update.sh` and the agent share one engine (`update-lib.sh`). It starts the new backend **beside** the running one, lets it
 migrate and pass `/readyz/`, and only then flips the `edge` front door to it
 with an `nginx -s reload` — graceful, so in-flight requests finish on the old
 container and none are refused. It then rebuilds the managed `backend` container
@@ -137,17 +139,25 @@ volume and to three external mount slots exposed under `/mnt/pointy-external`.
 Set the source paths in `.env` to the real connected Windows drives or folders:
 
 ```env
-POINTY_BACKUP_DRIVE_1_SOURCE=D:/
-POINTY_BACKUP_DRIVE_2_SOURCE=E:/PointyBackups
-POINTY_BACKUP_DRIVE_3_SOURCE=F:/
+POINTY_BACKUP_DRIVE_1_SOURCE=/mnt/d
+POINTY_BACKUP_DRIVE_2_SOURCE=/mnt/e/PointyBackups
+POINTY_BACKUP_DRIVE_3_SOURCE=/mnt/f
 ```
 
-Docker Desktop runs Linux containers inside a small Linux VM. A Windows drive
-letter such as `D:/` is a host path, not something the image can see by itself.
-Docker Desktop must allow that host path to be shared with the VM before Docker
-can bind-mount it into a container. This cannot be enabled from inside the
-Docker image because image code starts only after the Docker daemon has already
-accepted or rejected the mount.
+On Windows the stack runs inside a WSL2 distro, which mounts the host's drives
+under `/mnt` — `D:/` is `/mnt/d`. Use that form, never a drive letter: a drive
+letter is not a path any Linux container can resolve, and `install.sh` rejects
+it outright.
+
+Two failure modes to know about, because neither announces itself:
+
+- **The drive is not attached when the stack starts.** `/mnt/d` does not exist,
+  and Docker creates a missing bind source as an empty directory *inside the
+  virtual disk*. Backups then "succeed" into the very disk they were meant to
+  survive. `install.sh` warns when a configured drive is missing — that warning
+  is the whole point, so do not skip past it.
+- **The drive is attached after WSL has booted.** WSL does not hot-mount it.
+  Mount it by hand (`mount -t drvfs d: /mnt/d`) or restart the distro.
 
 If a drive is mounted at its root, Pointy's backup destination picker will list
 the drive slot and its writable child folders. The same mounts are attached to
@@ -213,12 +223,14 @@ movements are read-only in the Django admin and cannot be deleted there.
 - **A service crashes:** All services use `restart: always`, so Docker restarts
   a crashed container in place immediately and brings the whole stack back when
   the Docker engine starts. Celery only starts once the backend is healthy.
-- **A container is destroyed, or the host reboots:** A watchdog
-  (`watchdog.ps1` / `watchdog.sh`, registered via `register-autostart.*`) runs at
-  boot and every 5 minutes. It runs `docker compose up -d` to recreate any
-  removed/stopped container and restarts any container left "unhealthy" (which
-  the restart policy alone will not do). See INSTALL.md > Resilience — on Windows
-  this also requires automatic logon so Docker Desktop starts unattended.
+- **A container is destroyed, or the host reboots:** A watchdog (`watchdog.sh`,
+  registered by `register-autostart.sh` as a systemd timer) runs at boot and
+  every 5 minutes. It runs `docker compose up -d` to recreate any removed or
+  stopped container and restarts any container left "unhealthy" (which the
+  restart policy alone will not do). On Windows a single scheduled task,
+  `PointyWSL`, starts the distro on the same cadence so systemd is there to run
+  that timer — and it needs **no** interactive logon, unlike the Docker Desktop
+  install it replaces. See INSTALL.md > Resilience.
 - **Long task hangs:** Celery enforces soft/hard time limits
   (`CELERY_TASK_*_TIME_LIMIT`) so a stuck task cannot pin a worker forever;
   backup/restore are exempted with their own higher limits.

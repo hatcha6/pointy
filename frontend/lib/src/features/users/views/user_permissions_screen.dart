@@ -19,6 +19,15 @@ class UserPermissionsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Saving pops explicitly from _SaveFooter, which PopScope does not
+    // intercept — so a successful save still closes the editor normally.
+    return PointyUnsavedChangesGuard(
+      isDirty: () => viewModel.hasChanges,
+      child: _buildScaffold(),
+    );
+  }
+
+  Widget _buildScaffold() {
     return ListenableBuilder(
       listenable: viewModel,
       builder: (context, _) {

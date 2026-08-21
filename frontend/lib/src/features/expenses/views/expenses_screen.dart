@@ -14,6 +14,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/query_controls/query_empty_state.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/expense_categories_view_model.dart';
@@ -152,12 +153,17 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
     final entries = viewModel.visibleEntries;
     if (entries.isEmpty) {
-      return PointyEmptyState(
+      // When the source chips are what emptied the list, "record an expense"
+      // is the wrong way out: a new expense lands under a hidden chip and the
+      // list stays blank. Offer the chips back instead, and keep the create
+      // action for a month that genuinely has no spending.
+      return QueryEmptyState(
         icon: Icons.receipt_long_outlined,
-        title: viewModel.ledger.entries.isEmpty
-            ? l10n.expensesEmptyMessage
-            : l10n.expensesNoMatchingMessage,
-        action: widget.capabilities.canManageExpenses
+        search: '',
+        hasFilters: viewModel.isFilteredToNothing,
+        emptyTitle: l10n.expensesEmptyMessage,
+        onClear: viewModel.showAllSources,
+        emptyAction: widget.capabilities.canManageExpenses
             ? FilledButton.icon(
                 onPressed: () => _openEditor(context),
                 icon: const Icon(Icons.add),

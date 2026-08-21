@@ -41,6 +41,17 @@ from .services import (
 )
 
 
+def _register_session_owner_key(request):
+    """The key a register session is stamped with for its operator.
+
+    Mirrors ``apps.sales.views.register_session_owner_key``; kept local so the
+    printing app does not import the sales viewset module.
+    """
+    if request.user.is_authenticated:
+        return f"user:{request.user.pk}"
+    return "anonymous"
+
+
 class PrintTemplateViewSet(viewsets.ModelViewSet):
     serializer_class = PrintTemplateSerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
@@ -198,7 +209,7 @@ class PrintAuditEventViewSet(
                 | Q(
                     document_type=PrintAuditEvent.DocumentType.SALE_ORDER,
                     sale_order__register_session__owner_key=(
-                        self._register_session_owner_key()
+                        _register_session_owner_key(self.request)
                     ),
                 )
             )
@@ -207,11 +218,6 @@ class PrintAuditEventViewSet(
                 document_type=PrintAuditEvent.DocumentType.PURCHASE_ORDER,
             )
         return queryset
-
-    def _register_session_owner_key(self):
-        if self.request.user.is_authenticated:
-            return f"user:{self.request.user.pk}"
-        return "anonymous"
 
     @action(detail=False, methods=["post"])
     def record(self, request):
@@ -259,19 +265,47 @@ class PrintJobViewSet(
         "failed": ("printing.change_printjob",),
         "report": ("printing.change_printjob",),
     }
-    queryset = (
-        PrintJob.objects.select_related(
-            "order",
-            "template_version",
-            "printer_profile",
-            "claimed_by",
-        )
-        .prefetch_related("events__agent", "events__user")
-        .all()
-    )
+    # No ``events`` prefetch: the job payload no longer embeds its audit trail
+    # (see PrintJobSerializer), and the ``events`` action below prefetches its
+    # own labels. Re-adding it here would load the trail for every row of the
+    # list and throw it away.
+    queryset = PrintJob.objects.select_related(
+        "order",
+        "template_version",
+        "printer_profile",
+        "claimed_by",
+    ).all()
     filterset_fields = ("job_type", "status", "order", "printer_profile", "claimed_by")
     search_fields = ("idempotency_key", "order__receipt_number", "error_message")
     ordering_fields = ("created_at", "updated_at", "priority", "attempts")
+
+    # Reading a job hands over its ``payload`` — the whole rendered receipt
+    # (lines, totals, applied discounts, the public-invoice link, the owning
+    # session). The *lifecycle* verbs below hand over none of that and must stay
+    # shop-wide: one agent drives a shared printer whichever till rang the sale.
+    _read_actions = ("list", "retrieve", "events")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.action not in self._read_actions:
+            return queryset
+        user = self.request.user
+        # Jobs with no order (manual/template jobs) carry no sale to protect.
+        order_less = Q(order__isnull=True)
+        if not user.has_perm("sales.view_order"):
+            return queryset.filter(order_less)
+        if user_has_full_visibility(user):
+            return queryset
+        # Same rule as OrderViewSet.get_queryset: without shop-wide visibility a
+        # cashier reads their own register session's sales and no one else's.
+        return queryset.filter(
+            order_less
+            | Q(
+                order__register_session__owner_key=_register_session_owner_key(
+                    self.request
+                )
+            )
+        )
 
     @action(detail=True, methods=["get"])
     def events(self, request, pk=None):

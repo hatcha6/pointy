@@ -16,7 +16,10 @@ from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.inventory.models import StockBatch, StockItem
 from apps.notifications import services as notification_services
-from apps.notifications.models import BusinessNotification
+from apps.notifications.models import (
+    BusinessNotification,
+    BusinessNotificationUserState,
+)
 from apps.printing.models import PrintJob, PrintTemplate, PrintTemplateVersion
 from apps.purchasing.models import PurchaseOrder, PurchaseReceipt, Supplier
 from apps.sales.models import RegisterSession
@@ -237,6 +240,86 @@ class BusinessNotificationApiTests(APITestCase):
         # prefetched and the redundant per-row fallback query removed, serializing
         # 20 alerts costs the same statements as 2 (no per-notification N+1).
         self.assertEqual(_count_for(2), _count_for(20))
+
+    def test_feed_state_rows_do_not_grow_with_staff_count(self):
+        """The bell poll must not pay for other people's dismissals.
+
+        ``_state_for_user`` wants exactly one row per alert — the reader's own
+        state — but the feed's prefetch used to load *every* member of staff's
+        state for every alert and discard all but one. The statement count is
+        identical either way (the test above stays green with or without the
+        fix), so this measures the rows actually materialized as headcount
+        grows.
+        """
+        User = get_user_model()
+        manager_group = Group.objects.get(name=MANAGER_GROUP)
+        throttle_key = notification_services.INLINE_SYNC_THROTTLE_CACHE_KEY
+        alert_count = 8
+
+        def _state_rows_for(staff_count):
+            BusinessNotification.objects.all().delete()
+            BusinessNotificationUserState.objects.all().delete()
+            colleagues = []
+            for index in range(staff_count - 1):
+                colleague = User.objects.create_user(
+                    username=f"notification-staff-{staff_count}-{index}",
+                    password="pass",
+                )
+                colleague.groups.add(manager_group)
+                colleagues.append(colleague)
+            alerts = [
+                BusinessNotification.objects.create(
+                    code="inventory.out_of_stock",
+                    category=BusinessNotification.Category.INVENTORY,
+                    severity=BusinessNotification.Severity.CRITICAL,
+                    fingerprint=f"inventory.out_of_stock:staff{staff_count}:{index}",
+                )
+                for index in range(alert_count)
+            ]
+            # Everyone has interacted with every alert — the steady state of a
+            # shop whose staff use the bell. The states carry neither an
+            # acknowledgement nor a live snooze, so every alert stays visible
+            # and the page size is the same at both headcounts.
+            BusinessNotificationUserState.objects.bulk_create(
+                [
+                    BusinessNotificationUserState(notification=alert, user=person)
+                    for alert in alerts
+                    for person in [self.manager, *colleagues]
+                ]
+            )
+
+            client = APIClient()
+            client.force_authenticate(user=self.manager)
+            loaded = []
+            build_instance = BusinessNotificationUserState.from_db.__func__
+
+            def counting_from_db(cls, db, field_names, values):
+                loaded.append(1)
+                return build_instance(cls, db, field_names, values)
+
+            with mock.patch(
+                "apps.notifications.tasks.sync_business_notifications_task.apply_async"
+            ):
+                # A warm-up read first, so the measured read is steady state.
+                cache.delete(throttle_key)
+                client.get(reverse("business-notification-list"))
+                cache.delete(throttle_key)
+                with mock.patch.object(
+                    BusinessNotificationUserState,
+                    "from_db",
+                    classmethod(counting_from_db),
+                ):
+                    response = client.get(reverse("business-notification-list"))
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertEqual(len(response.data["results"]), alert_count)
+            return len(loaded)
+
+        solo = _state_rows_for(1)
+        crowded = _state_rows_for(6)
+        # One row per alert, whoever else works here. Unfiltered, ``crowded``
+        # was six times ``solo`` — the feed read every colleague's state too.
+        self.assertEqual(solo, alert_count)
+        self.assertEqual(crowded, solo)
 
     def test_cashier_only_sees_alert_categories_allowed_by_permissions(self):
         product = create_product_with_default_variant(

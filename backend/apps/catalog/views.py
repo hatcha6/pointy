@@ -6,7 +6,6 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction
 from django.db.models import (
     BooleanField,
-    Count,
     DecimalField,
     Exists,
     F,
@@ -78,8 +77,11 @@ from .serializers import (
 )
 from .search_filters import CatalogRelevanceFilter, VariantRelevanceFilter
 from .services import (
+    category_detail_prefetch,
     category_ids_with_descendants,
     image_attachment_prefetch,
+    unit_detail_prefetch,
+    unit_usage_queryset,
     variant_detail_queryset,
 )
 
@@ -252,8 +254,8 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     }
     queryset = Product.objects.prefetch_related(
         image_attachment_prefetch("attachments"),
-        "categories",
-        "units__unit",
+        category_detail_prefetch("categories"),
+        unit_detail_prefetch("units__unit"),
         "units__barcodes",
         "variants",
         image_attachment_prefetch("variants__attachments"),
@@ -306,7 +308,28 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             context["catalog_summary"] = True
         return context
 
+    # Detail actions that only need the product's *identity*. Each of them
+    # either answers about a related collection (``attachments``), re-queries
+    # from scratch (``variants`` builds ``variant_detail_queryset()``), or uses
+    # nothing but the row itself (``bought_together``, ``image_import``) --
+    # none of them serializes the product with ``ProductCatalogSerializer``.
+    # ``get_object()`` runs ``get_queryset()`` regardless, so those tabs each
+    # paid the whole catalog prefetch tree (variants, their option values,
+    # stock, categories, units, barcodes, modifier groups, image attachments)
+    # only to throw every prefetched row away. ``archive``/``restore``/
+    # ``set_variant_prices`` are deliberately NOT here: they return the product
+    # through ``self.get_serializer(...)`` and do need the tree.
+    identity_only_actions = frozenset(
+        {"attachments", "bought_together", "image_import", "variants"}
+    )
+
     def get_queryset(self):
+        queryset = self._catalog_queryset()
+        if getattr(self, "action", None) in self.identity_only_actions:
+            return queryset.prefetch_related(None)
+        return queryset
+
+    def _catalog_queryset(self):
         queryset = self._with_variant_rollups(super().get_queryset())
         queryset = self._filter_by_category(queryset)
         queryset = self._filter_by_barcode(queryset)
@@ -479,14 +502,16 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         if request.method.lower() == "post":
             return self._create_variant_for_product(request, product)
 
+        # The prefetch shape belongs to ProductVariantSerializer, not to this
+        # action: the hand-rolled list above named four real relations and still
+        # left the 1:1 stock row, the parent product's categories/units/
+        # variant-options/modifier groups and each attachment's own FKs to fire
+        # once per variant (15 queries/variant, measured). Reuse the same
+        # factory ProductVariantViewSet does so a new serializer field cannot be
+        # fast on one endpoint and an N+1 on the other.
         queryset = (
-            product.variants.select_related("product")
-            .prefetch_related(
-                "attachments",
-                "product__attachments",
-                "option_values",
-                "option_values__option",
-            )
+            variant_detail_queryset()
+            .filter(product=product)
             .order_by("-is_default", "name", "id")
         )
         page = self.paginate_queryset(queryset)
@@ -1013,9 +1038,7 @@ class UnitOfMeasureViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         "partial_update": ("catalog.change_unitofmeasure",),
         "destroy": ("catalog.delete_unitofmeasure",),
     }
-    queryset = UnitOfMeasure.objects.annotate(
-        product_count=Count("product_units", distinct=True),
-    ).order_by("display_order", "name", "id")
+    queryset = unit_usage_queryset().order_by("display_order", "name", "id")
     filterset_fields = ("is_active", "dimension", "is_system")
     search_fields = ("code", "name", "abbreviation")
     ordering_fields = ("display_order", "name", "dimension", "created_at")

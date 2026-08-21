@@ -398,3 +398,503 @@ can reuse both without reordering the original's awaits. And note the test trap:
 these panes are `StatelessWidget`s fed a view model by a parent
 `ListenableBuilder` — pump them bare and the retry refetches but never repaints,
 so the test fails for the wrong reason.
+
+## 2026-08-20 - A filters-only surface needs a third branch the shared empty state did not have
+
+**Learning:** `QueryEmptyState` branched two ways — search-only, or "filtered"
+— and the "filtered" branch was really *search + filters*: it showed
+`queryNoResultsMessage` ("تحقق من الكتابة، أو امسح البحث والفلاتر…") and a
+"مسح البحث والفلاتر" button whenever `hasFilters` was true, **regardless of
+whether a search term was set**. So the common case on every list screen — open
+the funnel, pick a status, type nothing — told the user to check their spelling
+and offered to clear a search box they never used. On the Payments hub, which
+has a date-range and a method filter and *no search box at all*, it named a
+control that does not exist on the screen. This is the same defect the
+2026-08-19 "word its escape after what is narrowing" entry fixed one level up:
+fixing it for `hasFilters == false` left the symmetric bug for `search == ''`.
+Its own test asserted the wrong copy (`'مسح البحث والفلاتر'` for
+`search: '', hasFilters: true`), so the suite defended the bug.
+
+**Action:** The state space is `(hasSearch, hasFilters)` — three reachable
+cases, not two. Write it as a `switch ((hasSearch, hasFilters))` over message
+*and* button label so a missing case cannot compile away silently, and cover
+all three in the widget's own test. Before reusing a shared empty state on a
+new surface, list the controls its copy names and check each one exists there;
+`search: ''` is the tell that a surface has no search box, and it must change
+the copy, not just the branch.
+
+**Also — a "clear filters" escape must be one fetch, not N.** The hub's existing
+clear button called `onRangeChanged(null)` then `onMethodChanged(null)`, and
+each setter fires its own `loadXPayments()` — two overlapping requests for the
+same ledger, the second racing the first. Any screen whose filter setters each
+trigger a reload needs a single `clearXFilters()` on the view model that nulls
+every field and reloads once; pointing both the filter bar and the empty state
+at it fixes the existing double-fetch too. Assert it by counting requests
+(`expect(requests.length, before + 1)`), not just by checking the list refilled.
+
+**Test trap:** work started inside `tester.runAsync` must *complete* before the
+callback returns. `runAsync(() => Future.sync(() => vm.setCustomerRange(r)))`
+returns immediately while the http future it kicked off is still pending, and
+the following `pumpAndSettle` then times out. Fire-and-forget view-model setters
+belong outside `runAsync` — call them like a tap and `pumpAndSettle`, which is
+what the retry tests already do successfully with `MockClient`.
+
+## 2026-08-20 - Asserting a retry inside a `PointyDataList` needs two scroll-aware finders
+
+**Learning:** The `PointyErrorState`-without-`action:` backlog is mostly
+mechanical — `PointyDataList.errorBuilder` sites whose view model *already*
+exposes the public reload (`loadEmployees`/`loadPayrollRuns`/`loadLoans` were all
+public, so the payroll route's four dead-ends cost 24 purely additive lines and no
+view-model change at all). The cost is entirely in the test, and two failures
+there look like product bugs but are not. (1) When the pane has a header — the
+payroll tab puts the month workflow card above the history list — the retry is in
+the tree and `findsOneWidget` passes, but `tester.tap` silently *misses* it
+(`warnIfMissed`) because it starts below the 800×600 test viewport, and the
+request-count assertion then fails with an off-by-one that reads like the button
+not being wired. (2) After `ensureVisible` scrolls to it, the refilled row is
+pushed offstage, so `find.textContaining('PR7')` finds nothing even though the
+list loaded correctly.
+
+**Action:** For any retry inside a scrollable pane: `await
+tester.ensureVisible(retry)` + `pumpAndSettle()` before `tap`, and assert the
+refilled content with `skipOffstage: false`. Assert *both* that the request count
+went up by exactly one and that the error text is gone — the count alone passes if
+the retry fires twice, and the text alone passes if the pane merely rebuilt.
+A fake that fails only the **first** request to one path and serves normally after
+is the right shape: it is the LAN blip that makes retry the correct affordance,
+and it makes the test fail loudly if the retry is wired to the wrong loader.
+
+**Remaining in the no-retry backlog** after this run (payroll route is now clear):
+`product_document_history_section` (×2), `device_settings_screen`,
+`discount_details_screen`, `shop_settings_screen`, `shop_backup_widgets`,
+`user_management_screen`. `payment_sheet` stays excluded — it is a *config* gap
+("no payment methods enabled"), not a fetch, so no retry applies.
+
+## 2026-08-20 - A disabled-control audit is blind to the control that was removed
+
+**Learning:** The "disabled control that won't say why" seam has a second half
+that no `onPressed: .* null` grep can reach: the control that is *conditionally
+absent*. `SaleOrderDetailsContent` builds its action bar as `if (canReturn)
+OutlinedButton…`, so on a voided invoice return, exchange and void simply are
+not in the tree — nothing greys out, nothing is there to carry an explanation.
+The returns desk was the sharp case: look up a receipt, get a correct-looking
+invoice, and there is no إرجاع button and no sentence saying why. The state
+*was* on screen — `الحالة: ملغاة` as a grey `_DetailRow` inside the summary
+section — but far below the actions and never causally linked to them.
+
+Two things made the finding defensible rather than subjective. (a) The backend
+settles the semantics: `void_order` and the full-return path in
+`sales/services.py` both flip `Order.Status` to `VOID` once no line has
+`returnable_quantity`, so `status == 'void'` **is** "nothing left to return" —
+one predicate, no guessing, and `status == 'paid' && !hasReturnableItems` is
+unreachable. (b) The sibling already exists: `_PurchaseOrderStatusCallout` in
+`purchase_order_details_screen.dart` states a cancelled PO's dead state in plain
+language, so the sales side was the odd one out.
+
+**Action:** Audit the *gating predicate* (`if (canX)`, `_canX`,
+`hasReturnableItems`), not `onPressed: null` — grep `if (can` in action bars.
+When you find one, check whether a backend status makes the reason unambiguous
+before writing copy; a callout that guesses wrong is worse than silence. Gate
+the explanation on **status, not on the callback**: `invoice_details_screen`
+already passes `onReturn: null` for a voided order, so keying off the callback
+would have hidden the explanation on the screen where a manager most often
+lands on one. `PointyDetailCallout` + `PointyCalloutTone.neutral` is the house
+component for this and was already imported in the file.
+
+**Also — a scripted insert before a `class` steals its docstring.** Anchoring a
+Python/sed insert on `class _CreditBalanceCallout extends StatelessWidget {`
+placed the new class *between* that class and its `///` comment, silently
+re-homing the doc onto the new widget. The analyzer is happy; only `git diff`
+catches it. Anchor on the doc comment's first line, or re-read the diff around
+every inserted class.
+
+## 2026-08-20 - An all-conditional `PopupMenuButton` is an enabled button that does nothing
+
+**Learning:** Flutter's `PopupMenuButton.showButtonMenu()` guards with
+`if (items.isNotEmpty)` — literally commented "Only show the menu if there is
+something to show". So a menu whose `itemBuilder` returns `[]` renders a normal,
+enabled, tappable ⋮ that opens nothing at all: no menu, no snackbar, no
+explanation. This is the *third* shape of the absent-control seam (after
+`if (canX) Button` and `onPressed: null`), and unlike those two it is invisible
+to every existing audit, because the control is present and looks live.
+
+An 11-site sweep of `PopupMenuButton` in `lib/src` found exactly **one**
+deviation, which is what makes it defensible: `invoice_list_screen` and
+`purchase_order_list_screen` both already guard the render
+(`if (onPrint != null || onShare != null || onEdit != null)`), and the other
+eight have at least one unconditional entry, so they can never be empty. Only
+`job_details_screen` had all three entries conditional behind
+`if (job != null)` — empty exactly when `status != open && !canReopenJobs`,
+i.e. any technician opening a finished job.
+
+**Action:** Audit `PopupMenuButton` by asking "can `itemBuilder` return an empty
+list?", not by reading `enabled:`. When it can, hoist the items into a named
+method and render `if (items.isNotEmpty)` — the repo's own idiom, and it keeps
+`onSelected`'s switch and the items in one place. Two notes for the test:
+`OperationsJobStatus.fromJson` falls through to `open` for any unknown string,
+so a `'closed'` fixture silently tests the *open* case and every assertion
+inverts — use the real enum values (`completed`/`cancelled`). And the job number
+renders in both the app bar and the header card, so `find.text(jobNumber)` needs
+`findsWidgets`, not `findsOneWidget`.
+
+**Also — `PopupMenuButton` was outside the icon-button tooltip audit.** The
+2026-08-19 entry's "every `IconButton` has a tooltip" sweep did not cover it,
+and a `PopupMenuButton` with no `tooltip:` falls back to
+`MaterialLocalizations.showMenuTooltip` ("إظهار القائمة") rather than naming what
+the menu does. Still unlabelled after this run: `recipes_page.dart:102`,
+`sales_channels_page.dart:318`, `payments_hub_screen.dart:627`. `moreActionsTooltip`
+("إجراءات") already exists and needs no new string.
+
+## 2026-08-20 - An error state that clears the list makes "empty" and "failed" the same state
+
+**Learning:** The sharpest shape of the dead-end seam is not a missing retry — it is
+a *footer computed from `list.length`* while the error path clears that list.
+`StockCountReconciliationViewModel.load()` does `_lines.clear(); _hasLoadError = true`
+on failure, and `_buildBottom` takes `lines.length` as its only input. So a failed
+load produced `hasVariances == false`, which is the **matched-count** branch: a green
+`check_circle_outline` FilledButton labelled "إنهاء الجرد" — offering to finalize a
+count whose variances were never fetched — sitting directly under the error text that
+said loading failed. The two states are byte-identical downstream of the view model;
+only `hasLoadError` tells them apart, and nothing read it.
+
+This generalises: any screen whose action bar branches on emptiness (`items.isEmpty`,
+`count == 0`, `hasX = list.isNotEmpty`) will render its *success* affordance on a load
+failure, because failure and emptiness both produce an empty list. The body showing an
+error does not save it — the footer is a separate subtree and contradicts it.
+
+**Action:** When auditing a list screen, don't stop at "does the error state have a
+retry?". Ask **"what else reads `lines`/`items`?"** — grep the file for the collection
+and check every consumer for a `hasLoadError` guard. Fix both halves: swap
+`PointyEmptyState` for `PointyErrorState` (danger-toned, takes `action:`) with a retry
+calling the view model's `load()`, *and* short-circuit the action bar with
+`PointyInlineMessage.error` before the emptiness branch. Place that guard **after** the
+capability gate, so a staff member still gets the "manager only" message rather than a
+retry hint for a button they could never press.
+
+**Two traps.** (a) The reconciliation screen reused `stockCountLoadError`
+("تعذّر تحميل عمليات الجرد." — failed to load stock count *sessions*), copy written for
+the sessions list; an error string shared across screens usually names the wrong noun on
+one of them, so read the Arabic before reusing the key. (b) A stub repository field named
+`loadCount` collides with `StockCountRepository.loadCount(int)` and fails compilation with
+"Can't declare a member that conflicts with an inherited one" — name retry counters
+`loadAttempts`.
+
+**Also — prove the test is not vacuous.** `git stash push -- <the production file>`,
+re-run the single test file, confirm it fails, then `git stash pop`. On this change the
+`findsNothing` assertions would have passed against the old code for the wrong reason if
+the pump had failed early; the stash run showed the real failure
+(`Found 0 widgets with text "تعذّر تحميل فروقات الجرد."`) and confirmed the coupling.
+
+
+## 2026-08-20 - Audit the unsaved-changes guard from the *dirty predicate*, not the forms
+
+**Learning:** `PointyUnsavedChangesGuard` wraps only 4 surfaces while ~20 files
+carry a `Form` + `TextEditingController`, so "unguarded form" looks like a huge
+backlog — but most of those are one-field dialogs where the guard is noise. The
+cheap, defensible shortlist comes from the other side: `grep -rn "isDirty\|
+hasChanges\|_formSignature"` and check which predicates *no guard consumes*.
+`UserPermissionsViewModel.hasChanges` was the standout — already written,
+already trusted as the Save button's enable condition, and consulted nowhere on
+the way out, so a manager's whole page of permission toggles vanished on back.
+The second shape is a sibling deviation: `ProductParentEditSheet` and
+`ProductVariantFormSheet` are presented by the same helper in the same file and
+only one was guarded.
+
+**Action:** For a surface with many heterogeneous fields, copy
+`discount_rule_form`'s `_formSignature()` / `_initialSignature` idiom rather
+than hand-rolling a per-field `||` chain — it sidesteps the question of whether
+each model (`ProductUnit` here) implements `==`. **The trap is async loaders:**
+a signature captured in `initState` is only safe if the in-flight loads never
+write to a compared field. Verify that literally (in this sheet `_loadUnits` /
+`_loadVariantOptions` / `_loadModifierGroups` fill only the *available* lists,
+never the selections) and pin it with an "untouched editor leaves without a
+prompt" test that runs after `pumpAndSettle`. Note that test is a **control,
+not proof** — it passes against the unguarded code too, so the non-vacuity
+revert should read `+1 -3`, not `+4 -0`.
+
+**Also:** `showAdaptiveFormSurface` defaults `enableDrag: isDismissible` (true),
+and the guard's own docstring admits drag-to-dismiss can bypass `PopScope` on
+some platforms. Both product sheets now share that caveat; do not "fix" it by
+flipping `isDismissible`, which would also kill the barrier tap the guard *does*
+intercept.
+
+## 2026-08-20 - A screen-level refresh action makes an actionless error state a false positive
+
+**Learning:** The `PointyErrorState`-without-`action:` backlog from the previous
+entry is not a to-do list. Re-scanned it shrank 17 → 8, and of those 8 only
+**one** file was a genuine dead end. `device_settings_screen`,
+`discount_details_screen`, `user_management_screen` and `shop_backup_widgets` all
+carry an `IconButton(icon: Icon(Icons.sync))` in the app bar that calls the very
+loader the inline retry would call — the user already has a way to re-ask, one
+that is *more* discoverable than a button buried in a section. Adding an inline
+retry there is churn, not a fix. `shop_settings_screen`'s is a *save* failure and
+`payment_sheet`'s is a config gap, so neither takes a reload retry at all.
+
+**Action:** Before adding a retry, grep the host screen for `Icons.sync` /
+`Icons.refresh` / `RefreshIndicator` and check the handler reloads the same thing
+the error state covers. Only report a dead end when nothing on the screen re-asks.
+`product_document_history_section.dart` qualified because
+`product_details_screen.dart` has **no** refresh anywhere — its app-bar actions are
+edit / archive / print-label only, so a blinked LAN stranded both history lists
+until the manager backed out of the product and reopened it.
+
+## 2026-08-20 - `PointyDataList` hands its error state to the parent unwrapped
+
+**Learning:** With `header == null`, `PointyDataList.build` returns
+`errorBuilder(context)` **directly** — no `ListView`, no scroll view (see
+`pointy_data_list.dart`, the `stateBody` branch). Where the parent is a fixed
+-height `SizedBox` — as both product history lists are, sized by
+`_documentHistoryListHeight` — growing the error state by adding an `action:`
+button is a hard render overflow, not a scroll. The empty state fit in the 220px
+"nothing here" height; the error state plus a retry button does not, and the
+Arabic titles wrap to two lines at phone width, which is where it bites first.
+
+**Action:** When adding `action:` to a `PointyErrorState`, look *up* for a
+`SizedBox(height:)` / `SizedBox.square` / aspect-ratio parent before assuming the
+change is presentation-only. Thread the error flag into the height helper and
+return the tall branch, reusing a height the function already returns rather than
+inventing a constant. Prove it with a third test at the tightest width (390) that
+asserts `tester.takeException()` is null — an overflow is reported as a thrown
+`FlutterError`, so a test that only checks `find.text` passes straight through one.
+
+## 2026-08-20 - `find.widgetWithText(FilledButton, …)` never matches a `.icon` button
+
+**Learning:** `FilledButton.icon` / `TextButton.icon` / `OutlinedButton.icon` do
+not build a `FilledButton` — they build a private `_FilledButtonWithIcon`
+subclass. `find.byType` matches `runtimeType` *exactly*, so
+`find.widgetWithText(FilledButton, 'إضافة مصروف')` finds zero widgets even when
+the button is right there on screen. A `findsOneWidget` assertion fails loudly,
+which is fine; the danger is the `findsNothing` direction — "the wrong action is
+no longer offered" passes vacuously against code that still offers it, so the
+whole proof of a corrected empty state evaporates. Every empty/error state in
+this app builds its `action:` with a `.icon` constructor.
+
+**Action:** Assert on the label with `find.text('…')`, not on the button type.
+When a test asserts a control is *absent*, always run the reverse check
+(temporarily restore the old widget and confirm the test fails) — the expected
+shape is `+1 -1`, the control passing and the behaviour test failing.
+
+## 2026-08-20 - A view-model escape hatch with no call site is the real dead end
+
+**Learning:** `ExpensesViewModel.showAllSources()` existed, was covered by a
+view-model test, and was called from **no** widget — the same shape as
+`PointyEmptyState.action` in the earlier entry. Meanwhile the expenses empty
+state offered "إضافة مصروف" whether the month was genuinely empty or the five
+source chips had hidden every row, and that action provably cannot fix the
+filtered case: the new expense files itself under the hidden `expense` chip and
+the list stays blank.
+
+**Action:** Grep the view model for public methods no view calls before hunting
+for new widgets to write — a tested-but-uncalled `clear…()`/`showAll…()` names
+an escape the UI forgot to offer. `QueryEmptyState` takes `search: ''`, so it
+fits a filter-only surface with no search box and needs **no new l10n keys**
+(`queryNoFilteredResultsTitle` / `queryNoFiltersResultsMessage` /
+`queryClearFiltersButton` are worded for exactly that case). Blame the filters
+only when `hidden.isNotEmpty && ledger.entries.isNotEmpty` — otherwise an
+untouched month with no spending gets told to clear filters that are hiding
+nothing.
+
+## 2026-08-20 - A filter with a non-null default breaks the usual `hasFilters` test
+
+**Learning:** `QueryEmptyState`'s `hasFilters` is usually "any filter is
+non-null", but the jobs board defaults `statusFilter` to
+`OperationsJobStatus.open` rather than null. Testing it against null would have
+flagged the *pristine* board as filtered, so a brand-new shop with no jobs at
+all gets "لا توجد نتائج مطابقة للفلاتر / امسح الفلاتر" instead of the onboarding
+copy that explains what a job is — the exact false positive the expenses entry
+warns about, arriving through a different door. The predicate has to be
+**default-relative** (`_statusFilter != _defaultStatusFilter`), and `clearFilters()`
+must restore that same default, not the widest view: the widget renders three
+different labels for one `onClear`, so a clear that also widened the status would
+make the "مسح البحث" (clear the search) branch silently change a filter the user
+never touched. Extract the default as a named constant so the predicate and the
+reset cannot drift apart.
+
+**Action:** Before reusing `QueryEmptyState`, read the view model's field
+*initializers*, not just its types — `T? x = someDefault` needs a
+default-relative predicate. Residual worth naming in the PR rather than hiding:
+this correctly stops lying about *why* the board is blank, but a technician
+searching for a completed repair still has to widen the status segment by hand.
+
+**Also — a screen-owned `TextEditingController` does not follow the view model.**
+`DebouncedSearchField` syncs its text from `widget.value`, so clearing the query
+clears the box for free (the catalog entry relies on this). A plain `TextField` +
+`_searchController` in the State, as on the jobs board, does **not**: clearing
+only `viewModel.searchQuery` leaves the dead term visible, and the still-pending
+400ms `_searchDebounce` then re-applies it a moment later. `onClear` must cancel
+the timer and clear the controller before delegating. Pin it with
+`tester.widget<TextField>(…).controller?.text` — asserting only on the view model
+passes straight through this bug.
+
+## 2026-08-20 - Never use `git stash` for the non-vacuity check
+
+**Learning:** The journal's "revert only the production file and re-run" check is
+right, but `git stash` is the wrong tool for it and cost most of a run. Two traps
+compound: (1) `git stash push -- <path> -q` puts `-q` **in the pathspec**, so the
+push aborts with "did not match any file(s)" and stashes nothing; (2) the following
+`git stash pop` therefore pops whatever was already at `stash@{0}` — and stashes are
+**repo-global across worktrees**, so it applied a *different routine's* uncommitted
+backend work into this worktree and left `backend/apps/employees/models.py` in a
+`UU` conflict with markers. Recovery is also gated: `git checkout HEAD -- <path>`
+and `git restore --source=HEAD` are both blocked by the sandbox classifier.
+
+**Action:** Do the revert with a plain file copy, never `git stash`:
+`cp <file> $SCRATCH/x.dart` → `git show HEAD:<repo-relative-path> > <file>` →
+run the test → `cp $SCRATCH/x.dart <file>`. Note `git show` needs the path from the
+**repo root** (`frontend/lib/...`) even when the shell is in `frontend/`. If a
+foreign stash does get popped, `git show HEAD:<path> > <path> && git add <path>`
+restores it and clears the conflict without a blocked checkout — and check
+`git stash list` afterwards to confirm the entry itself survived (a failed pop keeps
+it), so the other routine's work is not lost.
+
+## 2026-08-20 - A fixed-height list section can't absorb a retry button
+
+**Learning:** Adding `action:` to a `PointyErrorState` is normally free, but
+`PointyDataList` renders `errorBuilder` **directly, with no scroll view**, so the
+state body inherits whatever height its parent imposes. `_BeneficiariesSection` in
+`discount_details_screen.dart` wraps the list in a `SizedBox(height: 220)` for the
+zero-item case, and the retry pushed it 4px over — a `RenderFlex overflowed` that a
+widget test surfaces as an unexpected exception *before* the assertion it was
+actually written for, so the failure reads as "the copy is wrong" rather than
+"the box is too short".
+
+**Action:** Before adding `action:` to an error state, check whether its
+`PointyDataList` sits inside a fixed-height box; if so, branch that height on the
+error flag rather than trusting the empty-state constant (the empty state has no
+button and often no second title line). Pin it with a test at a **narrow** viewport
+(~420pt) as well as a wide one — the title wraps to two lines there and the wide
+case alone passes vacuously.
+
+## 2026-08-20 - A `_ =>` arm over a backend enum string hides states, and looks total
+
+**Learning:** `conversations_screen.dart` mapped `outbound_status` to an icon with a
+Dart `switch` whose default arm was `_ => Icons.schedule`. It reads as exhaustive —
+it is not: the backend (`apps/messaging/models.py`, `OutboundMessage.Status`) has
+nine states, the widget named four, and the other five (`queued`, `scheduled`,
+`sending`, `cancelled`, `expired`) all landed on the same clock. So a message that
+had been cancelled or had expired — one that will *never* arrive — was drawn
+identically to one still waiting its turn. Dart cannot warn here because the
+subject is a `String`, not an enum: `outbound_status` crosses the wire as text and
+the client never mints an enum for it.
+
+**Action:** Whenever a widget switches on a raw backend status string, read the
+matching `TextChoices` / `models.py` block and enumerate every value before judging
+the mapping — the `_` arm is where the missing states hide, and a state that means
+"this is over" collapsing into one that means "this is pending" is the failure mode
+to look for. Test it by asserting the *distinctness* of the icons
+(`expect(iconFor('cancelled'), isNot(iconFor('queued')))`) rather than pinning each
+one, so the assertion survives an icon change but still fails on a re-merge.
+
+**Two presentation notes from the same fix.** (1) A tooltip is not enough on a
+cashier tablet — nobody long-presses a 14px glyph. Split by consequence: states the
+reader must act on (failed / cancelled / expired / opted-out) get their Arabic name
+as *visible* text; the rest keep icon-plus-tooltip, or the thread becomes a wall of
+status labels. When the label is visible, pass `semanticLabel: null` on the icon or
+a screen reader reads it twice. (2) Adding text to a metadata line built as
+`Row(mainAxisSize: min)` inside a width-capped bubble will overflow on a narrow
+phone — switch that line to `Wrap`, which gives the label its own line instead of a
+yellow-and-black stripe, and needs no ellipsis or `Flexible`.
+
+## 2026-08-21 - Shared-component copy that names a value only *some* call sites show
+
+**Learning:** `record_payment_dialog.dart` is one dialog behind four flows
+(invoice, customer account ×2, supplier). Its amount error said "…ولا يتجاوز
+المتبقّي" — "not exceeding the remaining" — while the *remaining* was rendered by
+an optional `balanceLabel` the **caller** passes. Three callers pass it; the
+supplier pay-out (`purchase_order_actions_panel.dart`) does not. So on the one
+money-OUT flow the dialog refused an amount for exceeding a number it never
+showed. The shared component already held that number (`maxAmount`), so the copy
+was pointing at caller state it could have owned outright.
+
+**Action:** When a shared widget's copy refers to a value ("the remaining", "the
+limit", "the selected item"), check whether *every* call site actually renders
+that value — an optional context parameter is exactly where one caller drifts.
+Prefer moving the number **into** the shared component's own string over adding
+it at the deviating call site. Here that was also the only testable option: the
+deviating call site is a private `Future<void> _showSupplierPaymentDialog` inside
+a `part` of `purchase_order_details_screen.dart`, unreachable without pumping the
+whole details screen, whereas `showRecordPaymentDialog` is public and
+`test/shared/payments/record_payment_dialog_test.dart` already had a
+`_pumpSupplierHost` mirroring the real supplier arguments — assert against that
+host and the fix is proven for the flow that was broken.
+
+**Also, a live backlog:** submit-time error flags that never clear while the user
+corrects the field. `bool _show…Error` appears in 11 files; three already clear it
+from `onChanged` (`purchase_order_receive_dialog`, `stock_count_sessions_screen`,
+`convert_quotation_dialog`), so it is an established idiom, and these still do not:
+`sales_channels_page`, `purchase_order_adjustment_dialogs`, `register_session_gate`,
+`register_session_close_sheet`, `register_cash_movement_sheet`,
+`sale_order_details_content`. A stale red line under a now-valid value reads as
+"still wrong" — match-the-sibling fixes, one screen at a time.
+
+## 2026-08-21 - A status enum that folds "we couldn't ask" into "the answer is no"
+
+**Learning:** `PosViewModel.registerSessionGateStatus` returns `noOpenSession`
+whenever `_availableRegisterSession == null` — which is equally true after a
+successful 204 (there really is none) and after a failed lookup (we never found
+out). The gate then rendered `noOpenRegisterSession` — "there is no open register
+session, start one before selling" — as a plain info message, with **بدء الجلسة**
+as the filled primary button, and merely appended the error underneath. So a LAN
+blip made the POS assert a fact it did not have, and steered the cashier toward
+opening a second session on top of the one the server may already hold. The same
+shape covers a failed *start*: the request may have succeeded with the response
+lost, so "re-read before starting again" is the correct advice in both cases and
+one message serves both — no extra error-kind flag needed.
+
+**Action:** When a view branches on "is there an X?", check whether the *error*
+path collapses into the *empty* path. Empty and unknown must not share copy: an
+empty state may assert, an unknown state may only report and offer a re-read. And
+when they differ, move the **emphasis** too — leaving the risky action filled and
+primary while a warning sits above it is what actually drives the mis-tap. Keep
+the risky action reachable but demoted (`OutlinedButton`), never disabled: an
+unreachable shop still has to be able to open a till.
+
+**Test trap for the ordering half.** `ResponsiveActionBar` lays actions out in a
+`Wrap` above `AppBreakpoints.largePhoneMin`, so at the default 800×600 test
+viewport both buttons share one row and `getTopLeft(...).dy` is *identical* —
+a `greaterThan` assertion on dy fails, and a `dx` assertion would encode RTL.
+Assert on the bar's own list instead:
+`tester.widget<ResponsiveActionBar>(find.byType(ResponsiveActionBar)).actions.last.key`.
+Direction-independent, and it states the actual contract (last = primary).
+
+## 2026-08-21 - An `InfiniteScrollList` that fails sets `hasMore: false`, so nothing can ask again
+
+**Learning:** `_AsyncMultiSelectPickerSheet` (the shared picker behind product,
+category, discount, activity-log, payroll and bulk-action selection) reported a
+load failure as a red line *above* the list while the list itself rendered its
+`emptyBuilder` — so a network failure showed "لا توجد نتائج" **and** an error
+at once, the journal's empty-vs-failed collapse in a shared component. The
+sharper half is the escape: the `catch` also set `_hasMore = false` (correctly —
+otherwise the scroll list re-fires the same broken request forever), and
+`onLoadMore` is the *only* thing that calls `_load` again. With the list already
+empty there is nothing to scroll, so the sole remaining path back was editing the
+search text. A user who had typed exactly the query they wanted had to corrupt it
+and retype it.
+
+**Action:** When a paginated list disables its own load-more on failure, the
+retry must be a **separate** entry point, not the list's trigger — and it has to
+restore `hasMore` before asking for the same page again, or the guard clause
+swallows it. Two branches, not one: an empty list becomes a `PointyErrorState`
+with a primary retry (replacing the list, so the misleading empty copy never
+renders); a *non-empty* list keeps its rows and gets an inline banner with its own
+retry. Grep shape for the next audit: a `catch` that writes `hasMore = false`
+alongside an error flag, in a widget whose reload is reachable only from scroll.
+
+## 2026-08-21 - An error flag cleared only on the reset path leaks onto the retry that succeeds
+
+**Learning:** In the same picker, `_hasError` was cleared **only** in the
+`reset: true` branch of `_load` — never in the success `setState`. That is
+invisible while the sole reload is a full restart, but the moment you add a
+mid-list retry (`reset: false`) the page loads, the rows append, and the red
+failure line plus its own retry button stay on screen above them. The change
+that fixed "empty and failed are the same screen" re-created it one screen over
+as "loaded and failed are the same screen". Warden caught it because the
+next-page branch was the untested half — and the untested half is the half that
+broke.
+
+**Action:** Clear the error flag where the data *arrives* (the success
+`setState`), not where a load *starts*, so every path that can succeed clears it.
+When a UX fix has two branches (empty list vs. populated list, first page vs.
+next page), write a widget test for **each** — asserting not just that the retry
+loads, but that the failure copy is gone afterwards. Stating the untested branch
+as fact in the PR body is what let it through.

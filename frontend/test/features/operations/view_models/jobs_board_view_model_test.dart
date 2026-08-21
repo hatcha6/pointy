@@ -66,6 +66,56 @@ void main() {
     expect(repo.loadJobsCount, 2);
     expect(repo.lastAssignedTo, 9);
   });
+
+  test('the default open-only view does not count as a user filter', () async {
+    final repo = _FakeOperationsRepository();
+    final vm = JobsBoardViewModel(repo);
+    addTearDown(vm.dispose);
+    await vm.loadAll();
+
+    // A brand-new shop with no jobs must get the onboarding empty state, not
+    // an invitation to clear filters that are hiding nothing.
+    expect(vm.hasActiveFilters, isFalse);
+
+    vm.statusFilter = OperationsJobStatus.completed;
+    expect(vm.hasActiveFilters, isTrue);
+  });
+
+  test('clearFilters restores the defaults in a single reload', () async {
+    final repo = _FakeOperationsRepository();
+    final vm = JobsBoardViewModel(repo);
+    addTearDown(vm.dispose);
+    await vm.loadAll();
+    vm.statusFilter = OperationsJobStatus.completed;
+    vm.assignedToMe = true;
+    vm.searchQuery = 'أحمد';
+    repo.loadJobsCount = 0;
+
+    vm.clearFilters();
+
+    expect(vm.statusFilter, OperationsJobStatus.open);
+    expect(vm.assignedToMe, isFalse);
+    expect(vm.jobTypeFilter, isNull);
+    expect(vm.searchQuery, isEmpty);
+    expect(vm.hasActiveFilters, isFalse);
+    // Resetting four fields through their setters would have fired four
+    // queries and flickered the board through the intermediate results.
+    expect(repo.loadJobsCount, 1);
+    expect(repo.lastStatus, OperationsJobStatus.open);
+    expect(repo.lastAssignedTo, isNull);
+  });
+
+  test('clearFilters on an untouched board does not reload', () async {
+    final repo = _FakeOperationsRepository();
+    final vm = JobsBoardViewModel(repo);
+    addTearDown(vm.dispose);
+    await vm.loadAll();
+    repo.loadJobsCount = 0;
+
+    vm.clearFilters();
+
+    expect(repo.loadJobsCount, 0);
+  });
 }
 
 class _FakeOperationsRepository extends OperationsRepository {

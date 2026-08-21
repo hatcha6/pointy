@@ -22,7 +22,7 @@ from rest_framework.test import APIClient
 
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.relay import RelayControlError
-from apps.core.roles import MANAGER_GROUP, ensure_role_groups
+from apps.core.roles import MANAGER_GROUP, TECHNICIAN_GROUP, ensure_role_groups
 from apps.purchasing.models import PurchaseOrder, Supplier
 
 from .image_normalization import MAX_DIMENSION, normalize_image_bytes
@@ -732,6 +732,86 @@ class AttachmentApiTests(TestCase):
             order_response.data["supplier_invoice_attachments"][0]["id"],
             response.data["id"],
         )
+
+    def _technician_client(self):
+        """A technician: the only stock role holding ``attachments.view_attachment``
+        and none of the purchasing permissions."""
+        technician = get_user_model().objects.create_user(
+            username="attachment-technician",
+            password="pass",
+        )
+        technician.groups.add(Group.objects.get(name=TECHNICIAN_GROUP))
+        self.assertFalse(technician.has_perm("purchasing.view_purchaseorder"))
+        self.assertTrue(technician.has_perm("attachments.view_attachment"))
+        client = APIClient()
+        client.force_authenticate(user=technician)
+        return client
+
+    def _supplier_invoice_attachment(self):
+        supplier = Supplier.objects.create(name="Confidential supplier")
+        purchase_order = PurchaseOrder.objects.create(supplier=supplier)
+        response = self.client.post(
+            reverse("purchaseorder-attachments", args=[purchase_order.pk]),
+            {
+                "file": SimpleUploadedFile(
+                    "supplier-invoice.pdf",
+                    self.pdf_payload(b"S"),
+                    content_type="application/pdf",
+                ),
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        return response.data["id"]
+
+    def test_attachment_list_hides_owners_the_user_may_not_view(self):
+        """The purchase order's own ``attachments`` action requires BOTH
+        ``purchasing.view_purchaseorder`` and ``attachments.view_attachment``.
+        The generic attachment endpoint must not serve the same rows on half
+        that gate."""
+        attachment_id = self._supplier_invoice_attachment()
+        client = self._technician_client()
+
+        # The properly gated path is closed to a technician...
+        listed = client.get(reverse("attachment-list"))
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        returned = {row["id"] for row in listed.data["results"]}
+        self.assertNotIn(attachment_id, returned)
+
+    def test_attachment_detail_and_download_deny_an_unviewable_owner(self):
+        attachment_id = self._supplier_invoice_attachment()
+        client = self._technician_client()
+
+        for view_name in ("attachment-detail", "attachment-download"):
+            response = client.get(reverse(view_name, args=[attachment_id]))
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_404_NOT_FOUND,
+                msg=f"{view_name} exposed a supplier invoice scan to a technician",
+            )
+
+    def test_attachment_list_still_serves_owners_the_user_may_view(self):
+        """A technician holds ``catalog.view_product``, so product images stay
+        visible — the scope narrows to the owner, it does not blanket-deny."""
+        upload = self.upload_attachment(self.pdf_payload(b"P"), "product.pdf")
+        self.assertEqual(upload.status_code, status.HTTP_201_CREATED)
+        client = self._technician_client()
+
+        listed = client.get(reverse("attachment-list"))
+        self.assertEqual(listed.status_code, status.HTTP_200_OK)
+        self.assertIn(upload.data["id"], {row["id"] for row in listed.data["results"]})
+
+    def test_signed_content_token_still_serves_an_unauthenticated_kiosk(self):
+        """Price-checker kiosks and the POS render product images through the
+        signed ``content`` URL with no session at all; owner scoping must not
+        break that path (the token already binds to one attachment)."""
+        upload = self.upload_attachment(self.pdf_payload(b"K"), "kiosk.pdf")
+        self.assertEqual(upload.status_code, status.HTTP_201_CREATED)
+        content_url = upload.data["content_url"]
+
+        anonymous = APIClient()
+        response = anonymous.get(content_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def upload_attachment(self, payload, filename):
         return self.client.post(

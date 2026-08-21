@@ -1,7 +1,12 @@
 from rest_framework import serializers
 
 from .models import Expense, ExpenseCategory
-from .services import create_expense
+from .services import create_expense, drawer_fields_locked, update_expense
+
+LOCKED_DRAWER_FIELD_MESSAGE = (
+    "هذا المصروف دُفع من درج تمت تسويته وإغلاقه، فلا يمكن تعديل المبلغ أو "
+    "طريقة الدفع. سجّل مصروفًا جديدًا أو حركة درج لتصحيح الفرق."
+)
 
 
 class ExpenseCategorySerializer(serializers.ModelSerializer):
@@ -80,8 +85,25 @@ class ExpenseSerializer(serializers.ModelSerializer):
             **validated_data,
         )
 
+    def validate(self, attrs):
+        # Once the register session behind a drawer-paid expense is closed, the
+        # till has been counted against its pay-out. Editing the amount or the
+        # payment method then would leave the drawer disagreeing with the
+        # expense (or silently rewrite a signed-off count), so both are frozen.
+        expense = self.instance
+        if expense is not None and drawer_fields_locked(expense):
+            locked = {
+                field: LOCKED_DRAWER_FIELD_MESSAGE
+                for field in ("amount", "payment_method")
+                if field in attrs and attrs[field] != getattr(expense, field)
+            }
+            if locked:
+                raise serializers.ValidationError(locked)
+        return attrs
+
     def update(self, instance, validated_data):
-        # The drawer linkage is decided once, at creation; editing an expense
-        # never re-books or unwinds a pay-out that already happened.
+        # Whether a pay-out exists is decided once, at creation; an edit never
+        # books a new one. It does keep an existing one honest — see
+        # ``update_expense``.
         validated_data.pop("pay_from_register", None)
-        return super().update(instance, validated_data)
+        return update_expense(instance, validated_data)

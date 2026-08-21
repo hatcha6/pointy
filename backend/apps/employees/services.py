@@ -8,7 +8,7 @@ from rest_framework import serializers
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
-from apps.sales.models import Order
+from apps.sales.models import Order, OrderAdjustment
 
 from .models import (
     CompensationPlan,
@@ -323,14 +323,34 @@ def _plan_for_period(employee, period_end):
 
 
 def _commissionable_sales_total(employee, period_start, period_end):
+    """Net value of the cashier's own recognized sales in the period.
+
+    ``committed_sales`` already drops voids, so goods that came back earn no
+    commission — but a *partial* return leaves the order PAID and never touches
+    ``Order.total``, so the refunded portion has to be subtracted here or the
+    same rule stops applying the moment one item of the basket is kept. Without
+    it, returning three of four units still pays commission on all four, and a
+    cashier who refunds everything but one line keeps the full commission that a
+    complete return would have taken away.
+
+    The refunds are netted against the period the *sale* falls in, which is how
+    voids already behave (a void removes the sale from its own period whenever
+    it happens). Adjustments are summed in a second query on purpose: joining
+    them into the ``Sum("total")`` aggregate would fan the order rows out and
+    multiply the sales total by the number of returns against it.
+    """
     if employee.user_id is None:
         return Decimal("0.00")
-    total = Order.objects.committed_sales().filter(
+    orders = Order.objects.committed_sales().filter(
         register_session__owner_id=employee.user_id,
         created_at__date__gte=period_start,
         created_at__date__lte=period_end,
-    ).aggregate(total=Sum("total"))["total"]
-    return (total or Decimal("0.00")).quantize(MONEY_PLACES)
+    )
+    total = orders.aggregate(total=Sum("total"))["total"] or Decimal("0.00")
+    refunded = OrderAdjustment.objects.filter(order__in=orders).aggregate(
+        total=Sum("amount")
+    )["total"] or Decimal("0.00")
+    return max(total - refunded, Decimal("0.00")).quantize(MONEY_PLACES)
 
 
 def _commissionable_jobs_total(employee, period_start, period_end, base):
@@ -344,7 +364,8 @@ def _commissionable_jobs_total(employee, period_start, period_end, base):
     - ``approved_price`` — the full price agreed with the customer (default);
     - ``labor`` — that price minus the consumed parts (at their sale price), i.e.
       the labor portion, available even before the job is invoiced;
-    - ``order_total`` — the total of the job's invoice (invoiced jobs only).
+    - ``order_total`` — the total of the job's invoice, net of any void or
+      return against it (invoiced jobs only).
     """
     from apps.operations.models import Job, WorkflowTemplate
 
@@ -365,10 +386,19 @@ def _commissionable_jobs_total(employee, period_start, period_end, base):
     )
 
     if base == CompensationPlan.OperationsCommissionBase.ORDER_TOTAL:
-        total = jobs.filter(order__isnull=False).aggregate(
-            total=Sum("order__total"),
-        )["total"]
-        return (total or Decimal("0.00")).quantize(MONEY_PLACES)
+        # Only invoices whose revenue is actually recognized count, and only
+        # net of what came back: a voided repair invoice was never collected,
+        # and a partially returned one collected less than its ``total`` says.
+        # Summing ``order__total`` off the job rows counts both in full (and
+        # counts one invoice twice when two of the employee's jobs share it).
+        invoices = Order.objects.committed_sales().filter(
+            pk__in=jobs.filter(order__isnull=False).values("order_id")
+        )
+        total = invoices.aggregate(total=Sum("total"))["total"] or Decimal("0.00")
+        refunded = OrderAdjustment.objects.filter(order__in=invoices).aggregate(
+            total=Sum("amount")
+        )["total"] or Decimal("0.00")
+        return max(total - refunded, Decimal("0.00")).quantize(MONEY_PLACES)
 
     jobs = jobs.filter(approved_price__isnull=False)
 

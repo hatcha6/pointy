@@ -1,7 +1,8 @@
 """Expense recording + the unified expense ledger.
 
 ``create_expense`` records an ad-hoc expense and, when paid in cash from an open
-register, the linked drawer pay-out. ``build_expense_ledger`` unions every place
+register, the linked drawer pay-out; ``update_expense`` keeps that pay-out true to
+the expense when it is later corrected. ``build_expense_ledger`` unions every place
 money leaves the shop (ad-hoc expenses, register pay-outs, supplier purchases,
 paid payroll, payment commissions) into one normalized, permission-aware list.
 """
@@ -46,6 +47,26 @@ def open_register_session(user):
     return RegisterSession.open_for(user)
 
 
+def expense_movement_reason(expense):
+    """The drawer pay-out's reason line for an expense, so the register detail
+    and the Z-report name the expense the movement paid for."""
+    return f"مصروف: {expense.category.name} — {expense.description}"
+
+
+def drawer_fields_locked(expense):
+    """True when an expense's cash amount and payment method are frozen.
+
+    A drawer-paid expense whose register session has been closed has already
+    been counted: the till was reconciled against this pay-out and signed off.
+    Re-booking the movement afterwards would rewrite a completed count, so the
+    two fields that drive it stop being editable.
+    """
+    if expense is None or expense.cash_movement_id is None:
+        return False
+    session = expense.register_session
+    return session is not None and session.status != RegisterSession.Status.OPEN
+
+
 @transaction.atomic
 def create_expense(*, user, pay_from_register=False, **fields):
     """Create an ``Expense``. When ``pay_from_register`` is set and the expense
@@ -63,7 +84,7 @@ def create_expense(*, user, pay_from_register=False, **fields):
                 register_session=session,
                 movement_type=RegisterCashMovement.MovementType.PAY_OUT,
                 amount=expense.amount,
-                reason=f"مصروف: {expense.category.name} — {expense.description}",
+                reason=expense_movement_reason(expense),
                 created_by=creator,
             )
             expense.register_session = session
@@ -81,6 +102,39 @@ def create_expense(*, user, pay_from_register=False, **fields):
         },
         metrics={"amount": float(expense.amount)},
     )
+    return expense
+
+
+@transaction.atomic
+def update_expense(expense, fields):
+    """Apply an edit to an expense, keeping its linked drawer pay-out true.
+
+    The pay-out is the record of cash that left the till *for this expense*, so
+    it has to keep saying what the expense says. A corrected amount re-books the
+    movement; switching the expense off cash means no cash left the drawer, so
+    the movement is removed and the link cleared. Both are only reachable while
+    the session is open — ``drawer_fields_locked`` refuses them once it closes.
+    """
+    for field, value in fields.items():
+        setattr(expense, field, value)
+    expense.save()
+
+    movement = expense.cash_movement
+    if movement is None:
+        return expense
+
+    if expense.payment_method != Expense.PaymentMethod.CASH:
+        expense.cash_movement = None
+        expense.register_session = None
+        expense.save(update_fields=["cash_movement", "register_session", "updated_at"])
+        movement.delete()
+        return expense
+
+    reason = expense_movement_reason(expense)
+    if movement.amount != expense.amount or movement.reason != reason:
+        movement.amount = expense.amount
+        movement.reason = reason
+        movement.save(update_fields=["amount", "reason", "updated_at"])
     return expense
 
 

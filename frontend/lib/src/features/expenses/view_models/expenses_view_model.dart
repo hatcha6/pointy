@@ -51,6 +51,12 @@ class ExpensesViewModel extends ChangeNotifier {
   bool isSourceVisible(ExpenseLedgerSource source) =>
       !_hiddenSources.contains(source);
 
+  /// Whether the source chips are hiding rows the month actually has. False
+  /// for a month with no spending at all, so an empty list is only ever
+  /// blamed on the filters when clearing them would really bring rows back.
+  bool get isFilteredToNothing =>
+      _hiddenSources.isNotEmpty && _ledger.entries.isNotEmpty;
+
   /// The ledger rows currently visible given the source-filter chips.
   List<ExpenseLedgerEntry> get visibleEntries => _ledger.entries
       .where((entry) => isSourceVisible(entry.source))

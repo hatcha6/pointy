@@ -1,4 +1,5 @@
 from django.core.handlers.asgi import ASGIRequest
+from django.db.models import Q
 from django.http import FileResponse, Http404, StreamingHttpResponse
 from django.utils.cache import get_conditional_response
 from django.utils.http import content_disposition_header, http_date, quote_etag
@@ -8,6 +9,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from apps.core.permissions import HasPointyPermission
+from apps.core.roles import user_is_manager
 from apps.core.streaming import aiter_handle
 
 from .models import Attachment, StorageVolume
@@ -84,7 +86,46 @@ class AttachmentViewSet(viewsets.ModelViewSet):
         owner_id = self.request.query_params.get("owner_id")
         if owner_id:
             queryset = queryset.filter(owner_object_id=owner_id)
-        return queryset
+        return self._scoped_to_viewable_owners(queryset)
+
+    def _scoped_to_viewable_owners(self, queryset):
+        """An attachment is exactly as confidential as the record it hangs off.
+
+        The owning app already says so: ``PurchaseOrderViewSet.attachments``
+        demands ``purchasing.view_purchaseorder`` *and*
+        ``attachments.view_attachment``. This generic endpoint asked only for the
+        second half, so a role holding it but not the owner's view permission — a
+        technician, say, who has no purchasing access at all — could list and
+        download every supplier invoice scan the shop had filed. Requiring the
+        owner's own ``view_`` permission here makes the two paths agree.
+        """
+        # The token-addressed ``content`` action authenticates against one
+        # specific attachment (see ``is_valid_attachment_content_token``), which
+        # is strictly narrower than any owner rule — and its callers are
+        # sessionless kiosks and POS image loads, which hold no permissions at
+        # all. Leave that path to the token.
+        if self.action == "content" and self.request.query_params.get("token"):
+            return queryset
+
+        user = self.request.user
+        if user.is_superuser or user_is_manager(user):
+            return queryset
+
+        owner_filter = Q()
+        matched_any = False
+        for code in user.get_all_permissions():
+            app_label, _, codename = code.partition(".")
+            if not codename.startswith("view_"):
+                continue
+            owner_filter |= Q(
+                owner_content_type__app_label=app_label,
+                owner_content_type__model=codename[len("view_") :],
+            )
+            matched_any = True
+        if not matched_any:
+            # An empty Q() matches everything; "views nothing" must mean nothing.
+            return queryset.none()
+        return queryset.filter(owner_filter)
 
     def perform_destroy(self, instance):
         instance.soft_delete(deleted_by=self.request.user)

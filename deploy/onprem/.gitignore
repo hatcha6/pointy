@@ -2,3 +2,7 @@
 external-backups/
 # Held by a running update; tells the watchdog to stand down.
 .update.lock
+
+# Built by wsl/build-rootfs.sh and fetched by CI — never committed (hundreds of MB).
+wsl/pointy-wsl-rootfs*.tar*
+wsl/*.msi

@@ -5,7 +5,17 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Count, DecimalField, F, OuterRef, Q, Subquery, Sum, Value
+from django.db.models import (
+    Count,
+    DecimalField,
+    F,
+    OuterRef,
+    Prefetch,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+)
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -210,7 +220,20 @@ def visible_notifications_for_user(user):
     codes = _codes_for_user(user)
     if not codes:
         return queryset.none()
-    return queryset.filter(code__in=codes).prefetch_related("user_states")
+    # Scope the prefetch to the viewer. ``_state_for_user`` is the only reader
+    # of these rows and it wants exactly one of them — this user's — yet an
+    # unfiltered prefetch loads every member of staff's state for every alert
+    # on the feed. That is rows the bell poll pays for and throws away, and it
+    # grows with headcount, a dimension the request does not depend on: at a
+    # full 50-alert page it is 50 x staff rows to answer 50 questions. The
+    # statement count is identical either way, which is why a query-count test
+    # cannot see it (see ``test_feed_state_rows_do_not_grow_with_staff_count``).
+    return queryset.filter(code__in=codes).prefetch_related(
+        Prefetch(
+            "user_states",
+            queryset=BusinessNotificationUserState.objects.filter(user=user),
+        )
+    )
 
 
 def notification_is_hidden_for_user(notification, user, now=None):

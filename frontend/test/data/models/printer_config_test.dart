@@ -10,15 +10,18 @@ void main() {
       expect(pdfPageSizeReceiptWidthMm(PdfPageSize.roll80), 80);
     });
 
-    test('fromJson accepts the enum name, legacy key, and bare millimetres', () {
-      expect(pdfPageSizeFromJson('roll80'), PdfPageSize.roll80);
-      expect(pdfPageSizeFromJson('mm58'), PdfPageSize.roll58);
-      expect(pdfPageSizeFromJson('70'), PdfPageSize.roll70);
-      // Unknown / missing values fall back to the full A4 document.
-      expect(pdfPageSizeFromJson(null), PdfPageSize.a4);
-      expect(pdfPageSizeFromJson('letter'), PdfPageSize.a4);
-      expect(pdfPageSizeFromJson('a4'), PdfPageSize.a4);
-    });
+    test(
+      'fromJson accepts the enum name, legacy key, and bare millimetres',
+      () {
+        expect(pdfPageSizeFromJson('roll80'), PdfPageSize.roll80);
+        expect(pdfPageSizeFromJson('mm58'), PdfPageSize.roll58);
+        expect(pdfPageSizeFromJson('70'), PdfPageSize.roll70);
+        // Unknown / missing values fall back to the full A4 document.
+        expect(pdfPageSizeFromJson(null), PdfPageSize.a4);
+        expect(pdfPageSizeFromJson('letter'), PdfPageSize.a4);
+        expect(pdfPageSizeFromJson('a4'), PdfPageSize.a4);
+      },
+    );
   });
 
   group('PrinterEndpoint.pdfPageSize', () {
@@ -99,7 +102,10 @@ void main() {
 
   group('PrinterEndpoint.compactReceipt', () {
     test('defaults to false', () {
-      const endpoint = PrinterEndpoint(kind: PrintTransportKind.serial, name: '');
+      const endpoint = PrinterEndpoint(
+        kind: PrintTransportKind.serial,
+        name: '',
+      );
       expect(endpoint.compactReceipt, isFalse);
     });
 
@@ -142,48 +148,51 @@ void main() {
     });
 
     test('copyWith updates it independently', () {
-      const endpoint = PrinterEndpoint(kind: PrintTransportKind.serial, name: '');
+      const endpoint = PrinterEndpoint(
+        kind: PrintTransportKind.serial,
+        name: '',
+      );
       expect(endpoint.copyWith(compactReceipt: true).compactReceipt, isTrue);
       expect(endpoint.compactReceipt, isFalse);
     });
   });
 
   group('BarcodeLabelPdfSize', () {
-    test('maps sticker/roll sizes to their width and A4 to null', () {
-      expect(barcodeLabelPdfWidthMm(BarcodeLabelPdfSize.label40x22), 40);
-      expect(barcodeLabelPdfWidthMm(BarcodeLabelPdfSize.roll50), 50);
-      expect(barcodeLabelPdfWidthMm(BarcodeLabelPdfSize.roll70), 70);
-      expect(barcodeLabelPdfWidthMm(BarcodeLabelPdfSize.roll80), 80);
-      expect(barcodeLabelPdfWidthMm(BarcodeLabelPdfSize.a4), isNull);
+    test('maps roll sizes to their width; die-cut and A4 to null', () {
+      expect(barcodeLabelPdfRollWidthMm(BarcodeLabelPdfSize.roll50), 50);
+      expect(barcodeLabelPdfRollWidthMm(BarcodeLabelPdfSize.roll70), 70);
+      expect(barcodeLabelPdfRollWidthMm(BarcodeLabelPdfSize.roll80), 80);
+      // A die-cut sticker takes its size from the endpoint's own label media.
+      expect(barcodeLabelPdfRollWidthMm(BarcodeLabelPdfSize.sticker), isNull);
+      expect(barcodeLabelPdfRollWidthMm(BarcodeLabelPdfSize.a4), isNull);
     });
 
     test('fromJson accepts the enum name, legacy keys, and defaults', () {
-      expect(
-        barcodeLabelPdfSizeFromJson('roll50'),
-        BarcodeLabelPdfSize.roll50,
-      );
+      expect(barcodeLabelPdfSizeFromJson('roll50'), BarcodeLabelPdfSize.roll50);
       expect(barcodeLabelPdfSizeFromJson('70'), BarcodeLabelPdfSize.roll70);
       expect(barcodeLabelPdfSizeFromJson('a4'), BarcodeLabelPdfSize.a4);
-      // Unknown / missing falls back to the default 40×22 sticker.
-      expect(
-        barcodeLabelPdfSizeFromJson(null),
-        BarcodeLabelPdfSize.label40x22,
-      );
+      // Unknown / missing — and the pre-2026-08 fixed 'label40x22' — fall back
+      // to the die-cut sticker sized from the endpoint's label media.
+      expect(barcodeLabelPdfSizeFromJson(null), BarcodeLabelPdfSize.sticker);
       expect(
         barcodeLabelPdfSizeFromJson('unknown'),
-        BarcodeLabelPdfSize.label40x22,
+        BarcodeLabelPdfSize.sticker,
+      );
+      expect(
+        barcodeLabelPdfSizeFromJson('label40x22'),
+        BarcodeLabelPdfSize.sticker,
       );
     });
   });
 
   group('PrinterEndpoint barcode label PDF fields', () {
-    test('default to a 40×22 sticker with no rotation', () {
+    test('default to a die-cut sticker with no rotation', () {
       const endpoint = PrinterEndpoint(
         kind: PrintTransportKind.system,
         name: '',
         outputMode: PrinterOutputMode.pdfA4,
       );
-      expect(endpoint.labelPdfSize, BarcodeLabelPdfSize.label40x22);
+      expect(endpoint.labelPdfSize, BarcodeLabelPdfSize.sticker);
       expect(endpoint.labelRotationQuarterTurns, 0);
     });
 
@@ -227,7 +236,7 @@ void main() {
       );
       expect(updated.labelPdfSize, BarcodeLabelPdfSize.a4);
       expect(updated.labelRotationQuarterTurns, 2);
-      expect(endpoint.labelPdfSize, BarcodeLabelPdfSize.label40x22);
+      expect(endpoint.labelPdfSize, BarcodeLabelPdfSize.sticker);
       expect(endpoint.labelRotationQuarterTurns, 0);
     });
   });

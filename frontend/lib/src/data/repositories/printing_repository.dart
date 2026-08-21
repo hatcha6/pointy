@@ -12,6 +12,7 @@ import '../models/purchase_submission.dart';
 import '../models/register_session_summary.dart';
 import '../models/sale_order.dart';
 import '../models/shop_settings.dart';
+import '../services/barcode_label_calibration.dart';
 import '../services/barcode_label_command_encoder.dart';
 import '../services/barcode_label_document_service.dart';
 import '../services/barcode_label_language_detector.dart';
@@ -363,6 +364,24 @@ class PrintingRepository {
     } on Object {
       return null;
     }
+  }
+
+  /// Prints one of the label calibration sheets. Document/PDF printers only —
+  /// the raw label-language path sizes itself from the printer's own label
+  /// settings and has nothing to calibrate here.
+  Future<PrintTransportResult> printBarcodeLabelCalibration(
+    PrinterConfig config,
+    BarcodeLabelCalibrationSheet sheet,
+  ) async {
+    if (!config.endpoint.usesDocumentInvoice) {
+      return const PrintTransportResult.failure(
+        'label calibration requires a document printer',
+      );
+    }
+    return _barcodeLabelDocumentService.printCalibration(
+      endpoint: config.endpoint,
+      sheet: sheet,
+    );
   }
 
   Future<PrintTransportResult> printBarcodeLabelTest(

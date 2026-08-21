@@ -2083,6 +2083,7 @@
   "intakeCustomerNameLabel": "اسم الزبون",
   "intakeCustomerPhoneLabel": "رقم الهاتف",
   "intakeCustomerRequired": "اختر زبونًا للمتابعة.",
+  "intakeCustomerCreateError": "تعذّر إنشاء الزبون. تحقّق من الاتصال ثم حاول مرة أخرى.",
   "intakeSelectAssetHint": "اختر جهاز الزبون أو أضف جهازًا جديدًا. يساعدك هذا لاحقًا في معرفة تاريخ كل جهاز.",
   "intakeNewAssetButton": "جهاز جديد",
   "intakeSkipAssetButton": "متابعة بدون جهاز",
@@ -2682,14 +2683,27 @@
   "printerPdfPageSizeRoll70": "إيصال 70 مم",
   "printerPdfPageSizeRoll80": "إيصال 80 مم",
   "printerBarcodeLabelPdfSizeLabel": "حجم ملصق الباركود",
-  "printerBarcodeLabelPdfSizeHelper": "شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الافتراضي ملصق 40×22 مم، ويمكن اختيار لفة 50/70/80 مم أو ورقة A4 بشبكة ملصقات. يتكيّف الملصق تلقائيًا مع الحجم المختار.",
-  "printerBarcodeLabelPdfSizeSticker40x22": "ملصق 40×22 مم (الافتراضي)",
+  "printerBarcodeLabelPdfSizeHelper": "شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الملصق المقصوص يُطبع بمقاس العرض والارتفاع المحددين أدناه بالضبط، فلا يدور ولا تخرج ملصقات فارغة بعده. على ويندوز اضبط المقاس نفسه في تعريف الطابعة.",
+  "printerBarcodeLabelPdfSizeSticker": "ملصق مقصوص (بمقاس الملصق أدناه)",
   "printerBarcodeLabelPdfSizeRoll50": "لفة 50 مم",
   "printerBarcodeLabelPdfSizeRoll70": "لفة 70 مم",
   "printerBarcodeLabelPdfSizeRoll80": "لفة 80 مم",
   "printerBarcodeLabelPdfSizeA4": "A4 (شبكة ملصقات)",
+  "printerBarcodeLabelCalibrationTitle": "معايرة مقاس الملصق",
+  "printerBarcodeLabelCalibrationHelper": "اطبع مسطرة على الملصقات واقرأ الأرقام منها بدل التخمين: المسطرة العرضية تعطيك الإزاحة من اليسار وعرض الملصق، ومسطرة التغذية تعطيك الإزاحة من الأعلى وارتفاع الملصق، والمشط يعطيك المسافة بين الملصقات (العمود الذي يبقى في نفس الارتفاع على كل ملصق هو الصحيح).",
+  "printerBarcodeLabelCalibrationAcross": "مسطرة عرضية",
+  "printerBarcodeLabelCalibrationFeed": "مسطرة التغذية",
+  "printerBarcodeLabelCalibrationCombCoarse": "مشط المسافة (خشن)",
+  "printerBarcodeLabelCalibrationCombFine": "مشط المسافة (دقيق)",
+  "printerBarcodeLabelOffsetYLabel": "إزاحة الملصق من الأعلى مم",
+  "printerBarcodeLabelOffsetYHelper": "المسافة من بداية الطباعة إلى الحافة العليا للملصق، في اتجاه التغذية.",
+  "printerBarcodeLabelPitchLabel": "المسافة بين الملصقات مم",
+  "printerBarcodeLabelPitchHelper": "من بداية ملصق إلى بداية الذي يليه (الملصق + الفاصل). تُطبع الدفعة كشريط متصل بهذه المسافة، فلا تنزلق الملصقات مع الطباعة المتتابعة. يقبل الكسور مثل 24.8.",
+  "printerBarcodeLabelOffsetXLabel": "إزاحة الملصق من اليسار مم",
+  "printerBarcodeLabelOffsetXHelper": "المسافة من بداية طباعة الرأس إلى الحافة اليسرى للملصق. اضبطها إذا كانت لفة الملصقات أضيق من عرض الطابعة أو غير محاذية للطرف، فتُطبع الملصقات مزاحة أو مقصوصة.",
+  "printerBarcodeLabelMediaHelper": "مقاس الملصق كما هو محمّل في الطابعة: العرض بعرض الملصق، والارتفاع من بداية ملصق إلى بداية الذي يليه (الملصق + الفاصل) حتى تتقدّم الطابعة ملصقًا واحدًا في كل مرة.",
   "printerBarcodeLabelRotationLabel": "تدوير الملصق",
-  "printerBarcodeLabelRotationHelper": "دوّر الملصق إذا كانت الطابعة تُغذّي الملصقات بالعرض.",
+  "printerBarcodeLabelRotationHelper": "يدوّر محتوى الملصق داخل الملصق نفسه، إذا كانت الطابعة تُغذّي الملصقات بالعرض.",
   "printerBarcodeLabelRotation0": "بدون تدوير",
   "printerBarcodeLabelRotation90": "90° يمين",
   "printerBarcodeLabelRotation180": "180°",
@@ -2808,6 +2822,14 @@
   "queryClearSearchAndFiltersButton": "مسح البحث والفلاتر",
   "@queryClearSearchAndFiltersButton": {
     "description": "Button that clears the search term and every user-set filter on a query-driven list."
+  },
+  "queryNoFiltersResultsMessage": "امسح الفلاتر لعرض القائمة كاملة.",
+  "@queryNoFiltersResultsMessage": {
+    "description": "Query-driven list empty state guidance when filters alone emptied the list and no search term is set. Names no search box, so it also reads correctly on surfaces that have none."
+  },
+  "queryClearFiltersButton": "مسح الفلاتر",
+  "@queryClearFiltersButton": {
+    "description": "Button that clears only the user-set filters, on a list with no search term set."
   },
   "queryNoSearchResultsMessage": "تحقق من الكتابة، أو امسح البحث لعرض القائمة كاملة.",
   "@queryNoSearchResultsMessage": {
@@ -4882,7 +4904,7 @@
   "registerSessionGateTitle": "جلسة الدرج",
   "checkingRegisterSession": "جار فحص جلسة الدرج...",
   "noOpenRegisterSession": "لا توجد جلسة درج مفتوحة. ابدأ جلسة جديدة قبل البيع.",
-  "registerSessionLoadError": "تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.",
+  "registerSessionLoadError": "تعذر الاتصال بجلسة الدرج، فلا نعرف إن كانت هناك جلسة مفتوحة. أعد المحاولة قبل بدء جلسة جديدة، تفاديا لفتح جلستين.",
   "openingCashInputLabel": "نقدية الافتتاح",
   "moneyAmountHint": "0.00",
   "openingCashRequiredError": "أدخل نقدية الافتتاح قبل بدء الجلسة.",
@@ -5183,6 +5205,14 @@
       }
     }
   },
+  "invoiceVoidedCalloutTitle": "لا يمكن الإرجاع من هذه الفاتورة",
+  "@invoiceVoidedCalloutTitle": {
+    "description": "Callout title shown on a voided invoice, explaining why the return, exchange and void actions are absent."
+  },
+  "invoiceVoidedCalloutBody": "هذه الفاتورة ملغاة: أُرجعت أصنافها أو أُلغيت بالكامل، ولم يتبقَّ صنف قابل للإرجاع أو الاستبدال.",
+  "@invoiceVoidedCalloutBody": {
+    "description": "Callout body on a voided invoice: nothing is left to return or exchange."
+  },
   "invoicePaymentTitle": "تسجيل دفعة على الفاتورة",
   "invoicePaymentAmountLabel": "المبلغ",
   "invoicePaymentReferenceLabel": "مرجع اختياري",
@@ -5197,6 +5227,15 @@
     }
   },
   "invoicePaymentAmountError": "أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقّي.",
+  "recordPaymentAmountMaxError": "أدخل مبلغًا أكبر من صفر ولا يتجاوز {amount}.",
+  "@recordPaymentAmountMaxError": {
+    "description": "Amount error inside the shared record-payment dialog. Names the exact ceiling (the remaining balance) so the cashier knows what to type instead of only that the entry was rejected.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "invoicePaymentSuccess": "تم تسجيل الدفعة على الفاتورة.",
   "invoiceAssignCustomerButton": "تعيين عميل",
   "@invoiceAssignCustomerButton": {
@@ -7039,7 +7078,6 @@
   "expenseAddButton": "إضافة مصروف",
   "expensesLoadError": "تعذّر تحميل المصروفات.",
   "expensesEmptyMessage": "لا توجد مصروفات في هذه الفترة.",
-  "expensesNoMatchingMessage": "لا توجد بنود مطابقة للتصفية.",
   "expensesPreviousMonth": "الشهر السابق",
   "expensesNextMonth": "الشهر التالي",
   "expensesPeriodTotal": "الإجمالي: {total}",
@@ -7203,6 +7241,8 @@
   "stockCountCancelConfirm": "إلغاء الجرد",
   "stockCountEmpty": "لا توجد عمليات جرد بعد.",
   "stockCountLoadError": "تعذّر تحميل عمليات الجرد.",
+  "stockCountReconciliationLoadError": "تعذّر تحميل فروقات الجرد.",
+  "stockCountApplyBlockedByLoadError": "لا يمكن إنهاء الجرد قبل تحميل الفروقات. أعد المحاولة أولاً.",
   "stockCountHistoryTitle": "سجل عمليات الجرد",
   "stockCountStatusInProgress": "قيد التنفيذ",
   "stockCountStatusApplied": "مطبّق",
@@ -8159,7 +8199,17 @@
   "conversationSendTooltip": "إرسال",
   "conversationSendError": "تعذّر إرسال الرسالة",
   "conversationReadOnly": "ليس لديك صلاحية الرد على المحادثات",
+  "conversationMessageStatusQueued": "بانتظار الإرسال",
+  "conversationMessageStatusScheduled": "مُجدولة",
+  "conversationMessageStatusSending": "جارٍ الإرسال",
+  "conversationMessageStatusSent": "أُرسلت",
+  "conversationMessageStatusDelivered": "وصلت",
+  "conversationMessageStatusFailed": "لم تُرسل",
+  "conversationMessageStatusBlocked": "موقوفة: ألغى الاشتراك",
+  "conversationMessageStatusCancelled": "أُلغيت",
+  "conversationMessageStatusExpired": "انتهت مهلتها",
   "newConversationTitle": "محادثة جديدة",
+  "newConversationStarting": "جارٍ فتح المحادثة…",
   "newConversationCustomerLabel": "العميل",
   "newConversationSelectCustomer": "اختر عميلاً",
   "newConversationNoPhoneWarning": "هذا العميل لا يملك رقم هاتف. أضِف رقمًا لبدء المحادثة.",

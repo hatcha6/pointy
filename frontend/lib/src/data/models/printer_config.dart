@@ -34,20 +34,22 @@ String pdfPageSizeToJson(PdfPageSize size) => size.name;
 
 /// Sticker geometry for the PDF/document barcode-label path — how a label prints
 /// on a printer driven through its own PDF/graphics driver (rather than raw
-/// label-language commands). [label40x22] is the common die-cut price sticker
-/// (default); [roll50]/[roll70]/[roll80] are receipt-style continuous label
-/// rolls at that width; [a4] tiles the sticker into a grid on a full sheet.
-enum BarcodeLabelPdfSize { label40x22, roll50, roll70, roll80, a4 }
+/// label-language commands). [sticker] is a die-cut label of the media size the
+/// endpoint already carries ([PrinterEndpoint.labelWidthMm] ×
+/// [PrinterEndpoint.labelHeightMm], the sticker as loaded in the printer);
+/// [roll50]/[roll70]/[roll80] are continuous label rolls at that width; [a4]
+/// tiles the sticker into a grid on a full sheet.
+enum BarcodeLabelPdfSize { sticker, roll50, roll70, roll80, a4 }
 
-/// Physical width in millimetres of a [BarcodeLabelPdfSize] sticker, or null for
-/// [a4] (a tiled sheet has no single sticker width at page level).
-double? barcodeLabelPdfWidthMm(BarcodeLabelPdfSize size) {
+/// Continuous-roll width in millimetres for a [BarcodeLabelPdfSize], or null
+/// when the size is not a roll ([sticker] takes its width from the endpoint's
+/// die-cut media; [a4] is a tiled sheet with no single sticker width).
+double? barcodeLabelPdfRollWidthMm(BarcodeLabelPdfSize size) {
   return switch (size) {
-    BarcodeLabelPdfSize.label40x22 => 40,
     BarcodeLabelPdfSize.roll50 => 50,
     BarcodeLabelPdfSize.roll70 => 70,
     BarcodeLabelPdfSize.roll80 => 80,
-    BarcodeLabelPdfSize.a4 => null,
+    BarcodeLabelPdfSize.sticker || BarcodeLabelPdfSize.a4 => null,
   };
 }
 
@@ -57,7 +59,9 @@ BarcodeLabelPdfSize barcodeLabelPdfSizeFromJson(Object? value) {
     'roll70' || 'mm70' || '70' => BarcodeLabelPdfSize.roll70,
     'roll80' || 'mm80' || '80' => BarcodeLabelPdfSize.roll80,
     'a4' || 'A4' => BarcodeLabelPdfSize.a4,
-    _ => BarcodeLabelPdfSize.label40x22,
+    // 'label40x22' is the pre-2026-08 fixed sticker size; it now means "the
+    // die-cut media this endpoint is configured for".
+    _ => BarcodeLabelPdfSize.sticker,
   };
 }
 
@@ -135,7 +139,10 @@ class PrinterEndpoint {
     this.labelHeightMm = 30,
     this.labelGapMm = 2,
     this.labelDpi = 203,
-    this.labelPdfSize = BarcodeLabelPdfSize.label40x22,
+    this.labelPdfSize = BarcodeLabelPdfSize.sticker,
+    this.labelPdfOffsetXMm = 0,
+    this.labelPdfOffsetYMm = 0,
+    this.labelPdfPitchMm = 0,
     this.labelRotationQuarterTurns = 0,
   });
 
@@ -177,6 +184,28 @@ class PrinterEndpoint {
   /// (a system/driver printer). Ignored by the raw label-language thermal path,
   /// which sizes itself from [labelWidthMm]/[labelHeightMm].
   final BarcodeLabelPdfSize labelPdfSize;
+
+  /// Distance in millimetres from where the printer starts printing (the left
+  /// edge of its head) to the left edge of the sticker. A label roll narrower
+  /// than the head — or simply loaded off-centre — sits some way in from that
+  /// origin, and a page that starts at the origin lands to the left of the
+  /// sticker, half of it printing off the label. The PDF page is widened by
+  /// this much so the artwork reaches the label. PDF/document path only.
+  final int labelPdfOffsetXMm;
+
+  /// Distance in millimetres from where the printer starts printing down the
+  /// feed to the sticker's leading edge. A label printer that seeks the gap
+  /// still has its own top-of-form offset, so the page is padded by this much
+  /// at the top to push the artwork onto the sticker. PDF/document path only.
+  final int labelPdfOffsetYMm;
+
+  /// The label pitch in millimetres: the distance from one sticker's leading
+  /// edge to the next, i.e. the sticker plus the gap after it. A run of labels
+  /// is laid out as one continuous strip at this spacing, so registration comes
+  /// from the artwork rather than from the printer's feed. 0 falls back to the
+  /// sticker height (continuous media with no gap).
+  /// PDF/document path only.
+  final double labelPdfPitchMm;
 
   /// Quarter-turn clockwise rotation (0–3) for the PDF barcode-label layout.
   final int labelRotationQuarterTurns;
@@ -244,6 +273,18 @@ class PrinterEndpoint {
       labelPdfSize: barcodeLabelPdfSizeFromJson(
         json['label_pdf_size'] ?? json['barcode_label_pdf_size'],
       ),
+      labelPdfOffsetXMm: _intFromJson(
+        json['label_pdf_offset_x_mm'] ?? json['barcode_label_offset_x_mm'],
+        fallback: 0,
+      ),
+      labelPdfOffsetYMm: _intFromJson(
+        json['label_pdf_offset_y_mm'] ?? json['barcode_label_offset_y_mm'],
+        fallback: 0,
+      ),
+      labelPdfPitchMm: _doubleFromJson(
+        json['label_pdf_pitch_mm'] ?? json['label_pdf_feed_mm'],
+        fallback: 0,
+      ),
       labelRotationQuarterTurns: barcodeLabelRotationFromJson(
         json['label_rotation_quarter_turns'] ??
             json['label_rotation'] ??
@@ -276,6 +317,9 @@ class PrinterEndpoint {
       'label_gap_mm': labelGapMm,
       'label_dpi': labelDpi,
       'label_pdf_size': barcodeLabelPdfSizeToJson(labelPdfSize),
+      'label_pdf_offset_x_mm': labelPdfOffsetXMm,
+      'label_pdf_offset_y_mm': labelPdfOffsetYMm,
+      'label_pdf_pitch_mm': labelPdfPitchMm,
       'label_rotation_quarter_turns': labelRotationQuarterTurns,
     };
   }
@@ -301,6 +345,9 @@ class PrinterEndpoint {
     int? labelGapMm,
     int? labelDpi,
     BarcodeLabelPdfSize? labelPdfSize,
+    int? labelPdfOffsetXMm,
+    int? labelPdfOffsetYMm,
+    double? labelPdfPitchMm,
     int? labelRotationQuarterTurns,
   }) {
     return PrinterEndpoint(
@@ -324,6 +371,9 @@ class PrinterEndpoint {
       labelGapMm: labelGapMm ?? this.labelGapMm,
       labelDpi: labelDpi ?? this.labelDpi,
       labelPdfSize: labelPdfSize ?? this.labelPdfSize,
+      labelPdfOffsetXMm: labelPdfOffsetXMm ?? this.labelPdfOffsetXMm,
+      labelPdfOffsetYMm: labelPdfOffsetYMm ?? this.labelPdfOffsetYMm,
+      labelPdfPitchMm: labelPdfPitchMm ?? this.labelPdfPitchMm,
       labelRotationQuarterTurns:
           labelRotationQuarterTurns ?? this.labelRotationQuarterTurns,
     );
@@ -460,6 +510,13 @@ bool _boolFromJson(Object? value, {required bool fallback}) {
     return value;
   }
   return value == null ? fallback : value.toString() == 'true';
+}
+
+double _doubleFromJson(Object? value, {required double fallback}) {
+  if (value is num) {
+    return value.toDouble();
+  }
+  return double.tryParse(value?.toString() ?? '') ?? fallback;
 }
 
 int _intFromJson(Object? value, {required int fallback}) {

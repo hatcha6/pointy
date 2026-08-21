@@ -9,6 +9,9 @@ VENV := $(BACKEND_DIR)/.venv
 PIP := $(VENV)/bin/pip
 MANAGE := $(VENV)/bin/python $(BACKEND_DIR)/manage.py
 FLUTTER ?= flutter
+# Postgres for `backend-test-pg`. The suite's Postgres-only guards skip on
+# sqlite, so a run that must prove something has to pin the engine.
+TEST_DATABASE_URL ?= postgres://postgres:postgres@127.0.0.1:5432/pointy
 GO ?= go
 GO_CACHE ?= $(RELAY_DIR)/.gocache
 GO_MOD_CACHE ?= $(RELAY_DIR)/.gomodcache
@@ -119,7 +122,7 @@ ENDURANCE_WORKERS ?= 4
 .PHONY: help setup install docker-check postgres postgres-stop postgres-logs postgres-ping redis redis-local redis-stop redis-logs redis-ping \
 	backend-venv backend-install backend-env backend-migrate backend-migrations backend-dev-migrate backend-run backend-run-remote \
 	backend-load-test backend-stress-test backend-endurance-test \
-	backend-shell backend-superuser backend-test backend-check backend-celery backend-celery-beat \
+	backend-shell backend-superuser backend-test backend-test-pg backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable postgres-ready clean
@@ -240,6 +243,9 @@ backend-endurance-test: backend-env backend-install ## Run a long checkout endur
 
 backend-test: backend-env backend-install ## Run backend tests.
 	$(MANAGE) test apps
+
+backend-test-pg: backend-env backend-install postgres ## Run backend tests, refusing to fall back to sqlite.
+	DATABASE_URL="$(TEST_DATABASE_URL)" POINTY_REQUIRE_POSTGRES=1 $(MANAGE) test apps
 
 backend-check: backend-env backend-install ## Run Django system checks.
 	$(MANAGE) check

@@ -413,7 +413,25 @@ make check
 make test
 ```
 
-These include the backend, frontend, and relay checks. Relay-only checks are:
+These include the backend, frontend, and relay checks.
+
+`make test` runs the backend suite on whatever `backend/.env` points at, which
+is sqlite in a fresh checkout. Several suites are Postgres-only and **skip**
+there — the query-scaling guards, the PgBouncer settings tests, dead-connection
+recovery and trigram search — so a green run does not prove a change on its own.
+Every run prints the engine it used:
+
+```
+[pointy] test database: postgresql 'test_pointy'
+```
+
+To pin it to Postgres and fail rather than fall back:
+
+```sh
+make backend-test-pg
+```
+
+Relay-only checks are:
 
 ```sh
 make relay-check

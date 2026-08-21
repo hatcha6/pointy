@@ -903,6 +903,43 @@ def apply_receipt_stock_changes(
         )
 
 
+def purchase_order_cancelled_total(purchase_order, *, lines=None):
+    """The goods value of every unit a receipt has closed as cancelled.
+
+    Each line contributes its cancelled units' share of ``net_line_total`` —
+    the discounted value of the ordered line. Multiplying before dividing keeps
+    a fully cancelled line exact (``net x qty / qty`` has no remainder to
+    lose), so an order whose whole shipment fell through carries exactly its
+    net goods value and settles at zero. Recomputed from scratch rather than
+    accumulated, so repeated partial receipts on the same line cannot
+    double-count.
+    """
+    cancelled_by_line = {
+        row["purchase_line_id"]: row["total"] or Decimal("0")
+        for row in (
+            PurchaseReceiptLine.objects.filter(
+                purchase_line__purchase_order=purchase_order
+            )
+            .values("purchase_line_id")
+            .annotate(total=models.Sum("cancelled_quantity"))
+        )
+    }
+    if not cancelled_by_line:
+        return Decimal("0.00")
+    if lines is None:
+        lines = list(purchase_order.lines.all())
+    exact = Decimal("0")
+    for line in lines:
+        ordered = Decimal(line.quantity or 0)
+        if ordered <= 0:
+            continue
+        cancelled = min(cancelled_by_line.get(line.pk, Decimal("0")), ordered)
+        if cancelled <= 0:
+            continue
+        exact += line.net_line_total * cancelled / ordered
+    return exact.quantize(Decimal("0.01"))
+
+
 @transaction.atomic
 def receive_purchase_order(purchase_order, *, request=None, lines_data=None, notes=""):
     locked_order = (
@@ -1000,11 +1037,22 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
         if has_outstanding
         else PurchaseOrder.Status.RECEIVED
     )
+    # Units the receipt cancelled will never arrive and can never be returned,
+    # so the order must stop billing for them here — nothing downstream can
+    # take them off the payable later.
+    locked_order.cancelled_total = purchase_order_cancelled_total(
+        locked_order,
+        lines=locked_lines,
+    )
     if locked_order.status == PurchaseOrder.Status.RECEIVED:
         locked_order.received_at = timezone.now()
-        locked_order.save(update_fields=["status", "received_at", "updated_at"])
+        locked_order.save(
+            update_fields=["status", "received_at", "cancelled_total", "updated_at"]
+        )
     else:
-        locked_order.save(update_fields=["status", "updated_at"])
+        locked_order.save(
+            update_fields=["status", "cancelled_total", "updated_at"]
+        )
     record_purchase_order_audit_event(
         locked_order,
         PurchaseOrderAuditEvent.Action.RECEIVED,
@@ -1033,6 +1081,22 @@ def purchase_adjustable_line_value(line):
     return (line.net_line_total * accepted / ordered).quantize(Decimal("0.01"))
 
 
+def purchase_adjustable_unit_span(line):
+    """How many units the line's returnable value is spread across.
+
+    Normally that is the ordered quantity: each of the ten units on a line
+    ordered ten is worth a tenth of it, whether four arrived or all ten did.
+    But a supplier can over-ship, and then ``accepted_quantity`` exceeds
+    ``quantity`` while the returnable value stays capped at what the order
+    actually billed (see :func:`purchase_adjustable_line_value`). Spreading that
+    capped value over the ordered count would price each *arrived* unit above
+    its share, so the span is whichever count is larger.
+    """
+    ordered = Decimal(line.quantity or 0)
+    accepted = Decimal(line.accepted_quantity or 0)
+    return max(ordered, accepted)
+
+
 def purchase_adjustment_line_amount(line, quantity):
     prior_amount = line.adjustment_lines.aggregate(total=models.Sum("line_amount"))[
         "total"
@@ -1043,9 +1107,12 @@ def purchase_adjustment_line_amount(line, quantity):
         return (purchase_adjustable_line_value(line) - prior_amount).quantize(
             Decimal("0.01")
         )
-    return (
-        line.net_line_total * Decimal(quantity) / Decimal(line.quantity)
-    ).quantize(Decimal("0.01"))
+    span = purchase_adjustable_unit_span(line)
+    if span <= 0:
+        return Decimal("0.00")
+    return (line.net_line_total * Decimal(quantity) / span).quantize(
+        Decimal("0.01")
+    )
 
 
 def purchase_adjustment_line_unit_cost(line, quantity):
