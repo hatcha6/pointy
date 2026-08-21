@@ -309,3 +309,29 @@ create_connection("default")`, `set_autocommit(False)`, `SELECT ... FOR UPDATE`)
 under `TransactionTestCase`, and run the request on a `threading.Thread` with a
 `join(deadline)` — otherwise "hangs forever" wedges the runner instead of
 failing it.
+
+## 2026-08-20 - A job row is a lock, and a killed worker never unlocks it
+
+**Learning:** `apps/core/backup.py::active_maintenance_job()` gates *every*
+backup — the daily scheduled one, the manual button, and restores — on "is any
+`SystemMaintenanceJob` still queued/running?". But only `run_backup`'s `except`
+block marks a job failed, so anything that kills the process outright (power
+cut, container restart, OOM, celery's hard `time_limit`) leaves the row
+`running` forever, and a `queued` row is stranded the same way when the broker
+restarts empty and the task is never delivered. One abandoned row silently
+disables the shop's backups permanently: the scheduled task no-ops every minute,
+the manual button 400s "another job is already running", and the UI shows a
+spinner that never resolves. There is no cancel endpoint and no reaper — the
+only exit is a DB edit. On unreliable mains, the shop loses its backups to
+exactly the outage backups exist for.
+
+**Action:** Any "is something already in progress?" guard that reads a
+*persisted* row is a lock held by a process that may not survive to release it.
+Ask what releases it when the holder is SIGKILLed. The bound wants deriving from
+an existing authority, not a new magic number: celery hard-kills at
+`POINTY_BACKUP_TASK_TIME_LIMIT`, so a job whose heartbeat (`updated_at`, bumped
+by `update_progress`) predates that cannot still be alive. Reap by marking
+*failed*, not by ignoring the row — ignoring it leaves the UI's phantom
+"running" state in place. Look for this shape elsewhere: `_ensure_no_active_job`
+is one instance; stock-count applies, migration runs and payroll drafts are
+worth checking for the same pattern.
