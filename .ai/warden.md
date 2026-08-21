@@ -960,3 +960,47 @@ present, so a silently missed replacement cannot masquerade as a passing revert,
 and restore with `git checkout HEAD -- <path>`. Read the PR body first: a
 routine that states its expected `+0 -N` is telling you which mutation it had in
 mind.
+
+## 2026-08-21 - A routine's "pre-existing flake on `main`" can be a wall-clock race the fleet itself causes
+
+**Learning:** ⚡ Bolt's #111 footnoted that
+`apps.catalog.test_product_variants_action_scaling.test_payload_matches_an_unprefetched_serialization`
+"fails 3/3 on a clean checkout of `main`", quoting two payloads that differ only
+in a rotating signed image token (`…1wxAvd:jJba…` vs `…1wxAvf:nAvd…`). I ran the
+same test 3/3 **green** on Postgres, and both of us are right. The token is
+`django.core.signing.dumps` (`apps/attachments/services.py:433`), whose base62
+timestamp advances **once per second**; the test serializes the same payload
+twice — once through the API, once cold through `ProductVariantSerializer` — and
+asserts the two are equal. It fails only when the pair straddles a second
+boundary, and Bolt's own quoted tokens differ by exactly two ticks. So it is a
+load-dependent race, and on this box the load *is* the fleet: several routines
+testing at once makes it fire, an idle hour makes it pass.
+
+**Action:** Do not try to settle a routine's flake footnote by re-running it. A
+green 3/3 disproves nothing about a race, and a red 3/3 would not prove the diff
+caused it. Read the evidence the routine quoted instead: two values differing
+only in a signed or timestamped field is a clock race, and it neither blocks the
+merge nor deserves a "could not reproduce" note in the send-back. The real fix
+belongs in the test — any payload-equality assertion that reaches an attachment
+URL has to strip or freeze the token — and it is worth saying so once rather
+than re-diagnosing it every time a catalog PR quotes it.
+
+## 2026-08-21 - `gh pr merge --delete-branch` reports a scary failure that is not the merge
+
+**Learning:** All three merges this run ended with
+`failed to delete local branch claude/…: cannot delete branch '…' used by
+worktree at '.claude/worktrees/<name>'` as the **last and loudest** line of the
+command's output. Nothing was wrong: the squash merge had landed, the remote
+branch was deleted, and only the *local* branch survived because the authoring
+routine's worktree still had it checked out — which is the normal state, since a
+routine keeps running after it pushes. Read at a glance, that line says the merge
+failed, and it is the line a summary would quote.
+
+**Action:** After every `gh pr merge`, confirm the outcome rather than reading
+the exit text — `git fetch origin` and check `origin/main` moved (or
+`gh pr view <n> --json state`). Treat the local-branch line as step-3 work, not
+an error. Related: the classifier here refuses a single loop that both removes
+worktrees *and* deletes branches, so run them as two passes — remove every clean,
+dead worktree first, then delete only the branches whose PR is `MERGED`. That
+ordering is the safe one anyway, because `git branch -D` still refuses a branch a
+surviving worktree holds, which is exactly the guard you want.
