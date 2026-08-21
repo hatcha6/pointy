@@ -853,3 +853,27 @@ fails 3/3 on a clean tree. The primed and cold payloads differ only in the
 rotating signed image token (`…1wxAvd:jJba…` vs `…1wxAvf:nAvd…`), which is
 regenerated per serialization from the clock. Any future payload-equality test
 against an attachment URL has to strip or freeze that token.
+
+## 2026-08-21 - Probe the ABSOLUTE query count of every list endpoint in one pass
+**Learning:** A ~40-line throwaway test that walks `router.registry`, reverses
+`<basename>-list` and counts queries against an *empty* database prices the
+whole API's fixed overhead in one run. Every endpoint came back 2-6 — except
+`/api/users/` at **233 queries with one user row**. The cause was not the
+serializer at all: `PosUserViewSet.initial` calls `ensure_role_groups()` on
+every request (list, retrieve, permission catalog, every write), and that
+re-sync resolved each of its 211 `app_label.codename` strings with its own
+`Permission.objects.filter(...).first()`. Batching them into one keyed map took
+the idempotent re-sync 228 -> 18 queries and 108 -> 18 ms, the endpoint 233 ->
+23 and 117 -> 29 ms. Note the viewset's `get_queryset` already carried a comment
+promising "list/retrieve stay O(1) queries" — and it was telling the truth about
+the *queryset*; the cost was in `initial()`, one method above it.
+**Action:** Run the empty-DB absolute probe before hunting slopes — it is
+cheaper than the static prefetch scan and finds a different bug class entirely
+(fixed overhead, which every scaling test reports as perfectly flat: this one
+measured 233 at 1, 5 and 20 users). And when a probe indicts an endpoint, price
+`initial()`/`dispatch()`/middleware before the serializer: an idempotent
+"ensure the world is set up" call on a read path is invisible to every audit
+that starts at `get_queryset`. For batching code -> row lookups, prefer two flat
+`__in` lists plus a dict keyed on the exact composite string over an OR of
+per-pair `Q`s — the over-fetched cross product is never looked up, and the
+planner gets one index scan instead of 200 OR branches.
