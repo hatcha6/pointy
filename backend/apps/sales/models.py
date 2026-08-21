@@ -717,6 +717,42 @@ def returned_cost_total(adjustments) -> Decimal:
     return (total or Decimal("0.00")).quantize(Decimal("0.01"))
 
 
+# Cost of one sold line, for aggregation. Kept next to ``returned_cost_total``
+# because the two answer opposite halves of the same question and must use the
+# same convention: raw product, summed, rounded once at the end. If a sale
+# subtracted a per-line-rounded cost while its return added back a raw-summed
+# one, undoing the sale would not return profit to where it started.
+SOLD_COST_EXPRESSION = models.F("quantity") * models.F("unit_cost")
+
+
+def gross_profit_total(*, revenue, sold_cost, refund_total, adjustments) -> Decimal:
+    """Gross profit over a period: revenue less the cost of the goods sold, less
+    the margin (not the cost) of whatever was handed back.
+
+    ``revenue`` must be the **documents'** revenue — ``Sum(Order.total)``, the
+    money the customers were actually charged — and not a re-derivation of it
+    from raw line arithmetic. The two are different numbers on any line whose
+    gross does not land on a whole cent (0.750 kg at 5.50 is a gross of 4.1250:
+    the line stores 4.12, the raw product keeps 4.1250), and the refund that
+    reverses a sale is always the document's own ``OrderAdjustment.amount``. Mix
+    the two and a sale that is entirely undone leaves a residue of profit behind
+    on goods the shop no longer sold — and the same report ends up stating two
+    different revenues, so ``net_sales - gross_profit`` is not the cost of
+    anything.
+
+    ``sold_cost`` is the raw ``Sum(SOLD_COST_EXPRESSION)`` the caller already
+    aggregated alongside its other line figures; it is rounded here, once, so it
+    matches ``returned_cost_total`` term for term.
+    """
+    cost = (Decimal(sold_cost or 0)).quantize(Decimal("0.01"))
+    return (
+        Decimal(revenue or 0)
+        - cost
+        - Decimal(refund_total or 0)
+        + returned_cost_total(adjustments)
+    ).quantize(Decimal("0.01"))
+
+
 class OrderExchange(TimeStampedModel):
     """Links the two legs of a sales exchange into one audited operation.
 

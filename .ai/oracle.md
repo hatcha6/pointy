@@ -538,3 +538,58 @@ not caused by this change — the default seed passes, so CI is green). Any chan
 that shifts the RNG stream re-rolls them, which reads like a regression and is
 not one. Worth forcing their shapes the way `op_purchase_submit` already forces
 the 11-line order, rather than leaving them to chance.
+
+## 2026-08-21 - Every figure was proved per document and none of them added up
+
+**Learning:** The oracle proved every number on every order, line, refund,
+session, purchase order and supplier balance — and had never once looked at an
+**aggregate**. An aggregation is its own implementation: the reports layer and
+the dashboard each answer "what did the shop sell and what did it make" with
+their own SQL over a period, and a figure can be right on all two hundred
+invoices and wrong the moment they are summed. That is exactly how the
+purchasing side's payable stayed broken across five read paths. Sweeping all
+seven money-bearing reports against oracle-derived expectations took one
+afternoon and every figure matched — gross sales, discounts, refunds, net sales,
+payment totals, register variance, purchase spend, stock value — **except gross
+profit**, which was wrong in all three places that state it, by a residue that
+never exceeded a dinar and never went away.
+
+The mechanism is the rounding-regime crossing again, on the one figure that was
+still computed outside the documents. `net_sales` came from `Sum(Order.total)` —
+the money the customers were charged — while `gross_profit` re-derived revenue
+from raw line arithmetic (`Sum(quantity * unit_price - discount_total)`,
+unrounded). One report, two different revenues, so `net_sales - gross_profit`
+was not the cost of anything and no drill-down reconciled. The refund that
+reverses a sale, meanwhile, is always the *document's* `OrderAdjustment.amount`.
+Mix the two and undoing a sale does not return profit to where it started: sell
+0.750 kg at 5.50 (a gross of 4.1250 — the line stores 4.12), void it, and the
+shop that sold nothing at all reads a gross profit of 0.01.
+
+**Action:** After proving a document, ask **who adds the documents up** — the
+aggregate is a separate implementation and needs its own assertion. And when
+choosing which rounding convention an aggregate should use, do not argue it in
+the abstract: pick the one that makes a **conservation law** hold. Cost is
+summed raw and rounded once here only because `returned_cost_total` already is,
+so the cost a sale takes out is exactly the cost its return puts back; revenue
+is the documents' because the refund that reverses it is. Neither choice is
+defensible alone — together they make "an order handed back in full contributes
+exactly nothing" exact, and that identity is convention-free, which is why the
+oracle asserts *it* rather than the aggregate's rounding. It is restricted to
+orders undone in ONE document at full quantity: split over several documents it
+genuinely does not hold, because each part rounds its own gross (0.5 + 0.5 of a
+line at 3.33 credits 3.32), and that is a recorded decision, not an oversight.
+
+**Also — the new vacuity guard needed the shape forced, like the last two.**
+`rounding_sensitive_undone_orders` was 0 on 1 seed in 12 at 300 operations,
+because whether a *void* happens to land on a *weighed* order is a coin flip and
+the identity is exact under every implementation without one. `op_void_order`
+now prefers such an order until the run has seen one. Still left to chance and
+still flaky at that rate: `mixed_unit_retail_landed_orders` and
+`over_received_return_assertions`. Note that forcing any shape re-rolls the RNG
+stream, so those two flip on unrelated changes and read like regressions.
+
+**Still unaudited on this axis:** the per-product and per-variant profit rows
+(`_product_sales_report`, `_variant_sales_report`, `_product_sales_rows`) keep
+the raw expression. They group by product, so there is no document revenue to
+reach for, and they are rankings rather than money the shop banks — but they
+still will not sum to the top line, and nothing asserts them.
