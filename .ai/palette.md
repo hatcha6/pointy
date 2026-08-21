@@ -826,3 +826,33 @@ from `onChanged` (`purchase_order_receive_dialog`, `stock_count_sessions_screen`
 `register_session_close_sheet`, `register_cash_movement_sheet`,
 `sale_order_details_content`. A stale red line under a now-valid value reads as
 "still wrong" — match-the-sibling fixes, one screen at a time.
+
+## 2026-08-21 - A status enum that folds "we couldn't ask" into "the answer is no"
+
+**Learning:** `PosViewModel.registerSessionGateStatus` returns `noOpenSession`
+whenever `_availableRegisterSession == null` — which is equally true after a
+successful 204 (there really is none) and after a failed lookup (we never found
+out). The gate then rendered `noOpenRegisterSession` — "there is no open register
+session, start one before selling" — as a plain info message, with **بدء الجلسة**
+as the filled primary button, and merely appended the error underneath. So a LAN
+blip made the POS assert a fact it did not have, and steered the cashier toward
+opening a second session on top of the one the server may already hold. The same
+shape covers a failed *start*: the request may have succeeded with the response
+lost, so "re-read before starting again" is the correct advice in both cases and
+one message serves both — no extra error-kind flag needed.
+
+**Action:** When a view branches on "is there an X?", check whether the *error*
+path collapses into the *empty* path. Empty and unknown must not share copy: an
+empty state may assert, an unknown state may only report and offer a re-read. And
+when they differ, move the **emphasis** too — leaving the risky action filled and
+primary while a warning sits above it is what actually drives the mis-tap. Keep
+the risky action reachable but demoted (`OutlinedButton`), never disabled: an
+unreachable shop still has to be able to open a till.
+
+**Test trap for the ordering half.** `ResponsiveActionBar` lays actions out in a
+`Wrap` above `AppBreakpoints.largePhoneMin`, so at the default 800×600 test
+viewport both buttons share one row and `getTopLeft(...).dy` is *identical* —
+a `greaterThan` assertion on dy fails, and a `dx` assertion would encode RTL.
+Assert on the bar's own list instead:
+`tester.widget<ResponsiveActionBar>(find.byType(ResponsiveActionBar)).actions.last.key`.
+Direction-independent, and it states the actual contract (last = primary).
