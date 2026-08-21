@@ -9,6 +9,11 @@ part of 'pos_view_model.dart';
 extension PosSessionPersistence on PosViewModel {
   static const _snapshotVersion = 1;
 
+  /// How long a pre-checkout snapshot write may take before the sale goes ahead
+  /// without it. Local WAL-mode SQLite answers in single-digit milliseconds; a
+  /// disk that has stopped answering must not hold up the cashier.
+  static const _persistNowDeadline = Duration(seconds: 2);
+
   /// True once there is at least one non-empty cart worth saving.
   bool get _hasPersistableContent =>
       _saleSessions.any((session) => session.cart.isNotEmpty);
@@ -63,6 +68,35 @@ extension PosSessionPersistence on PosViewModel {
     });
   }
 
+  /// Writes the snapshot now instead of on the 500ms debounce, and reports
+  /// whether it landed.
+  ///
+  /// Called immediately before a checkout POST. The idempotency key minted for
+  /// that request has to be on disk *before* the request leaves: mains power in
+  /// these shops is not dependable, and a cut in the window between the sale
+  /// committing on the backend and the till reading the response otherwise
+  /// loses the key — the cart is restored on the next launch (that is the whole
+  /// point of this file), the cashier presses checkout again, a fresh key is
+  /// minted, and the same sale is billed and stocked twice.
+  ///
+  /// Best-effort and bounded by design: a storage failure or a stalled write is
+  /// reported to the caller, never thrown and never waited on indefinitely. A
+  /// till that cannot write its scratch state must still be able to take the
+  /// customer's money.
+  Future<bool> persistNow() async {
+    final scope = _persistScope;
+    if (scope == null) {
+      return false;
+    }
+    _persistDebounce?.cancel();
+    try {
+      await _flushPersist(scope).timeout(_persistNowDeadline);
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
   Future<void> _flushPersist(String scope) async {
     if (_hasPersistableContent) {
       await _sessionStorage.save(scope, _serializeSessions());
@@ -88,6 +122,9 @@ extension PosSessionPersistence on PosViewModel {
             'shareInvoiceAfterPayment': session.shareInvoiceAfterPayment,
             'customer': session.selectedCustomer?.toJson(),
             'cart': [for (final line in session.cart) line.toJson()],
+            // Restored with the cart so a checkout the till never saw the
+            // answer to is retried under its original key — see [persistNow].
+            'checkoutAttempts': session.checkoutAttemptsToJson(),
           },
       ],
     });
@@ -119,6 +156,7 @@ extension PosSessionPersistence on PosViewModel {
             sessionMap['printInvoiceAfterPayment'] == true;
         session.shareInvoiceAfterPayment =
             sessionMap['shareInvoiceAfterPayment'] == true;
+        session.restoreCheckoutAttempts(sessionMap['checkoutAttempts']);
         final customerJson = sessionMap['customer'];
         if (customerJson is Map) {
           session.selectedCustomer = Customer.fromJson(

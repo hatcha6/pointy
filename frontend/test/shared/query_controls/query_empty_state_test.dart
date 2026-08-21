@@ -55,14 +55,37 @@ void main() {
     expect(cleared, 1);
   });
 
-  testWidgets('a filter with no search term still explains the blank list', (
+  testWidgets('a filter with no search term names only the filters', (
     tester,
   ) async {
     await _pumpEmptyState(tester, search: '', hasFilters: true);
 
     expect(find.text('لا توجد نتائج مطابقة للفلاتر المحددة'), findsOneWidget);
-    expect(find.text('مسح البحث والفلاتر'), findsOneWidget);
+    expect(find.text('امسح الفلاتر لعرض القائمة كاملة.'), findsOneWidget);
+    expect(find.text('مسح الفلاتر'), findsOneWidget);
+
+    // Mirror of the search-only case above: the user typed nothing, so telling
+    // them to check their spelling and offering to clear a search box — which
+    // the payments hub and the contact pickers do not even have — points at a
+    // control that will not change anything.
+    expect(find.text('مسح البحث والفلاتر'), findsNothing);
     expect(find.text('مسح البحث'), findsNothing);
+    expect(
+      find.text('تحقق من الكتابة، أو امسح البحث والفلاتر لعرض القائمة كاملة.'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a search term and a filter together name both', (tester) async {
+    await _pumpEmptyState(tester, search: '1042', hasFilters: true);
+
+    expect(find.text('لا توجد نتائج لـ «1042»'), findsOneWidget);
+    expect(
+      find.text('تحقق من الكتابة، أو امسح البحث والفلاتر لعرض القائمة كاملة.'),
+      findsOneWidget,
+    );
+    expect(find.text('مسح البحث والفلاتر'), findsOneWidget);
+    expect(find.text('مسح الفلاتر'), findsNothing);
   });
 
   group('clearing keeps what the user did not set', () {

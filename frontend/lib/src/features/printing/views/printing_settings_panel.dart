@@ -8,6 +8,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/prep_station.dart';
+import '../../../data/services/barcode_label_calibration.dart';
 import '../../../data/models/printer_config.dart';
 import '../../../data/repositories/prep_station_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
@@ -344,6 +345,9 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
   late final TextEditingController _codeTableController;
   late final TextEditingController _capabilityProfileController;
   late final TextEditingController _feedLinesController;
+  late final TextEditingController _labelPdfOffsetXController;
+  late final TextEditingController _labelPdfOffsetYController;
+  late final TextEditingController _labelPdfPitchController;
   late final TextEditingController _labelWidthController;
   late final TextEditingController _labelHeightController;
   late final TextEditingController _labelGapController;
@@ -361,6 +365,15 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
       text: endpoint.capabilityProfile,
     );
     _feedLinesController = TextEditingController(text: '${endpoint.feedLines}');
+    _labelPdfOffsetXController = TextEditingController(
+      text: '${widget.viewModel.config.endpoint.labelPdfOffsetXMm}',
+    );
+    _labelPdfOffsetYController = TextEditingController(
+      text: '${widget.viewModel.config.endpoint.labelPdfOffsetYMm}',
+    );
+    _labelPdfPitchController = TextEditingController(
+      text: _pitchText(widget.viewModel.config.endpoint.labelPdfPitchMm),
+    );
     _labelWidthController = TextEditingController(
       text: '${endpoint.labelWidthMm}',
     );
@@ -384,6 +397,9 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
     _codeTableController.dispose();
     _capabilityProfileController.dispose();
     _feedLinesController.dispose();
+    _labelPdfOffsetXController.dispose();
+    _labelPdfOffsetYController.dispose();
+    _labelPdfPitchController.dispose();
     _labelWidthController.dispose();
     _labelHeightController.dispose();
     _labelGapController.dispose();
@@ -499,10 +515,8 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
                       ),
                       items: [
                         DropdownMenuItem(
-                          value: BarcodeLabelPdfSize.label40x22,
-                          child: Text(
-                            l10n.printerBarcodeLabelPdfSizeSticker40x22,
-                          ),
+                          value: BarcodeLabelPdfSize.sticker,
+                          child: Text(l10n.printerBarcodeLabelPdfSizeSticker),
                         ),
                         DropdownMenuItem(
                           value: BarcodeLabelPdfSize.roll50,
@@ -529,6 +543,102 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
                               }
                             },
                     ),
+                    if (endpoint.labelPdfSize ==
+                        BarcodeLabelPdfSize.sticker) ...[
+                      SizedBox(height: spacing.md),
+                      ResponsiveFormGrid(
+                        maxColumns: 2,
+                        children: [
+                          TextFormField(
+                            controller: _labelWidthController,
+                            enabled: !widget.viewModel.isTesting,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            onChanged: widget.viewModel.updateLabelWidth,
+                            decoration: InputDecoration(
+                              labelText: l10n.printerLabelWidthLabel,
+                              helperText: l10n.printerBarcodeLabelMediaHelper,
+                              helperMaxLines: 3,
+                              prefixIcon: const Icon(
+                                Icons.width_normal_outlined,
+                              ),
+                            ),
+                          ),
+                          TextFormField(
+                            controller: _labelHeightController,
+                            enabled: !widget.viewModel.isTesting,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            onChanged: widget.viewModel.updateLabelHeight,
+                            decoration: InputDecoration(
+                              labelText: l10n.printerLabelHeightLabel,
+                              prefixIcon: const Icon(Icons.height_outlined),
+                            ),
+                          ),
+                          TextFormField(
+                            controller: _labelPdfPitchController,
+                            enabled: !widget.viewModel.isTesting,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.allow(
+                                RegExp(r'[0-9.]'),
+                              ),
+                            ],
+                            onChanged: widget.viewModel.updateLabelPdfPitch,
+                            decoration: InputDecoration(
+                              labelText: l10n.printerBarcodeLabelPitchLabel,
+                              helperText: l10n.printerBarcodeLabelPitchHelper,
+                              helperMaxLines: 4,
+                              prefixIcon: const Icon(Icons.straighten_outlined),
+                            ),
+                          ),
+                          TextFormField(
+                            controller: _labelPdfOffsetYController,
+                            enabled: !widget.viewModel.isTesting,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            onChanged: widget.viewModel.updateLabelPdfOffsetY,
+                            decoration: InputDecoration(
+                              labelText: l10n.printerBarcodeLabelOffsetYLabel,
+                              helperText: l10n.printerBarcodeLabelOffsetYHelper,
+                              helperMaxLines: 3,
+                              prefixIcon: const Icon(
+                                Icons.vertical_align_top_outlined,
+                              ),
+                            ),
+                          ),
+                          TextFormField(
+                            controller: _labelPdfOffsetXController,
+                            enabled: !widget.viewModel.isTesting,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            onChanged: widget.viewModel.updateLabelPdfOffsetX,
+                            decoration: InputDecoration(
+                              labelText: l10n.printerBarcodeLabelOffsetXLabel,
+                              helperText: l10n.printerBarcodeLabelOffsetXHelper,
+                              helperMaxLines: 3,
+                              prefixIcon: const Icon(
+                                Icons.format_indent_increase_outlined,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: spacing.md),
+                      _BarcodeLabelCalibrationSection(
+                        viewModel: widget.viewModel,
+                      ),
+                    ],
                     SizedBox(height: spacing.md),
                     DropdownButtonFormField<int>(
                       key: ValueKey(endpoint.labelRotationQuarterTurns),
@@ -538,7 +648,9 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
                         labelText: l10n.printerBarcodeLabelRotationLabel,
                         helperText: l10n.printerBarcodeLabelRotationHelper,
                         helperMaxLines: 2,
-                        prefixIcon: const Icon(Icons.rotate_90_degrees_cw_outlined),
+                        prefixIcon: const Icon(
+                          Icons.rotate_90_degrees_cw_outlined,
+                        ),
                       ),
                       items: [
                         DropdownMenuItem(
@@ -816,11 +928,18 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
     _setText(_codeTableController, endpoint.codeTable);
     _setText(_capabilityProfileController, endpoint.capabilityProfile);
     _setText(_feedLinesController, '${endpoint.feedLines}');
+    _setText(_labelPdfOffsetXController, '${endpoint.labelPdfOffsetXMm}');
+    _setText(_labelPdfOffsetYController, '${endpoint.labelPdfOffsetYMm}');
+    _setText(_labelPdfPitchController, _pitchText(endpoint.labelPdfPitchMm));
     _setText(_labelWidthController, '${endpoint.labelWidthMm}');
     _setText(_labelHeightController, '${endpoint.labelHeightMm}');
     _setText(_labelGapController, '${endpoint.labelGapMm}');
     _setText(_labelDpiController, '${endpoint.labelDpi}');
   }
+
+  /// Whole millimetres print without a decimal tail; fractions keep one digit.
+  static String _pitchText(double value) =>
+      value == value.roundToDouble() ? '${value.round()}' : '$value';
 
   void _setText(TextEditingController controller, String value) {
     if (controller.text != value) {
@@ -1193,4 +1312,83 @@ String _barcodeLabelLanguageLabel(
     BarcodeLabelPrinterLanguage.escPos =>
       l10n.printerBarcodeLabelLanguageEscPos,
   };
+}
+
+/// Calibration prints for die-cut labels.
+///
+/// Every die-cut number is a measurement — where the roll sits under the head,
+/// how tall a sticker is, how far apart they repeat — and a printer that is a
+/// millimetre out on any of them walks its labels off the stickers. These sheets
+/// put a scale on the labels themselves so the numbers can be read rather than
+/// guessed at, one print per unknown.
+class _BarcodeLabelCalibrationSection extends StatelessWidget {
+  const _BarcodeLabelCalibrationSection({required this.viewModel});
+
+  final PrintingSettingsViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final spacing = AdaptiveSpacing.of(context);
+    final busy = viewModel.isTesting || !viewModel.hasConfiguredPrinter;
+
+    Widget sheetButton(
+      String label,
+      IconData icon,
+      BarcodeLabelCalibrationSheet sheet,
+    ) {
+      return OutlinedButton.icon(
+        onPressed: busy
+            ? null
+            : () => viewModel.printBarcodeLabelCalibration(sheet),
+        icon: Icon(icon, size: 18),
+        label: Text(label),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          l10n.printerBarcodeLabelCalibrationTitle,
+          style: theme.textTheme.titleSmall,
+        ),
+        SizedBox(height: spacing.xs),
+        Text(
+          l10n.printerBarcodeLabelCalibrationHelper,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        SizedBox(height: spacing.sm),
+        Wrap(
+          spacing: spacing.sm,
+          runSpacing: spacing.sm,
+          children: [
+            sheetButton(
+              l10n.printerBarcodeLabelCalibrationAcross,
+              Icons.straighten_outlined,
+              BarcodeLabelCalibrationSheet.acrossRuler,
+            ),
+            sheetButton(
+              l10n.printerBarcodeLabelCalibrationFeed,
+              Icons.height_outlined,
+              BarcodeLabelCalibrationSheet.feedRuler,
+            ),
+            sheetButton(
+              l10n.printerBarcodeLabelCalibrationCombCoarse,
+              Icons.view_column_outlined,
+              BarcodeLabelCalibrationSheet.pitchCombCoarse,
+            ),
+            sheetButton(
+              l10n.printerBarcodeLabelCalibrationCombFine,
+              Icons.view_week_outlined,
+              BarcodeLabelCalibrationSheet.pitchCombFine,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 }

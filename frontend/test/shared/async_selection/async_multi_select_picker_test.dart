@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/shared/async_selection/async_multi_select_picker.dart';
+import 'package:pointy_frontend/src/shared/components/pointy_error_state.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 
 void main() {
@@ -17,7 +18,9 @@ void main() {
       // between the debounce firing and the results arriving.
       await Future<void>.delayed(const Duration(milliseconds: 300));
       return const AsyncSelectionPage<int>(
-        options: [AsyncSelectionOption<int>(id: 1, label: 'حليب', subtitle: '')],
+        options: [
+          AsyncSelectionOption<int>(id: 1, label: 'حليب', subtitle: ''),
+        ],
         hasMore: false,
       );
     }
@@ -66,13 +69,20 @@ void main() {
 
     // The reliable, bug-tied signal: the field must NOT be disabled while a page is
     // loading (a disabled TextField is what drops focus on-device).
-    bool? searchEnabled() => tester.widget<TextField>(find.byKey(searchKey)).enabled;
+    bool? searchEnabled() =>
+        tester.widget<TextField>(find.byKey(searchKey)).enabled;
 
     expect(searchEnabled(), isTrue);
     // Type — focuses the field, and after the debounce kicks off a reload.
     await tester.enterText(find.byKey(searchKey), 'حل');
-    await tester.pump(const Duration(milliseconds: 360)); // debounce fired → load in flight
-    expect(searchEnabled(), isTrue, reason: 'field disabled mid-load → focus drops');
+    await tester.pump(
+      const Duration(milliseconds: 360),
+    ); // debounce fired → load in flight
+    expect(
+      searchEnabled(),
+      isTrue,
+      reason: 'field disabled mid-load → focus drops',
+    );
     expect(
       tester.widget<EditableText>(find.byType(EditableText)).focusNode.hasFocus,
       isTrue,
@@ -81,5 +91,183 @@ void main() {
     // isn't left pending at teardown).
     await tester.pump(const Duration(milliseconds: 350)); // results arrive
     expect(searchEnabled(), isTrue);
+  });
+
+  testWidgets('a failed first page offers a retry instead of "no results"', (
+    tester,
+  ) async {
+    // Regression: a failed load emptied the list and left a red line above an
+    // "empty" list — so the picker said "no results" for a search it never got
+    // to run, and the only way to ask again was to edit the search text.
+    var shouldFail = true;
+
+    Future<AsyncSelectionPage<int>> loadPage(String search, int page) async {
+      if (shouldFail) {
+        throw Exception('offline');
+      }
+      return const AsyncSelectionPage<int>(
+        options: [
+          AsyncSelectionOption<int>(id: 1, label: 'حليب', subtitle: ''),
+        ],
+        hasMore: false,
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        theme: PointyTheme.light(),
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () => showAsyncMultiSelectPicker<int>(
+                  context: context,
+                  selected: const [],
+                  loadPage: loadPage,
+                  strings: AsyncSelectionPickerStrings<int>(
+                    title: 'العنوان',
+                    searchHint: 'ابحث',
+                    emptyText: 'لا توجد نتائج',
+                    clearText: 'مسح',
+                    clearSearchTooltip: 'مسح البحث',
+                    loadErrorText: 'تعذّر تحميل القائمة',
+                    confirmText: 'تأكيد',
+                    fallbackLabelForId: (id) => '#$id',
+                  ),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+
+    // The failure is reported as a failure — not as an empty result set.
+    expect(find.byType(PointyErrorState), findsOneWidget);
+    expect(find.text('تعذّر تحميل القائمة'), findsOneWidget);
+    expect(find.text('لا توجد نتائج'), findsNothing);
+
+    // And it is escapable without touching the search field. Match the label,
+    // not the button type: the action is a `FilledButton.icon`, whose private
+    // subclass `find.widgetWithText(FilledButton, …)` never matches.
+    final retry = find.text(l10n.retryButton);
+    expect(retry, findsOneWidget);
+
+    shouldFail = false;
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PointyErrorState), findsNothing);
+    expect(find.text('حليب'), findsOneWidget);
+  });
+
+  testWidgets('a successful mid-list retry clears the failure line', (
+    tester,
+  ) async {
+    // Regression: the success path never cleared `_hasError`, which is only
+    // reset when a load *restarts* from page one. So a retried next page
+    // appended its rows while the red failure line — and its own retry
+    // button — stayed above them: the picker reported a failure and the
+    // result of that same failure's retry on one screen.
+    var page2ShouldFail = true;
+
+    Future<AsyncSelectionPage<int>> loadPage(String search, int page) async {
+      if (page == 1) {
+        // `hasMore` keeps the list asking for page 2; a single short page has
+        // no scroll extent, so the list requests it on its own post-frame.
+        return const AsyncSelectionPage<int>(
+          options: [
+            AsyncSelectionOption<int>(id: 1, label: 'حليب', subtitle: ''),
+          ],
+          hasMore: true,
+        );
+      }
+      if (page2ShouldFail) {
+        throw Exception('offline');
+      }
+      return const AsyncSelectionPage<int>(
+        options: [AsyncSelectionOption<int>(id: 2, label: 'خبز', subtitle: '')],
+        hasMore: false,
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        theme: PointyTheme.light(),
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () => showAsyncMultiSelectPicker<int>(
+                  context: context,
+                  selected: const [],
+                  loadPage: loadPage,
+                  strings: AsyncSelectionPickerStrings<int>(
+                    title: 'العنوان',
+                    searchHint: 'ابحث',
+                    emptyText: 'لا توجد نتائج',
+                    clearText: 'مسح',
+                    clearSearchTooltip: 'مسح البحث',
+                    loadErrorText: 'تعذّر تحميل القائمة',
+                    confirmText: 'تأكيد',
+                    fallbackLabelForId: (id) => '#$id',
+                  ),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle(); // page 1 loads, page 2 is asked for and fails
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+
+    // Page 1's rows survive the failed page 2 — this is the inline path, not
+    // the full-pane error state.
+    expect(find.text('حليب'), findsOneWidget);
+    expect(find.byType(PointyErrorState), findsNothing);
+    expect(find.text('تعذّر تحميل القائمة'), findsOneWidget);
+
+    final retry = find.text(l10n.retryButton);
+    expect(retry, findsOneWidget);
+
+    page2ShouldFail = false;
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+
+    expect(find.text('خبز'), findsOneWidget, reason: 'page 2 loaded on retry');
+    expect(
+      find.text('تعذّر تحميل القائمة'),
+      findsNothing,
+      reason: 'a load that just succeeded must not still report a failure',
+    );
+    expect(find.text(l10n.retryButton), findsNothing);
+    expect(find.text('حليب'), findsOneWidget, reason: 'page 1 rows kept');
   });
 }

@@ -27,6 +27,13 @@ permissions:
 
 env:
   FLUTTER_VERSION: "3.38.6"
+  # The WSL installer bundled into the on-prem zip, so a Windows shop can be
+  # installed with no internet and no Microsoft Store. TAG is the microsoft/WSL
+  # release tag; ASSET is the file name on that release (Microsoft appends a
+  # fourth version component to the asset, so it is NOT derivable from the tag).
+  # Bump both together and check the asset name on the release page.
+  WSL_MSI_TAG: "2.3.26"
+  WSL_MSI_ASSET: "wsl.2.3.26.0.x64.msi"
   FLUTTER_CHANNEL: "stable"
   JAVA_VERSION: "17"
   POSTGRES_IMAGE: "postgres:17-alpine"
@@ -503,6 +510,28 @@ jobs:
           docker pull "${REDIS_IMAGE}"
           docker pull "${PGBOUNCER_IMAGE}"
 
+      # The Windows install path is "WSL2 + this pre-baked distro". Building it
+      # here rather than on the shop's PC is what keeps an on-prem install fully
+      # offline: install.sh's Docker bootstrap fetches get.docker.com, which a
+      # shop behind a dead line can never reach.
+      - name: Build the WSL distro rootfs
+        run: |
+          mkdir -p wsl-rootfs
+          bash deploy/onprem/wsl/build-rootfs.sh wsl-rootfs/pointy-wsl-rootfs.tar.gz
+
+      # Bundling the WSL MSI lets bootstrap-wsl.ps1 install WSL on a machine with
+      # no internet and no Microsoft Store (routinely stripped from POS images).
+      # Best-effort: if the download fails the bundle still installs on any host
+      # that already has a modern wsl.exe.
+      - name: Fetch the WSL installer MSI
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p wsl-msi
+          curl -fsSL -o wsl-msi/wsl.msi \
+            "https://github.com/microsoft/WSL/releases/download/${WSL_MSI_TAG}/${WSL_MSI_ASSET}"
+          ls -lh wsl-msi
+
       - name: Stage on-prem bundle
         shell: bash
         env:
@@ -561,23 +590,51 @@ jobs:
               -e "s|^POINTY_EDGE_IMAGE=.*|POINTY_EDGE_IMAGE=${EDGE_IMAGE}|" \
               deploy/onprem/.env.example > "${BUNDLE}/.env.example"
 
-          cp deploy/onprem/install.sh deploy/onprem/install.ps1 \
-             deploy/onprem/watchdog.sh deploy/onprem/watchdog.ps1 \
-             deploy/onprem/register-autostart.sh deploy/onprem/register-autostart.ps1 \
-             deploy/onprem/update-agent.sh deploy/onprem/update-agent.ps1 \
-             deploy/onprem/update.sh deploy/onprem/update.ps1 \
-             deploy/onprem/update-lib.sh deploy/onprem/update-lib.ps1 \
-             deploy/onprem/disable-watchdog.sh deploy/onprem/disable-watchdog.ps1 \
-             deploy/onprem/fix-backend-outages.sh deploy/onprem/fix-backend-outages.ps1 \
-             deploy/onprem/discovery-responder.py deploy/onprem/discovery-responder.ps1 \
-             deploy/onprem/migrate-fahd.sh deploy/onprem/migrate-fahd.ps1 \
+          # One implementation of every deploy step, in bash. Windows shops run
+          # these same scripts inside a WSL2 distro (see wsl/bootstrap-wsl.ps1),
+          # so there is no second, drifting PowerShell copy to keep in sync.
+          cp deploy/onprem/install.sh \
+             deploy/onprem/watchdog.sh \
+             deploy/onprem/register-autostart.sh \
+             deploy/onprem/update-agent.sh \
+             deploy/onprem/update.sh \
+             deploy/onprem/update-lib.sh \
+             deploy/onprem/disable-watchdog.sh \
+             deploy/onprem/fix-backend-outages.sh \
+             deploy/onprem/discovery-responder.py \
+             deploy/onprem/migrate-fahd.sh \
              deploy/onprem/INSTALL.md deploy/onprem/README.md "${BUNDLE}/"
+
+          echo "==> Staging the Windows (WSL) bootstrap…"
+          mkdir -p "${BUNDLE}/wsl"
+          cp deploy/onprem/wsl/bootstrap-wsl.ps1 \
+             deploy/onprem/wsl/timezone-map.txt "${BUNDLE}/wsl/"
+          mv wsl-rootfs/pointy-wsl-rootfs.tar.gz "${BUNDLE}/wsl/"
+          if [ -f wsl-msi/wsl.msi ]; then
+            cp wsl-msi/wsl.msi "${BUNDLE}/wsl/${WSL_MSI_ASSET}"
+            echo "    bundled ${WSL_MSI_ASSET} (offline Windows install supported)"
+          else
+            echo "WARNING: no WSL MSI in this bundle. A Windows host without a modern" >&2
+            echo "         wsl.exe will need internet to install one. Check that" >&2
+            echo "         WSL_MSI_TAG/WSL_MSI_ASSET still match a microsoft/WSL release." >&2
+          fi
           chmod +x "${BUNDLE}/install.sh" "${BUNDLE}/watchdog.sh" \
              "${BUNDLE}/register-autostart.sh" "${BUNDLE}/update-agent.sh" \
              "${BUNDLE}/update.sh" "${BUNDLE}/update-lib.sh" \
              "${BUNDLE}/discovery-responder.py" \
              "${BUNDLE}/migrate-fahd.sh" "${BUNDLE}/disable-watchdog.sh" \
              "${BUNDLE}/fix-backend-outages.sh"
+
+          # The bundle is unzipped on Windows and streamed into the distro. Any
+          # CRLF that sneaks in makes bash fail with "\r: command not found", and
+          # a CRLF in .env puts a trailing \r inside the generated Postgres
+          # password — an authentication failure that only surfaces much later.
+          echo "==> Asserting LF line endings on everything the distro executes…"
+          bad=0
+          for f in "${BUNDLE}"/*.sh "${BUNDLE}/discovery-responder.py" "${BUNDLE}/.env.example"; do
+            if grep -qU $'\r' "${f}"; then echo "CRLF in ${f}" >&2; bad=1; fi
+          done
+          [ "${bad}" -eq 0 ] || { echo "ERROR: CRLF line endings in the bundle" >&2; exit 1; }
           echo "${VERSION}" > "${BUNDLE}/VERSION.txt"
 
           echo "==> Sanity-checking rendered Compose…"

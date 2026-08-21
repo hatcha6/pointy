@@ -14,6 +14,84 @@ cd "$(dirname "$0")"
 
 err() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
 
+# ---------------------------------------------------------------------------
+# WSL preflight.
+#
+# On Windows the stack runs inside a WSL2 distro (see wsl/bootstrap-wsl.ps1).
+# Three WSL-specific mistakes destroy a shop's data quietly rather than loudly,
+# so they are hard failures / loud warnings here rather than a line in a README
+# nobody reads at 7am on install day.
+# ---------------------------------------------------------------------------
+running_under_wsl() {
+  [ -n "${WSL_DISTRO_NAME:-}" ] && return 0
+  grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null
+}
+
+wsl_preflight() {
+  running_under_wsl || return 0
+  echo "==> WSL detected (${WSL_DISTRO_NAME:-unknown}); running WSL preflight…"
+
+  # 1. NEVER run from the Windows filesystem. /mnt/c is DrvFs (a 9p/plan9
+  #    protocol bridge): roughly an order of magnitude slower, and — fatally —
+  #    it does not honour POSIX locking or fsync ordering the way Postgres
+  #    requires. A database on /mnt/c does not degrade, it corrupts.
+  case "$PWD" in
+    /mnt/*)
+      err "this bundle is on the Windows filesystem (${PWD}).
+       Postgres cannot run safely there: DrvFs does not give the file locking
+       and fsync ordering the database needs, and the data WILL corrupt.
+       Move the bundle onto the distro's own disk and re-run:
+         cp -r \"${PWD}\" /opt/pointy && cd /opt/pointy && bash install.sh"
+      ;;
+  esac
+
+  # 2. systemd must be PID 1, or register-autostart.sh has no supervisor to
+  #    install the watchdog and update-agent timers into — the shop would come
+  #    up once and never self-heal again.
+  if [ "$(ps -p 1 -o comm= 2>/dev/null)" != "systemd" ]; then
+    echo "WARN: systemd is not PID 1 in this distro." >&2
+    echo "      The watchdog and update agent cannot be registered, so the stack" >&2
+    echo "      will NOT come back on its own after a reboot or a crash." >&2
+    echo "      Fix: put this in /etc/wsl.conf, then run 'wsl --shutdown' on Windows:" >&2
+    echo "          [boot]" >&2
+    echo "          systemd=true" >&2
+  fi
+
+  echo "    WSL preflight passed (running from ${PWD} on the distro's own disk)."
+}
+
+wsl_check_backup_drives() {
+  running_under_wsl || return 0
+  [ -f .env ] || return 0
+  # External backup drives are bind-mounted from the Windows host. If the drive
+  # is not attached, /mnt/<letter> does not exist — and Docker CREATES a missing
+  # bind source as an empty directory inside the VM. Every backup then
+  # "succeeds" into the very virtual disk it was meant to survive, and the shop
+  # finds out on the one day it needs the backup.
+  local key value letter
+  for key in POINTY_BACKUP_DRIVE_1_SOURCE POINTY_BACKUP_DRIVE_2_SOURCE POINTY_BACKUP_DRIVE_3_SOURCE; do
+    value="$(sed -n "s/^${key}=//p" .env | tail -1 | tr -d '\r')"
+    case "$value" in
+      /mnt/*)
+        if [ ! -d "$value" ]; then
+          letter="${value#/mnt/}"; letter="${letter%%/*}"
+          echo "WARN: ${key}=${value} does not exist." >&2
+          echo "      That drive is not attached (or Windows has not mounted it yet)." >&2
+          echo "      Docker will silently create an empty folder INSIDE the virtual disk," >&2
+          echo "      so your off-machine backups would go nowhere. Attach the drive, then:" >&2
+          echo "          mkdir -p /mnt/${letter} && mount -t drvfs ${letter}: /mnt/${letter}" >&2
+        fi
+        ;;
+      [A-Za-z]:*|*\\*)
+        err "${key}=${value} is a Windows path. Inside WSL use the /mnt form instead
+       (D:/PointyBackups becomes /mnt/d/PointyBackups)."
+        ;;
+    esac
+  done
+}
+
+wsl_preflight
+
 # Install Docker Engine + the Compose plugin (Linux, via Docker's official
 # convenience script) or Docker Desktop (macOS, via Homebrew) when it is missing,
 # so onboarding a fresh shop is just running this one script.
@@ -136,11 +214,13 @@ echo "==> Resetting the LAN front door to the managed backend…"
 mkdir -p edge/active
 cat > edge/active/upstream.conf <<'UPSTREAM'
 # GENERATED — the backend the LAN front door is currently sending traffic to.
-# Rewritten by update.sh / update.ps1 during a live update; reset here.
+# Rewritten by update.sh during a live update; reset here.
 set $pointy_upstream      "http://backend:8000";
 set $pointy_upstream_name "backend";
 UPSTREAM
 docker rm -f pointy-backend-standby >/dev/null 2>&1 || true
+
+wsl_check_backup_drives
 
 echo "==> Starting the Pointy stack…"
 docker compose --env-file .env -f docker-compose.yml up -d

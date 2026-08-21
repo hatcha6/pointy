@@ -33,19 +33,25 @@ class Supplier(TimeStampedModel):
         primed = getattr(self, "_payable_balance", None)
         if primed is not None:
             return primed
-        # Each order owes its total minus everything paid against it (cash or
-        # applied credit) — i.e. ``raw_balance_due``. Batch the per-order paid
+        # Each order owes its billable total — what was ordered, less anything
+        # a receipt cancelled — minus everything paid against it (cash or
+        # applied credit); i.e. ``raw_balance_due``. Batch the per-order paid
         # totals into one aggregate so a supplier with many orders does not fan
         # out into two queries per order.
         po_rows = (
             self.purchase_orders.exclude(status=PurchaseOrder.Status.CANCELLED)
             .annotate(_paid=Sum("supplier_payments__amount"))
-            .values_list("pk", "total", "_paid")
+            .values_list("pk", "total", "cancelled_total", "_paid")
         )
         outstanding = sum(
             (
-                max(po_total - (paid or Decimal("0.00")), Decimal("0.00"))
-                for _po_id, po_total, paid in po_rows
+                max(
+                    po_total
+                    - (cancelled or Decimal("0.00"))
+                    - (paid or Decimal("0.00")),
+                    Decimal("0.00"),
+                )
+                for _po_id, po_total, cancelled, paid in po_rows
             ),
             Decimal("0.00"),
         )
@@ -141,6 +147,20 @@ class PurchaseOrder(TimeStampedModel):
         default=LandedCostAllocationMethod.LINE_VALUE,
     )
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # The goods value of ordered units that will never arrive: whatever a
+    # receipt closed as ``cancelled_quantity`` (the supplier could not supply
+    # it, or the shop rejected it at the door). ``total`` stays the value of
+    # what was *ordered* — it is the document's own number and the lines still
+    # sum to it — so the units that fell out are carried here instead and
+    # subtracted wherever the question is "what does the shop still owe".
+    # Maintained by ``receive_purchase_order``, which recomputes it from every
+    # receipt line each time (idempotent across repeated partial receipts).
+    cancelled_total = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
     due_date = models.DateField(blank=True, null=True)
     submitted_at = models.DateTimeField(blank=True, null=True)
     received_at = models.DateTimeField(blank=True, null=True)
@@ -386,10 +406,16 @@ class PurchaseOrder(TimeStampedModel):
             self.landed_cost_allocation_method
             == self.LandedCostAllocationMethod.RETAIL_VALUE
         ):
+            # ``unit_price`` is per BASE unit (per egg, never per tray), while
+            # ``quantity`` is in the line's purchase unit. Multiplying them
+            # directly values a line of 5 cartons of 24 at five eggs' retail,
+            # so on a mixed-unit order the freight lands almost entirely on the
+            # loose-piece lines. Convert to base units first — the same rule
+            # ``effective_base_unit_cost`` documents for the other direction.
             return {
-                line.pk: (line.variant.unit_price * line.quantity).quantize(
-                    self.MONEY_PLACES
-                )
+                line.pk: (
+                    line.variant.unit_price * line.to_base_quantity(line.quantity)
+                ).quantize(self.MONEY_PLACES)
                 for line in lines
             }
         if (
@@ -455,9 +481,26 @@ class PurchaseOrder(TimeStampedModel):
         return total.quantize(Decimal("0.01"))
 
     @property
+    def billable_total(self):
+        """What this order can ever be invoiced for.
+
+        The ordered total less the goods that were cancelled at receipt. A
+        supplier that ships 4 of the 10 crates ordered and cancels the rest
+        bills for 4; billing the shop for 10 leaves a payable that no payment,
+        credit or adjustment can ever clear, because cancelled units are not
+        returnable either (``adjustable_quantity`` counts accepted units only).
+        Landed costs are deliberately untouched — freight and customs were
+        incurred on the shipment that did arrive.
+        """
+        return max(
+            self.total - (self.cancelled_total or Decimal("0.00")),
+            Decimal("0.00"),
+        ).quantize(Decimal("0.01"))
+
+    @property
     def raw_balance_due(self):
         return (
-            self.total
+            self.billable_total
             - self.paid_total
             - self.credit_applied_total
         ).quantize(Decimal("0.01"))
@@ -1050,11 +1093,11 @@ def prime_supplier_balances(suppliers):
         PurchaseOrder.objects.filter(supplier_id__in=ids)
         .exclude(status=PurchaseOrder.Status.CANCELLED)
         .annotate(_paid=Sum("supplier_payments__amount"))
-        .values_list("supplier_id", "pk", "total", "_paid")
+        .values_list("supplier_id", "pk", "total", "cancelled_total", "_paid")
     )
-    for supplier_id, _po_id, po_total, paid in po_rows:
+    for supplier_id, _po_id, po_total, cancelled, paid in po_rows:
         outstanding[supplier_id] = outstanding.get(supplier_id, zero) + max(
-            po_total - (paid or zero), zero
+            po_total - (cancelled or zero) - (paid or zero), zero
         )
 
     unallocated = {

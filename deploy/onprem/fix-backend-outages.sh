@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Fixes the "backend goes down every N minutes" outages on an existing
-# Pointy on-prem install (Linux). Mirrors fix-backend-outages.ps1.
+# Pointy on-prem install. On Windows, run it inside the WSL distro.
 #
 # ROOT CAUSE — not the watchdog. The backend's ASGI workers were configured
 # to self-terminate after 1000 requests (POINTY_ASGI_MAX_REQUESTS=1000).

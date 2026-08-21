@@ -1,6 +1,7 @@
 import logging
 
 from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
@@ -9,6 +10,7 @@ from rest_framework.response import Response
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.catalog.models import VariantOptionValue
 from apps.channels.services import require_active_sales_channel
 from apps.core.idempotency import run_idempotent_request
 from apps.core.discovery import request_is_relayed
@@ -40,6 +42,31 @@ from .serializers import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _best_effort_print_step(description, step):
+    """Run one of checkout's print steps so no printing fault can undo the sale.
+
+    ``run_idempotent_request`` wraps the whole checkout — validation, stock
+    deduction, payments *and* these steps — in a single transaction, so anything
+    that raises here does not merely lose a receipt: it rolls the sale back and
+    hands the cashier a 500 with the customer still standing there, again on
+    every retry for as long as the fault lasts. Printing is a nice-to-have; the
+    sale is not.
+
+    The savepoint is what makes the ``except`` real. A step that fails on a
+    *database* error — a statement timeout, a lost connection, a constraint hit
+    by one of the bare ``.save()`` calls in the enqueue path — aborts the whole
+    Postgres transaction, so catching it alone just defers the 500 to the next
+    query. Rolling back to a savepoint leaves the sale intact and the
+    transaction usable.
+    """
+    try:
+        with transaction.atomic():
+            return step()
+    except Exception:
+        logger.exception("Failed to enqueue %s; the sale is unaffected.", description)
+        return None
 
 
 class OrderViewSet(
@@ -103,20 +130,11 @@ class OrderViewSet(
     def _list_summary_queryset(self, queryset):
         # The invoices list rows show a line COUNT and totals/profit (computed
         # from the lines) but never the line items themselves — the detail screen
-        # re-fetches those on open. Keep a LIGHT `lines` prefetch (the rows only,
-        # for total_cost / total_profit / the count) and drop the heavy per-line
-        # variant / option / adjustment trees that were the bulk of the payload.
-        return queryset.prefetch_related(None).prefetch_related(
-            # lines + their adjustment_lines only: total_cost/profit and the
-            # can_void/return/exchange affordances read them. The heavy
-            # variant/product/option trees (the payload bulk) are dropped since
-            # the rows never serialize the line items.
-            "lines__adjustment_lines",
-            "payments",
-            "applied_discounts",
-            "exchanges__replacement_order",
-            "exchanges__created_by",
-        )
+        # re-fetches those on open. `with_list_serializer_relations` is the one
+        # definition of what those rows read (a LIGHT `lines` prefetch, dropping
+        # the heavy per-line variant/option trees that were the payload bulk);
+        # the register-session strip serializes the same rows and shares it.
+        return queryset.prefetch_related(None).with_list_serializer_relations()
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -141,6 +159,32 @@ class OrderViewSet(
         ):
             return queryset
         return queryset.filter(register_session__owner_key=register_session_owner_key(self.request))
+
+    def _adjusted_order_response(self, order_pk, *, status_code):
+        """Serialize a just-mutated order through the prefetch-rich queryset.
+
+        Every adjustment action used to answer with the bare instance it had
+        just ``refresh_from_db()``-ed — and that call *clears*
+        ``_prefetched_objects_cache``, so the rich object ``get_object()``
+        returned came back empty-handed. ``OrderSerializer`` then paid ~5
+        queries per line for the response alone (option labels via
+        ``variant.display_name``, plus ``can_void`` / ``can_return`` /
+        ``can_exchange`` / ``returned_quantity`` / ``returnable_quantity``
+        each re-reading ``adjustment_lines``). Re-reading instead of
+        refreshing gives the same payload at a fixed query count.
+
+        Uses ``self.queryset`` rather than ``get_queryset()``: the order is
+        already authorized by the ``get_object()`` that opened the action, and
+        ``get_queryset()``'s ``?product=`` / ``?variant=`` filters would
+        happily filter the just-mutated order out of its own response.
+        """
+        return Response(
+            OrderSerializer(
+                self.queryset.get(pk=order_pk),
+                context={"request": self.request},
+            ).data,
+            status=status_code,
+        )
 
     def _open_register_session(self, request):
         return RegisterSession.objects.filter(
@@ -192,7 +236,7 @@ class OrderViewSet(
         # prefetches instead of firing a query per line (the checkout response
         # N+1). The bare `order` is kept for the print/kitchen steps below.
         response_data = OrderSerializer(
-            self.get_queryset().get(pk=order.pk),
+            self.queryset.get(pk=order.pk),
             context={"request": request},
         ).data
 
@@ -271,10 +315,9 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        order.refresh_from_db()
-        return Response(
-            OrderSerializer(order, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
+        return self._adjusted_order_response(
+            order.pk,
+            status_code=status.HTTP_201_CREATED,
         )
 
     @action(detail=True, methods=["post"], url_path="assign-customer")
@@ -294,10 +337,9 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        order.refresh_from_db()
-        return Response(
-            OrderSerializer(order, context={"request": request}).data,
-            status=status.HTTP_200_OK,
+        return self._adjusted_order_response(
+            order.pk,
+            status_code=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["post"])
@@ -325,9 +367,9 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         new_order = serializer.save()
-        return Response(
-            OrderSerializer(new_order, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
+        return self._adjusted_order_response(
+            new_order.pk,
+            status_code=status.HTTP_201_CREATED,
         )
 
     @action(detail=True, methods=["post"])
@@ -370,11 +412,10 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        order.refresh_from_db()
         schedule_targeted_sweep()
-        return Response(
-            OrderSerializer(order, context={"request": request}).data,
-            status=status.HTTP_200_OK,
+        return self._adjusted_order_response(
+            order.pk,
+            status_code=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["post"])
@@ -396,11 +437,10 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        order.refresh_from_db()
         schedule_targeted_sweep()
-        return Response(
-            OrderSerializer(order, context={"request": request}).data,
-            status=status.HTTP_200_OK,
+        return self._adjusted_order_response(
+            order.pk,
+            status_code=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["post"], url_path="exchange-items")
@@ -427,11 +467,10 @@ class OrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        order.refresh_from_db()
         schedule_targeted_sweep()
-        return Response(
-            OrderSerializer(order, context={"request": request}).data,
-            status=status.HTTP_200_OK,
+        return self._adjusted_order_response(
+            order.pk,
+            status_code=status.HTTP_200_OK,
         )
 
     @action(detail=False, methods=["get"])
@@ -475,6 +514,14 @@ class OrderViewSet(
         if action_serializer is None:
             return None
 
+        # Best-effort: a receipt-printing fault must never fail or roll back a
+        # completed, paid sale (the kitchen enqueue below is the same deal).
+        return _best_effort_print_step(
+            f"receipt print job for order {order.pk}",
+            lambda: self._claim_invoice_print_job(order, action_serializer, request),
+        )
+
+    def _claim_invoice_print_job(self, order, action_serializer, request):
         from apps.core.models import ShopSettings
         from apps.printing.services import (
             claim_print_job,
@@ -508,14 +555,11 @@ class OrderViewSet(
 
         # Best-effort: a kitchen-printing misconfiguration must never fail or
         # roll back a completed, paid sale (mirrors the receipt enqueue).
-        try:
-            return enqueue_kitchen_print_jobs(order.pk)
-        except Exception:
-            logger.exception(
-                "Failed to enqueue kitchen tickets for order %s; the sale is unaffected.",
-                order.pk,
-            )
-            return []
+        jobs = _best_effort_print_step(
+            f"kitchen tickets for order {order.pk}",
+            lambda: enqueue_kitchen_print_jobs(order.pk),
+        )
+        return jobs or []
 
 
 class PublicInvoiceView(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
@@ -527,6 +571,15 @@ class PublicInvoiceView(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
 
     queryset = Order.objects.select_related("customer").prefetch_related(
         "lines__variant__product",
+        # This page builds its own queryset rather than reusing
+        # ``OrderViewSet``'s, so the option-value prefetch that one carries has
+        # to be repeated here: every line renders ``variant.display_name``,
+        # whose ``option_values_label`` fallback queries once per line for the
+        # unnamed variants a normal shop sells almost exclusively.
+        Prefetch(
+            "lines__variant__option_values",
+            queryset=VariantOptionValue.objects.select_related("option"),
+        ),
     )
 
     def get_queryset(self):
@@ -602,15 +655,13 @@ class RegisterSessionViewSet(
     def orders(self, request, pk=None):
         session = self.get_object()
         # The strip renders row summaries + a line count + a returnable flag, not
-        # the line items. Prefetch the lines (with their adjustment_lines) so the
-        # count, totals/profit AND the returnable flag all read from cache — the
-        # flag's returnable_quantity otherwise fired an adjustment-line query per
-        # line (the endpoint's N+1) — then serialize the trimmed
-        # OrderSessionSerializer instead of the full line items.
-        orders = (
-            session.orders.select_related("customer", "register_session")
-            .prefetch_related("lines__adjustment_lines", "payments")
-            .order_by("-created_at")
+        # the line items, so it serializes the trimmed OrderSessionSerializer.
+        # That is `OrderListSerializer` plus one flag, so it reads exactly what
+        # the invoices list reads and takes the same shared prefetch shape — a
+        # hand-rolled subset here cost `applied_discounts` and `exchanges` (and
+        # the `sales_channel` FK) once per order in the page.
+        orders = session.orders.with_list_serializer_relations().order_by(
+            "-created_at"
         )
         customer_id = request.query_params.get("customer")
         if customer_id:

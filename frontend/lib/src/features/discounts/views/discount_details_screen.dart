@@ -873,6 +873,7 @@ class _BeneficiariesSection extends StatelessWidget {
         height: _beneficiaryListHeight(
           viewModel.beneficiaries.length,
           viewModel.hasMoreBeneficiaries,
+          viewModel.hasBeneficiaryLoadError,
         ),
         child: PointyDataList<DiscountBeneficiary>(
           items: viewModel.beneficiaries,
@@ -890,6 +891,12 @@ class _BeneficiariesSection extends StatelessWidget {
           errorBuilder: (context) => PointyErrorState(
             title: l10n.discountDetailsBeneficiariesLoadError,
             icon: Icons.people_alt_outlined,
+            action: FilledButton.icon(
+              key: const ValueKey('discount_beneficiaries_retry_button'),
+              onPressed: viewModel.loadBeneficiaries,
+              icon: const Icon(Icons.sync),
+              label: Text(l10n.retryButton),
+            ),
           ),
           itemBuilder: (context, beneficiary) {
             return _BeneficiaryTile(beneficiary: beneficiary);
@@ -899,9 +906,11 @@ class _BeneficiariesSection extends StatelessWidget {
     );
   }
 
-  double _beneficiaryListHeight(int itemCount, bool hasMore) {
+  double _beneficiaryListHeight(int itemCount, bool hasMore, bool hasError) {
     if (itemCount == 0) {
-      return 220;
+      // The failure state stacks a retry under the icon and title, and the
+      // title wraps to two lines on a narrow till; the empty state has neither.
+      return hasError ? 300 : 220;
     }
     final visibleRows = (itemCount + (hasMore ? 1 : 0)).clamp(1, 5);
     return visibleRows.toDouble() * 88.0;

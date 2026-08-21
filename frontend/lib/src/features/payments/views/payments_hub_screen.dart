@@ -19,6 +19,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/query_controls/query_empty_state.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../printing/views/print_audit_sheet.dart';
@@ -144,6 +145,9 @@ class _PaymentsHubBody extends StatelessWidget {
                         ? null
                         : SupplierPaymentMethod.fromApiValue(value),
                   ),
+            onClearFilters: isCustomer
+                ? viewModel.clearCustomerFilters
+                : viewModel.clearSupplierFilters,
           ),
           SizedBox(height: spacing.md),
           Expanded(
@@ -173,6 +177,7 @@ class _FilterBar extends StatelessWidget {
     required this.methodOptions,
     required this.onRangeChanged,
     required this.onMethodChanged,
+    required this.onClearFilters,
   });
 
   final DateTimeRange? range;
@@ -180,6 +185,10 @@ class _FilterBar extends StatelessWidget {
   final List<_MethodOption> methodOptions;
   final ValueChanged<DateTimeRange?> onRangeChanged;
   final ValueChanged<String?> onMethodChanged;
+
+  /// Drops the date window and the method together in one reload. Nulling the
+  /// two setters in turn would refetch the ledger twice.
+  final VoidCallback onClearFilters;
 
   @override
   Widget build(BuildContext context) {
@@ -211,10 +220,7 @@ class _FilterBar extends StatelessWidget {
         ),
         if (hasFilters)
           TextButton.icon(
-            onPressed: () {
-              onRangeChanged(null);
-              onMethodChanged(null);
-            },
+            onPressed: onClearFilters,
             icon: const Icon(Icons.clear),
             label: Text(l10n.paymentsHubClearFilters),
           ),
@@ -328,11 +334,20 @@ class _CustomerLedger extends StatelessWidget {
       errorBuilder: (context) => PointyErrorState(
         title: l10n.paymentsHubLoadError,
         icon: Icons.account_balance_wallet_outlined,
+        action: OutlinedButton.icon(
+          onPressed: viewModel.loadCustomerPayments,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.retryButton),
+        ),
       ),
-      emptyBuilder: (context) => PointyEmptyState(
+      emptyBuilder: (context) => QueryEmptyState(
         icon: Icons.south_west,
-        title: l10n.paymentsHubCustomerEmptyTitle,
-        message: l10n.paymentsHubCustomerEmptyMessage,
+        search: '',
+        hasFilters:
+            viewModel.customerRange != null || viewModel.customerMethod != null,
+        emptyTitle: l10n.paymentsHubCustomerEmptyTitle,
+        emptyMessage: l10n.paymentsHubCustomerEmptyMessage,
+        onClear: viewModel.clearCustomerFilters,
       ),
       itemBuilder: (context, payment) => _CustomerPaymentTile(
         payment: payment,
@@ -368,11 +383,20 @@ class _SupplierLedger extends StatelessWidget {
       errorBuilder: (context) => PointyErrorState(
         title: l10n.paymentsHubLoadError,
         icon: Icons.account_balance_wallet_outlined,
+        action: OutlinedButton.icon(
+          onPressed: viewModel.loadSupplierPayments,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.retryButton),
+        ),
       ),
-      emptyBuilder: (context) => PointyEmptyState(
+      emptyBuilder: (context) => QueryEmptyState(
         icon: Icons.north_east,
-        title: l10n.paymentsHubSupplierEmptyTitle,
-        message: l10n.paymentsHubSupplierEmptyMessage,
+        search: '',
+        hasFilters:
+            viewModel.supplierRange != null || viewModel.supplierMethod != null,
+        emptyTitle: l10n.paymentsHubSupplierEmptyTitle,
+        emptyMessage: l10n.paymentsHubSupplierEmptyMessage,
+        onClear: viewModel.clearSupplierFilters,
       ),
       itemBuilder: (context, payment) => _SupplierPaymentTile(
         payment: payment,

@@ -93,9 +93,9 @@ container_health() {
     "$1" 2>/dev/null || echo missing
 }
 
-# 0. Start the daemon if it is down (mirrors watchdog.ps1 starting Docker
-#    Desktop): systemd Linux hosts get `systemctl start docker` (the timer runs
-#    this script as root), macOS hosts get Docker Desktop (best-effort).
+# 0. Start the daemon if it is down: systemd hosts (Linux, and the WSL distro
+#    on Windows) get `systemctl start docker` — the timer runs this script as
+#    root — and macOS hosts get Docker Desktop (best-effort).
 if ! docker info >/dev/null 2>&1; then
   if command -v systemctl >/dev/null 2>&1 && [ "$(id -u)" -eq 0 ]; then
     log "Docker daemon is down; starting docker.service…"

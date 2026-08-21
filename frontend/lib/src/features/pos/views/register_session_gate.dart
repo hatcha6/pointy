@@ -152,25 +152,56 @@ class _StartSessionGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
+    final isStarting = viewModel.isStartingRegisterSession;
+    // A failed lookup lands here too, because a session we could not read is
+    // indistinguishable from one that does not exist. Saying "no open session"
+    // in that case asserts something we do not know, and pointing the cashier
+    // at the start button invites a second session on top of the one the
+    // server may already hold — so when the call failed, say so and lead with
+    // the retry instead.
+    final failedToRead = viewModel.hasRegisterSessionError;
+    final retryButton = _action(
+      key: const ValueKey('register_session_gate_retry_button'),
+      primary: failedToRead,
+      onPressed: isStarting ? null : viewModel.loadCurrentRegisterSession,
+      icon: const Icon(Icons.refresh),
+      label: Text(l10n.retryButton),
+    );
+    final startButton = _action(
+      key: const ValueKey('register_session_gate_start_button'),
+      primary: !failedToRead,
+      onPressed: isStarting ? null : () => _startSession(context),
+      icon: isStarting
+          ? const SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.play_arrow),
+      label: Text(
+        isStarting
+            ? l10n.startingRegisterSessionButton
+            : l10n.startRegisterSessionButton,
+      ),
+    );
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        PointyInlineMessage(
-          message: l10n.noOpenRegisterSession,
-          icon: Icons.info_outline,
-        ),
-        if (viewModel.hasRegisterSessionError) ...[
-          SizedBox(height: spacing.md),
+        if (failedToRead)
           PointyInlineMessage.error(
             message: l10n.registerSessionLoadError,
             icon: Icons.warning_amber_outlined,
+          )
+        else
+          PointyInlineMessage(
+            message: l10n.noOpenRegisterSession,
+            icon: Icons.info_outline,
           ),
-        ],
         SizedBox(height: spacing.md),
         TextField(
           controller: openingCashController,
-          enabled: !viewModel.isStartingRegisterSession,
+          enabled: !isStarting,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: [DecimalTextInputFormatter()],
           onChanged: (_) => onOpeningCashChanged(),
@@ -188,34 +219,36 @@ class _StartSessionGate extends StatelessWidget {
         ),
         SizedBox(height: spacing.md),
         ResponsiveActionBar(
-          actions: [
-            OutlinedButton.icon(
-              onPressed: viewModel.isStartingRegisterSession
-                  ? null
-                  : viewModel.loadCurrentRegisterSession,
-              icon: const Icon(Icons.refresh),
-              label: Text(l10n.retryButton),
-            ),
-            FilledButton.icon(
-              onPressed: viewModel.isStartingRegisterSession
-                  ? null
-                  : () => _startSession(context),
-              icon: viewModel.isStartingRegisterSession
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.play_arrow),
-              label: Text(
-                viewModel.isStartingRegisterSession
-                    ? l10n.startingRegisterSessionButton
-                    : l10n.startRegisterSessionButton,
-              ),
-            ),
-          ],
+          // The bar renders in order and the design system reads the last
+          // action as the primary one, so the emphasised button also goes last.
+          actions: failedToRead
+              ? [startButton, retryButton]
+              : [retryButton, startButton],
         ),
       ],
     );
+  }
+
+  Widget _action({
+    required Key key,
+    required bool primary,
+    required VoidCallback? onPressed,
+    required Widget icon,
+    required Widget label,
+  }) {
+    return primary
+        ? FilledButton.icon(
+            key: key,
+            onPressed: onPressed,
+            icon: icon,
+            label: label,
+          )
+        : OutlinedButton.icon(
+            key: key,
+            onPressed: onPressed,
+            icon: icon,
+            label: label,
+          );
   }
 
   Future<void> _startSession(BuildContext context) async {

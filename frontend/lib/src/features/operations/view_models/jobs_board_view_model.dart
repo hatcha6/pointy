@@ -13,13 +13,19 @@ class JobsBoardViewModel extends ChangeNotifier {
   JobsBoardViewModel(this._repository, {AnalyticsEngine? analyticsEngine})
     : _analyticsEngine = analyticsEngine;
 
+  /// The board opens on work that is still in progress; a finished job is
+  /// history, not something a technician needs on the board every morning.
+  /// Clearing the filters restores this rather than widening to every
+  /// status, so "clear" always means "back to the default view".
+  static const _defaultStatusFilter = OperationsJobStatus.open;
+
   final OperationsRepository _repository;
   final AnalyticsEngine? _analyticsEngine;
 
   List<OperationsJob> _jobs = const [];
   List<WorkflowTemplate> _templates = const [];
   List<BillOfMaterials> _boms = const [];
-  OperationsJobStatus? _statusFilter = OperationsJobStatus.open;
+  OperationsJobStatus? _statusFilter = _defaultStatusFilter;
   OperationsJobType? _jobTypeFilter;
   String _searchQuery = '';
   bool _assignedToMe = false;
@@ -45,6 +51,35 @@ class JobsBoardViewModel extends ChangeNotifier {
   List<WorkflowTemplate> get enabledTemplates => _templates
       .where((template) => template.isActive)
       .toList(growable: false);
+
+  /// Whether the technician has narrowed the board away from its default view.
+  ///
+  /// The search term is deliberately excluded: `QueryEmptyState` takes it
+  /// separately so it can word the escape after whichever is actually hiding
+  /// the work. The default "open only" status is excluded too — counting it
+  /// would tell a brand-new shop with no jobs at all to clear filters that are
+  /// hiding nothing.
+  bool get hasActiveFilters =>
+      _assignedToMe ||
+      _jobTypeFilter != null ||
+      _statusFilter != _defaultStatusFilter;
+
+  /// Restores the default view in one round trip.
+  ///
+  /// Assigning the four setters in turn would fire up to four `loadJobs()`
+  /// calls and leave the board flickering through intermediate results, so the
+  /// fields are reset together and reloaded once.
+  void clearFilters() {
+    if (!hasActiveFilters && _searchQuery.isEmpty) {
+      return;
+    }
+    _statusFilter = _defaultStatusFilter;
+    _jobTypeFilter = null;
+    _assignedToMe = false;
+    _searchQuery = '';
+    notifyListeners();
+    loadJobs();
+  }
 
   set statusFilter(OperationsJobStatus? value) {
     if (_statusFilter == value) {

@@ -4,6 +4,7 @@ from django.db.models import Manager
 from rest_framework import serializers
 
 from apps.catalog.models import ModifierOption, ProductVariant
+from apps.catalog.services import MIN_LINES_TO_PRELOAD, load_line_variants
 from apps.catalog.units import (
     UnitConversionError,
     resolve_unit,
@@ -760,6 +761,41 @@ class CheckoutLineModifierSerializer(serializers.Serializer):
     quantity = serializers.IntegerField(min_value=1, default=1)
 
 
+def _variant_pks(raw_lines):
+    """The variant pks raw cart lines name. Preloading runs before field
+    validation, so anything that is not a plain pk is skipped here and left for
+    the field itself to reject."""
+    for raw_line in raw_lines:
+        try:
+            yield int(raw_line["variant"])
+        except (TypeError, ValueError, KeyError):
+            continue
+
+
+class CheckoutLineListSerializer(serializers.ListSerializer):
+    """Resolve every cart line's variant in one bulk load, before the lines
+    validate.
+
+    ``CheckoutLineSerializer.validate`` reads its variant's product modifier
+    groups and units, and the discount engine then reads the product's
+    categories — but DRF's ``PrimaryKeyRelatedField`` hands the child a bare
+    instance, so each of those cost a query *per line* on the two busiest till
+    endpoints: checkout, and the discount preview the POS fires on every cart
+    edit. The child's ``validate`` swaps in the enriched instance from here.
+
+    It has to happen before the children run: by the time the parent
+    serializer's own ``validate`` (or ``checkout_order``) could preload, every
+    line has already paid for its own reads.
+    """
+
+    def to_internal_value(self, data):
+        self.preloaded_variants = {}
+        if isinstance(data, list) and len(data) >= MIN_LINES_TO_PRELOAD:
+            lines = [line for line in data if isinstance(line, dict)]
+            self.preloaded_variants = load_line_variants(_variant_pks(lines))
+        return super().to_internal_value(data)
+
+
 class CheckoutLineSerializer(serializers.Serializer):
     variant = serializers.PrimaryKeyRelatedField(
         queryset=ProductVariant.objects.active().select_related("product"),
@@ -792,10 +828,20 @@ class CheckoutLineSerializer(serializers.Serializer):
         default=list,
     )
 
+    class Meta:
+        list_serializer_class = CheckoutLineListSerializer
+
     def validate(self, attrs):
         variant = attrs.get("variant")
         if variant is None:
             raise serializers.ValidationError({"variant": "Variant is required."})
+        # Use the cart-wide bulk load when there is one (see
+        # CheckoutLineListSerializer): the units, modifier groups and categories
+        # read below are prefetched on that instance and would each cost a query
+        # on the bare one the field resolved.
+        preloaded = getattr(self.parent, "preloaded_variants", None)
+        if preloaded:
+            variant = preloaded.get(variant.pk, variant)
         try:
             resolved = resolve_unit(variant.product, attrs.get("unit") or "", field="unit")
         except UnitConversionError as error:
@@ -823,9 +869,13 @@ class CheckoutLineSerializer(serializers.Serializer):
         return attrs
 
     def _validate_and_price_modifiers(self, variant, selections):
+        # ``.all()`` + a Python filter (not ``.filter(is_active=True)``, which
+        # builds a fresh queryset and ignores the prefetch) so a preloaded cart
+        # answers this without a query per line.
         assigned_groups = {
             group.id: group
-            for group in variant.product.modifier_groups.filter(is_active=True)
+            for group in variant.product.modifier_groups.all()
+            if group.is_active
         }
         delta = Decimal("0.00")
         seen_option_ids = set()
@@ -966,6 +1016,25 @@ class CheckoutSerializer(serializers.Serializer):
         ):
             raise serializers.ValidationError(
                 {"customer": "A customer is required for a quotation or debt invoice."}
+            )
+
+        # A stock hold must be bounded. ``release_expired_quote_reservations``
+        # only ever sees quotations with a ``valid_until`` in the past, and an
+        # OPEN quotation cannot be voided, so a hold placed without a deadline
+        # has no release path at all — the quoted units stay committed, and
+        # therefore unsellable, forever. Refuse it here rather than strand it.
+        if (
+            sale_type == Order.SaleType.QUOTATION
+            and attrs.get("reserve_stock")
+            and attrs.get("valid_until") is None
+        ):
+            raise serializers.ValidationError(
+                {
+                    "valid_until": (
+                        "A quotation that reserves stock must set valid_until: "
+                        "the hold is released when the offer lapses."
+                    )
+                }
             )
 
         payments = attrs.get("payments")

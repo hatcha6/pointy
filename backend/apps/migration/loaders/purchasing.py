@@ -86,7 +86,7 @@ class PurchaseOrderLoader(BaseLoader):
                     )
                 )
                 continue
-            quantity = int(to_decimal(line.quantity))
+            quantity = to_decimal(line.quantity)
             if quantity <= 0:
                 continue
             line_specs.append((variant_pk, quantity, to_decimal(line.unit_cost)))

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -19,6 +20,8 @@ from django.utils.text import get_valid_filename
 
 from .dispatch import enqueue_or_raise
 from .models import SystemBackupSchedule, SystemMaintenanceJob
+
+logger = logging.getLogger(__name__)
 
 ARCHIVE_ROOT = "pointy-backup"
 BACKUP_FILE_PREFIX = "pointy-backup-"
@@ -118,7 +121,42 @@ def latest_maintenance_job(operation=None):
     return queryset.order_by("-created_at").first()
 
 
+def reap_abandoned_maintenance_jobs(now=None):
+    """Fail maintenance jobs whose worker died without unwinding.
+
+    ``run_backup``/``run_restore`` only mark a job failed from their ``except``
+    block, so anything that kills the process outright — a power cut, a container
+    restart, an OOM kill, celery's hard ``time_limit`` — leaves the row in
+    ``running`` for good. A ``queued`` job is lost the same way when the broker
+    restarts empty and the task is never delivered. Either way the row keeps
+    ``active_maintenance_job()`` truthy, which silently disables every future
+    backup: the scheduled one no-ops each minute and the manual one 400s with
+    "another job is already running", with no way out of the UI. On this
+    deployment — on-prem, unreliable mains — that is the shop losing its backups
+    to the exact outage backups exist for.
+
+    Celery hard-kills a maintenance task at ``POINTY_BACKUP_TASK_TIME_LIMIT``, so
+    a job that has not checked in since then provably cannot still be running;
+    ``updated_at`` is the heartbeat, refreshed by every ``update_progress`` call.
+    Failing it explicitly (rather than just ignoring it) also replaces the UI's
+    permanent "backup running" spinner with an honest outcome.
+    """
+    cutoff = (now or timezone.now()) - timedelta(
+        seconds=settings.POINTY_BACKUP_TASK_TIME_LIMIT
+    )
+    abandoned = SystemMaintenanceJob.objects.filter(
+        status__in=[
+            SystemMaintenanceJob.Status.QUEUED,
+            SystemMaintenanceJob.Status.RUNNING,
+        ],
+        updated_at__lte=cutoff,
+    )
+    for job in abandoned:
+        job.mark_failed("توقفت العملية قبل أن تكتمل (توقف الخادم أثناء التنفيذ).")
+
+
 def active_maintenance_job():
+    reap_abandoned_maintenance_jobs()
     return (
         SystemMaintenanceJob.objects.filter(
             status__in=[
@@ -211,6 +249,13 @@ def run_backup(job_id):
             )
 
         os.replace(temp_archive_path, archive_path)
+        # The archive's bytes were forced to the platter inside
+        # _write_backup_archive; this makes the rename itself durable, so a power
+        # cut can never leave the final name pointing at nothing. Both have to
+        # happen before _delete_old_backups below: retention unlinks the previous
+        # (good) archives, and unlinks are journaled metadata that survive a cut
+        # the new archive's data would not have.
+        _fsync_directory(backup_dir)
         archive_size = archive_path.stat().st_size
         checksum = _sha256_file(archive_path)
         deleted_count = _delete_old_backups(
@@ -392,24 +437,34 @@ def _write_backup_archive(
     manifest,
     job,
 ):
-    with zipfile.ZipFile(
-        archive_path,
-        mode="w",
-        compression=zipfile.ZIP_DEFLATED,
-        compresslevel=6,
-    ) as archive:
-        archive.writestr(
-            f"{ARCHIVE_ROOT}/{MANIFEST_NAME}",
-            json.dumps(manifest, ensure_ascii=False, indent=2),
-        )
-        archive.write(database_dump_path, f"{ARCHIVE_ROOT}/{DATABASE_DUMP_NAME}")
-        total_media_files = max(len(media_files), 1)
-        for index, media_file in enumerate(media_files, start=1):
-            relative_path = media_file.relative_to(media_root).as_posix()
-            archive.write(media_file, f"{ARCHIVE_ROOT}/{MEDIA_DIR_NAME}/{relative_path}")
-            if index == len(media_files) or index % 20 == 0:
-                percent = 20 + round((index / total_media_files) * 72)
-                job.update_progress(percent, "جار ضغط الملفات.")
+    with archive_path.open("wb") as archive_file:
+        with zipfile.ZipFile(
+            archive_file,
+            mode="w",
+            compression=zipfile.ZIP_DEFLATED,
+            compresslevel=6,
+        ) as archive:
+            archive.writestr(
+                f"{ARCHIVE_ROOT}/{MANIFEST_NAME}",
+                json.dumps(manifest, ensure_ascii=False, indent=2),
+            )
+            archive.write(database_dump_path, f"{ARCHIVE_ROOT}/{DATABASE_DUMP_NAME}")
+            total_media_files = max(len(media_files), 1)
+            for index, media_file in enumerate(media_files, start=1):
+                relative_path = media_file.relative_to(media_root).as_posix()
+                archive.write(
+                    media_file, f"{ARCHIVE_ROOT}/{MEDIA_DIR_NAME}/{relative_path}"
+                )
+                if index == len(media_files) or index % 20 == 0:
+                    percent = 20 + round((index / total_media_files) * 72)
+                    job.update_progress(percent, "جار ضغط الملفات.")
+        # Closing the ZipFile only hands the bytes to the OS page cache. Shops
+        # back up to USB sticks on unreliable mains power, so force them to the
+        # device before the caller renames this into place and prunes the older
+        # archives. A failure here fails the backup: an archive we cannot promise
+        # is on disk must not be reported as one.
+        archive_file.flush()
+        os.fsync(archive_file.fileno())
 
 
 def _iter_media_files(media_root, backup_dir):
@@ -475,6 +530,29 @@ def _replace_media_root(media_source):
         raise
     finally:
         shutil.rmtree(old_media_holder, ignore_errors=True)
+
+
+def _fsync_directory(path):
+    """Persist a directory entry (the rename) as well as the file's contents.
+
+    Windows cannot open a directory as a file and journals renames itself, and
+    some removable filesystems reject fsync on directories. Neither is a reason
+    to fail a backup whose bytes are already durable, so those are logged and
+    tolerated.
+    """
+    if os.name == "nt":
+        return
+    try:
+        directory_fd = os.open(str(path), os.O_RDONLY)
+    except OSError:
+        logger.warning("Could not open %s to flush the backup directory entry.", path)
+        return
+    try:
+        os.fsync(directory_fd)
+    except OSError:
+        logger.warning("Filesystem at %s does not support flushing directories.", path)
+    finally:
+        os.close(directory_fd)
 
 
 def _delete_old_backups(backup_dir, *, keep_count):

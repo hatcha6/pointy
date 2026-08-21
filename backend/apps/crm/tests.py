@@ -18,7 +18,15 @@ from .tasks import route_inbound_task
 _EAGER = dict(CELERY_TASK_ALWAYS_EAGER=True, CELERY_TASK_EAGER_PROPAGATES=True)
 
 
-def make_fake_gateway(**kwargs):
+# Activation provisions a per-gateway webhook token and bakes it into the URLs
+# it registers with the phone; ``IsGatewayPeer`` authenticates a webhook hit on
+# it. No transport vouches for a secretless gateway (see
+# ``SecretlessGatewayInboundAuthTests``), so the webhook tests below post an
+# activated gateway's token rather than relying on an unauthenticated hit.
+WEBHOOK_TOKEN = "test-webhook-token"
+
+
+def make_fake_gateway(webhook_token=WEBHOOK_TOKEN, **kwargs):
     defaults = dict(
         name="Shop phone",
         provider=MessagingGateway.Provider.FAKE,
@@ -26,7 +34,11 @@ def make_fake_gateway(**kwargs):
         is_active=True,
     )
     defaults.update(kwargs)
-    return MessagingGateway.objects.create(**defaults)
+    gateway = MessagingGateway.objects.create(**defaults)
+    if webhook_token:
+        gateway.set_secret("webhook_token", webhook_token)
+        gateway.save()
+    return gateway
 
 
 def make_inbound(gateway, *, phone="+218912345678", body="مرحبا", provider_id="m1"):
@@ -88,7 +100,8 @@ class InboundWebhookTests(TestCase):
         self.client = APIClient()
 
     def _url(self, gateway=None):
-        return f"/api/messaging/inbound/{(gateway or self.gateway).id}/"
+        gateway = gateway or self.gateway
+        return f"/api/messaging/inbound/{gateway.id}/?token={WEBHOOK_TOKEN}"
 
     def test_webhook_records_and_routes(self):
         resp = self.client.post(
@@ -111,14 +124,16 @@ class InboundWebhookTests(TestCase):
 
     def test_unsigned_sms_gate_webhook_is_rejected(self):
         # A real provider with no webhook signing key fails HMAC verification.
+        # No webhook token either, so there is nothing to fall back to.
         gateway = make_fake_gateway(
+            webhook_token=None,
             name="real",
             is_default=False,
             provider=MessagingGateway.Provider.SMS_GATE,
             config={"base_url": "http://x"},
         )
         resp = self.client.post(
-            self._url(gateway),
+            f"/api/messaging/inbound/{gateway.id}/",
             {"from": "+218912345678", "body": "hi", "id": "x"},
             format="json",
         )
@@ -187,7 +202,7 @@ class ReplyAndReceiptApiTests(TestCase):
         self.assertEqual(message.status, OutboundMessage.Status.SENT)
 
         resp = self.client.post(
-            f"/api/messaging/receipts/{self.gateway.id}/",
+            f"/api/messaging/receipts/{self.gateway.id}/?token={WEBHOOK_TOKEN}",
             {"id": message.provider_message_id, "status": "delivered"},
             format="json",
         )

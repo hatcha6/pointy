@@ -224,6 +224,12 @@ class _PayrollHomeTab extends StatelessWidget {
       errorBuilder: (context) => PointyErrorState(
         title: l10n.payrollRunsLoadError,
         icon: Icons.payments_outlined,
+        action: OutlinedButton.icon(
+          key: const ValueKey('payroll_runs_retry_button'),
+          onPressed: viewModel.loadPayrollRuns,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.retryButton),
+        ),
       ),
       emptyBuilder: (context) => PointyEmptyState(
         icon: Icons.payments_outlined,
@@ -781,6 +787,12 @@ class _EmployeesTab extends StatelessWidget {
             errorBuilder: (context) => PointyErrorState(
               title: l10n.employeesLoadError,
               icon: Icons.badge_outlined,
+              action: OutlinedButton.icon(
+                key: const ValueKey('employees_retry_button'),
+                onPressed: viewModel.loadEmployees,
+                icon: const Icon(Icons.refresh),
+                label: Text(l10n.retryButton),
+              ),
             ),
             emptyBuilder: (context) => PointyEmptyState(
               icon: Icons.badge_outlined,
@@ -897,6 +909,12 @@ class _LoansTab extends StatelessWidget {
       errorBuilder: (context) => PointyErrorState(
         title: l10n.employeeLoansLoadError,
         icon: Icons.account_balance_wallet_outlined,
+        action: OutlinedButton.icon(
+          key: const ValueKey('employee_loans_retry_button'),
+          onPressed: viewModel.loadLoans,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.retryButton),
+        ),
       ),
       emptyBuilder: (context) => PointyEmptyState(
         icon: Icons.account_balance_wallet_outlined,

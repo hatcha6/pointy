@@ -80,6 +80,7 @@ class _RecentSaleOrdersList extends StatelessWidget {
         height: _documentHistoryListHeight(
           viewModel.recentSaleOrders.length,
           viewModel.hasMoreSaleHistory,
+          hasError: viewModel.hasSaleHistoryError,
         ),
         child: PointyDataList<SaleOrder>(
           items: viewModel.recentSaleOrders,
@@ -94,6 +95,11 @@ class _RecentSaleOrdersList extends StatelessWidget {
           errorBuilder: (context) => PointyErrorState(
             title: l10n.productRecentInvoicesLoadError,
             icon: Icons.receipt_long_outlined,
+            action: FilledButton.icon(
+              onPressed: viewModel.loadSaleHistory,
+              icon: const Icon(Icons.sync),
+              label: Text(l10n.retryButton),
+            ),
           ),
           emptyBuilder: (context) => PointyEmptyState(
             icon: Icons.receipt_long_outlined,
@@ -134,6 +140,7 @@ class _RecentPurchaseOrdersList extends StatelessWidget {
         height: _documentHistoryListHeight(
           viewModel.recentPurchaseOrders.length,
           viewModel.hasMorePurchaseHistory,
+          hasError: viewModel.hasPurchaseHistoryError,
         ),
         child: PointyDataList<PurchaseOrder>(
           items: viewModel.recentPurchaseOrders,
@@ -148,6 +155,11 @@ class _RecentPurchaseOrdersList extends StatelessWidget {
           errorBuilder: (context) => PointyErrorState(
             title: l10n.productRecentPurchaseBillsLoadError,
             icon: Icons.inventory_2_outlined,
+            action: FilledButton.icon(
+              onPressed: viewModel.loadPurchaseHistory,
+              icon: const Icon(Icons.sync),
+              label: Text(l10n.retryButton),
+            ),
           ),
           emptyBuilder: (context) => PointyEmptyState(
             icon: Icons.inventory_2_outlined,
@@ -222,7 +234,16 @@ class _HistorySubsection extends StatelessWidget {
   }
 }
 
-double _documentHistoryListHeight(int itemCount, bool hasMore) {
+double _documentHistoryListHeight(
+  int itemCount,
+  bool hasMore, {
+  bool hasError = false,
+}) {
+  // The error state is taller than the empty one — it carries a retry button —
+  // and this box does not scroll, so it needs the full height or it overflows.
+  if (hasError && itemCount == 0) {
+    return 288;
+  }
   if (hasMore || itemCount > 3) {
     return 288;
   }

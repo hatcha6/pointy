@@ -134,9 +134,13 @@ class _StockCountReconciliationScreenState
                       ),
                     ),
               emptyBuilder: (context) => _MatchedState(),
-              errorBuilder: (context) => PointyEmptyState(
-                icon: Icons.error_outline,
-                title: l10n.stockCountLoadError,
+              errorBuilder: (context) => PointyErrorState(
+                title: l10n.stockCountReconciliationLoadError,
+                action: OutlinedButton.icon(
+                  onPressed: _viewModel.load,
+                  icon: const Icon(Icons.refresh),
+                  label: Text(l10n.retryButton),
+                ),
               ),
               itemBuilder: (context, line) => _ReconciliationTile(
                 line: line,
@@ -166,6 +170,20 @@ class _StockCountReconciliationScreenState
           child: PointyInlineMessage(
             message: l10n.stockCountApplyManagerOnly,
             icon: Icons.lock_outline,
+          ),
+        ),
+      );
+    }
+    if (_viewModel.hasLoadError) {
+      // A failed load empties `lines`, which is indistinguishable from a
+      // matched count: without this the footer would offer a confident
+      // "finish" on variances nobody has seen.
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: AdaptiveSpacing.of(context).compactPadding,
+          child: PointyInlineMessage.error(
+            message: l10n.stockCountApplyBlockedByLoadError,
           ),
         ),
       );

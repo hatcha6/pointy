@@ -3526,6 +3526,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get intakeCustomerRequired => 'اختر زبونًا للمتابعة.';
 
   @override
+  String get intakeCustomerCreateError =>
+      'تعذّر إنشاء الزبون. تحقّق من الاتصال ثم حاول مرة أخرى.';
+
+  @override
   String get intakeSelectAssetHint =>
       'اختر جهاز الزبون أو أضف جهازًا جديدًا. يساعدك هذا لاحقًا في معرفة تاريخ كل جهاز.';
 
@@ -4552,11 +4556,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get printerBarcodeLabelPdfSizeHelper =>
-      'شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الافتراضي ملصق 40×22 مم، ويمكن اختيار لفة 50/70/80 مم أو ورقة A4 بشبكة ملصقات. يتكيّف الملصق تلقائيًا مع الحجم المختار.';
+      'شكل ملصق الباركود عند الطباعة عبر تعريف الطابعة. الملصق المقصوص يُطبع بمقاس العرض والارتفاع المحددين أدناه بالضبط، فلا يدور ولا تخرج ملصقات فارغة بعده. على ويندوز اضبط المقاس نفسه في تعريف الطابعة.';
 
   @override
-  String get printerBarcodeLabelPdfSizeSticker40x22 =>
-      'ملصق 40×22 مم (الافتراضي)';
+  String get printerBarcodeLabelPdfSizeSticker =>
+      'ملصق مقصوص (بمقاس الملصق أدناه)';
 
   @override
   String get printerBarcodeLabelPdfSizeRoll50 => 'لفة 50 مم';
@@ -4571,11 +4575,55 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerBarcodeLabelPdfSizeA4 => 'A4 (شبكة ملصقات)';
 
   @override
+  String get printerBarcodeLabelCalibrationTitle => 'معايرة مقاس الملصق';
+
+  @override
+  String get printerBarcodeLabelCalibrationHelper =>
+      'اطبع مسطرة على الملصقات واقرأ الأرقام منها بدل التخمين: المسطرة العرضية تعطيك الإزاحة من اليسار وعرض الملصق، ومسطرة التغذية تعطيك الإزاحة من الأعلى وارتفاع الملصق، والمشط يعطيك المسافة بين الملصقات (العمود الذي يبقى في نفس الارتفاع على كل ملصق هو الصحيح).';
+
+  @override
+  String get printerBarcodeLabelCalibrationAcross => 'مسطرة عرضية';
+
+  @override
+  String get printerBarcodeLabelCalibrationFeed => 'مسطرة التغذية';
+
+  @override
+  String get printerBarcodeLabelCalibrationCombCoarse => 'مشط المسافة (خشن)';
+
+  @override
+  String get printerBarcodeLabelCalibrationCombFine => 'مشط المسافة (دقيق)';
+
+  @override
+  String get printerBarcodeLabelOffsetYLabel => 'إزاحة الملصق من الأعلى مم';
+
+  @override
+  String get printerBarcodeLabelOffsetYHelper =>
+      'المسافة من بداية الطباعة إلى الحافة العليا للملصق، في اتجاه التغذية.';
+
+  @override
+  String get printerBarcodeLabelPitchLabel => 'المسافة بين الملصقات مم';
+
+  @override
+  String get printerBarcodeLabelPitchHelper =>
+      'من بداية ملصق إلى بداية الذي يليه (الملصق + الفاصل). تُطبع الدفعة كشريط متصل بهذه المسافة، فلا تنزلق الملصقات مع الطباعة المتتابعة. يقبل الكسور مثل 24.8.';
+
+  @override
+  String get printerBarcodeLabelOffsetXLabel => 'إزاحة الملصق من اليسار مم';
+
+  @override
+  String get printerBarcodeLabelOffsetXHelper =>
+      'المسافة من بداية طباعة الرأس إلى الحافة اليسرى للملصق. اضبطها إذا كانت لفة الملصقات أضيق من عرض الطابعة أو غير محاذية للطرف، فتُطبع الملصقات مزاحة أو مقصوصة.';
+
+  @override
+  String get printerBarcodeLabelMediaHelper =>
+      'مقاس الملصق كما هو محمّل في الطابعة: العرض بعرض الملصق، والارتفاع من بداية ملصق إلى بداية الذي يليه (الملصق + الفاصل) حتى تتقدّم الطابعة ملصقًا واحدًا في كل مرة.';
+
+  @override
   String get printerBarcodeLabelRotationLabel => 'تدوير الملصق';
 
   @override
   String get printerBarcodeLabelRotationHelper =>
-      'دوّر الملصق إذا كانت الطابعة تُغذّي الملصقات بالعرض.';
+      'يدوّر محتوى الملصق داخل الملصق نفسه، إذا كانت الطابعة تُغذّي الملصقات بالعرض.';
 
   @override
   String get printerBarcodeLabelRotation0 => 'بدون تدوير';
@@ -4831,6 +4879,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get queryClearSearchAndFiltersButton => 'مسح البحث والفلاتر';
+
+  @override
+  String get queryNoFiltersResultsMessage => 'امسح الفلاتر لعرض القائمة كاملة.';
+
+  @override
+  String get queryClearFiltersButton => 'مسح الفلاتر';
 
   @override
   String get queryNoSearchResultsMessage =>
@@ -8110,7 +8164,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get registerSessionLoadError =>
-      'تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.';
+      'تعذر الاتصال بجلسة الدرج، فلا نعرف إن كانت هناك جلسة مفتوحة. أعد المحاولة قبل بدء جلسة جديدة، تفاديا لفتح جلستين.';
 
   @override
   String get openingCashInputLabel => 'نقدية الافتتاح';
@@ -8667,6 +8721,13 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get invoiceVoidedCalloutTitle => 'لا يمكن الإرجاع من هذه الفاتورة';
+
+  @override
+  String get invoiceVoidedCalloutBody =>
+      'هذه الفاتورة ملغاة: أُرجعت أصنافها أو أُلغيت بالكامل، ولم يتبقَّ صنف قابل للإرجاع أو الاستبدال.';
+
+  @override
   String get invoicePaymentTitle => 'تسجيل دفعة على الفاتورة';
 
   @override
@@ -8686,6 +8747,11 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get invoicePaymentAmountError =>
       'أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقّي.';
+
+  @override
+  String recordPaymentAmountMaxError(String amount) {
+    return 'أدخل مبلغًا أكبر من صفر ولا يتجاوز $amount.';
+  }
 
   @override
   String get invoicePaymentSuccess => 'تم تسجيل الدفعة على الفاتورة.';
@@ -11408,9 +11474,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get expensesEmptyMessage => 'لا توجد مصروفات في هذه الفترة.';
 
   @override
-  String get expensesNoMatchingMessage => 'لا توجد بنود مطابقة للتصفية.';
-
-  @override
   String get expensesPreviousMonth => 'الشهر السابق';
 
   @override
@@ -11793,6 +11856,13 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get stockCountLoadError => 'تعذّر تحميل عمليات الجرد.';
+
+  @override
+  String get stockCountReconciliationLoadError => 'تعذّر تحميل فروقات الجرد.';
+
+  @override
+  String get stockCountApplyBlockedByLoadError =>
+      'لا يمكن إنهاء الجرد قبل تحميل الفروقات. أعد المحاولة أولاً.';
 
   @override
   String get stockCountHistoryTitle => 'سجل عمليات الجرد';
@@ -13447,7 +13517,37 @@ class AppLocalizationsAr extends AppLocalizations {
   String get conversationReadOnly => 'ليس لديك صلاحية الرد على المحادثات';
 
   @override
+  String get conversationMessageStatusQueued => 'بانتظار الإرسال';
+
+  @override
+  String get conversationMessageStatusScheduled => 'مُجدولة';
+
+  @override
+  String get conversationMessageStatusSending => 'جارٍ الإرسال';
+
+  @override
+  String get conversationMessageStatusSent => 'أُرسلت';
+
+  @override
+  String get conversationMessageStatusDelivered => 'وصلت';
+
+  @override
+  String get conversationMessageStatusFailed => 'لم تُرسل';
+
+  @override
+  String get conversationMessageStatusBlocked => 'موقوفة: ألغى الاشتراك';
+
+  @override
+  String get conversationMessageStatusCancelled => 'أُلغيت';
+
+  @override
+  String get conversationMessageStatusExpired => 'انتهت مهلتها';
+
+  @override
   String get newConversationTitle => 'محادثة جديدة';
+
+  @override
+  String get newConversationStarting => 'جارٍ فتح المحادثة…';
 
   @override
   String get newConversationCustomerLabel => 'العميل';

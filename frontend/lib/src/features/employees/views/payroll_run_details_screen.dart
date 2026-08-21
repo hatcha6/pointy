@@ -102,6 +102,12 @@ class _PayrollRunDetailsScreenState extends State<PayrollRunDetailsScreen> {
                   child: PointyErrorState(
                     title: l10n.payrollRunDetailsLoadError,
                     icon: Icons.warning_amber_outlined,
+                    action: OutlinedButton.icon(
+                      key: const ValueKey('payroll_details_retry_button'),
+                      onPressed: _isLoading ? null : _load,
+                      icon: const Icon(Icons.refresh),
+                      label: Text(l10n.retryButton),
+                    ),
                   ),
                 )
               : _PayrollRunDetailsBody(

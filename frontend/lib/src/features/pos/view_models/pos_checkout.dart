@@ -182,23 +182,39 @@ extension PosCheckoutActions on PosViewModel {
         ? invoicePrinterConfig
         : null;
 
-    final checkoutDraft = SaleCheckoutDraft.fromCart(
-      cart: cartSnapshot,
-      payments: payments,
-      invoicePrinterConfig: backendInvoicePrinterConfig,
-      customerId: _selectedCustomer?.id,
-      couponCode: _couponCode,
-      saleType: saleType,
-      validUntil: validUntil,
-      reserveStock: reserveStock,
+    SaleCheckoutDraft buildCheckoutDraft(PrinterConfig? printerConfig) {
+      return SaleCheckoutDraft.fromCart(
+        cart: cartSnapshot,
+        payments: payments,
+        invoicePrinterConfig: printerConfig,
+        customerId: _selectedCustomer?.id,
+        couponCode: _couponCode,
+        saleType: saleType,
+        validUntil: validUntil,
+        reserveStock: reserveStock,
+      );
+    }
+
+    // A retry of this same sale must reach the backend as the *same* request:
+    // the same key so it replays, and the same body so it isn't refused as a
+    // conflicting reuse of that key. The attempt therefore carries the print
+    // routing of the first send, and it is that routing — not whatever resolved
+    // this time round — that goes back out (shop settings that failed to reload
+    // during the outage, a printer reconfigured between attempts).
+    final attempt = _activeSaleSession.checkoutAttemptFor(
+      buildCheckoutDraft(backendInvoicePrinterConfig),
     );
-    final checkoutIdempotencyKey = _activeSaleSession.checkoutIdempotencyKeyFor(
-      checkoutDraft,
-    );
+    final checkoutDraft = buildCheckoutDraft(attempt.invoicePrinterConfig);
+    // Get the key on disk before the request leaves. Everything after this
+    // point can be interrupted by a mains cut, and the cart comes back on the
+    // next launch — without the key beside it the cashier's retry would book a
+    // second sale. Best-effort: a till that can't write its scratch state still
+    // has to be able to take the money.
+    await persistNow();
 
     final result = await _saleRepository.checkout(
       checkoutDraft,
-      idempotencyKey: checkoutIdempotencyKey,
+      idempotencyKey: attempt.idempotencyKey,
     );
 
     switch (result) {

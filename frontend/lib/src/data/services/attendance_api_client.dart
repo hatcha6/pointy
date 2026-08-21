@@ -49,7 +49,12 @@ class AttendanceApiClient {
   }
 
   Future<AttendanceSyncResult> sync() async {
-    final response = await _session.post('attendance/sync/');
+    // Pulls every employee and punch off the fingerprint device inside the
+    // request; on a large device that legitimately runs for minutes.
+    final response = await _session.post(
+      'attendance/sync/',
+      timeout: PosApiSession.longRunningRequestTimeout,
+    );
     _session.ensureSuccess(response, 'Attendance sync failed with status');
     return AttendanceSyncResult.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,

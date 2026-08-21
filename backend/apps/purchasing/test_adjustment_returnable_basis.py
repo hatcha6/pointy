@@ -195,3 +195,81 @@ class AdjustmentReturnableBasisTests(TestCase):
 
         self.assertEqual(adjustment.outbound_amount, Decimal("40.00"))
         self.assertEqual(adjustment.lines.get().unit_cost, UNIT_COST)
+
+    # -- over-shipments -------------------------------------------------
+    #
+    # ``purchase_adjustable_line_value`` caps an over-received line's
+    # returnable value at what the order billed — the surplus units were never
+    # paid for. But the *partial* return branch spread ``net_line_total`` over
+    # the **ordered** count while charging it against the **arrived** count, so
+    # each arrived unit was priced above its share and a partial return sailed
+    # straight past the cap. Ordering 10 at 10.00, taking 12, and sending 11
+    # back credited 110.00 against a line the shop was billed 100.00 for.
+    #
+    # The invariant: no return may credit more than the line's returnable
+    # value, and every return added together must land on it exactly.
+
+    def _over_received(self, sku):
+        # Ordered 10 at 10.00 = 100.00 billed; the supplier shipped 12.
+        return self._received_line(sku=sku, ordered=10, accepted=12, over_receipt=2)
+
+    def test_partial_return_of_an_over_shipment_stays_within_what_was_billed(self):
+        order, line = self._over_received("OVERPART")
+
+        self.assertEqual(line.adjustable_quantity, Decimal("12"))
+        amount = purchase_adjustment_line_amount(line, Decimal("11"))
+
+        self.assertLessEqual(amount, Decimal("100.00"))
+        # 100.00 spread over the twelve units that actually arrived.
+        self.assertEqual(amount, Decimal("91.67"))
+        self.assertEqual(
+            purchase_adjustment_line_unit_cost(line, Decimal("11")), Decimal("8.33")
+        )
+
+    def test_returns_of_an_over_shipment_add_up_to_the_billed_value(self):
+        order, line = self._over_received("OVERSUM")
+
+        adjust_purchase_order_items(
+            purchase_order=order,
+            adjustment_type=PurchaseOrderAdjustment.AdjustmentType.RETURN,
+            lines=[(line, Decimal("11"))],
+            reason="تالف",
+            settlement_method=PurchaseOrderAdjustment.SettlementMethod.SUPPLIER_CREDIT,
+        )
+        line.refresh_from_db()
+
+        # The twelfth unit is still returnable, and for a positive amount --
+        # the old arithmetic had already over-claimed by 10.00, leaving -10.00
+        # here, which the service rejects outright as a non-positive adjustment.
+        self.assertEqual(line.adjustable_quantity, Decimal("1"))
+        last = purchase_adjustment_line_amount(line, Decimal("1"))
+        self.assertEqual(last, Decimal("8.33"))
+
+        adjust_purchase_order_items(
+            purchase_order=order,
+            adjustment_type=PurchaseOrderAdjustment.AdjustmentType.RETURN,
+            lines=[(line, Decimal("1"))],
+            reason="تالف",
+            settlement_method=PurchaseOrderAdjustment.SettlementMethod.SUPPLIER_CREDIT,
+        )
+
+        self.supplier.refresh_from_db()
+        self.assertEqual(self.supplier.credit_balance, Decimal("100.00"))
+
+    def test_whole_over_shipment_returned_at_once_is_unchanged(self):
+        # The ceiling branch was already right; this pins that the fix to the
+        # proportional branch left it alone.
+        order, line = self._over_received("OVERWHOLE")
+
+        self.assertEqual(
+            purchase_adjustment_line_amount(line, Decimal("12")), Decimal("100.00")
+        )
+
+    def test_short_shipment_still_credits_per_ordered_unit(self):
+        # No over-receipt: the span stays the ordered count, so each of the ten
+        # units is worth a tenth of the line whether it arrived or not.
+        order, line = self._received_line(sku="UNDER", ordered=10, accepted=4)
+
+        self.assertEqual(
+            purchase_adjustment_line_amount(line, Decimal("3")), Decimal("30.00")
+        )

@@ -157,7 +157,9 @@ class CanonicalPayment(CanonicalRecord):
 @dataclass
 class CanonicalPurchaseLine:
     variant_source_key: str
-    quantity: int = 1
+    # Decimal, like CanonicalSaleLine: PurchaseLine.quantity is Decimal(12, 3)
+    # so fractional units (half a tray, 2.5 kg) are a real purchase.
+    quantity: Decimal = Decimal("1")
     unit_cost: Decimal = Decimal("0")
 
 

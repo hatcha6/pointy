@@ -130,6 +130,188 @@ it compares hex hashes and `.exclude(api_key_hash="")`.
 **Action:** Any new secret comparison uses that helper. A bare `compare_digest`
 on `str` in a credential path is the finding, no further analysis needed.
 
+## 2026-08-20 - "Private REMOTE_ADDR" is not "on the LAN" — the connector is on the LAN
+**Learning:** The relay connector dials the local backend from the shop's own
+network, so **every** request tunnelled in from the internet arrives with a
+private `REMOTE_ADDR`. `request_is_private_network()` therefore returns True for
+remote callers, and is not by itself an authorisation gate.
+`request_discovery_allowed` knew this (it rejects `request_is_relayed` first) and
+the client-installer views inherited the fix by reusing it — but the two
+hand-rolled copies did not: `price_checker.IsPrivateNetworkOrAuthenticated` and
+`messaging.IsGatewayPeer` called `request_is_private_network` directly. The
+price-checker pair was genuinely reachable (`relayTarget` proxies any `/api/…`
+path on the access token alone), giving anyone holding the shop's *device-level*
+relay token an unauthenticated catalogue read and kiosk-registration write with
+no user session. All three now go through `request_is_lan_local()`.
+**Action:** Treat `request_is_private_network` as a plumbing primitive, not a
+gate — a new caller of it in a permission class is the finding. This is the same
+"duplication is the tell" shape as the `compare_digest` sweep: the LAN check had
+drifted into three copies and only the original stayed correct.
+
+## 2026-08-20 - Surface 5 (injection / input handling) audited; nothing found
+**Learning:** Swept it end to end and it is clean, so don't re-derive: the only
+non-migration `RawSQL`/`cursor.execute` sites build identifiers from
+`_meta.db_table` + `connection.ops.quote_name` (`analytics/export.py`) or are
+transport code that parameterises values and quotes identifiers
+(`migration/transports/sql_base.py`). Both URL fetchers are hardened and
+documented — `AiFaviconView` only ever fetches a fixed Google endpoint with the
+host as a *query param*, and `attachments/image_search.py` has a real SSRF guard
+(scheme/credential/hostname checks plus `getaddrinfo` → private/loopback/
+link-local/multicast/reserved rejection) that is re-applied on every redirect via
+`ValidatingRedirectHandler`. Attachment storage paths are `uuid4().hex` with a
+regex-validated extension — the uploaded filename never reaches the path. The
+restore-archive reader (`core/backup.py`) requires a `pointy-backup/` first
+component and rejects absolute paths and `..`.
+**Action:** Skip this surface as a run theme. Re-check only a *newly added*
+outbound fetch (does it call `validate_remote_image_url`?) or a new writer that
+derives a path from user input.
+
+## 2026-08-20 - The relay trust boundary audited end to end; nothing found
+**Learning:** Audited surface 3 (the Go relay) fully and it is clean. Specifics
+worth not re-deriving: every route in `ServeHTTP`'s switch carries an explicit
+`RouteMode` gate *plus* an auth wrapper, and all three wrappers are fail-closed
+on an unset secret — `withAdmin` 401s when `AdminToken == ""` (unless the
+explicit `AllowOpenAdmin` dev flag), `withNodeProxy` 404s when `NodeProxyToken`
+is blank. The scoped-vs-fleet split holds: `handleInstallationRoutes` computes
+`selfServiceable` from (path-part count, method) and then requires
+`ValidateAccessTokenIdentity(...).ID == id`, so an installation token reaches
+only its own GET / connector-certificate / metadata routes and every other
+sub-route falls through to `withAdmin`. No handler anywhere takes an
+installation id from a body or query field — `handleAgentManifest`,
+`handleAgentStatus`, `handleAIUsage`, `handleListHolidays` all derive it from
+the validated token (the only `FormValue("installation_id")` is the
+admin-gated console form). Artifact traversal is closed twice over:
+`handleAgentArtifact` rejects any `/` in the version and `artifacts.safeVersion`
+is a character allow-list that additionally rejects `..`.
+**Action:** Do not re-audit relay routing, wrapper fail-closure, scoped-token
+containment or artifact path handling. Re-check only if a *new* route is added
+to the `ServeHTTP` switch — the thing to verify then is that it has both a
+`RouteMode` gate and a wrapper, since the switch is hand-maintained.
+
+## 2026-08-20 - An empty permission tuple means "any authenticated user"
+**Learning:** `HasPointyPermission` has three outcomes, not two:
+`_required_permissions` returning `None` denies (the unmapped case, already
+journaled), but returning an **empty** tuple hits `if not required_permissions:
+return True` — authenticated-only, no permission required. So `"action": ()` in
+a `permission_map`, or a `get_required_permissions` that returns `()`, is a
+real open door that the "is every action mapped?" check does not catch. All
+three current uses are legitimately scoped *inside* the handler, and each is a
+false positive: `EmployeeLoanViewSet.mine` filters `Employee.objects.filter(
+user=request.user)`; `request_loan` delegates to `EmployeeLoanRequestSerializer`,
+which has no `employee` field and calls `request_employee_loan(user=request.user)`
+so the loan can only ever be bound to the caller; and `DashboardView` gates every
+section individually, with all revenue/profit sections behind
+`reports.view_reportrun` and row scope behind `user_has_full_visibility`.
+**Action:** `grep -rn ': ()' apps/*/views.py` plus a scan of every
+`get_required_permissions` is a cheap, high-signal 2-minute check. Treat a hit
+as a finding *only* if the handler does not scope to `request.user` — but a
+newly added empty tuple with no such scoping is a genuine hole.
+
+## 2026-08-20 - The escalation guard covered `extra_permissions` but not `role`
+**Learning:** `PosUserSerializer.validate_extra_permissions` has an explicit
+"you can only grant what you hold" rule — and the two adjacent fields that grant
+just as much had none. `role` is a `ChoiceField` over `ROLE_GROUPS` with no
+guard, and `manager` resolves to `role_permission_codes(...) is None` = every
+permission; `password` lets an actor take over any account outright. Both
+`auth.add_user` and `auth.change_user` are in `PERMISSION_CATALOG`, so a manager
+delegating staff-account upkeep to a cashier handed them a one-request path to
+`role: manager` (or to resetting the manager's own password and logging in).
+Guards now sit in `validate_role` + `validate()`, keyed on
+`role_permission_codes(resolved_role) is None` so a manager/superuser
+short-circuits and the default configuration is unchanged.
+**Action:** When one field on a serializer carries an authorization check, ask
+what *else* on that serializer grants the same thing. A per-field guard is a
+smell: the check belongs to the operation, not the field. Self-service edits use
+different serializers (`CurrentUserUpdateSerializer`, `PasswordChangeSerializer`)
+so tightening `PosUserSerializer` cannot break a user editing their own profile.
+
+## 2026-08-20 - A transport that self-declares "trusted" is an auth bypass
+**Learning:** `IsGatewayPeer` authenticates a messaging webhook on the gateway's
+shared `webhook_token` when one is stored, and otherwise **delegates to
+`transport.verify_inbound`** — which makes each driver its own authenticator.
+`base.py` returns False and `sms_gate.py` requires a signing key, but
+`fake.py` returned `True` unconditionally ("tests exercise the routing
+pipeline"). That driver is registered in production (`transports/__init__.py`
+imports it for the `@register` side effect) and `Provider.FAKE` is a real
+model choice, so a gateway created but never activated — no token provisioned —
+accepted an unauthenticated POST from any LAN peer, with a caller-chosen
+`from` number. That routes into `crm.route_inbound`: a forged "STOP" revokes a
+real customer's marketing consent, anything else threads into the conversation
+staff read and reply to. Verified 200 + row stored before the fix.
+**Action:** Two things generalise. (a) When a permission class delegates the
+credential check to pluggable code, audit *every* registered implementation,
+not the base class — the abstract default being fail-closed proves nothing.
+(b) "Test-only" is a claim about intent, not reachability: check whether the
+thing is registered in production and selectable through the API. The new
+`test_no_registered_transport_vouches_for_a_secretless_gateway` asserts the
+invariant over the whole registry so the next driver cannot reopen it.
+
+## 2026-08-21 - A generic sub-resource endpoint can drop half a two-permission gate
+**Learning:** `PurchaseOrderViewSet.attachments` deliberately requires BOTH
+`purchasing.view_purchaseorder` AND `attachments.view_attachment`. The generic
+`AttachmentViewSet` asked only for the second half and its `get_queryset` did no
+owner scoping at all, so `technician` — the *only* stock role holding
+`attachments.view_attachment`, and one with zero purchasing permissions — could
+list and download every supplier invoice scan (costs, suppliers, terms) the shop
+had filed. Two things generalise. (a) When a nested action names two permissions,
+the second one usually belongs to a generic viewset that names it alone; that
+generic viewset is the bypass. (b) The reachability intersection journaled on
+2026-08-20 cannot see this — it proves *which* permission guards a route, not
+whether that permission is sufficient for the rows the route returns.
+**Action:** For any generic viewset over a `GenericForeignKey` owner, ask what
+the owning app requires. The fix pattern now in `_scoped_to_viewable_owners`
+derives the allowed owner content types from the caller's own `view_*`
+permissions (zero extra queries — `get_all_permissions()` is already warm), with
+an explicit manager short-circuit, because the manager group is
+`app_label__in=MANAGER_PERMISSION_DOMAINS`, not literally every permission.
+Note the token-addressed `content` action must be exempted: kiosks and POS image
+loads call it with no session, and the signed token is a strictly narrower
+authorization than any owner rule.
+
+## 2026-08-21 - Surface 2 (unauthenticated) is fully enumerated; don't re-sweep it
+**Learning:** Walking the resolver for every route whose `permission_classes`
+lack `IsAuthenticated` yields exactly 20 non-admin routes, and every one is now
+accounted for by a journal entry: the AI favicon, login/setup/enrollment status
+(throttled + `initial_admin_setup_required`), discovery, the two public
+token pages, the three client-installer views, both messaging webhooks, the two
+price-checker LAN endpoints, schema/docs, and the four relay views — of which
+`RelayDiagnosticsAnalyticsExportView` correctly uses the shared
+`connector_token_accepted` helper. Also checked and clean: the only three
+`get_permissions` overrides in the codebase (`AttachmentViewSet` narrows to a
+signed token, `AnalyticsEventViewSet` *adds* `IsManager`, one serializer method
+of the same name), `POINTY_ALLOW_PRIVATE_HOSTS` (policy is private/loopback/
+link-local IPs plus explicit names; CORS is an allow-list, not `ALLOW_ALL`), and
+the `LicenseGateMiddleware` exempt prefixes.
+**Action:** Treat surface 2 as closed. Re-check only a *newly added* route that
+declares `AllowAny` or a new `get_permissions` override — the resolver walk that
+finds both takes about two minutes.
+
+## 2026-08-21 - The sibling that scopes is the proof the other one should
+**Learning:** `PrintAuditEventViewSet.get_queryset` carefully re-derives the
+sales row scope (drop SALE_ORDER rows without `sales.view_order`; without
+`user_has_full_visibility` narrow to the caller's own
+`sale_order__register_session__owner_key`). `PrintJobViewSet`, twenty lines
+below it in the same file, had **no** `get_queryset` at all — and a `PrintJob`
+carries `payload`, the *whole rendered receipt* (lines, totals, applied
+discounts, the public-invoice token URL, the owning session's `owner_key`),
+where an audit event carries only a document number. Cashier holds
+`printing.view_printjob` and not `reports.view_reportrun`, so
+`GET /api/print-jobs/?order=<id>` (or `?search=<receipt number>`) returned any
+sale in the shop, defeating `OrderViewSet`'s own-session scoping. The Flutter
+client never calls the list endpoint — `loadPrintJobs` has zero consumers — so
+this was pure attack surface. Two things generalise. (a) When one viewset in a
+file re-derives another app's row scope by hand, every *other* viewset in that
+file over the same parent is a candidate; the careful one is the tell that the
+scope matters. (b) Scope the **read** verbs only: `claim`/`requeue`/`printed`
+go through `get_object()` too, and one agent drives a shared printer whichever
+till rang the sale, so scoping those would break shared-printer shops.
+**Action:** For any model whose rows embed a *rendered copy* of a scoped
+document (print payloads, cached exports, notification bodies, queued message
+bodies), check the viewset scope against the source document's viewset, not
+against the model's own `view_*` permission. Also keep order-less rows visible
+where an existing test relies on it — `PrintingPermissionTests` retrieves a
+manually created, order-less job as a cashier.
+
 ## 2026-08-20 - The relay's identity plumbing is sound; its *metering* was the gap
 **Learning:** Audited the whole relay trust boundary end to end and the identity
 half is genuinely tight — every `Validate*Token` enforces the token *purpose*

@@ -608,7 +608,7 @@ const aiTitleSystemPrompt = "Generate a very short title for a chat conversation
 	"user's message. Summarize the topic concisely; do not answer the message."
 
 // generateTitle asks the cheap fast model for a short conversation title from
-// “prompt“ — the user's first message when they typed one, or the assistant's
+// ``prompt`` — the user's first message when they typed one, or the assistant's
 // reply when they didn't (a voice/attachment turn), so a chat always gets a real
 // name. Returns "" on any failure so the caller can fall back to a truncated
 // title — a missing title must never block or break a reply.

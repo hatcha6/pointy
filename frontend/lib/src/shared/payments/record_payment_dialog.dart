@@ -5,6 +5,7 @@ import '../../core/parsing.dart';
 import '../../data/models/purchase_submission.dart' show SupplierPaymentMethod;
 import '../../data/models/sale_order.dart' show PaymentMethod;
 import '../../features/pos/views/payment/card_receipt_validation_dialog.dart';
+import '../formatters.dart';
 import '../payment_labels.dart';
 
 /// One selectable payment method in [RecordPaymentDialog]. Method-enum agnostic
@@ -178,12 +179,23 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
+                // The error names the ceiling rather than just refusing: the
+                // supplier flow passes no balance line at all, so without the
+                // number the cashier is told there is a limit they were never
+                // shown.
                 decoration: InputDecoration(
                   labelText: l10n.invoicePaymentAmountLabel,
                   errorText: _showAmountError
-                      ? l10n.invoicePaymentAmountError
+                      ? l10n.recordPaymentAmountMaxError(
+                          formatMoney(widget.maxAmount),
+                        )
                       : null,
                 ),
+                onChanged: (_) {
+                  if (_showAmountError) {
+                    setState(() => _showAmountError = false);
+                  }
+                },
               ),
               if (widget.showReference) ...[
                 const SizedBox(height: 12),

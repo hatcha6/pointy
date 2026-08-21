@@ -362,17 +362,43 @@ def assigned_role_from_group_names(group_names, *, is_superuser=False):
     return None
 
 
-def _permissions_for_codes(permission_codes):
-    permissions = []
-    for permission_code in permission_codes:
-        app_label, codename = permission_code.split(".", 1)
-        permission = Permission.objects.filter(
-            content_type__app_label=app_label,
-            codename=codename,
-        ).first()
-        if permission is not None:
-            permissions.append(permission)
-    return permissions
+def _permission_map(permission_codes):
+    """Resolve ``app_label.codename`` strings to ``Permission`` rows in ONE query.
+
+    Keyed by the exact ``app_label.codename`` string, so the two flat ``__in``
+    lists are safe: they can over-fetch a cross product (an app_label from one
+    code paired with a codename from another), but those rows are simply never
+    looked up. Two ``__in`` lists are deliberate over an OR of per-code tuples —
+    same result, and one index scan instead of 200-odd OR branches for the
+    planner to chew through.
+    """
+    pairs = [permission_code.split(".", 1) for permission_code in permission_codes]
+    if not pairs:
+        return {}
+    permissions = Permission.objects.filter(
+        content_type__app_label__in={app_label for app_label, _ in pairs},
+        codename__in={codename for _, codename in pairs},
+    ).select_related("content_type")
+    return {
+        f"{permission.content_type.app_label}.{permission.codename}": permission
+        for permission in permissions
+    }
+
+
+def _permissions_for_codes(permission_codes, permission_map=None):
+    """The ``Permission`` rows for ``permission_codes``, in that order, silently
+    skipping codes with no matching row (an app whose migrations have not run).
+
+    Pass ``permission_map`` to reuse a map already built for a wider set of
+    codes; without it one is built for just these codes.
+    """
+    if permission_map is None:
+        permission_map = _permission_map(permission_codes)
+    return [
+        permission_map[permission_code]
+        for permission_code in permission_codes
+        if permission_code in permission_map
+    ]
 
 
 def ensure_role_groups():
@@ -384,11 +410,24 @@ def ensure_role_groups():
     manager_permissions = Permission.objects.filter(
         content_type__app_label__in=MANAGER_PERMISSION_DOMAINS,
     )
-    manager_user_permissions = _permissions_for_codes(USER_PERMISSION_CODES)
+    # Resolve every code the eight roles need in a single query, then slice it
+    # per role. This used to be one ``.filter(...).first()`` per code — 211 of
+    # them — and ensure_role_groups runs on *every* request to the users screen
+    # (``PosUserViewSet.initial``), so that was 211 round trips on a read path.
+    # Keep the resolution batched here; do not push it back inside the loop.
+    permission_map = _permission_map(
+        [
+            *USER_PERMISSION_CODES,
+            *(code for codes in ROLE_PERMISSION_CODES.values() for code in codes),
+        ]
+    )
+    manager_user_permissions = _permissions_for_codes(
+        USER_PERMISSION_CODES, permission_map
+    )
 
     groups[MANAGER_GROUP].permissions.add(*manager_permissions, *manager_user_permissions)
     for role, codes in ROLE_PERMISSION_CODES.items():
-        groups[role].permissions.set(_permissions_for_codes(codes))
+        groups[role].permissions.set(_permissions_for_codes(codes, permission_map))
     return groups
 
 
