@@ -130,20 +130,11 @@ class OrderViewSet(
     def _list_summary_queryset(self, queryset):
         # The invoices list rows show a line COUNT and totals/profit (computed
         # from the lines) but never the line items themselves — the detail screen
-        # re-fetches those on open. Keep a LIGHT `lines` prefetch (the rows only,
-        # for total_cost / total_profit / the count) and drop the heavy per-line
-        # variant / option / adjustment trees that were the bulk of the payload.
-        return queryset.prefetch_related(None).prefetch_related(
-            # lines + their adjustment_lines only: total_cost/profit and the
-            # can_void/return/exchange affordances read them. The heavy
-            # variant/product/option trees (the payload bulk) are dropped since
-            # the rows never serialize the line items.
-            "lines__adjustment_lines",
-            "payments",
-            "applied_discounts",
-            "exchanges__replacement_order",
-            "exchanges__created_by",
-        )
+        # re-fetches those on open. `with_list_serializer_relations` is the one
+        # definition of what those rows read (a LIGHT `lines` prefetch, dropping
+        # the heavy per-line variant/option trees that were the payload bulk);
+        # the register-session strip serializes the same rows and shares it.
+        return queryset.prefetch_related(None).with_list_serializer_relations()
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -664,15 +655,13 @@ class RegisterSessionViewSet(
     def orders(self, request, pk=None):
         session = self.get_object()
         # The strip renders row summaries + a line count + a returnable flag, not
-        # the line items. Prefetch the lines (with their adjustment_lines) so the
-        # count, totals/profit AND the returnable flag all read from cache — the
-        # flag's returnable_quantity otherwise fired an adjustment-line query per
-        # line (the endpoint's N+1) — then serialize the trimmed
-        # OrderSessionSerializer instead of the full line items.
-        orders = (
-            session.orders.select_related("customer", "register_session")
-            .prefetch_related("lines__adjustment_lines", "payments")
-            .order_by("-created_at")
+        # the line items, so it serializes the trimmed OrderSessionSerializer.
+        # That is `OrderListSerializer` plus one flag, so it reads exactly what
+        # the invoices list reads and takes the same shared prefetch shape — a
+        # hand-rolled subset here cost `applied_discounts` and `exchanges` (and
+        # the `sales_channel` FK) once per order in the page.
+        orders = session.orders.with_list_serializer_relations().order_by(
+            "-created_at"
         )
         customer_id = request.query_params.get("customer")
         if customer_id:
