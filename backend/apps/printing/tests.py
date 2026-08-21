@@ -35,6 +35,7 @@ from .services import (
     build_kitchen_ticket_payload,
     claim_next_print_job,
     enqueue_kitchen_print_jobs,
+    enqueue_manual_receipt_reprint,
     enqueue_receipt_print_job,
     kitchen_prepared_lines,
     publish_template_version,
@@ -802,6 +803,93 @@ class PrintingPermissionTests(PrintingTestMixin, TestCase):
         self.assertTrue(self.cashier.has_perm("printing.change_printjob"))
         self.assertFalse(self.cashier.has_perm("printing.add_printtemplate"))
         self.assertTrue(self.manager.has_perm("printing.add_printtemplate"))
+
+
+class PrintJobVisibilityTests(PrintingTestMixin, TestCase):
+    """A queued print job carries the whole rendered receipt — line items,
+    totals, applied discounts, the public-invoice link and the owning session.
+    Reading it must therefore be no wider than reading the sale itself, which
+    ``OrderViewSet.get_queryset`` limits to the cashier's own register session
+    unless they hold shop-wide visibility."""
+
+    def setUp(self):
+        super().setUp()
+        User = get_user_model()
+        self.other_cashier = User.objects.create_user(
+            username="printing-other-cashier",
+            password="pass",
+        )
+        self.other_cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        self.other_cashier_client = APIClient()
+        self.other_cashier_client.force_authenticate(user=self.other_cashier)
+
+    def _job_for_another_cashiers_sale(self):
+        order = self.create_paid_sale_order()
+        return order, enqueue_manual_receipt_reprint(order, user=self.cashier)
+
+    def test_another_cashiers_receipt_job_is_not_listed(self):
+        _, job = self._job_for_another_cashiers_sale()
+
+        response = self.other_cashier_client.get(reverse("printjob-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn(job.pk, [row["id"] for row in response.data["results"]])
+
+    def test_another_cashiers_receipt_job_cannot_be_retrieved(self):
+        _, job = self._job_for_another_cashiers_sale()
+
+        response = self.other_cashier_client.get(
+            reverse("printjob-detail", args=[job.pk])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_another_cashiers_receipt_job_events_are_not_readable(self):
+        _, job = self._job_for_another_cashiers_sale()
+
+        response = self.other_cashier_client.get(
+            reverse("printjob-events", args=[job.pk])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_owning_cashier_still_reads_their_own_receipt_job(self):
+        _, job = self._job_for_another_cashiers_sale()
+
+        response = self.cashier_client.get(reverse("printjob-detail", args=[job.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["payload"]["order"]["id"], job.order_id)
+
+    def test_shop_wide_visibility_still_reads_every_receipt_job(self):
+        _, job = self._job_for_another_cashiers_sale()
+
+        response = self.manager_client.get(reverse("printjob-detail", args=[job.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_order_less_jobs_stay_visible_to_any_print_operator(self):
+        job = self.create_job()
+
+        response = self.other_cashier_client.get(
+            reverse("printjob-detail", args=[job.pk])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_agent_lifecycle_still_spans_the_whole_shop_queue(self):
+        """A shared receipt printer is driven by one agent, whichever till rang
+        the sale — claiming and requeueing stay shop-wide on purpose."""
+        _, job = self._job_for_another_cashiers_sale()
+        agent = PrintAgent.objects.create(name="Shared", identifier="shared-agent")
+
+        response = self.other_cashier_client.post(
+            reverse("printjob-claim", args=[job.pk]),
+            {"agent": agent.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
 class KitchenTicketServiceTests(TestCase):
