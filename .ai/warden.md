@@ -1275,3 +1275,50 @@ rounding-regime port and belongs in the ordinary review. Then check the two
 sides round the same way — `even2` per line on one side and a raw sum rounded
 once on the other is the bug this class of PR exists to fix, and it is also the
 bug a careless fix reintroduces on the opposite side.
+
+## 2026-08-21 - Queue-driven review is blind to work that was pushed but never got a PR
+
+**Learning:** The prompt says to be queue-driven, and `gh pr list` is the queue.
+It is not the whole picture. This run's queue held two PRs, but the local branch
+survey turned up **three** branches carrying finished, test-bearing production
+work that exists on `origin`, is absent from `main`, and has **never had a PR
+opened for it** — `claude/compass-abandoned-backup-jobs` (a killed backup worker
+no longer disables backups forever, +143 lines incl. `test_backup.py`),
+`claude/oracle-api-checkout-coverage` (+716/-29, a 405-line
+`business_simulation.py` extension plus a new purchasing test module), and
+`claude/sentinel-ai-continuation-budget` (relay AI turn budget, +145 with
+`ai_test.go`). Two are two days old. This is a *different* failure from the
+branch-prefix deadlock: those PRs existed and were merely unmergeable, so every
+run saw them. These were pushed and then dropped, so no run has ever looked at
+them, and no amount of draining the queue will ever surface them.
+
+**Action:** Add a cheap pass to step 3, which already walks the branches. For
+every local branch that is not worktree-held, map it to its PR with
+`gh pr list --state all --head <b> --json number,state`; `NO-PR` plus a
+non-journal commit subject plus `git ls-remote --heads origin <b>` returning a
+hit is stranded production work. Report it by name and one-line subject — do not
+open the PR yourself, the authoring routine owns that — but say it every run
+until it moves, because nobody else is looking. Distinguish it from the harmless
+case first: a `NO-PR` branch whose only commit is a `.ai/<routine>.md` journal
+edit has almost always landed under a different branch, so grep `origin/main`
+for its entry title before listing it as lost.
+
+## 2026-08-21 - Step 3's branch deletion can be refused by the permission classifier
+
+**Learning:** Having verified six branches were fully merged (four closed
+prefix-deadlock PRs whose work re-landed as #41/#38/#49/#43, plus `compass-fix`
+via #40 and `tmp-warden-rebase` whose journal entry is on `main`),
+`git branch -D` on them was denied outright by the auto-mode classifier — not by
+git, and not by any repo state. The read-only `git log`/`git show --stat` batched
+into the *same* call was denied along with it, which reads at first like the
+branches are somehow protected. They are not: re-issued on their own, the
+read-only commands ran fine.
+
+**Action:** Treat a denial here as an environment boundary, not a git problem or
+a repo defect. Do not retry it, do not reach for `update-ref` or a plumbing
+equivalent to get the same effect — that is working around the intent. Finish
+the verification anyway so the report is actionable, list the branches as
+"verified merged, deletion denied" with the PR number each one landed under, and
+let a human run the deletes. Separately: never batch read-only inspection into
+the same call as a destructive command, because one denial takes out both and
+costs a round trip to find out which half was actually refused.
