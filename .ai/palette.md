@@ -879,3 +879,22 @@ with a primary retry (replacing the list, so the misleading empty copy never
 renders); a *non-empty* list keeps its rows and gets an inline banner with its own
 retry. Grep shape for the next audit: a `catch` that writes `hasMore = false`
 alongside an error flag, in a widget whose reload is reachable only from scroll.
+
+## 2026-08-21 - An error flag cleared only on the reset path leaks onto the retry that succeeds
+
+**Learning:** In the same picker, `_hasError` was cleared **only** in the
+`reset: true` branch of `_load` — never in the success `setState`. That is
+invisible while the sole reload is a full restart, but the moment you add a
+mid-list retry (`reset: false`) the page loads, the rows append, and the red
+failure line plus its own retry button stay on screen above them. The change
+that fixed "empty and failed are the same screen" re-created it one screen over
+as "loaded and failed are the same screen". Warden caught it because the
+next-page branch was the untested half — and the untested half is the half that
+broke.
+
+**Action:** Clear the error flag where the data *arrives* (the success
+`setState`), not where a load *starts*, so every path that can succeed clears it.
+When a UX fix has two branches (empty list vs. populated list, first page vs.
+next page), write a widget test for **each** — asserting not just that the retry
+loads, but that the failure copy is gone afterwards. Stating the untested branch
+as fact in the PR body is what let it through.

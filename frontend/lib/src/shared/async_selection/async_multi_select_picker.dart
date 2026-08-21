@@ -335,6 +335,11 @@ class _AsyncMultiSelectPickerSheetState<T extends Object>
         _options = reset ? page.options : [..._options, ...page.options];
         _hasMore = page.hasMore;
         _nextPage += 1;
+        // A page that just arrived clears the previous failure, whichever
+        // path asked for it: without this a successful mid-list retry
+        // appends its rows while the red failure line stays above them,
+        // so the screen reports a failure and its result at once.
+        _hasError = false;
         _isLoading = false;
         _isLoadingMore = false;
       });
