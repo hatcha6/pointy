@@ -934,6 +934,8 @@ class Simulation:
         # found it.
         self.undone_orders_reconciled = 0
         self.rounding_sensitive_undone_orders = 0
+        self.ranking_rows_reconciled = 0
+        self.returned_ranking_rows = 0
 
     # -- helpers ----------------------------------------------------------
 
@@ -3024,6 +3026,7 @@ class Simulation:
             self._assert_ledger(item.variant_id)
         self.reconcile_summaries()
         self.reconcile_reports()
+        self.reconcile_product_rankings()
         self.reconcile_identities()
         return executed
 
@@ -3578,6 +3581,18 @@ class Simulation:
             sum(1 for rec in txn if rec.status == Order.Status.VOID),
             "report voided_order_count",
         )
+        # Units the shop actually sold. Stated gross this sat next to a
+        # ``net_sales`` of 0.00 on the very same summary after a sale was
+        # voided: nothing sold, five items sold.
+        self.assert_qty(
+            summary["items_sold"],
+            sum((line.quantity for rec in txn for line in rec.lines), ZERO)
+            - sum(
+                (Decimal(qty) for refund in self.oracle.refunds for _, qty, _ in refund.lines),
+                ZERO,
+            ),
+            "report items_sold",
+        )
         # The second implementation of the same question, on its own endpoint.
         profit_costs = self._report_summary("profit_costs")
         self.assert_money(
@@ -3638,10 +3653,200 @@ class Simulation:
                 # implementation and proves nothing.
                 self.rounding_sensitive_undone_orders += 1
 
+    def reconcile_product_rankings(self):
+        """What the shop reorders, ranked — and it must be what the shop kept.
+
+        ``reconcile_reports`` proved the shop-wide P&L, but the same order lines
+        are also rolled up per product and per variant into six rankings on the
+        dashboard and one section of the sales report, and those rollups looked
+        only at what was rung up. A sale that was voided, and goods that were
+        handed back, still counted in full: a wholly voided sale ranked as the
+        shop's best seller directly beneath a ``net_sales`` of 0.00.
+
+        Every expectation here is built from the oracle's own records — the
+        per-line price, quantity, discount and cost it derived when each sale
+        was rung up, and the quantities and refund discounts it computed for
+        each return. Nothing is read back from an order line, an adjustment
+        line or the other endpoint to decide what to expect, and the report and
+        the dashboard are never compared to each other: they are two
+        implementations of one answer, and two implementations agreeing says
+        nothing about either being right.
+
+        Borrowed from production, deliberately: the *scope* (which orders count
+        as transactional, and that the netting is against the same period's own
+        refund documents) and the *ordering rule* (value descending, ties by
+        name). Both are definitions, not answers.
+        """
+        txn = [
+            rec
+            for rec in self.oracle.orders.values()
+            if rec.sale_type != Order.SaleType.QUOTATION
+            and (
+                rec.status in (Order.Status.PAID, Order.Status.VOID)
+                or (
+                    rec.sale_type == Order.SaleType.CREDIT
+                    and rec.status == Order.Status.OPEN
+                )
+            )
+        ]
+        product_of = {item.variant_id: item.product_id for item in self.items}
+        name_of = {
+            item.product_id: item.variant.product.name for item in self.items
+        }
+        variant_name_of = {item.variant_id: item.variant.name for item in self.items}
+
+        def blank():
+            return {"quantity": ZERO, "revenue": ZERO, "profit": ZERO, "returned": False}
+
+        by_product = defaultdict(blank)
+        by_variant = defaultdict(blank)
+        # The sold side: raw per-line products, summed. Rounded once at the very
+        # end, which is the convention the cost figures already share — so a
+        # line handed back in full cancels its own sale term for term instead of
+        # leaving a rounding residue behind on the ranking.
+        for rec in txn:
+            for line in rec.lines:
+                revenue = line.unit_price * line.quantity - line.discount_total
+                profit = (
+                    line.quantity * (line.unit_price - line.unit_cost)
+                    - line.discount_total
+                )
+                for bucket in (
+                    by_product[product_of[line.variant_id]],
+                    by_variant[line.variant_id],
+                ):
+                    bucket["quantity"] += line.quantity
+                    bucket["revenue"] += revenue
+                    bucket["profit"] += profit
+        # ...and the returned side, stated the same way over the quantities and
+        # refund discounts the oracle itself asked each return document for.
+        for refund in self.oracle.refunds:
+            for line, qty, refund_discount in refund.lines:
+                qty = Decimal(qty)
+                revenue = line.unit_price * qty - refund_discount
+                profit = qty * (line.unit_price - line.unit_cost) - refund_discount
+                for bucket in (
+                    by_product[product_of[line.variant_id]],
+                    by_variant[line.variant_id],
+                ):
+                    bucket["quantity"] -= qty
+                    bucket["revenue"] -= revenue
+                    bucket["profit"] -= profit
+                    bucket["returned"] = True
+
+        product_rows = [
+            {
+                "name": name_of[product_id],
+                "sort_name": name_of[product_id],
+                **bucket,
+            }
+            for product_id, bucket in by_product.items()
+        ]
+        variant_rows = [
+            {
+                "name": (
+                    f"{name_of[product_of[variant_id]]} - {variant_name_of[variant_id]}"
+                    if (variant_name_of[variant_id] or "").strip()
+                    else name_of[product_of[variant_id]]
+                ),
+                "sort_name": (
+                    name_of[product_of[variant_id]],
+                    variant_name_of[variant_id] or "",
+                ),
+                **bucket,
+            }
+            for variant_id, bucket in by_variant.items()
+        ]
+
+        report_rows = self._report_section("sales_summary", "top_products")
+        self._assert_ranking(
+            report_rows, product_rows, order_by="revenue", limit=24,
+            what="report top_products",
+        )
+        # The dashboard is a second, independently written implementation of the
+        # same six rankings, so it is checked against the oracle too — never
+        # against the report.
+        reports = self._dashboard_sales_reports()
+        for grain, rows in (("products", product_rows), ("variants", variant_rows)):
+            for key, order_by in (
+                ("top_sold", "quantity"),
+                ("revenue", "revenue"),
+                ("profit", "profit"),
+            ):
+                self._assert_ranking(
+                    reports[grain][key], rows, order_by=order_by, limit=24,
+                    what=f"dashboard {grain}.{key}",
+                )
+
+    def _assert_ranking(self, actual, expected_rows, *, order_by, limit, what):
+        """Compare one ranking, row for row, against the oracle's own rows.
+
+        Both the *selection* and the *order* are checked, not just the figures:
+        the defect this exists to catch is a product that should have dropped
+        down the ranking (or off it) once what came back was taken off, and a
+        figures-only check on whatever rows the backend chose to return would
+        never see it.
+        """
+        # Ranked on the figure the row displays, like the backend: ordering on
+        # the raw sums would let a difference far below a cent decide which of
+        # two rows showing the same money comes first.
+        quantize = q3 if order_by == "quantity" else even2
+        ranked = sorted(
+            expected_rows,
+            key=lambda row: (-quantize(row[order_by]), row["sort_name"]),
+        )[:limit]
+        self.assert_equal(
+            [row["product_name"] for row in actual],
+            [row["name"] for row in ranked],
+            f"{what}: ranking",
+        )
+        for actual_row, expected in zip(actual, ranked):
+            name = expected["name"]
+            self.assert_qty(
+                actual_row["quantity"], expected["quantity"], f"{what}: {name} units"
+            )
+            self.assert_money(
+                actual_row["revenue"], expected["revenue"], f"{what}: {name} revenue"
+            )
+            self.assert_money(
+                actual_row["profit"], expected["profit"], f"{what}: {name} profit"
+            )
+            self.ranking_rows_reconciled += 1
+            if expected["returned"]:
+                # Without a row something actually came back from, gross and net
+                # are the same number and the assertion holds under the
+                # implementation this exists to catch.
+                self.returned_ranking_rows += 1
+
+    def _report_section(self, report_type: str, key: str) -> list:
+        payload = self._report_payload(report_type)
+        for section in payload["sections"]:
+            if section.get("key") == key:
+                return section["rows"]
+        self.fail(f"report {report_type} has no {key} section")
+
+    def _dashboard_sales_reports(self) -> dict:
+        """The dashboard's own six rankings, through its own endpoint.
+
+        Sections are cached for 30s under a key that names neither the database
+        nor the test, so a sibling simulation run in the same process would
+        otherwise be served this one's payload.
+        """
+        from django.core.cache import cache
+
+        cache.clear()
+        response = self.client.get("/api/dashboard/", {"sections": "sales"})
+        if response.status_code != 200:
+            self.fail(f"dashboard failed: {response.status_code} {response.data}")
+        return response.data["sections"]["sales"]["reports"]
+
     def _report_summary(self, report_type: str) -> dict:
-        """Run a production report through its own endpoint and hand back the
-        summary block. Deliberately the API and not the service function: the
-        report a shop reads is the one that came through here."""
+        return self._report_payload(report_type)["summary"]
+
+    def _report_payload(self, report_type: str) -> dict:
+        """Run a production report through its own endpoint and hand back its
+        payload. Deliberately the API and not the service function: the report a
+        shop reads is the one that came through here."""
         today = timezone.localdate()
         response = self.client.post(
             "/api/reports/",
@@ -3659,7 +3864,7 @@ class Simulation:
             self.fail(
                 f"report {report_type} failed: {response.status_code} {response.data}"
             )
-        return response.data["payload"]["summary"]
+        return response.data["payload"]
 
     def reconcile_identities(self):
         """Global conservation identities that must hold across the whole run."""

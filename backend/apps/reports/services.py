@@ -35,6 +35,9 @@ from apps.sales.models import (
     RegisterSession,
     SOLD_COST_EXPRESSION,
     gross_profit_total,
+    net_product_rollups,
+    rank_rollups,
+    returned_items_total,
 )
 
 from .models import ReportRun
@@ -301,12 +304,15 @@ def _sales_summary_report(user, period):
         ),
     )
     line_values = OrderLine.objects.filter(order__in=orders).aggregate(
-        items_sold=Coalesce(Sum("quantity"), ZERO_QTY),
+        items_rung_up=Coalesce(Sum("quantity"), ZERO_QTY),
         sold_cost=Coalesce(
             Sum(SOLD_COST_EXPRESSION, output_field=MONEY_FIELD),
             Value(Decimal("0.00")),
             output_field=MONEY_FIELD,
         ),
+    )
+    items_sold = (line_values["items_rung_up"] or Decimal("0")) - returned_items_total(
+        adjustments
     )
     net_sales = order_values["order_total"] - adjustment_values["refund_total"]
     # Revenue comes from the same ``Sum(Order.total)`` ``net_sales`` is built
@@ -318,7 +324,7 @@ def _sales_summary_report(user, period):
         refund_total=adjustment_values["refund_total"],
         adjustments=adjustments,
     )
-    top_products = _product_sales_rows(orders)
+    top_products = _product_sales_rows(orders, adjustments)
     recent_orders = _bounded_queryset(
         orders.order_by("-created_at"),
         limit=_section_row_limit("recent_orders"),
@@ -334,7 +340,7 @@ def _sales_summary_report(user, period):
             "paid_order_count": order_values["paid_order_count"],
             "voided_order_count": order_values["voided_order_count"],
             "return_count": adjustment_values["return_count"],
-            "items_sold": line_values["items_sold"] or 0,
+            "items_sold": items_sold,
         },
         "sections": [
             _metric_section(
@@ -348,7 +354,7 @@ def _sales_summary_report(user, period):
                     ("paid_order_count", order_values["paid_order_count"]),
                     ("voided_order_count", order_values["voided_order_count"]),
                     ("return_count", adjustment_values["return_count"]),
-                    ("items_sold", line_values["items_sold"] or 0),
+                    ("items_sold", items_sold),
                 ]
             ),
             _report_section(
@@ -1271,45 +1277,28 @@ def _payload_audit(payload):
     }
 
 
-def _product_sales_rows(orders):
-    revenue_expr = F("quantity") * F("unit_price") - F("discount_total")
-    profit_expr = F("quantity") * (F("unit_price") - F("unit_cost")) - F(
-        "discount_total"
-    )
-    row_values = (
-        OrderLine.objects.filter(order__in=orders)
-        .values("variant__product__name")
-        .annotate(
-            units_sold=Coalesce(Sum("quantity"), ZERO_QTY),
-            revenue=Coalesce(
-                Sum(revenue_expr, output_field=MONEY_FIELD),
-                Value(Decimal("0.00")),
-                output_field=MONEY_FIELD,
-            ),
-            profit=Coalesce(
-                Sum(profit_expr, output_field=MONEY_FIELD),
-                Value(Decimal("0.00")),
-                output_field=MONEY_FIELD,
-            ),
-        )
-        .order_by("-revenue", "variant__product__name")
-    )
-    bounded_rows = _bounded_queryset(
-        row_values,
-        limit=_section_row_limit("top_products"),
-    )
+def _product_sales_rows(orders, adjustments):
+    """Top products by revenue, net of everything handed back over the period.
+
+    Stated gross this ranked a wholly voided sale as the shop's best seller —
+    the row sat directly under a ``net_sales`` of 0.00 in the same report. The
+    netting, the ordering and the tie-break live in ``net_line_rollups`` and
+    ``rank_rollups`` so this section and the dashboard's cannot drift apart.
+    """
+    limit = _section_row_limit("top_products")
+    rows = net_product_rollups(orders, adjustments)
     return BoundedRows(
         rows=[
             {
-                "product_name": row["variant__product__name"],
-                "quantity": row["units_sold"],
+                "product_name": row["product_name"],
+                "quantity": row["quantity"],
                 "revenue": _money(row["revenue"]),
                 "profit": _money(row["profit"]),
             }
-            for row in bounded_rows.rows
+            for row in rank_rollups(rows, order_by="-revenue", limit=limit)
         ],
-        total_count=bounded_rows.total_count,
-        limit=bounded_rows.limit,
+        total_count=len(rows),
+        limit=limit,
     )
 
 
