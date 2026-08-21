@@ -8160,7 +8160,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get registerSessionLoadError =>
-      'تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.';
+      'تعذر الاتصال بجلسة الدرج، فلا نعرف إن كانت هناك جلسة مفتوحة. أعد المحاولة قبل بدء جلسة جديدة، تفاديا لفتح جلستين.';
 
   @override
   String get openingCashInputLabel => 'نقدية الافتتاح';

@@ -14228,7 +14228,7 @@ abstract class AppLocalizations {
   /// No description provided for @registerSessionLoadError.
   ///
   /// In ar, this message translates to:
-  /// **'تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.'**
+  /// **'تعذر الاتصال بجلسة الدرج، فلا نعرف إن كانت هناك جلسة مفتوحة. أعد المحاولة قبل بدء جلسة جديدة، تفاديا لفتح جلستين.'**
   String get registerSessionLoadError;
 
   /// No description provided for @openingCashInputLabel.

@@ -4903,7 +4903,7 @@
   "registerSessionGateTitle": "جلسة الدرج",
   "checkingRegisterSession": "جار فحص جلسة الدرج...",
   "noOpenRegisterSession": "لا توجد جلسة درج مفتوحة. ابدأ جلسة جديدة قبل البيع.",
-  "registerSessionLoadError": "تعذر الاتصال بجلسة الدرج. حاول مرة أخرى.",
+  "registerSessionLoadError": "تعذر الاتصال بجلسة الدرج، فلا نعرف إن كانت هناك جلسة مفتوحة. أعد المحاولة قبل بدء جلسة جديدة، تفاديا لفتح جلستين.",
   "openingCashInputLabel": "نقدية الافتتاح",
   "moneyAmountHint": "0.00",
   "openingCashRequiredError": "أدخل نقدية الافتتاح قبل بدء الجلسة.",
