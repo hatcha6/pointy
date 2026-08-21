@@ -55,12 +55,21 @@ class CatalogListQueryScalingTests(TestCase):
             code="scalingbox",
             defaults={"name": "box"},
         )[0]
+        # Every product's category is a SUBcategory. category_details renders
+        # parent_name from parent.name, so a bare "categories" prefetch costs a
+        # query per (product x category) pair -- but only in a shop that nests
+        # its categories. A flat fixture makes that N+1 test-invisible, which is
+        # exactly how it survived on the hottest read path in the app.
+        self.root_category = ProductCategory.objects.create(name="scaling-root")
 
     def _add_products(self, count):
         for _ in range(count):
             self._seq += 1
             i = self._seq
-            category = ProductCategory.objects.create(name=f"cat{i}")
+            category = ProductCategory.objects.create(
+                name=f"cat{i}",
+                parent=self.root_category,
+            )
             group = ModifierGroup.objects.create(name=f"grp{i}")
             ModifierOption.objects.create(
                 group=group, name=f"opt{i}", price_delta=Decimal("1")

@@ -77,6 +77,7 @@ from .serializers import (
 )
 from .search_filters import CatalogRelevanceFilter, VariantRelevanceFilter
 from .services import (
+    category_detail_prefetch,
     category_ids_with_descendants,
     image_attachment_prefetch,
     unit_detail_prefetch,
@@ -253,7 +254,7 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     }
     queryset = Product.objects.prefetch_related(
         image_attachment_prefetch("attachments"),
-        "categories",
+        category_detail_prefetch("categories"),
         unit_detail_prefetch("units__unit"),
         "units__barcodes",
         "variants",

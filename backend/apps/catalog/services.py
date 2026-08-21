@@ -46,6 +46,22 @@ def image_attachment_prefetch(lookup):
     )
 
 
+def category_detail_prefetch(lookup):
+    """Prefetch ``category_details`` with the parent its ``parent_name`` reads.
+
+    ``ProductCategorySerializer`` renders ``parent_name`` from ``parent.name``,
+    so a bare string prefetch costs one query per *sub*category on the page —
+    invisible in a shop whose categories are all top level, and one query per
+    (product x category) pair in a shop that nests them. ``ProductCategoryViewSet``
+    select_relates the parent for its own list; this is the same rule for every
+    payload that embeds the serializer.
+    """
+    return Prefetch(
+        lookup,
+        queryset=ProductCategory.objects.select_related("parent"),
+    )
+
+
 def variant_detail_queryset():
     """Every relation ``ProductVariantSerializer`` reads, in one queryset.
 
@@ -72,10 +88,7 @@ def variant_detail_queryset():
         # product_detail (ProductCatalogSummarySerializer) serializes the parent
         # product's categories, variant options and modifier groups; prefetch
         # those chains so each doesn't fire once per variant.
-        Prefetch(
-            "product__categories",
-            queryset=ProductCategory.objects.select_related("parent"),
-        ),
+        category_detail_prefetch("product__categories"),
         "product__variant_options__values",
         "product__modifier_group_links__group__options",
     )
