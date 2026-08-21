@@ -447,3 +447,94 @@ at op#220 — *only* op#220, because a refund of a line bought by the carton is
 rare enough that `multi_unit_costed_refund_assertions` was 2 in a 300-op run.
 That guard is not decorative; without it the pack↔base crossing in the reversal
 is untested most of the time.
+
+## 2026-08-21 - A defensive clamp is a question, not an answer
+
+**Learning:** `Order.recalculate` clamps `discount_total = min(sum of line
+discounts, subtotal)`. A previous run of this routine read that clamp, mirrored
+it into `_assert_order_lines` ("without it an over-discounted order would be
+reported as a defect the backend does not have"), and made the `sum(line_total)
+== order.total` identity *conditional* on the clamp not firing. That reasoning
+is exactly backwards, and it cost this defect several clean 3500-op sweeps. The
+question to ask about a clamp is **what state reaches it** — and here nothing
+legitimate does: the engine already caps every allocation at that line's own
+subtotal (`remaining_by_line`, initialised to `DiscountLineInput.subtotal`), so
+`sum(d) > sum(s)` is unreachable *except* through the rounding-regime gap between
+the engine's `up2` subtotal and the order line's `even2` one. The clamp was not
+describing a legitimate state; it was silently absorbing a bug, and mirroring it
+taught the oracle to absorb it too.
+
+**Action:** when a backend figure is clamped, min'd, `max(..., 0)`'d or
+`or Decimal("0.00")`'d, do not port the guard into the oracle until you have
+constructed the input that trips it. If you cannot, the guard is dead defensive
+code and the oracle should **assert it never fires** — that assertion is worth
+more than the mirrored clamp, because it fails the moment something starts
+reaching it. `_assert_order_lines` now does exactly that, and identity 3 is
+unconditional again. Other guards in this codebase that deserve the same
+treatment: `adjustment_amount`'s `amount <= 0` refusal (reachable — see below),
+`clamp_discount_amount`, and `max(remaining_discount, 0)` in
+`line_refund_discount`.
+
+**Also — a real product gap this surfaced, deliberately not fixed here.**
+`adjustment_amount` raises on a non-positive refund. A return whose lines are
+all fully discounted is worth exactly 0.00, so it is refused: the customer
+cannot hand the goods back and the stock never returns to the shelf. That is a
+product decision rather than an arithmetic error, so the simulation now avoids
+generating it (`_refund_gross`) instead of the routine changing it unilaterally.
+It is worth a human's ruling.
+
+## 2026-08-21 - The engine's per-line allocation is engine-domain too
+
+**Learning:** The 2026-08-19 entry on the two rounding regimes caught
+`discount_result.total` being used as the amount to tender, and
+`expected_order_totals` was written as the boundary where sales-domain figures
+get recomputed. But that function only refused the engine's *total* — it went on
+to sum the engine's raw `allocation.amount` values, which are just as much
+engine-domain (each is capped against `up2(unit x qty)`). So the crossing was
+half-closed, and the open half cost a cent in two places at once on any line the
+discounts consumed entirely whose gross lands on a half-cent (0.750 kg at 5.50 ->
+engine 4.13, line 4.12): **the line** stored 4.13 against a 4.12 subtotal and
+settled at `line_total = -0.01`, and **the document** took the same 4.13 off the
+cart, so 6.00 of other goods next to the free item rang up at 5.99. The order's
+own three totals were self-consistent throughout — `recalculate` clamped the
+document — which is why every total-shaped assertion passed.
+
+**Action:** a regime boundary is not closed by fixing the one number that
+crossed it. Enumerate *every* value that leaves the source domain and ask which
+regime the destination needs it in. For the discount engine the exports are
+`.total`, `.subtotal`, `.discount_total`, `application.amount` and
+`allocation.amount`; the sales side now recomputes the last of these in
+`order_line_discounts`, and `expected_order_totals` sums that rather than the
+raw allocations, so the preview, the tender check and `Order.recalculate` all
+reach the same number from the same helper. Note `checkout_loss_lines` had been
+capping per line all along — when one consumer of a shared figure already
+defends itself against it, that defence is evidence about the figure, not a
+quirk of that consumer. Still publishing engine-domain figures unaudited:
+`apps/price_checker/pricing.py` (`final_price = result.total`, where a unit
+barcode with a fractional `factor_to_base` can make `unit_amount` finer than
+2dp) and the preview's per-application `allocations` payload, which the cashier
+sees per cart line and which still carries the uncapped figure.
+
+## 2026-08-21 - `git stash` in a worktree is not yours
+
+**Learning:** The worktrees under `.claude/worktrees/` share one `.git`, and the
+stash is a **repository-level** stack, not a per-worktree one. A bare `git stash
+pop` here popped another routine's in-progress `apps/employees/models.py` work
+into this tree and left it conflicted. Nothing was lost only because the pop
+conflicted, so git kept the entry — a clean pop would have silently *consumed*
+another agent's stash and there would have been no way to tell whose it was.
+
+**Action:** never `git stash` in a worktree. To compare behaviour against
+`main` — the common reason to reach for it, e.g. "does this seed fail before my
+change too?" — copy the files aside, `git checkout HEAD -- <files>`, run, and
+copy them back. If a pop has already happened, do **not** drop the entry:
+`git checkout -f HEAD -- <conflicted paths>` restores your tree and leaves
+`stash@{0}` on the stack for its owner.
+
+**Also — two pre-existing vacuity guards are seed-flaky at CI scale.**
+`mixed_unit_retail_landed_orders` and `over_received_return_assertions` each
+fail on roughly 1 seed in 12 at the default 300 operations (measured on `main`,
+not caused by this change — the default seed passes, so CI is green). Any change
+that shifts the RNG stream re-rolls them, which reads like a regression and is
+not one. Worth forcing their shapes the way `op_purchase_submit` already forces
+the 11-line order, rather than leaving them to chance.

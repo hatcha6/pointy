@@ -102,7 +102,7 @@ def create_order_with_lines(
             customer=customer,
             coupon_codes=coupon_codes,
         )
-    discount_by_line_key = discount_allocations_by_line_key(discount_result)
+    discount_by_line_key = order_line_discounts(lines_data, discount_result)
 
     # Snapshot the special day(s) active right now (shop-local) onto the sale so
     # forecasting has a stable per-sale signal. Defensive by contract: a holidays
@@ -245,6 +245,60 @@ def discount_allocations_by_line_key(discount_result):
     return allocations
 
 
+def order_line_subtotals(lines_data):
+    """The subtotal each line's ``OrderLine`` will store, keyed by line key.
+
+    Price and quantity are quantized to the line's own field precision first:
+    ``Order.recalculate`` reads the persisted line back, so anything finer than
+    the column holds is already gone by the time it sums. Shared by
+    ``expected_order_totals`` and ``order_line_discounts`` so the amount a line
+    can carry and the amount the document charges can never drift apart.
+    """
+    subtotals = {}
+    for line_data in lines_data:
+        unit_price = money(
+            line_data.get("effective_unit_price", line_data["variant"].unit_price)
+        )
+        quantity = Decimal(line_data["quantity"]).quantize(QUANTITY_PLACES)
+        key = checkout_line_key(line_data)
+        subtotals[key] = money(
+            subtotals.get(key, Decimal("0.00")) + money(unit_price * quantity)
+        )
+    return subtotals
+
+
+def order_line_discounts(lines_data, discount_result):
+    """Per-line discounts **in the order's own rounding regime**, by line key.
+
+    The discount engine allocates in its regime — 2dp HALF_UP — and caps each
+    line at *its* subtotal (``DiscountLineInput.subtotal``). An order line
+    stores the sales regime, 2dp HALF_EVEN (``OrderLine.line_subtotal``). On a
+    line whose gross lands exactly on a half-cent the two disagree by a cent:
+    0.750 kg at 5.50 is 4.125, which the engine calls 4.13 and the line calls
+    4.12. So an allocation that consumed the whole engine line — a free item, a
+    fixed-amount coupon bigger than the cart, a 100% rule, the free unit of a
+    buy-X-get-Y — is a cent more than the line can carry.
+
+    Cap each line at the subtotal it will actually store. This is the same move
+    ``expected_order_totals`` makes for the document and for the same documented
+    reason: the engine decides discount *amounts*, it does not get to decide
+    what a line — or the order — is worth. ``checkout_loss_lines`` already
+    capped this way when deciding whether a line sells below cost.
+
+    Two things were wrong before the cap, one on each side of the ledger. The
+    line settled at ``line_total = -0.01``, which is not a display bug: the
+    returns desk credits ``line_total`` for a whole-line return and
+    ``adjustment_amount`` refuses a non-positive refund, so those goods could
+    not be handed back at all. And the uncapped cent reached the document too,
+    so a cart holding the free item plus 6.00 of other goods charged 5.99.
+    """
+    allocated = discount_allocations_by_line_key(discount_result)
+    return {
+        key: min(allocated.get(key, Decimal("0.00")), subtotal)
+        for key, subtotal in order_line_subtotals(lines_data).items()
+    }
+
+
 def expected_order_totals(lines_data, discount_result):
     """``(subtotal, discount_total, total)`` the order for ``lines_data`` will store.
 
@@ -268,23 +322,27 @@ def expected_order_totals(lines_data, discount_result):
     So: anything that decides what the customer pays, or shows them what they
     are about to pay, computes it here, in the order's own regime. The engine
     keeps deciding discount *amounts*; it does not get to decide the total.
+
+    That applies to the engine's per-line ``allocation.amount`` as much as to
+    its ``.total``, which is why the discounts summed here come from
+    ``order_line_discounts`` — each capped at what its own line is worth in this
+    regime — rather than from the raw allocations. Summing the same figures the
+    lines will store is also what keeps this function, ``Order.recalculate`` and
+    the POS preview on one answer.
     """
-    discount_by_key = discount_allocations_by_line_key(discount_result)
-    subtotal = Decimal("0.00")
-    discount_total = Decimal("0.00")
-    for line_data in lines_data:
-        # Quantize price and quantity to the line's own field precision first:
-        # Order.recalculate reads the persisted line back, so anything finer
-        # than the column holds is already gone by the time it sums.
-        unit_price = money(
-            line_data.get("effective_unit_price", line_data["variant"].unit_price)
-        )
-        quantity = Decimal(line_data["quantity"]).quantize(QUANTITY_PLACES)
-        subtotal += money(unit_price * quantity)
-        discount_total += discount_by_key.get(
-            checkout_line_key(line_data), Decimal("0.00")
-        )
-    subtotal = money(subtotal)
+    subtotal = money(
+        sum(order_line_subtotals(lines_data).values(), Decimal("0.00"))
+    )
+    # The per-line discounts each line can actually carry (order_line_discounts),
+    # not the engine's raw allocations: an allocation a cent larger than its own
+    # line took that cent off the order too, so a cart of 6.00 of goods plus a
+    # free half-cent item charged 5.99. Summing the capped figures also makes
+    # this the same number Order.recalculate reaches from the stored lines, so
+    # the preview, the tender check and the saved order cannot disagree.
+    discount_total = sum(
+        order_line_discounts(lines_data, discount_result).values(),
+        Decimal("0.00"),
+    )
     discount_total = min(money(discount_total), subtotal)
     return subtotal, discount_total, money(subtotal - discount_total)
 
@@ -1263,12 +1321,20 @@ def line_refund_discount(line, quantity):
 
     remaining_discount = money(line.discount_total - line.returned_discount_total)
     if quantity >= line.returnable_quantity:
-        return max(remaining_discount, Decimal("0.00"))
-
-    proportional_discount = money(
-        line.discount_total * Decimal(quantity) / Decimal(line.quantity)
-    )
-    return min(proportional_discount, max(remaining_discount, Decimal("0.00")))
+        discount = max(remaining_discount, Decimal("0.00"))
+    else:
+        proportional_discount = money(
+            line.discount_total * Decimal(quantity) / Decimal(line.quantity)
+        )
+        discount = min(proportional_discount, max(remaining_discount, Decimal("0.00")))
+    # A refund line can never credit less than nothing. Each part of a split
+    # return rounds its own gross on its own, so a proportional share of a
+    # fully-discounted line can land a cent ABOVE the gross it is about to be
+    # subtracted from: 0.500 kg off a 1.500 kg line at 3.33 is a 1.66 gross
+    # against a 1.67 share. Clamping here rather than in line_refund_amount
+    # keeps the amount paid out and the discount stored on OrderAdjustmentLine
+    # the same number, so the refund document still adds up.
+    return min(discount, money(line.unit_price * Decimal(quantity)))
 
 
 def line_refund_amount(line, quantity):

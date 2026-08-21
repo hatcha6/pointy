@@ -908,6 +908,15 @@ class Simulation:
         # only ever saw those has proved nothing about ``returned_cost_total``.
         self.costed_refund_assertions = 0
         self.multi_unit_costed_refund_assertions = 0
+        # Vacuity guard for the destination-regime cap on a line's discount.
+        # The engine's cap and the order line's own subtotal can only disagree
+        # on a line the discounts consumed ENTIRELY (anything less is far from
+        # both caps) whose gross lands exactly on a half-cent (anything else
+        # rounds the same way in both regimes). A run that never rang up that
+        # combination proves nothing about ``_order_line_discounts`` — with or
+        # without the cap, every line agrees.
+        self.fully_discounted_line_assertions = 0
+        self.half_cent_fully_discounted_lines = 0
 
     # -- helpers ----------------------------------------------------------
 
@@ -1214,6 +1223,24 @@ class Simulation:
                 exclusive=False,
             ),
             dict(
+                # A line-scope 100% coupon on the two weighed products. This is
+                # the ONLY generator that can hand an order line a discount
+                # equal to its whole value, and a weighed line priced 3.33 or
+                # 5.50 against quantities in 0.25 steps lands on a half-cent
+                # often (5.50 x 0.75 = 4.125). That pair is the entire reachable
+                # surface of the two rounding regimes' disagreement about what a
+                # line can carry, and nothing in this world produced it before.
+                name="Coupon FREEKG",
+                application_type=DiscountRule.ApplicationType.COUPON_CODE,
+                coupon_code="FREEKG",
+                scope=DiscountRule.Scope.LINE,
+                value_type=DiscountRule.ValueType.PERCENTAGE,
+                value=Decimal("100"),
+                priority=1,
+                exclusive=False,
+                products=[self.items[9].variant.product, self.items[10].variant.product],
+            ),
+            dict(
                 name="Coupon HALF",
                 application_type=DiscountRule.ApplicationType.COUPON_CODE,
                 coupon_code="HALF",
@@ -1337,6 +1364,50 @@ class Simulation:
                 specs.append(spec)
         return specs
 
+    def _force_half_cent_free_line(self, specs):
+        """Put a weighed line whose gross lands exactly on a half-cent into
+        ``specs``, replacing any line already there for the same variant.
+
+        FREEKG zeroes such a line outright, and a fully consumed line whose
+        gross is a half-cent is the *only* shape in which the discount engine's
+        cap (``up2`` — 5.50 x 0.75 = 4.125 -> 4.13) and the subtotal the order
+        line actually stores (``even2`` -> 4.12) disagree about what that line
+        can carry. Left to chance it is a few percent of carts, and a 300-op CI
+        run sees none — so it is forced, the same deliberate widening the
+        11-line purchase order and the mixed-unit landed-cost order already get.
+        """
+        for item in (self.items[9], self.items[10]):  # Weight 0 / Weight 1
+            unit = item.units[0]
+            price = item.effective_unit_price(unit, [])
+            for quantity in (
+                Decimal("0.75"),
+                Decimal("0.25"),
+                Decimal("1.50"),
+                Decimal("0.50"),
+            ):
+                gross = price * quantity
+                if even2(gross) == up2(gross):
+                    continue  # not a half-cent: both regimes agree, no test
+                if self.oracle.available(item.variant_id) < quantity:
+                    continue
+                specs = [
+                    spec
+                    for spec in specs
+                    if spec["item"].variant_id != item.variant_id
+                ]
+                specs.append(
+                    {
+                        "item": item,
+                        "unit": unit,
+                        "quantity": quantity,
+                        "modifiers": [],
+                        "eff_price": price,
+                        "base_qty": q3(quantity * unit.factor),
+                    }
+                )
+                return specs
+        return specs
+
     def _build_lines_payload(self, specs):
         lines_data = []
         for spec in specs:
@@ -1375,12 +1446,35 @@ class Simulation:
         ]
         return self.discount_engine.calculate(discount_lines, customer_id, coupon_codes)
 
+    def _order_line_discounts(self, specs, per_line_discount):
+        """The discount each ORDER LINE stores — the oracle's own port of
+        ``apps.sales.services.order_line_discounts``.
+
+        The engine (ported above as ``OracleDiscountEngine``) allocates in the
+        discount regime, ``up2``, and caps a line at *its* subtotal. An order
+        line stores ``even2``. On a gross landing exactly on a half-cent the two
+        differ by a cent, so an allocation that consumed the whole engine line
+        is one cent more than the order line can carry. Cap at the line's own
+        ``even2`` subtotal — computed here from the oracle's own ``eff_price``
+        and ``quantity``, never read back from the order.
+        """
+        return {
+            str(index): min(
+                per_line_discount.get(str(index), ZERO),
+                even2(spec["eff_price"] * spec["quantity"]),
+            )
+            for index, spec in enumerate(specs)
+        }
+
     def _order_totals(self, specs, per_line_discount):
         subtotal = even2(
             sum((even2(s["eff_price"] * s["quantity"]) for s in specs), ZERO)
         )
+        # The discounts the LINES can carry, not the engine's raw allocations:
+        # an allocation a cent above its own line used to take that cent off the
+        # order as well. Ported from the documented backend rule.
         discount_total = sum(
-            (per_line_discount.get(str(i), ZERO) for i in range(len(specs))), ZERO
+            self._order_line_discounts(specs, per_line_discount).values(), ZERO
         )
         discount_total = min(even2(discount_total), subtotal)
         total = even2(subtotal - discount_total)
@@ -1406,6 +1500,20 @@ class Simulation:
 
     def _build_order_rec(self, order, specs, per_line_discount, sale_type, customer_id):
         subtotal, discount_total, total = self._order_totals(specs, per_line_discount)
+        line_discounts = self._order_line_discounts(specs, per_line_discount)
+        for index, spec in enumerate(specs):
+            gross = spec["eff_price"] * spec["quantity"]
+            if gross <= ZERO:
+                continue
+            if line_discounts.get(str(index), ZERO) < even2(gross):
+                continue
+            # A line the discounts consumed entirely: the only shape in which
+            # the engine's cap and the line's own subtotal can disagree, and
+            # therefore the only one that proves the destination-regime port
+            # above does anything.
+            self.fully_discounted_line_assertions += 1
+            if even2(gross) != up2(gross):
+                self.half_cent_fully_discounted_lines += 1
         order_lines = list(order.lines.order_by("pk"))
         if len(order_lines) != len(specs):
             self.fail(
@@ -1420,7 +1528,7 @@ class Simulation:
                     unit_price=spec["eff_price"],
                     quantity=spec["quantity"],
                     unit_factor=spec["unit"].factor,
-                    discount_total=per_line_discount.get(str(index), ZERO),
+                    discount_total=line_discounts.get(str(index), ZERO),
                     tracks_stock=spec["item"].tracks_stock,
                     whole_only=spec["unit"].whole_only,
                     unit_cost=self._expected_unit_cost(
@@ -1458,6 +1566,8 @@ class Simulation:
         customer = self.rng.choice(self.customers) if self.rng.random() < 0.5 else None
         customer_id = customer.id if customer else None
         coupon_codes = self._random_coupons()
+        if "FREEKG" in coupon_codes:
+            specs = self._force_half_cent_free_line(specs)
         per_line_discount, _ = self._compute_discounts(specs, customer_id, coupon_codes)
         _, _, total = self._order_totals(specs, per_line_discount)
         if total <= ZERO:
@@ -1507,6 +1617,8 @@ class Simulation:
         customer = self.rng.choice(self.customers) if self.rng.random() < 0.5 else None
         customer_id = customer.id if customer else None
         coupon_codes = self._random_coupons()
+        if "FREEKG" in coupon_codes:
+            specs = self._force_half_cent_free_line(specs)
         per_line_discount, _, applied_codes = self._compute_discounts_detail(
             specs, customer_id, coupon_codes
         )
@@ -1871,9 +1983,42 @@ class Simulation:
             return ZERO
         remaining_discount = even2(line.discount_total - line.returned_discount)
         if Decimal(qty) >= line.returnable_qty:
-            return max(remaining_discount, ZERO)
-        proportional = even2(line.discount_total * Decimal(qty) / Decimal(line.quantity))
-        return min(proportional, max(remaining_discount, ZERO))
+            discount = max(remaining_discount, ZERO)
+        else:
+            proportional = even2(
+                line.discount_total * Decimal(qty) / Decimal(line.quantity)
+            )
+            discount = min(proportional, max(remaining_discount, ZERO))
+        # A refund line never credits less than nothing: each part of a split
+        # return rounds its own gross, so a proportional share of a fully
+        # discounted line can land a cent above the gross it is subtracted
+        # from. Ported from the documented backend rule, not read back.
+        return min(discount, even2(line.unit_price * Decimal(qty)))
+
+    def _refund_gross(self, refund_lines) -> Decimal:
+        """What ``adjustment_amount`` will make of ``refund_lines``.
+
+        Production refuses a non-positive refund outright
+        (``apps.sales.services.adjustment_amount``), so a set of lines that were
+        discounted to nothing is not a valid input and the simulation must not
+        offer one — the 400 that comes back is the backend being right. Note
+        this is a *product* limitation worth knowing rather than an arithmetic
+        one: goods given away free cannot be handed back at all, so their stock
+        never returns to the shelf. Computed from the oracle's own ported refund
+        arithmetic, like everything else here.
+        """
+        return even2(
+            sum(
+                (
+                    even2(
+                        even2(line.unit_price * Decimal(qty))
+                        - self._line_refund_discount(line, qty)
+                    )
+                    for line, qty in refund_lines
+                ),
+                ZERO,
+            )
+        )
 
     def op_return_items(self) -> bool:
         candidates = self._refundable_orders()
@@ -1890,7 +2035,7 @@ class Simulation:
                 continue
             refund_lines.append((line, qty))
             api_lines.append((OrderLine.objects.get(pk=line.order_line_id), qty))
-        if not refund_lines:
+        if not refund_lines or self._refund_gross(refund_lines) <= ZERO:
             return False
         adjustment = return_order_items(
             order=Order.objects.get(pk=rec.order_id),
@@ -1938,7 +2083,7 @@ class Simulation:
                 continue
             outbound.append((line, qty))
             outbound_api_lines.append((OrderLine.objects.get(pk=line.order_line_id), qty))
-        if not outbound:
+        if not outbound or self._refund_gross(outbound) <= ZERO:
             return False
         # Replacement goods are chosen against availability as it stands *before*
         # the outbound leg restocks — deliberately conservative, so the choice can
@@ -2014,6 +2159,12 @@ class Simulation:
         refund_lines = [
             (line, line.returnable_qty) for line in rec.lines if line.returnable_qty > ZERO
         ]
+        if self._refund_gross(refund_lines) <= ZERO:
+            # Everything still on the order was given away free, so the void is
+            # worth 0.00 and production refuses it — the third entry point into
+            # ``adjustment_amount``'s positive-refund rule, and the sharpest:
+            # a sale that cost the customer nothing cannot be voided at all.
+            return False
         adjustment = void_order(
             order=Order.objects.get(pk=rec.order_id),
             reason="sim void",
@@ -2762,13 +2913,20 @@ class Simulation:
 
     def _random_coupons(self):
         choice = self.rng.random()
-        if choice < 0.55:
+        if choice < 0.45:
             return ()
-        if choice < 0.75:
+        if choice < 0.65:
             return ("SAVE3",)
-        if choice < 0.9:
+        if choice < 0.80:
             return ("HALF",)
-        return ("SAVE3", "HALF")
+        if choice < 0.90:
+            return ("SAVE3", "HALF")
+        # FREEKG zeroes a weighed line outright. Handed out deliberately rather
+        # than left to chance: the shape it creates (a fully consumed line whose
+        # gross is a half-cent) is the only one the destination-regime cap on a
+        # line's discount can be observed by, and the vacuity guard in the
+        # entry-point test refuses a run that never saw it.
+        return ("FREEKG",)
 
     # -- run loop ---------------------------------------------------------
 
@@ -3016,6 +3174,17 @@ class Simulation:
             )
             self.assert_money(line.unit_cost, expected.unit_cost, f"{tag} unit_cost")
             self.assert_money(line.line_total, expected.line_total, f"{tag} line_total")
+            if line.discount_total > line.line_subtotal:
+                # A line worth less than nothing. The refund path credits
+                # ``line_total`` for a whole-line return, and
+                # ``adjustment_amount`` refuses a non-positive refund outright —
+                # so an over-discounted line does not merely misreport, it makes
+                # the goods unreturnable.
+                self.fail(
+                    f"{tag} discount {line.discount_total} exceeds its own "
+                    f"subtotal {line.line_subtotal} (line_total "
+                    f"{line.line_total})"
+                )
             self.assert_money(line.line_cost, expected.line_cost, f"{tag} line_cost")
             self.assert_money(
                 line.line_profit, expected.line_profit, f"{tag} line_profit"
@@ -3030,10 +3199,22 @@ class Simulation:
         subtotal_sum = even2(sum((line.line_subtotal for line in lines.values()), ZERO))
         discount_sum = even2(sum((line.discount_total for line in lines.values()), ZERO))
         # ``Order.recalculate`` clamps the discount to the subtotal
-        # (apps/sales/models.py), so the clamp belongs in the expectation too —
-        # without it an over-discounted order would be reported as a defect the
-        # backend does not have.
-        clamped_discount = min(discount_sum, subtotal_sum)
+        # (apps/sales/models.py). That clamp is defensive only: a line can never
+        # be handed more discount than it is worth, because
+        # ``apps.sales.services.order_line_discounts`` caps each line at the
+        # subtotal it stores before the line is written. So the clamp must never
+        # fire, and an order that needs it is itself the defect — it used to be
+        # the one way a line landed at ``line_total = -0.01`` and became
+        # unreturnable. Asserting the clamp away rather than mirroring it is the
+        # point: mirroring it is what hid this for as long as it did.
+        if discount_sum > subtotal_sum:
+            self.fail(
+                f"order#{order.pk} is over-discounted: lines discount "
+                f"{discount_sum} against subtotal {subtotal_sum} — "
+                "Order.recalculate's clamp would forgive the excess while the "
+                "lines keep it"
+            )
+        clamped_discount = discount_sum
         # Identity 1: the lines' revenue is the order's revenue.
         self.assert_money(
             subtotal_sum,
@@ -3053,16 +3234,15 @@ class Simulation:
             order.total,
             f"identity: order#{order.pk} subtotal less discount is total",
         )
-        if discount_sum <= subtotal_sum:
-            # Unclamped, the lines' own net value must also land on the total.
-            # Under the clamp it cannot: the order forgives the excess discount
-            # while the lines keep it, so this is the one identity that is
-            # genuinely conditional rather than merely restated.
-            self.assert_money(
-                even2(sum((line.line_total for line in lines.values()), ZERO)),
-                order.total,
-                f"identity: order#{order.pk} line totals sum to total",
-            )
+        # The lines' own net value must land on the total. This used to be
+        # conditional on the order not being over-discounted; with the cap in
+        # place that state is unreachable, so the condition is gone and the
+        # identity holds for every order.
+        self.assert_money(
+            even2(sum((line.line_total for line in lines.values()), ZERO)),
+            order.total,
+            f"identity: order#{order.pk} line totals sum to total",
+        )
         # Identity 4: the cost basis the reports read is the lines' own.
         self.assert_money(order.total_cost, rec.total_cost, f"order#{order.pk} total_cost")
         self.assert_money(
