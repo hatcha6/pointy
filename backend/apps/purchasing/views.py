@@ -339,6 +339,14 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     # serializer and the trimmed prefetches below.
     _list_shaped_actions = ("list", "outstanding_received_not_paid")
 
+    # The attachments tab needs the order's *identity* and nothing else -- it
+    # serializes ``purchase_order.attachments`` with its own queryset -- yet
+    # ``get_object()`` runs ``get_queryset()`` regardless, so opening it pulled
+    # the whole document tree above (lines, receipts, adjustments, audit
+    # events, payments and every variant/option chain under them) and threw
+    # every row away.
+    _identity_only_actions = ("attachments",)
+
     def get_serializer_class(self):
         if self.action in self._list_shaped_actions:
             return PurchaseOrderListSerializer
@@ -372,6 +380,8 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                     )
                 )
             )
+        elif self.action in self._identity_only_actions:
+            queryset = queryset.prefetch_related(None)
         product_id = self.request.query_params.get("product")
         variant_id = self.request.query_params.get("variant")
         if product_id:

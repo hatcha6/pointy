@@ -923,3 +923,35 @@ opposite of the `display_name`/`ProductUnit` fixture trap: a *property that
 branches* goes quiet when its relation is unpopulated, but a serializer field
 backed by a relation queries regardless. Don't skip an N+1 because the fixture
 has none of the child rows.
+
+## 2026-08-21 - A detail `@action` pays the viewset's whole prefetch tree, even when it only needs the row's id
+**Learning:** `get_object()` runs `get_queryset()`, so *every* detail route
+inherits the prefetch tree the detail/list serializer needs — including side-tab
+actions that never serialize the object at all. `ProductViewSet.attachments`
+reads `product.attachments` (a related-manager `.active()` call, which bypasses
+the prefetch cache anyway), `variants` rebuilds `variant_detail_queryset()`,
+`bought_together` uses `product.id`; all three loaded variants, option values,
+stock, categories, units, barcodes, modifier groups and image attachments and
+threw every row away. Measured on a simulated shop: `product-attachments`
+**13 → 3**, `product-variants` 21 → 11, `product-bought-together` 17 → 7,
+`purchaseorder-attachments` **16 → 3**. The Flutter product-details screen fires
+the first three on open: 51 → 21 queries per product opened.
+**Action:** The tell is a **big absolute query count against a tiny payload** —
+17 queries for a 2-byte `[]`. No scaling test sees it (flat in every dimension)
+and the empty-DB list probe misses it (these are detail routes). Probe
+`-detail` + `@action` routes over simulated data and sort by *queries per byte*.
+Fix by naming the identity-only actions and returning `.prefetch_related(None)`
+for them — and be strict about membership: `archive`/`restore`/
+`set_variant_prices` answer with `ProductCatalogSerializer`, so adding them
+would trade 13 prefetches for an N+1 per variant. Ship a guard test for that
+direction too. **Test technique:** rather than a fixture-specific magic number,
+`patch.object(ViewSet, "identity_only_actions", frozenset(), create=True)`
+re-measures the same request with the tree forced on and the test asserts the
+difference; `create=True` makes it a clean assertion failure (not an
+`AttributeError`) on a tree without the fix, and both payloads can be compared
+for equality in the same pass — strip `?token=` first, attachment `content_url`s
+re-sign per serialization.
+**Next targets (measured, unfixed):** `pos-user-activity` 45 q for 4.6 KB and
+`pos-user-detail` 22 q for 239 B, both dominated by `PosUserViewSet.initial`'s
+`ensure_role_groups()` re-sync — 18 queries on *every* users request, writes
+included; caching the "already synced" verdict is the next step.
