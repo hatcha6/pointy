@@ -652,3 +652,53 @@ draws (a reconciliation that runs after the operation stream, like
 `reconcile_product_rankings`) leaves the stream identical, so these guards
 cannot flip because of it — if one fails after such a change, check the same
 seed on `main` before believing it is yours.
+
+## 2026-08-20 - The oracle can inherit the backend's model, and then it proves nothing
+
+**Learning:** A short shipment kept billing for goods that never arrived.
+``receive_purchase_order`` records ``cancelled_quantity`` — units the supplier
+could not supply, or the shop rejected at the door — closes the order as
+``received``, and never touches the money: ``balance_due`` and
+``Supplier.payable_balance`` still quoted the whole *ordered* total. Nothing
+downstream could clear it either, because a supplier return credits
+``adjustable_quantity``, which counts *accepted* units, so the phantom payable
+was permanent and the payables list carried the row forever. The part worth
+recording is why 3500 clean operations never saw it: the simulation *does*
+generate cancellations, and ``_assert_po`` asserted
+``balance_due == total - paid`` — the oracle had ported the backend's model of
+what an order owes rather than deriving it. Both sides agreed, and agreement is
+all a tautology ever produces.
+
+**Action:** The rule "never read a number back from the backend" is not enough —
+an expectation can be independent in its *arithmetic* and still borrowed in its
+*model*. When adding or reviewing an assertion, ask what real-world quantity it
+claims (here: "what does the shop owe this supplier?") and derive it from the
+transaction inputs, rather than restating the formula the backend happens to
+use. A good smell test: if the assertion would still pass after deleting a whole
+category of event the simulation generates (cancellations, in this case), it is
+describing the code, not the business. Where a number has several backend ports
+— ``raw_balance_due``, ``Supplier.payable_balance``, ``prime_supplier_balances``
+and the dashboard's row pass are four ports of *one* question — assert the
+oracle's figure against each of them; ``_assert_supplier_ap`` now checks the
+cold and primed paths against the same independently derived total.
+
+## 2026-08-20 - Inserting a helper above a function steals its decorator
+
+**Learning:** Adding ``purchase_order_cancelled_total`` immediately before
+``receive_purchase_order`` put the new function underneath the existing
+``@transaction.atomic`` line, so the *helper* became atomic and the receipt —
+which writes stock movements, receipt lines, expected-quantity adjustments and
+the order's status in one go — silently stopped being. The whole 174-test
+purchasing suite passed, because nothing in it forces a mid-receipt failure; a
+partial receipt would have half-applied under any real error. That is a worse
+money bug than the one the change was fixing, and it came from where the text
+was inserted, not from anything the change said.
+
+**Action:** After inserting a top-level function, read the two lines *above*
+the insertion point, not just the diff hunk for the new code — a decorator, and
+in this codebase that usually means ``@transaction.atomic``, sits on its own
+line and belongs to whatever follows it. ``git diff`` shows this clearly: if a
+hunk adding a new function opens with an unchanged ``@transaction.atomic``
+context line, the decorator has changed owner. Prefer appending after the end of
+the function you are working near, and check that the diff contains no
+decorator lines you did not intend to move.
