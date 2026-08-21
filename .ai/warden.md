@@ -1167,3 +1167,58 @@ trigger load-more, fix the loader, tap retry, and assert the failure copy is
 `findsNothing`. It runs in a second and it distinguishes "the retry works" from
 "the retry works and stops lying". Generally: a two-branch change needs a test
 per branch, and the untested branch is where to look first.
+
+## 2026-08-21 - The `human-approved` label, and why a Windows-only PR is still reviewable on a Mac
+
+**Learning:** #128 arrived on `claude/wsl-onprem-deployment` carrying a label
+this journal had not seen: **`human-approved`** — "Human authored and scoped
+this PR; waives Warden's size/path escalation (never the review)". It
+deliberately tripped four step-(e) triggers at once (2,949 changed lines,
+`.github/workflows/**`, a Dockerfile, deletes far more than it adds) and the PR
+body tabulated each one with the human's decision. Escalating it would have been
+the *wrong* call: it is already escalated, and parking it just stalls the human's
+own work. The label is not a review waiver, though, and the second half of the
+trap is assuming a Windows/PowerShell PR cannot be verified from this machine.
+It can, almost entirely: `docker run --rm mcr.microsoft.com/powershell` +
+`[System.Management.Automation.Language.Parser]::ParseFile` gives a real syntax
+check, and the *parsers* inside the script — the `netsh portproxy` table reader,
+the `ip -4 -o addr` reader — can be fed realistic sample text and their output
+asserted, which is where the actual bugs live. The bash half is fully testable:
+I extracted `wsl_preflight` into a scratch dir and ran all four of its documented
+cases under `set -euo pipefail`, including the one that mattered most — a
+non-WSL host, where a stray non-zero would have broken `install.sh` for every
+existing Linux shop.
+
+**Action:** Treat `human-approved` as satisfying step (e) and nothing else —
+review and test exactly as normal, and post what you actually ran so the human
+is not taking your word for it. For a shell/PowerShell deploy PR the reviewable
+surface is bigger than it looks: `bash -n` every script, parse the YAML in
+Python, parse the PowerShell in the container above, exercise each regex parser
+against sample input, source any new shell function into a scratch harness and
+drive its branches, and simulate the bundle-adoption/upgrade path with fake
+files. What is left after that is genuinely hardware-only — say so plainly and
+merge, rather than treating "I cannot boot Windows" as "I cannot review this".
+
+## 2026-08-21 - A hang-guard's revert proof fails *twice*, and the second failure is the point
+
+**Learning:** Proving 🧭 Compass's #129 non-vacuous — restore `main`'s
+`idempotency.py`, keep the new test — produced `FAILED (failures=2)`, not the
+one failure the PR claimed. The expected one fired exactly as quoted
+(`checkout was still waiting on the row lock after 20.0s`). The second,
+`AssertionError: Decimal('46.000') != Decimal('48')`, is in the *retry* test and
+looks like the PR mis-stating its own evidence. It is not: the test runs the
+checkout on a daemon thread with `join(20s)` so a hang fails instead of wedging
+the runner, and on `main` that thread is still alive at the deadline. It then
+commits the sale the moment the holder releases — so the retry sees 48 - 2 = 46.
+The collateral failure *is* the bug: a checkout the client already gave up on
+quietly completes later.
+
+**Action:** When the behaviour under test is "waits forever", expect the revert
+proof to fail in more places than the PR names, and read each extra failure
+before doubting the diff — an abandoned worker thread finishing late is
+corroboration, not a discrepancy. Generally, count a revert proof as passing
+when the *named* assertion fails with the quoted message; a superset of failures
+is normal, a subset is the thing to worry about. (Do not tighten this into
+"re-run it": the sibling assertion's outcome is timing-dependent — the
+sold-nothing test happened to pass on `main` because it reads stock before the
+stranded thread commits.)
