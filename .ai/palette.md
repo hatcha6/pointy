@@ -794,3 +794,35 @@ a screen reader reads it twice. (2) Adding text to a metadata line built as
 `Row(mainAxisSize: min)` inside a width-capped bubble will overflow on a narrow
 phone — switch that line to `Wrap`, which gives the label its own line instead of a
 yellow-and-black stripe, and needs no ellipsis or `Flexible`.
+
+## 2026-08-21 - Shared-component copy that names a value only *some* call sites show
+
+**Learning:** `record_payment_dialog.dart` is one dialog behind four flows
+(invoice, customer account ×2, supplier). Its amount error said "…ولا يتجاوز
+المتبقّي" — "not exceeding the remaining" — while the *remaining* was rendered by
+an optional `balanceLabel` the **caller** passes. Three callers pass it; the
+supplier pay-out (`purchase_order_actions_panel.dart`) does not. So on the one
+money-OUT flow the dialog refused an amount for exceeding a number it never
+showed. The shared component already held that number (`maxAmount`), so the copy
+was pointing at caller state it could have owned outright.
+
+**Action:** When a shared widget's copy refers to a value ("the remaining", "the
+limit", "the selected item"), check whether *every* call site actually renders
+that value — an optional context parameter is exactly where one caller drifts.
+Prefer moving the number **into** the shared component's own string over adding
+it at the deviating call site. Here that was also the only testable option: the
+deviating call site is a private `Future<void> _showSupplierPaymentDialog` inside
+a `part` of `purchase_order_details_screen.dart`, unreachable without pumping the
+whole details screen, whereas `showRecordPaymentDialog` is public and
+`test/shared/payments/record_payment_dialog_test.dart` already had a
+`_pumpSupplierHost` mirroring the real supplier arguments — assert against that
+host and the fix is proven for the flow that was broken.
+
+**Also, a live backlog:** submit-time error flags that never clear while the user
+corrects the field. `bool _show…Error` appears in 11 files; three already clear it
+from `onChanged` (`purchase_order_receive_dialog`, `stock_count_sessions_screen`,
+`convert_quotation_dialog`), so it is an established idiom, and these still do not:
+`sales_channels_page`, `purchase_order_adjustment_dialogs`, `register_session_gate`,
+`register_session_close_sheet`, `register_cash_movement_sheet`,
+`sale_order_details_content`. A stale red line under a now-valid value reads as
+"still wrong" — match-the-sibling fixes, one screen at a time.

@@ -5226,6 +5226,15 @@
     }
   },
   "invoicePaymentAmountError": "أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقّي.",
+  "recordPaymentAmountMaxError": "أدخل مبلغًا أكبر من صفر ولا يتجاوز {amount}.",
+  "@recordPaymentAmountMaxError": {
+    "description": "Amount error inside the shared record-payment dialog. Names the exact ceiling (the remaining balance) so the cashier knows what to type instead of only that the entry was rejected.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "invoicePaymentSuccess": "تم تسجيل الدفعة على الفاتورة.",
   "invoiceAssignCustomerButton": "تعيين عميل",
   "@invoiceAssignCustomerButton": {

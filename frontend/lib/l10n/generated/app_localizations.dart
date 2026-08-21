@@ -15275,6 +15275,12 @@ abstract class AppLocalizations {
   /// **'أدخل مبلغًا أكبر من صفر ولا يتجاوز المتبقّي.'**
   String get invoicePaymentAmountError;
 
+  /// Amount error inside the shared record-payment dialog. Names the exact ceiling (the remaining balance) so the cashier knows what to type instead of only that the entry was rejected.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغًا أكبر من صفر ولا يتجاوز {amount}.'**
+  String recordPaymentAmountMaxError(String amount);
+
   /// No description provided for @invoicePaymentSuccess.
   ///
   /// In ar, this message translates to:
