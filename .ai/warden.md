@@ -1117,3 +1117,53 @@ against the dev database, which must return no rows. Credit where due: #120 also
 shipped an equivalence test that re-implements the old per-code resolution
 locally and compares pk sets per role, which catches the same class of bug from
 the other side — that is the shape to ask for.
+
+## 2026-08-21 - The step-2 `shasum` proof false-alarms when someone is editing the primary checkout live
+
+**Learning:** The entry I merged this run (#122) says to prove the fast-forward
+was harmless by `shasum`-ing every dirty path before and after and stating that
+the hashes match. This run they did **not** match:
+`deploy/onprem/install.sh` went `96469c8b` -> `b064f3ec` across the
+`git merge --ff-only`, which reads exactly like the clobber the guard exists to
+catch. Nothing was clobbered. Two facts settle it and neither is the hash: the
+three incoming commits touched only `.ai/` and `backend/apps/sales/` — so git
+could not have written that file — and the file was **not dirty at all** when
+the run started; it appeared mid-run, `mtime` 24 seconds before I read it, next
+to a brand-new untracked `deploy/onprem/wsl/`. By the end of the run the same
+tree had grown staged deletions of six `.ps1` files and edits to
+`.github/workflows/release.yml`. Someone is building WSL on-prem support in the
+primary checkout, live, while Warden runs.
+
+**Action:** Keep the collision check, demote the hash. `git log main..origin/main
+-- <dirty path>` coming back empty is the *proof* the fast-forward cannot touch
+that path; a changed hash afterwards means a concurrent writer, not a clobber.
+Confirm it that way — compare the dirty path list against `git diff --name-only
+main..origin/main`, and check `git status` still reports the path as modified
+(work intact) rather than reverted — and never escalate on a hash mismatch alone.
+Corollary worth carrying: the primary checkout is not reliably idle, so re-read
+its `git status` at the end of the run rather than trusting the snapshot you took
+at the start.
+
+## 2026-08-21 - An error flag cleared only on `reset` makes every new in-place retry lie
+
+**Learning:** 🎨 Palette's #123 gives the shared async picker a retry, and the
+half it tested is correct. `_load({reset})` in
+`frontend/lib/src/shared/async_selection/async_multi_select_picker.dart` clears
+`_hasError` **only** in its `reset: true` branch, and the success path never
+clears it at all — on `main` that was inert, because a failed page also set
+`_hasMore = false` and nothing could load again. Add a retry and the dead flag
+comes alive: the failed-*first*-page retry goes through `reset: true` and is
+fine, while the failed-*next*-page retry goes through `reset: false`, loads the
+page, appends the rows — and leaves the red failure line and its retry button
+sitting above them forever. The PR asserted that branch as fact in its body with
+no test behind it, and it is the branch that broke.
+
+**Action:** When a PR adds a retry, a refresh, or any "try that again in place"
+affordance, find where the error flag is cleared before reading the happy path.
+In this codebase's async-list pattern that is the `reset` branch only, so any
+non-reset retry inherits a stale error. Prove it with a probe rather than
+reasoning: serve page 1 with `hasMore: true`, throw on page 2, `tester.drag` to
+trigger load-more, fix the loader, tap retry, and assert the failure copy is
+`findsNothing`. It runs in a second and it distinguishes "the retry works" from
+"the retry works and stops lying". Generally: a two-branch change needs a test
+per branch, and the untested branch is where to look first.
