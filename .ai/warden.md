@@ -1004,3 +1004,52 @@ worktrees *and* deletes branches, so run them as two passes — remove every cle
 dead worktree first, then delete only the branches whose PR is `MERGED`. That
 ordering is the safe one anyway, because `git branch -D` still refuses a branch a
 surviving worktree holds, which is exactly the guard you want.
+
+## 2026-08-21 - The queue moves while you drain it; the prune survey is where you find out
+
+**Learning:** The opening `gh pr list` showed three PRs (#55 escalated, #114,
+#115). Both were handled, and the run would have ended there — except step 3's
+worktree survey prints a PR state per worktree, and `hungry-lewin-9bb687` came
+back `#116 OPEN` for a PR that did not exist when the queue was read. Re-polling
+then surfaced #116 (🔐 Sentinel), and re-polling again after merging it surfaced
+#117 (🧭 Compass), opened at 14:07 — an hour into the run. Both were good and
+both merged: a real unauthenticated-scope hole (a technician could list and
+download every supplier invoice scan) and a checkout that discarded a completed,
+paid, de-stocked sale whenever a print step raised. Reading the queue once would
+have parked both for an hour, and #117's window would have overlapped the next
+Warden run's own start, so it could have been parked twice. This is not the
+stale-cache entry above: `gh pr list` was correct each time it ran: the fleet
+simply keeps opening PRs while you work, and a single 3-PR read at minute zero
+is a snapshot, never the queue.
+
+**Action:** Treat step 1 as a loop, not a list. Re-run `gh pr list --state open`
+after **every** merge and once more before writing the summary, and read the
+`pr=` column of the step-3 survey as a queue check rather than prune metadata —
+a worktree whose PR says `OPEN` when your list did not name it means the queue
+moved under you. The survey is free and it is the last thing you do, so it is
+the cheapest possible backstop against declaring an empty queue that is not.
+
+## 2026-08-21 - `_scoped_to_viewable_owners`-style fixes need the roles table, not the diff
+
+**Learning:** 🔐 Sentinel's #116 narrows the generic attachment endpoint to
+owners the caller may view, deriving allowed content types from the caller's own
+`view_<model>` permissions. The diff cannot tell you whether that *over*-blocks —
+a role that legitimately reads an attachment whose owner model it holds no
+`view_` permission for would start getting 404s in production, with no test to
+catch it. One query settles it, and it is worth running rather than reasoning
+about: iterate `Group.objects.all()` printing each group's `view_` permissions.
+Here it showed that **only `manager` and `technician`** hold
+`attachments.view_attachment` at all, and the technician keeps
+`catalog.view_product` and `operations.view_job` — so the blast radius is
+exactly the purchasing rows the PR meant to close, and no role loses anything.
+It also independently confirmed the PR's claim about *who* was exposed.
+`Attachment.owner_content_type` is non-nullable, so there is no ownerless-row
+blind spot either — worth checking, because such rows would match no `Q()` and
+vanish for every non-manager.
+
+**Action:** For any PR that gates a queryset on the caller's permissions, run
+the roles dump before merging (`for g in Group.objects.all(): print(g.name,
+[p.content_type.app_label + '.' + p.codename for p in g.permissions.all() if
+p.codename.startswith('view_')])`) and check the nullability of whatever column
+the new filter keys on. Two minutes, and it converts "the tests pass" into
+"nobody who should see this stops seeing it".
