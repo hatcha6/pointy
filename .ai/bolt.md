@@ -877,3 +877,49 @@ that starts at `get_queryset`. For batching code -> row lookups, prefer two flat
 `__in` lists plus a dict keyed on the exact composite string over an OR of
 per-pair `Q`s — the over-fetched cross product is never looked up, and the
 planner gets one index scan instead of 200 OR branches.
+
+## 2026-08-21 - Probe every `@action` at once by driving `run_simulation()`, then reversing the router
+**Learning:** The empty-DB list probe (2026-08-21) reported every list endpoint
+at 2-6 queries and looked like the API was clean. It was measuring the wrong
+surface: **detail routes and custom `@action`s are most of the read surface and
+none of them appear in `router.registry`'s list URLs**. Populating a test
+database with `apps.sales.business_simulation.run_simulation(seed=7,
+operations=250)` — real orders, sessions, POs, stock, payments — and then, for
+each registered viewset, reversing `<basename>-detail` plus every attribute
+whose `.mapping` contains `"get"` (that is how DRF marks an `@action`), prices
+~120 endpoints in one ~10s run. It immediately indicted
+`register-session-orders` at **117 queries / 130 ms / 93 KB**, three times the
+next worst; the whole list surface was clean. Cost me one throwaway test file.
+**Action:** Probe `-detail` + `@action` routes over simulated data before
+hunting slopes; `getattr(fn, "mapping", None)` and `getattr(fn, "url_name", …)`
+are all the enumeration needs, and the simulation gives fixtures for free. Sort
+by query count and read the top five — everything below ~15 is noise.
+
+## 2026-08-21 - A shared prefetch factory that is too HEAVY is why the second caller still hand-rolls
+**Learning:** `OrderQuerySet.with_serializer_relations()` exists precisely to
+stop callers writing their own list (its docstring says so), and
+`RegisterSessionViewSet.orders` still hand-rolled
+`select_related("customer","register_session").prefetch_related(
+"lines__adjustment_lines","payments")` — because it serializes the *trimmed*
+`OrderSessionSerializer`, and adopting the full factory would have pulled in the
+per-line variant/product/option trees the strip never renders. So the author
+wrote a subset, and lost `sales_channel`, `applied_discounts` and `exchanges`:
+3.00 q/order (24 q at 5 orders, 69 at 20; 117 on a full 50-row page). The tell
+was sitting in the other viewset — `OrderViewSet._list_summary_queryset` was
+already the correct list shape, one method above the one everybody greps. The
+fix is to split the factory rather than subset it at the call site:
+`with_list_serializer_relations()` (what `OrderListSerializer` reads) and
+`with_serializer_relations()` = that + the line trees. Flat **11** queries after,
+and the endpoint went 130 -> 52 ms on the simulated shop.
+**Action:** This is the fifth "two callers, one serializer". New rule for it: if
+a caller serializes a *lighter* variant of the serializer, the shared factory
+needs a lighter variant too — check whether some other viewset has already
+written that shape privately (a `_list_…_queryset` helper is the giveaway)
+before assuming the hand-rolled subset was a considered choice.
+**Also — an EMPTY reverse/generic relation still costs its query per row.**
+There were no discounts and no exchanges anywhere in the fixture and
+`applied_discounts`/`exchanges` were still 1.00 q/order each. That is the
+opposite of the `display_name`/`ProductUnit` fixture trap: a *property that
+branches* goes quiet when its relation is unpopulated, but a serializer field
+backed by a relation queries regardless. Don't skip an N+1 because the fixture
+has none of the child rows.

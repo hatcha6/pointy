@@ -235,6 +235,31 @@ class OrderQuerySet(models.QuerySet):
     def quotations(self):
         return self.filter(sale_type=Order.SaleType.QUOTATION)
 
+    def with_list_serializer_relations(self):
+        """Load everything ``OrderListSerializer`` reads, in a fixed query count.
+
+        The row serializers (the invoices list and the register-session strip)
+        show a line COUNT plus totals/profit and the returnable flag, never the
+        line items — so ``lines`` is prefetched *light*, without the heavy
+        variant/product/option trees that ``with_serializer_relations`` adds.
+        Everything else the rows read is here, and every one of these costs a
+        query **per row** when a caller hand-rolls a shorter list instead:
+        ``sales_channel_name``/``_slug`` traverse the FK,
+        ``can_void``/``can_return`` read ``adjustment_lines`` per line, and
+        ``applied_discounts``/``exchanges`` are a query each per order.
+        """
+        return self.select_related(
+            "customer",
+            "register_session",
+            "sales_channel",
+        ).prefetch_related(
+            "lines__adjustment_lines",
+            "payments",
+            "applied_discounts",
+            "exchanges__replacement_order",
+            "exchanges__created_by",
+        )
+
     def with_serializer_relations(self):
         """Load everything ``OrderSerializer`` reads, in a fixed query count.
 
@@ -247,21 +272,12 @@ class OrderQuerySet(models.QuerySet):
         ``applied_discounts``/``exchanges`` cost a query per order. Extend this
         method — not a caller's own list — when the serializer grows a field.
         """
-        return self.select_related(
-            "customer",
-            "register_session",
-            "sales_channel",
-        ).prefetch_related(
+        return self.with_list_serializer_relations().prefetch_related(
             "lines__variant__product",
-            "lines__adjustment_lines",
             Prefetch(
                 "lines__variant__option_values",
                 queryset=VariantOptionValue.objects.select_related("option"),
             ),
-            "payments",
-            "applied_discounts",
-            "exchanges__replacement_order",
-            "exchanges__created_by",
         )
 
 
