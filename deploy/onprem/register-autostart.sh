@@ -132,14 +132,28 @@ if [ -f "${DISCOVERY_SERVICE}" ]; then
   systemctl enable --now pointy-discovery.service
 fi
 
-# Make Docker itself start on boot (the Linux counterpart of register-autostart.ps1
-# setting Docker Desktop to start at login). Best-effort: rootless/custom setups
-# may not ship a docker.service unit.
+# Make Docker itself start on boot. Best-effort: rootless/custom setups may not
+# ship a docker.service unit.
 echo "==> Ensuring Docker starts on boot"
 if systemctl enable docker >/dev/null 2>&1; then
   echo "    docker.service enabled."
 else
   echo "WARN: could not enable docker.service — make sure Docker starts on boot yourself."
+fi
+
+# Under WSL the UDP responder binds and runs, but never hears a client: the WSL2
+# VM sits behind a NAT and broadcast frames do not cross it. That is not a
+# regression — the tills' discovery races the stored IP, UDP, and an HTTP /24
+# subnet sweep, and the sweep finds the backend at the Windows host's LAN
+# address (which bootstrap-wsl.ps1 forwards into the VM). First pairing takes a
+# couple of seconds longer; nothing else changes. We leave the unit registered
+# so it starts working by itself if the host is ever switched to WSL mirrored
+# networking.
+if [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then
+  echo ""
+  echo "NOTE (WSL): UDP broadcast discovery cannot reach a NAT'd WSL VM, so tills"
+  echo "            will find this server via the HTTP /24 sweep instead. Make sure"
+  echo "            bootstrap-wsl.ps1 -Boot has forwarded TCP 8000/80 on the host."
 fi
 
 echo ""
