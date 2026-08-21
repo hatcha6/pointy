@@ -594,6 +594,65 @@ the raw expression. They group by product, so there is no document revenue to
 reach for, and they are rankings rather than money the shop banks — but they
 still will not sum to the top line, and nothing asserts them.
 
+## 2026-08-21 - The aggregate was proved; its breakdowns were a third implementation
+
+**Learning:** The previous entry's rule — "after proving a document, ask who
+adds the documents up" — stopped one layer too early. Below the shop-wide P&L
+sit the *breakdowns* of the same lines: top products, top variants, top
+categories, `items_sold`. They are not slices of the total that was just proved;
+each is its own `GROUP BY` over `OrderLine`, written before refunds existed as a
+concept, and **not one of them subtracted anything that came back**. The whole
+netting apparatus that makes `net_sales` and `gross_profit` correct —
+`OrderAdjustment.amount`, `returned_cost_total` — is simply absent from them.
+So one report block stated `net_sales 0.00`, `gross_profit 0.00`,
+`items_sold 5`, and directly beneath it ranked the wholly voided sale as the
+shop's best seller. Four read paths, all wrong the same way, all sitting under a
+figure that was right.
+
+**Action:** an aggregate has a *shape*, not just a value. Having proved the
+total, enumerate what else is computed from the same rows — every breakdown,
+ranking, per-entity row and count — and ask each one separately whether the
+correcting term reaches it. "It is derived from lines I already proved" is not
+an argument: the netting lives in the aggregation, not in the lines. Still
+unaudited on this axis: `_top_categories` (same defect, deliberately left —
+the simulation creates no categories, so the oracle cannot yet prove it, and an
+unprovable fix riding along in a correctness PR is exactly what should not
+happen), and the per-session Z-Report's `items_sold`/category rollup, which
+excludes voided orders wholesale rather than netting and so has a different
+model again.
+
+**Also — a LIMIT cannot stay in front of a netting.** The obvious fix is to
+subtract the returned figures from the rows the query already returned. It is
+wrong, and silently: netting lowers every row, but by different amounts, so the
+*gross* top-N is not a superset of the *netted* top-N — 100 sold and returned in
+full ranks below 90 sold and kept, and no fixed window of gross candidates is
+guaranteed to contain the answer. The `ORDER BY … LIMIT` has to move behind the
+netting, which here meant materialising one row per product sold in the period
+and ranking in Python (bounded by the assortment, not the transaction volume —
+the trade `register_summary` already makes). Rank on the figure the row
+*displays*, not the raw sum: ordering on unrounded aggregates lets a difference
+far below a cent decide which of two rows showing the same money comes first,
+and decide it differently on SQLite than on Postgres.
+
+**Also — the cheapest way to make a conservation law exact is to state both
+sides with the same expression.** `OrderAdjustmentLine` snapshots the sale
+line's own `unit_price` and its share of `discount_total`, and reaches cost
+through `order_line__unit_cost`. Write the returned side as literally the same
+arithmetic over those columns and a line handed back in full cancels its sale
+term for term, whatever the figures were — no rounding convention has to be
+argued for, because nothing is rounded until the caller rounds once at the end.
+Reach for that before reasoning about which regime an aggregate "should" use.
+
+**Also — `multi_unit_costed_refund_assertions` joins the seed-flaky guards.**
+Measured on `main`: it is 0 on roughly 2 seeds in 6 at the default 300
+operations, which is worse than the ~1-in-12 already recorded for
+`mixed_unit_retail_landed_orders` and `over_received_return_assertions`. CI's
+default seed passes, so CI is green. Note that an extension which adds no RNG
+draws (a reconciliation that runs after the operation stream, like
+`reconcile_product_rankings`) leaves the stream identical, so these guards
+cannot flip because of it — if one fails after such a change, check the same
+seed on `main` before believing it is yours.
+
 ## 2026-08-20 - The oracle can inherit the backend's model, and then it proves nothing
 
 **Learning:** A short shipment kept billing for goods that never arrived.

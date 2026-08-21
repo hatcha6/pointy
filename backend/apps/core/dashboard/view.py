@@ -310,12 +310,13 @@ def _sales_section(request, period):
     current.pop("net_sales_raw")
 
     trend = _sales_trend(current_orders, current_adjustments, period)
+    top_products, reports = _sales_rankings(current_orders, current_adjustments)
     return {
         "summary": current,
         "trend": trend,
         "hourly_sales": _hourly_sales(current_orders),
-        "top_products": _top_products(current_orders),
-        "reports": _sales_reports(current_orders),
+        "top_products": top_products,
+        "reports": reports,
         "top_categories": _top_categories(current_orders),
         "recent_orders": _recent_orders(current_orders),
         "registers": _cached_dashboard_section(

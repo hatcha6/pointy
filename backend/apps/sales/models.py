@@ -725,6 +725,186 @@ def returned_cost_total(adjustments) -> Decimal:
 SOLD_COST_EXPRESSION = models.F("quantity") * models.F("unit_cost")
 
 
+# ---------------------------------------------------------------------------
+# Per-product / per-variant rollups, net of what came back
+# ---------------------------------------------------------------------------
+#
+# The shop-wide totals net refunds out (``gross_profit_total`` above), but every
+# *ranking* built on top of the same lines used to state the gross sale and stop
+# there: sell five, void the sale, and "top products" still credited the product
+# with five units, its revenue and its margin. Rankings drive what a shop
+# reorders and what it stops stocking, so a voided mis-scan or a returned batch
+# quietly promotes goods the shop never actually sold.
+#
+# The two sides state the *same* arithmetic over the *same* snapshot columns —
+# ``OrderAdjustmentLine`` copies the sale line's ``unit_price`` and its share of
+# ``discount_total``, and takes cost from ``order_line__unit_cost`` — so a line
+# handed back in full cancels its own sale term for term, whatever the figures
+# were. That is the conservation law these rollups are chosen to satisfy, and it
+# is why both sides are summed raw and rounded once by the caller (the
+# convention ``SOLD_COST_EXPRESSION`` and ``returned_cost_total`` already share).
+SOLD_REVENUE_EXPRESSION = (
+    models.F("quantity") * models.F("unit_price") - models.F("discount_total")
+)
+SOLD_PROFIT_EXPRESSION = models.F("quantity") * (
+    models.F("unit_price") - models.F("unit_cost")
+) - models.F("discount_total")
+RETURNED_REVENUE_EXPRESSION = (
+    models.F("quantity") * models.F("unit_price") - models.F("discount_total")
+)
+RETURNED_PROFIT_EXPRESSION = models.F("quantity") * (
+    models.F("unit_price") - models.F("order_line__unit_cost")
+) - models.F("discount_total")
+
+_ROLLUP_MONEY = models.DecimalField(max_digits=14, decimal_places=2)
+_ROLLUP_QTY = models.DecimalField(max_digits=16, decimal_places=3)
+
+
+def _rollup(queryset, keys, *, quantity_expr, revenue_expr, profit_expr, extra=None):
+    rows = queryset.values(*keys).annotate(
+        rollup_quantity=Sum(quantity_expr, output_field=_ROLLUP_QTY),
+        rollup_revenue=Sum(revenue_expr, output_field=_ROLLUP_MONEY),
+        rollup_profit=Sum(profit_expr, output_field=_ROLLUP_MONEY),
+        **(extra or {}),
+    )
+    return {tuple(row[key] for key in keys): row for row in rows}
+
+
+def net_line_rollups(orders, adjustments, *keys, labels=(), extra=None):
+    """Units, revenue and profit per ``keys``, net of everything handed back.
+
+    ``keys`` are field paths that must resolve on **both** ``OrderLine`` and
+    ``OrderAdjustmentLine`` — the two share a ``variant``, so anything reached
+    through it groups the same way on either side and the halves merge on the
+    same tuple. ``labels`` are extra display-only fields carried from the sold
+    side (names, SKUs); they never take part in the merge, and ``extra`` are
+    further aggregates over the sold side alone — nothing came *back* in a
+    variant count — computed inside the same GROUP BY rather than as a query of
+    their own.
+
+    Scope mirrors the summary figures exactly: ``orders`` and ``adjustments``
+    are the period's own document sets, the same two the report already sums
+    into ``net_sales``. A ranking built from a different set of documents than
+    the top line it sits under cannot reconcile with it.
+
+    Sums are raw and unrounded — the caller rounds once, so a fully returned
+    line contributes exactly nothing rather than a rounding residue.
+    """
+    keys = tuple(keys)
+    sold = _rollup(
+        OrderLine.objects.filter(order__in=orders),
+        keys + tuple(labels),
+        quantity_expr=models.F("quantity"),
+        revenue_expr=SOLD_REVENUE_EXPRESSION,
+        profit_expr=SOLD_PROFIT_EXPRESSION,
+        extra=extra,
+    )
+    returned = _rollup(
+        OrderAdjustmentLine.objects.filter(adjustment__in=adjustments),
+        keys,
+        quantity_expr=models.F("quantity"),
+        revenue_expr=RETURNED_REVENUE_EXPRESSION,
+        profit_expr=RETURNED_PROFIT_EXPRESSION,
+    )
+    rows = []
+    for sold_key, row in sold.items():
+        back = returned.get(sold_key[: len(keys)])
+        quantity = row["rollup_quantity"] or Decimal("0")
+        revenue = row["rollup_revenue"] or Decimal("0")
+        profit = row["rollup_profit"] or Decimal("0")
+        if back is not None:
+            quantity -= back["rollup_quantity"] or Decimal("0")
+            revenue -= back["rollup_revenue"] or Decimal("0")
+            profit -= back["rollup_profit"] or Decimal("0")
+        rows.append(
+            {
+                **{
+                    key: row[key]
+                    for key in keys + tuple(labels) + tuple(extra or ())
+                },
+                "quantity": quantity,
+                "revenue": revenue,
+                "profit": profit,
+            }
+        )
+    return rows
+
+
+def net_product_rollups(orders, adjustments):
+    """One netted row per product sold in the period, ready to rank.
+
+    The dashboard and the reports layer both rank products by revenue and both
+    used to build the row themselves; the shared row is what keeps the two
+    stating the same number.
+    """
+    return [
+        {
+            "product_id": row["variant__product_id"],
+            "product_name": row["variant__product__name"],
+            "quantity": row["quantity"],
+            "revenue": row["revenue"],
+            "profit": row["profit"],
+            "variant_count": row["variant_count"],
+            "sort_name": row["variant__product__name"] or "",
+        }
+        for row in net_line_rollups(
+            orders,
+            adjustments,
+            "variant__product_id",
+            labels=("variant__product__name",),
+            extra={"variant_count": models.Count("variant_id", distinct=True)},
+        )
+    ]
+
+
+def rank_rollups(rows, *, order_by, limit):
+    """Rank netted rollup rows: the ordering figure descending, ties broken by
+    the row's ``sort_name`` ascending — the ordering the SQL used to do.
+
+    Ranking has to happen *after* netting rather than before. Netting only ever
+    lowers a row, but by different amounts, so the gross top-N is not the netted
+    top-N: a product sold 100 and returned in full ranks below one sold 90 and
+    kept, and no fixed window of gross candidates is guaranteed to contain the
+    answer. The rows this sorts are bounded by the assortment sold in the period
+    rather than by the transaction volume — the same trade ``register_summary``
+    already makes for its per-category breakdown.
+
+    Shared by the dashboard and the reports layer on purpose: they state the
+    same ranking, and two implementations of one answer is how the per-product
+    rows came to disagree with the top line in the first place.
+
+    Ranks on the figure the row will *display*, not on the raw sum behind it.
+    The sums arrive from the database with whatever precision the engine's
+    aggregate carried, so ordering on them would let a difference far below a
+    cent decide which of two rows showing the same money comes first — and
+    decide it differently on SQLite than on Postgres.
+    """
+    key = order_by.lstrip("-")
+    places = Decimal("0.001") if key == "quantity" else Decimal("0.01")
+    return sorted(
+        rows,
+        key=lambda row: (-Decimal(row[key]).quantize(places), row["sort_name"]),
+    )[:limit]
+
+
+def returned_items_total(adjustments) -> Decimal:
+    """Units handed back over ``adjustments`` — the term ``items_sold`` was
+    missing. Stated gross, "items sold: 5" sat next to "net sales: 0.00" on the
+    very same summary block after a sale was voided.
+
+    Its own aggregate rather than something folded into the caller's: the sold
+    term comes off ``OrderLine`` and this one off ``OrderAdjustmentLine``, and
+    joining the two would repeat each sale line once per return taken against
+    it and count the sale that many times over.
+    """
+    return (
+        OrderAdjustmentLine.objects.filter(adjustment__in=adjustments).aggregate(
+            total=Sum("quantity", output_field=_ROLLUP_QTY)
+        )["total"]
+        or Decimal("0")
+    )
+
+
 def gross_profit_total(*, revenue, sold_cost, refund_total, adjustments) -> Decimal:
     """Gross profit over a period: revenue less the cost of the goods sold, less
     the margin (not the cost) of whatever was handed back.
