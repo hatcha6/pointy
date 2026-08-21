@@ -235,3 +235,48 @@ question is never "does it import" but "does it import *what the source said*";
 the giveaway is a coercion (`int()`, `round()`, `[:120]`) sitting between the
 source value and the column. Every existing purchase fixture in this repo used
 whole quantities, which is exactly why 43 green tests never saw it.
+
+## 2026-08-21 - A rule enforced only at 100% is a cliff, and the cliff is where the bug is
+**Learning:** `employees._commissionable_sales_total` values a cashier's period
+as `Sum(Order.total)` over `committed_sales()`. That queryset excludes VOID, and
+a *full* return flips the order to VOID (`return_order_items` voids once every
+line's `returnable_quantity` hits 0) — so the code already states the policy
+"goods that came back earn no commission". It just implements it at exactly one
+point on the scale: a partial return leaves the order PAID and never touches
+`Order.total`, so returning three of four units still paid commission on four,
+and refunding everything *but one line* kept the full commission that a complete
+return would have removed. The same shape sat in `_commissionable_jobs_total`'s
+`order_total` base, only worse: `Sum("order__total")` off the job rows applied no
+status filter at all, so a fully **voided** repair invoice still paid the
+technician.
+**Action:** When a behaviour is right in the all-or-nothing case, don't record it
+as covered — that is the case the implementation gets for free from a status
+flag. Ask what the *partial* case does, and whether the two ends agree. And note
+the general shape: an aggregate reached through a related model
+(`Sum("order__total")` from `Job`) silently skips whatever manager/queryset
+filtering the owning model's own aggregates apply — `Order.objects` is a
+`committed_sales`-aware manager, `job.order__total` is not.
+
+## 2026-08-21 - Netting a mirror table into an aggregate needs a second query, not a join
+**Learning:** The obvious one-query fix — `aggregate(total=Sum("total"),
+refunded=Sum("adjustments__amount"))` — is wrong: the join fans each order row
+out once per adjustment, so `Sum("total")` multiplies by the number of returns
+against it. Two orders with two returns each report double the sales. Same trap
+as any "sum two different one-to-many branches in one aggregate".
+**Action:** Whenever an aggregate needs a figure from a second one-to-many
+relation, run it as its own `aggregate` over the same filtered queryset
+(`Model.objects.filter(order__in=orders)`), not as a second `Sum` in the first
+call. It costs one extra query and is the only correct form.
+
+## 2026-08-21 - The shared test database is contended; give your run its own
+**Learning:** `manage.py test` from a worktree against the primary `.env` targets
+`test_pointy`, which another routine's run holds open — the run dies with
+"database is being accessed by other users" and it looks like an environment
+fault. Pointing `DATABASE_URL` at a *nonexistent* database name works fine:
+Django creates the test DB through the `postgres` maintenance connection and
+never touches the named one.
+**Action:** Run backend tests as
+`DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/pointy_probe'
+POINTY_REQUIRE_POSTGRES=1 <venv>/bin/python manage.py test --noinput …` — own
+database (`test_pointy_probe`), still real Postgres, no collision with the fleet.
+`--noinput` matters too: without it the clobber prompt hits EOF and the run dies.
