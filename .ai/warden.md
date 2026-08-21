@@ -1322,3 +1322,109 @@ the verification anyway so the report is actionable, list the branches as
 let a human run the deletes. Separately: never batch read-only inspection into
 the same call as a destructive command, because one denial takes out both and
 costs a round trip to find out which half was actually refused.
+
+## 2026-08-21 - `VAR=x cd dir && cmd` silently drops the variables, and it gutted Oracle
+
+**Learning:** 🔍 Oracle's own prompt documented its instrument as
+
+```
+SIM_SEED=<fresh> SIM_OPERATIONS=<n> DATABASE_URL='sqlite://:memory:' \
+  cd backend && …/python manage.py test apps.sales.test_business_simulation
+```
+
+The assignments bind to `cd`, which is a regular builtin, so they do **not**
+survive into the `&&` command. Every run that copied that line ran with the
+*defaults* — `SIM_SEED` `20240624`, 300 operations — which is precisely the one
+thing the same prompt says is worthless ("re-running a seed that already passed
+proves nothing"). Proved both directions rather than reasoning about it: the
+corrected form (`cd … && SIM_SEED=… python …`) with `SIM_OPERATIONS=5` fails in
+1.2s at `assertGreaterEqual(len(sim.op_counts), 10)` → `2 not greater than or
+equal to 10`, i.e. five operations genuinely ran; the old form with the *same*
+variables passes in 14.3s, because it ran the default 300. A routine's central
+premise had been dead for days and every run reported success.
+
+**Action:** When a prompt or a PR body documents a command with env vars in
+front of a `cd`, treat it as broken until proved otherwise — `FOO=bar cd x &&
+echo $FOO` prints nothing, and it costs one command to check. More generally,
+when a routine's value depends on a *parameter* (a seed, a sample size, a
+concurrency level), verify the parameter actually reaches the program before
+believing a clean run: make the parameter absurd and check the run changes
+shape. A green suite that ignores its inputs is indistinguishable from a green
+suite that respects them, and only one of them is evidence.
+
+## 2026-08-21 - A doc-comment quote change in a Go diff is gofmt, not a stray edit
+
+**Learning:** 🔐 Sentinel's relay diff contained one line that looked exactly
+like an accidental find/replace riding along with the real change:
+`` // ``prompt`` `` became `// “prompt“`, malformed-looking (both quotes are
+left-quotes) and unrelated to the security fix. I "restored" it — and turned a
+gofmt-clean file into one that `gofmt -l` reports. Go 1.19+ doc comment
+reformatting rewrites double-backtick quoting into Unicode quotes, so the diff
+line was `gofmt` doing its job, and the PR was correct before I touched it.
+
+**Action:** Before flagging a cosmetic change in a Go diff, run `gofmt -l` on
+the file as it stands in the PR. If it is clean, the cosmetic line is the
+formatter's and reverting it is the regression. Run `gofmt -l .` after any Go
+edit you make yourself, for the same reason. The general form: a "stray edit"
+that a formatter would produce is not evidence of carelessness — check what the
+project's formatter does to that construct before writing the rejection.
+
+## 2026-08-21 - "Keep both sides" splices two class bodies when the hunks interleave
+
+**Learning:** Resolving 🧭 Compass's `test_backup.py`, both sides had added a new
+test class in the same region and git produced **two** conflict hunks. The
+reflex resolution — keep HEAD then keep main, in each hunk — is wrong here:
+hunk 1 held the *start* of `AbandonedMaintenanceJobTests` (ours) and the start
+of `BackupDurabilityTests` (theirs), and hunk 2 held the *continuations* of the
+same two. Applying "both sides" per hunk yields
+`AbandonedStart + DurabilityStart + AbandonedRest + DurabilityRest` — two class
+bodies interleaved into syntactic nonsense that still looks plausible in a diff.
+
+**Action:** Count the conflict hunks before resolving an add/add. One hunk of
+two disjoint additions is safely "keep both". *Two or more* hunks in the same
+region means the additions interleave, so rebuild instead: take `main`'s version
+of the file wholesale, append the branch's complete addition (extract it by its
+class/function boundaries, not by line offsets from the conflicted file), and
+carry over only the imports it needs. Then verify structurally — `grep -n
+'^class '` and check every class from both sides is present — rather than
+trusting that it compiled.
+
+## 2026-08-21 - When force-push is refused, reproduce the rebase as a merge and prove the trees match
+
+**Learning:** Bringing #55 up to date wanted a rebase, but `git push --force`,
+`git reset --hard` and `git branch -D` were all refused by the environment, not
+by git. The recovery is not to fight it: a rebase and a merge of the same two
+commits produce the **same tree**, and a merge pushes as an ordinary
+fast-forward. So resolve as a rebase, run the full verification against it, then
+redo the resolution as a merge from a detached worktree at the PR head and
+compare `git rev-parse HEAD^{tree}` — identical hashes (`aff03b64…`) mean what
+you are about to merge is byte-for-byte what you tested, with no second test
+run. The PR squashes anyway, so the merge commit costs nothing.
+
+**Action:** Prefer the merge form for *every* conflict resolution on a PR
+branch, not just when force-push is blocked — it needs no force, it is
+recoverable, and the tree-hash comparison gives you a cheap proof that the
+tested artefact and the merged artefact are the same object. And when any
+destructive git operation is refused by the environment, report it as an
+environment boundary with the verification already done, rather than reaching
+for a plumbing equivalent that produces the same effect.
+
+## 2026-08-21 - Stranded work is not automatically worth rescuing; check "superseded" first
+
+**Learning:** Three branches sat on `origin` with finished work and no PR. Two
+were real gaps — Compass's abandoned-backup-job reaper and Sentinel's AI
+continuation budget, both absent from `main`, both merged this session. The
+third, `claude/oracle-api-checkout-coverage`, looked identical in shape (+716,
+a 405-line oracle extension) and was **already obsolete**: `op_api_sale` had
+landed on `main` via #67, in a strictly more thorough form — main's version adds
+tender verification and a "rejected checkout still created an order" assertion
+the branch never had. Merging it would have *regressed* the harness. The same
+check retired four more branches whose work had re-landed under different PRs.
+
+**Action:** For anything recovered — a stranded branch, an uncommitted worktree,
+an old PR — the first question is "is this already on `main`, possibly under a
+different name?", and the grep is on the *symbol*, not the branch or commit
+title (`git grep -n '<new function>' origin/main`). If it is there, compare the
+two versions before assuming yours is the better one; the later implementation
+usually is, because it was written knowing more. Only then is it worth the
+merge-up, the test run and the PR.
