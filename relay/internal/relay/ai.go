@@ -158,6 +158,27 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 			outcome = limitOutcome
 			return
 		}
+	} else {
+		// count_usage is supplied by the caller, and the caller is the shop's own
+		// on-prem backend — so "this is only an internal continuation" is a claim
+		// the relay cannot verify. Left unbounded it makes the per-shop usage
+		// limits opt-out: a token holder that marks every turn as a continuation
+		// gets metered-free inference on the relay's OpenRouter key. The global
+		// concurrency slot above caps in-flight work but neither rate nor cost.
+		// Continuations therefore draw on their own generous per-shop window
+		// (see aiContinuationPolicy) — invisible to a legitimate agentic loop,
+		// but a ceiling rather than no limit at all.
+		if limited, limitStatus, limitOutcome := s.enforceRateLimit(
+			w,
+			r,
+			"ai_continuation",
+			aiContinuationBudgetKey(installation.ID),
+			s.aiContinuationPolicy(),
+		); limited {
+			statusCode = limitStatus
+			outcome = limitOutcome
+			return
+		}
 	}
 
 	// Enforce the per-prompt image cap (also enforced client-side) before
@@ -587,7 +608,7 @@ const aiTitleSystemPrompt = "Generate a very short title for a chat conversation
 	"user's message. Summarize the topic concisely; do not answer the message."
 
 // generateTitle asks the cheap fast model for a short conversation title from
-// ``prompt`` — the user's first message when they typed one, or the assistant's
+// “prompt“ — the user's first message when they typed one, or the assistant's
 // reply when they didn't (a voice/attachment turn), so a chat always gets a real
 // name. Returns "" on any failure so the caller can fall back to a truncated
 // title — a missing title must never block or break a reply.
@@ -948,6 +969,31 @@ func aiWindowSnapshot(used, limit int, resetAt *time.Time) map[string]any {
 
 func aiChatRateLimitKey(installationID string) string {
 	return "ai-chat:" + strings.TrimSpace(installationID)
+}
+
+func aiContinuationBudgetKey(installationID string) string {
+	return "ai-continuation:" + strings.TrimSpace(installationID)
+}
+
+// aiContinuationBudgetMultiple sizes the unmetered continuation window relative
+// to the metered 5h limit. Django caps one question at MAX_TOOL_ITERS (10)
+// continuation turns, and the daily dashboard digest adds a handful more, so
+// 20x the metered allowance clears the worst legitimate case with room to spare
+// while keeping the unmetered path bounded.
+const aiContinuationBudgetMultiple = 20
+
+// aiContinuationPolicy is the window continuation turns draw on. It rides the
+// metered 5h policy so it needs no separate configuration, and stays disabled
+// whenever usage metering itself is disabled (unlimited plans keep behaving
+// exactly as before).
+func (s HTTPServer) aiContinuationPolicy() ratelimit.Policy {
+	if !s.AILimit5H.Enabled() {
+		return ratelimit.Policy{}
+	}
+	return ratelimit.Policy{
+		Limit:  s.AILimit5H.Limit * aiContinuationBudgetMultiple,
+		Window: s.AILimit5H.Window,
+	}
 }
 
 func aiCredentialStatusCode(err error) int {

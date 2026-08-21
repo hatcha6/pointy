@@ -187,6 +187,7 @@ is a character allow-list that additionally rejects `..`.
 containment or artifact path handling. Re-check only if a *new* route is added
 to the `ServeHTTP` switch — the thing to verify then is that it has both a
 `RouteMode` gate and a wrapper, since the switch is hand-maintained.
+
 ## 2026-08-20 - An empty permission tuple means "any authenticated user"
 **Learning:** `HasPointyPermission` has three outcomes, not two:
 `_required_permissions` returning `None` denies (the unmapped case, already
@@ -310,3 +311,29 @@ bodies), check the viewset scope against the source document's viewset, not
 against the model's own `view_*` permission. Also keep order-less rows visible
 where an existing test relies on it — `PrintingPermissionTests` retrieves a
 manually created, order-less job as a cashier.
+
+## 2026-08-20 - The relay's identity plumbing is sound; its *metering* was the gap
+**Learning:** Audited the whole relay trust boundary end to end and the identity
+half is genuinely tight — every `Validate*Token` enforces the token *purpose*
+(so a ticket can't act as an access token), tokens are stored as SHA-256 hashes
+(a blank stored hash therefore never matches, unlike the Django-side plaintext
+`compare_digest` bug), `handleRelay` routes to `installation.ID` taken from the
+validated credential and never from a path or body field, the connector
+handshake binds the mTLS certificate fingerprint to the token's installation,
+and `handleInstallationRoutes` restricts self-service to three routes and
+requires `installation.ID == path id`. Don't re-audit those. The real gap was
+one layer up: `POST /v1/ai/chat` read `count_usage` **from the request body** to
+decide whether to charge the per-shop usage window — and the caller is the
+shop's own on-prem backend, so that is an unverifiable claim. Marking every turn
+a continuation made the paid 5h/weekly limits opt-out entirely; the repo's own
+`TestHandleAIChatCountUsageFalseSkipsCharge` documented it ("never charge, so
+they always pass"). The code's stated safeguard — the global `limit.Limiter`
+slot — is a non-blocking *concurrency* semaphore: it bounds in-flight count, not
+request rate and not cost.
+**Action:** Two reusable tells. (1) When a handler branches on a client-supplied
+field to skip a *charge* or a *limit*, ask who the client is — on the relay it is
+never Anthropic-side code, it is the shop. (2) A concurrency semaphore is not a
+rate limit; don't accept "the global limiter covers it" as the answer for an
+unmetered path. Also note `validateConnectorCertificate` returns nil when
+`ConnectorCertificateFingerprint == ""` — that is the deliberate pre-enrolment
+bootstrap window (token-only auth, still 32 random bytes), not a finding.
