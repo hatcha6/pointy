@@ -1,0 +1,23 @@
+{
+  "name": "daftar-promo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion promo videos for Daftar (\u062f\u0641\u062a\u0631) POS",
+  "scripts": {
+    "dev": "remotion studio",
+    "render": "node render-all.mjs",
+    "typecheck": "tsc --noEmit",
+    "posters": "node render-posters.mjs",
+    "brand": "node render-brand.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.394",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "remotion": "4.0.394"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.0",
+    "typescript": "5.7.3"
+  }
+}
