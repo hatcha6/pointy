@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
@@ -172,6 +171,22 @@ class BarcodeLabelDocumentService {
           'label print failed: ${spooled.error}',
         );
       }
+    }
+
+    // On macOS the plugin fallback below is not a fallback, it is a hang. Its
+    // print operation runs modally on the main thread and blocks on a semaphore
+    // inside `knowsPageRange`, waiting for the Dart `onLayout` reply — which can
+    // only be delivered on that same main thread. The app freezes with no error
+    // and has to be killed. (Observed under the App Sandbox, which forbids
+    // exec'ing `lp` and so sent the label down this path; the deadlock itself is
+    // the plugin's, not the sandbox's.) A named failure the caller can show
+    // beats a frozen till.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
+      return const PrintTransportResult.failure(
+        'label print failed: CUPS is unavailable — on macOS labels must spool '
+        'through `lp` (an unsandboxed build), because the document print '
+        'fallback deadlocks',
+      );
     }
 
     final format = document.platformPageFormat;

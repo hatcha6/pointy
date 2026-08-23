@@ -2,8 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Dev builds run UNSANDBOXED so the barcode-label path can exec `lp`. The
+	     App Sandbox forbids launching system binaries, and CUPS is the only
+	     route that can pin custom label media, turn off the driver's bottom
+	     paper-save and send the gap seek (see cups_pdf_spooler_io.dart).
+	     Sandboxed, that call fails and the label falls through to the printing
+	     plugin, whose macOS print operation deadlocks the app. Release keeps
+	     the sandbox; macOS is not a shipping target. -->
 	<key>com.apple.security.app-sandbox</key>
-	<true/>
+	<false/>
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
 	<key>com.apple.security.device.bluetooth</key>
@@ -11,6 +18,8 @@
 	<key>com.apple.security.device.camera</key>
 	<true/>
 	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>com.apple.security.print</key>
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
