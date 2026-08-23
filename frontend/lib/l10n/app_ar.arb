@@ -2739,6 +2739,7 @@
   "detectBarcodeLabelLanguageButton": "اكتشاف لغة طابعة الملصقات",
   "printerLabelWidthLabel": "عرض الملصق مم",
   "printerLabelHeightLabel": "ارتفاع الملصق مم",
+  "printerBarcodeLabelHeightHelper": "بوحدات الصفحة لا بمليمترات الورق: تغذية هذه الطابعات أقصر من قياسها الاسمي (٩٪ في LPQ80). اضرب الارتفاع المقاس بالمسطرة في: الخطوة ÷ (الملصق + الفاصل بالمسطرة). للتحقّق: الارتفاع + الفاصل = الخطوة.",
   "printerLabelGapLabel": "الفاصل مم",
   "printerLabelDpiLabel": "الدقة DPI",
   "printerBarcodeLanguageSummary": "لغة الملصقات: {language}",

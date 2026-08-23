@@ -4735,6 +4735,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printerLabelHeightLabel => 'ارتفاع الملصق مم';
 
   @override
+  String get printerBarcodeLabelHeightHelper =>
+      'بوحدات الصفحة لا بمليمترات الورق: تغذية هذه الطابعات أقصر من قياسها الاسمي (٩٪ في LPQ80). اضرب الارتفاع المقاس بالمسطرة في: الخطوة ÷ (الملصق + الفاصل بالمسطرة). للتحقّق: الارتفاع + الفاصل = الخطوة.';
+
+  @override
   String get printerLabelGapLabel => 'الفاصل مم';
 
   @override

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../../../core/analytics_engine.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/barcode_label.dart';
 import '../../../data/repositories/printing_repository.dart';
+import '../../../data/services/barcode_label_print_preferences.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
@@ -233,6 +235,16 @@ class _BarcodeLabelPrintOptionsDialogState
   void initState() {
     super.initState();
     _includeExpiryDate = widget.tracksExpiry;
+    _loadIncludePriceDefault();
+  }
+
+  /// The switch opens on whatever this counter chose last time.
+  Future<void> _loadIncludePriceDefault() async {
+    final remembered = await barcodeLabelPrintPreferences.includePrice();
+    if (!mounted || remembered == _includePrice) {
+      return;
+    }
+    setState(() => _includePrice = remembered);
   }
 
   @override
@@ -388,6 +400,7 @@ class _BarcodeLabelPrintOptionsDialogState
     if (!_formKey.currentState!.validate()) {
       return;
     }
+    unawaited(barcodeLabelPrintPreferences.setIncludePrice(_includePrice));
     Navigator.of(context).pop(
       BarcodeLabelPrintDialogResult(
         copies: int.parse(_copiesController.text),

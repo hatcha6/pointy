@@ -334,11 +334,9 @@ class PrintingRepository {
     // same route its receipts take. Raw ESC/POS-family printers use the native
     // label-language encoder.
     if (config.endpoint.usesDocumentInvoice) {
-      final shopName = await _loadShopNameForLabels();
       return _barcodeLabelDocumentService.printLabels(
         lines: lines,
         endpoint: config.endpoint,
-        shopName: shopName,
       );
     }
     if (!config.endpoint.usesThermalReceipt) {
@@ -351,18 +349,6 @@ class PrintingRepository {
       return _printBarcodeLabelLines(lines, config);
     } on Object catch (error) {
       return PrintTransportResult.failure(error.toString());
-    }
-  }
-
-  /// Best-effort shop name for the sticker header. Never throws — a label still
-  /// prints (without the shop line) if settings can't be fetched (e.g. offline).
-  Future<String?> _loadShopNameForLabels() async {
-    try {
-      final settings = await _service.fetchShopSettings();
-      final name = settings.shopName.trim();
-      return name.isEmpty ? null : name;
-    } on Object {
-      return null;
     }
   }
 
@@ -388,11 +374,7 @@ class PrintingRepository {
     PrinterConfig config,
   ) async {
     if (config.endpoint.usesDocumentInvoice) {
-      final shopName = await _loadShopNameForLabels();
-      return _barcodeLabelDocumentService.printTest(
-        config.endpoint,
-        shopName: shopName,
-      );
+      return _barcodeLabelDocumentService.printTest(config.endpoint);
     }
     if (!config.endpoint.usesThermalReceipt) {
       return const PrintTransportResult.failure(

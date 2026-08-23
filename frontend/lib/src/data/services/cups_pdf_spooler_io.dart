@@ -13,6 +13,10 @@ import 'dart:typed_data';
 ///
 /// `lp` takes the media size per job (`-o media=Custom.40x25mm`), which pins the
 /// page to the die-cut sticker: no fitting, no rotation, no wasted labels.
+///
+/// Set [registerLabelTop] for die-cut media, and only for die-cut media: the
+/// job is then preceded by a gap seek that parks the roll on a sticker's
+/// leading edge (see [seekLabelTopViaCups]).
 Future<CupsSpoolResult> spoolPdfToCups({
   required Uint8List bytes,
   required String? queue,
@@ -20,6 +24,7 @@ Future<CupsSpoolResult> spoolPdfToCups({
   required double mediaWidthMm,
   required double mediaHeightMm,
   int copies = 1,
+  bool registerLabelTop = false,
 }) async {
   if (!Platform.isLinux && !Platform.isMacOS) {
     return const CupsSpoolResult.unsupported();
@@ -31,6 +36,14 @@ Future<CupsSpoolResult> spoolPdfToCups({
   Directory? workDir;
   try {
     workDir = await Directory.systemTemp.createTemp('pointy-label-');
+
+    // Register first, print second. Both go to the same queue, and CUPS runs a
+    // queue's jobs in submission order, so the roll is on a label edge by the
+    // time the artwork arrives.
+    if (registerLabelTop) {
+      await seekLabelTopViaCups(queue: queue, workDir: workDir);
+    }
+
     final file = File('${workDir.path}/$jobName.pdf');
     await file.writeAsBytes(bytes, flush: true);
 
@@ -44,6 +57,15 @@ Future<CupsSpoolResult> spoolPdfToCups({
       // or fit-to-page the filter chain might apply would only distort it.
       '-o', 'orientation-requested=3',
       '-o', 'print-scaling=none',
+      // Feed the WHOLE page, blank tail included. Receipt-derived drivers
+      // default to trimming the trailing white off a page ("bottom paper save"
+      // — on the LPQ80's PPD it is on by default and cut 5.5 mm off an 81.7 mm
+      // strip). On a receipt that only saves paper; on die-cut labels it means
+      // every job stops short of the page it was given, so the roll ends a
+      // little behind where the next job assumes it starts, and the labels walk
+      // down the strip. Unknown to other PPDs, where CUPS ignores it.
+      '-o', 'PaperSaveBottom=0',
+      '-o', 'PaperSaveMode=0',
       file.path,
     ]).timeout(const Duration(seconds: 20));
 
@@ -68,6 +90,49 @@ Future<CupsSpoolResult> spoolPdfToCups({
     } on Object {
       // Best effort: a leftover temp file must never fail a print.
     }
+  }
+}
+
+/// Parks the roll on a die-cut sticker's leading edge, the way the FEED button
+/// does, by sending the printer a bare `GS FF` (`1D 0C`) as a raw job.
+///
+/// **Why the driver can't be trusted to do this.** The HPRT LPQ80's bundled PPD
+/// is a receipt PPD (`*Product: "(LPQ80ESC)"`, model `POS80`) and its filter
+/// reports `islabelprinter = NO`. Parsing what it actually emits confirms it:
+/// `ESC @`, a run of `GS v 0` raster blocks, and nothing else — no form feed, no
+/// gap seek, at either end of the job. The print lands wherever the paper
+/// happens to be sitting. Absent this seek the only thing keeping the artwork on
+/// the stickers is that every job feeds a whole number of pitches and so ends in
+/// the phase it started, which holds right up until anything moves the roll —
+/// a torn label, a new roll, a receipt, a FEED press, the lid.
+///
+/// Costs one blank label per job, which is the same label the cashier gives up
+/// pressing FEED by hand, and buys registration that does not depend on the roll
+/// never being touched.
+///
+/// Die-cut media only. On continuous stock there is no gap to find and the
+/// printer feeds until it gives up — the caller gates this on the endpoint's
+/// media being a sticker.
+///
+/// Best effort throughout: a printer that ignores `GS FF` is no worse off than
+/// before, so a failure here must never stop the labels from printing.
+Future<void> seekLabelTopViaCups({
+  required String? queue,
+  required Directory workDir,
+}) async {
+  try {
+    final file = File('${workDir.path}/label-top-seek.bin');
+    await file.writeAsBytes(const [0x1d, 0x0c], flush: true);
+    await Process.run('lp', [
+      if (queue != null && queue.trim().isNotEmpty) ...['-d', queue.trim()],
+      '-t', 'label-top-seek',
+      // Straight to the device: the raster filter would swallow these two bytes
+      // as if they were a document to render.
+      '-o', 'raw',
+      file.path,
+    ]).timeout(const Duration(seconds: 10));
+  } on Object {
+    // See above: the labels still print, just without the re-registration.
   }
 }
 

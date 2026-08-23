@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/src/data/models/barcode_label.dart';
@@ -49,7 +51,6 @@ void main() {
     final document = await service.buildLabelsDocument(
       lines: [line],
       endpoint: endpoint(BarcodeLabelPdfSize.sticker),
-      shopName: 'متجر الأمانة',
     );
     expect(document.bytes, isNotEmpty);
     // 40 mm → 40 * 72 / 25.4 ≈ 113.39 pt, 25 mm → 70.87 pt. The MediaBox is
@@ -82,7 +83,6 @@ void main() {
     final document = await service.buildLabelsDocument(
       lines: [line],
       endpoint: endpoint(BarcodeLabelPdfSize.sticker, offsetXMm: 20),
-      shopName: 'متجر الأمانة',
     );
     // 20 mm run-up + 40 mm sticker = 60 mm → 170.08 pt, height unchanged.
     expect(_mediaBox(document.bytes), _isSize(170.08, 70.87));
@@ -98,7 +98,6 @@ void main() {
         offsetXMm: 20,
         offsetYMm: 5,
       ),
-      shopName: 'متجر الأمانة',
     );
     // 20 + 40 mm across → 170.08 pt; 5 + 25 mm down → 85.04 pt.
     expect(_mediaBox(document.bytes), _isSize(170.08, 85.04));
@@ -118,12 +117,45 @@ void main() {
         offsetYMm: 1,
         pitchMm: 26.9,
       ),
-      shopName: 'متجر الأمانة',
     );
-    // One page: 1 mm run-up + 4 × 26.9 mm → 108.6 mm → 307.8 pt.
+    // One page: 4 × 26.9 mm → 107.6 mm → 305.0 pt. The 1 mm run-up is spent
+    // inside the first pitch, not added on top of the strip.
     expect(_pageCount(document.bytes), 1);
-    expect(_mediaBox(document.bytes).height, closeTo(307.8, 1));
-    expect(document.mediaHeightMm, closeTo(108.6, 0.01));
+    expect(_mediaBox(document.bytes).height, closeTo(305.0, 1));
+    expect(document.mediaHeightMm, closeTo(107.6, 0.01));
+  });
+
+  test('a strip is a whole number of pitches, so jobs stay in phase', () async {
+    // The roll has to end a job the same distance from the next sticker's
+    // leading edge as it started, or every job walks one run-up further down
+    // the labels and someone has to press FEED to straighten it out.
+    for (final offsetYMm in [0, 1, 3]) {
+      for (final pitchMm in [26.9, 30.0, 25.5]) {
+        final document = await service.buildLabelsDocument(
+          lines: [
+            BarcodeLabelPrintLine(label: line.label, copies: 5),
+          ],
+          endpoint: endpoint(
+            BarcodeLabelPdfSize.sticker,
+            offsetYMm: offsetYMm,
+            pitchMm: pitchMm,
+          ),
+        );
+        final pitches = document.mediaHeightMm! / pitchMm;
+        expect(
+          pitches,
+          closeTo(pitches.roundToDouble(), 0.001),
+          reason:
+              'a $pitchMm mm pitch with a $offsetYMm mm run-up left the strip '
+              'at ${document.mediaHeightMm} mm, which is not a whole pitch',
+        );
+        // And it still has to be long enough to hold every sticker.
+        expect(
+          document.mediaHeightMm,
+          greaterThanOrEqualTo(offsetYMm + 4 * pitchMm + 25),
+        );
+      }
+    }
   });
 
   test('a run longer than one strip splits into equal strips', () async {
@@ -163,7 +195,6 @@ void main() {
       final document = await service.buildLabelsDocument(
         lines: [line],
         endpoint: endpoint(BarcodeLabelPdfSize.sticker, rotation: rotation),
-        shopName: 'متجر الأمانة',
       );
       expect(
         _mediaBox(document.bytes),
@@ -179,12 +210,10 @@ void main() {
     final upright = await service.buildLabelsPdf(
       lines: [line],
       endpoint: endpoint(BarcodeLabelPdfSize.sticker),
-      shopName: 'متجر الأمانة',
     );
     final turned = await service.buildLabelsPdf(
       lines: [line],
       endpoint: endpoint(BarcodeLabelPdfSize.sticker, rotation: 1),
-      shopName: 'متجر الأمانة',
     );
     expect(turned, isNot(equals(upright)));
   });
@@ -193,7 +222,6 @@ void main() {
     final document = await service.buildLabelsDocument(
       lines: [line],
       endpoint: endpoint(BarcodeLabelPdfSize.roll80),
-      shopName: 'متجر الأمانة',
     );
     expect(document.bytes, isNotEmpty);
     // 80 mm → 226.77 pt wide, with a measured (never infinite) height.
@@ -208,7 +236,6 @@ void main() {
     final document = await service.buildLabelsDocument(
       lines: [line],
       endpoint: endpoint(BarcodeLabelPdfSize.a4),
-      shopName: 'متجر الأمانة',
     );
     expect(document.bytes, isNotEmpty);
     // A4 width → 595.28 pt. A sheet needs no custom media.
@@ -235,6 +262,65 @@ void main() {
     expect(bytes, isEmpty);
   });
 
+  test('the price is set at the name\'s size, and both are big', () async {
+    final bytes = await service.buildLabelsPdf(
+      lines: [line],
+      // The shop's own 33 x 23 mm die-cut roll.
+      endpoint: endpoint(
+        BarcodeLabelPdfSize.sticker,
+        widthMm: 33,
+        heightMm: 23,
+      ),
+    );
+    final sizes = _fontSizes(bytes);
+    expect(sizes, isNotEmpty);
+
+    // Name and price are the two things read from arm's length: same size, and
+    // nothing on the sticker is set larger than they are.
+    final headline = sizes.reduce(math.max);
+    expect(
+      sizes.where((size) => size == headline).length,
+      greaterThanOrEqualTo(2),
+      reason: 'the name and the price should share one size',
+    );
+    // 23 mm sticker, 1 mm margins -> a 21 mm card. Anything under ~7.5 pt
+    // (2.6 mm) is the soft, thin type this layout exists to get away from.
+    expect(headline, greaterThan(8));
+    // Only the human-readable barcode digits are allowed to be smaller, so the
+    // sticker uses exactly two sizes.
+    expect(sizes.toSet(), hasLength(2));
+  });
+
+  test('a label with no price gives the name and the bars the room', () async {
+    final priced = await service.buildLabelsPdf(
+      lines: [line],
+      endpoint: endpoint(
+        BarcodeLabelPdfSize.sticker,
+        widthMm: 33,
+        heightMm: 23,
+      ),
+    );
+    final bare = await service.buildLabelsPdf(
+      lines: [
+        BarcodeLabelPrintLine(
+          label: line.label,
+          copies: 1,
+          includePrice: false,
+        ),
+      ],
+      endpoint: endpoint(
+        BarcodeLabelPdfSize.sticker,
+        widthMm: 33,
+        heightMm: 23,
+      ),
+    );
+    expect(
+      _fontSizes(bare).reduce(math.max),
+      greaterThan(_fontSizes(priced).reduce(math.max)),
+      reason: 'the name should grow into the space the price gave up',
+    );
+  });
+
   test(
     'writes sample PDFs for visual inspection when POINTY_LABEL_DUMP set',
     () async {
@@ -258,6 +344,18 @@ void main() {
           widthMm: 50,
           heightMm: 30,
         ),
+        // The HPRT LPQ80 exactly as calibrated in the field: the smallest roll
+        // in use, and the geometry that shows whether the layout still holds
+        // when it is tight. Printable as-is with
+        // `lp -o media=Custom.55x80.7mm -o PaperSaveBottom=0`.
+        'sticker33x23-lpq80': endpoint(
+          BarcodeLabelPdfSize.sticker,
+          widthMm: 33,
+          heightMm: 23,
+          offsetXMm: 22,
+          offsetYMm: 1,
+          pitchMm: 26.9,
+        ),
         'roll80': endpoint(BarcodeLabelPdfSize.roll80),
         'a4': endpoint(BarcodeLabelPdfSize.a4),
       };
@@ -265,12 +363,38 @@ void main() {
         final bytes = await service.buildLabelsPdf(
           lines: [line, line],
           endpoint: entry.value,
-          shopName: 'متجر الأمانة',
         );
         File('$dumpDir/${entry.key}.pdf').writeAsBytesSync(bytes);
       }
     },
   );
+}
+
+/// Every font size the document actually sets, read off the page content
+/// streams' `Tf` operators — the sizes the printer will render, not the ones the
+/// layout asked for.
+List<double> _fontSizes(Uint8List bytes) {
+  final sizes = <double>[];
+  final marker = RegExp('stream\r?\n');
+  for (final match in marker.allMatches(latin1.decode(bytes))) {
+    final start = match.end;
+    final end = latin1.decode(bytes).indexOf('endstream', start);
+    if (end < 0) {
+      continue;
+    }
+    List<int> inflated;
+    try {
+      inflated = zlib.decode(bytes.sublist(start, end));
+    } on Object {
+      continue;
+    }
+    for (final tf in RegExp(
+      r'/F\d+\s+([\d.]+)\s+Tf',
+    ).allMatches(latin1.decode(inflated))) {
+      sizes.add(double.parse(tf.group(1)!));
+    }
+  }
+  return sizes;
 }
 
 /// Page size in points, read off the PDF's own `/MediaBox`.

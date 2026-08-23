@@ -37,15 +37,11 @@ class BarcodeLabelDocumentService {
   Future<PrintTransportResult> printLabels({
     required List<BarcodeLabelPrintLine> lines,
     required PrinterEndpoint endpoint,
-    String? shopName,
-    Uint8List? shopLogoBytes,
   }) async {
     try {
       final document = await buildLabelsDocument(
         lines: lines,
         endpoint: endpoint,
-        shopName: shopName,
-        shopLogoBytes: shopLogoBytes,
       );
       if (document.bytes.isEmpty) {
         return const PrintTransportResult.failure('no barcode labels to print');
@@ -60,10 +56,7 @@ class BarcodeLabelDocumentService {
     }
   }
 
-  Future<PrintTransportResult> printTest(
-    PrinterEndpoint endpoint, {
-    String? shopName,
-  }) {
+  Future<PrintTransportResult> printTest(PrinterEndpoint endpoint) {
     return printLabels(
       lines: const [
         BarcodeLabelPrintLine(
@@ -79,7 +72,6 @@ class BarcodeLabelDocumentService {
         ),
       ],
       endpoint: endpoint,
-      shopName: shopName,
     );
   }
 
@@ -109,14 +101,10 @@ class BarcodeLabelDocumentService {
   Future<Uint8List> buildLabelsPdf({
     required List<BarcodeLabelPrintLine> lines,
     required PrinterEndpoint endpoint,
-    String? shopName,
-    Uint8List? shopLogoBytes,
   }) async {
     final document = await buildLabelsDocument(
       lines: lines,
       endpoint: endpoint,
-      shopName: shopName,
-      shopLogoBytes: shopLogoBytes,
     );
     return document.bytes;
   }
@@ -126,8 +114,6 @@ class BarcodeLabelDocumentService {
   Future<BarcodeLabelDocument> buildLabelsDocument({
     required List<BarcodeLabelPrintLine> lines,
     required PrinterEndpoint endpoint,
-    String? shopName,
-    Uint8List? shopLogoBytes,
   }) async {
     final stickers = _expand(lines);
     if (stickers.isEmpty) {
@@ -144,7 +130,6 @@ class BarcodeLabelDocumentService {
       stickerPitchMm: endpoint.labelPdfPitchMm,
       dpi: endpoint.labelDpi,
       rotationQuarterTurns: endpoint.labelRotationQuarterTurns,
-      shopName: (shopName ?? '').trim(),
       fonts: fonts,
     ).build();
   }
@@ -175,6 +160,9 @@ class BarcodeLabelDocumentService {
         jobName: jobName,
         mediaWidthMm: width,
         mediaHeightMm: height,
+        // Die-cut stock only: on a continuous roll there is no gap to seek and
+        // the printer would feed until it times out.
+        registerLabelTop: endpoint.labelPdfSize == BarcodeLabelPdfSize.sticker,
       );
       if (spooled.succeeded) {
         return const PrintTransportResult.success('barcode labels printed');
@@ -304,7 +292,6 @@ class _BarcodeLabelSheet {
     required this.stickerPitchMm,
     required this.dpi,
     required this.rotationQuarterTurns,
-    required this.shopName,
     required this.fonts,
   });
 
@@ -317,7 +304,6 @@ class _BarcodeLabelSheet {
   final double stickerPitchMm;
   final int dpi;
   final int rotationQuarterTurns;
-  final String shopName;
   final PointyPdfFonts fonts;
 
   static const _ink = PdfColor.fromInt(0xff000000);
@@ -379,8 +365,15 @@ class _BarcodeLabelSheet {
     final heightMm = stickerHeightMm.clamp(_minStickerMm, _maxStickerMm);
     final offsetXMm = stickerOffsetXMm.clamp(0.0, _maxStickerMm);
     final offsetYMm = stickerOffsetYMm.clamp(0.0, _maxStickerMm);
-    final marginXMm = math.min(1.5, widthMm * 0.05);
-    final marginYMm = math.min(2.0, heightMm * 0.09);
+    // Quiet zone. Across the head registration is exact, so 1.2 mm is plenty —
+    // the old 1.5 mm was label the shop paid for and could not use. Down the
+    // feed it is not exact (that is the whole reason the pitch has to be
+    // calibrated), so the vertical margin stays wide enough to absorb the
+    // registration this printer actually delivers. Cutting it to 1.0 mm to win
+    // 4% of a 23 mm sticker was a bad trade: it spends the tolerance that keeps
+    // the top line off the die-cut edge.
+    final marginXMm = math.min(1.2, widthMm * 0.05);
+    final marginYMm = math.min(1.8, heightMm * 0.08);
     // How far apart the stickers repeat on the roll. Zero means "one page per
     // label": the printer seeks the gap between pages and re-registers every
     // sticker, which is what gap-sensing label media is for. Set it only for a
@@ -410,8 +403,20 @@ class _BarcodeLabelSheet {
     final stripCount = (stickers.length / maxPerStrip).ceil();
     final perStrip = (stickers.length / stripCount).ceil();
 
+    // A strip is a WHOLE number of label pitches, so the roll ends a job in the
+    // same phase it began: the head is left the same distance from the next
+    // sticker's leading edge as it was at the start, and the job after this one
+    // lands on the labels without anyone touching FEED.
+    //
+    // The run-up ([stickerOffsetYMm]) is spent *inside* the first pitch, never
+    // added on top of it. Added on top — which is what this used to do — every
+    // job overshot by exactly that run-up and the print walked one offset down
+    // the roll per job. The ceiling covers the rare geometry whose sticker plus
+    // run-up is longer than one pitch, at the cost of a blank label.
+    final minStripHeightMm =
+        offsetYMm + (perStrip - 1) * pitchMm + heightMm;
     final stripHeightMm = stripMode
-        ? offsetYMm + perStrip * pitchMm
+        ? (minStripHeightMm / pitchMm).ceil() * pitchMm
         : offsetYMm + heightMm;
 
     final pdf = _newDocument();
@@ -467,7 +472,7 @@ class _BarcodeLabelSheet {
   /// (180°) here — a roll's width already equals the label width, so 90°/270°
   /// would not fit the media.
   Future<BarcodeLabelDocument> _buildRollPages(double widthMm) async {
-    const marginMm = 3.0;
+    const marginMm = 2.0;
     final contentWidth = (widthMm - 2 * marginMm) * _mm;
     final cardHeight = widthMm * 0.62 * _mm;
     final pageHeight = cardHeight + 2 * marginMm * _mm;
@@ -506,7 +511,7 @@ class _BarcodeLabelSheet {
     final cellWidthMm = stickerWidthMm.clamp(_minStickerMm, _maxStickerMm);
     final cellHeightMm = stickerHeightMm.clamp(_minStickerMm, _maxStickerMm);
     const gapMm = 2.0;
-    final paddingMm = math.min(1.5, math.min(cellWidthMm, cellHeightMm) * 0.06);
+    final paddingMm = math.min(1.0, math.min(cellWidthMm, cellHeightMm) * 0.05);
     final cardWidth = (cellWidthMm - 2 * paddingMm) * _mm;
     final cardHeight = (cellHeightMm - 2 * paddingMm) * _mm;
 
@@ -552,25 +557,44 @@ class _BarcodeLabelSheet {
     return BarcodeLabelDocument(bytes: await pdf.save());
   }
 
-  /// The sticker face: shop name, product name, barcode (with human-readable
-  /// digits) and an optional price / expiry line. RTL, all pure black.
+  /// The sticker face: product name, barcode (with human-readable digits) and,
+  /// when the line asks for them, the price and an expiry date. RTL, all pure
+  /// black.
   ///
-  /// Every row is a **fixed** box that together fill the card exactly, and each
-  /// row scales its own text down to fit. Nothing scales the card as a whole:
-  /// a card-wide scale factor is what used to shrink the type below what a
-  /// 203-dpi head can hold together (the soft, thin look next to a receipt) and
-  /// it would also drag the barcode off the printer's dot grid.
+  /// The name and the price are the two things read from arm's length — off a
+  /// shelf, at a glance — so they are set in the same face at the same size and
+  /// take an equal share of the card. Nothing else competes with them: the shop
+  /// already owns the shelf the sticker is on, so its name is not repeated here.
+  ///
+  /// Every row is a **fixed** box, the boxes together fill the card exactly, and
+  /// each row scales only its own text down to fit. Nothing scales the card as a
+  /// whole: a card-wide scale factor is what used to shrink the type below what
+  /// a 203-dpi head can hold together (the soft, thin look next to a receipt)
+  /// and it would also drag the barcode off the printer's dot grid.
+  ///
+  /// A sticker with no footer hands that share to the name and the bars rather
+  /// than leaving the label part empty.
   pw.Widget _card(
     _LabelSticker sticker, {
     required double cardWidth,
     required double cardHeight,
   }) {
-    final showShop = shopName.isNotEmpty && cardHeight >= 13 * _mm;
-    final shopHeight = showShop ? cardHeight * 0.12 : 0.0;
-    final nameHeight = cardHeight * 0.22;
-    final digitsHeight = cardHeight * 0.12;
-    final footerHeight = cardHeight * 0.18;
-    final footer = _footer(sticker, height: footerHeight);
+    final hasFooter = sticker.priceText != null || sticker.expiryLine != null;
+    final name = sticker.name.isEmpty ? '\u2014' : sticker.name;
+
+    // The one size the name and the price are both set at.
+    final headlineFontSize = cardHeight * (hasFooter ? 0.15 : 0.17);
+    // A name too long for two lines is set smaller until it fits, instead of
+    // being clipped mid-word.
+    final nameLines = (_estimatedWidth(name, headlineFontSize) / cardWidth)
+        .ceil();
+    final nameFontSize = nameLines <= 2
+        ? headlineFontSize
+        : headlineFontSize * 2 / nameLines;
+
+    final digitsHeight = cardHeight * 0.11;
+    final footerHeight = hasFooter ? headlineFontSize * 1.34 : 0.0;
+    final footer = _footer(sticker, fontSize: headlineFontSize);
 
     // Bars wider than ~60 mm buy nothing but ink: a scanner needs module width,
     // not overall length.
@@ -586,35 +610,18 @@ class _BarcodeLabelSheet {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          if (showShop)
-            _row(
-              height: shopHeight,
-              width: cardWidth,
-              child: pw.Text(
-                shopName,
-                maxLines: 1,
-                overflow: pw.TextOverflow.clip,
-                textAlign: pw.TextAlign.center,
-                style: pw.TextStyle(
-                  fontSize: shopHeight * 0.8,
-                  fontWeight: pw.FontWeight.bold,
-                  color: _ink,
-                ),
-              ),
-            ),
-          _row(
-            height: nameHeight,
-            width: cardWidth,
-            child: pw.Text(
-              sticker.name.isEmpty ? '—' : sticker.name,
-              maxLines: 2,
-              overflow: pw.TextOverflow.clip,
-              textAlign: pw.TextAlign.center,
-              style: pw.TextStyle(
-                fontSize: nameHeight * 0.78,
-                fontWeight: pw.FontWeight.bold,
-                color: _ink,
-              ),
+          // The name takes exactly the one or two lines it needs — never a
+          // fixed box it has to be shrunk into, and never a fixed box it leaves
+          // half empty. Whatever it doesn't use goes to the bars below.
+          pw.Text(
+            name,
+            maxLines: 2,
+            overflow: pw.TextOverflow.clip,
+            textAlign: pw.TextAlign.center,
+            style: pw.TextStyle(
+              fontSize: nameFontSize,
+              fontWeight: pw.FontWeight.bold,
+              color: _ink,
             ),
           ),
           pw.Expanded(
@@ -660,6 +667,22 @@ class _BarcodeLabelSheet {
     );
   }
 
+  /// Roughly how wide [text] sets at [fontSize] — enough to decide whether the
+  /// product name needs a second line.
+  ///
+  /// Exact metrics would need the document's own `PdfFont`, which only exists
+  /// inside a page's build, and would still misjudge Arabic: the metrics table
+  /// lists isolated glyphs, while what prints are the narrower joined forms. So
+  /// this errs wide, and guessing wrong only costs the line the row's own
+  /// scale-to-fit would have taken back anyway.
+  double _estimatedWidth(String text, double fontSize) {
+    var ems = 0.0;
+    for (final rune in text.runes) {
+      ems += rune == 0x20 ? 0.28 : 0.55;
+    }
+    return ems * fontSize;
+  }
+
   /// One fixed-height row of the card. The text inside is laid out at the card's
   /// full width — so it wraps rather than running off — then scaled down only if
   /// it still overflows its own row.
@@ -678,16 +701,17 @@ class _BarcodeLabelSheet {
     );
   }
 
-  /// Price (and expiry, when the line carries one) — the price is the one thing
-  /// on a sticker that gets read from arm's length, so it is the biggest.
-  pw.Widget? _footer(_LabelSticker sticker, {required double height}) {
+  /// Price (and expiry, when the line carries one). The price is set in the
+  /// name's face at the name's size — [fontSize] is the very number the name
+  /// used — so the two read as one pair from across an aisle.
+  pw.Widget? _footer(_LabelSticker sticker, {required double fontSize}) {
     final price = sticker.priceText;
     final expiry = sticker.expiryLine;
     if (price == null && expiry == null) {
       return null;
     }
     final priceStyle = pw.TextStyle(
-      fontSize: height * 0.95,
+      fontSize: fontSize,
       fontWeight: pw.FontWeight.bold,
       color: _ink,
     );
@@ -716,7 +740,7 @@ class _BarcodeLabelSheet {
           maxLines: 1,
           overflow: pw.TextOverflow.clip,
           style: pw.TextStyle(
-            fontSize: height * 0.55,
+            fontSize: fontSize * 0.6,
             fontWeight: pw.FontWeight.bold,
             color: _ink,
           ),

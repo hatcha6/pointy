@@ -8383,6 +8383,12 @@ abstract class AppLocalizations {
   /// **'ارتفاع الملصق مم'**
   String get printerLabelHeightLabel;
 
+  /// No description provided for @printerBarcodeLabelHeightHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'بوحدات الصفحة لا بمليمترات الورق: تغذية هذه الطابعات أقصر من قياسها الاسمي (٩٪ في LPQ80). اضرب الارتفاع المقاس بالمسطرة في: الخطوة ÷ (الملصق + الفاصل بالمسطرة). للتحقّق: الارتفاع + الفاصل = الخطوة.'**
+  String get printerBarcodeLabelHeightHelper;
+
   /// No description provided for @printerLabelGapLabel.
   ///
   /// In ar, this message translates to:

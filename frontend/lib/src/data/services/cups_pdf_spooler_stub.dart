@@ -8,6 +8,7 @@ Future<CupsSpoolResult> spoolPdfToCups({
   required double mediaWidthMm,
   required double mediaHeightMm,
   int copies = 1,
+  bool registerLabelTop = false,
 }) async {
   return const CupsSpoolResult.unsupported();
 }

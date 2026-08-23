@@ -15,6 +15,7 @@ import 'data/models/business_alert.dart';
 import 'data/models/report_run.dart';
 import 'data/models/sale_order.dart';
 import 'data/models/shop_settings.dart';
+import 'data/services/barcode_label_print_preferences.dart';
 import 'features/activity_log/views/activity_log_event_presenter.dart';
 import 'features/activity_log/views/activity_log_screen.dart';
 import 'features/ai/view_models/ai_chat_view_model.dart';
@@ -1549,10 +1550,14 @@ class _AuthenticatedRoutes implements AppNavigation {
   Future<void> _printProductLabel(BuildContext context, Product product) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
+    // The palette prints in one tap, so it takes the counter's remembered
+    // answer to "price on the label?" rather than assuming one.
+    final includePrice = await barcodeLabelPrintPreferences.includePrice();
     final result = await dependencies.printingRepository.printBarcodeLabels([
       BarcodeLabelPrintLine(
         label: BarcodeLabelDraft.fromProduct(product),
         copies: 1,
+        includePrice: includePrice,
       ),
     ]);
     messenger.showSnackBar(

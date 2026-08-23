@@ -576,6 +576,14 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
                             onChanged: widget.viewModel.updateLabelHeight,
                             decoration: InputDecoration(
                               labelText: l10n.printerLabelHeightLabel,
+                              // Page units, not paper millimetres. Leaving this
+                              // unsaid once cost a night: a sticker entered at
+                              // its tape-measured height makes the card centre
+                              // in a box shorter than the label, and nudging the
+                              // offset to correct it only walks the print off
+                              // one edge or the other.
+                              helperText: l10n.printerBarcodeLabelHeightHelper,
+                              helperMaxLines: 4,
                               prefixIcon: const Icon(Icons.height_outlined),
                             ),
                           ),
