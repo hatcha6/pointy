@@ -8,7 +8,6 @@ import Foundation
 import audioplayers_darwin
 import file_picker
 import file_selector_macos
-import flutter_bluetooth_classic_serial
 import flutter_libserialport
 import flutter_tts
 import mobile_scanner
@@ -25,7 +24,6 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   AudioplayersDarwinPlugin.register(with: registry.registrar(forPlugin: "AudioplayersDarwinPlugin"))
   FilePickerPlugin.register(with: registry.registrar(forPlugin: "FilePickerPlugin"))
   FileSelectorPlugin.register(with: registry.registrar(forPlugin: "FileSelectorPlugin"))
-  SwiftFlutterBluetoothClassicPlugin.register(with: registry.registrar(forPlugin: "SwiftFlutterBluetoothClassicPlugin"))
   FlutterLibserialportPlugin.register(with: registry.registrar(forPlugin: "FlutterLibserialportPlugin"))
   FlutterTtsPlugin.register(with: registry.registrar(forPlugin: "FlutterTtsPlugin"))
   MobileScannerPlugin.register(with: registry.registrar(forPlugin: "MobileScannerPlugin"))
