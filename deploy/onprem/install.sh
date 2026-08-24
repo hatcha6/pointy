@@ -153,14 +153,82 @@ docker info >/dev/null 2>&1 \
 docker compose version >/dev/null 2>&1 \
   || err "Docker Compose v2 ('docker compose') is required but missing."
 
+# ---------------------------------------------------------------------------
+# Image archives are destroyed once Docker has taken them.
+#
+# ./images/pointy-*.tar is the softest target on the whole machine: two plain
+# `tar xf` calls — no Docker, no root, no knowledge of anything — and the
+# application's entire source tree is sitting in a directory. Docker's own image
+# store is a materially harder target, and it is the one copy that has to exist
+# for the stack to run, so the archives go as soon as `docker load` has them.
+#
+# What this costs, and it is not nothing: a shop can no longer re-install from
+# its own deploy directory if Docker's image store is destroyed (Docker
+# reinstalled, /var/lib/docker wiped). It needs the release bundle again for
+# that. Set POINTY_KEEP_IMAGE_ARCHIVES=1 (env or .env) to keep them.
+#
+# Third-party archives (postgres/redis/pgbouncer) are deliberately left alone:
+# they carry none of our code, they are freely downloadable anyway, and they are
+# what a later maintenance restart loads.
+# ---------------------------------------------------------------------------
+
+# Read a single KEY=value out of .env without evaluating it as shell.
+env_value() { grep -E "^$1=" .env 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '\r'; }
+
+keep_image_archives() {
+  local flag="${POINTY_KEEP_IMAGE_ARCHIVES:-}"
+  [ -n "$flag" ] || flag="$(env_value POINTY_KEEP_IMAGE_ARCHIVES)"
+  case "$flag" in 1|true|TRUE|yes|YES) return 0 ;; *) return 1 ;; esac
+}
+
+# Overwrite once, then unlink. shred is not a guarantee on a journalling or
+# copy-on-write filesystem, so this is defence in depth rather than a promise —
+# the point is that the file is gone.
+shred_archive() {
+  if command -v shred >/dev/null 2>&1 && shred -n 1 -u "$1" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$1"
+}
+
+# Are the application images already in Docker's store? This is what makes
+# re-running the installer safe after a previous run shredded the archives.
+app_images_loaded() {
+  local key image
+  for key in POINTY_BACKEND_IMAGE POINTY_RELAY_IMAGE POINTY_WEB_IMAGE; do
+    image="$(env_value "$key")"
+    [ -n "$image" ] || return 1
+    docker image inspect "$image" >/dev/null 2>&1 || return 1
+  done
+  return 0
+}
+
 echo "==> Loading Pointy container images (this can take a minute)…"
 shopt -s nullglob
 images=(images/*.tar)
-[ ${#images[@]} -gt 0 ] || err "No image archives found under ./images. Is this a complete bundle?"
-for tar in "${images[@]}"; do
-  echo "    - $tar"
-  docker load -i "$tar"
-done
+if [ ${#images[@]} -gt 0 ]; then
+  for tar in "${images[@]}"; do
+    echo "    - $tar"
+    docker load -i "$tar"
+    case "$(basename "$tar")" in
+      pointy-*)
+        if ! keep_image_archives; then
+          shred_archive "$tar"
+          echo "      archive removed (POINTY_KEEP_IMAGE_ARCHIVES=1 keeps it)"
+        fi
+        ;;
+    esac
+  done
+elif [ -f .env ] && app_images_loaded; then
+  # A re-run after a previous install shredded the archives. Every image is
+  # already in Docker's store, which is all `compose up` needs.
+  echo "    Already loaded (archives were removed after the last install)."
+else
+  err "No image archives under ./images, and the images they carry are not in
+       Docker either. Archives are removed once they are loaded, so this is
+       either an incomplete bundle or a machine whose Docker image store was
+       wiped. Re-extract the release bundle and run install.sh from it."
+fi
 
 if [ ! -f .env ]; then
   # LICENSING TEMPORARILY OFF ("for now"): on-prem installs don't require a

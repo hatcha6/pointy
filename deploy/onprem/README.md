@@ -99,9 +99,13 @@ docker compose --env-file deploy/onprem/.env -f deploy/onprem/docker-compose.yml
 docker compose --env-file deploy/onprem/.env -f deploy/onprem/docker-compose.yml up -d
 ```
 
-Keep the previous image tag available when doing customer updates, so rollback
-is just changing `POINTY_BACKEND_IMAGE` or `POINTY_RELAY_IMAGE` and running
-`up -d` again.
+Keep every bundle you ship. A deployment does not keep one: image archives are
+destroyed as they load and a committed update drops the superseded application
+images (see "Image archives are not kept" under Hardening Notes), so rolling a
+customer back means `bash update.sh /path/to/<older>.zip --force`, not editing
+`POINTY_BACKEND_IMAGE`. On a build machine — or anywhere you set
+`POINTY_KEEP_IMAGE_ARCHIVES=1` — the old tags are still there and swapping the
+image name in `.env` plus `up -d` still works.
 
 ### Zero-downtime updates (how, and what a release must honour)
 
@@ -190,6 +194,33 @@ Every service also has a memory (`mem_limit`) and CPU (`cpus`) cap so one
 runaway process — a heavy report, a worker leak, a restore — cannot starve the
 host and take down the till. Defaults total well under 8GB; raise the
 `POINTY_*_MEM_LIMIT` / `POINTY_*_CPUS` values in `.env` on larger hosts.
+
+### Image archives are not kept
+
+`images/pointy-*.tar` is the softest reverse-engineering target a deployment
+has: two plain `tar xf` calls, with no Docker and no root involved, and our
+whole source tree is sitting in a directory. Docker's image store is a much
+harder target and it is the only copy the stack actually needs, so `install.sh`
+and the update engine shred every `pointy-*.tar` the moment `docker load` has
+taken it — along with any bundle zip the updater downloaded or unpacked itself —
+and a committed update removes the superseded `pointy-backend`, `pointy-relay`
+and `pointy-web` images. That removal is never forced: an image a container
+still holds is kept and logged.
+
+Third-party archives (postgres/redis/pgbouncer) stay, since they carry none of
+our code and are what the next maintenance restart loads.
+
+This buys the offline case only — a copied deploy directory, a stolen disk, a
+bundle left in a Downloads folder. Root on the host still reaches the running
+container's filesystem with `docker cp`, and no amount of image deletion changes
+that; deleting the *loaded* backend image would only leave `compose up` unable
+to recreate the container, with no registry to pull from. Raising the bar
+further is an image-content problem (obfuscated or compiled Python), not an
+image-lifecycle one.
+
+Trade-off: the machine can no longer re-install from its own deploy directory if
+Docker's image store is destroyed, and rollback needs the previous bundle.
+`POINTY_KEEP_IMAGE_ARCHIVES=1` disables the whole behaviour.
 
 ### Brute-force protection
 

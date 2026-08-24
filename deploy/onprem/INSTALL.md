@@ -30,7 +30,8 @@ wsl/                    The Windows install path — see "Windows hosts" below
   timezone-map.txt          Windows time zone -> IANA zone
 README.md               Full operations / hardening / backup guide
 VERSION.txt             The Pointy version this bundle was built from
-images/                 Saved Docker images (loaded by the installer)
+images/                 Saved Docker images (loaded, then destroyed, by the
+                        installer — see "Image archives are not kept" below)
   pointy-backend-<ver>.tar
   pointy-relay-<ver>.tar
   pointy-web-<ver>.tar    Flutter web app + nginx (browser access)
@@ -64,9 +65,9 @@ PowerShell on Windows, with internet access). You only need:
    folder** next to `install.sh` and the installer records it for
    later; if not, the installer proceeds without it.
 
-3. **Run the installer.** It loads the bundled images, generates the local
-   secrets, records your license key if present, and starts the stack — no `.env`
-   editing:
+3. **Run the installer.** It loads the bundled images (and then destroys the
+   archives — see below), generates the local secrets, records your license key
+   if present, and starts the stack — no `.env` editing:
 
    - Windows (**elevated** PowerShell):
      ```powershell
@@ -354,5 +355,51 @@ what it is doing.
 
 ### Rolling back
 
-To roll back, re-run the installer from the previous bundle folder (it still has
-its own images and `.env`).
+Point the updater at the previous release and force it:
+
+```sh
+bash update.sh /path/to/pointy-onprem-<older>.zip --force
+```
+
+Keep the previous bundle: the deployment does not hold a copy of it. Installing
+and updating both destroy the image archives once Docker has loaded them, and a
+committed update drops the superseded application images (see below), so there
+is nothing on the machine to roll back *to* once an update has been committed.
+
+### Image archives are not kept
+
+`images/pointy-*.tar` is the easiest way there is to read our source: two plain
+`tar xf` calls, no Docker and no root involved. Docker's own image store is a
+much harder target and it is the only copy the stack needs to run, so:
+
+* every `pointy-*.tar` is shredded as soon as `docker load` has taken it, on
+  both install and update;
+* a bundle the updater downloaded or unzipped itself is shredded with it;
+* once an update is committed and healthy, the previous release's
+  `pointy-backend` / `pointy-relay` / `pointy-web` images are removed — never
+  forced, so an image a container still holds is left alone.
+
+Third-party archives (`postgres.tar`, `redis.tar`, `pgbouncer.tar`) are kept:
+they hold none of our code and they are what the next maintenance restart loads.
+The `pointy-edge` archive is kept through a live update for the same reason, and
+is destroyed at the restart that loads it.
+
+Two consequences worth knowing before you rely on them:
+
+* **The machine cannot re-install itself from its own deploy directory** if
+  Docker's image store is destroyed (Docker reinstalled, `/var/lib/docker`
+  wiped). Re-running `install.sh` is still fine as long as the image store is
+  intact — it detects the loaded images and skips the load step. Anything worse
+  needs the release bundle again.
+* **Keep every bundle you ship**, because rollback needs it.
+
+Set `POINTY_KEEP_IMAGE_ARCHIVES=1` (in the environment or in `.env`) to turn all
+of this off for a machine where offline re-installability matters more.
+
+Note what this does *not* claim: anyone with root on the host still has the
+running container, and `docker cp` / `docker export` reads its filesystem
+directly. Deleting the loaded backend image itself would not change that — and
+it would leave `compose up` with nothing to recreate the container from and no
+registry to pull from, which is a shop that never comes back after a crash. The
+bar this raises is the offline one: a copied deploy directory, a stolen disk, a
+bundle left in Downloads.

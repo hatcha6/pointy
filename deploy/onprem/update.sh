@@ -54,7 +54,13 @@ command -v docker >/dev/null 2>&1 || fail "docker not found on PATH"
 
 POINTY_BUNDLE_STAGING=""
 cleanup() {
-  [ -n "${POINTY_BUNDLE_STAGING:-}" ] && rm -rf "$POINTY_BUNDLE_STAGING"
+  # Only the copy WE extracted. A bundle directory the operator pointed us at is
+  # their own media — they may be installing several shops from one stick — so it
+  # is never touched here; the archives inside ./images are shredded as they load.
+  if [ -n "${POINTY_BUNDLE_STAGING:-}" ]; then
+    pu_shred_staged_archives "$POINTY_BUNDLE_STAGING"
+    rm -rf "$POINTY_BUNDLE_STAGING"
+  fi
   pu_release_lock
 }
 

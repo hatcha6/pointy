@@ -103,8 +103,16 @@ STATE_FILE="$(mktemp)"
 STAGING=""
 cleanup() {
   rm -f "$STATE_FILE"
-  [ -n "$STAGING" ] && rm -rf "$STAGING"
-  [ -n "${POINTY_BUNDLE_STAGING:-}" ] && rm -rf "$POINTY_BUNDLE_STAGING"
+  # The downloaded zip and everything unpacked out of it carry the same image
+  # archives as ./images, so they go the same way rather than merely unlinked.
+  if [ -n "$STAGING" ]; then
+    pu_shred_staged_archives "$STAGING"
+    rm -rf "$STAGING"
+  fi
+  if [ -n "${POINTY_BUNDLE_STAGING:-}" ]; then
+    pu_shred_staged_archives "$POINTY_BUNDLE_STAGING"
+    rm -rf "$POINTY_BUNDLE_STAGING"
+  fi
   pu_release_lock
 }
 trap cleanup EXIT

@@ -293,6 +293,75 @@ set $pointy_upstream_name "backend";
 EOF
 }
 
+# ---------------------------------------------------------------------------
+# Image archives
+#
+# An image archive is the softest reverse-engineering target a deployment has:
+# ./images/pointy-*.tar is two plain `tar xf` calls away from the application's
+# whole source tree, with no Docker and no root involved. Docker's own image
+# store is a materially harder target and it is the one copy the stack actually
+# needs, so every application archive is destroyed the moment `docker load` has
+# taken it. See the same note in install.sh.
+#
+# Third-party archives (postgres/redis/pgbouncer) are left alone: none of our
+# code is in them, and they are what the next maintenance restart loads.
+#
+# The cost is real — a shop can no longer re-install from its own deploy
+# directory if Docker's image store is destroyed; it needs the bundle again.
+# POINTY_KEEP_IMAGE_ARCHIVES=1 (env or .env) turns this off.
+# ---------------------------------------------------------------------------
+pu_keep_image_archives() {
+  local flag="${POINTY_KEEP_IMAGE_ARCHIVES:-}"
+  [ -n "$flag" ] || flag="$(pu_env_value POINTY_KEEP_IMAGE_ARCHIVES)"
+  case "$flag" in 1|true|TRUE|yes|YES) return 0 ;; *) return 1 ;; esac
+}
+
+# Overwrite once, then unlink. shred is not a guarantee on a journalling or
+# copy-on-write filesystem, so this is defence in depth rather than a promise —
+# the point is that the file is gone.
+pu_shred_file() {
+  [ -f "$1" ] || return 0
+  if command -v shred >/dev/null 2>&1 && shred -n 1 -u "$1" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$1"
+}
+
+# Every application archive under a tree that is about to be discarded: the
+# staged copy of a bundle (extracted zip, downloaded zip) holds the same tars as
+# ./images, and `rm -rf` on the staging directory is the last moment we can be
+# sure they are gone rather than merely unlinked.
+pu_shred_staged_archives() {
+  local root="$1" file
+  [ -d "$root" ] || return 0
+  pu_keep_image_archives && return 0
+  find "$root" -type f \( -name 'pointy-*.tar' -o -name '*.zip' \) 2>/dev/null \
+    | while IFS= read -r file; do
+        pu_shred_file "$file"
+      done
+}
+
+# Drop the previous release's application images once the new ones are serving.
+# An installed shop should not accumulate a browsable history of every build we
+# ever shipped, and the layers are dead weight besides. Deliberately not forced:
+# `docker image rm` without -f refuses an image a container still holds, which
+# is exactly the guard we want if something is still pointing at the old
+# release. pointy-edge is absent on purpose — its tag is hand-bumped, shared
+# across releases, and the front door keeps running on it through a live update.
+pu_prune_superseded_images() {
+  local current="$1" assigned="$2" repo
+  [ -n "$current" ] && [ "$current" != unknown ] || return 0
+  [ "$current" != "$assigned" ] || return 0
+  for repo in pointy-backend pointy-relay pointy-web; do
+    docker image inspect "${repo}:${current}" >/dev/null 2>&1 || continue
+    if docker image rm "${repo}:${current}" >/dev/null 2>&1; then
+      pu_log "removed the superseded image ${repo}:${current}"
+    else
+      pu_log "kept ${repo}:${current} (a container still uses it)"
+    fi
+  done
+}
+
 # Load images from ./images. A live update loads ONLY the application images:
 # loading a new postgres/redis/pgbouncer/nginx tar would change what the compose
 # file resolves to and hand the next `compose up` a reason to recreate the
@@ -316,6 +385,10 @@ pu_load_images() {
     pu_log "loading $(basename "$tar")…"
     docker load -i "$tar" >/dev/null || return 1
     found=1
+    # Docker has it now; the archive is pure exposure from here on.
+    case "$(basename "$tar")" in
+      pointy-*) pu_keep_image_archives || pu_shred_file "$tar" ;;
+    esac
   done
   [ "$found" = 1 ] || { pu_warn "no application images found in ./images"; return 1; }
   return 0
@@ -491,6 +564,9 @@ pu_apply_bundle() {
     if [ "$rc" -eq 0 ] && pu_healthy 24; then
       echo "${assigned}" >VERSION.txt
       pu_register_autostart
+      # Only past the point of no return: until here, rollback needs the old
+      # images to still exist.
+      pu_prune_superseded_images "$current" "$assigned"
       rm -rf "$snapshot"
       pu_log "updated to ${assigned} — no downtime"
       return 0
@@ -510,6 +586,7 @@ pu_apply_bundle() {
   if pu_apply_restart && pu_healthy; then
     echo "${assigned}" >VERSION.txt
     pu_register_autostart
+    pu_prune_superseded_images "$current" "$assigned"
     rm -rf "$snapshot"
     pu_log "updated to ${assigned}"
     return 0
