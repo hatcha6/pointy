@@ -120,10 +120,18 @@ def requested_category_ids(query_params):
     return category_ids
 
 
+class VariantIdInFilter(django_filters.BaseInFilter, django_filters.NumberFilter):
+    """Comma-separated ``?ids=`` list filter."""
+
+
 class ProductVariantFilter(django_filters.FilterSet):
     category = django_filters.CharFilter(method="filter_category")
     categories = django_filters.CharFilter(method="filter_category")
     barcode = django_filters.CharFilter(method="filter_barcode")
+    # Fetch a known set of variants in one request: the purchasing draft
+    # refreshes the selling price of every line it restored from local storage,
+    # and one request for the whole cart beats one product fetch per line.
+    ids = VariantIdInFilter(field_name="id", lookup_expr="in")
 
     class Meta:
         model = ProductVariant

@@ -4221,6 +4221,35 @@
   "emptyPurchaseDraftMessage": "أضف منتجات من الكتالوج لبناء أمر الشراء",
   "purchaseLineCostLabel": "التكلفة",
   "purchaseLineUnitLabel": "وحدة الشراء",
+  "purchaseLineSellingPrice": "سعر البيع {price}",
+  "@purchaseLineSellingPrice": {
+    "description": "Purchase draft line: the variant's current selling price, shown under the SKU.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseLineSellingPricePerUnit": "سعر البيع {price} / {unit}",
+  "@purchaseLineSellingPricePerUnit": {
+    "description": "Purchase draft line selling price when the line is bought in a pack unit; the price is per base unit.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseLineNoSellingPrice": "لا يوجد سعر بيع",
+  "@purchaseLineNoSellingPrice": {
+    "description": "Purchase draft line: shown instead of the selling price when the product has never been priced."
+  },
+  "purchaseLineSellingPriceBelowCostTooltip": "سعر البيع لا يغطي تكلفة الشراء",
+  "@purchaseLineSellingPriceBelowCostTooltip": {
+    "description": "Tooltip on a purchase draft line whose selling price is at or below the line's cost per base unit."
+  },
   "purchaseLineBaseEquivalent": "= {quantity} {unit}",
   "@purchaseLineBaseEquivalent": {
     "placeholders": {

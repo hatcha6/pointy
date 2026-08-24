@@ -790,6 +790,7 @@ class PurchaseDraftLine {
   double get baseQuantity => quantity * unitFactor;
 
   PurchaseDraftLine copyWith({
+    ProductVariant? variant,
     double? quantity,
     double? unitCost,
     String? unitCode,
@@ -800,7 +801,7 @@ class PurchaseDraftLine {
     bool clearExpiryDate = false,
   }) {
     return PurchaseDraftLine(
-      variant: variant,
+      variant: variant ?? this.variant,
       quantity: quantity ?? this.quantity,
       unitCost: unitCost ?? this.unitCost,
       unitCode: unitCode ?? this.unitCode,

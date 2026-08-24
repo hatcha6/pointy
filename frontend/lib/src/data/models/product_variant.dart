@@ -222,7 +222,11 @@ class ProductVariant {
     };
   }
 
-  ProductVariant copyWith({double? quantityOnHand, Product? productDetail}) {
+  ProductVariant copyWith({
+    double? quantityOnHand,
+    Product? productDetail,
+    double? unitPrice,
+  }) {
     return ProductVariant(
       id: id,
       productId: productId,
@@ -233,7 +237,7 @@ class ProductVariant {
       fullName: fullName,
       sku: sku,
       barcode: barcode,
-      unitPrice: unitPrice,
+      unitPrice: unitPrice ?? this.unitPrice,
       isActive: isActive,
       isDefault: isDefault,
       tracksExpiry: tracksExpiry,

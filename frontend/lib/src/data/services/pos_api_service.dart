@@ -758,6 +758,10 @@ class PosApiService {
     return _catalog.fetchProductVariants(query: query, page: page);
   }
 
+  Future<ProductVariantPage> fetchVariantsByIds(List<int> ids) {
+    return _catalog.fetchVariantsByIds(ids);
+  }
+
   Future<ProductVariantPage> fetchVariantsForProduct(
     int productId, {
     int page = 1,

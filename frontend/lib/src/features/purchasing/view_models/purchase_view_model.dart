@@ -99,6 +99,10 @@ class PurchaseViewModel extends ChangeNotifier {
       LandedCostAllocationMethod.byLineValue;
   String? _errorMessage;
   int _discountPreviewRequestVersion = 0;
+  // Guards the one-shot selling-price refresh a restored draft kicks off, so a
+  // second restore (or a rebuild) can never double-fetch.
+  bool _isRefreshingSellingPrices = false;
+  bool _disposed = false;
   ProductQuery _query = const ProductQuery(
     availability: ProductAvailabilityFilter.active,
   );
@@ -206,6 +210,7 @@ class PurchaseViewModel extends ChangeNotifier {
         _variants = result.value.variants;
         _hasMoreProducts = result.value.hasMore;
         _nextVariantPage = 2;
+        _adoptSellingPricesFrom(result.value.variants);
       case Error<ProductVariantPage>():
         _variants = _catalogRepository.sampleProductVariants(_query);
         _hasMoreProducts = false;
@@ -238,6 +243,7 @@ class PurchaseViewModel extends ChangeNotifier {
         _variants = [..._variants, ...result.value.variants];
         _hasMoreProducts = result.value.hasMore;
         _nextVariantPage += 1;
+        _adoptSellingPricesFrom(result.value.variants);
       case Error<ProductVariantPage>():
         _errorMessage = 'sample_catalog_notice';
     }
@@ -994,7 +1000,85 @@ class PurchaseViewModel extends ChangeNotifier {
       productId: productId,
       pricesByVariant: pricesByVariant,
     );
-    return result is Ok<Product>;
+    if (result is! Ok<Product>) {
+      return false;
+    }
+    // The cart shows each line's current selling price; the prices we just
+    // wrote are that price now, so the draft adopts them instead of waiting
+    // for a catalog reload to notice.
+    _applySellingPrices(pricesByVariant);
+    return true;
+  }
+
+  /// Refreshes the selling price shown on every draft line, in as few requests
+  /// as the server allows (one for a normal cart). Only worth doing for a draft
+  /// restored from local storage: a line added from the catalog, a scan, or a
+  /// reopened order carries a price that was current when it was added, whereas
+  /// a restored draft's prices are as old as the draft itself.
+  Future<void> refreshDraftSellingPrices() async {
+    if (_draft.isEmpty || _isRefreshingSellingPrices || _disposed) {
+      return;
+    }
+    _isRefreshingSellingPrices = true;
+    final requestedIds = {for (final line in _draft) line.variant.id};
+    try {
+      final variants = await _catalogRepository.loadVariantsByIds(requestedIds);
+      _adoptSellingPricesFrom(variants, notify: true);
+    } finally {
+      _isRefreshingSellingPrices = false;
+    }
+  }
+
+  /// Adopts the selling prices carried by [variants] onto any draft line for
+  /// the same variant. Free freshness: the catalog pages the pane loads anyway
+  /// carry current prices, so browsing heals a stale cart line.
+  void _adoptSellingPricesFrom(
+    Iterable<ProductVariant> variants, {
+    bool notify = false,
+  }) {
+    if (_draft.isEmpty) {
+      return;
+    }
+    final draftVariantIds = {for (final line in _draft) line.variant.id};
+    final prices = <int, double>{
+      for (final variant in variants)
+        if (draftVariantIds.contains(variant.id)) variant.id: variant.unitPrice,
+    };
+    _applySellingPrices(prices, notify: notify);
+  }
+
+  /// Writes [pricesByVariantId] onto the matching draft lines. Untouched when
+  /// nothing actually changed, so a catalog reload of an unchanged price costs
+  /// no rebuild.
+  void _applySellingPrices(
+    Map<int, double> pricesByVariantId, {
+    bool notify = true,
+  }) {
+    if (pricesByVariantId.isEmpty || _disposed) {
+      return;
+    }
+    var changed = false;
+    for (var index = 0; index < _draft.length; index += 1) {
+      final line = _draft[index];
+      final price = pricesByVariantId[line.variant.id];
+      if (price == null || price == line.variant.unitPrice) {
+        continue;
+      }
+      _draft[index] = line.copyWith(
+        variant: line.variant.copyWith(unitPrice: price),
+      );
+      changed = true;
+    }
+    if (!changed) {
+      return;
+    }
+    // Display-only: the selling price never feeds the order's totals, so this
+    // deliberately leaves the submission intent (and its idempotency key)
+    // alone and only re-persists what the draft already holds.
+    _schedulePersist();
+    if (notify) {
+      notifyListeners();
+    }
   }
 
   void _resetLandedCosts() {
@@ -1033,6 +1117,7 @@ class PurchaseViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _persistDebounce?.cancel();
     super.dispose();
   }
@@ -1108,6 +1193,9 @@ class PurchaseViewModel extends ChangeNotifier {
       // Fresh idempotency key so a restored draft submits as a new order.
       _submitIdempotencyKey = _newPurchaseIdempotencyKey('purchase-draft');
       notifyListeners();
+      // The restored lines carry the selling price each product had when it
+      // was added, which may be days old — refresh the whole cart in one go.
+      unawaited(refreshDraftSellingPrices());
       if (_selectedSupplier != null) {
         unawaited(refreshDiscountPreview());
       }

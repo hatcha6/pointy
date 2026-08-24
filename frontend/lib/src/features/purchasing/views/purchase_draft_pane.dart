@@ -769,6 +769,60 @@ class _PurchaseDraftScrollContentState
   }
 }
 
+enum _SellingPriceSeverity { normal, unpriced, belowCost }
+
+/// A cart line's current selling price, under its SKU: what the product sells
+/// for today, so a buyer typing a new cost can see, without leaving the cart,
+/// whether the shelf price still works. A price that no longer clears the cost
+/// (or a product that was never priced) is called out — the reprice button sits
+/// on the same line.
+class _SellingPriceLabel extends StatelessWidget {
+  const _SellingPriceLabel({
+    required this.text,
+    required this.severity,
+    this.tooltip,
+  });
+
+  final String text;
+  final _SellingPriceSeverity severity;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+    final color = switch (severity) {
+      _SellingPriceSeverity.normal => colors.mutedInk,
+      _SellingPriceSeverity.unpriced => colors.warning,
+      _SellingPriceSeverity.belowCost => colors.danger,
+    };
+    final label = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (severity != _SellingPriceSeverity.normal) ...[
+          Icon(Icons.warning_amber_rounded, size: 14, color: color),
+          const SizedBox(width: 4),
+        ],
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: color,
+              fontWeight: severity == _SellingPriceSeverity.normal
+                  ? null
+                  : FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+    final message = tooltip;
+    return message == null ? label : Tooltip(message: message, child: label);
+  }
+}
+
 final Map<LogicalKeyboardKey, String> _draftDigitKeys = {
   LogicalKeyboardKey.digit0: '0',
   LogicalKeyboardKey.digit1: '1',
@@ -1559,6 +1613,18 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
         : line.total;
 
     final colors = context.pointyColors;
+    // The line's cost per BASE unit — a pack line's cost is per pack, whereas a
+    // selling price is always per base unit. Landed cost, when the preview has
+    // allocated any, is the honest number to compare a price against.
+    final unitFactor = line.unitFactor > 0 ? line.unitFactor : 1;
+    final baseUnitCost = (effectiveUnitCost ?? line.unitCost) / unitFactor;
+    final sellingPrice = line.variant.unitPrice;
+    final hasSellingPrice = sellingPrice > 0;
+    // The reason this price is on the cart line at all: a cost that has caught
+    // up with (or passed) the shelf price is a product that needs repricing —
+    // the reprice button sits on this same line.
+    final sellingPriceBelowCost =
+        hasSellingPrice && baseUnitCost > 0 && sellingPrice <= baseUnitCost;
     final imageUrl =
         line.variant.primaryImage?.contentUrl ??
         line.variant.productDetail?.primaryImage?.contentUrl;
@@ -1585,6 +1651,27 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
             style: theme.textTheme.bodySmall?.copyWith(color: colors.mutedInk),
           ),
         ],
+        const SizedBox(height: 3),
+        _SellingPriceLabel(
+          text: switch ((hasSellingPrice, line.isBaseUnit)) {
+            (false, _) => l10n.purchaseLineNoSellingPrice,
+            (true, true) => l10n.purchaseLineSellingPrice(
+              formatMoney(sellingPrice),
+            ),
+            (true, false) => l10n.purchaseLineSellingPricePerUnit(
+              formatMoney(sellingPrice),
+              unitLabel(l10n, line.variant.unit),
+            ),
+          },
+          tooltip: sellingPriceBelowCost
+              ? l10n.purchaseLineSellingPriceBelowCostTooltip
+              : null,
+          severity: switch ((hasSellingPrice, sellingPriceBelowCost)) {
+            (false, _) => _SellingPriceSeverity.unpriced,
+            (true, true) => _SellingPriceSeverity.belowCost,
+            (true, false) => _SellingPriceSeverity.normal,
+          },
+        ),
         if (costDetails.isNotEmpty) ...[
           const SizedBox(height: 3),
           Text(

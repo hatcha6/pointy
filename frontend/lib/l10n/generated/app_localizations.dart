@@ -12437,6 +12437,30 @@ abstract class AppLocalizations {
   /// **'وحدة الشراء'**
   String get purchaseLineUnitLabel;
 
+  /// Purchase draft line: the variant's current selling price, shown under the SKU.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر البيع {price}'**
+  String purchaseLineSellingPrice(String price);
+
+  /// Purchase draft line selling price when the line is bought in a pack unit; the price is per base unit.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر البيع {price} / {unit}'**
+  String purchaseLineSellingPricePerUnit(String price, String unit);
+
+  /// Purchase draft line: shown instead of the selling price when the product has never been priced.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد سعر بيع'**
+  String get purchaseLineNoSellingPrice;
+
+  /// Tooltip on a purchase draft line whose selling price is at or below the line's cost per base unit.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر البيع لا يغطي تكلفة الشراء'**
+  String get purchaseLineSellingPriceBelowCostTooltip;
+
   /// No description provided for @purchaseLineBaseEquivalent.
   ///
   /// In ar, this message translates to:

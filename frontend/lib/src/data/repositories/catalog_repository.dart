@@ -29,6 +29,7 @@ import '../models/variant_option_value.dart';
 import '../models/variant_option_value_draft.dart';
 import '../models/variant_option_value_page.dart';
 import '../models/variant_option_value_query.dart';
+import '../services/catalog_api_client.dart' show catalogVariantIdBatchSize;
 import '../services/pos_api_service.dart';
 
 class CatalogRepository {
@@ -221,6 +222,37 @@ class CatalogRepository {
     return Result.guard(
       () => _service.fetchProductVariants(query: query, page: page),
     );
+  }
+
+  /// Loads an exact set of variants by id, in as few requests as the server's
+  /// page size allows (one for a normal cart). Ids beyond the page size are
+  /// split into further batches, and a failed batch drops out rather than
+  /// failing the whole set — callers use this to refresh what they can.
+  Future<List<ProductVariant>> loadVariantsByIds(Iterable<int> ids) async {
+    final unique = <int>{...ids}.toList(growable: false);
+    if (unique.isEmpty) {
+      return const [];
+    }
+    final batches = <List<int>>[
+      for (
+        var start = 0;
+        start < unique.length;
+        start += catalogVariantIdBatchSize
+      )
+        unique.sublist(
+          start,
+          (start + catalogVariantIdBatchSize).clamp(0, unique.length),
+        ),
+    ];
+    final pages = await Future.wait(
+      batches.map(
+        (batch) => Result.guard(() => _service.fetchVariantsByIds(batch)),
+      ),
+    );
+    return [
+      for (final page in pages)
+        if (page case Ok<ProductVariantPage>(:final value)) ...value.variants,
+    ];
   }
 
   Future<Result<ProductVariantPage>> loadVariantsForProduct(

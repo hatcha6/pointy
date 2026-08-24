@@ -6,6 +6,7 @@ from django.contrib.auth.models import Group, Permission
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -1598,4 +1599,78 @@ class ProductBoughtTogetherApiTests(TestCase):
         self.assertIn(
             response.status_code,
             (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN),
+        )
+
+
+class ProductVariantIdsFilterTests(TestCase):
+    """``/api/product-variants/?ids=`` — fetch a known set in one request.
+
+    The purchasing draft pane shows each cart line's current selling price and
+    refreshes a locally restored draft in one round trip, so the variant list
+    has to answer "these exact variants" without a request per line.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="variant-ids-user",
+            password="pass",
+        )
+        self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client.force_authenticate(user=self.user)
+        self.first = create_product_with_default_variant(
+            name="قهوة",
+            sku="IDS-1",
+            unit_price=Decimal("5.00"),
+        ).default_variant
+        self.second = create_product_with_default_variant(
+            name="شاي",
+            sku="IDS-2",
+            unit_price=Decimal("7.50"),
+        ).default_variant
+        self.third = create_product_with_default_variant(
+            name="سكر",
+            sku="IDS-3",
+            unit_price=Decimal("2.25"),
+        ).default_variant
+
+    def _get(self, ids):
+        return self.client.get(
+            reverse("product-variant-list"),
+            {"ids": ",".join(str(value) for value in ids)},
+        )
+
+    def test_returns_only_the_requested_variants(self):
+        response = self._get([self.first.pk, self.third.pk])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        returned = {row["id"]: row["unit_price"] for row in response.data["results"]}
+        self.assertEqual(set(returned), {self.first.pk, self.third.pk})
+        self.assertEqual(Decimal(returned[self.third.pk]), Decimal("2.25"))
+
+    def test_unknown_ids_are_ignored_rather_than_erroring(self):
+        response = self._get([self.second.pk, 999_999])
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [row["id"] for row in response.data["results"]],
+            [self.second.pk],
+        )
+
+    def test_non_numeric_ids_are_rejected(self):
+        response = self.client.get(reverse("product-variant-list"), {"ids": "abc"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_archived_products_stay_hidden(self):
+        product = self.first.product
+        product.archived_at = timezone.now()
+        product.save(update_fields=["archived_at"])
+
+        response = self._get([self.first.pk, self.second.pk])
+
+        self.assertEqual(
+            [row["id"] for row in response.data["results"]],
+            [self.second.pk],
         )

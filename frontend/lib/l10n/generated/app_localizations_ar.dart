@@ -7088,6 +7088,23 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchaseLineUnitLabel => 'وحدة الشراء';
 
   @override
+  String purchaseLineSellingPrice(String price) {
+    return 'سعر البيع $price';
+  }
+
+  @override
+  String purchaseLineSellingPricePerUnit(String price, String unit) {
+    return 'سعر البيع $price / $unit';
+  }
+
+  @override
+  String get purchaseLineNoSellingPrice => 'لا يوجد سعر بيع';
+
+  @override
+  String get purchaseLineSellingPriceBelowCostTooltip =>
+      'سعر البيع لا يغطي تكلفة الشراء';
+
+  @override
   String purchaseLineBaseEquivalent(String quantity, String unit) {
     return '= $quantity $unit';
   }

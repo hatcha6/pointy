@@ -21,6 +21,10 @@ import '../models/variant_option_value_draft.dart';
 import '../models/variant_option_value_page.dart';
 import 'api_session.dart';
 
+/// How many variant ids one `?ids=` request may carry: the server's catalog
+/// page size. A longer set is split into several requests.
+const int catalogVariantIdBatchSize = 50;
+
 class CatalogApiClient {
   const CatalogApiClient(this._session);
 
@@ -277,6 +281,27 @@ class CatalogApiClient {
     final response = await _session.get(
       'product-variants/',
       query: query.toQueryParameters(page: page),
+      conditionalCache: true,
+    );
+    _session.ensureSuccess(
+      response,
+      'Product variant request failed with status',
+    );
+    return ProductVariantPage.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Fetches an exact set of variants by id — one request for a whole set
+  /// instead of a product fetch per item. Used by the purchasing draft to
+  /// refresh the selling price of every line it restored from local storage.
+  ///
+  /// [ids] must not exceed the server's page size (see
+  /// [catalogVariantIdBatchSize]); callers with more send several batches.
+  Future<ProductVariantPage> fetchVariantsByIds(List<int> ids) async {
+    final response = await _session.get(
+      'product-variants/',
+      query: {'ids': ids.join(',')},
       conditionalCache: true,
     );
     _session.ensureSuccess(
