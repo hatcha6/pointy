@@ -1062,6 +1062,16 @@
   "smartNotificationCategoryFraud": "مراجعة الاشتباه",
   "smartNotificationCategoryDiscounts": "الخصومات",
   "smartNotificationCategoryOperations": "التشغيل",
+  "smartNotificationStockUntrustedTitle": "أرصدة المخزون غير موثوقة",
+  "smartNotificationStockUntrustedMessage": "{count, plural, =1{صنف واحد رصيده بالسالب — بيع دون أن يُستلم. راجع الجرد قبل الاعتماد على أرقام المخزون.} =2{صنفان رصيدهما بالسالب — بيعا دون أن يُستلما. راجع الجرد قبل الاعتماد على أرقام المخزون.} other{{count} أصناف أرصدتها بالسالب — بيعت دون أن تُستلم. راجع الجرد قبل الاعتماد على أرقام المخزون.}}",
+  "@smartNotificationStockUntrustedMessage": {
+    "description": "Roll-up alert raised when stock items hold an impossible negative quantity, meaning the book position cannot be trusted. Replaces one out-of-stock alert per variant.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
   "smartNotificationOutOfStockTitle": "منتجات نافدة تحتاج إجراء",
   "smartNotificationOutOfStockMessage": "{count, plural, =1{منتج واحد غير متاح للبيع الآن.} =2{منتجان غير متاحين للبيع الآن.} other{{count} منتجات غير متاحة للبيع الآن.}}",
   "@smartNotificationOutOfStockMessage": {

@@ -42,6 +42,7 @@ logger = logging.getLogger(__name__)
 MANAGED_CODES = (
     "inventory.out_of_stock",
     "inventory.low_stock",
+    "inventory.position_untrusted",
     "inventory.expiring_batch",
     "purchasing.overdue_order",
     "printing.failed_job",
@@ -60,6 +61,10 @@ NOTIFICATION_AUDIENCE_RULES = {
         "manager_only": True,
     },
     "inventory.low_stock": {
+        "permissions": ("inventory.view_stockitem", "inventory.view_stockmovement"),
+        "manager_only": True,
+    },
+    "inventory.position_untrusted": {
         "permissions": ("inventory.view_stockitem", "inventory.view_stockmovement"),
         "manager_only": True,
     },
@@ -343,27 +348,102 @@ def acknowledge_notifications_for_user(user, queryset, now=None):
 
 
 def _inventory_notifications(now):
+    """Stock alerts, guarded against a shop that has no real stock position.
+
+    A shop that never counted its opening stock in — or that sells with
+    overselling allowed — drifts every tracked item below zero. Alerting once
+    per variant then produces thousands of rows that are all the same fact:
+    *the book position is fiction*. One field shop reached 11,884 active
+    out-of-stock alerts, 88% of everything the notification system had ever
+    said, and the register-variance and fraud alerts underneath were never
+    seen. Severity means nothing when almost everything is critical.
+
+    So three guards, in order:
+
+    * A **negative** quantity is a data-integrity problem, not an empty shelf —
+      you cannot sell what you never received. Those roll up into a single
+      ``inventory.position_untrusted`` alert instead of one alert each.
+    * When most of what we track has gone negative, the position as a whole is
+      untrustworthy: emit only the roll-up and skip the per-variant alerts
+      entirely, because none of them can be believed.
+    * Whatever survives is capped, so no single sync can flood the centre.
+
+    Out-of-stock itself is a WARNING, not CRITICAL. An empty shelf is a normal
+    trading condition; critical is for money going missing and systems failing.
+    """
+    ratio_gate = _setting_ratio("POINTY_INVENTORY_UNTRUSTED_RATIO", 0.5)
+    min_items = max(
+        int(getattr(settings, "POINTY_INVENTORY_UNTRUSTED_MIN_ITEMS", 10)), 1
+    )
+    max_items = max(int(getattr(settings, "POINTY_INVENTORY_ALERT_MAX_ITEMS", 50)), 0)
+
+    tracked = StockItem.objects.filter(
+        variant__is_active=True,
+        variant__product__is_active=True,
+    )
+    tracked_count = tracked.count()
+    if not tracked_count:
+        return []
+
+    negative_count = tracked.filter(quantity_on_hand__lt=0).count()
+    non_positive_count = tracked.filter(quantity_on_hand__lte=0).count()
+    # Keyed on *negatives*, not on everything non-positive: a shop can honestly
+    # have a lot of empty shelves, and silencing it for that would hide the very
+    # thing it asked to be told. Only an impossible position — sold what was
+    # never received — says the numbers themselves cannot be believed. The
+    # minimum sample stops a two-item catalog from tripping the ratio on one row.
+    position_untrusted = (
+        tracked_count >= min_items and (negative_count / tracked_count) >= ratio_gate
+    )
+
     specs = []
+    if negative_count:
+        specs.append(
+            _spec(
+                code="inventory.position_untrusted",
+                category=BusinessNotification.Category.INVENTORY,
+                severity=BusinessNotification.Severity.WARNING,
+                # Shop-wide, so a single stable fingerprint: this is one
+                # condition, and it resolves when the last negative clears.
+                fingerprint="inventory.position_untrusted:shop",
+                entity_type="inventory.stockitem",
+                entity_id="",
+                payload={
+                    "count": negative_count,
+                    "quantity": negative_count,
+                    "tracked_count": tracked_count,
+                    "non_positive_count": non_positive_count,
+                    "suppressing_item_alerts": position_untrusted,
+                },
+            )
+        )
+
+    if position_untrusted:
+        # Every per-variant alert would be derived from the same broken data.
+        return specs
+
     # Only rows that can alert leave the DB: on a 30k-item catalog a handful
     # are at/below reorder, but this used to materialize every StockItem.
     stock = (
-        StockItem.objects.select_related("variant", "variant__product")
-        .filter(
-            variant__is_active=True,
-            variant__product__is_active=True,
-        )
+        tracked.select_related("variant", "variant__product")
         .filter(
             Q(quantity_on_hand__lte=0)
             | Q(quantity_on_hand__lte=F("reorder_level"))
         )
+        .order_by("quantity_on_hand", "variant_id")
     )
+
+    item_specs = []
     for item in stock:
-        if item.quantity_on_hand <= 0:
-            specs.append(
+        if item.quantity_on_hand < 0:
+            # Covered by the roll-up above.
+            continue
+        if item.quantity_on_hand == 0:
+            item_specs.append(
                 _spec(
                     code="inventory.out_of_stock",
                     category=BusinessNotification.Category.INVENTORY,
-                    severity=BusinessNotification.Severity.CRITICAL,
+                    severity=BusinessNotification.Severity.WARNING,
                     fingerprint=f"inventory.out_of_stock:variant:{item.variant_id}",
                     entity_type="catalog.productvariant",
                     entity_id=str(item.variant_id),
@@ -371,7 +451,7 @@ def _inventory_notifications(now):
                 )
             )
         elif item.quantity_on_hand <= item.reorder_level:
-            specs.append(
+            item_specs.append(
                 _spec(
                     code="inventory.low_stock",
                     category=BusinessNotification.Category.INVENTORY,
@@ -382,7 +462,30 @@ def _inventory_notifications(now):
                     payload=_stock_payload(item),
                 )
             )
+
+    if max_items and len(item_specs) > max_items:
+        dropped = len(item_specs) - max_items
+        item_specs = item_specs[:max_items]
+        logger.info(
+            "inventory alerts capped at %s; %s further items not raised",
+            max_items,
+            dropped,
+        )
+    specs.extend(item_specs)
     return specs
+
+
+def _setting_ratio(name, default):
+    """A 0..1 settings knob that refuses to silently become a no-op.
+
+    A misconfigured 0 would make every shop look untrusted and a misconfigured
+    2 would disable the guard, so clamp rather than trust the value.
+    """
+    try:
+        value = float(getattr(settings, name, default))
+    except (TypeError, ValueError):
+        return default
+    return min(max(value, 0.0), 1.0)
 
 
 def _expiry_notifications(now):
