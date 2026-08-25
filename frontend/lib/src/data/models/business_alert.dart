@@ -25,6 +25,7 @@ enum BusinessAlertCategory {
 enum BusinessAlertType {
   outOfStock,
   lowStock,
+  stockPositionUntrusted,
   expiringStock,
   overduePurchases,
   printFailures,
@@ -200,6 +201,8 @@ BusinessAlertType _typeFromCode(String code) {
   return switch (code) {
     'inventory.out_of_stock' => BusinessAlertType.outOfStock,
     'inventory.low_stock' => BusinessAlertType.lowStock,
+    'inventory.position_untrusted' =>
+      BusinessAlertType.stockPositionUntrusted,
     'inventory.expiring_batch' => BusinessAlertType.expiringStock,
     'purchasing.overdue_order' => BusinessAlertType.overduePurchases,
     'printing.failed_job' => BusinessAlertType.printFailures,
@@ -238,6 +241,7 @@ BusinessAlertSeverity _severityFromJson(Object? value) {
 
 int _sortScore(BusinessAlertType type) {
   return switch (type) {
+    BusinessAlertType.stockPositionUntrusted => 9,
     BusinessAlertType.outOfStock => 10,
     BusinessAlertType.printFailures => 15,
     BusinessAlertType.stalePrintAgents => 18,
@@ -284,7 +288,9 @@ String _primaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
       payload['rule_name']?.toString() ?? '',
     BusinessAlertType.payrollReady => payload['run_number']?.toString() ?? '',
     BusinessAlertType.operationsError => payload['name']?.toString() ?? '',
-    BusinessAlertType.lowProfitMargin || BusinessAlertType.unknown => '',
+    BusinessAlertType.stockPositionUntrusted ||
+    BusinessAlertType.lowProfitMargin ||
+    BusinessAlertType.unknown => '',
   };
 }
 

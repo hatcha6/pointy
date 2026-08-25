@@ -1805,6 +1805,24 @@ class AppLocalizationsAr extends AppLocalizations {
   String get smartNotificationCategoryOperations => 'التشغيل';
 
   @override
+  String get smartNotificationStockUntrustedTitle => 'أرصدة المخزون غير موثوقة';
+
+  @override
+  String smartNotificationStockUntrustedMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count أصناف أرصدتها بالسالب — بيعت دون أن تُستلم. راجع الجرد قبل الاعتماد على أرقام المخزون.',
+      two:
+          'صنفان رصيدهما بالسالب — بيعا دون أن يُستلما. راجع الجرد قبل الاعتماد على أرقام المخزون.',
+      one:
+          'صنف واحد رصيده بالسالب — بيع دون أن يُستلم. راجع الجرد قبل الاعتماد على أرقام المخزون.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get smartNotificationOutOfStockTitle => 'منتجات نافدة تحتاج إجراء';
 
   @override

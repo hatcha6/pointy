@@ -3362,6 +3362,18 @@ abstract class AppLocalizations {
   /// **'التشغيل'**
   String get smartNotificationCategoryOperations;
 
+  /// No description provided for @smartNotificationStockUntrustedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرصدة المخزون غير موثوقة'**
+  String get smartNotificationStockUntrustedTitle;
+
+  /// Roll-up alert raised when stock items hold an impossible negative quantity, meaning the book position cannot be trusted. Replaces one out-of-stock alert per variant.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{صنف واحد رصيده بالسالب — بيع دون أن يُستلم. راجع الجرد قبل الاعتماد على أرقام المخزون.} =2{صنفان رصيدهما بالسالب — بيعا دون أن يُستلما. راجع الجرد قبل الاعتماد على أرقام المخزون.} other{{count} أصناف أرصدتها بالسالب — بيعت دون أن تُستلم. راجع الجرد قبل الاعتماد على أرقام المخزون.}}'**
+  String smartNotificationStockUntrustedMessage(num count);
+
   /// No description provided for @smartNotificationOutOfStockTitle.
   ///
   /// In ar, this message translates to:

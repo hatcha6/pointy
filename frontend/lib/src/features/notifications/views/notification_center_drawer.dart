@@ -351,6 +351,8 @@ class _NotificationAlertRow extends StatelessWidget {
     return switch (alert.type) {
       BusinessAlertType.outOfStock => Icons.inventory_2_outlined,
       BusinessAlertType.lowStock => Icons.production_quantity_limits_outlined,
+      BusinessAlertType.stockPositionUntrusted =>
+        Icons.rule_folder_outlined,
       BusinessAlertType.expiringStock => Icons.event_busy_outlined,
       BusinessAlertType.overduePurchases => Icons.event_busy_outlined,
       BusinessAlertType.printFailures => Icons.print_disabled_outlined,
@@ -394,6 +396,8 @@ class _NotificationAlertRow extends StatelessWidget {
     return switch (alert.type) {
       BusinessAlertType.outOfStock => l10n.smartNotificationOutOfStockTitle,
       BusinessAlertType.lowStock => l10n.smartNotificationLowStockTitle,
+      BusinessAlertType.stockPositionUntrusted =>
+        l10n.smartNotificationStockUntrustedTitle,
       BusinessAlertType.expiringStock =>
         l10n.smartNotificationExpiringStockTitle,
       BusinessAlertType.overduePurchases =>
@@ -425,6 +429,8 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.lowStock => l10n.smartNotificationLowStockMessage(
         alert.count,
       ),
+      BusinessAlertType.stockPositionUntrusted =>
+        l10n.smartNotificationStockUntrustedMessage(alert.count),
       BusinessAlertType.expiringStock =>
         l10n.smartNotificationExpiringStockMessage(alert.count, alert.days),
       BusinessAlertType.overduePurchases =>
@@ -508,6 +514,7 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.operationsError => alert.detailLabel,
       BusinessAlertType.stalePrintAgents ||
       BusinessAlertType.registerVariance ||
+      BusinessAlertType.stockPositionUntrusted ||
       BusinessAlertType.lowProfitMargin ||
       BusinessAlertType.unknown => '',
     };

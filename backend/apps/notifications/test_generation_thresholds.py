@@ -14,7 +14,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.catalog.testing import create_product_with_default_variant
@@ -210,18 +210,102 @@ class NotificationGenerationThresholdTests(TestCase):
         self.assertFalse(_active("inventory.low_stock").exists())
         self.assertFalse(_active("inventory.out_of_stock").exists())
 
-    def test_qty_zero_or_below_is_out_of_stock_critical(self):
+    def test_qty_zero_is_out_of_stock_warning_not_critical(self):
+        # An empty shelf is a normal trading condition. Critical is reserved for
+        # money going missing and systems failing; a shop whose every alert is
+        # critical has no severity at all.
         _make_stock("Empty", "LS-ZERO", qty=0, reorder_level=5)
-        _make_stock("Negative", "LS-NEG", qty=-2, reorder_level=5)
+        _make_stock("Healthy", "LS-OK", qty=50, reorder_level=5)
         sync_business_notifications()
 
         self.assertFalse(_active("inventory.low_stock").exists())
-        critical = _active("inventory.out_of_stock")
-        self.assertEqual(critical.count(), 2)
-        for notification in critical:
-            self.assertEqual(
-                notification.severity, BusinessNotification.Severity.CRITICAL
-            )
+        out_of_stock = _active("inventory.out_of_stock").get()
+        self.assertEqual(out_of_stock.severity, BusinessNotification.Severity.WARNING)
+
+    def test_negative_quantity_rolls_up_instead_of_alerting_per_variant(self):
+        # You cannot sell what you never received: a negative book position is a
+        # data problem, and one alert per variant just multiplies the same fact.
+        _make_stock("NegA", "LS-NEG-A", qty=-2, reorder_level=5)
+        _make_stock("NegB", "LS-NEG-B", qty=-9, reorder_level=5)
+        for index in range(8):
+            _make_stock(f"Healthy{index}", f"LS-OK-{index}", qty=50, reorder_level=5)
+        sync_business_notifications()
+
+        self.assertFalse(_active("inventory.out_of_stock").exists())
+        rollup = _active("inventory.position_untrusted").get()
+        self.assertEqual(rollup.severity, BusinessNotification.Severity.WARNING)
+        self.assertEqual(rollup.payload["count"], 2)
+        self.assertEqual(rollup.payload["tracked_count"], 10)
+        self.assertFalse(rollup.payload["suppressing_item_alerts"])
+
+    def test_mostly_non_positive_stock_suppresses_per_item_alerts(self):
+        # The field case: a shop that never counted its opening stock in. Every
+        # per-variant alert would be derived from the same broken data, so only
+        # the roll-up is worth saying.
+        for index in range(9):
+            _make_stock(f"Broken{index}", f"LS-BRK-{index}", qty=-3, reorder_level=5)
+        _make_stock("Healthy", "LS-FINE", qty=50, reorder_level=5)
+        sync_business_notifications()
+
+        self.assertFalse(_active("inventory.out_of_stock").exists())
+        self.assertFalse(_active("inventory.low_stock").exists())
+        rollup = _active("inventory.position_untrusted").get()
+        self.assertTrue(rollup.payload["suppressing_item_alerts"])
+        self.assertEqual(rollup.payload["non_positive_count"], 9)
+
+    def test_position_untrusted_resolves_once_the_negatives_clear(self):
+        product = _make_stock("NegOnly", "LS-NEG-ONE", qty=-4, reorder_level=5)
+        for index in range(9):
+            _make_stock(f"Fine{index}", f"LS-FINE-{index}", qty=50, reorder_level=5)
+        sync_business_notifications()
+        rollup = _active("inventory.position_untrusted").get()
+
+        stock = StockItem.objects.get(variant=product.default_variant)
+        stock.quantity_on_hand = Decimal("7")
+        stock.save(update_fields=["quantity_on_hand", "updated_at"])
+        sync_business_notifications()
+
+        rollup.refresh_from_db()
+        self.assertEqual(rollup.status, BusinessNotification.Status.RESOLVED)
+
+    def test_field_shaped_broken_inventory_yields_one_alert_not_thousands(self):
+        """Regression for the شراء سفيان field case (dump 2026-07-23).
+
+        That shop tracked 1,702 stock items, 79% of them negative, and the
+        notification table held 11,884 active ``inventory.out_of_stock`` rows —
+        88% of every notification it had ever raised, all critical, only 11%
+        ever acknowledged. The register-variance and fraud alerts underneath
+        were never seen. Same proportions, scaled down.
+        """
+        for index in range(79):
+            _make_stock(f"Neg{index}", f"FIELD-NEG-{index}", qty=-4, reorder_level=5)
+        for index in range(21):
+            _make_stock(f"Ok{index}", f"FIELD-OK-{index}", qty=40, reorder_level=5)
+
+        sync_business_notifications()
+
+        inventory_alerts = BusinessNotification.objects.filter(
+            category=BusinessNotification.Category.INVENTORY,
+            status=BusinessNotification.Status.ACTIVE,
+        )
+        self.assertEqual(inventory_alerts.count(), 1)
+        self.assertEqual(inventory_alerts.get().code, "inventory.position_untrusted")
+        self.assertEqual(
+            BusinessNotification.objects.filter(
+                severity=BusinessNotification.Severity.CRITICAL
+            ).count(),
+            0,
+        )
+
+    @override_settings(POINTY_INVENTORY_ALERT_MAX_ITEMS=3)
+    def test_per_item_alerts_are_capped(self):
+        for index in range(6):
+            _make_stock(f"Zero{index}", f"LS-CAP-{index}", qty=0, reorder_level=5)
+        for index in range(20):
+            _make_stock(f"Stocked{index}", f"LS-CAPOK-{index}", qty=50, reorder_level=5)
+        sync_business_notifications()
+
+        self.assertEqual(_active("inventory.out_of_stock").count(), 3)
 
     # ------------------------------------------------------------------ #
     # 3. Expiry severity bands
