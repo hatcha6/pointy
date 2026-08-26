@@ -420,7 +420,42 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"payment_methods": "At least one payment method must be enabled."}
             )
+        self._validate_valuation_method_change(attrs)
         return attrs
+
+    def _validate_valuation_method_change(self, attrs):
+        """Refuse a mid-life change of valuation method unless it is confirmed.
+
+        The method decides what every past sale's cost *was*, so switching it
+        re-labels history that has already been reported and paid commission
+        against. A shop that has never moved stock has nothing to re-label and
+        may switch freely; once stock has moved, the change needs an explicit
+        acknowledgement so a client that forgets to show the warning cannot slip
+        it through.
+        """
+        acknowledged = attrs.pop("valuation_method_change_acknowledged", False)
+        method = attrs.get("inventory_valuation_method")
+        if method is None or self.instance is None:
+            return
+        if method == self.instance.inventory_valuation_method:
+            return
+        if acknowledged or not shop_has_stock_history():
+            return
+
+        # DRF normalises every leaf of a ``validate()`` error to a list, so the
+        # client reads ``code[0]`` to decide whether to raise the warning dialog.
+        raise serializers.ValidationError(
+            {
+                "inventory_valuation_method": (
+                    "Changing how stock is costed affects the recorded cost and "
+                    "profit of sales that have already happened. Confirm the "
+                    "change to continue."
+                ),
+                "code": "valuation_method_change_requires_acknowledgement",
+                "current_method": self.instance.inventory_valuation_method,
+                "requested_method": method,
+            }
+        )
 
     def validate_trusted_card_terminal_ids(self, value):
         if not isinstance(value, list):
@@ -436,6 +471,15 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             normalized.append(terminal_id)
             seen.add(terminal_id)
         return normalized
+
+    # Write-only escape hatch for the valuation-method guard below. The client
+    # sets it only after the user has read the warning dialog and chosen to
+    # continue anyway.
+    valuation_method_change_acknowledged = serializers.BooleanField(
+        write_only=True,
+        required=False,
+        default=False,
+    )
 
     class Meta:
         model = ShopSettings
@@ -459,6 +503,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "prevent_selling_at_loss",
             "low_stock_threshold",
             "warn_low_stock_before_sale",
+            "inventory_valuation_method",
             "stock_count_variance_min_units",
             "stock_count_variance_percent",
             "cashier_return_window_hours",
@@ -474,8 +519,21 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "pos_cash_purchase_limit",
             "logo_attachment",
             "updated_at",
+            "valuation_method_change_acknowledged",
         ]
         read_only_fields = ["shop_type", "logo_attachment", "updated_at"]
+
+
+
+def shop_has_stock_history() -> bool:
+    """Has any stock ever moved in this shop?
+
+    Imported lazily: ``apps.inventory`` imports ``apps.core.models``, so a
+    module-level import here would close the cycle.
+    """
+    from apps.inventory.models import StockMovement
+
+    return StockMovement.objects.exists()
 
 
 class ShopSetupSerializer(serializers.Serializer):
@@ -484,6 +542,12 @@ class ShopSetupSerializer(serializers.Serializer):
 
     shop_type = serializers.ChoiceField(choices=ShopSettings.ShopType.choices)
     shop_name = serializers.CharField(max_length=120, required=False)
+    # Asked during setup because it is the one choice here that is expensive to
+    # revisit: it decides what every future sale's cost will be.
+    inventory_valuation_method = serializers.ChoiceField(
+        choices=ShopSettings.ValuationMethod.choices,
+        required=False,
+    )
     allow_overselling = serializers.BooleanField(required=False)
     require_opening_cash = serializers.BooleanField(required=False)
     auto_print_receipts = serializers.BooleanField(required=False)

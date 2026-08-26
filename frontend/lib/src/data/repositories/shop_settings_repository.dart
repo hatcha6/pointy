@@ -42,6 +42,7 @@ class ShopSettingsRepository {
     bool? requireOpeningCash,
     bool? autoPrintReceipts,
     bool? autoPrintKitchenTickets,
+    InventoryValuationMethod? inventoryValuationMethod,
   }) async {
     return Result.guard(
       () => _service.setupShop(
@@ -51,6 +52,7 @@ class ShopSettingsRepository {
         requireOpeningCash: requireOpeningCash,
         autoPrintReceipts: autoPrintReceipts,
         autoPrintKitchenTickets: autoPrintKitchenTickets,
+        inventoryValuationMethod: inventoryValuationMethod,
       ),
     );
   }

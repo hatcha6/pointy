@@ -7747,6 +7747,105 @@ abstract class AppLocalizations {
   /// **'عند إيقافه سيظهر تحذير للكاشير قبل إتمام بيع بخسارة.'**
   String get preventSellingAtLossSubtitle;
 
+  /// Label for the inventory valuation method picker in shop settings.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة تسعير المخزون'**
+  String get valuationMethodLabel;
+
+  /// Helper text under the valuation method picker.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحدد تكلفة البضاعة المباعة عندما يُشترى نفس الصنف بأسعار مختلفة.'**
+  String get valuationMethodHelper;
+
+  /// No description provided for @valuationMethodMovingAverage.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتوسط المتحرك'**
+  String get valuationMethodMovingAverage;
+
+  /// No description provided for @valuationMethodFifo.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوارد أولاً يصرف أولاً (FIFO)'**
+  String get valuationMethodFifo;
+
+  /// No description provided for @valuationMethodLifo.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوارد أخيراً يصرف أولاً (LIFO)'**
+  String get valuationMethodLifo;
+
+  /// No description provided for @valuationMethodMovingAverageDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة واحدة مُوزّعة على كل الكمية الموجودة، تتغيّر مع كل شراء جديد. الأنسب لمعظم المحلات.'**
+  String get valuationMethodMovingAverageDescription;
+
+  /// No description provided for @valuationMethodFifoDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُحتسب البيع على تكلفة أقدم بضاعة في المخزن أولاً. الأنسب للبضاعة ذات الصلاحية.'**
+  String get valuationMethodFifoDescription;
+
+  /// No description provided for @valuationMethodLifoDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُحتسب البيع على تكلفة أحدث بضاعة اشتُريت أولاً. يرفع التكلفة ويقلّل الربح المُعلن عند ارتفاع الأسعار.'**
+  String get valuationMethodLifoDescription;
+
+  /// No description provided for @valuationMethodChangeWarningTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير طريقة تسعير المخزون'**
+  String get valuationMethodChangeWarningTitle;
+
+  /// First paragraph of the dialog warning the user before the inventory valuation method changes.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنت على وشك التغيير من «{currentMethod}» إلى «{newMethod}».'**
+  String valuationMethodChangeWarningBody(
+    String currentMethod,
+    String newMethod,
+  );
+
+  /// No description provided for @valuationMethodChangeWarningConsequences.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الطريقة تحدد تكلفة كل بيعة وربحها. تغييرها الآن يجعل أرقام التكلفة والأرباح الجديدة محسوبة بطريقة مختلفة عن التقارير التي سبق أن اعتمدت عليها، وقد لا تتطابق مع العمولات التي صُرفت أو الأرباح التي أُعلنت سابقاً.'**
+  String get valuationMethodChangeWarningConsequences;
+
+  /// No description provided for @valuationMethodChangeWarningAdvice.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأفضل اختيار الطريقة مرة واحدة عند تجهيز المحل وعدم تغييرها بعد ذلك. إن كنت مضطراً للتغيير، فالأنسب أن يكون في بداية فترة محاسبية جديدة وبعد استخراج تقارير الفترة السابقة.'**
+  String get valuationMethodChangeWarningAdvice;
+
+  /// No description provided for @valuationMethodChangeKeepCurrent.
+  ///
+  /// In ar, this message translates to:
+  /// **'إبقاء الطريقة الحالية'**
+  String get valuationMethodChangeKeepCurrent;
+
+  /// No description provided for @valuationMethodChangeConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'أفهم ذلك، غيّرها'**
+  String get valuationMethodChangeConfirm;
+
+  /// No description provided for @valuationMethodSetupTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة تسعير المخزون'**
+  String get valuationMethodSetupTitle;
+
+  /// No description provided for @valuationMethodSetupSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر مرة واحدة الآن — تغييرها بعد بدء البيع يؤثر على تكلفة وأرباح المبيعات السابقة.'**
+  String get valuationMethodSetupSubtitle;
+
   /// No description provided for @paymentMethodCash.
   ///
   /// In ar, this message translates to:

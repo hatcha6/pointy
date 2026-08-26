@@ -9,7 +9,7 @@ from apps.analytics.services import record_domain_event
 from apps.channels.services import require_active_sales_channel
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
-from apps.inventory.models import StockMovement
+from apps.inventory.models import StockLedgerEntry, StockMovement
 from apps.inventory.services import (
     consume_expiring_stock_batches,
     create_stock_movement,
@@ -345,6 +345,7 @@ def _consume_material(material, *, request=None):
         stock_item=stock_item,
         movement_type=StockMovement.Type.DECREASE,
         quantity=material.quantity,
+        voucher_type=StockLedgerEntry.VoucherType.PRODUCTION,
         note=f"مهمة {material.job.job_number}",
         created_by=request_user(request),
         before=before,
@@ -379,6 +380,9 @@ def reverse_job_material(*, job, material, request=None):
             stock_item=stock_item,
             movement_type=StockMovement.Type.INCREASE,
             quantity=material.quantity,
+            # Unconsumed material going back on the shelf is worth what the
+            # rest of that shelf is worth; the bin's own rate says so.
+            voucher_type=StockLedgerEntry.VoucherType.PRODUCTION,
             note=f"إرجاع مواد مهمة {job.job_number}",
             created_by=request_user(request),
             before=before,
@@ -489,6 +493,10 @@ def receive_finished_goods(job, *, request=None):
         note=f"إنتاج {job.job_number}",
         created_by=request_user(request),
         before=before,
+        # A made thing is worth what went into making it.
+        unit_cost=unit_cost,
+        voucher_type=StockLedgerEntry.VoucherType.PRODUCTION,
+        voucher_id=job.pk,
     )
     job.output_unit_cost = unit_cost
     job.output_received_at = timezone.now()

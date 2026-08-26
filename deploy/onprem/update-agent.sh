@@ -101,6 +101,13 @@ CURRENT_VERSION="$(pu_current_version)"
 # connector image is `scratch` (no shell to exec into).
 STATE_FILE="$(mktemp)"
 STAGING=""
+# The trap has to be armed before the lock is taken, so that an early exit still
+# cleans up STATE_FILE. That means cleanup runs on paths where this process
+# never owned the lock — including the one where it stood down BECAUSE another
+# update holds it — so releasing unconditionally would unlink the other
+# updater's lock, let the watchdog reconcile the stack mid-flip, and leave the
+# next timer tick free to start a second concurrent update.
+LOCK_HELD=0
 cleanup() {
   rm -f "$STATE_FILE"
   # The downloaded zip and everything unpacked out of it carry the same image
@@ -113,7 +120,8 @@ cleanup() {
     pu_shred_staged_archives "$POINTY_BUNDLE_STAGING"
     rm -rf "$POINTY_BUNDLE_STAGING"
   fi
-  pu_release_lock
+  [ "$LOCK_HELD" = 1 ] && pu_release_lock
+  return 0
 }
 trap cleanup EXIT
 
@@ -163,6 +171,7 @@ fi
 # Take the update lock before downloading: it also tells the watchdog to keep
 # its hands off the stack for the duration.
 pu_acquire_lock || exit 0
+LOCK_HELD=1
 
 report_status "$CURRENT_VERSION" "applying" ""
 

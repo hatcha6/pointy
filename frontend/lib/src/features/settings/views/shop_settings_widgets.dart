@@ -873,6 +873,8 @@ class _InventorySettingsFields extends StatelessWidget {
     required this.onAllowOversellingChanged,
     required this.onWarnLowStockBeforeSaleChanged,
     required this.onPreventSellingAtLossChanged,
+    required this.valuationMethod,
+    required this.onValuationMethodChanged,
   });
 
   final TextEditingController controller;
@@ -881,10 +883,12 @@ class _InventorySettingsFields extends StatelessWidget {
   final bool allowOverselling;
   final bool warnLowStockBeforeSale;
   final bool preventSellingAtLoss;
+  final InventoryValuationMethod valuationMethod;
   final VoidCallback onThresholdChanged;
   final ValueChanged<bool> onAllowOversellingChanged;
   final ValueChanged<bool> onWarnLowStockBeforeSaleChanged;
   final ValueChanged<bool> onPreventSellingAtLossChanged;
+  final ValueChanged<InventoryValuationMethod> onValuationMethodChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -925,9 +929,64 @@ class _InventorySettingsFields extends StatelessWidget {
           subtitle: Text(l10n.preventSellingAtLossSubtitle),
           onChanged: enabled ? onPreventSellingAtLossChanged : null,
         ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<InventoryValuationMethod>(
+          initialValue: valuationMethod,
+          decoration: InputDecoration(
+            labelText: l10n.valuationMethodLabel,
+            helperText: l10n.valuationMethodHelper,
+            helperMaxLines: 3,
+            prefixIcon: const Icon(Icons.calculate_outlined),
+          ),
+          items: [
+            for (final method in InventoryValuationMethod.values)
+              DropdownMenuItem(
+                value: method,
+                child: Text(_valuationMethodLabel(l10n, method)),
+              ),
+          ],
+          onChanged: enabled
+              ? (value) {
+                  if (value != null) {
+                    onValuationMethodChanged(value);
+                  }
+                }
+              : null,
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Text(
+            _valuationMethodDescription(l10n, valuationMethod),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
       ],
     );
   }
+}
+
+String _valuationMethodLabel(
+  AppLocalizations l10n,
+  InventoryValuationMethod method,
+) {
+  return switch (method) {
+    InventoryValuationMethod.movingAverage => l10n.valuationMethodMovingAverage,
+    InventoryValuationMethod.fifo => l10n.valuationMethodFifo,
+    InventoryValuationMethod.lifo => l10n.valuationMethodLifo,
+  };
+}
+
+String _valuationMethodDescription(
+  AppLocalizations l10n,
+  InventoryValuationMethod method,
+) {
+  return switch (method) {
+    InventoryValuationMethod.movingAverage =>
+      l10n.valuationMethodMovingAverageDescription,
+    InventoryValuationMethod.fifo => l10n.valuationMethodFifoDescription,
+    InventoryValuationMethod.lifo => l10n.valuationMethodLifoDescription,
+  };
 }
 
 class _AnalyticsExportFields extends StatelessWidget {

@@ -15,11 +15,13 @@ from apps.discounts.models import (
     normalize_coupon_code,
 )
 from apps.discounts.services import DiscountUsageLimitExceeded, persist_applied_discounts
-from apps.inventory.models import StockMovement
+from apps.inventory.models import StockLedgerEntry, StockMovement
 from apps.inventory.services import (
+    build_stock_movement,
     consume_expiring_stock_batches,
     create_expiring_stock_batch,
     create_stock_movement,
+    create_stock_movements,
     lock_stock_item,
     save_stock_item_quantities,
     stock_snapshot,
@@ -835,6 +837,15 @@ def apply_receipt_stock_changes(
     expected_quantities,
     created_by,
 ):
+    """Adjust one received line's stock and return its unsaved movements.
+
+    The movements are returned rather than saved so the whole receipt is written
+    and valued in one batch. Valuing line by line cost a fixed handful of
+    queries per line, which a twenty-line delivery pays twenty times over. The
+    per-line arithmetic is untouched — each movement is still built from the
+    snapshot taken before its own adjustment.
+    """
+    movements = []
     stock_item = lock_stock_item(variant=line.variant)
 
     # Receipt quantities are in the line's purchase unit (whole packs); stock is
@@ -847,14 +858,19 @@ def apply_receipt_stock_changes(
         stock_item.quantity_on_hand += accepted_expected_base
         decrement_expected(stock_item, accepted_expected_base)
         save_stock_item_quantities(stock_item)
-        create_stock_movement(
-            stock_item=stock_item,
-            variant=line.variant,
-            movement_type=StockMovement.Type.RECEIVE_EXPECTED,
-            quantity=accepted_expected_base,
-            note=f"استلام مشتريات {locked_order.order_number}",
-            created_by=created_by,
-            before=before,
+        movements.append(
+            build_stock_movement(
+                stock_item=stock_item,
+                variant=line.variant,
+                movement_type=StockMovement.Type.RECEIVE_EXPECTED,
+                quantity=accepted_expected_base,
+                note=f"استلام مشتريات {locked_order.order_number}",
+                created_by=created_by,
+                before=before,
+                # Net of discounts and landed costs: what this stock actually
+                # cost to put on the shelf is what it is worth on it.
+                unit_cost=line.effective_base_unit_cost,
+            )
         )
 
     if accepted_overage > 0:
@@ -862,14 +878,17 @@ def apply_receipt_stock_changes(
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand += accepted_overage_base
         save_stock_item_quantities(stock_item)
-        create_stock_movement(
-            stock_item=stock_item,
-            variant=line.variant,
-            movement_type=StockMovement.Type.INCREASE,
-            quantity=accepted_overage_base,
-            note=f"زيادة توريد {locked_order.order_number}",
-            created_by=created_by,
-            before=before,
+        movements.append(
+            build_stock_movement(
+                stock_item=stock_item,
+                variant=line.variant,
+                movement_type=StockMovement.Type.INCREASE,
+                quantity=accepted_overage_base,
+                note=f"زيادة توريد {locked_order.order_number}",
+                created_by=created_by,
+                before=before,
+                unit_cost=line.effective_base_unit_cost,
+            )
         )
 
     damaged_expected = expected_quantities["damaged_expected"]
@@ -877,14 +896,16 @@ def apply_receipt_stock_changes(
         before = stock_snapshot(stock_item)
         decrement_expected(stock_item, line.to_base_quantity(damaged_expected))
         save_stock_item_quantities(stock_item)
-        create_stock_movement(
-            stock_item=stock_item,
-            variant=line.variant,
-            movement_type=StockMovement.Type.RECEIVE_DAMAGED,
-            quantity=line.to_base_quantity(damaged_expected),
-            note=f"تالف عند الاستلام {locked_order.order_number}",
-            created_by=created_by,
-            before=before,
+        movements.append(
+            build_stock_movement(
+                stock_item=stock_item,
+                variant=line.variant,
+                movement_type=StockMovement.Type.RECEIVE_DAMAGED,
+                quantity=line.to_base_quantity(damaged_expected),
+                note=f"تالف عند الاستلام {locked_order.order_number}",
+                created_by=created_by,
+                before=before,
+            )
         )
 
     cancelled_expected = expected_quantities["cancelled_expected"]
@@ -892,15 +913,19 @@ def apply_receipt_stock_changes(
         before = stock_snapshot(stock_item)
         decrement_expected(stock_item, line.to_base_quantity(cancelled_expected))
         save_stock_item_quantities(stock_item)
-        create_stock_movement(
-            stock_item=stock_item,
-            variant=line.variant,
-            movement_type=StockMovement.Type.CANCEL_EXPECTED,
-            quantity=line.to_base_quantity(cancelled_expected),
-            note=f"إلغاء توريد {locked_order.order_number}",
-            created_by=created_by,
-            before=before,
+        movements.append(
+            build_stock_movement(
+                stock_item=stock_item,
+                variant=line.variant,
+                movement_type=StockMovement.Type.CANCEL_EXPECTED,
+                quantity=line.to_base_quantity(cancelled_expected),
+                note=f"إلغاء توريد {locked_order.order_number}",
+                created_by=created_by,
+                before=before,
+            )
         )
+
+    return movements
 
 
 def purchase_order_cancelled_total(purchase_order, *, lines=None):
@@ -975,6 +1000,10 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
         created_by=created_by,
     )
 
+    # Collected across every line so the whole delivery is written and valued in
+    # one batch rather than once per line.
+    stock_movements = []
+
     for line_data in lines_data:
         line = line_data["line"]
         accepted_quantity = line_data.get("accepted_quantity", 0)
@@ -998,14 +1027,16 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
             damaged_quantity,
             cancelled_quantity,
         )
-        apply_receipt_stock_changes(
-            locked_order=locked_order,
-            line=line,
-            accepted_quantity=accepted_quantity,
-            damaged_quantity=damaged_quantity,
-            cancelled_quantity=cancelled_quantity,
-            expected_quantities=expected_quantities,
-            created_by=created_by,
+        stock_movements.extend(
+            apply_receipt_stock_changes(
+                locked_order=locked_order,
+                line=line,
+                accepted_quantity=accepted_quantity,
+                damaged_quantity=damaged_quantity,
+                cancelled_quantity=cancelled_quantity,
+                expected_quantities=expected_quantities,
+                created_by=created_by,
+            )
         )
         receipt_line = PurchaseReceiptLine.objects.create(
             receipt=receipt,
@@ -1028,6 +1059,13 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
             # Batches are consumed in base units by FEFO, so store base units.
             quantity=line.to_base_quantity(accepted_quantity),
         )
+
+    # One insert and one valuation pass for the whole delivery.
+    create_stock_movements(
+        stock_movements,
+        voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RECEIPT,
+        voucher_id=locked_order.pk,
+    )
 
     has_outstanding = any(
         line.outstanding_quantity > 0 for line in locked_lines
@@ -1239,6 +1277,8 @@ def record_purchase_adjustment_stock_movements(
             note=purchase_adjustment_note(adjustment_type, purchase_order.order_number),
             created_by=created_by,
             before=before,
+            voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RETURN,
+            voucher_id=purchase_order.pk,
         )
 
 
@@ -1274,6 +1314,11 @@ def record_purchase_replacement_stock_movements(
             note=purchase_replacement_note(purchase_order.order_number),
             created_by=created_by,
             before=before,
+            # No explicit cost: a replacement is the same goods arriving again,
+            # so it is worth what the stock it replaces is worth. Falling back
+            # to the bin's own rate says exactly that.
+            voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RECEIPT,
+            voucher_id=purchase_order.pk,
         )
 
 

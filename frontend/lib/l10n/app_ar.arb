@@ -2609,6 +2609,39 @@
   "warnLowStockBeforeSaleSubtitle": "عند إيقافه يكتمل البيع فوق المخزون دون طلب تأكيد (يتطلب تفعيل «السماح بالبيع فوق المخزون»).",
   "preventSellingAtLossLabel": "منع البيع بخسارة",
   "preventSellingAtLossSubtitle": "عند إيقافه سيظهر تحذير للكاشير قبل إتمام بيع بخسارة.",
+  "valuationMethodLabel": "طريقة تسعير المخزون",
+  "@valuationMethodLabel": {
+    "description": "Label for the inventory valuation method picker in shop settings."
+  },
+  "valuationMethodHelper": "تحدد تكلفة البضاعة المباعة عندما يُشترى نفس الصنف بأسعار مختلفة.",
+  "@valuationMethodHelper": {
+    "description": "Helper text under the valuation method picker."
+  },
+  "valuationMethodMovingAverage": "المتوسط المتحرك",
+  "valuationMethodFifo": "الوارد أولاً يصرف أولاً (FIFO)",
+  "valuationMethodLifo": "الوارد أخيراً يصرف أولاً (LIFO)",
+  "valuationMethodMovingAverageDescription": "تكلفة واحدة مُوزّعة على كل الكمية الموجودة، تتغيّر مع كل شراء جديد. الأنسب لمعظم المحلات.",
+  "valuationMethodFifoDescription": "يُحتسب البيع على تكلفة أقدم بضاعة في المخزن أولاً. الأنسب للبضاعة ذات الصلاحية.",
+  "valuationMethodLifoDescription": "يُحتسب البيع على تكلفة أحدث بضاعة اشتُريت أولاً. يرفع التكلفة ويقلّل الربح المُعلن عند ارتفاع الأسعار.",
+  "valuationMethodChangeWarningTitle": "تغيير طريقة تسعير المخزون",
+  "valuationMethodChangeWarningBody": "أنت على وشك التغيير من «{currentMethod}» إلى «{newMethod}».",
+  "@valuationMethodChangeWarningBody": {
+    "description": "First paragraph of the dialog warning the user before the inventory valuation method changes.",
+    "placeholders": {
+      "currentMethod": {
+        "type": "String"
+      },
+      "newMethod": {
+        "type": "String"
+      }
+    }
+  },
+  "valuationMethodChangeWarningConsequences": "هذه الطريقة تحدد تكلفة كل بيعة وربحها. تغييرها الآن يجعل أرقام التكلفة والأرباح الجديدة محسوبة بطريقة مختلفة عن التقارير التي سبق أن اعتمدت عليها، وقد لا تتطابق مع العمولات التي صُرفت أو الأرباح التي أُعلنت سابقاً.",
+  "valuationMethodChangeWarningAdvice": "الأفضل اختيار الطريقة مرة واحدة عند تجهيز المحل وعدم تغييرها بعد ذلك. إن كنت مضطراً للتغيير، فالأنسب أن يكون في بداية فترة محاسبية جديدة وبعد استخراج تقارير الفترة السابقة.",
+  "valuationMethodChangeKeepCurrent": "إبقاء الطريقة الحالية",
+  "valuationMethodChangeConfirm": "أفهم ذلك، غيّرها",
+  "valuationMethodSetupTitle": "طريقة تسعير المخزون",
+  "valuationMethodSetupSubtitle": "اختر مرة واحدة الآن — تغييرها بعد بدء البيع يؤثر على تكلفة وأرباح المبيعات السابقة.",
   "paymentMethodCash": "نقد",
   "paymentMethodCard": "بطاقة",
   "paymentMethodTransfer": "تحويل",

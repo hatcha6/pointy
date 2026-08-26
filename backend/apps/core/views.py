@@ -349,7 +349,12 @@ class ShopSettingsView(views.APIView):
             event_type=AnalyticsEvent.EventType.AUDIT,
             severity=(
                 AnalyticsEvent.Severity.WARNING
-                if "allow_overselling" in changed_fields and settings.allow_overselling
+                if (
+                    ("allow_overselling" in changed_fields and settings.allow_overselling)
+                    # Re-costing history is the most consequential thing this
+                    # endpoint can do; it should stand out in the audit trail.
+                    or "inventory_valuation_method" in changed_fields
+                )
                 else AnalyticsEvent.Severity.INFO
             ),
             user=request.user,
@@ -364,6 +369,7 @@ class ShopSettingsView(views.APIView):
                 "require_opening_cash": settings.require_opening_cash,
                 "cashier_return_window_hours": settings.cashier_return_window_hours,
                 "low_stock_threshold": settings.low_stock_threshold,
+                "inventory_valuation_method": settings.inventory_valuation_method,
                 "warn_low_stock_before_sale": settings.warn_low_stock_before_sale,
                 "enable_cash_payments": settings.enable_cash_payments,
                 "enable_card_payments": settings.enable_card_payments,
@@ -408,6 +414,7 @@ class ShopSetupView(views.APIView):
         settings.apply_shop_type_preset(data["shop_type"])
         for field in (
             "shop_name",
+            "inventory_valuation_method",
             "allow_overselling",
             "require_opening_cash",
             "auto_print_receipts",
@@ -423,7 +430,10 @@ class ShopSetupView(views.APIView):
             user=request.user,
             entity_type="shop_settings",
             entity_id=settings.pk,
-            attributes={"shop_type": settings.shop_type},
+            attributes={
+                "shop_type": settings.shop_type,
+                "inventory_valuation_method": settings.inventory_valuation_method,
+            },
         )
         return Response(
             ShopSettingsSerializer(settings, context={"request": request}).data

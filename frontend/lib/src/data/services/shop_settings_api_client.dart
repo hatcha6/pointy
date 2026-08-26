@@ -25,7 +25,13 @@ class ShopSettingsApiClient {
       'shop-settings/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(response, 'Shop settings update failed with status');
+    // throwApiException (not ensureSuccess) so the response body survives: the
+    // valuation-method guard answers 400 with a code the screen has to read to
+    // know it should raise the confirmation dialog.
+    _session.throwApiException(
+      response,
+      'Shop settings update failed with status',
+    );
     return ShopSettings.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -38,8 +44,12 @@ class ShopSettingsApiClient {
     bool? requireOpeningCash,
     bool? autoPrintReceipts,
     bool? autoPrintKitchenTickets,
+    InventoryValuationMethod? inventoryValuationMethod,
   }) async {
     final body = <String, Object?>{'shop_type': shopType};
+    if (inventoryValuationMethod != null) {
+      body['inventory_valuation_method'] = inventoryValuationMethod.wireValue;
+    }
     if (shopName != null) body['shop_name'] = shopName;
     if (allowOverselling != null) body['allow_overselling'] = allowOverselling;
     if (requireOpeningCash != null) {

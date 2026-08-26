@@ -492,6 +492,11 @@ def _model_has_initial_setup_blocking_data(model, model_label):
         return queryset.exclude(name__in=DEFAULT_EXPENSE_CATEGORY_NAMES).exists()
     if model_label == ("operations", "workflowstage"):
         return queryset.filter(template__is_system=False).exists()
+    if model_label == ("inventory", "warehouse"):
+        # The default "Main" warehouse is created by migration so the valuation
+        # ledger always has somewhere to post. It is scaffolding, not activity —
+        # a shop that has added a second location has actually done something.
+        return queryset.filter(is_default=False).exists()
     if model_label == ("catalog", "unitofmeasure"):
         # Seeded built-in units are configuration scaffolding, not shop activity.
         return queryset.filter(is_system=False).exists()
