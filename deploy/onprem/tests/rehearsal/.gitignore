@@ -1,0 +1,2 @@
+# The stand-in binary, cross-compiled into the Docker build context at run time.
+root/

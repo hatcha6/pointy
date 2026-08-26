@@ -1,7 +1,8 @@
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import StockBatch, StockItem, StockMovement
+from .models import StockBatch, StockItem, StockLedgerEntry, StockMovement
+from .valuation_service import post_movement_valuations
 
 # The quantity columns a stock write touches, plus the timestamp that has to
 # move with them. Shared by the single-row save and the batched one so the two
@@ -92,6 +93,7 @@ def build_stock_movement(
     created_by,
     before,
     variant=None,
+    unit_cost=None,
 ):
     """The unsaved ledger row for one stock change, or ``None`` for a no-op.
 
@@ -109,7 +111,7 @@ def build_stock_movement(
         )
     if quantity <= 0:
         return None
-    return StockMovement(
+    movement = StockMovement(
         variant=variant,
         stock_item=stock_item,
         movement_type=movement_type,
@@ -123,21 +125,67 @@ def build_stock_movement(
         expected_before=before["expected"],
         expected_after=stock_item.quantity_expected,
     )
-
-
-def create_stock_movement(**kwargs):
-    movement = build_stock_movement(**kwargs)
-    if movement is not None:
-        movement.save()
+    # Carried on the instance rather than in a side dictionary so a document
+    # with the same variant on two lines at two different costs values each
+    # line at what it actually cost.
+    movement.valuation_unit_cost = unit_cost
     return movement
 
 
-def create_stock_movements(movements):
-    """Insert a batch of built movements in one statement."""
+def create_stock_movement(
+    *,
+    voucher_type=StockLedgerEntry.VoucherType.ADJUSTMENT,
+    voucher_id=None,
+    unit_cost=None,
+    posting_at=None,
+    **kwargs,
+):
+    """Save one movement and value it.
+
+    ``unit_cost`` is the cost per base unit of stock coming *in* — what a
+    receipt paid, or what a returned sale line originally cost. Stock going
+    *out* never takes a cost from the caller: the valuation engine decides it
+    from what is actually on the shelf, which is the whole point of the ledger.
+    """
+    movement = build_stock_movement(unit_cost=unit_cost, **kwargs)
+    if movement is None:
+        return None
+    movement.save()
+    post_movement_valuations(
+        [movement],
+        voucher_type=voucher_type,
+        voucher_id=voucher_id,
+        posting_at=posting_at,
+    )
+    return movement
+
+
+def create_stock_movements(
+    movements,
+    *,
+    voucher_type=StockLedgerEntry.VoucherType.ADJUSTMENT,
+    voucher_id=None,
+    unit_costs=None,
+    posting_at=None,
+):
+    """Insert a batch of built movements in one statement, then value them.
+
+    Each returned movement carries ``valuation_rate_applied`` — the cost per
+    base unit the ledger settled on — so a document can stamp what it really
+    cost onto its own lines without a second query.
+    """
     rows = [movement for movement in movements if movement is not None]
     if not rows:
         return []
-    return StockMovement.objects.bulk_create(rows)
+    created = StockMovement.objects.bulk_create(rows)
+    post_movement_valuations(
+        created,
+        voucher_type=voucher_type,
+        voucher_id=voucher_id,
+        posting_at=posting_at,
+        unit_costs=unit_costs,
+    )
+    return created
 
 
 def create_expiring_stock_batch(*, receipt_line, expiry_date, quantity):

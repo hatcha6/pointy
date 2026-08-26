@@ -25,7 +25,7 @@ from apps.discounts.services import (
 )
 from apps.catalog.services import preload_line_variants
 from apps.catalog.units import quantize_quantity
-from apps.inventory.models import StockMovement
+from apps.inventory.models import StockLedgerEntry, StockMovement
 from apps.inventory.services import (
     build_stock_movement,
     consume_expiring_stock_batches,
@@ -114,7 +114,10 @@ def create_order_with_lines(
     # One batched cost lookup for the whole cart instead of one purchase/
     # production query per line (latest_sale_unit_cost was the checkout's
     # per-line cost N+1).
-    cost_by_variant = latest_sale_unit_costs(
+    # Provisional: the real cost is settled when the stock is actually issued
+    # (see _stamp_ledger_cost_on_lines). A cart that never takes payment keeps
+    # this figure, which is the right answer for a quotation.
+    cost_by_variant = sale_cost_basis(
         [line_data["variant"] for line_data in lines_data]
     )
     line_objects_by_key = {}
@@ -401,6 +404,18 @@ def latest_sale_unit_costs(variants):
     return costs
 
 
+def sale_cost_basis(variants):
+    """Cost per base unit for a cart, read from the valuation ledger.
+
+    Replaces the old last-purchase-cost lookup as the everyday answer. That
+    lookup survives inside the valuation service as the fallback for stock that
+    has never been valued, so a brand new product still prices sensibly.
+    """
+    from apps.inventory.valuation_service import valuation_unit_costs
+
+    return valuation_unit_costs([variant.pk for variant in variants])
+
+
 def checkout_loss_lines(lines_data, discount_result=None):
     discount_by_line_key = (
         discount_allocations_by_line_key(discount_result)
@@ -409,7 +424,7 @@ def checkout_loss_lines(lines_data, discount_result=None):
     )
     # Batch the cost lookup across every cart line (was one query per line, on the
     # preview that fires on every keystroke).
-    cost_by_variant = latest_sale_unit_costs(
+    cost_by_variant = sale_cost_basis(
         [line_data["variant"] for line_data in lines_data]
     )
     loss_lines = []
@@ -789,7 +804,46 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None):
         )
 
     save_stock_item_quantities_bulk(adjusted_items)
-    create_stock_movements(movements)
+    created = create_stock_movements(
+        movements,
+        voucher_type=StockLedgerEntry.VoucherType.SALE,
+        voucher_id=order.pk,
+    )
+    _stamp_ledger_cost_on_lines(order, created)
+
+
+def _stamp_ledger_cost_on_lines(order, movements):
+    """Write what the sale actually cost onto its own lines.
+
+    Until the stock is issued nobody knows the cost: with FIFO a sale can
+    straddle two purchase prices, and even under moving average the rate can
+    move between adding the line and taking the payment. So the line carries a
+    provisional cost while the cart is open, and this replaces it with the
+    figure the valuation engine settled on when the stock actually left.
+
+    Every report reads ``OrderLine.unit_cost``, so correcting it here is what
+    makes gross profit true without touching a single report.
+    """
+    rates = {
+        movement.variant_id: movement.valuation_rate_applied
+        for movement in movements
+        if getattr(movement, "valuation_rate_applied", None) is not None
+    }
+    if not rates:
+        return
+
+    lines = list(order.lines.filter(variant_id__in=rates))
+    updated = []
+    for line in lines:
+        # The ledger works in base units; the line is priced in whatever unit
+        # was sold, so scale by the factor the line snapshotted.
+        base_rate = rates[line.variant_id]
+        unit_cost = money(base_rate * (line.unit_factor or Decimal("1")))
+        if unit_cost != line.unit_cost:
+            line.unit_cost = unit_cost
+            updated.append(line)
+    if updated:
+        OrderLine.objects.bulk_update(updated, ["unit_cost", "updated_at"])
 
 
 def reserve_stock_for_quote(order, *, settings=None):
@@ -1753,4 +1807,30 @@ def record_return_stock_movement(*, order, variant, quantity, created_by):
         note=f"مرتجع {order.receipt_number}",
         created_by=created_by,
         before=before,
+        # Returned goods re-enter at what they cost when they left, not at
+        # today's rate. Valuing a return at the current rate would book a
+        # profit or loss on a sale that was simply undone.
+        unit_cost=returned_line_base_unit_cost(order, variant),
+        voucher_type=StockLedgerEntry.VoucherType.SALE_RETURN,
+        voucher_id=order.pk,
     )
+
+
+def returned_line_base_unit_cost(order, variant):
+    """Cost per base unit that this variant left the shop at on this order.
+
+    ``None`` when the order has no such line (it should), which lets the
+    valuation fall back to the bin's own rate rather than guessing at zero.
+    """
+    line = (
+        order.lines.filter(variant=variant)
+        .order_by("id")
+        .values("unit_cost", "unit_factor")
+        .first()
+    )
+    if line is None:
+        return None
+    factor = line["unit_factor"] or Decimal("1")
+    if factor <= 0:
+        return line["unit_cost"]
+    return Decimal(line["unit_cost"]) / factor

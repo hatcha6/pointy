@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -10,6 +11,7 @@ import '../../../data/models/analytics_export.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/models/system_backup.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/services/api_session.dart';
 
 class ShopSettingsViewModel extends ChangeNotifier {
   ShopSettingsViewModel(this._repository, {AnalyticsEngine? analyticsEngine})
@@ -87,6 +89,7 @@ class ShopSettingsViewModel extends ChangeNotifier {
   Future<bool> updateSettings(ShopSettingsDraft draft) async {
     _isSaving = true;
     _hasSaveError = false;
+    _needsValuationMethodConfirmation = false;
     notifyListeners();
 
     final result = await _repository.updateSettings(draft);
@@ -98,9 +101,43 @@ class ShopSettingsViewModel extends ChangeNotifier {
         notifyListeners();
         return true;
       case Error<ShopSettings>():
-        _hasSaveError = true;
+        _needsValuationMethodConfirmation = _isValuationMethodGuard(
+          result.exception,
+        );
+        // The guard is a question, not a failure: the save did not fail, it is
+        // waiting for the user to confirm. Showing the red save-error banner
+        // underneath the confirmation dialog would misread as both.
+        _hasSaveError = !_needsValuationMethodConfirmation;
         notifyListeners();
         return false;
+    }
+  }
+
+  /// True when the last save was held back because the user changed how stock
+  /// is costed and has not yet confirmed it. The screen answers by showing the
+  /// warning dialog and re-saving with an acknowledgement.
+  bool get needsValuationMethodConfirmation =>
+      _needsValuationMethodConfirmation;
+
+  bool _needsValuationMethodConfirmation = false;
+
+  static bool _isValuationMethodGuard(Exception exception) {
+    if (exception is! PosApiException || exception.statusCode != 400) {
+      return false;
+    }
+    try {
+      final body = jsonDecode(exception.responseBody);
+      if (body is! Map<String, Object?>) {
+        return false;
+      }
+      // DRF normalises error leaves to lists, so the code arrives wrapped.
+      final code = body['code'];
+      final value = code is List && code.isNotEmpty
+          ? code.first?.toString()
+          : code?.toString();
+      return value == 'valuation_method_change_requires_acknowledgement';
+    } on FormatException {
+      return false;
     }
   }
 

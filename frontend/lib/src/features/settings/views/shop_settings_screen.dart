@@ -276,6 +276,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late bool _allowOverselling;
   late bool _warnLowStockBeforeSale;
   late bool _preventSellingAtLoss;
+  late InventoryValuationMethod _inventoryValuationMethod;
   late bool _enableCashPayments;
   late bool _enableCardPayments;
   late bool _enableTransferPayments;
@@ -336,6 +337,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       _allowOverselling = widget.settings.allowOverselling;
       _warnLowStockBeforeSale = widget.settings.warnLowStockBeforeSale;
       _preventSellingAtLoss = widget.settings.preventSellingAtLoss;
+      _inventoryValuationMethod = widget.settings.inventoryValuationMethod;
       _enableCashPayments = widget.settings.enableCashPayments;
       _enableCardPayments = widget.settings.enableCardPayments;
       _enableTransferPayments = widget.settings.enableTransferPayments;
@@ -398,6 +400,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _allowOverselling = settings.allowOverselling;
     _warnLowStockBeforeSale = settings.warnLowStockBeforeSale;
     _preventSellingAtLoss = settings.preventSellingAtLoss;
+    _inventoryValuationMethod = settings.inventoryValuationMethod;
     _enableCashPayments = settings.enableCashPayments;
     _enableCardPayments = settings.enableCardPayments;
     _enableTransferPayments = settings.enableTransferPayments;
@@ -950,6 +953,11 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         allowOverselling: _allowOverselling,
         warnLowStockBeforeSale: _warnLowStockBeforeSale,
         preventSellingAtLoss: _preventSellingAtLoss,
+        valuationMethod: _inventoryValuationMethod,
+        onValuationMethodChanged: (value) {
+          setState(() => _inventoryValuationMethod = value);
+          refresh();
+        },
         onThresholdChanged: () => _refreshSettingsGroup(refresh),
         onAllowOversellingChanged: (value) {
           setState(() => _allowOverselling = value);
@@ -1478,39 +1486,32 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     }
 
     final messenger = ScaffoldMessenger.of(context);
-    final currentSettings = widget.viewModel.settings ?? widget.settings;
-    var saved = await widget.viewModel.updateSettings(
-      ShopSettingsDraft(
-        shopName: _shopNameController.text.trim(),
-        receiptHeader: _receiptHeaderController.text.trim(),
-        receiptFooter: _receiptFooterController.text.trim(),
-        enableOnlineInvoices: _enableOnlineInvoices,
-        requireOpeningCash: _requireOpeningCash,
-        autoPrintReceipts: _autoPrintReceipts,
-        allowOverselling: _allowOverselling,
-        warnLowStockBeforeSale: _warnLowStockBeforeSale,
-        preventSellingAtLoss: _preventSellingAtLoss,
-        lowStockThreshold:
-            int.tryParse(_lowStockThresholdController.text.trim()) ?? 0,
-        cashierReturnWindowHours: _cashierReturnWindowHours,
-        enableCashPayments: _enableCashPayments,
-        enableCardPayments: _enableCardPayments,
-        enableTransferPayments: _enableTransferPayments,
-        requireCardPaymentReceipt: _requireCardPaymentReceipt,
-        trustedCardTerminalIds: _trustedCardTerminalIds,
-        cardCommissionPercent: _parsePercent(_cardCommissionController.text),
-        transferCommissionPercent: _parsePercent(
-          _transferCommissionController.text,
-        ),
-        requireCustomerForCredit: _requireCustomerForCredit,
-        allowCashierCustomerAccess: _allowCashierCustomerAccess,
-        posCashPurchaseLimit: _parsePosCashPurchaseLimit(),
-        enableRepairOperations: currentSettings.enableRepairOperations,
-        enableProductionOperations: currentSettings.enableProductionOperations,
-        enableKitchenOperations: currentSettings.enableKitchenOperations,
-        enableJobTracking: currentSettings.enableJobTracking,
-      ),
-    );
+    final draft = _buildDraft();
+    var saved = await widget.viewModel.updateSettings(draft);
+
+    // The backend holds back a change to how stock is costed until the user
+    // has seen what it means. Ask, then re-send the same draft with the
+    // acknowledgement attached.
+    if (!saved && widget.viewModel.needsValuationMethodConfirmation) {
+      if (!mounted) {
+        return;
+      }
+      final confirmed = await _confirmValuationMethodChange(l10n);
+      if (!confirmed) {
+        // Put the form back on the stored method so the screen and the shop
+        // agree about what is in force.
+        setState(() {
+          _inventoryValuationMethod =
+              (widget.viewModel.settings ?? widget.settings)
+                  .inventoryValuationMethod;
+        });
+        return;
+      }
+      saved = await widget.viewModel.updateSettings(
+        draft.acknowledgingValuationMethodChange(),
+      );
+    }
+
     if (saved && _selectedLogoUpload != null) {
       saved = await widget.viewModel.uploadLogo(_selectedLogoUpload!);
     } else if (saved && _removeLogo) {
@@ -1530,6 +1531,82 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
           ),
         ),
       );
+  }
+
+  ShopSettingsDraft _buildDraft() {
+    final currentSettings = widget.viewModel.settings ?? widget.settings;
+    return ShopSettingsDraft(
+      shopName: _shopNameController.text.trim(),
+      receiptHeader: _receiptHeaderController.text.trim(),
+      receiptFooter: _receiptFooterController.text.trim(),
+      enableOnlineInvoices: _enableOnlineInvoices,
+      requireOpeningCash: _requireOpeningCash,
+      autoPrintReceipts: _autoPrintReceipts,
+      allowOverselling: _allowOverselling,
+      warnLowStockBeforeSale: _warnLowStockBeforeSale,
+      preventSellingAtLoss: _preventSellingAtLoss,
+      lowStockThreshold:
+          int.tryParse(_lowStockThresholdController.text.trim()) ?? 0,
+      cashierReturnWindowHours: _cashierReturnWindowHours,
+      enableCashPayments: _enableCashPayments,
+      enableCardPayments: _enableCardPayments,
+      enableTransferPayments: _enableTransferPayments,
+      requireCardPaymentReceipt: _requireCardPaymentReceipt,
+      trustedCardTerminalIds: _trustedCardTerminalIds,
+      cardCommissionPercent: _parsePercent(_cardCommissionController.text),
+      transferCommissionPercent: _parsePercent(
+        _transferCommissionController.text,
+      ),
+      requireCustomerForCredit: _requireCustomerForCredit,
+      allowCashierCustomerAccess: _allowCashierCustomerAccess,
+      posCashPurchaseLimit: _parsePosCashPurchaseLimit(),
+      enableRepairOperations: currentSettings.enableRepairOperations,
+      enableProductionOperations: currentSettings.enableProductionOperations,
+      enableKitchenOperations: currentSettings.enableKitchenOperations,
+      enableJobTracking: currentSettings.enableJobTracking,
+      inventoryValuationMethod: _inventoryValuationMethod,
+    );
+  }
+
+  Future<bool> _confirmValuationMethodChange(AppLocalizations l10n) async {
+    final current = (widget.viewModel.settings ?? widget.settings)
+        .inventoryValuationMethod;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded),
+        title: Text(l10n.valuationMethodChangeWarningTitle),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                l10n.valuationMethodChangeWarningBody(
+                  _valuationMethodLabel(l10n, current),
+                  _valuationMethodLabel(l10n, _inventoryValuationMethod),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(l10n.valuationMethodChangeWarningConsequences),
+              const SizedBox(height: 12),
+              Text(l10n.valuationMethodChangeWarningAdvice),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.valuationMethodChangeKeepCurrent),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.valuationMethodChangeConfirm),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
   }
 
   double _parsePercent(String value) {

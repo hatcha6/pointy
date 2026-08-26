@@ -106,6 +106,168 @@ class StockBatch(TimeStampedModel):
         return f"{self.variant.sku} expires {self.expiry_date}"
 
 
+class Warehouse(TimeStampedModel):
+    """A place stock physically sits.
+
+    Deliberately minimal and deliberately early. Multi-location is a later
+    phase, but every valuation row carries a warehouse from its first migration
+    so that phase adds screens and rows rather than re-migrating the whole of
+    stock history. Until then exactly one row exists — the default "Main" — and
+    no screen shows it.
+    """
+
+    name = models.CharField(max_length=120)
+    code = models.SlugField(max_length=32, unique=True)
+    is_default = models.BooleanField(default=False, db_index=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["-is_default", "name", "id"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    @classmethod
+    def default_id(cls):
+        """Primary key of the default warehouse, creating it if it is missing.
+
+        Self-healing on purpose: a shop restored from a backup taken before this
+        migration must not lose the ability to sell.
+        """
+        row = cls.objects.filter(is_default=True).values_list("id", flat=True).first()
+        if row is not None:
+            return row
+        warehouse, _ = cls.objects.get_or_create(
+            code="main",
+            defaults={"name": "المخزن الرئيسي", "is_default": True},
+        )
+        return warehouse.pk
+
+
+class StockValuationBin(TimeStampedModel):
+    """The live valuation state for one variant in one warehouse.
+
+    This is ERPNext's ``Bin`` in miniature: a cache of the ledger that exists so
+    a checkout does not have to replay history to learn what a sale costs. The
+    ledger is the truth; this row can always be rebuilt from it
+    (``repost_valuation``).
+
+    ``state`` is the valuation engine's own state — the ``[[qty, rate], ...]``
+    queue for FIFO/LIFO, or a single blended bin for moving average — stored as
+    strings so a Decimal never round-trips through a float.
+    """
+
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.CASCADE,
+        related_name="valuation_bins",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name="valuation_bins",
+    )
+    quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    valuation_rate = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    stock_value = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    state = models.JSONField(default=list, blank=True)
+    # The method that produced ``state``. A change of method has to rebuild the
+    # state rather than keep consuming a queue the new method cannot read.
+    method = models.CharField(max_length=20, default="moving_average")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["variant", "warehouse"],
+                name="stock_valuation_bin_unique",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.variant.sku} @ {self.warehouse.code}: {self.valuation_rate}"
+
+
+class StockLedgerEntry(TimeStampedModel):
+    """One valued stock event: what moved, at what cost, and what is left.
+
+    Append-only. ``StockMovement`` records that a quantity changed and who did
+    it; this records what that change was *worth*, which is what gross profit,
+    stock value and the loss guard actually need. Ported in spirit from
+    ERPNext's Stock Ledger Entry.
+
+    ``value_change`` is the money that moved: for an issue it is the cost of
+    goods sold, computed by the valuation engine from the bins actually
+    consumed, not from whatever the item last cost to buy.
+    """
+
+    class VoucherType(models.TextChoices):
+        SALE = "sale", "Sale"
+        SALE_RETURN = "sale_return", "Sale return"
+        PURCHASE_RECEIPT = "purchase_receipt", "Purchase receipt"
+        PURCHASE_RETURN = "purchase_return", "Purchase return"
+        PRODUCTION = "production", "Production"
+        STOCK_COUNT = "stock_count", "Stock count"
+        ADJUSTMENT = "adjustment", "Manual adjustment"
+        OPENING = "opening", "Opening balance"
+
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.CASCADE,
+        related_name="ledger_entries",
+    )
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name="ledger_entries",
+    )
+    movement = models.OneToOneField(
+        StockMovement,
+        on_delete=models.CASCADE,
+        related_name="ledger_entry",
+        null=True,
+        blank=True,
+    )
+    posting_at = models.DateTimeField(db_index=True)
+    # Signed: positive received, negative issued. Always in base units.
+    quantity_change = models.DecimalField(max_digits=14, decimal_places=3)
+    # The rate this entry moved at: the purchase cost for a receipt, the
+    # blended cost of the consumed bins for an issue.
+    valuation_rate = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    value_change = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    balance_quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
+    balance_value = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    # Engine state after this entry, so history can be inspected and a repost
+    # can resume from any point instead of always replaying from the beginning.
+    state = models.JSONField(default=list, blank=True)
+    method = models.CharField(max_length=20, default="moving_average")
+    voucher_type = models.CharField(
+        max_length=24,
+        choices=VoucherType.choices,
+        default=VoucherType.ADJUSTMENT,
+        db_index=True,
+    )
+    voucher_id = models.PositiveBigIntegerField(null=True, blank=True, db_index=True)
+    note = models.CharField(max_length=240, blank=True)
+
+    class Meta:
+        ordering = ["posting_at", "id"]
+        indexes = [
+            models.Index(
+                fields=["variant", "warehouse", "posting_at", "id"],
+                name="sle_variant_wh_posting_idx",
+            ),
+            models.Index(
+                fields=["voucher_type", "voucher_id"],
+                name="sle_voucher_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.variant_id} {self.quantity_change:+} @ {self.valuation_rate}"
+        )
+
+
 class StockCount(TimeStampedModel):
     """A physical inventory count session.
 

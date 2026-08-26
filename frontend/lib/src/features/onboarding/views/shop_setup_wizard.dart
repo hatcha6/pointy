@@ -33,6 +33,8 @@ class _ShopSetupWizardState extends State<ShopSetupWizard> {
   bool _allowOverselling = false;
   bool _requireOpeningCash = true;
   bool _autoPrintReceipts = false;
+  InventoryValuationMethod _valuationMethod =
+      InventoryValuationMethod.movingAverage;
   bool _isSubmitting = false;
   bool _hasError = false;
 
@@ -58,6 +60,7 @@ class _ShopSetupWizardState extends State<ShopSetupWizard> {
       allowOverselling: _allowOverselling,
       requireOpeningCash: _requireOpeningCash,
       autoPrintReceipts: _autoPrintReceipts,
+      inventoryValuationMethod: _valuationMethod,
     );
     if (!mounted) {
       return;
@@ -126,6 +129,9 @@ class _ShopSetupWizardState extends State<ShopSetupWizard> {
                       setState(() => _requireOpeningCash = v),
                   onAutoPrintReceiptsChanged: (v) =>
                       setState(() => _autoPrintReceipts = v),
+                  valuationMethod: _valuationMethod,
+                  onValuationMethodChanged: (v) =>
+                      setState(() => _valuationMethod = v),
                 ),
               if (_hasError) ...[
                 SizedBox(height: spacing.md),
@@ -280,6 +286,8 @@ class _SettingsStep extends StatelessWidget {
     required this.onAllowOversellingChanged,
     required this.onRequireOpeningCashChanged,
     required this.onAutoPrintReceiptsChanged,
+    required this.valuationMethod,
+    required this.onValuationMethodChanged,
   });
 
   final TextEditingController shopNameController;
@@ -289,6 +297,8 @@ class _SettingsStep extends StatelessWidget {
   final ValueChanged<bool> onAllowOversellingChanged;
   final ValueChanged<bool> onRequireOpeningCashChanged;
   final ValueChanged<bool> onAutoPrintReceiptsChanged;
+  final InventoryValuationMethod valuationMethod;
+  final ValueChanged<InventoryValuationMethod> onValuationMethodChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -312,6 +322,39 @@ class _SettingsStep extends StatelessWidget {
             prefixIcon: const Icon(Icons.payments_outlined),
           ),
           controller: TextEditingController(text: l10n.shopSetupCurrencyValue),
+        ),
+        const SizedBox(height: 12),
+        // Asked here rather than in Settings because it is the one choice on
+        // this screen that is genuinely expensive to revisit: it decides what
+        // every future sale's cost will be.
+        DropdownButtonFormField<InventoryValuationMethod>(
+          initialValue: valuationMethod,
+          decoration: InputDecoration(
+            labelText: l10n.valuationMethodSetupTitle,
+            helperText: l10n.valuationMethodSetupSubtitle,
+            helperMaxLines: 3,
+            prefixIcon: const Icon(Icons.calculate_outlined),
+          ),
+          items: [
+            for (final method in InventoryValuationMethod.values)
+              DropdownMenuItem(
+                value: method,
+                child: Text(_wizardValuationMethodLabel(l10n, method)),
+              ),
+          ],
+          onChanged: (value) {
+            if (value != null) {
+              onValuationMethodChanged(value);
+            }
+          },
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Text(
+            _wizardValuationMethodDescription(l10n, valuationMethod),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ),
         const SizedBox(height: 8),
         SwitchListTile(
@@ -399,4 +442,28 @@ List<_ShopTypeOption> _shopTypeOptions(AppLocalizations l10n) {
       description: l10n.shopTypeRetailDescription,
     ),
   ];
+}
+
+
+String _wizardValuationMethodLabel(
+  AppLocalizations l10n,
+  InventoryValuationMethod method,
+) {
+  return switch (method) {
+    InventoryValuationMethod.movingAverage => l10n.valuationMethodMovingAverage,
+    InventoryValuationMethod.fifo => l10n.valuationMethodFifo,
+    InventoryValuationMethod.lifo => l10n.valuationMethodLifo,
+  };
+}
+
+String _wizardValuationMethodDescription(
+  AppLocalizations l10n,
+  InventoryValuationMethod method,
+) {
+  return switch (method) {
+    InventoryValuationMethod.movingAverage =>
+      l10n.valuationMethodMovingAverageDescription,
+    InventoryValuationMethod.fifo => l10n.valuationMethodFifoDescription,
+    InventoryValuationMethod.lifo => l10n.valuationMethodLifoDescription,
+  };
 }

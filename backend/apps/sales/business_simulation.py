@@ -64,6 +64,11 @@ from apps.discounts.models import DiscountRule
 from apps.expenses.models import Expense, ExpenseCategory
 from apps.expenses.services import create_expense
 from apps.inventory.models import StockItem, StockMovement
+from apps.inventory.valuation import (
+    ValuationMethod,
+    consumed_unit_cost,
+    valuation_engine,
+)
 from apps.purchasing.models import (
     PurchaseLine,
     PurchaseOrder,
@@ -728,6 +733,19 @@ class Oracle:
         # variant will snapshot onto its line. Set by the purchases this
         # simulation issues, from their own inputs.
         self.base_unit_cost: dict = {}
+        # The valuation ledger this world implies: one engine per variant, fed
+        # by the same stock events the oracle already tracks, in the same order.
+        #
+        # This deliberately reuses the production valuation engine rather than
+        # reimplementing FIFO/LIFO/average arithmetic a second time. What the
+        # oracle proves here is the *wiring* — that every stock event reaches
+        # the ledger with the right quantity, the right cost and in the right
+        # order — which is where this change can actually go wrong. The
+        # arithmetic itself is pinned separately, and adversarially, by
+        # ``apps.inventory.test_valuation``.
+        self.valuation: dict = {}
+        self.valuation_method = ValuationMethod.MOVING_AVERAGE
+        self.last_bin_rate: dict = {}
         # Open supplier credit per supplier, accumulated from the returns this
         # simulation issued and the amounts the oracle computed for them.
         self.supplier_credit: dict = defaultdict(lambda: ZERO)
@@ -751,6 +769,92 @@ class Oracle:
     def seed_stock(self, variant_id: int, quantity: Decimal):
         self.on_hand[variant_id] = q3(quantity)
         self.seed_on_hand[variant_id] = q3(quantity)
+        # Deliberately no valuation entry: this stock is created straight onto
+        # ``StockItem`` with no movement, so the real ledger never sees it
+        # either. The first sale of an unpurchased variant therefore falls back
+        # to the last purchase cost on both sides, which is what makes that
+        # fallback path exercised rather than theoretical.
+
+    # -- valuation (mirrors apps.inventory.valuation_service) --
+    def _valuation_engine(self, variant_id: int):
+        engine = self.valuation.get(variant_id)
+        if engine is None:
+            engine = valuation_engine(self.valuation_method)
+            self.valuation[variant_id] = engine
+        return engine
+
+    def _bin_rate(self, variant_id: int) -> Decimal:
+        """The stored rate, quantised the way the bin column is."""
+        engine = self.valuation.get(variant_id)
+        if engine is None:
+            return ZERO
+        quantity, value = engine.get_total_stock_and_value()
+        if quantity == ZERO:
+            return self.last_bin_rate.get(variant_id, ZERO)
+        return (value / quantity).quantize(Decimal("0.000001"))
+
+    def _valuation_fallback(self, variant_id: int) -> Decimal:
+        """What an issue costs when nothing has been valued yet.
+
+        Mirrors the service: the bin's own rate when it has one, otherwise the
+        last purchase cost — the pre-ledger rule, kept as the floor.
+        """
+        return self._bin_rate(variant_id) or self.base_unit_cost.get(variant_id, ZERO)
+
+    def value_receipt(self, variant_id: int, base_quantity: Decimal, rate: Decimal):
+        if base_quantity <= ZERO:
+            return
+        engine = self._valuation_engine(variant_id)
+        previous = self._bin_rate(variant_id)
+        engine.add_stock(base_quantity, rate)
+        self._remember_bin_rate(variant_id, previous)
+
+    def value_issue(self, variant_id: int, base_quantity: Decimal) -> Decimal:
+        """Issue stock and return what it cost per base unit."""
+        if base_quantity <= ZERO:
+            return ZERO
+        engine = self._valuation_engine(variant_id)
+        previous = self._bin_rate(variant_id)
+        fallback = self._valuation_fallback(variant_id)
+        consumed = engine.remove_stock(
+            base_quantity,
+            rate_generator=lambda: fallback,
+        )
+        self._remember_bin_rate(variant_id, previous)
+        return consumed_unit_cost(consumed)
+
+    def _remember_bin_rate(self, variant_id: int, previous: Decimal):
+        """Emptying a bin keeps its last rate, exactly as the column does."""
+        engine = self.valuation[variant_id]
+        quantity, value = engine.get_total_stock_and_value()
+        if quantity == ZERO:
+            self.last_bin_rate[variant_id] = previous
+        else:
+            self.last_bin_rate[variant_id] = (value / quantity).quantize(
+                Decimal("0.000001")
+            )
+
+    def cost_basis(self, variant_id: int, base_quantity: Decimal) -> Decimal:
+        """What issuing ``base_quantity`` of this variant would cost per base unit.
+
+        Asked by *probing* a throwaway copy of the engine rather than reading
+        the stored rate, because the backend takes the figure it stamps from
+        the issue itself. The two diverge exactly where it matters: once a bin
+        has been emptied or driven negative, the stored rate is the last rate
+        the shelf *held*, while the issue is priced at the rate the engine is
+        actually carrying.
+        """
+        engine = self.valuation.get(variant_id)
+        if engine is None:
+            return self.base_unit_cost.get(variant_id, ZERO)
+        if base_quantity is None or base_quantity <= ZERO:
+            return self._bin_rate(variant_id) or self.base_unit_cost.get(
+                variant_id, ZERO
+            )
+        fallback = self._valuation_fallback(variant_id)
+        probe = valuation_engine(self.valuation_method, engine.state)
+        consumed = probe.remove_stock(base_quantity, rate_generator=lambda: fallback)
+        return consumed_unit_cost(consumed)
 
     # -- register cash (derived from logs) --
     def session_cash_sales(self, session_id: int) -> Decimal:
@@ -1533,25 +1637,31 @@ class Simulation:
         total = even2(subtotal - discount_total)
         return subtotal, discount_total, total
 
-    def _expected_unit_cost(self, variant_id: int, unit_factor: Decimal) -> Decimal:
+    def _expected_unit_cost(
+        self, variant_id: int, unit_factor: Decimal, base_quantity: Decimal = None
+    ) -> Decimal:
         """The cost a sale line for ``variant_id`` must snapshot right now.
 
-        Ported from the documented backend chain, not read back from it: the
-        most recent non-cancelled purchase line for the variant supplies a cost
-        per BASE unit (``PurchaseLine.base_unit_cost``), which the sale scales
-        by the factor of the unit it is transacting in, so
-        ``unit_cost * quantity`` stays the cost of the goods that actually left.
-        A variant nobody has purchased yet costs nothing — this world has no
-        production, so there is no second source to fall back to.
+        Since the valuation ledger landed this is no longer "whatever the item
+        last cost to buy". It is what the goods on the shelf are actually
+        worth: the rate the ledger holds for this variant, scaled by the factor
+        of the unit being transacted in so ``unit_cost * quantity`` stays the
+        cost of the goods that actually left.
 
-        Note the cost is *not* the effective (landed, discounted) cost: the
-        backend deliberately reads the raw purchase price here, so the oracle
-        must too, and a change to either side has to show up as a divergence.
+        A variant with nothing valued yet — this world seeds free opening stock
+        with no movement behind it, exactly as a pre-ledger shop has — falls
+        back to the last purchase cost, which is the old rule kept as the floor.
+
+        Read *before* the issue rather than after, which is sound because this
+        world values at moving average and issuing stock does not move a moving
+        average. A simulation running FIFO or LIFO would have to take the rate
+        from the issue itself, since there the two differ.
         """
-        base_cost = self.oracle.base_unit_cost.get(variant_id, ZERO)
+        base_cost = self.oracle.cost_basis(variant_id, base_quantity)
         return even2(base_cost * unit_factor)
 
     def _build_order_rec(self, order, specs, per_line_discount, sale_type, customer_id):
+        issues_stock = sale_type != Order.SaleType.QUOTATION
         subtotal, discount_total, total = self._order_totals(specs, per_line_discount)
         line_discounts = self._order_line_discounts(specs, per_line_discount)
         for index, spec in enumerate(specs):
@@ -1585,7 +1695,15 @@ class Simulation:
                     tracks_stock=spec["item"].tracks_stock,
                     whole_only=spec["unit"].whole_only,
                     unit_cost=self._expected_unit_cost(
-                        spec["item"].variant_id, spec["unit"].factor
+                        spec["item"].variant_id,
+                        spec["unit"].factor,
+                        # A quotation reserves stock, it does not issue any, so
+                        # its lines keep the provisional cost the cart was
+                        # priced at and are never restamped. Only a sale that
+                        # actually moves stock is costed from the issue.
+                        spec["base_qty"]
+                        if spec["item"].tracks_stock and issues_stock
+                        else None,
                     ),
                 )
             )
@@ -1609,6 +1727,7 @@ class Simulation:
             if spec["item"].tracks_stock:
                 vid = spec["item"].variant_id
                 self.oracle.on_hand[vid] = q3(self.oracle.on_hand[vid] - spec["base_qty"])
+                self.oracle.value_issue(vid, spec["base_qty"])
 
     # -- operations -------------------------------------------------------
 
@@ -1912,6 +2031,7 @@ class Simulation:
         for vid, base_qty in quote.reservations:
             self.oracle.committed[vid] = q3(self.oracle.committed[vid] - base_qty)
             self.oracle.on_hand[vid] = q3(self.oracle.on_hand[vid] - base_qty)
+            self.oracle.value_issue(vid, base_qty)
         quote.reservation_active = False
         quote.voided = True
         quote.converted = True
@@ -1934,7 +2054,11 @@ class Simulation:
                     # purchase moved the cost between quoting and converting,
                     # the sale carries the newer one, not the quote's.
                     unit_cost=self._expected_unit_cost(
-                        src.variant_id, src.unit_factor
+                        src.variant_id,
+                        src.unit_factor,
+                        q3(Decimal(src.quantity) * src.unit_factor)
+                        if src.tracks_stock
+                        else None,
                     ),
                 )
             )
@@ -2029,6 +2153,12 @@ class Simulation:
                 base = q3(Decimal(qty) * line.unit_factor)
                 self.oracle.on_hand[line.variant_id] = q3(
                     self.oracle.on_hand[line.variant_id] + base
+                )
+                # Returned goods re-enter at what they left at: the cost the
+                # original line snapshotted, per base unit.
+                factor = line.unit_factor or Decimal("1")
+                self.oracle.value_receipt(
+                    line.variant_id, base, Decimal(line.unit_cost) / factor
                 )
         if all(line.returnable_qty <= ZERO for line in rec.lines):
             rec.voided = True
@@ -2641,6 +2771,13 @@ class Simulation:
         self.oracle.on_hand[vid] = q3(
             self.oracle.on_hand[vid] + accepted_expected_base + accepted_overage_base
         )
+        # Received stock is valued at what it cost to put on the shelf: net of
+        # discounts and landed costs, per base unit.
+        self.oracle.value_receipt(
+            vid,
+            q3(accepted_expected_base + accepted_overage_base),
+            line.effective_base_unit_cost,
+        )
         # expected decremented (clamped at 0) for accepted_expected, damaged, cancelled
         for packs in (accepted_expected, damaged_expected, cancelled_expected):
             base = q3(Decimal(packs) * line.unit_factor)
@@ -2754,6 +2891,7 @@ class Simulation:
         self.oracle.on_hand[line.variant_id] = q3(
             self.oracle.on_hand[line.variant_id] - base_quantity
         )
+        self.oracle.value_issue(line.variant_id, base_quantity)
         if refund:
             # Settled as a refund: a supplier payment, so it counts against
             # what the shop still owes on the order.
@@ -2899,7 +3037,16 @@ class Simulation:
         if resp.status_code not in (200, 201):
             self.fail(f"stock-count apply failed: {resp.status_code} {resp.data}")
         for vid, counted in planned:
+            delta = q3(counted - self.oracle.on_hand[vid])
             self.oracle.on_hand[vid] = counted
+            # A count variance is stock appearing or disappearing at the value
+            # the shelf already carried — no new cost information exists.
+            if delta > ZERO:
+                self.oracle.value_receipt(
+                    vid, delta, self.oracle._valuation_fallback(vid)
+                )
+            elif delta < ZERO:
+                self.oracle.value_issue(vid, -delta)
             self._assert_variant(vid)
         return True
 

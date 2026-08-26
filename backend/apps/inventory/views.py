@@ -18,7 +18,13 @@ from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_has_full_visibility
-from .models import StockCount, StockCountLine, StockItem, StockMovement
+from .models import (
+    StockCount,
+    StockCountLine,
+    StockItem,
+    StockLedgerEntry,
+    StockMovement,
+)
 from .serializers import StockItemSerializer, StockMovementSerializer
 from .services import (
     consume_expiring_stock_batches,
@@ -580,6 +586,8 @@ class StockCountViewSet(
                     created_by=request.user,
                     before=before,
                     variant=line.variant,
+                    voucher_type=StockLedgerEntry.VoucherType.STOCK_COUNT,
+                    voucher_id=stock_count.pk,
                 )
                 line.movement = movement
                 line.applied = True

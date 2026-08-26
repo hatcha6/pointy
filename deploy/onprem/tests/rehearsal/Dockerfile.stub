@@ -1,0 +1,31 @@
+# The stand-in for every Pointy application container in the update rehearsal.
+#
+# FROM scratch on purpose: a release bundle carries `docker save` tars, and the
+# rehearsal builds several bundles per run — a few MB each saves and loads in
+# about a second, where a real Django image would take minutes and dominate the
+# whole exercise. The engine under test never looks inside the image.
+#
+# One binary serves at three paths so the SHIPPED compose file works verbatim,
+# with no rehearsal-specific edits: it is the entrypoint, and it also answers to
+# the two commands the compose healthchecks invoke (`python …/healthcheck.py`
+# and `celery -A pointy inspect ping`). All three land in a single layer, which
+# every built tag then shares.
+FROM scratch
+COPY root/ /
+
+# Failure injection is baked in per IMAGE, never passed through compose:
+# "release 2.0.0 is broken" has to be a property of the release, exactly as it
+# is in production, and the compose file has to be identical for the version
+# that works and the one that does not.
+ARG STUB_VERSION=dev
+ARG STUB_FAIL=
+ARG STUB_BOOT_DELAY=0
+ARG STUB_CRASH_AFTER=5
+ENV POINTY_STUB_VERSION=$STUB_VERSION \
+    POINTY_STUB_FAIL=$STUB_FAIL \
+    POINTY_STUB_BOOT_DELAY=$STUB_BOOT_DELAY \
+    POINTY_STUB_CRASH_AFTER=$STUB_CRASH_AFTER \
+    PATH=/usr/local/bin:/usr/bin:/bin
+
+ENTRYPOINT ["/pointy-stub"]
+CMD ["web"]
