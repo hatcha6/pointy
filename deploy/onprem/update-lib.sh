@@ -460,7 +460,14 @@ pu_apply_live() {
     pu_warn "could not recreate the backend service"
     return 2
   fi
-  if ! pu_wait_upstream backend "the rebuilt backend" 120; then
+  # Same default as before, now bounded by the operator like the standby's wait
+  # above. It is the wait nobody could reach: if the rebuilt backend never comes
+  # up, the shop spends this whole budget being served by the STANDBY — a
+  # `compose run` one-off with no restart policy, which a crash or a reboot would
+  # take away — while the update lock stays held and the relay keeps showing the
+  # shop as "applying". Twenty minutes is a long time to be one power cut from a
+  # dark till, and until now there was no way to shorten it or to rehearse it.
+  if ! pu_wait_upstream backend "the rebuilt backend" "${POINTY_REBUILD_READY_TRIES:-120}"; then
     return 2
   fi
   pu_set_upstream backend || return 2
@@ -555,6 +562,16 @@ pu_apply_bundle() {
   snapshot="$(mktemp -d)"
   cp .env "${snapshot}/.env"
   [ -f docker-compose.yml ] && cp docker-compose.yml "${snapshot}/docker-compose.yml"
+  # VERSION.txt has to be in here even though the success paths rewrite it
+  # anyway, because ADOPTING the bundle already overwrote it with the new
+  # version — before a single container was started. Without this, a failed
+  # update leaves the deployment claiming to run the release that just failed to
+  # install, which is worse than it sounds: update.sh then refuses the retry
+  # ("already on X"), the update agent sees assigned == current and reports
+  # `idle` forever, and the relay's fleet view shows the shop as updated while it
+  # is still running the old code. A rollout would look green with shops silently
+  # left behind.
+  [ -f VERSION.txt ] && cp VERSION.txt "${snapshot}/VERSION.txt"
 
   pu_adopt_bundle "$dir" "$assigned"
 
@@ -606,6 +623,14 @@ pu_apply_bundle() {
 pu_restore_snapshot() {
   cp -f "$1/.env" .env
   [ -f "$1/docker-compose.yml" ] && cp -f "$1/docker-compose.yml" docker-compose.yml
+  # Restore what the deployment SAID it was running, including the case where it
+  # said nothing at all: a deployment with no VERSION.txt must not be left with
+  # the one adoption dropped in.
+  if [ -f "$1/VERSION.txt" ]; then
+    cp -f "$1/VERSION.txt" VERSION.txt
+  else
+    rm -f VERSION.txt
+  fi
   rm -rf "$1"
 }
 
@@ -615,7 +640,8 @@ pu_rollback_live() {
   local snapshot="$1" current="$2" assigned="$3"
   pu_warn "update to ${assigned} failed after the switchover; rolling back to ${current}"
   pu_restore_snapshot "$snapshot"
-  if pu_recreate backend >/dev/null 2>&1 && pu_wait_upstream backend "the restored backend" 120; then
+  if pu_recreate backend >/dev/null 2>&1 \
+      && pu_wait_upstream backend "the restored backend" "${POINTY_RESTORE_READY_TRIES:-120}"; then
     pu_set_upstream backend || true
     pu_remove_standby
     pu_warn "rolled back to ${current}; the shop stayed open throughout"

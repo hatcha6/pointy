@@ -65,6 +65,21 @@ class ShopSettings(TimeStampedModel):
         BAKERY = "bakery", "Bakery / Pastry"
         RETAIL = "retail", "Clothing / Retail"
 
+    class ValuationMethod(models.TextChoices):
+        """How the cost of goods sold is decided when stock was bought at more
+        than one price. Mirrors ``apps.inventory.valuation.ValuationMethod``.
+
+        This is close to irreversible in practice: the method decides what every
+        past sale's cost *was*, so switching it mid-life re-labels history that
+        has already been reported, banked on, and paid commission against. The
+        API refuses a change once stock has moved unless the caller explicitly
+        acknowledges that (see ``ShopSettingsSerializer``).
+        """
+
+        MOVING_AVERAGE = "moving_average", "Moving average"
+        FIFO = "fifo", "First in, first out (FIFO)"
+        LIFO = "lifo", "Last in, first out (LIFO)"
+
     shop_name = models.CharField(max_length=120, default="نقطة البيع")
     # The shop's vertical, chosen in the first-run setup wizard. Empty until
     # then; drives the preset defaults but every setting stays editable after.
@@ -96,6 +111,16 @@ class ShopSettings(TimeStampedModel):
     allow_overselling = models.BooleanField(default=False)
     prevent_selling_at_loss = models.BooleanField(default=True)
     low_stock_threshold = models.PositiveIntegerField(default=5)
+    # How stock is costed when it was bought at several prices. Moving average
+    # is the default because it is what the shops we run today were already
+    # getting in spirit — one blended cost per item — and because it is the
+    # method whose numbers move least when a purchase price jumps. Chosen in the
+    # first-run wizard; changing it later is guarded, not forbidden.
+    inventory_valuation_method = models.CharField(
+        max_length=20,
+        choices=ValuationMethod.choices,
+        default=ValuationMethod.MOVING_AVERAGE,
+    )
     # The POS pops a confirmation dialog when a cart line's quantity exceeds the
     # available stock. Shops that routinely sell into negative stock (with
     # ``allow_overselling`` on) can switch this off so checkout completes without

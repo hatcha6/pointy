@@ -4436,6 +4436,66 @@ class AppLocalizationsAr extends AppLocalizations {
       'عند إيقافه سيظهر تحذير للكاشير قبل إتمام بيع بخسارة.';
 
   @override
+  String get valuationMethodLabel => 'طريقة تسعير المخزون';
+
+  @override
+  String get valuationMethodHelper =>
+      'تحدد تكلفة البضاعة المباعة عندما يُشترى نفس الصنف بأسعار مختلفة.';
+
+  @override
+  String get valuationMethodMovingAverage => 'المتوسط المتحرك';
+
+  @override
+  String get valuationMethodFifo => 'الوارد أولاً يصرف أولاً (FIFO)';
+
+  @override
+  String get valuationMethodLifo => 'الوارد أخيراً يصرف أولاً (LIFO)';
+
+  @override
+  String get valuationMethodMovingAverageDescription =>
+      'تكلفة واحدة مُوزّعة على كل الكمية الموجودة، تتغيّر مع كل شراء جديد. الأنسب لمعظم المحلات.';
+
+  @override
+  String get valuationMethodFifoDescription =>
+      'يُحتسب البيع على تكلفة أقدم بضاعة في المخزن أولاً. الأنسب للبضاعة ذات الصلاحية.';
+
+  @override
+  String get valuationMethodLifoDescription =>
+      'يُحتسب البيع على تكلفة أحدث بضاعة اشتُريت أولاً. يرفع التكلفة ويقلّل الربح المُعلن عند ارتفاع الأسعار.';
+
+  @override
+  String get valuationMethodChangeWarningTitle => 'تغيير طريقة تسعير المخزون';
+
+  @override
+  String valuationMethodChangeWarningBody(
+    String currentMethod,
+    String newMethod,
+  ) {
+    return 'أنت على وشك التغيير من «$currentMethod» إلى «$newMethod».';
+  }
+
+  @override
+  String get valuationMethodChangeWarningConsequences =>
+      'هذه الطريقة تحدد تكلفة كل بيعة وربحها. تغييرها الآن يجعل أرقام التكلفة والأرباح الجديدة محسوبة بطريقة مختلفة عن التقارير التي سبق أن اعتمدت عليها، وقد لا تتطابق مع العمولات التي صُرفت أو الأرباح التي أُعلنت سابقاً.';
+
+  @override
+  String get valuationMethodChangeWarningAdvice =>
+      'الأفضل اختيار الطريقة مرة واحدة عند تجهيز المحل وعدم تغييرها بعد ذلك. إن كنت مضطراً للتغيير، فالأنسب أن يكون في بداية فترة محاسبية جديدة وبعد استخراج تقارير الفترة السابقة.';
+
+  @override
+  String get valuationMethodChangeKeepCurrent => 'إبقاء الطريقة الحالية';
+
+  @override
+  String get valuationMethodChangeConfirm => 'أفهم ذلك، غيّرها';
+
+  @override
+  String get valuationMethodSetupTitle => 'طريقة تسعير المخزون';
+
+  @override
+  String get valuationMethodSetupSubtitle =>
+      'اختر مرة واحدة الآن — تغييرها بعد بدء البيع يؤثر على تكلفة وأرباح المبيعات السابقة.';
+
+  @override
   String get paymentMethodCash => 'نقد';
 
   @override

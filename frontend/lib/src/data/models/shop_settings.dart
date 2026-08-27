@@ -2,6 +2,34 @@ import 'dart:typed_data';
 
 import 'attachment_summary.dart';
 
+/// How the cost of goods sold is decided when the same product was bought at
+/// more than one price.
+///
+/// Chosen during first-run setup and changeable afterwards only behind an
+/// explicit confirmation: the method decides what every past sale's cost *was*,
+/// so switching it re-labels history that has already been reported on.
+enum InventoryValuationMethod {
+  movingAverage('moving_average'),
+  fifo('fifo'),
+  lifo('lifo');
+
+  const InventoryValuationMethod(this.wireValue);
+
+  final String wireValue;
+
+  static InventoryValuationMethod fromWire(Object? value) {
+    final raw = value?.toString();
+    for (final method in InventoryValuationMethod.values) {
+      if (method.wireValue == raw) {
+        return method;
+      }
+    }
+    // An unknown value means a newer backend or a corrupted row; fall back to
+    // the default rather than failing to load the settings screen at all.
+    return InventoryValuationMethod.movingAverage;
+  }
+}
+
 class ShopSettings {
   const ShopSettings({
     required this.shopName,
@@ -30,6 +58,7 @@ class ShopSettings {
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
     this.posCashPurchaseLimit,
+    this.inventoryValuationMethod = InventoryValuationMethod.movingAverage,
     this.currencyCode = 'LYD',
     this.currencySymbol = 'د.ل',
     this.logoAttachment,
@@ -70,6 +99,9 @@ class ShopSettings {
   /// Per-purchase ceiling for POS cash purchases (drawer-paid POs from the
   /// sell screen). Null or 0 = no cap.
   final double? posCashPurchaseLimit;
+
+  /// How stock is costed. See [InventoryValuationMethod].
+  final InventoryValuationMethod inventoryValuationMethod;
   final String currencyCode;
   final String currencySymbol;
   final AttachmentSummary? logoAttachment;
@@ -153,6 +185,9 @@ class ShopSettings {
       posCashPurchaseLimit: json['pos_cash_purchase_limit'] == null
           ? null
           : _moneyFromJson(json['pos_cash_purchase_limit'], 0),
+      inventoryValuationMethod: InventoryValuationMethod.fromWire(
+        json['inventory_valuation_method'],
+      ),
       currencyCode: json['currency_code']?.toString() ?? 'LYD',
       currencySymbol: json['currency_symbol']?.toString() ?? 'د.ل',
       logoAttachment: logoJson is Map<String, Object?>
@@ -202,6 +237,8 @@ class ShopSettingsDraft {
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
     this.posCashPurchaseLimit,
+    this.inventoryValuationMethod = InventoryValuationMethod.movingAverage,
+    this.valuationMethodChangeAcknowledged = false,
   });
 
   final String shopName;
@@ -230,6 +267,55 @@ class ShopSettingsDraft {
   final bool enableKitchenOperations;
   final bool enableJobTracking;
   final double? posCashPurchaseLimit;
+  final InventoryValuationMethod inventoryValuationMethod;
+
+  /// One-shot confirmation that the user has read the warning about changing
+  /// the valuation method. Never stored — the backend refuses the change
+  /// without it once stock has moved, and forgets it immediately after.
+  final bool valuationMethodChangeAcknowledged;
+
+  ShopSettingsDraft acknowledgingValuationMethodChange() {
+    return copyWith(valuationMethodChangeAcknowledged: true);
+  }
+
+  ShopSettingsDraft copyWith({
+    InventoryValuationMethod? inventoryValuationMethod,
+    bool? valuationMethodChangeAcknowledged,
+  }) {
+    return ShopSettingsDraft(
+      shopName: shopName,
+      receiptHeader: receiptHeader,
+      receiptFooter: receiptFooter,
+      enableOnlineInvoices: enableOnlineInvoices,
+      requireOpeningCash: requireOpeningCash,
+      autoPrintReceipts: autoPrintReceipts,
+      allowOverselling: allowOverselling,
+      preventSellingAtLoss: preventSellingAtLoss,
+      lowStockThreshold: lowStockThreshold,
+      cashierReturnWindowHours: cashierReturnWindowHours,
+      enableCashPayments: enableCashPayments,
+      enableCardPayments: enableCardPayments,
+      enableTransferPayments: enableTransferPayments,
+      requireCardPaymentReceipt: requireCardPaymentReceipt,
+      trustedCardTerminalIds: trustedCardTerminalIds,
+      cardCommissionPercent: cardCommissionPercent,
+      transferCommissionPercent: transferCommissionPercent,
+      requireCustomerForCredit: requireCustomerForCredit,
+      allowCashierCustomerAccess: allowCashierCustomerAccess,
+      warnLowStockBeforeSale: warnLowStockBeforeSale,
+      autoPrintKitchenTickets: autoPrintKitchenTickets,
+      enableRepairOperations: enableRepairOperations,
+      enableProductionOperations: enableProductionOperations,
+      enableKitchenOperations: enableKitchenOperations,
+      enableJobTracking: enableJobTracking,
+      posCashPurchaseLimit: posCashPurchaseLimit,
+      inventoryValuationMethod:
+          inventoryValuationMethod ?? this.inventoryValuationMethod,
+      valuationMethodChangeAcknowledged:
+          valuationMethodChangeAcknowledged ??
+          this.valuationMethodChangeAcknowledged,
+    );
+  }
 
   Map<String, Object?> toJson() {
     return {
@@ -261,6 +347,11 @@ class ShopSettingsDraft {
       'enable_kitchen_operations': enableKitchenOperations,
       'enable_job_tracking': enableJobTracking,
       'pos_cash_purchase_limit': posCashPurchaseLimit?.toStringAsFixed(2),
+      'inventory_valuation_method': inventoryValuationMethod.wireValue,
+      // Only sent when the user has actually confirmed, so an ordinary save
+      // can never carry a stale acknowledgement.
+      if (valuationMethodChangeAcknowledged)
+        'valuation_method_change_acknowledged': true,
     };
   }
 }

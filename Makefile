@@ -125,6 +125,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-shell backend-superuser backend-test backend-test-pg backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
+	onprem-test onprem-rehearsal onprem-rehearsal-clean \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable postgres-ready clean
 
 help: ## Show available commands.
@@ -534,11 +535,20 @@ relay-remote-provision: ## Provision an installation on the REMOTE relay and pri
 		--shop-name "$(RELAY_REMOTE_SHOP_NAME)" \
 		--relay-enabled --subscription-active
 
+onprem-test: ## Run the on-prem update engine unit tests (pure bash; no Docker, no network).
+	bash deploy/onprem/tests/run-tests.sh
+
+onprem-rehearsal: docker-check ## Rehearse real updates against real Docker (installs throwaway shops; needs Go).
+	bash deploy/onprem/tests/rehearsal/run-rehearsal.sh $(REHEARSAL)
+
+onprem-rehearsal-clean: ## Reclaim the rehearsal's cached images, bundles and any leftover shops.
+	bash deploy/onprem/tests/rehearsal/run-rehearsal.sh clean
+
 format: frontend-l10n frontend-format relay-format ## Format all currently scaffolded code.
 
 check: backend-check frontend-analyze relay-check ## Run non-mutating project checks.
 
-test: backend-test frontend-test relay-test ## Run backend, frontend, and relay tests.
+test: backend-test frontend-test relay-test onprem-test ## Run backend, frontend, relay, and on-prem update engine tests.
 
 e2e: frontend-e2e ## Run opt-in end-to-end tests.
 
