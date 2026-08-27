@@ -375,16 +375,69 @@ class PosApiSession {
   /// it works over LAN and through the relay tunnel. On non-2xx it reads the
   /// (small) error body and throws [PosApiException]. Native platforms stream
   /// incrementally; web delivers the buffered body at once (same code path).
-  Stream<SseEvent> openEventStream(String path, {Object? body}) async* {
+  /// Opens a Server-Sent Events stream (the AI assistant).
+  ///
+  /// Two deadlines, because a stream can fail in two ways and neither used to
+  /// be bounded at all. [connectTimeout] covers "the server never answered" —
+  /// the AI request travels backend -> relay -> model, and on a slow link the
+  /// backend can sit on the relay call before a single byte comes back.
+  /// [idleTimeout] covers "the connection died mid-stream": a dropped TCP
+  /// connection that never sends FIN (a NAT or proxy quietly timing out, which
+  /// is routine on a shop's link) leaves the socket open forever, and with no
+  /// deadline the app waited on it forever — the chat bubble simply span.
+  ///
+  /// The server sends a `ping` as soon as the stream opens and between tool
+  /// rounds, so [idleTimeout] measures silence, not thinking.
+  Stream<SseEvent> openEventStream(
+    String path, {
+    Object? body,
+    Duration connectTimeout = const Duration(seconds: 30),
+    Duration idleTimeout = const Duration(seconds: 90),
+  }) async* {
     final request = http.Request('POST', uri(path));
     request.headers.addAll(headers(includeCsrf: true));
     if (body != null) {
       request.body = jsonEncode(body);
     }
 
-    final streamed = await client.send(request);
+    // Streams used to bypass _send entirely, so they were invisible: not one of
+    // the 10,079 recorded HTTP requests in the field was an AI call, which is
+    // why a chat that never answered left no trace at all.
+    final stopwatch = Stopwatch()..start();
+    var streamedBytes = 0;
+    void record({int? statusCode, String errorMessage = ''}) {
+      _recordPerformance(
+        method: 'POST',
+        path: path,
+        duration: stopwatch.elapsed,
+        statusCode: statusCode,
+        requestSizeBytes: _encodedSize(request.body),
+        responseSizeBytes: streamedBytes,
+        errorMessage: errorMessage,
+      );
+    }
+
+    final http.StreamedResponse streamed;
+    try {
+      streamed = await client.send(request).timeout(connectTimeout);
+    } on TimeoutException {
+      record(errorMessage: 'stream connect timed out');
+      throw PosApiException(
+        // 0: there was no HTTP response at all, so this reads as a network
+        // failure rather than a server one.
+        statusCode: 0,
+        responseBody: '',
+        message:
+            'Stream request timed out after ${connectTimeout.inSeconds}s '
+            'with no response',
+      );
+    } on Exception catch (error) {
+      record(errorMessage: error.toString());
+      rethrow;
+    }
     if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
       final errorBody = await streamed.stream.bytesToString();
+      record(statusCode: streamed.statusCode);
       throw PosApiException(
         message: 'Stream request failed with status ${streamed.statusCode}',
         statusCode: streamed.statusCode,
@@ -393,33 +446,70 @@ class PosApiSession {
     }
 
     final lines = streamed.stream
+        .map((chunk) {
+          streamedBytes += chunk.length;
+          return chunk;
+        })
+        .timeout(
+          idleTimeout,
+          onTimeout: (sink) => sink.addError(
+            PosApiException(
+              message:
+                  'Stream went quiet for ${idleTimeout.inSeconds}s and was '
+                  'closed',
+              statusCode: streamed.statusCode,
+              responseBody: '',
+            ),
+          ),
+        )
         .transform(utf8.decoder)
         .transform(const LineSplitter());
     String? eventType;
     final dataLines = <String>[];
-    await for (final line in lines) {
-      if (line.isEmpty) {
-        if (dataLines.isNotEmpty) {
-          yield SseEvent(
-            event: eventType ?? 'message',
-            data: dataLines.join('\n'),
-          );
+    var recorded = false;
+    try {
+      await for (final line in lines) {
+        if (line.isEmpty) {
+          if (dataLines.isNotEmpty) {
+            yield SseEvent(
+              event: eventType ?? 'message',
+              data: dataLines.join('\n'),
+            );
+          }
+          eventType = null;
+          dataLines.clear();
+          continue;
         }
-        eventType = null;
-        dataLines.clear();
-        continue;
+        if (line.startsWith(':')) {
+          continue;
+        }
+        if (line.startsWith('event:')) {
+          eventType = line.substring('event:'.length).trim();
+        } else if (line.startsWith('data:')) {
+          dataLines.add(line.substring('data:'.length).trim());
+        }
       }
-      if (line.startsWith(':')) {
-        continue;
+      if (dataLines.isNotEmpty) {
+        yield SseEvent(
+          event: eventType ?? 'message',
+          data: dataLines.join('\n'),
+        );
       }
-      if (line.startsWith('event:')) {
-        eventType = line.substring('event:'.length).trim();
-      } else if (line.startsWith('data:')) {
-        dataLines.add(line.substring('data:'.length).trim());
+      record(statusCode: streamed.statusCode);
+      recorded = true;
+    } catch (error) {
+      record(statusCode: streamed.statusCode, errorMessage: error.toString());
+      recorded = true;
+      rethrow;
+    } finally {
+      // A cancelled subscription (the user leaving the chat) unwinds here
+      // without either branch running; the turn still deserves a row.
+      if (!recorded) {
+        record(
+          statusCode: streamed.statusCode,
+          errorMessage: 'stream cancelled',
+        );
       }
-    }
-    if (dataLines.isNotEmpty) {
-      yield SseEvent(event: eventType ?? 'message', data: dataLines.join('\n'));
     }
   }
 

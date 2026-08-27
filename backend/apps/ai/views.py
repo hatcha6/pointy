@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import re
+import time
 import urllib.parse
 import urllib.request
 from datetime import timedelta
@@ -20,6 +21,8 @@ from rest_framework.views import APIView
 from apps.core.dashboard import build_dashboard_snapshot
 from apps.core.models import RelayInstallation
 from apps.core.relay import RelayControlClient, RelayControlError, relay_ai_available
+from apps.analytics.models import AnalyticsEvent
+from apps.analytics.services import record_event_buffered
 from apps.core.streaming import aiter_in_thread
 
 from .dashboard_digest import generate_dashboard_digest
@@ -235,29 +238,36 @@ class AiChatView(APIView):
         )
 
         client = RelayControlClient()
-        try:
-            first_response = client.open_ai_stream(
-                access_token=installation.access_token,
-                messages=messages,
-                attachments=attachments,
-                tools=tools,
-                count_usage=True,
-                want_title=wants_title,
-            )
-        except RelayControlError as exc:
-            return _relay_error_response(exc)
-
+        # The relay call is opened INSIDE the stream, not before it.
+        #
+        # Opening it here meant the client's POST got no response — not even
+        # headers — until the relay answered, up to the full AI timeout. On a
+        # link where reaching the relay is slow that is a chat bubble spinning
+        # for two minutes with nothing on the wire, and the failure it finally
+        # produced was an HTTP 500 the app could say nothing useful about.
+        #
+        # Now the response starts immediately (see _agentic_stream's opening
+        # ping) and a failed open arrives as an `error` event carrying the same
+        # body and status this used to return, so quota / not-enabled / too-many
+        # -images still reach exactly the UI they always did.
         return self._sse_response(
             request,
             self._agentic_stream(
                 client=client,
+                open_stream=lambda: client.open_ai_stream(
+                    access_token=installation.access_token,
+                    messages=messages,
+                    attachments=attachments,
+                    tools=tools,
+                    count_usage=True,
+                    want_title=wants_title,
+                ),
                 installation=installation,
                 conversation=conversation,
                 user_message=user_message,
                 messages=messages,
                 tools=tools,
                 user=request.user,
-                first_response=first_response,
                 apply_title=wants_title,
                 favicon_base=request.build_absolute_uri(reverse("ai-favicon")),
             ),
@@ -387,7 +397,7 @@ class AiChatView(APIView):
         messages,
         tools,
         user,
-        first_response,
+        open_stream,
         apply_title=False,
         favicon_base="",
     ):
@@ -429,9 +439,35 @@ class AiChatView(APIView):
         # Where this turn's own messages begin (after system + history + user). Used
         # to snapshot the tool rounds run before a pause so they survive resume.
         base_len = len(messages)
-        response = first_response
+        started_at = time.monotonic()
+        # How this turn ended, recorded on the way out. See _record_stream_outcome.
+        outcome = "completed"
+        failure_status = None
+        failure_detail = ""
         try:
+            # Get bytes onto the wire before the model has said anything.
+            #
+            # Until the first token arrives this connection is silent, and a
+            # turn that runs tools is silent again between rounds. Every hop in
+            # between — the shop's router, an ISP NAT, a proxy — is entitled to
+            # treat a silent connection as dead, and the client cannot tell
+            # "thinking" from "gone". A ping per round costs nothing and makes
+            # the client's idle deadline mean silence rather than thought.
+            yield sse_event("ping", {})
+            try:
+                response = open_stream()
+            except RelayControlError as exc:
+                # Reaching the relay failed. Same body and status the HTTP path
+                # used to return, carried in the event so the client maps quota
+                # / not-enabled / too-many-images exactly as before.
+                payload, status_code = relay_error_payload(exc)
+                outcome = "relay_refused"
+                failure_status = status_code
+                failure_detail = str(payload.get("detail", ""))[:500]
+                yield sse_event("error", payload)
+                return
             for iteration in range(MAX_TOOL_ITERS + 1):
+                yield sse_event("ping", {})
                 turn_text = []
                 turn_reasoning = []
                 turn_tool_calls = None
@@ -659,7 +695,7 @@ class AiChatView(APIView):
                     "web_search": web_searched,
                 },
             )
-        except Exception:
+        except Exception as exc:
             # A mid-stream failure — most often the relay tunnel dropping the
             # upstream SSE connection (IncompleteRead / ConnectionReset /
             # timeout while iterating iter_relay_sse, none of which are a
@@ -671,8 +707,17 @@ class AiChatView(APIView):
             # (client disconnect / early aclose) is a BaseException, not caught
             # here, so early-close cleanup keeps working.
             logger.exception("AI chat stream failed mid-turn")
+            outcome = "failed_mid_stream"
+            failure_detail = f"{type(exc).__name__}: {exc}"[:500]
             yield sse_event("error", {"detail": "ai stream failed"})
         finally:
+            self._record_stream_outcome(
+                user=user,
+                outcome=outcome,
+                status_code=failure_status,
+                detail=failure_detail,
+                elapsed_ms=int((time.monotonic() - started_at) * 1000),
+            )
             if not saved and not paused and ("".join(answer) or "".join(reasoning) or tool_events):
                 self._save_assistant(
                     conversation,
@@ -687,6 +732,51 @@ class AiChatView(APIView):
                 response.close()
             except Exception:
                 pass
+
+    def _record_stream_outcome(
+        self, *, user, outcome, status_code, detail, elapsed_ms
+    ):
+        """Record how an AI turn actually ended, from inside the stream.
+
+        The request middleware cannot see this. It records status and duration
+        when the *response object* is returned — which for a streaming response
+        is before a single byte of the body has been produced. So since the
+        relay call moved inside the stream, `ai/chat/` reports 200 in ~0ms no
+        matter what happens next: a shop that has hit its quota, a relay nobody
+        can reach, and a perfect answer all look identical in backend telemetry.
+        Every failure still reaches the user (it is in the SSE body), but an
+        investigation reading request rows would see a wall of healthy 200s.
+
+        This row is what closes that hole, and it covers more than the status
+        code ever did: a turn that dies *mid-stream*, after the 200 was already
+        sent, was never visible to the old approach either.
+
+        Best-effort — telemetry must not be the thing that breaks a chat.
+        """
+        try:
+            record_event_buffered(
+                name="ai.stream_finished",
+                event_type=(
+                    AnalyticsEvent.EventType.USAGE
+                    if outcome == "completed"
+                    else AnalyticsEvent.EventType.ERROR
+                ),
+                severity=(
+                    AnalyticsEvent.Severity.INFO
+                    if outcome == "completed"
+                    else AnalyticsEvent.Severity.ERROR
+                ),
+                user=user,
+                attributes={
+                    "outcome": outcome,
+                    "path": "/api/ai/chat/",
+                    **({"status_code": status_code} if status_code else {}),
+                    **({"detail": detail} if detail else {}),
+                },
+                metrics={"duration_ms": elapsed_ms},
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug("Could not record AI stream outcome", exc_info=True)
 
     def _apply_conversation_title(self, conversation, title):
         """Persist the AI-generated conversation title (overriding the truncated
@@ -869,20 +959,7 @@ class AiChatResumeView(AiChatView):
         )
 
         client = RelayControlClient()
-        try:
-            first_response = client.open_ai_stream(
-                access_token=installation.access_token,
-                messages=messages,
-                tools=tools,
-                count_usage=False,
-                # Resume is a continuation of the original turn — carry its tier
-                # (persisted on the paused message) so a resumed PO/agentic flow
-                # keeps the difficulty it was routed to, not a default.
-                route_tier=paused.tier,
-            )
-        except RelayControlError as exc:
-            return _relay_error_response(exc)
-
+        # Opened inside the stream, same as the chat turn above.
         return self._sse_response(
             request,
             self._agentic_stream(
@@ -893,7 +970,17 @@ class AiChatResumeView(AiChatView):
                 messages=messages,
                 tools=tools,
                 user=request.user,
-                first_response=first_response,
+                open_stream=lambda: client.open_ai_stream(
+                    access_token=installation.access_token,
+                    messages=messages,
+                    tools=tools,
+                    count_usage=False,
+                    # Resume is a continuation of the original turn — carry its
+                    # tier (persisted on the paused message) so a resumed
+                    # PO/agentic flow keeps the difficulty it was routed to,
+                    # not a default.
+                    route_tier=paused.tier,
+                ),
                 favicon_base=request.build_absolute_uri(reverse("ai-favicon")),
             ),
         )
@@ -1084,6 +1171,23 @@ class AiConversationTruncateView(APIView):
         conversation.messages.filter(pk__gte=target.pk).delete()
         AiConversation.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def relay_error_payload(exc):
+    """The app-facing body + status for a relay AI failure.
+
+    One mapping, two carriers. A failure the client must *act* on — quota
+    reached, AI not enabled for this shop, too many images — has to reach the
+    same UI whether it happened before the stream opened (an HTTP status) or
+    after (an SSE ``error`` event). Keeping the mapping here and letting both
+    paths use it is what makes moving the relay call inside the stream safe:
+    the response body is identical, and ``status`` rides along in the event so
+    the client maps it exactly as it maps an HTTP code.
+    """
+    response = _relay_error_response(exc)
+    payload = dict(response.data)
+    payload["status"] = response.status_code
+    return payload, response.status_code
 
 
 def _relay_error_response(exc):

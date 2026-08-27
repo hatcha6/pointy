@@ -9,6 +9,7 @@ from django.test import AsyncRequestFactory, TestCase, TransactionTestCase
 from django.urls import reverse
 from rest_framework.test import APIClient, force_authenticate
 
+from apps.analytics.models import AnalyticsEvent
 from apps.core.models import RelayInstallation
 from apps.core.relay import RelayControlError, relay_ai_available
 
@@ -16,6 +17,17 @@ from .models import AiConversation, AiMessage
 from .relay_stream import iter_relay_sse
 from .tools import validate_ask_user_spec
 from .views import MAX_TOOL_ITERS, AiChatView
+
+
+def _first_event_payload(body, event_name):
+    """The JSON payload of the first ``event_name`` frame in an SSE body."""
+    frames = body.split("\n\n")
+    for frame in frames:
+        if frame.startswith(f"event: {event_name}"):
+            for line in frame.splitlines():
+                if line.startswith("data:"):
+                    return json.loads(line[len("data:") :].strip())
+    raise AssertionError(f"no {event_name!r} event in: {body[:400]}")
 
 
 class FakeRelayResponse:
@@ -533,7 +545,11 @@ class AiChatViewTests(TestCase):
         # The empty-text user turn is still present so the relay can attach images.
         self.assertEqual(kwargs["messages"][-1], {"role": "user", "content": ""})
 
-    def test_maps_relay_usage_limit_to_429(self):
+    def test_relay_usage_limit_reaches_the_client_as_a_429_error_event(self):
+        # The relay call happens inside the stream now, so the response has
+        # already started (200) by the time it fails. The status the app acts on
+        # rides in the event instead — same body, same mapping, so the rate-limit
+        # UI is reached exactly as it was when this was an HTTP 429.
         with patch("apps.ai.views.RelayControlClient") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = RelayControlError(
                 "relay AI returned 429",
@@ -541,8 +557,37 @@ class AiChatViewTests(TestCase):
                 body='{"error":"ai usage limit reached","scope":"five_hour","reset_at":"2026-06-19T12:00:00Z"}',
             )
             response = self.client.post(reverse("ai-chat"), {"message": "hi"}, format="json")
-        self.assertEqual(response.status_code, 429)
-        self.assertEqual(response.data["scope"], "five_hour")
+            body = b"".join(response.streaming_content).decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        payload = _first_event_payload(body, "error")
+        self.assertEqual(payload["status"], 429)
+        self.assertEqual(payload["scope"], "five_hour")
+        self.assertEqual(payload["reset_at"], "2026-06-19T12:00:00Z")
+
+    def test_relay_not_entitled_reaches_the_client_as_a_403_error_event(self):
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.side_effect = RelayControlError(
+                "relay AI returned 402",
+                status_code=402,
+                body="{}",
+            )
+            response = self.client.post(reverse("ai-chat"), {"message": "hi"}, format="json")
+            body = b"".join(response.streaming_content).decode("utf-8")
+
+        self.assertEqual(_first_event_payload(body, "error")["status"], 403)
+
+    def test_the_stream_pings_before_the_relay_is_even_reached(self):
+        # What fixes the spinning bubble: bytes are on the wire before the call
+        # that used to block for up to the full AI timeout with nothing sent.
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.side_effect = RelayControlError(
+                "unreachable", status_code=None, body=""
+            )
+            response = self.client.post(reverse("ai-chat"), {"message": "hi"}, format="json")
+            body = b"".join(response.streaming_content).decode("utf-8")
+
+        self.assertTrue(body.startswith("event: ping"), body[:60])
 
     def test_usage_endpoint_returns_relay_snapshot(self):
         snapshot = {
@@ -1246,7 +1291,7 @@ class AskUserFlowTests(TestCase):
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["تم"], reasoning="")
             )
-            self.client.post(
+            resumed = self.client.post(
                 reverse("ai-chat-resume"),
                 {
                     "conversation_id": conversation.pk,
@@ -1259,6 +1304,8 @@ class AskUserFlowTests(TestCase):
                 },
                 format="json",
             )
+            # Opened lazily inside the stream: consume the body to drive it.
+            b"".join(resumed.streaming_content)
             messages = mock_client.return_value.open_ai_stream.call_args.kwargs["messages"]
 
         replayed_names = [
@@ -1387,7 +1434,10 @@ class AiChatActionToolTests(TestCase):
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
-            self.client.post(reverse("ai-chat"), payload, format="json")
+            response = self.client.post(reverse("ai-chat"), payload, format="json")
+            # The relay call is opened lazily, inside the stream, so the request
+            # returns before it happens: consume the body to drive the turn.
+            b"".join(response.streaming_content)
             _, kwargs = mock_client.return_value.open_ai_stream.call_args
             return {t["function"]["name"] for t in kwargs["tools"]}
 
@@ -1404,7 +1454,9 @@ class AiChatActionToolTests(TestCase):
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
-            self.client.post(reverse("ai-chat"), payload, format="json")
+            response = self.client.post(reverse("ai-chat"), payload, format="json")
+            # Opened lazily inside the stream: consume the body to drive it.
+            b"".join(response.streaming_content)
             _, kwargs = mock_client.return_value.open_ai_stream.call_args
             return kwargs["messages"][0]["content"]
 
@@ -1634,3 +1686,88 @@ class AiChatAsgiStreamingTests(TransactionTestCase):
             self.assertFalse(response.is_async)
             body = b"".join(response.streaming_content).decode("utf-8")
         self.assertIn("event: done", body)
+
+
+class AiStreamOutcomeTelemetryTests(TestCase):
+    """A failing AI turn has to be visible to the backend, not only to the user.
+
+    The request middleware records status and duration when the response object
+    is returned, which for a stream is before any of the body exists. Since the
+    relay call moved inside the stream, `ai/chat/` reports 200 in ~0ms whatever
+    happens — so the outcome is recorded from inside the generator instead.
+    """
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="owner", password="pw"
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        RelayInstallation.objects.create(
+            installation_id="inst-tel",
+            access_token="ptr1.inst-tel.secret",
+            relay_enabled=False,
+            subscription_active=True,
+            ai_enabled=True,
+        )
+
+    def _finished(self):
+        from apps.analytics import buffer
+
+        buffer.flush()
+        return AnalyticsEvent.objects.filter(name="ai.stream_finished")
+
+    def _post(self, **relay):
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            for key, value in relay.items():
+                setattr(mock_client.return_value.open_ai_stream, key, value)
+            response = self.client.post(
+                reverse("ai-chat"), {"message": "hi"}, format="json"
+            )
+            b"".join(response.streaming_content)
+        return response
+
+    def test_a_good_turn_is_recorded_as_usage(self):
+        self._post(return_value=FakeRelayResponse(fake_sse_lines(["ok"])))
+
+        event = self._finished().get()
+        self.assertEqual(event.attributes["outcome"], "completed")
+        self.assertEqual(event.severity, AnalyticsEvent.Severity.INFO)
+        self.assertIn("duration_ms", event.metrics)
+
+    def test_a_relay_refusal_is_recorded_as_an_error_with_its_status(self):
+        # The request row now says 200; without this the quota wall would be
+        # invisible to anyone reading backend telemetry.
+        self._post(
+            side_effect=RelayControlError(
+                "relay AI returned 429",
+                status_code=429,
+                body='{"error":"ai usage limit reached"}',
+            )
+        )
+
+        event = self._finished().get()
+        self.assertEqual(event.attributes["outcome"], "relay_refused")
+        self.assertEqual(event.attributes["status_code"], 429)
+        self.assertEqual(event.severity, AnalyticsEvent.Severity.ERROR)
+
+    def test_a_turn_that_dies_mid_stream_is_recorded(self):
+        # This one the status code never caught, before or after the change:
+        # the 200 had already been sent by the time it broke.
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["ok"])
+            )
+            with patch(
+                "apps.ai.views.iter_relay_sse",
+                side_effect=ConnectionResetError("tunnel dropped"),
+            ):
+                response = self.client.post(
+                    reverse("ai-chat"), {"message": "hi"}, format="json"
+                )
+                body = b"".join(response.streaming_content).decode("utf-8")
+
+        self.assertIn("event: error", body)
+        event = self._finished().get()
+        self.assertEqual(event.attributes["outcome"], "failed_mid_stream")
+        self.assertIn("ConnectionResetError", event.attributes["detail"])

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import '../models/ai_chat.dart';
 import 'api_session.dart';
 
@@ -36,7 +38,7 @@ class AiApiClient {
       'ai/chat/',
       body: body,
     )) {
-      final parsed = _parseEvent(event);
+      final parsed = parseEvent(event);
       if (parsed != null) {
         yield parsed;
       }
@@ -67,14 +69,23 @@ class AiApiClient {
       'ai/chat/resume/',
       body: body,
     )) {
-      final parsed = _parseEvent(event);
+      final parsed = parseEvent(event);
       if (parsed != null) {
         yield parsed;
       }
     }
   }
 
-  AiChatEvent? _parseEvent(SseEvent event) {
+  /// Turns one SSE frame into a chat event, or null for a frame this client
+  /// does not know — a `ping`, or anything a newer backend adds.
+  ///
+  /// Exposed for tests because the wire contract matters more than it used to:
+  /// the turn's relay call is opened inside the stream, so a refusal (quota, AI
+  /// not enabled, too many images) arrives as an `error` event rather than an
+  /// HTTP status, and that status has to survive the trip or the app falls back
+  /// to a generic error.
+  @visibleForTesting
+  AiChatEvent? parseEvent(SseEvent event) {
     Map<String, Object?> data = const {};
     if (event.data.isNotEmpty) {
       try {
@@ -131,10 +142,26 @@ class AiApiClient {
               : const <AiQuestion>[],
         );
       case 'error':
-        return AiChatError((data['detail'] as String?) ?? 'error');
+        // `status` is present when the failure was the relay refusing —
+        // quota, AI not enabled, too many images. The turn's relay call is
+        // opened inside the stream, so those arrive here rather than as an
+        // HTTP status, and the view model maps both through the same code.
+        return AiChatError(
+          (data['detail'] as String?) ?? 'error',
+          statusCode: _statusOf(data['status']),
+        );
       default:
         return null;
     }
+  }
+
+  /// The status carried by an `error` event, or null for an in-band model
+  /// failure that has no HTTP meaning.
+  static int? _statusOf(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    return int.tryParse(value?.toString() ?? '');
   }
 
   Future<AiUsage> fetchUsage() async {
