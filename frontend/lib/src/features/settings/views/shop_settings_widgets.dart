@@ -1243,7 +1243,7 @@ class _SettingsSaveBar extends StatelessWidget {
         icon: isSaving
             ? const SizedBox.square(
                 dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: PointySpinner(strokeWidth: 2),
               )
             : const Icon(Icons.save_outlined),
         label: Text(isSaving ? l10n.savingButton : l10n.saveSettingsButton),
@@ -1293,7 +1293,7 @@ class _AnalyticsExportActionBar extends StatelessWidget {
         icon: isExporting
             ? const SizedBox.square(
                 dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: PointySpinner(strokeWidth: 2),
               )
             : const Icon(Icons.file_download_outlined),
         label: Text(

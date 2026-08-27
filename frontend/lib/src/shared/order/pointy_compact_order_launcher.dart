@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design/design.dart';
 import '../responsive/responsive.dart';
+import '../components/pointy_progress.dart';
 
 class PointyCompactOrderLauncher extends StatelessWidget {
   const PointyCompactOrderLauncher({
@@ -191,7 +192,7 @@ class _CompactOrderAction extends StatelessWidget {
         icon: isBusy
             ? const SizedBox.square(
                 dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: PointySpinner(strokeWidth: 2),
               )
             : Icon(icon),
         label: FittedBox(

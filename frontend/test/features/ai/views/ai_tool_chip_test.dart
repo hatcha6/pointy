@@ -50,8 +50,9 @@ class _ToolRepo extends AiChatRepository {
   Future<Result<AiUsage>> loadUsage() async => Error(Exception('none'));
 
   @override
-  Future<Result<List<AiConversationSummary>>> loadConversations({int page = 1}) async =>
-      const Ok([]);
+  Future<Result<List<AiConversationSummary>>> loadConversations({
+    int page = 1,
+  }) async => const Ok([]);
 }
 
 class _FakeNavigation implements AppNavigation {
@@ -104,34 +105,40 @@ Future<void> _pump(WidgetTester tester, AiChatViewModel viewModel) async {
         controller: PointyNavigationRailController(),
         child: child ?? const SizedBox.shrink(),
       ),
-      home: AiAssistantScreen(viewModel: viewModel, navigation: _FakeNavigation()),
+      home: AiAssistantScreen(
+        viewModel: viewModel,
+        navigation: _FakeNavigation(),
+      ),
     ),
   );
   await tester.pump();
 }
 
 void main() {
-  testWidgets('tapping a tool chip opens the inspector with its inputs + output', (
-    tester,
-  ) async {
-    final viewModel = AiChatViewModel(_ToolRepo());
-    addTearDown(viewModel.dispose);
+  testWidgets(
+    'tapping a tool chip opens the inspector with its inputs + output',
+    (tester) async {
+      final viewModel = AiChatViewModel(_ToolRepo());
+      addTearDown(viewModel.dispose);
 
-    await _pump(tester, viewModel);
-    await viewModel.sendMessage('أنشئ أمر شراء من الفاتورة');
-    await tester.pumpAndSettle();
+      await _pump(tester, viewModel);
+      await viewModel.sendMessage('أنشئ أمر شراء من الفاتورة');
+      await tester.pumpAndSettle();
 
-    // The read chip rendered with its label and the tap-to-inspect affordance.
-    final chip = find.text('يستعلم عن مطابقة منتجات الفاتورة');
-    expect(chip, findsOneWidget);
-    expect(find.byIcon(Icons.info_outline), findsOneWidget);
+      // The read chip rendered with its label and the tap-to-inspect affordance.
+      final chip = find.text('يستعلم عن مطابقة منتجات الفاتورة');
+      expect(chip, findsOneWidget);
+      expect(find.byIcon(Icons.info_outline), findsOneWidget);
 
-    await tester.tap(find.ancestor(of: chip, matching: find.byType(InkWell)).first);
-    await tester.pumpAndSettle();
+      await tester.tap(
+        find.ancestor(of: chip, matching: find.byType(InkWell)).first,
+      );
+      await tester.pumpAndSettle();
 
-    // The inspector sheet shows both sections and the tool's actual output.
-    expect(find.text('المدخلات'), findsOneWidget);
-    expect(find.text('النتيجة'), findsOneWidget);
-    expect(find.textContaining('الوفاق'), findsWidgets);
-  });
+      // The inspector sheet shows both sections and the tool's actual output.
+      expect(find.text('المدخلات'), findsOneWidget);
+      expect(find.text('النتيجة'), findsOneWidget);
+      expect(find.textContaining('الوفاق'), findsWidgets);
+    },
+  );
 }

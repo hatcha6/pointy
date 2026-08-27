@@ -51,10 +51,7 @@ class _PosShortcutsSheet extends StatelessWidget {
     final groups = [
       _PosShortcutGroup(l10n.posShortcutsSectionInvoices, [
         _PosShortcut(const ['F1'], l10n.posShortcutNewInvoice),
-        _PosShortcut(
-          const ['Page ↓', 'Page ↑'],
-          l10n.posShortcutCycleInvoices,
-        ),
+        _PosShortcut(const ['Page ↓', 'Page ↑'], l10n.posShortcutCycleInvoices),
       ]),
       _PosShortcutGroup(l10n.posShortcutsSectionItems, [
         _PosShortcut(const ['F2'], l10n.posShortcutCycleUnit),

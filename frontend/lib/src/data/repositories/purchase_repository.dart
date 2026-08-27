@@ -145,6 +145,9 @@ class PurchaseRepository {
     String discountCode = '',
     double extraDiscountAmount = 0,
     String? idempotencyKey,
+
+    /// Set after the buyer has seen and confirmed the backend's cost warnings.
+    bool acknowledgeCostWarnings = false,
   }) async {
     if (lines.isEmpty) {
       return Error(Exception('purchase draft is empty'));
@@ -164,6 +167,7 @@ class PurchaseRepository {
       final order = await _service.createPurchaseOrder(
         draft,
         idempotencyKey: _scopedIdempotencyKey(idempotencyKey, 'create'),
+        acknowledgeCostWarnings: acknowledgeCostWarnings,
       );
       final submittedOrder = await _service.submitPurchaseOrder(
         order.id,

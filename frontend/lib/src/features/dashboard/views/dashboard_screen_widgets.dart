@@ -51,10 +51,7 @@ class _AiBriefHeadline extends StatelessWidget {
       trailing: const PointyDisclosureChevron(),
       child: Text(
         brief,
-        style: textTheme.bodyLarge?.copyWith(
-          color: colors.ink,
-          height: 1.45,
-        ),
+        style: textTheme.bodyLarge?.copyWith(color: colors.ink, height: 1.45),
       ),
     );
   }

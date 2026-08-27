@@ -207,7 +207,7 @@ class _ProductCostHistorySection extends StatelessWidget {
     final entries = viewModel.costHistory;
 
     if (viewModel.isLoadingCostInsights && impact == null && entries.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: PointySpinner());
     }
     if (viewModel.hasCostInsightsError && impact == null && entries.isEmpty) {
       return PointyInlineMessage.error(
@@ -265,14 +265,18 @@ class _ProductCostHistorySection extends StatelessWidget {
                         l10n.purchaseOrderNumberValue(
                           entry.purchaseOrderNumber!,
                         ),
-                      l10n.purchaseOrderLineQuantity(formatQuantity(entry.quantity)),
+                      l10n.purchaseOrderLineQuantity(
+                        formatQuantity(entry.quantity),
+                      ),
                       // A pack row carries its pack price for reference; the
                       // trailing figure stays per base unit so a carton row
                       // doesn't read as a 30× cost spike next to piece rows.
                       if (entry.isPackPurchase &&
                           (entry.unitLabel?.isNotEmpty ?? false))
                         l10n.productCostHistoryPackCost(
-                          formatMoney(entry.effectiveUnitCost ?? entry.unitCost),
+                          formatMoney(
+                            entry.effectiveUnitCost ?? entry.unitCost,
+                          ),
                           entry.unitLabel!,
                         ),
                       if (entry.recordedAt != null)
@@ -476,7 +480,7 @@ class _StockSummarySection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (viewModel.isLoadingStock)
-            const LinearProgressIndicator()
+            const PointyProgressBar()
           else if (viewModel.errorMessage == 'stock_load_error')
             PointyInlineMessage.error(message: l10n.stockLoadError)
           else

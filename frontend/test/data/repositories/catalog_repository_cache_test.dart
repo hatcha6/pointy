@@ -35,7 +35,11 @@ void main() {
       client: MockClient((request) async {
         requests += 1;
         final body = request.url.path.endsWith('/product-variants/')
-            ? {'count': 1, 'next': null, 'results': [_variantJson()]}
+            ? {
+                'count': 1,
+                'next': null,
+                'results': [_variantJson()],
+              }
             : {'count': 1, 'next': null, 'results': []};
         return http.Response.bytes(
           utf8.encode(jsonEncode(body)),
@@ -90,11 +94,13 @@ void main() {
       client: MockClient((request) async {
         requests += 1;
         return http.Response.bytes(
-          utf8.encode(jsonEncode({
-            'count': 1,
-            'next': null,
-            'results': [_variantJson()],
-          })),
+          utf8.encode(
+            jsonEncode({
+              'count': 1,
+              'next': null,
+              'results': [_variantJson()],
+            }),
+          ),
           200,
           headers: {'x-pointy-catalog-version': version},
         );
@@ -131,9 +137,18 @@ void main() {
   test('different queries and pages never collide', () async {
     final repository = CatalogRepository(serviceWith(version: '7'));
 
-    await repository.loadProducts(query: const ProductQuery(search: 'a'), page: 1);
-    await repository.loadProducts(query: const ProductQuery(search: 'b'), page: 1);
-    await repository.loadProducts(query: const ProductQuery(search: 'a'), page: 2);
+    await repository.loadProducts(
+      query: const ProductQuery(search: 'a'),
+      page: 1,
+    );
+    await repository.loadProducts(
+      query: const ProductQuery(search: 'b'),
+      page: 1,
+    );
+    await repository.loadProducts(
+      query: const ProductQuery(search: 'a'),
+      page: 2,
+    );
 
     expect(requests, 3);
   });

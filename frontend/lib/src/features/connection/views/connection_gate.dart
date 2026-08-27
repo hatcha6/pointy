@@ -163,7 +163,9 @@ class _ManualConnectionScreenState extends State<ManualConnectionScreen> {
                 ),
                 if (_failed) ...[
                   SizedBox(height: spacing.md),
-                  PointyInlineMessage.error(message: l10n.connectionManualError),
+                  PointyInlineMessage.error(
+                    message: l10n.connectionManualError,
+                  ),
                 ],
                 SizedBox(height: spacing.lg),
                 FilledButton.icon(
@@ -171,7 +173,7 @@ class _ManualConnectionScreenState extends State<ManualConnectionScreen> {
                   icon: _submitting
                       ? const SizedBox.square(
                           dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2.4),
+                          child: PointySpinner(strokeWidth: 2.4),
                         )
                       : const Icon(Icons.link),
                   label: Text(l10n.connectionManualConnectButton),
@@ -189,7 +191,7 @@ class _ManualConnectionScreenState extends State<ManualConnectionScreen> {
                     children: [
                       const SizedBox.square(
                         dimension: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: PointySpinner(strokeWidth: 2),
                       ),
                       SizedBox(width: spacing.xs),
                       Flexible(

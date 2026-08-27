@@ -118,7 +118,10 @@ class ProductQuery extends ModelQuery {
     if (supplierId != null)
       QueryFilter(parameter: 'supplier', value: '$supplierId'),
     if (preferredSupplierId != null)
-      QueryFilter(parameter: 'preferred_supplier', value: '$preferredSupplierId'),
+      QueryFilter(
+        parameter: 'preferred_supplier',
+        value: '$preferredSupplierId',
+      ),
   ];
 
   ProductQuery copyWith({

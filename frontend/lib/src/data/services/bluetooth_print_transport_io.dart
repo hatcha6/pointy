@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart' show MissingPluginException;
 import 'package:flutter_bluetooth_classic_serial/flutter_bluetooth_classic.dart';
 
 import '../models/print_job.dart';
@@ -149,22 +150,48 @@ class BluetoothPrintTransport extends PrintTransport {
     } on Object catch (error) {
       return PrintTransportResult.failure('bluetooth print failed: $error');
     } finally {
-      unawaited(_bluetooth.disconnect());
+      // Unawaited, so an exception here would also escape into the zone.
+      unawaited(_bluetooth.disconnect().catchError((Object _) => false));
     }
+  }
+
+  /// Latched once the platform proves it has no real implementation, so the
+  /// app stops paying for calls that can only fail.
+  bool _pluginUnavailable = false;
+
+  static bool _looksUnimplemented(Object error) {
+    return error is MissingPluginException ||
+        error is UnimplementedError ||
+        error.toString().contains('MissingPluginException');
   }
 
   Future<void> _discoverNearbyDevices(
     Map<String, PrinterEndpoint> endpoints,
   ) async {
+    if (_pluginUnavailable) {
+      return;
+    }
     StreamSubscription<BluetoothDevice>? subscription;
     try {
-      subscription = _bluetooth.onDeviceDiscovered.listen((device) {
-        endpoints[device.address] = PrinterEndpoint(
-          kind: PrintTransportKind.bluetooth,
-          name: device.name,
-          address: device.address,
-        );
-      });
+      subscription = _bluetooth.onDeviceDiscovered.listen(
+        (device) {
+          endpoints[device.address] = PrinterEndpoint(
+            kind: PrintTransportKind.bluetooth,
+            name: device.name,
+            address: device.address,
+          );
+        },
+        // Without this the stream's error has nowhere to go and becomes an
+        // unhandled zone error. On a platform where the plugin is only a
+        // template stub, binding this EventChannel fails every single time
+        // with MissingPluginException: 867 of the app's 1,116 reported Flutter
+        // errors were this one line. Bluetooth discovery is best-effort —
+        // paired devices are still listed — so a failure is not news.
+        onError: (Object error) {
+          _pluginUnavailable = _pluginUnavailable || _looksUnimplemented(error);
+        },
+        cancelOnError: true,
+      );
       final started = await _bluetooth.startDiscovery();
       if (started) {
         await Future<void>.delayed(const Duration(seconds: 4));

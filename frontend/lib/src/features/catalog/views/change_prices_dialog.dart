@@ -7,6 +7,7 @@ import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../view_models/product_details_view_model.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Opens the "Change prices" dialog for a product: every variant is listed with
 /// its lowest/highest/last cost (read-only) and an editable new-price field so
@@ -134,9 +135,9 @@ class _ChangePricesDialogState extends State<_ChangePricesDialog> {
             children: [
               Text(
                 l10n.changePricesSubtitle,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colors.mutedInk,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
               ),
               const SizedBox(height: 12),
               if (_rows.isEmpty)
@@ -164,7 +165,9 @@ class _ChangePricesDialogState extends State<_ChangePricesDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _submitting ? null : () => Navigator.of(context).pop(false),
+          onPressed: _submitting
+              ? null
+              : () => Navigator.of(context).pop(false),
           child: Text(l10n.cancelButton),
         ),
         FilledButton(
@@ -173,7 +176,7 @@ class _ChangePricesDialogState extends State<_ChangePricesDialog> {
               ? const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : Text(l10n.changePricesSaveButton),
         ),
@@ -214,9 +217,18 @@ class _PriceRow extends StatelessWidget {
           spacing: 12,
           runSpacing: 4,
           children: [
-            _CostChip(label: l10n.lowestCostLabel, value: money(summary.lowestCost)),
-            _CostChip(label: l10n.highestCostLabel, value: money(summary.highestCost)),
-            _CostChip(label: l10n.lastCostLabel, value: money(summary.lastCost)),
+            _CostChip(
+              label: l10n.lowestCostLabel,
+              value: money(summary.lowestCost),
+            ),
+            _CostChip(
+              label: l10n.highestCostLabel,
+              value: money(summary.highestCost),
+            ),
+            _CostChip(
+              label: l10n.lastCostLabel,
+              value: money(summary.lastCost),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -228,9 +240,9 @@ class _PriceRow extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 14),
                 child: Text(
                   '${l10n.currentPriceLabel}: ${formatMoney(summary.unitPrice)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.mutedInk,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
                 ),
               ),
             ),
@@ -239,8 +251,9 @@ class _PriceRow extends StatelessWidget {
               width: 160,
               child: TextFormField(
                 controller: controller,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 textInputAction: TextInputAction.next,
                 inputFormatters: [DecimalTextInputFormatter()],
                 decoration: InputDecoration(

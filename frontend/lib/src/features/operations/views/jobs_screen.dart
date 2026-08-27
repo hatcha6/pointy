@@ -321,6 +321,7 @@ class _JobsScreenState extends State<JobsScreen> {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => RecipesPage(
+          capabilities: widget.capabilities,
           viewModel: widget.recipesViewModel,
           catalogRepository: widget.catalogRepository,
         ),
@@ -797,7 +798,7 @@ class _AdvanceButton extends StatelessWidget {
             const SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: PointySpinner(strokeWidth: 2),
             )
           else
             const Icon(Icons.arrow_forward, size: 18),

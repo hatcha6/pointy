@@ -18,7 +18,9 @@ void main() {
     final path = Platform.environment['CATALOG_PAYLOAD'];
     if (path == null || !File(path).existsSync()) {
       // ignore: avoid_print
-      print('SKIP: set CATALOG_PAYLOAD to a payload JSON file to run this benchmark.');
+      print(
+        'SKIP: set CATALOG_PAYLOAD to a payload JSON file to run this benchmark.',
+      );
       return;
     }
     final raw = File(path).readAsStringSync();
@@ -41,17 +43,21 @@ void main() {
     }
     swParse.stop();
 
-    final variants =
-        page.products.fold<int>(0, (sum, p) => sum + p.variants.length);
+    final variants = page.products.fold<int>(
+      0,
+      (sum, p) => sum + p.variants.length,
+    );
     final decodeMs = swDecode.elapsedMicroseconds / iterations / 1000;
     final parseMs = swParse.elapsedMicroseconds / iterations / 1000;
 
     // ignore: avoid_print
-    print('PARSE  ${(raw.length / 1024).toStringAsFixed(0)}KB  '
-        'products=${page.products.length} variants=$variants  |  '
-        'jsonDecode=${decodeMs.toStringAsFixed(1)}ms  '
-        'fromJson(total)=${parseMs.toStringAsFixed(1)}ms  '
-        'modelBuild=${(parseMs - decodeMs).toStringAsFixed(1)}ms');
+    print(
+      'PARSE  ${(raw.length / 1024).toStringAsFixed(0)}KB  '
+      'products=${page.products.length} variants=$variants  |  '
+      'jsonDecode=${decodeMs.toStringAsFixed(1)}ms  '
+      'fromJson(total)=${parseMs.toStringAsFixed(1)}ms  '
+      'modelBuild=${(parseMs - decodeMs).toStringAsFixed(1)}ms',
+    );
     expect(page.products, isNotEmpty);
   });
 }

@@ -108,18 +108,20 @@ void main() {
     );
   });
 
-  test('escPos falls back to text when the payload is not Code128-safe',
-      () async {
-    // Arabic in the *barcode* field cannot be expressed in Code128; the label
-    // should still print something identifiable rather than come out blank.
-    final bytes = await encoder.encodeLabels(
-      lines: [_line(barcode: 'منتج')],
-      endpoint: _endpoint(),
-    );
+  test(
+    'escPos falls back to text when the payload is not Code128-safe',
+    () async {
+      // Arabic in the *barcode* field cannot be expressed in Code128; the label
+      // should still print something identifiable rather than come out blank.
+      final bytes = await encoder.encodeLabels(
+        lines: [_line(barcode: 'منتج')],
+        endpoint: _endpoint(),
+      );
 
-    expect(bytes, isNotEmpty);
-    expect(_contains(bytes, _gsKCode128), isFalse);
-  });
+      expect(bytes, isNotEmpty);
+      expect(_contains(bytes, _gsKCode128), isFalse);
+    },
+  );
 
   test('escPos renders an Arabic product name without throwing', () async {
     final bytes = await encoder.encodeLabels(
@@ -165,7 +167,10 @@ void main() {
       return;
     }
     final bytes = await encoder.encodeLabels(
-      lines: [_line(), _line(name: 'قهوة عربية', barcode: '5901234123457')],
+      lines: [
+        _line(),
+        _line(name: 'قهوة عربية', barcode: '5901234123457'),
+      ],
       endpoint: _endpoint(),
     );
     await File(target).writeAsBytes(bytes, flush: true);

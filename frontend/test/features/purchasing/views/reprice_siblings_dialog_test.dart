@@ -80,18 +80,21 @@ void main() {
     expect(harness.purchase.requestedProductId, 5);
   });
 
-  testWidgets('pre-fills the field with the current price, not the suggestion', (
+  testWidgets(
+    'pre-fills the field with the current price, not the suggestion',
+    (tester) async {
+      await pumpDialog(tester, suggestedPrice: 3);
+
+      // The editable field shows the variant's real current price (10.00), so a
+      // straight save can never silently apply the recommendation.
+      expect(find.widgetWithText(TextFormField, '10.00'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, '3.00'), findsNothing);
+    },
+  );
+
+  testWidgets('saving without touching anything writes nothing', (
     tester,
   ) async {
-    await pumpDialog(tester, suggestedPrice: 3);
-
-    // The editable field shows the variant's real current price (10.00), so a
-    // straight save can never silently apply the recommendation.
-    expect(find.widgetWithText(TextFormField, '10.00'), findsOneWidget);
-    expect(find.widgetWithText(TextFormField, '3.00'), findsNothing);
-  });
-
-  testWidgets('saving without touching anything writes nothing', (tester) async {
     final harness = await pumpDialog(tester, suggestedPrice: 3);
 
     await tapSave(tester);
@@ -103,17 +106,18 @@ void main() {
     );
   });
 
-  testWidgets('applying the suggestion then saving writes the suggested price', (
-    tester,
-  ) async {
-    final harness = await pumpDialog(tester, suggestedPrice: 3);
+  testWidgets(
+    'applying the suggestion then saving writes the suggested price',
+    (tester) async {
+      final harness = await pumpDialog(tester, suggestedPrice: 3);
 
-    await tester.tap(find.byIcon(Icons.auto_awesome));
-    await tester.pumpAndSettle();
-    await tapSave(tester);
+      await tester.tap(find.byIcon(Icons.auto_awesome));
+      await tester.pumpAndSettle();
+      await tapSave(tester);
 
-    expect(harness.catalog.repricedPrices, {11: 3.0});
-  });
+      expect(harness.catalog.repricedPrices, {11: 3.0});
+    },
+  );
 
   testWidgets('no suggestion chip when the shop lacks pricing data', (
     tester,

@@ -76,7 +76,8 @@ class _FakeMigrationRepository extends MigrationRepository {
   factory _FakeMigrationRepository.configured() =>
       _FakeMigrationRepository([_seedSource]);
 
-  factory _FakeMigrationRepository.empty() => _FakeMigrationRepository(const []);
+  factory _FakeMigrationRepository.empty() =>
+      _FakeMigrationRepository(const []);
 
   final List<MigrationSource> _sources;
 
@@ -116,11 +117,13 @@ class _FakeMigrationRepository extends MigrationRepository {
   @override
   Future<Result<MigrationConnectionTest>> testConnection(int id) async {
     await Future<void>.delayed(const Duration(milliseconds: 400));
-    return Ok(MigrationConnectionTest.fromJson(const {
-      'ok': true,
-      'table_count': 23,
-      'tables': ['Items', 'Groups', 'Customers'],
-    }));
+    return Ok(
+      MigrationConnectionTest.fromJson(const {
+        'ok': true,
+        'table_count': 23,
+        'tables': ['Items', 'Groups', 'Customers'],
+      }),
+    );
   }
 
   @override
@@ -185,7 +188,13 @@ const _catalogJson = <String, Object?>{
       'system_key': 'aboghris_mssql',
       'display_name': 'AboGhris (SQL Server)',
       'required_transport': 'mssql',
-      'supported_entities': ['category', 'product', 'stock', 'customer', 'supplier'],
+      'supported_entities': [
+        'category',
+        'product',
+        'stock',
+        'customer',
+        'supplier',
+      ],
       'versions': ['aboghris-unknown'],
       'implemented': false,
     },

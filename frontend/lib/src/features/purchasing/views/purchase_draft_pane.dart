@@ -24,6 +24,7 @@ import '../../../shared/unit_options.dart';
 import '../../../shared/units.dart';
 import '../view_models/purchase_view_model.dart';
 import 'reprice_siblings_dialog.dart';
+import 'purchase_cost_warning_dialog.dart';
 
 class PurchaseDraftPane extends StatefulWidget {
   const PurchaseDraftPane({
@@ -188,7 +189,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       icon: viewModel.isSubmitting
           ? const SizedBox.square(
               dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: PointySpinner(strokeWidth: 2),
             )
           : const Icon(Icons.inventory_outlined),
       label: FittedBox(
@@ -209,7 +210,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       icon: viewModel.isSubmitting
           ? const SizedBox.square(
               dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: PointySpinner(strokeWidth: 2),
             )
           : const Icon(Icons.save_outlined),
       label: FittedBox(
@@ -266,9 +267,32 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
         );
       return;
     }
-    final result = await viewModel.submitDraft();
+    var result = await viewModel.submitDraft();
     if (!context.mounted) {
       return;
+    }
+
+    // The backend refused because a cost reads as a typo — the bread bought for
+    // 130 and entered as 130 *per loaf*. Show what it found and let the buyer
+    // decide: clearance stock and thin margins are real, so this asks rather
+    // than blocks. (A POS cash purchase gets no such offer.)
+    if (result is Error<PurchaseSubmission> &&
+        viewModel.costWarnings.isNotEmpty) {
+      final confirmed = await showPurchaseCostWarningDialog(
+        context,
+        warnings: viewModel.costWarnings,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      if (!confirmed) {
+        viewModel.clearCostWarnings();
+        return;
+      }
+      result = await viewModel.submitDraft(acknowledgeCostWarnings: true);
+      if (!context.mounted) {
+        return;
+      }
     }
 
     final message = switch (result) {
@@ -551,7 +575,10 @@ class _PurchaseDraftScrollContentState
 
     final digit = _draftDigitKeys[key];
     if (digit != null) {
-      final rollback = _scanBurstGuard.onDigit(_pendingQuantity, DateTime.now());
+      final rollback = _scanBurstGuard.onDigit(
+        _pendingQuantity,
+        DateTime.now(),
+      );
       if (rollback != null) {
         // A wedge is typing, not the buyer — roll the pending entry back to
         // its pre-burst value and swallow the keystroke. The scan itself is
@@ -570,7 +597,10 @@ class _PurchaseDraftScrollContentState
         key == LogicalKeyboardKey.numpadDecimal) {
       // Fractional entry (2.5 of anything) is the buyer's choice — allowed for
       // every product; at most one decimal point.
-      final rollback = _scanBurstGuard.onDigit(_pendingQuantity, DateTime.now());
+      final rollback = _scanBurstGuard.onDigit(
+        _pendingQuantity,
+        DateTime.now(),
+      );
       if (rollback != null) {
         if (_pendingQuantity != rollback) {
           setState(() => _pendingQuantity = rollback);
@@ -1353,7 +1383,9 @@ class _PurchaseDraftSettingsDialogState
     final extraDiscount =
         parseDecimal(_extraDiscountController.text.trim()) ?? 0;
     if (extraDiscount != widget.viewModel.extraDiscount) {
-      widget.viewModel.updateExtraDiscount(extraDiscount < 0 ? 0 : extraDiscount);
+      widget.viewModel.updateExtraDiscount(
+        extraDiscount < 0 ? 0 : extraDiscount,
+      );
     }
   }
 

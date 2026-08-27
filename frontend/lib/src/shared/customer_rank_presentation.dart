@@ -8,7 +8,11 @@ import 'design/design.dart';
 /// contacts list (filter chips + per-row badge) and the discount form (rank
 /// targeting picker) so a rank looks the same everywhere it appears.
 class RankStyle {
-  const RankStyle({required this.label, required this.color, required this.icon});
+  const RankStyle({
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
 
   final String label;
   final Color color;

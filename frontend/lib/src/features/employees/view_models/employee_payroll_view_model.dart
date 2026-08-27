@@ -77,9 +77,8 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     return null;
   }
 
-  List<EmployeeLoan> get pendingLoans => List.unmodifiable(
-    _loans.where((loan) => loan.status.canReview),
-  );
+  List<EmployeeLoan> get pendingLoans =>
+      List.unmodifiable(_loans.where((loan) => loan.status.canReview));
 
   Future<void> loadEmployees() async {
     _isLoadingEmployees = true;

@@ -141,30 +141,31 @@ void main() {
     expect(autoSend, isTrue);
   });
 
-  testWidgets('tapping an explainer opens the chat seeded with the card topic', (
-    tester,
-  ) async {
-    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
-    String? seed;
-    bool? autoSend;
-    await _pump(
-      tester,
-      user: _aiManager(),
-      digestJson: _digestJson(),
-      onOpenAiChat: (prompt, send) {
-        seed = prompt;
-        autoSend = send;
-      },
-    );
+  testWidgets(
+    'tapping an explainer opens the chat seeded with the card topic',
+    (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+      String? seed;
+      bool? autoSend;
+      await _pump(
+        tester,
+        user: _aiManager(),
+        digestJson: _digestJson(),
+        onOpenAiChat: (prompt, send) {
+          seed = prompt;
+          autoSend = send;
+        },
+      );
 
-    await tester.ensureVisible(find.text(_lowStockExplainer));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(_lowStockExplainer));
-    await tester.pump();
+      await tester.ensureVisible(find.text(_lowStockExplainer));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(_lowStockExplainer));
+      await tester.pump();
 
-    expect(seed, l10n.aiDigestElaborate(l10n.dashboardLowStockTitle));
-    expect(autoSend, isFalse);
-  });
+      expect(seed, l10n.aiDigestElaborate(l10n.dashboardLowStockTitle));
+      expect(autoSend, isFalse);
+    },
+  );
 
   testWidgets('shows no inline AI text when the digest is empty', (
     tester,

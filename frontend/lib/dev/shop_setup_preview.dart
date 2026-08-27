@@ -19,8 +19,9 @@ import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
 void main() => runApp(const _PreviewApp());
 
-ThemeMode _mode() =>
-    Uri.base.queryParameters['screen'] == 'dark' ? ThemeMode.dark : ThemeMode.light;
+ThemeMode _mode() => Uri.base.queryParameters['screen'] == 'dark'
+    ? ThemeMode.dark
+    : ThemeMode.light;
 
 class _PreviewApp extends StatelessWidget {
   const _PreviewApp();

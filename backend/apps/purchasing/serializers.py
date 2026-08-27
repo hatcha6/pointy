@@ -23,6 +23,7 @@ from apps.discounts.services import (
     allocate_discount_amount,
     rounding_metadata_payload,
 )
+from .cost_guard import block_thresholds, find_cost_anomalies, warn_thresholds
 from .models import (
     prime_supplier_balances,
     PurchaseLine,
@@ -516,6 +517,35 @@ class PurchaseOrderLandedCostEntrySerializer(serializers.ModelSerializer):
         if value < Decimal("0.00"):
             raise serializers.ValidationError("Amount cannot be negative.")
         return value
+
+
+def raise_cost_warnings(anomalies, *, blocking=False):
+    """Turn suspicious costs into one structured 400.
+
+    Shaped like ``raise_identity_conflicts``: a flat ``cost_warnings`` list the
+    app parses to mark the exact rows, plus per-line ``lines`` entries so any
+    plain DRF client still renders something useful. Each warning carries
+    ``blocking``, telling the client whether confirming is even on offer — a
+    cashier on the POS path has no override, and an app that offered one would
+    be lying about what happens next. It rides inside the warning rather than at
+    the top level because DRF wraps a bare scalar leaf in a list on its way out.
+    """
+    if not anomalies:
+        return
+
+    detail = {
+        "cost_warnings": [
+            anomaly.as_payload(blocking=blocking) for anomaly in anomalies
+        ],
+    }
+    rows: dict[int, dict] = {}
+    for anomaly in anomalies:
+        rows.setdefault(anomaly.index, {}).setdefault("unit_cost", []).append(
+            anomaly.message
+        )
+    if rows:
+        detail["lines"] = [rows.get(index, {}) for index in range(max(rows) + 1)]
+    raise serializers.ValidationError(detail)
 
 
 def money_string(value):
@@ -1355,6 +1385,14 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
 
 class PurchaseOrderSerializer(serializers.ModelSerializer):
     lines = PurchaseLineSerializer(many=True, allow_empty=False)
+    # Set by the purchasing screen after the buyer has seen the cost warnings
+    # and confirmed them. Never honoured on the POS cash-purchase path, which
+    # blocks outright — see apps.purchasing.cost_guard.
+    acknowledge_cost_warnings = serializers.BooleanField(
+        required=False,
+        default=False,
+        write_only=True,
+    )
     receipts = PurchaseReceiptSerializer(many=True, read_only=True)
     adjustments = PurchaseOrderAdjustmentSerializer(many=True, read_only=True)
     audit_events = PurchaseOrderAuditEventSerializer(many=True, read_only=True)
@@ -1429,6 +1467,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "status",
             "notes",
             "due_date",
+            "acknowledge_cost_warnings",
             "lines",
             "receipts",
             "adjustments",
@@ -1634,7 +1673,32 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
                         )
                     }
                 )
+        # Pop it here: it is an instruction to the validator, not a field on the
+        # order, and create/update forward **validated_data to the model.
+        acknowledged = attrs.pop("acknowledge_cost_warnings", False)
+        self._guard_costs(attrs.get("lines"), acknowledged=acknowledged)
         return attrs
+
+    def _guard_costs(self, lines_data, *, acknowledged):
+        """Refuse a cost that reads as a typo.
+
+        Two different jobs behind one check. On the purchasing screen a buyer
+        may confirm — clearance stock and thin margins are real. On the POS
+        cash-purchase path the operator is a cashier with no way to judge or
+        override the number, so the looser blocking thresholds apply and
+        acknowledgement is ignored. The path is decided here rather than after
+        validation so the 400 tells the app the truth about whether a confirm
+        button leads anywhere.
+        """
+        if not lines_data:
+            return
+        blocking = bool(self.context.get("pos_cash_purchase"))
+        thresholds = block_thresholds() if blocking else warn_thresholds()
+        if blocking or not acknowledged:
+            raise_cost_warnings(
+                find_cost_anomalies(lines_data, thresholds=thresholds),
+                blocking=blocking,
+            )
 
     def create(self, validated_data):
         lines_data = validated_data.pop("lines", [])

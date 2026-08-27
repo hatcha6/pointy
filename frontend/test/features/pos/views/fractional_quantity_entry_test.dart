@@ -25,41 +25,38 @@ void main() {
     productName: 'قلم حبر',
   );
 
-  testWidgets(
-    'quantity dialog accepts a fraction for a plain piece product '
-    'and uses generic quantity wording (not "weight")',
-    (tester) async {
-      double? entered;
-      await _pump(
-        tester,
-        Builder(
-          builder: (context) => ElevatedButton(
-            onPressed: () async {
-              entered = await showWeightEntrySheet(
-                context,
-                variant: pieceVariant,
-              );
-            },
-            child: const Text('open'),
-          ),
+  testWidgets('quantity dialog accepts a fraction for a plain piece product '
+      'and uses generic quantity wording (not "weight")', (tester) async {
+    double? entered;
+    await _pump(
+      tester,
+      Builder(
+        builder: (context) => ElevatedButton(
+          onPressed: () async {
+            entered = await showWeightEntrySheet(
+              context,
+              variant: pieceVariant,
+            );
+          },
+          child: const Text('open'),
         ),
-      );
+      ),
+    );
 
-      await tester.tap(find.text('open'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
 
-      // A plain piece product is not weighed: it shows "الكمية" (quantity), not
-      // the weight prompt.
-      expect(find.text('الكمية'), findsOneWidget);
-      expect(find.text('أدخل الوزن'), findsNothing);
+    // A plain piece product is not weighed: it shows "الكمية" (quantity), not
+    // the weight prompt.
+    expect(find.text('الكمية'), findsOneWidget);
+    expect(find.text('أدخل الوزن'), findsNothing);
 
-      await tester.enterText(find.byType(TextField), '2.5');
-      await tester.tap(find.byType(FilledButton));
-      await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '2.5');
+    await tester.tap(find.byType(FilledButton));
+    await tester.pumpAndSettle();
 
-      expect(entered, 2.5);
-    },
-  );
+    expect(entered, 2.5);
+  });
 
   testWidgets('UoM sheet accepts a fraction on a whole-number unit', (
     tester,

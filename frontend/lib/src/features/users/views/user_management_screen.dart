@@ -410,7 +410,10 @@ class _UserRowMenu extends StatelessWidget {
         ),
         PopupMenuItem(
           value: 'edit',
-          child: _MenuRow(icon: Icons.edit_outlined, label: l10n.userEditAction),
+          child: _MenuRow(
+            icon: Icons.edit_outlined,
+            label: l10n.userEditAction,
+          ),
         ),
         PopupMenuItem(
           value: 'permissions',
@@ -576,7 +579,9 @@ class _CreateUserFormState extends State<_CreateUserForm> {
                       TextFormField(
                         controller: _usernameController,
                         enabled: !widget.viewModel.isSaving,
-                        decoration: InputDecoration(labelText: l10n.usernameLabel),
+                        decoration: InputDecoration(
+                          labelText: l10n.usernameLabel,
+                        ),
                         validator: (value) =>
                             value == null || value.trim().isEmpty
                             ? l10n.requiredField
@@ -635,7 +640,7 @@ class _CreateUserFormState extends State<_CreateUserForm> {
                         icon: widget.viewModel.isSaving
                             ? const SizedBox.square(
                                 dimension: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: PointySpinner(strokeWidth: 2),
                               )
                             : const Icon(Icons.person_add_alt_1),
                         label: Text(l10n.createUserButton),
@@ -703,7 +708,9 @@ class _EditUserFormState extends State<_EditUserForm> {
   @override
   void initState() {
     super.initState();
-    _displayNameController = TextEditingController(text: widget.user.displayName);
+    _displayNameController = TextEditingController(
+      text: widget.user.displayName,
+    );
     _emailController = TextEditingController(text: widget.user.email);
     _role = widget.user.role;
     _isActive = widget.user.isActive;
@@ -831,7 +838,7 @@ class _EditUserFormState extends State<_EditUserForm> {
                         icon: widget.viewModel.isSaving
                             ? const SizedBox.square(
                                 dimension: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: PointySpinner(strokeWidth: 2),
                               )
                             : const Icon(Icons.check),
                         label: Text(l10n.saveButton),

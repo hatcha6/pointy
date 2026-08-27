@@ -11,6 +11,7 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/product_image_thumbnail.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Search/browse fallback for unlabeled goods. Returns the selected variant or
 /// null on dismiss. Service and made-to-order products (which carry no stock)
@@ -147,7 +148,7 @@ class _ItemSearchSheetState extends State<_ItemSearchSheet> {
     if (_isLoading && _results.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(32),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: PointySpinner()),
       );
     }
     if (_hasError) {

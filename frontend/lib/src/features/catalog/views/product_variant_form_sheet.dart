@@ -197,7 +197,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
                     icon: widget.viewModel.isSavingVariant
                         ? const SizedBox.square(
                             dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: PointySpinner(strokeWidth: 2),
                           )
                         : Icon(_isEditing ? Icons.save_outlined : Icons.add),
                     label: Text(

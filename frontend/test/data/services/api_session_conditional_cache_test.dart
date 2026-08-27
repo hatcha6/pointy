@@ -18,7 +18,9 @@ void main() {
           return http.Response('', 304, headers: {'etag': etag});
         }
         return http.Response(
-          jsonEncode({'results': ['v$version']}),
+          jsonEncode({
+            'results': ['v$version'],
+          }),
           200,
           headers: {'etag': etag},
         );

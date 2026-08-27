@@ -164,6 +164,9 @@ extension PosCheckoutActions on PosViewModel {
           ) ??
           Future<void>.value(),
     );
+    // Any +/- run still open belongs to the sale being rung up, not the next
+    // one: emit it before the checkout event so the order reads correctly.
+    _cartQuantityRuns.settleAll();
     final shouldPrintInvoice =
         _checkoutSettings?.autoPrintReceipts == true ||
         _printInvoiceAfterPayment;
@@ -181,7 +184,12 @@ extension PosCheckoutActions on PosViewModel {
         invoicePrinterConfig?.endpoint.usesThermalReceipt == true
         ? invoicePrinterConfig
         : null;
-
+    // Only a raw-thermal printer goes through the backend's print queue; a
+    // driver/PDF one is driven from here (see _printPaidInvoice) and never
+    // touches it. Say which, so the backend does not mint a queue row nothing
+    // will ever read — 24,264 of those accumulated in the field while every
+    // receipt printed perfectly by the local route. Left null when we are not
+    // printing at all, so the backend keeps its own agent-based judgement.
     SaleCheckoutDraft buildCheckoutDraft(PrinterConfig? printerConfig) {
       return SaleCheckoutDraft.fromCart(
         cart: cartSnapshot,
@@ -192,6 +200,14 @@ extension PosCheckoutActions on PosViewModel {
         saleType: saleType,
         validUntil: validUntil,
         reserveStock: reserveStock,
+        // Derived from the config being sent, not from whatever resolves right
+        // now, so a retry carries the first attempt's routing like the rest of
+        // the body does.
+        receiptDelivery: !shouldPrintInvoice
+            ? null
+            : printerConfig != null
+            ? ReceiptDelivery.agent
+            : ReceiptDelivery.local,
       );
     }
 

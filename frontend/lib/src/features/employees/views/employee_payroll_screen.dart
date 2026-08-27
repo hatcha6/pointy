@@ -188,8 +188,7 @@ class _PayrollHomeTab extends StatelessWidget {
           attendanceViewModel: attendanceViewModel,
           capabilities: capabilities,
         ),
-        if (pendingLoans.isNotEmpty &&
-            capabilities.canManageEmployeeLoans) ...[
+        if (pendingLoans.isNotEmpty && capabilities.canManageEmployeeLoans) ...[
           SizedBox(height: spacing.md),
           _PendingLoansCard(viewModel: viewModel, loans: pendingLoans),
         ],
@@ -644,7 +643,10 @@ class _PendingLoansCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.notifications_active_outlined, color: colors.warning),
+                Icon(
+                  Icons.notifications_active_outlined,
+                  color: colors.warning,
+                ),
                 SizedBox(width: spacing.sm),
                 Expanded(
                   child: Text(

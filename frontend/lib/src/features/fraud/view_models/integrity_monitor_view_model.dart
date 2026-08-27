@@ -7,8 +7,10 @@ import '../../../data/models/fraud_finding.dart';
 import '../../../data/repositories/fraud_repository.dart';
 
 class IntegrityMonitorViewModel extends ChangeNotifier {
-  IntegrityMonitorViewModel(this._repository, {AnalyticsEngine? analyticsEngine})
-    : _analyticsEngine = analyticsEngine {
+  IntegrityMonitorViewModel(
+    this._repository, {
+    AnalyticsEngine? analyticsEngine,
+  }) : _analyticsEngine = analyticsEngine {
     loadFindings();
   }
 

@@ -23,7 +23,8 @@ sealed class AiDeepLink {
     // and `pointy:///product/42` all resolve. The conventional `app` host is just
     // a placeholder and is dropped.
     final parts = <String>[
-      if (uri.host.isNotEmpty && uri.host.toLowerCase() != 'app') uri.host.toLowerCase(),
+      if (uri.host.isNotEmpty && uri.host.toLowerCase() != 'app')
+        uri.host.toLowerCase(),
       for (final segment in uri.pathSegments)
         if (segment.trim().isNotEmpty) segment.trim(),
     ];
@@ -87,7 +88,9 @@ class AiChatLink extends AiDeepLink {
 
   @override
   bool operator ==(Object other) =>
-      other is AiChatLink && other.prompt == prompt && other.autoSend == autoSend;
+      other is AiChatLink &&
+      other.prompt == prompt &&
+      other.autoSend == autoSend;
 
   @override
   int get hashCode => Object.hash(prompt, autoSend);
@@ -106,7 +109,8 @@ class AiEntityLink extends AiDeepLink {
   final int id;
 
   @override
-  bool operator ==(Object other) => other is AiEntityLink && other.type == type && other.id == id;
+  bool operator ==(Object other) =>
+      other is AiEntityLink && other.type == type && other.id == id;
 
   @override
   int get hashCode => Object.hash(type, id);

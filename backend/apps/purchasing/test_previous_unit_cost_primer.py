@@ -64,9 +64,17 @@ class PreviousUnitCostPrimerTests(TestCase):
             self.variants.append(product.default_variant)
 
     def _order(self, lines, *, status=None):
+        # The history below deliberately jumps 2.00 -> 99.00 to prove a
+        # cancelled order stays invisible to both lookup paths. That is the
+        # exact shape apps.purchasing.cost_guard refuses, so this fixture
+        # confirms past it the way the purchasing screen's buyer would.
         response = self.client.post(
             reverse("purchaseorder-list"),
-            {"supplier": self.supplier.pk, "lines": lines},
+            {
+                "supplier": self.supplier.pk,
+                "lines": lines,
+                "acknowledge_cost_warnings": True,
+            },
             format="json",
         )
         self.assertEqual(response.status_code, 201, response.data)

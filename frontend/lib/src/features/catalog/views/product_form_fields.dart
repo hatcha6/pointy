@@ -8,6 +8,7 @@ import '../../../shared/product_category_picker.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/variant_option_value_picker.dart';
 import 'variant_identity_watcher.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 class ProductParentFormFields extends StatelessWidget {
   const ProductParentFormFields({
@@ -342,7 +343,7 @@ class IdentityStatusIcon extends StatelessWidget {
         padding: EdgeInsets.all(14),
         child: SizedBox.square(
           dimension: 16,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: PointySpinner(strokeWidth: 2),
         ),
       ),
       IdentityStatus.free => Icon(

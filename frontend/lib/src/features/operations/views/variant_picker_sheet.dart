@@ -22,10 +22,8 @@ Future<ProductVariant?> showVariantPickerSheet(
 }) {
   return showAdaptiveModalBottomSheet<ProductVariant>(
     context: context,
-    builder: (sheetContext) => _VariantPickerSheet(
-      catalogRepository: catalogRepository,
-      title: title,
-    ),
+    builder: (sheetContext) =>
+        _VariantPickerSheet(catalogRepository: catalogRepository, title: title),
   );
 }
 
@@ -124,7 +122,7 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
               child: _isLoading
                   ? const Padding(
                       padding: EdgeInsets.all(24),
-                      child: Center(child: CircularProgressIndicator()),
+                      child: Center(child: PointySpinner()),
                     )
                   : _hasError
                   ? PointyEmptyState(

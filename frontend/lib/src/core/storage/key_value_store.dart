@@ -76,6 +76,8 @@ class MemoryKeyValueStore implements KeyValueStore {
   }
 
   @override
-  Future<Set<String>> getKeys() async =>
-      <String>{..._strings.keys, ..._lists.keys};
+  Future<Set<String>> getKeys() async => <String>{
+    ..._strings.keys,
+    ..._lists.keys,
+  };
 }

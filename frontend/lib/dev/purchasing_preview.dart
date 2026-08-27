@@ -346,8 +346,20 @@ PurchaseOrder _order({
 }
 
 final List<PurchaseOrderLine> _sampleLines = [
-  _line(id: 1, name: 'قهوة عربية محمصة', sku: 'COF-001', quantity: 24, unitCost: 18.5),
-  _line(id: 2, name: 'أكواب ورقية مزدوجة', sku: 'CUP-220', quantity: 50, unitCost: 2.25),
+  _line(
+    id: 1,
+    name: 'قهوة عربية محمصة',
+    sku: 'COF-001',
+    quantity: 24,
+    unitCost: 18.5,
+  ),
+  _line(
+    id: 2,
+    name: 'أكواب ورقية مزدوجة',
+    sku: 'CUP-220',
+    quantity: 50,
+    unitCost: 2.25,
+  ),
   _line(id: 3, name: 'حليب مكثف', sku: 'MLK-010', quantity: 12, unitCost: 6.75),
 ];
 

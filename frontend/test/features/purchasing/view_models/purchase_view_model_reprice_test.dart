@@ -25,28 +25,34 @@ void main() {
     expect(catalog.loadedProductId, 5);
   });
 
-  test('loadPricingSuggestion returns the suggested price and markup', () async {
-    final viewModel = PurchaseViewModel(
-      _FakeCatalogRepository(),
-      _FakePurchaseRepository(suggestedPrice: 13, markupPercent: 30),
-    );
+  test(
+    'loadPricingSuggestion returns the suggested price and markup',
+    () async {
+      final viewModel = PurchaseViewModel(
+        _FakeCatalogRepository(),
+        _FakePurchaseRepository(suggestedPrice: 13, markupPercent: 30),
+      );
 
-    final suggestion = await viewModel.loadPricingSuggestion(10);
+      final suggestion = await viewModel.loadPricingSuggestion(10);
 
-    expect(suggestion.suggestedPrice, 13);
-    expect(suggestion.markupPercent, 30);
-  });
+      expect(suggestion.suggestedPrice, 13);
+      expect(suggestion.markupPercent, 30);
+    },
+  );
 
-  test('repriceProductVariants forwards the changed prices and succeeds', () async {
-    final catalog = _FakeCatalogRepository(siblings: siblings);
-    final viewModel = PurchaseViewModel(catalog, _FakePurchaseRepository());
+  test(
+    'repriceProductVariants forwards the changed prices and succeeds',
+    () async {
+      final catalog = _FakeCatalogRepository(siblings: siblings);
+      final viewModel = PurchaseViewModel(catalog, _FakePurchaseRepository());
 
-    final ok = await viewModel.repriceProductVariants(5, {1: 2.5, 2: 3.5});
+      final ok = await viewModel.repriceProductVariants(5, {1: 2.5, 2: 3.5});
 
-    expect(ok, isTrue);
-    expect(catalog.repricedProductId, 5);
-    expect(catalog.repricedPrices, {1: 2.5, 2: 3.5});
-  });
+      expect(ok, isTrue);
+      expect(catalog.repricedProductId, 5);
+      expect(catalog.repricedPrices, {1: 2.5, 2: 3.5});
+    },
+  );
 
   test('repriceProductVariants with no changes is a no-op success', () async {
     final catalog = _FakeCatalogRepository(siblings: siblings);
@@ -55,7 +61,11 @@ void main() {
     final ok = await viewModel.repriceProductVariants(5, const {});
 
     expect(ok, isTrue);
-    expect(catalog.repricedPrices, isNull, reason: 'setVariantPrices not called');
+    expect(
+      catalog.repricedPrices,
+      isNull,
+      reason: 'setVariantPrices not called',
+    );
   });
 }
 

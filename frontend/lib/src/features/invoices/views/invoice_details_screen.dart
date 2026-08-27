@@ -93,8 +93,9 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
               if ((order.customerPhone ?? '').trim().isNotEmpty)
                 IconButton(
                   tooltip: l10n.invoiceSendSmsTooltip,
-                  onPressed:
-                      _viewModel.isLoading ? null : () => _sendSms(order),
+                  onPressed: _viewModel.isLoading
+                      ? null
+                      : () => _sendSms(order),
                   icon: const Icon(Icons.sms_outlined),
                 ),
               IconButton(
@@ -298,8 +299,8 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
   /// Opens the per-invoice payment dialog (cards allowed) and records the
   /// payment. Returns true on success so the shared surface can confirm.
   Future<bool> _recordPayment(SaleOrder order) async {
-    final trustedTerminalIds =
-        await widget.shopSettingsRepository.loadTrustedCardTerminalIds();
+    final trustedTerminalIds = await widget.shopSettingsRepository
+        .loadTrustedCardTerminalIds();
     if (!mounted) {
       return false;
     }

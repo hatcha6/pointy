@@ -333,7 +333,7 @@ Widget _primaryActionButton(BuildContext context, _PoAction action) {
   final icon = action.busy
       ? const SizedBox.square(
           dimension: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: PointySpinner(strokeWidth: 2),
         )
       : Icon(action.icon);
   final label = Text(action.label);

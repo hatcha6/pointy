@@ -201,8 +201,7 @@ BusinessAlertType _typeFromCode(String code) {
   return switch (code) {
     'inventory.out_of_stock' => BusinessAlertType.outOfStock,
     'inventory.low_stock' => BusinessAlertType.lowStock,
-    'inventory.position_untrusted' =>
-      BusinessAlertType.stockPositionUntrusted,
+    'inventory.position_untrusted' => BusinessAlertType.stockPositionUntrusted,
     'inventory.expiring_batch' => BusinessAlertType.expiringStock,
     'purchasing.overdue_order' => BusinessAlertType.overduePurchases,
     'printing.failed_job' => BusinessAlertType.printFailures,

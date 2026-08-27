@@ -13,6 +13,7 @@ import '../../../data/repositories/purchase_repository.dart';
 import '../../../shared/navigation/app_navigation.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchasing_screen.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Hosts an isolated editing session for a single **draft** purchase order.
 ///
@@ -124,7 +125,7 @@ class _PurchaseOrderEditScreenState extends State<PurchaseOrderEditScreen> {
       ),
       body: Center(
         child: switch (_state) {
-          _EditLoadState.loading => const CircularProgressIndicator(),
+          _EditLoadState.loading => const PointySpinner(),
           _EditLoadState.notEditable => _EditLoadMessage(
             message: l10n.editPurchaseOrderNotEditableError,
           ),

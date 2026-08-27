@@ -13,8 +13,10 @@ void main() {
     expect(guard.onDigit('1', now), isNull);
     now = now.add(const Duration(milliseconds: 250));
     expect(guard.onDigit('12', now), isNull);
-    expect(guard.shouldSwallowCommit(now.add(const Duration(milliseconds: 50))),
-        isFalse);
+    expect(
+      guard.shouldSwallowCommit(now.add(const Duration(milliseconds: 50))),
+      isFalse,
+    );
   });
 
   test('a scanner burst rolls pending entry back to its pre-burst value', () {

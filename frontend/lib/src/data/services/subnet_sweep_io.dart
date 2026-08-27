@@ -102,10 +102,7 @@ Future<String?> _probeHost(
       await response.drain<void>();
       return null;
     }
-    final body = await response
-        .transform(utf8.decoder)
-        .join()
-        .timeout(timeout);
+    final body = await response.transform(utf8.decoder).join().timeout(timeout);
     final decoded = jsonDecode(body);
     if (decoded is! Map) {
       return null;

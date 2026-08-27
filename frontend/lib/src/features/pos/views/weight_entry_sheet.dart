@@ -80,7 +80,9 @@ class _WeightEntryDialogState extends State<_WeightEntryDialog> {
                   : l10n.posUnitQuantityLabel,
               suffixText: unitLabel(l10n, widget.variant.unit),
               errorText: _showError
-                  ? (isWeighed ? l10n.posWeightInvalid : l10n.posQuantityInvalid)
+                  ? (isWeighed
+                        ? l10n.posWeightInvalid
+                        : l10n.posQuantityInvalid)
                   : null,
             ),
             onChanged: (_) => setState(() => _showError = false),

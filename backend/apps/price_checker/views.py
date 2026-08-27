@@ -1,3 +1,7 @@
+from datetime import timedelta
+
+from django.db.models import Count, Max
+from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -97,10 +101,45 @@ class PriceCheckEventViewSet(
     permission_map = {
         "list": ("price_checker.view_pricecheckevent",),
         "retrieve": ("price_checker.view_pricecheckevent",),
+        "unmatched": ("price_checker.view_pricecheckevent",),
     }
     filterset_fields = ("result", "device", "device_identifier", "barcode")
     search_fields = ("barcode", "product_name", "device_identifier")
     ordering_fields = ("created_at", "latency_ms")
+
+    @action(detail=False, methods=["get"], url_path="unmatched")
+    def unmatched(self, request):
+        """The codes customers scanned that the catalogue could not answer.
+
+        One kiosk scan in eight came back not_found — a customer standing in
+        the shop holding something it sells, told nothing. Individually those
+        are 816 audit rows nobody reads; grouped, they are a short worklist,
+        because the same few unlabelled products get picked up over and over.
+
+        Ordered by how often each code was scanned, so the shopkeeper fixes the
+        product that is costing the most answers first.
+        """
+        try:
+            days = max(1, min(int(request.query_params.get("days", 30)), 365))
+        except (TypeError, ValueError):
+            days = 30
+        try:
+            limit = max(1, min(int(request.query_params.get("limit", 50)), 500))
+        except (TypeError, ValueError):
+            limit = 50
+
+        since = timezone.now() - timedelta(days=days)
+        rows = (
+            PriceCheckEvent.objects.filter(
+                result=PriceCheckEvent.Result.NOT_FOUND,
+                created_at__gte=since,
+                barcode__gt="",
+            )
+            .values("barcode")
+            .annotate(scans=Count("id"), last_scanned_at=Max("created_at"))
+            .order_by("-scans", "-last_scanned_at")[:limit]
+        )
+        return Response({"days": days, "results": list(rows)})
 
 
 @api_view(["GET", "POST"])

@@ -7,6 +7,7 @@ import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../view_models/variant_generation.dart';
 import 'variant_identity_watcher.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Lets the user define a product's options (e.g. Color, Size) by **creating a
 /// new option inline** as the primary action. Previously created options can
@@ -58,7 +59,7 @@ class VariantOptionField extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (isLoading) const LinearProgressIndicator(),
+              if (isLoading) const PointyProgressBar(),
               if (hasError)
                 Align(
                   alignment: AlignmentDirectional.centerStart,

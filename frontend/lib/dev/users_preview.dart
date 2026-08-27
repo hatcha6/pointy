@@ -195,8 +195,8 @@ class _FakeUserRepository extends UserRepository {
     if (search.trim().isNotEmpty) {
       final term = search.trim().toLowerCase();
       rows = rows.where((u) {
-        final hay =
-            '${u['username']} ${u['first_name']} ${u['email']}'.toLowerCase();
+        final hay = '${u['username']} ${u['first_name']} ${u['email']}'
+            .toLowerCase();
         return hay.contains(term);
       });
     }
@@ -261,8 +261,9 @@ class _FakeUserRepository extends UserRepository {
       map['extra_permissions'] = extras;
       map['extra_permission_count'] = extras.length;
     }
-    final extras = ((map['extra_permissions'] as List?) ?? const [])
-        .map((e) => e.toString());
+    final extras = ((map['extra_permissions'] as List?) ?? const []).map(
+      (e) => e.toString(),
+    );
     map['effective_permissions'] = {...roleCodes, ...extras}.toList();
     return Ok(PosUser.fromJson(map));
   }

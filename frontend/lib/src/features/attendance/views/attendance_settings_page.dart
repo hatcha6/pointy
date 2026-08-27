@@ -123,8 +123,7 @@ class _AttendanceSettingsPageState extends State<AttendanceSettingsPage> {
             actions: [
               IconButton(
                 tooltip: l10n.attendanceSyncNowButton,
-                onPressed:
-                    viewModel.isSyncing || !viewModel.isEnabled
+                onPressed: viewModel.isSyncing || !viewModel.isEnabled
                     ? null
                     : () => _syncNow(context),
                 icon: const Icon(Icons.sync),
@@ -515,7 +514,9 @@ class _AttendanceSettingsPageState extends State<AttendanceSettingsPage> {
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          saved ? l10n.attendanceSettingsSaved : l10n.attendanceSettingsSaveError,
+          saved
+              ? l10n.attendanceSettingsSaved
+              : l10n.attendanceSettingsSaveError,
         ),
       ),
     );
@@ -619,7 +620,7 @@ class _ActionSpinner extends StatelessWidget {
   Widget build(BuildContext context) {
     return const SizedBox.square(
       dimension: 18,
-      child: CircularProgressIndicator(strokeWidth: 2),
+      child: PointySpinner(strokeWidth: 2),
     );
   }
 }

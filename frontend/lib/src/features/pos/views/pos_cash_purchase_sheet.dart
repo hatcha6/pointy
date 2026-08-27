@@ -23,6 +23,8 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/unit_options.dart';
 import 'pos_variant_picker_sheet.dart';
+import '../../../data/models/purchase_cost_warning.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Opens the POS quick cash-purchase sheet. Returns the recorded submission,
 /// or null when dismissed.
@@ -349,6 +351,17 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
   }
 
   String _describeSubmitError(AppLocalizations l10n, Exception exception) {
+    // A refused cost comes back with the two numbers that make the mistake
+    // obvious — "130.00 for something that sells for 1.00". Show that sentence
+    // rather than a generic failure, and offer no way past it: this sheet is
+    // used by cashiers, who cannot judge the number and cannot override it.
+    final costWarnings = purchaseCostWarningsFromException(exception);
+    if (costWarnings.isNotEmpty) {
+      return costWarnings
+          .map((warning) => warning.message)
+          .where((message) => message.isNotEmpty)
+          .join('\n');
+    }
     if (exception is PosApiException) {
       final detail = exception.responseBody;
       if (detail.contains('register session')) {
@@ -470,7 +483,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
                     padding: EdgeInsets.all(12),
                     child: SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     ),
                   )
                 : null,
@@ -538,7 +551,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
                     padding: EdgeInsets.all(12),
                     child: SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     ),
                   )
                 : null,
@@ -667,7 +680,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
           icon: _submitting
               ? const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : const Icon(Icons.point_of_sale_outlined),
           label: Text(

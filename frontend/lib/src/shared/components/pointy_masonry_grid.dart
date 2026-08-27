@@ -56,9 +56,7 @@ class PointyMasonryGrid extends StatelessWidget {
       // one layer — without this, one tile repainting (an animation, a hover, a
       // data refresh) re-rasters the whole grid. Layout is unaffected; only the
       // raster is scoped to the tile that actually changed.
-      children: [
-        for (final child in children) RepaintBoundary(child: child),
-      ],
+      children: [for (final child in children) RepaintBoundary(child: child)],
     );
   }
 }

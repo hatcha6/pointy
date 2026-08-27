@@ -12,7 +12,9 @@ bool canSmartReorder(
   AppNavigation navigation,
   AuthorizationCapabilities capabilities,
 ) {
-  return navigation.isDestinationAvailable(AppNavigationDestination.aiAssistant) &&
+  return navigation.isDestinationAvailable(
+        AppNavigationDestination.aiAssistant,
+      ) &&
       capabilities.canCreatePurchaseOrder;
 }
 

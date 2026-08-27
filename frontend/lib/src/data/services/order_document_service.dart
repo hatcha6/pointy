@@ -1633,10 +1633,7 @@ class _ReceiptFrame {
       children.add(
         pw.Text(
           note,
-          style: const pw.TextStyle(
-            fontSize: 8,
-            color: _ink,
-          ),
+          style: const pw.TextStyle(fontSize: 8, color: _ink),
           textAlign: pw.TextAlign.center,
         ),
       );
@@ -1746,10 +1743,7 @@ class _ReceiptFrame {
     for (final line in template.recipientLines.skip(1)) {
       widgets.add(pw.SizedBox(height: 1));
       widgets.add(
-        pw.Text(
-          line,
-          style: const pw.TextStyle(fontSize: 8, color: _ink),
-        ),
+        pw.Text(line, style: const pw.TextStyle(fontSize: 8, color: _ink)),
       );
     }
     return widgets;
@@ -1921,10 +1915,7 @@ class _ReceiptFrame {
           pw.SizedBox(height: 2),
           pw.Text(
             labels.scanOnlineInvoice,
-            style: const pw.TextStyle(
-              fontSize: 8,
-              color: _ink,
-            ),
+            style: const pw.TextStyle(fontSize: 8, color: _ink),
             textAlign: pw.TextAlign.center,
           ),
         ],

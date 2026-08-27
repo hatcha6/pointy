@@ -228,7 +228,10 @@ class BarcodeLabelCommandEncoder {
     required PrinterEndpoint endpoint,
   }) async {
     final profile = await CapabilityProfile.load();
-    final generator = Generator(_escPosPaperSize(endpoint.paperWidthMm), profile);
+    final generator = Generator(
+      _escPosPaperSize(endpoint.paperWidthMm),
+      profile,
+    );
     final codeTable = endpoint.codeTable.trim().isEmpty
         ? 'CP864'
         : endpoint.codeTable.trim();

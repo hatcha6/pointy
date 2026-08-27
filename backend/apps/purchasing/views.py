@@ -774,7 +774,11 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         )
 
     def _pos_cash_purchase(self, request):
+        # Tells the serializer which cost rules apply: this path blocks an
+        # implausible cost outright instead of offering a confirmation the
+        # cashier could not act on anyway.
         serializer = self.get_serializer(data=request.data)
+        serializer.context["pos_cash_purchase"] = True
         serializer.is_valid(raise_exception=True)
         purchase_order = create_pos_cash_purchase(
             request=request,

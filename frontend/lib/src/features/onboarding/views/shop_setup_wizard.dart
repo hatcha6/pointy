@@ -96,7 +96,9 @@ class _ShopSetupWizardState extends State<ShopSetupWizard> {
             padding: spacing.pagePadding,
             children: [
               Text(
-                _step == 0 ? l10n.shopSetupPickTypeTitle : l10n.shopSetupTuneTitle,
+                _step == 0
+                    ? l10n.shopSetupPickTypeTitle
+                    : l10n.shopSetupTuneTitle,
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               SizedBox(height: spacing.xs),
@@ -155,7 +157,7 @@ class _ShopSetupWizardState extends State<ShopSetupWizard> {
                       icon: _isSubmitting
                           ? const SizedBox.square(
                               dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: PointySpinner(strokeWidth: 2),
                             )
                           : const Icon(Icons.check),
                       label: Text(l10n.shopSetupFinish),

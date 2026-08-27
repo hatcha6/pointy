@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import '../../core/app_version.dart';
 
 typedef ApiPerformanceRecorder =
     void Function(ApiRequestPerformance performance);
@@ -218,6 +219,7 @@ class PosApiSession {
     String path, {
     Map<String, String>? query,
     bool conditionalCache = false,
+    Duration? timeout,
   }) {
     final key =
         '${conditionalCache ? 'c' : 'p'}:${uri(path, queryParameters: query)}';
@@ -226,8 +228,13 @@ class PosApiSession {
       return pending;
     }
     late final Future<http.Response> future;
-    future = _getOnce(path, query: query, conditionalCache: conditionalCache)
-        .whenComplete(() {
+    future =
+        _getOnce(
+          path,
+          query: query,
+          conditionalCache: conditionalCache,
+          timeout: timeout,
+        ).whenComplete(() {
           // Evict only our own entry: a mutation may have cleared the map and
           // a fresh identical GET may already be registered under this key.
           if (identical(_inFlightGets[key], future)) {
@@ -242,11 +249,13 @@ class PosApiSession {
     String path, {
     Map<String, String>? query,
     bool conditionalCache = false,
+    Duration? timeout,
   }) async {
     if (!conditionalCache) {
       return _send(
         method: 'GET',
         path: path,
+        timeout: timeout,
         request: () =>
             client.get(uri(path, queryParameters: query), headers: headers()),
       );
@@ -259,6 +268,7 @@ class PosApiSession {
     final response = await _send(
       method: 'GET',
       path: path,
+      timeout: timeout,
       request: () {
         final requestHeaders = headers();
         if (cached != null) {
@@ -490,6 +500,26 @@ class PosApiSession {
     );
   }
 
+  /// Identifies this install on every request, authenticated or not.
+  ///
+  /// Backend telemetry used to take the device from the request's session, so a
+  /// rejected request recorded nothing at all — which is why 5.1M unauthenticated
+  /// ingest calls in the field could not be traced to a machine. Set once at
+  /// startup from the analytics installation id.
+  String _deviceId = '';
+  String _clientPlatform = '';
+  String _appVersion = '';
+
+  void describeClient({
+    required String deviceId,
+    required String platform,
+    String appVersion = kAppVersion,
+  }) {
+    _deviceId = deviceId.trim();
+    _clientPlatform = platform.trim();
+    _appVersion = appVersion.trim();
+  }
+
   Map<String, String> headers({
     bool includeCsrf = false,
     String? idempotencyKey,
@@ -497,6 +527,9 @@ class PosApiSession {
     final normalizedIdempotencyKey = idempotencyKey?.trim() ?? '';
     return {
       'Content-Type': 'application/json',
+      if (_deviceId.isNotEmpty) 'X-Pointy-Device-Id': _deviceId,
+      if (_clientPlatform.isNotEmpty) 'X-Pointy-Platform': _clientPlatform,
+      if (_appVersion.isNotEmpty) 'X-Pointy-App-Version': _appVersion,
       if (_cookies.isNotEmpty)
         'Cookie': _cookies.entries
             .map((entry) => '${entry.key}=${entry.value}')

@@ -3,18 +3,21 @@ import 'package:pointy_frontend/src/data/models/ai_chat.dart';
 
 void main() {
   group('AiMessage streaming notifications', () {
-    test('appendContent mutates in place and notifies once per non-empty delta', () {
-      final message = AiMessage(role: AiMessageRole.assistant, content: '');
-      var notifications = 0;
-      message.addListener(() => notifications++);
+    test(
+      'appendContent mutates in place and notifies once per non-empty delta',
+      () {
+        final message = AiMessage(role: AiMessageRole.assistant, content: '');
+        var notifications = 0;
+        message.addListener(() => notifications++);
 
-      message.appendContent('Hel');
-      message.appendContent('lo');
-      message.appendContent(''); // empty delta is a no-op (no rebuild)
+        message.appendContent('Hel');
+        message.appendContent('lo');
+        message.appendContent(''); // empty delta is a no-op (no rebuild)
 
-      expect(message.content, 'Hello');
-      expect(notifications, 2);
-    });
+        expect(message.content, 'Hello');
+        expect(notifications, 2);
+      },
+    );
 
     test('appendReasoning accumulates separately and notifies', () {
       final message = AiMessage(role: AiMessageRole.assistant, content: '');
@@ -34,7 +37,9 @@ void main() {
       var notifications = 0;
       message.addListener(() => notifications++);
 
-      message.startToolRun(AiToolRun(name: 'query_resource', resource: 'orders'));
+      message.startToolRun(
+        AiToolRun(name: 'query_resource', resource: 'orders'),
+      );
       message.finishToolRun(
         name: 'query_resource',
         resource: 'orders',
@@ -54,21 +59,24 @@ void main() {
       expect(notifications, 2);
     });
 
-    test('markStreamingComplete flips the flag and notifies only when streaming', () {
-      final message = AiMessage(
-        role: AiMessageRole.assistant,
-        content: 'done',
-        isStreaming: true,
-      );
-      var notifications = 0;
-      message.addListener(() => notifications++);
+    test(
+      'markStreamingComplete flips the flag and notifies only when streaming',
+      () {
+        final message = AiMessage(
+          role: AiMessageRole.assistant,
+          content: 'done',
+          isStreaming: true,
+        );
+        var notifications = 0;
+        message.addListener(() => notifications++);
 
-      message.markStreamingComplete();
-      message.markStreamingComplete(); // already complete — no second notify
+        message.markStreamingComplete();
+        message.markStreamingComplete(); // already complete — no second notify
 
-      expect(message.isStreaming, isFalse);
-      expect(notifications, 1);
-    });
+        expect(message.isStreaming, isFalse);
+        expect(notifications, 1);
+      },
+    );
   });
 
   group('AiQuestion parsing', () {
@@ -100,46 +108,52 @@ void main() {
       expect(question.unit, 'كجم');
     });
 
-    test('an unknown server type degrades to unknown (rendered as free text)', () {
-      final question = AiQuestion.fromJson({
-        'id': 'q1',
-        'type': 'star_rating',
-        'prompt': '?',
-      });
-      expect(question.type, AiQuestionType.unknown);
-      expect(aiQuestionTypeWire(question.type), 'free_text');
-      expect(question.isRequired, isTrue); // defaults to required
-    });
+    test(
+      'an unknown server type degrades to unknown (rendered as free text)',
+      () {
+        final question = AiQuestion.fromJson({
+          'id': 'q1',
+          'type': 'star_rating',
+          'prompt': '?',
+        });
+        expect(question.type, AiQuestionType.unknown);
+        expect(aiQuestionTypeWire(question.type), 'free_text');
+        expect(question.isRequired, isTrue); // defaults to required
+      },
+    );
 
-    test('AiPendingQuestion.fromParts rejects missing id or empty questions', () {
-      expect(
-        AiPendingQuestion.fromParts(
-          toolCallId: null,
-          messageId: 1,
-          questionsRaw: [
-            {'id': 'q1', 'type': 'free_text', 'prompt': 'x'},
-          ],
-        ),
-        isNull,
-      );
-      expect(
-        AiPendingQuestion.fromParts(
+    test(
+      'AiPendingQuestion.fromParts rejects missing id or empty questions',
+      () {
+        expect(
+          AiPendingQuestion.fromParts(
+            toolCallId: null,
+            messageId: 1,
+            questionsRaw: [
+              {'id': 'q1', 'type': 'free_text', 'prompt': 'x'},
+            ],
+          ),
+          isNull,
+        );
+        expect(
+          AiPendingQuestion.fromParts(
+            toolCallId: 'c1',
+            messageId: 1,
+            questionsRaw: const [],
+          ),
+          isNull,
+        );
+        final ok = AiPendingQuestion.fromParts(
           toolCallId: 'c1',
-          messageId: 1,
-          questionsRaw: const [],
-        ),
-        isNull,
-      );
-      final ok = AiPendingQuestion.fromParts(
-        toolCallId: 'c1',
-        messageId: 7,
-        questionsRaw: [
-          {'id': 'q1', 'type': 'confirm', 'prompt': 'متابعة؟'},
-        ],
-      );
-      expect(ok, isNotNull);
-      expect(ok!.questions.single.type, AiQuestionType.confirm);
-    });
+          messageId: 7,
+          questionsRaw: [
+            {'id': 'q1', 'type': 'confirm', 'prompt': 'متابعة؟'},
+          ],
+        );
+        expect(ok, isNotNull);
+        expect(ok!.questions.single.type, AiQuestionType.confirm);
+      },
+    );
 
     test('AiAnswer.toJson carries the right shape per answer kind', () {
       final select = const AiAnswer(
@@ -238,7 +252,10 @@ void main() {
     });
 
     test('round-trips the wire name and coerces a numeric config value', () {
-      expect(aiQuestionTypeWire(AiQuestionType.productPicker), 'product_picker');
+      expect(
+        aiQuestionTypeWire(AiQuestionType.productPicker),
+        'product_picker',
+      );
       final question = AiQuestion.fromJson({
         'id': 'l',
         'type': 'product_picker',
@@ -281,7 +298,10 @@ void main() {
       expect(message.pendingQuestion, isNotNull);
       expect(message.pendingQuestion!.questions.single.prompt, 'اختر');
       expect(message.submittedAnswers, isNull);
-      expect(message.hasPendingQuestion, isTrue); // still answerable after reload
+      expect(
+        message.hasPendingQuestion,
+        isTrue,
+      ); // still answerable after reload
     });
 
     test('an answered turn rehydrates a read-only recap (not pending)', () {

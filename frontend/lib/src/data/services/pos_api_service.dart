@@ -114,6 +114,7 @@ import 'sales_channel_api_client.dart';
 import 'shop_settings_api_client.dart';
 import 'stock_count_api_client.dart';
 import 'user_api_client.dart';
+import '../../core/app_version.dart';
 
 export 'api_session.dart' show PosApiException;
 
@@ -165,6 +166,21 @@ class PosApiService {
   bool get usesRelay => _session.usesRelay;
 
   late final PosApiSession _session;
+
+  /// Stamp this install's identity on every outgoing request so the backend can
+  /// name the device behind one it rejects.
+  void describeClient({
+    required String deviceId,
+    required String platform,
+    String appVersion = kAppVersion,
+  }) {
+    _session.describeClient(
+      deviceId: deviceId,
+      platform: platform,
+      appVersion: appVersion,
+    );
+  }
+
   late final AttendanceApiClient _attendance;
   late final MigrationApiClient _migration;
   late final AuthApiClient _auth;
@@ -1584,10 +1600,12 @@ class PosApiService {
   Future<PurchaseOrder> createPurchaseOrder(
     PurchaseOrderDraft draft, {
     String? idempotencyKey,
+    bool acknowledgeCostWarnings = false,
   }) {
     return _purchasing.createPurchaseOrder(
       draft,
       idempotencyKey: idempotencyKey,
+      acknowledgeCostWarnings: acknowledgeCostWarnings,
     );
   }
 

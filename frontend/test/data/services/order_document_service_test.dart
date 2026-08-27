@@ -320,27 +320,30 @@ void main() {
       expect(widths.every((w) => (w - mm(210)).abs() < 1), isTrue);
     });
 
-    test('each receipt roll size renders a narrow page at that width', () async {
-      const cases = <(PdfPageSize, int)>[
-        (PdfPageSize.roll58, 58),
-        (PdfPageSize.roll70, 70),
-        (PdfPageSize.roll80, 80),
-      ];
-      for (final (size, widthMm) in cases) {
-        final bytes = await service.buildSaleInvoiceBytes(
-          order: _saleOrder(receiptNumber: 'R-$widthMm'),
-          shopSettings: _settings,
-          pageSize: size,
-        );
-        final widths = _mediaBoxWidths(bytes);
-        expect(widths, isNotEmpty, reason: 'no page rendered for $size');
-        expect(
-          widths.every((w) => (w - mm(widthMm)).abs() < 1),
-          isTrue,
-          reason: '$size should be ${widthMm}mm wide, got $widths',
-        );
-      }
-    });
+    test(
+      'each receipt roll size renders a narrow page at that width',
+      () async {
+        const cases = <(PdfPageSize, int)>[
+          (PdfPageSize.roll58, 58),
+          (PdfPageSize.roll70, 70),
+          (PdfPageSize.roll80, 80),
+        ];
+        for (final (size, widthMm) in cases) {
+          final bytes = await service.buildSaleInvoiceBytes(
+            order: _saleOrder(receiptNumber: 'R-$widthMm'),
+            shopSettings: _settings,
+            pageSize: size,
+          );
+          final widths = _mediaBoxWidths(bytes);
+          expect(widths, isNotEmpty, reason: 'no page rendered for $size');
+          expect(
+            widths.every((w) => (w - mm(widthMm)).abs() < 1),
+            isTrue,
+            reason: '$size should be ${widthMm}mm wide, got $widths',
+          );
+        }
+      },
+    );
 
     test('a receipt roll is a single content-height page, not A4', () async {
       final bytes = await service.buildSaleInvoiceBytes(
@@ -438,8 +441,14 @@ void main() {
       );
 
       // Same 80mm width, but the dense slip advances less paper.
-      expect(_mediaBoxWidths(compact).every((w) => (w - mm(80)).abs() < 1), isTrue);
-      expect(_mediaBoxHeights(compact).single, lessThan(_mediaBoxHeights(standard).single));
+      expect(
+        _mediaBoxWidths(compact).every((w) => (w - mm(80)).abs() < 1),
+        isTrue,
+      );
+      expect(
+        _mediaBoxHeights(compact).single,
+        lessThan(_mediaBoxHeights(standard).single),
+      );
     });
 
     test('a compact A4 invoice still renders a full-width page', () async {
@@ -453,44 +462,47 @@ void main() {
       expect(widths.every((w) => (w - mm(210)).abs() < 1), isTrue);
     });
 
-    test('a long receipt paginates instead of overflowing one roll page', () async {
-      // Far more items than fit on a single roll segment.
-      final lines = [
-        for (var i = 0; i < 80; i++)
-          SaleOrderLine(
-            id: i + 1,
-            productId: 100 + i,
-            variantId: 0,
-            quantity: 1,
-            returnedQuantity: 0,
-            returnableQuantity: 1,
-            unitLabel: 'قطعة',
-            unitPrice: 3,
-            total: 3,
-            productName: 'صنف رقم $i',
+    test(
+      'a long receipt paginates instead of overflowing one roll page',
+      () async {
+        // Far more items than fit on a single roll segment.
+        final lines = [
+          for (var i = 0; i < 80; i++)
+            SaleOrderLine(
+              id: i + 1,
+              productId: 100 + i,
+              variantId: 0,
+              quantity: 1,
+              returnedQuantity: 0,
+              returnableQuantity: 1,
+              unitLabel: 'قطعة',
+              unitPrice: 3,
+              total: 3,
+              productName: 'صنف رقم $i',
+            ),
+        ];
+        final bytes = await service.buildSaleInvoiceBytes(
+          order: _saleOrder(
+            receiptNumber: 'R-long',
+            lines: lines,
+            subtotal: 240,
+            total: 240,
           ),
-      ];
-      final bytes = await service.buildSaleInvoiceBytes(
-        order: _saleOrder(
-          receiptNumber: 'R-long',
-          lines: lines,
-          subtotal: 240,
-          total: 240,
-        ),
-        shopSettings: _settings,
-        pageSize: PdfPageSize.roll80,
-      );
+          shopSettings: _settings,
+          pageSize: PdfPageSize.roll80,
+        );
 
-      final heights = _mediaBoxHeights(bytes);
-      final widths = _mediaBoxWidths(bytes);
-      // Content overran one segment, so it flows across several pages instead of
-      // one over-tall page (which pushed the total off the top of the slip).
-      expect(heights.length, greaterThan(1));
-      // Every page is a bounded 80mm-wide roll segment no taller than the cap.
-      expect(widths.every((w) => (w - mm(80)).abs() < 1), isTrue);
-      final cap = mm(80) * 6;
-      expect(heights.every((h) => h <= cap + 1), isTrue);
-    });
+        final heights = _mediaBoxHeights(bytes);
+        final widths = _mediaBoxWidths(bytes);
+        // Content overran one segment, so it flows across several pages instead of
+        // one over-tall page (which pushed the total off the top of the slip).
+        expect(heights.length, greaterThan(1));
+        // Every page is a bounded 80mm-wide roll segment no taller than the cap.
+        expect(widths.every((w) => (w - mm(80)).abs() < 1), isTrue);
+        final cap = mm(80) * 6;
+        expect(heights.every((h) => h <= cap + 1), isTrue);
+      },
+    );
 
     test('a short receipt stays a single continuous page', () async {
       final bytes = await service.buildSaleInvoiceBytes(
@@ -550,84 +562,85 @@ void main() {
     // Opt-in: writes standard/compact receipt rolls at every thermal width so
     // they can be eyeballed or replayed onto a real printer.
     // Run with POINTY_ROLL_DUMP=<dir>.
-    test('writes standard/compact receipt rolls when POINTY_ROLL_DUMP set', () async {
-      final dumpDir = Platform.environment['POINTY_ROLL_DUMP'];
-      if (dumpDir == null || dumpDir.isEmpty) {
-        return;
-      }
-      Directory(dumpDir).createSync(recursive: true);
-      // The default loader reads the asset bundle, which is unavailable here,
-      // so Arabic would silently fall back to Helvetica. Load the real fonts
-      // off disk — the dump exists precisely to inspect Arabic rendering.
-      const dumpService = OrderDocumentService(
-        fontLoader: _FileFontLoader(),
-      );
-      final order = _saleOrder(
-        receiptNumber: 'R-2026-0042',
-        customerName: 'أحمد المهدي',
-        subtotal: 41,
-        total: 41,
-        createdAt: DateTime(2026, 8, 18, 14, 30),
-        lines: const [
-          SaleOrderLine(
-            id: 1,
-            productId: 10,
-            variantId: 0,
-            quantity: 2,
-            returnedQuantity: 0,
-            returnableQuantity: 2,
-            unitLabel: 'قطعة',
-            unitPrice: 5,
-            total: 10,
-            productName: 'شاي أخضر سيلاني ٢٠٠ جرام',
-          ),
-          SaleOrderLine(
-            id: 2,
-            productId: 11,
-            variantId: 0,
-            quantity: 3,
-            returnedQuantity: 0,
-            returnableQuantity: 3,
-            unitLabel: 'كرتونة',
-            unitPrice: 6,
-            total: 18,
-            productName: 'قهوة عربية مطحونة',
-          ),
-          SaleOrderLine(
-            id: 3,
-            productId: 12,
-            variantId: 0,
-            quantity: 1,
-            returnedQuantity: 0,
-            returnableQuantity: 1,
-            unitLabel: 'قطعة',
-            unitPrice: 13,
-            total: 13,
-            productName: 'شامبو للأطفال ٤٠٠ مل خالي من الدموع',
-          ),
-        ],
-      );
-
-      for (final (size, mmWidth) in const [
-        (PdfPageSize.roll58, 58),
-        (PdfPageSize.roll70, 70),
-        (PdfPageSize.roll80, 80),
-      ]) {
-        for (final compact in const [false, true]) {
-          final bytes = await dumpService.buildSaleInvoiceBytes(
-            order: order,
-            shopSettings: _settings,
-            pageSize: size,
-            compact: compact,
-          );
-          final tag = compact ? 'compact' : 'standard';
-          await File(
-            '$dumpDir/$tag-$mmWidth.pdf',
-          ).writeAsBytes(bytes, flush: true);
+    test(
+      'writes standard/compact receipt rolls when POINTY_ROLL_DUMP set',
+      () async {
+        final dumpDir = Platform.environment['POINTY_ROLL_DUMP'];
+        if (dumpDir == null || dumpDir.isEmpty) {
+          return;
         }
-      }
-      expect(Directory(dumpDir).listSync(), isNotEmpty);
-    });
+        Directory(dumpDir).createSync(recursive: true);
+        // The default loader reads the asset bundle, which is unavailable here,
+        // so Arabic would silently fall back to Helvetica. Load the real fonts
+        // off disk — the dump exists precisely to inspect Arabic rendering.
+        const dumpService = OrderDocumentService(fontLoader: _FileFontLoader());
+        final order = _saleOrder(
+          receiptNumber: 'R-2026-0042',
+          customerName: 'أحمد المهدي',
+          subtotal: 41,
+          total: 41,
+          createdAt: DateTime(2026, 8, 18, 14, 30),
+          lines: const [
+            SaleOrderLine(
+              id: 1,
+              productId: 10,
+              variantId: 0,
+              quantity: 2,
+              returnedQuantity: 0,
+              returnableQuantity: 2,
+              unitLabel: 'قطعة',
+              unitPrice: 5,
+              total: 10,
+              productName: 'شاي أخضر سيلاني ٢٠٠ جرام',
+            ),
+            SaleOrderLine(
+              id: 2,
+              productId: 11,
+              variantId: 0,
+              quantity: 3,
+              returnedQuantity: 0,
+              returnableQuantity: 3,
+              unitLabel: 'كرتونة',
+              unitPrice: 6,
+              total: 18,
+              productName: 'قهوة عربية مطحونة',
+            ),
+            SaleOrderLine(
+              id: 3,
+              productId: 12,
+              variantId: 0,
+              quantity: 1,
+              returnedQuantity: 0,
+              returnableQuantity: 1,
+              unitLabel: 'قطعة',
+              unitPrice: 13,
+              total: 13,
+              productName: 'شامبو للأطفال ٤٠٠ مل خالي من الدموع',
+            ),
+          ],
+        );
+
+        for (final (size, mmWidth) in const [
+          (PdfPageSize.roll58, 58),
+          (PdfPageSize.roll70, 70),
+          (PdfPageSize.roll80, 80),
+        ]) {
+          for (final compact in const [false, true]) {
+            final bytes = await dumpService.buildSaleInvoiceBytes(
+              order: order,
+              shopSettings: _settings,
+              pageSize: size,
+              compact: compact,
+            );
+            final tag = compact ? 'compact' : 'standard';
+            await File(
+              '$dumpDir/$tag-$mmWidth.pdf',
+            ).writeAsBytes(bytes, flush: true);
+          }
+        }
+        expect(Directory(dumpDir).listSync(), isNotEmpty);
+      },
+    );
   });
 }
 

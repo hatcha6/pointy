@@ -4,7 +4,9 @@ import time
 import traceback
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.signals import got_request_exception
+from django.core.validators import validate_ipv46_address
 from django.db import connections
 from django.dispatch import receiver
 
@@ -235,8 +237,18 @@ def _should_record_request_event(request, *, status_code, severity):
     those cost nothing, so they must not each buy a DB write. Attachment
     *content* serves (product images) are the highest-volume 2xx endpoint once
     a catalog screen scrolls; keep only the slow/error ones.
+
+    The ingest endpoint itself is excluded outright. Recording a telemetry row
+    about the delivery of telemetry is circular, and in the field it was the
+    single largest thing in the database: a client stuck in a rejection loop
+    sent 5.1M ingest requests, and because each rejection was written down, the
+    failure to store telemetry became 50% of the stored telemetry. Ingest still
+    reports its 5xx through ``backend.response_error``, which is rare and
+    genuinely diagnostic.
     """
     if status_code == 304:
+        return False
+    if _is_analytics_ingest_path(getattr(request, "path", "")):
         return False
     if severity == AnalyticsEvent.Severity.INFO and _is_attachment_content_path(
         getattr(request, "path", "")
@@ -245,10 +257,63 @@ def _should_record_request_event(request, *, status_code, severity):
     return True
 
 
+def _is_analytics_ingest_path(path):
+    return path.startswith("/api/analytics-events/ingest")
+
+
 def _is_attachment_content_path(path):
     return path.startswith("/api/attachments/") and (
         path.endswith("/content/") or path.endswith("/content")
     )
+
+
+# Field widths on AnalyticsEvent; headers are attacker-controlled, so truncate.
+_DEVICE_ID_MAX = 64
+_PLATFORM_MAX = 32
+_APP_VERSION_MAX = 40
+_USER_AGENT_MAX = 512
+
+
+def _client_identity(request):
+    """Who sent this, using only what an unauthenticated request still carries.
+
+    Device and session used to be taken from the request's *session*, so a
+    rejected request recorded nothing identifying at all — no ip, no device, no
+    user agent. That is why 5.1M unauthenticated ingest calls could be measured
+    precisely and still not be traced to a machine. The client now stamps its
+    installation id on every request (PosApiSession.describeClient); the peer
+    address and user agent are always available.
+    """
+    headers = getattr(request, "headers", {})
+    meta = getattr(request, "META", {})
+    device_id = str(headers.get("X-Pointy-Device-Id", "") or "")[:_DEVICE_ID_MAX]
+    platform = str(headers.get("X-Pointy-Platform", "") or "")[:_PLATFORM_MAX]
+    app_version = str(headers.get("X-Pointy-App-Version", "") or "")[:_APP_VERSION_MAX]
+    user_agent = str(headers.get("User-Agent", "") or "")[:_USER_AGENT_MAX]
+    # REMOTE_ADDR is the immediate peer, which is the honest answer: an
+    # X-Forwarded-For a client can set is worse than none.
+    raw_address = meta.get("REMOTE_ADDR") or ""
+    identity = {  # noqa: E501 - keys mirror AnalyticsEvent's identity columns
+        "session_id": getattr(getattr(request, "session", None), "session_key", "") or "",
+        "trace_id": str(headers.get("X-Request-ID", "") or "")[:_DEVICE_ID_MAX],
+        "device_id": device_id,
+        "installation_id": device_id,
+        "platform": platform,
+        "app_version": app_version,
+        "user_agent": user_agent,
+        "request_path": str(getattr(request, "path", ""))[:256],
+    }
+    # ip_address is a GenericIPAddressField: an unparseable value would raise on
+    # save, and these rows are written through a bulk buffer, so one malformed
+    # address would take a whole batch of unrelated events down with it.
+    if raw_address:
+        try:
+            validate_ipv46_address(raw_address)
+        except ValidationError:
+            pass
+        else:
+            identity["ip_address"] = raw_address
+    return identity
 
 
 def _safe_record_event(
@@ -270,10 +335,9 @@ def _safe_record_event(
             severity=severity,
             source=AnalyticsEvent.Source.BACKEND,
             user=user,
-            session_id=getattr(getattr(request, "session", None), "session_key", "") or "",
-            trace_id=request.headers.get("X-Request-ID", ""),
             attributes=attributes,
             metrics=metrics,
+            **_client_identity(request),
         )
     except Exception:
         return

@@ -7,6 +7,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/price_lookup_result.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/network_image_caching.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// The lifecycle of a single scan, from the customer's point of view.
 enum PriceCheckerKioskStatus { idle, loading, found, notFound, disconnected }
@@ -285,10 +286,7 @@ class _IdleContent extends StatelessWidget {
               SizedBox(
                 width: metrics.font(28, min: 22, max: 44),
                 height: metrics.font(28, min: 22, max: 44),
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  color: colors.primary,
-                ),
+                child: PointySpinner(strokeWidth: 3, color: colors.primary),
               ),
               SizedBox(height: metrics.gap),
               Text(
@@ -513,7 +511,7 @@ class _CameraViewfinderState extends State<_CameraViewfinder>
                   child: SizedBox(
                     width: metrics.font(30, min: 24, max: 48),
                     height: metrics.font(30, min: 24, max: 48),
-                    child: const CircularProgressIndicator(
+                    child: const PointySpinner(
                       strokeWidth: 3,
                       color: Colors.white,
                     ),
@@ -831,10 +829,7 @@ class _ProductPhoto extends StatelessWidget {
             child: SizedBox(
               width: 32,
               height: 32,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: colors.primary,
-              ),
+              child: PointySpinner(strokeWidth: 2.5, color: colors.primary),
             ),
           ),
           errorWidget: (context, imageUrl, error) => Icon(

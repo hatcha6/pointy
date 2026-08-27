@@ -417,7 +417,7 @@ class _QuickAccessContent extends StatelessWidget {
             alignment: AlignmentDirectional.centerStart,
             child: SizedBox.square(
               dimension: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: PointySpinner(strokeWidth: 2),
             ),
           ),
         );
@@ -630,7 +630,7 @@ class _CategoryTreeList extends StatelessWidget {
               children: [
                 const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 ),
                 SizedBox(width: spacing.sm),
                 Text(l10n.categoryLoadingChildren),
@@ -951,7 +951,7 @@ class _RowLeading extends StatelessWidget {
         icon: isLoadingChildren
             ? const SizedBox.square(
                 dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: PointySpinner(strokeWidth: 2),
               )
             : Icon(
                 isExpanded ? Icons.expand_more : Icons.chevron_left,
@@ -1174,7 +1174,7 @@ class _CategoryFormState extends State<CategoryForm> {
                   icon: saving
                       ? const SizedBox.square(
                           dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: PointySpinner(strokeWidth: 2),
                         )
                       : Icon(_isEditing ? Icons.check : Icons.add),
                   label: Text(_submitLabel(l10n, saving)),

@@ -144,7 +144,7 @@ class _SaveFooter extends StatelessWidget {
         icon: viewModel.isSaving
             ? const SizedBox.square(
                 dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: PointySpinner(strokeWidth: 2),
               )
             : const Icon(Icons.check),
         label: Text(l10n.permissionsSaveButton),
@@ -252,9 +252,9 @@ class _PermissionRow extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       entry.description,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colors.mutedInk,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
                     ),
                   ],
                 ],
@@ -274,9 +274,9 @@ class _PermissionRow extends StatelessWidget {
                 child: Text(
                   l10n.permissionsNeedsHigherPermission,
                   textAlign: TextAlign.end,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: colors.warning,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelSmall?.copyWith(color: colors.warning),
                 ),
               ),
           ],

@@ -190,17 +190,67 @@ class SystemMaintenanceJob {
   }
 }
 
+/// Whether the shop actually has a way back, as opposed to whether the last
+/// job reported success.
+///
+/// [latestVerifiedAt] moves only when an archive was written and then read back
+/// intact. A backup that "succeeded" without being verified deliberately does
+/// not count: that was the state a first shop sat in for weeks, with a green
+/// history and nothing restorable behind it.
+class BackupHealth {
+  const BackupHealth({
+    required this.enabled,
+    required this.isStale,
+    required this.staleAfterHours,
+    required this.lastError,
+    this.latestVerifiedAt,
+    this.lastAttemptAt,
+  });
+
+  final bool enabled;
+  final bool isStale;
+  final int staleAfterHours;
+  final String lastError;
+  final DateTime? latestVerifiedAt;
+  final DateTime? lastAttemptAt;
+
+  /// Nothing has ever been verified on this install.
+  bool get hasNeverVerified => latestVerifiedAt == null;
+
+  static const BackupHealth unknown = BackupHealth(
+    enabled: false,
+    isStale: false,
+    staleAfterHours: 48,
+    lastError: '',
+  );
+
+  factory BackupHealth.fromJson(Map<String, Object?> json) {
+    return BackupHealth(
+      enabled: _boolFromJson(json['enabled']),
+      isStale: _boolFromJson(json['is_stale']),
+      staleAfterHours: (json['stale_after_hours'] as num?)?.toInt() ?? 48,
+      lastError: json['last_error']?.toString() ?? '',
+      latestVerifiedAt: _dateTimeFromJson(json['latest_verified_at']),
+      lastAttemptAt: _dateTimeFromJson(json['last_attempt_at']),
+    );
+  }
+}
+
 class BackupOperationsStatus {
   const BackupOperationsStatus({
     required this.schedule,
+    required this.health,
     this.activeJob,
     this.latestBackupJob,
+    this.latestVerifiedBackupJob,
     this.latestRestoreJob,
   });
 
   final BackupSchedule schedule;
+  final BackupHealth health;
   final SystemMaintenanceJob? activeJob;
   final SystemMaintenanceJob? latestBackupJob;
+  final SystemMaintenanceJob? latestVerifiedBackupJob;
   final SystemMaintenanceJob? latestRestoreJob;
 
   factory BackupOperationsStatus.fromJson(Map<String, Object?> json) {
@@ -208,8 +258,14 @@ class BackupOperationsStatus {
       schedule: BackupSchedule.fromJson(
         json['schedule'] as Map<String, Object?>? ?? const {},
       ),
+      // Older backends do not send `health`; the screen then simply shows no
+      // banner rather than claiming a problem it cannot see.
+      health: json['health'] is Map<String, Object?>
+          ? BackupHealth.fromJson(json['health'] as Map<String, Object?>)
+          : BackupHealth.unknown,
       activeJob: _jobFromJson(json['active_job']),
       latestBackupJob: _jobFromJson(json['latest_backup_job']),
+      latestVerifiedBackupJob: _jobFromJson(json['latest_verified_backup_job']),
       latestRestoreJob: _jobFromJson(json['latest_restore_job']),
     );
   }

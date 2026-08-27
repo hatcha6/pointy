@@ -157,11 +157,7 @@ class UserManagementViewModel extends ChangeNotifier {
   /// Apply an arbitrary edit (profile, role, and/or extra permissions) from the
   /// edit sheet or permissions editor, then patch the local row in place.
   Future<bool> saveUserEdits(PosUser user, UserUpdateDraft draft) {
-    return _updateUser(
-      user,
-      draft,
-      eventName: 'users.management.user.edited',
-    );
+    return _updateUser(user, draft, eventName: 'users.management.user.edited');
   }
 
   /// Replace a row already updated elsewhere (e.g. the pushed permissions

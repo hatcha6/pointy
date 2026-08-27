@@ -84,12 +84,11 @@ abstract final class PointyTheme {
         ),
         contentTextStyle: textTheme.bodyMedium,
       ),
-      dividerTheme: DividerThemeData(
-        color: c.line,
-        thickness: 1,
-        space: 1,
+      dividerTheme: DividerThemeData(color: c.line, thickness: 1, space: 1),
+      filledButtonTheme: PointyComponentStyles.filledButtonTheme(
+        c,
+        colorScheme,
       ),
-      filledButtonTheme: PointyComponentStyles.filledButtonTheme(c, colorScheme),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: c.primary,
         foregroundColor: Colors.white,
@@ -118,9 +117,7 @@ abstract final class PointyTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: c.ink,
-        contentTextStyle: textTheme.bodyMedium?.copyWith(
-          color: c.surface,
-        ),
+        contentTextStyle: textTheme.bodyMedium?.copyWith(color: c.surface),
         behavior: SnackBarBehavior.floating,
         shape: PointyComponentStyles.shape(PointyRadii.button),
       ),

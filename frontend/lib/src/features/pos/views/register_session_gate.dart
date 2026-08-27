@@ -174,7 +174,7 @@ class _StartSessionGate extends StatelessWidget {
       icon: isStarting
           ? const SizedBox.square(
               dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: PointySpinner(strokeWidth: 2),
             )
           : const Icon(Icons.play_arrow),
       label: Text(

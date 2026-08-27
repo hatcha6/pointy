@@ -75,12 +75,8 @@ Uint8List buildWavFile(
 
   final out = BytesBuilder(copy: false);
   void putAscii(String s) => out.add(ascii.encode(s));
-  void putU32(int v) => out.add([
-    v & 0xff,
-    (v >> 8) & 0xff,
-    (v >> 16) & 0xff,
-    (v >> 24) & 0xff,
-  ]);
+  void putU32(int v) =>
+      out.add([v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff]);
   void putU16(int v) => out.add([v & 0xff, (v >> 8) & 0xff]);
 
   putAscii('RIFF');

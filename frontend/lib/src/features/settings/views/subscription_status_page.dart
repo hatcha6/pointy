@@ -74,7 +74,7 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
                 icon: viewModel.isSyncing
                     ? const SizedBox.square(
                         dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: PointySpinner(strokeWidth: 2),
                       )
                     : const Icon(Icons.sync),
               ),
@@ -155,8 +155,11 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
         ? status.shopName.trim()
         : l10n.subscriptionHeroFallbackTitle;
     final endsAt = status.subscriptionEndsAt;
-    final valueSubtitle = (status.subscriptionActive && !status.subscriptionExpired)
-        ? (endsAt != null ? l10n.subscriptionUntilDate(formatDate(endsAt)) : null)
+    final valueSubtitle =
+        (status.subscriptionActive && !status.subscriptionExpired)
+        ? (endsAt != null
+              ? l10n.subscriptionUntilDate(formatDate(endsAt))
+              : null)
         : null;
 
     return PointyDetailHero(
@@ -339,9 +342,7 @@ class _RemoteAccessSection extends StatelessWidget {
         label: l10n.subscriptionFieldExpiresOn,
         value: endsAt != null
             ? formatDate(endsAt)
-            : (status.subscriptionActive
-                  ? l10n.subscriptionExpiryNever
-                  : '—'),
+            : (status.subscriptionActive ? l10n.subscriptionExpiryNever : '—'),
       ),
       if (endsAt != null)
         PointySummaryRow(
@@ -366,7 +367,9 @@ class _RemoteAccessSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PointyDetailCallout(
-            icon: supported ? Icons.verified_user_outlined : Icons.lock_outlined,
+            icon: supported
+                ? Icons.verified_user_outlined
+                : Icons.lock_outlined,
             tone: supported
                 ? PointyCalloutTone.success
                 : PointyCalloutTone.neutral,
@@ -408,9 +411,7 @@ class _AiSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           PointyDetailCallout(
-            icon: available
-                ? Icons.auto_awesome_outlined
-                : Icons.lock_outlined,
+            icon: available ? Icons.auto_awesome_outlined : Icons.lock_outlined,
             tone: available
                 ? PointyCalloutTone.success
                 : PointyCalloutTone.neutral,
@@ -436,9 +437,9 @@ class _AiSection extends StatelessWidget {
             ] else
               Text(
                 l10n.subscriptionAiUsageUnavailable,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colors.mutedInk,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
               ),
           ],
         ],
@@ -492,7 +493,7 @@ class _UsageBar extends StatelessWidget {
         SizedBox(height: spacing.xs),
         ClipRRect(
           borderRadius: BorderRadius.circular(6),
-          child: LinearProgressIndicator(
+          child: PointyProgressBar(
             value: unlimited ? 0 : window.fraction.clamp(0.0, 1.0).toDouble(),
             minHeight: 7,
             backgroundColor: colors.line,

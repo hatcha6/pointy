@@ -18,6 +18,7 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
 import '../../../shared/units.dart';
+import '../../../data/models/purchase_cost_warning.dart';
 
 /// Add sources that mark the new line as the active line for the arrow-key
 /// unit cycle, exactly like a hardware scan does — so picking a product from
@@ -469,7 +470,9 @@ class PurchaseViewModel extends ChangeNotifier {
     // line's factor); the entered cost is per this line's unit, so a carton's
     // 162 must be stored as 162/30 — not poison the next piece-line prefill.
     final factor = _draft[index].unitFactor;
-    _lastCostByVariantId[variant.id] = factor > 0 ? unitCost / factor : unitCost;
+    _lastCostByVariantId[variant.id] = factor > 0
+        ? unitCost / factor
+        : unitCost;
     _draft[index] = _draft[index].copyWith(unitCost: unitCost);
     _touchSubmissionIntent();
     notifyListeners();
@@ -704,7 +707,26 @@ class PurchaseViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<Result<PurchaseSubmission>> submitDraft() async {
+  /// Cost warnings the backend raised on the last submit attempt, if any.
+  ///
+  /// Non-empty means the draft was refused because a cost reads as a typo — the
+  /// screen shows these and, when they are not blocking, offers to submit again
+  /// with [acknowledgeCostWarnings].
+  List<PurchaseCostWarning> get costWarnings =>
+      List.unmodifiable(_costWarnings);
+  List<PurchaseCostWarning> _costWarnings = const [];
+
+  void clearCostWarnings() {
+    if (_costWarnings.isEmpty) {
+      return;
+    }
+    _costWarnings = const [];
+    notifyListeners();
+  }
+
+  Future<Result<PurchaseSubmission>> submitDraft({
+    bool acknowledgeCostWarnings = false,
+  }) async {
     final supplier = _selectedSupplier;
     if (_draft.isEmpty ||
         supplier == null ||
@@ -727,9 +749,11 @@ class PurchaseViewModel extends ChangeNotifier {
       discountCode: _discountCode,
       extraDiscountAmount: _extraDiscount,
       idempotencyKey: _submitIdempotencyKey,
+      acknowledgeCostWarnings: acknowledgeCostWarnings,
     );
     switch (result) {
       case Ok<PurchaseSubmission>():
+        _costWarnings = const [];
         _trackDraftSubmitted(result.value, supplier: supplier);
         _draft.clear();
         _selectedSupplier = null;
@@ -739,7 +763,8 @@ class PurchaseViewModel extends ChangeNotifier {
         _resetLandedCosts();
         _clearDiscountPreview();
         _touchSubmissionIntent();
-      case Error<PurchaseSubmission>():
+      case Error<PurchaseSubmission>(exception: final exception):
+        _costWarnings = purchaseCostWarningsFromException(exception);
         _trackDraftSubmitFailed(supplier);
         break;
     }

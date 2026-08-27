@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/purchase_submission.dart'
     show SupplierPayment, SupplierPaymentMethod, SupplierPaymentPage;
@@ -15,13 +14,11 @@ enum PaymentsHubSegment { customer, supplier }
 /// money-IN and supplier money-OUT). One date window and method filter apply to
 /// the active segment; switching segments lazily loads the other ledger.
 class PaymentsHubViewModel extends ChangeNotifier {
-  PaymentsHubViewModel(this._repository, {AnalyticsEngine? analyticsEngine})
-    : _analyticsEngine = analyticsEngine {
+  PaymentsHubViewModel(this._repository) {
     loadCustomerPayments();
   }
 
   final PaymentsRepository _repository;
-  final AnalyticsEngine? _analyticsEngine;
 
   PaymentsHubSegment _segment = PaymentsHubSegment.customer;
 
@@ -111,7 +108,6 @@ class PaymentsHubViewModel extends ChangeNotifier {
     _isLoadingCustomer = false;
     _customerLoaded = true;
     notifyListeners();
-    _trackView();
   }
 
   Future<void> loadMoreCustomerPayments() async {
@@ -191,7 +187,6 @@ class PaymentsHubViewModel extends ChangeNotifier {
     _isLoadingSupplier = false;
     _supplierLoaded = true;
     notifyListeners();
-    _trackView();
   }
 
   Future<void> loadMoreSupplierPayments() async {
@@ -254,9 +249,5 @@ class PaymentsHubViewModel extends ChangeNotifier {
       return null;
     }
     return DateTime(day.year, day.month, day.day, 23, 59, 59, 999);
-  }
-
-  void _trackView() {
-    _analyticsEngine?.setCurrentScreen('payments_hub');
   }
 }

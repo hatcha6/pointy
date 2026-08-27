@@ -87,13 +87,17 @@ void main() {
         'total': '7.00',
       };
       expect(
-        SaleOrder.fromJson({...base, 'can_assign_customer': true})
-            .canAssignCustomer,
+        SaleOrder.fromJson({
+          ...base,
+          'can_assign_customer': true,
+        }).canAssignCustomer,
         isTrue,
       );
       expect(
-        SaleOrder.fromJson({...base, 'can_assign_customer': false})
-            .canAssignCustomer,
+        SaleOrder.fromJson({
+          ...base,
+          'can_assign_customer': false,
+        }).canAssignCustomer,
         isFalse,
       );
       // An older backend without the flag must not surface the action.

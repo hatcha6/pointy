@@ -123,7 +123,7 @@ class ProductDetailsView extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             if (viewModel.isLoading) ...[
-              const LinearProgressIndicator(),
+              const PointyProgressBar(),
               const SizedBox(height: 12),
             ],
             if (viewModel.errorMessage == 'product_detail_load_error') ...[
@@ -149,7 +149,8 @@ class ProductDetailsView extends StatelessWidget {
               _PricingAndCostSection(
                 viewModel: viewModel,
                 capabilities: capabilities,
-                onChangePrices: () => showChangePricesDialog(context, viewModel),
+                onChangePrices: () =>
+                    showChangePricesDialog(context, viewModel),
               ),
             ],
             const SizedBox(height: 12),
@@ -604,11 +605,9 @@ class _PricingAndCostSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (viewModel.isLoadingCostSummary && summaries.isEmpty)
-            const Center(child: CircularProgressIndicator())
+            const Center(child: PointySpinner())
           else if (viewModel.hasCostSummaryError && summaries.isEmpty)
-            PointyInlineMessage.error(
-              message: l10n.changePricesLoadError,
-            )
+            PointyInlineMessage.error(message: l10n.changePricesLoadError)
           else if (!hasAnyCost)
             Text(
               l10n.noCostDataLabel,
@@ -1090,9 +1089,7 @@ class _BoughtTogetherCard extends StatelessWidget {
                   l10n.productBoughtTogetherOrders('${item.ordersTogether}'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: textTheme.labelSmall?.copyWith(
-                    color: colors.mutedInk,
-                  ),
+                  style: textTheme.labelSmall?.copyWith(color: colors.mutedInk),
                 ),
               ],
             ),

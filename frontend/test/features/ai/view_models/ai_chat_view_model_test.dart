@@ -117,30 +117,33 @@ void main() {
     expect(viewModel.errorKind, isNull);
   });
 
-  test('sendRecordedAudio sends the clip (no text) as an audio attachment', () async {
-    final repo = _FakeAiChatRepository([const AiChatDone(conversationId: 3)]);
-    final viewModel = AiChatViewModel(repo);
-    addTearDown(viewModel.dispose);
+  test(
+    'sendRecordedAudio sends the clip (no text) as an audio attachment',
+    () async {
+      final repo = _FakeAiChatRepository([const AiChatDone(conversationId: 3)]);
+      final viewModel = AiChatViewModel(repo);
+      addTearDown(viewModel.dispose);
 
-    await viewModel.sendRecordedAudio(
-      AiAttachment(
-        kind: AiAttachmentKind.audio,
-        dataUri: 'data:audio/wav;base64,QUJD',
-        name: 'voice-message.wav',
-        mime: 'audio/wav',
-        durationMs: 4000,
-      ),
-    );
+      await viewModel.sendRecordedAudio(
+        AiAttachment(
+          kind: AiAttachmentKind.audio,
+          dataUri: 'data:audio/wav;base64,QUJD',
+          name: 'voice-message.wav',
+          mime: 'audio/wav',
+          durationMs: 4000,
+        ),
+      );
 
-    expect(repo.lastAttachments.length, 1);
-    expect(repo.lastAttachments.single.kind, AiAttachmentKind.audio);
-    final userMessage = viewModel.messages.first;
-    expect(userMessage.isUser, isTrue);
-    expect(userMessage.content, '');
-    expect(userMessage.attachments.single.isAudio, isTrue);
-    // Pending list is cleared once the turn is sent.
-    expect(viewModel.hasPendingAttachments, isFalse);
-  });
+      expect(repo.lastAttachments.length, 1);
+      expect(repo.lastAttachments.single.kind, AiAttachmentKind.audio);
+      final userMessage = viewModel.messages.first;
+      expect(userMessage.isUser, isTrue);
+      expect(userMessage.content, '');
+      expect(userMessage.attachments.single.isAudio, isTrue);
+      // Pending list is cleared once the turn is sent.
+      expect(viewModel.hasPendingAttachments, isFalse);
+    },
+  );
 
   test(
     'streamed deltas notify the message, not the whole view model (jank fix)',
@@ -289,21 +292,24 @@ void main() {
     expect(viewModel.usage?.fiveHour.remaining, 24);
   });
 
-  test('an AI title in the done event names the conversation in history', () async {
-    final repo = _FakeAiChatRepository([
-      const AiChatDelta('...'),
-      const AiChatDone(conversationId: 5, title: 'أكثر المنتجات مبيعًا'),
-    ]);
-    final viewModel = AiChatViewModel(repo);
-    addTearDown(viewModel.dispose);
+  test(
+    'an AI title in the done event names the conversation in history',
+    () async {
+      final repo = _FakeAiChatRepository([
+        const AiChatDelta('...'),
+        const AiChatDone(conversationId: 5, title: 'أكثر المنتجات مبيعًا'),
+      ]);
+      final viewModel = AiChatViewModel(repo);
+      addTearDown(viewModel.dispose);
 
-    await viewModel.sendMessage('ما هي أكثر المنتجات مبيعًا؟');
+      await viewModel.sendMessage('ما هي أكثر المنتجات مبيعًا؟');
 
-    // The just-named conversation appears in the local history with its AI title.
-    final named = viewModel.conversations.where((c) => c.id == 5).toList();
-    expect(named, hasLength(1));
-    expect(named.single.title, 'أكثر المنتجات مبيعًا');
-  });
+      // The just-named conversation appears in the local history with its AI title.
+      final named = viewModel.conversations.where((c) => c.id == 5).toList();
+      expect(named, hasLength(1));
+      expect(named.single.title, 'أكثر المنتجات مبيعًا');
+    },
+  );
 
   test('maps a 429 to rateLimited', () async {
     final repo = _FakeAiChatRepository([
@@ -420,60 +426,73 @@ void main() {
     final assistant = viewModel.messages.last;
     expect(assistant.pendingQuestion, isNotNull);
     expect(assistant.pendingQuestion!.questions.single.id, 'q1');
-    expect(assistant.isStreaming, isFalse); // typing indicator yields to the card
+    expect(
+      assistant.isStreaming,
+      isFalse,
+    ); // typing indicator yields to the card
     expect(viewModel.hasPendingQuestion, isTrue);
     expect(viewModel.isStreaming, isFalse);
     expect(viewModel.conversationId, 5); // captured from the ask_user event
   });
 
-  test('submitAnswer resumes with the answer and streams a new bubble', () async {
-    final repo = _FakeAiChatRepository([askUser()]);
-    final viewModel = AiChatViewModel(repo);
-    addTearDown(viewModel.dispose);
+  test(
+    'submitAnswer resumes with the answer and streams a new bubble',
+    () async {
+      final repo = _FakeAiChatRepository([askUser()]);
+      final viewModel = AiChatViewModel(repo);
+      addTearDown(viewModel.dispose);
 
-    await viewModel.sendMessage('أضف منتجًا');
-    repo.resumeEvents = [
-      const AiChatDelta('تمام'),
-      const AiChatDone(conversationId: 5),
-    ];
+      await viewModel.sendMessage('أضف منتجًا');
+      repo.resumeEvents = [
+        const AiChatDelta('تمام'),
+        const AiChatDone(conversationId: 5),
+      ];
 
-    await viewModel.submitAnswer([
-      const AiAnswer(
-        questionId: 'q1',
-        type: AiQuestionType.singleSelect,
-        value: 'main',
-      ),
-    ]);
+      await viewModel.submitAnswer([
+        const AiAnswer(
+          questionId: 'q1',
+          type: AiQuestionType.singleSelect,
+          value: 'main',
+        ),
+      ]);
 
-    expect(repo.resumeMessageId, 10);
-    expect(repo.resumeToolCallId, 'call_1');
-    expect(repo.resumeAnswers.single.value, 'main');
-    expect(repo.resumeDeclined, isFalse);
-    expect(viewModel.hasPendingQuestion, isFalse);
-    // A fresh assistant bubble carries the continuation; the question bubble
-    // stays and is marked resolved (read-only summary).
-    expect(viewModel.messages.length, 3);
-    expect(viewModel.messages.last.content, 'تمام');
-    expect(viewModel.messages[1].submittedAnswers, isNotNull);
-  });
+      expect(repo.resumeMessageId, 10);
+      expect(repo.resumeToolCallId, 'call_1');
+      expect(repo.resumeAnswers.single.value, 'main');
+      expect(repo.resumeDeclined, isFalse);
+      expect(viewModel.hasPendingQuestion, isFalse);
+      // A fresh assistant bubble carries the continuation; the question bubble
+      // stays and is marked resolved (read-only summary).
+      expect(viewModel.messages.length, 3);
+      expect(viewModel.messages.last.content, 'تمام');
+      expect(viewModel.messages[1].submittedAnswers, isNotNull);
+    },
+  );
 
-  test('skipQuestion resumes with declined and unblocks the composer', () async {
-    final repo = _FakeAiChatRepository([askUser(type: AiQuestionType.confirm)]);
-    final viewModel = AiChatViewModel(repo);
-    addTearDown(viewModel.dispose);
+  test(
+    'skipQuestion resumes with declined and unblocks the composer',
+    () async {
+      final repo = _FakeAiChatRepository([
+        askUser(type: AiQuestionType.confirm),
+      ]);
+      final viewModel = AiChatViewModel(repo);
+      addTearDown(viewModel.dispose);
 
-    await viewModel.sendMessage('احذف المنتج');
-    repo.resumeEvents = [const AiChatDone(conversationId: 5)];
+      await viewModel.sendMessage('احذف المنتج');
+      repo.resumeEvents = [const AiChatDone(conversationId: 5)];
 
-    await viewModel.skipQuestion();
+      await viewModel.skipQuestion();
 
-    expect(repo.resumeDeclined, isTrue);
-    expect(repo.resumeAnswers, isEmpty);
-    expect(viewModel.hasPendingQuestion, isFalse);
-  });
+      expect(repo.resumeDeclined, isTrue);
+      expect(repo.resumeAnswers, isEmpty);
+      expect(viewModel.hasPendingQuestion, isFalse);
+    },
+  );
 
   test('a resumed turn can itself ask another question', () async {
-    final repo = _FakeAiChatRepository([askUser(messageId: 10, toolCallId: 'call_1')]);
+    final repo = _FakeAiChatRepository([
+      askUser(messageId: 10, toolCallId: 'call_1'),
+    ]);
     final viewModel = AiChatViewModel(repo);
     addTearDown(viewModel.dispose);
 
@@ -493,7 +512,10 @@ void main() {
     // The new question is now the active one, on a fresh bubble.
     expect(viewModel.hasPendingQuestion, isTrue);
     expect(viewModel.pendingQuestion!.toolCallId, 'call_2');
-    expect(viewModel.pendingQuestion!.questions.single.type, AiQuestionType.number);
+    expect(
+      viewModel.pendingQuestion!.questions.single.type,
+      AiQuestionType.number,
+    );
   });
 
   test('surfaces tool activity as chips on the assistant turn', () async {
@@ -527,34 +549,37 @@ void main() {
     expect(assistant.content, '٥ مبيعات');
   });
 
-  test('a create/edit tool activity is flagged as a mutation on its chip', () async {
-    final repo = _FakeAiChatRepository([
-      const AiChatToolActivity(
-        name: 'create_resource',
-        resource: 'expenses',
-        label: 'إنشاء: المصروفات',
-        phase: 'start',
-        mutates: true,
-      ),
-      const AiChatToolActivity(
-        name: 'create_resource',
-        resource: 'expenses',
-        label: 'إنشاء: المصروفات',
-        phase: 'done',
-        ok: true,
-        mutates: true,
-      ),
-      const AiChatDelta('تم تسجيل المصروف'),
-      const AiChatDone(conversationId: 1),
-    ]);
-    final viewModel = AiChatViewModel(repo);
-    addTearDown(viewModel.dispose);
+  test(
+    'a create/edit tool activity is flagged as a mutation on its chip',
+    () async {
+      final repo = _FakeAiChatRepository([
+        const AiChatToolActivity(
+          name: 'create_resource',
+          resource: 'expenses',
+          label: 'إنشاء: المصروفات',
+          phase: 'start',
+          mutates: true,
+        ),
+        const AiChatToolActivity(
+          name: 'create_resource',
+          resource: 'expenses',
+          label: 'إنشاء: المصروفات',
+          phase: 'done',
+          ok: true,
+          mutates: true,
+        ),
+        const AiChatDelta('تم تسجيل المصروف'),
+        const AiChatDone(conversationId: 1),
+      ]);
+      final viewModel = AiChatViewModel(repo);
+      addTearDown(viewModel.dispose);
 
-    await viewModel.sendMessage('سجّل مصروف كهرباء');
+      await viewModel.sendMessage('سجّل مصروف كهرباء');
 
-    final run = viewModel.messages.last.toolRuns.single;
-    expect(run.mutates, isTrue);
-    expect(run.done, isTrue);
-    expect(run.label, 'إنشاء: المصروفات');
-  });
+      final run = viewModel.messages.last.toolRuns.single;
+      expect(run.mutates, isTrue);
+      expect(run.done, isTrue);
+      expect(run.label, 'إنشاء: المصروفات');
+    },
+  );
 }

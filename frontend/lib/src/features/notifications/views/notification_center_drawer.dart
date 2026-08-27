@@ -351,8 +351,7 @@ class _NotificationAlertRow extends StatelessWidget {
     return switch (alert.type) {
       BusinessAlertType.outOfStock => Icons.inventory_2_outlined,
       BusinessAlertType.lowStock => Icons.production_quantity_limits_outlined,
-      BusinessAlertType.stockPositionUntrusted =>
-        Icons.rule_folder_outlined,
+      BusinessAlertType.stockPositionUntrusted => Icons.rule_folder_outlined,
       BusinessAlertType.expiringStock => Icons.event_busy_outlined,
       BusinessAlertType.overduePurchases => Icons.event_busy_outlined,
       BusinessAlertType.printFailures => Icons.print_disabled_outlined,

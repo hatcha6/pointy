@@ -8,11 +8,22 @@ import '../../../data/models/dashboard_ai_digest.dart';
 import '../../../data/repositories/dashboard_repository.dart';
 
 class DashboardViewModel extends ChangeNotifier {
-  DashboardViewModel(this._dashboardRepository) {
+  DashboardViewModel(
+    this._dashboardRepository, {
+    bool Function()? canRequestAiDigest,
+  }) : _canRequestAiDigest = canRequestAiDigest ?? (() => true) {
     loadDashboard();
   }
 
   final DashboardRepository _dashboardRepository;
+
+  /// Whether this shop/user may read the AI digest at all.
+  ///
+  /// AI is a separate paid entitlement, so a shop without it — or a user
+  /// without the permission — was firing `ai/dashboard-digest/` on every
+  /// dashboard load and being told 403, 79 times in the field. Gate the call
+  /// on the permission, not the response.
+  final bool Function() _canRequestAiDigest;
 
   DashboardSnapshot? _snapshot;
   int _selectedDays = 30;
@@ -52,7 +63,7 @@ class DashboardViewModel extends ChangeNotifier {
     // The AI digest is a separate, non-blocking call so the dashboard paints
     // immediately and the inline AI text fills in when ready. A failure (no AI
     // entitlement, relay hiccup) just leaves it empty — never an error.
-    if (_snapshot != null) {
+    if (_snapshot != null && _canRequestAiDigest()) {
       unawaited(_loadAiDigest());
     }
   }

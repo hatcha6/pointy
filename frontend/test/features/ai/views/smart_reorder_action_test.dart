@@ -8,10 +8,7 @@ import 'package:pointy_frontend/src/shared/navigation/app_navigation.dart';
 
 import '../../../shared/fake_app_navigation.dart';
 
-PosUser _user({
-  UserRole role = UserRole.manager,
-  bool aiAvailable = true,
-}) {
+PosUser _user({UserRole role = UserRole.manager, bool aiAvailable = true}) {
   return PosUser(
     id: 1,
     username: 'u',
@@ -51,7 +48,9 @@ void main() {
     expect(find.byIcon(Icons.auto_awesome), findsNothing);
   });
 
-  testWidgets('hidden when the user cannot create purchase orders', (tester) async {
+  testWidgets('hidden when the user cannot create purchase orders', (
+    tester,
+  ) async {
     // A cashier has no createPurchaseOrder capability even with AI available.
     final user = _user(role: UserRole.cashier, aiAvailable: true);
     final nav = FakeAppNavigation(currentUser: user);
@@ -67,7 +66,9 @@ void main() {
     expect(find.byIcon(Icons.auto_awesome), findsNothing);
   });
 
-  testWidgets('shows a clear label and tapping auto-sends the seed prompt', (tester) async {
+  testWidgets('shows a clear label and tapping auto-sends the seed prompt', (
+    tester,
+  ) async {
     String? seenPrompt;
     bool? seenAutoSend;
     final user = _user();

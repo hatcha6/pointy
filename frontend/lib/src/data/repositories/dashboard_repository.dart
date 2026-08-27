@@ -23,7 +23,9 @@ class DashboardRepository {
         DateTime.now().difference(cached.fetchedAt) < _snapshotTtl) {
       return Ok(cached.snapshot);
     }
-    final result = await Result.guard(() => _service.fetchDashboard(days: days));
+    final result = await Result.guard(
+      () => _service.fetchDashboard(days: days),
+    );
     if (result is Ok<DashboardSnapshot>) {
       _snapshotsByDays[days] = (
         snapshot: result.value,

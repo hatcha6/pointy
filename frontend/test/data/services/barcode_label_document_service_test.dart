@@ -132,9 +132,7 @@ void main() {
     for (final offsetYMm in [0, 1, 3]) {
       for (final pitchMm in [26.9, 30.0, 25.5]) {
         final document = await service.buildLabelsDocument(
-          lines: [
-            BarcodeLabelPrintLine(label: line.label, copies: 5),
-          ],
+          lines: [BarcodeLabelPrintLine(label: line.label, copies: 5)],
           endpoint: endpoint(
             BarcodeLabelPdfSize.sticker,
             offsetYMm: offsetYMm,

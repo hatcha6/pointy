@@ -29,7 +29,7 @@ ActivityEventPresentation activityEventPresentation(
   AnalyticsEventRecord event,
 ) {
   final target = activityLogDrillDownTarget(event);
-  final knownTitle = _knownEventTitle(l10n, event.name);
+  final knownTitle = _knownEventTitle(l10n, event.name, event);
   if (knownTitle != null) {
     return ActivityEventPresentation(
       title: knownTitle,
@@ -109,7 +109,24 @@ IconData activityLogDrillDownIcon(ActivityLogDrillDownTarget target) {
   };
 }
 
-String? _knownEventTitle(AppLocalizations l10n, String name) {
+/// Which way a settled quantity run moved. Falls back to "decrease" only when
+/// the attribute is missing, which is the pre-coalescing shape.
+bool _quantityDirectionIsIncrease(AnalyticsEventRecord event) {
+  return event.attributes['direction']?.toString() == 'increase';
+}
+
+String? _knownEventTitle(
+  AppLocalizations l10n,
+  String name,
+  AnalyticsEventRecord event,
+) {
+  // A +/- run is one event now, carrying the direction it moved rather than
+  // splitting into two names. The wording is unchanged for the reader.
+  if (name == 'pos.cart.line.quantity_settled') {
+    return _quantityDirectionIsIncrease(event)
+        ? l10n.activityEventPosLineQuantityIncreased
+        : l10n.activityEventPosLineQuantityDecreased;
+  }
   return switch (name) {
     'sales.checkout.completed' => l10n.activityEventCheckoutCompleted,
     'sales.order.paid' => l10n.activityEventOrderPaid,
@@ -530,6 +547,10 @@ IconData _businessEventIcon(
     'pos.cart.line.added' => Icons.add_shopping_cart_outlined,
     'pos.cart.line.quantity_increased' => Icons.add_circle_outline,
     'pos.cart.line.quantity_decreased' => Icons.remove_circle_outline,
+    'pos.cart.line.quantity_settled' =>
+      _quantityDirectionIsIncrease(event)
+          ? Icons.add_circle_outline
+          : Icons.remove_circle_outline,
     'pos.cart.line.deleted' => Icons.remove_shopping_cart_outlined,
     'pos.cart.cleared' => Icons.delete_sweep_outlined,
     String name when name.startsWith('pos.checkout.') =>

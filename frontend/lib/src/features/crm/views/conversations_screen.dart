@@ -110,7 +110,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   icon: widget.viewModel.isStarting
                       ? const SizedBox.square(
                           dimension: 18,
-                          child: CircularProgressIndicator(
+                          child: PointySpinner(
                             strokeWidth: 2,
                             color: Colors.white,
                           ),
@@ -535,7 +535,7 @@ class _Composer extends StatelessWidget {
                 icon: isSending
                     ? const SizedBox.square(
                         dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: PointySpinner(strokeWidth: 2),
                       )
                     : const Icon(Icons.send_outlined),
               ),
@@ -563,9 +563,9 @@ class _ReadOnlyHint extends StatelessWidget {
       child: Text(
         label,
         textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: colors.mutedInk,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
       ),
     );
   }

@@ -56,7 +56,10 @@ class CatalogRepository {
     int page = 1,
   }) async {
     final cacheKey = _productPageCacheKey(query, page);
-    final cached = _productPageCache.read(cacheKey, _service.catalogVersionToken);
+    final cached = _productPageCache.read(
+      cacheKey,
+      _service.catalogVersionToken,
+    );
     if (cached != null) {
       return Ok(cached);
     }

@@ -255,7 +255,7 @@ class _ProductFormState extends State<ProductForm> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      LinearProgressIndicator(value: _step == 0 ? 0.5 : 1),
+                      PointyProgressBar(value: _step == 0 ? 0.5 : 1),
                       const SizedBox(height: 18),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 180),
@@ -534,9 +534,7 @@ class _ProductFormState extends State<ProductForm> {
                         icon: widget.viewModel.isSaving
                             ? const SizedBox.square(
                                 dimension: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
+                                child: PointySpinner(strokeWidth: 2),
                               )
                             : Icon(
                                 _step == 0 ? Icons.arrow_forward : Icons.add,

@@ -151,7 +151,11 @@ class PointySemanticColors extends ThemeExtension<PointySemanticColors> {
       primary: Color.lerp(primary, other.primary, t)!,
       primaryStrong: Color.lerp(primaryStrong, other.primaryStrong, t)!,
       primaryDark: Color.lerp(primaryDark, other.primaryDark, t)!,
-      primaryContainer: Color.lerp(primaryContainer, other.primaryContainer, t)!,
+      primaryContainer: Color.lerp(
+        primaryContainer,
+        other.primaryContainer,
+        t,
+      )!,
       darkTopBar: Color.lerp(darkTopBar, other.darkTopBar, t)!,
       accentAmber: Color.lerp(accentAmber, other.accentAmber, t)!,
       amberContainer: Color.lerp(amberContainer, other.amberContainer, t)!,

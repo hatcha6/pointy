@@ -1553,6 +1553,22 @@ def create_pos_cash_purchase(*, request, validated_data):
 
     lines_data = validated_data.pop("lines", [])
     landed_cost_entries_data = validated_data.pop("landed_cost_entries", None)
+
+    # Hard stop, with no acknowledgement path: a cashier cannot judge whether
+    # 130.00 per loaf is plausible and has no permission to override it. In the
+    # field exactly this entry — the amount paid typed into unit_cost against
+    # quantity 1 — went unnoticed for weeks and erased 11 points of gross
+    # margin. The API path sets this through serializer context; repeating it
+    # here covers any caller that reaches the service directly, and costs one
+    # pass over the lines.
+    from .cost_guard import block_thresholds, find_cost_anomalies
+    from .serializers import raise_cost_warnings
+
+    raise_cost_warnings(
+        find_cost_anomalies(lines_data, thresholds=block_thresholds()),
+        blocking=True,
+    )
+
     purchase_order = save_purchase_order_with_lines(
         lines_data=lines_data,
         landed_cost_entries_data=landed_cost_entries_data,

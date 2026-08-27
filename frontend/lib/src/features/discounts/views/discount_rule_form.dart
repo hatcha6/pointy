@@ -388,7 +388,7 @@ class _DiscountRuleFormState extends State<DiscountRuleForm> {
                 icon: widget.viewModel.isSaving
                     ? const SizedBox.square(
                         dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: PointySpinner(strokeWidth: 2),
                       )
                     : const Icon(Icons.check),
                 label: Text(l10n.discountSaveButton),

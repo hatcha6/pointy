@@ -601,7 +601,7 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
         SizedBox(height: spacing.xs),
         ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(value: percent == 0 ? null : percent),
+          child: PointyProgressBar(value: percent == 0 ? null : percent),
         ),
       ],
     );
@@ -769,9 +769,7 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
     final servers = await widget.viewModel.discoverServers();
     if (!context.mounted) return;
     if (servers == null) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.migrationScanFailed)),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(l10n.migrationScanFailed)));
       return;
     }
     final picked = await showDialog<DiscoveredServer>(
@@ -835,15 +833,20 @@ String _entityLabel(
 String _stockSourceLabel(AppLocalizations l10n, MigrationStockSource source) {
   return switch (source) {
     MigrationStockSource.snapshot => l10n.migrationStockSourceSnapshotLabel,
-    MigrationStockSource.reconstruct => l10n.migrationStockSourceReconstructLabel,
+    MigrationStockSource.reconstruct =>
+      l10n.migrationStockSourceReconstructLabel,
     MigrationStockSource.none => l10n.migrationStockSourceNoneLabel,
   };
 }
 
-String _stockSourceSubtitle(AppLocalizations l10n, MigrationStockSource source) {
+String _stockSourceSubtitle(
+  AppLocalizations l10n,
+  MigrationStockSource source,
+) {
   return switch (source) {
     MigrationStockSource.snapshot => l10n.migrationStockSourceSnapshotSubtitle,
-    MigrationStockSource.reconstruct => l10n.migrationStockSourceReconstructSubtitle,
+    MigrationStockSource.reconstruct =>
+      l10n.migrationStockSourceReconstructSubtitle,
     MigrationStockSource.none => l10n.migrationStockSourceNoneSubtitle,
   };
 }
@@ -972,7 +975,7 @@ class _Spinner extends StatelessWidget {
   Widget build(BuildContext context) {
     return const SizedBox.square(
       dimension: 18,
-      child: CircularProgressIndicator(strokeWidth: 2),
+      child: PointySpinner(strokeWidth: 2),
     );
   }
 }

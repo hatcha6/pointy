@@ -7,6 +7,8 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../data/models/product_variant.dart';
 import '../design/design.dart';
 import '../formatters.dart';
+import '../components/pointy_progress.dart';
+import 'camera_scanning_support.dart';
 
 enum CameraBarcodeScannerMode { single, multiple }
 
@@ -36,6 +38,11 @@ Future<List<CameraVariantScanEntry>?> showCameraBarcodeScannerSheet(
   bool enableQuantity = false,
   int initialQuantity = 1,
 }) {
+  if (!cameraScanningSupported) {
+    // Nothing to open, and opening it anyway throws. Callers already treat a
+    // null result as "the user scanned nothing".
+    return Future<List<CameraVariantScanEntry>?>.value();
+  }
   return showModalBottomSheet<List<CameraVariantScanEntry>>(
     context: context,
     isScrollControlled: true,
@@ -533,7 +540,7 @@ class _ScannerStatusLine extends StatelessWidget {
         if (isLoading)
           const SizedBox.square(
             dimension: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: PointySpinner(strokeWidth: 2),
           )
         else
           Icon(

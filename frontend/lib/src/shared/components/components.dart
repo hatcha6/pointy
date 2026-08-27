@@ -19,6 +19,7 @@ export 'pointy_metric_tile.dart';
 export 'pointy_navigation_surface.dart';
 export 'pointy_password_field.dart';
 export 'pointy_permission_denied_view.dart';
+export 'pointy_progress.dart';
 export 'pointy_qr_image.dart';
 export 'pointy_section_header.dart';
 export 'pointy_skeleton.dart';

@@ -118,6 +118,19 @@ class ReceiptAutoPrintTests(PrintingTestMixin, TestCase):
         )
         self.variant = self.product.default_variant
         StockItem.objects.create(variant=self.variant, quantity_on_hand=10)
+        # The queue only accepts work when something is reading it — see
+        # apps.sales.services.create_receipt_print_job. These tests are about
+        # what the job contains, so they establish that precondition explicitly
+        # rather than relying on it. A shop with no agent creating no rows is
+        # covered by apps.printing.test_queue_lifecycle.
+        PrintAgent.objects.update_or_create(
+            identifier="auto-print-agent",
+            defaults={
+                "name": "auto-print-agent",
+                "is_active": True,
+                "last_seen_at": timezone.now(),
+            },
+        )
         self.cashier_client.post(
             reverse("register-session-start"),
             {"opening_cash": "0.00"},

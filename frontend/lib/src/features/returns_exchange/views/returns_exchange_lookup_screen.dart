@@ -148,9 +148,7 @@ class _ReturnsExchangeLookupScreenState
                           icon: _searching
                               ? const SizedBox.square(
                                   dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
+                                  child: PointySpinner(strokeWidth: 2),
                                 )
                               : const Icon(Icons.search),
                           label: Text(l10n.returnsLookupSearchButton),

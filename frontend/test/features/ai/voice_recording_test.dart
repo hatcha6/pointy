@@ -37,7 +37,9 @@ void main() {
 
     test('peaks near 1.0 for a full-scale sample', () {
       // Int16 32767 little-endian = [0xFF, 0x7F].
-      final amp = pcm16PeakAmplitude(Uint8List.fromList([0x00, 0x00, 0xFF, 0x7F]));
+      final amp = pcm16PeakAmplitude(
+        Uint8List.fromList([0x00, 0x00, 0xFF, 0x7F]),
+      );
       expect(amp, greaterThan(0.99));
       expect(amp, lessThanOrEqualTo(1.0));
     });

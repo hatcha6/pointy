@@ -38,6 +38,7 @@ import 'package:pointy_frontend/src/shared/barcode/scan_feedback_sounds.dart';
 import 'package:pointy_frontend/src/shared/unit_options.dart';
 
 void main() {
+  _registerQuantityCoalescingTests();
   test(
     'cart totals update and checkout locks mutations until success',
     () async {
@@ -684,10 +685,14 @@ void main() {
       final events = sink.acceptedEvents
           .where((event) => event.name.startsWith('pos.cart.'))
           .toList();
+      // The +/- run settles when the cart is cleared, before the deletes, so
+      // the run is still attributed to the line it happened on. Scanning an
+      // item already in the cart keeps its own `quantity_increased` name — that
+      // is a different gesture from holding the button.
       expect(events.map((event) => event.name), [
         'pos.cart.line.added',
         'pos.cart.line.quantity_increased',
-        'pos.cart.line.quantity_decreased',
+        'pos.cart.line.quantity_settled',
         'pos.cart.line.deleted',
         'pos.cart.cleared',
       ]);
@@ -708,6 +713,14 @@ void main() {
       expect(increased.attributes['previous_quantity'], 1);
       expect(increased.attributes['new_quantity'], 2);
       expect(increased.metrics['cart_item_count'], 2);
+
+      final settled = events[2];
+      expect(settled.attributes['direction'], 'decrease');
+      expect(settled.attributes['previous_quantity'], 2);
+      expect(settled.attributes['new_quantity'], 1);
+      expect(settled.attributes['reversed'], isFalse);
+      expect(settled.metrics['step_count'], 1);
+      expect(settled.metrics['quantity_delta'], -1);
 
       final deleted = events[3];
       expect(deleted.name, 'pos.cart.line.deleted');
@@ -1972,4 +1985,120 @@ class _NoopPrintTransport extends PrintTransport {
   Future<PrintTransportStatus> status(PrinterEndpoint endpoint) async {
     return const PrintTransportStatus(isAvailable: true, message: 'ready');
   }
+}
+
+void _registerQuantityCoalescingTests() {
+  test('holding +/- becomes one event, not one per press', () async {
+    // 93.9% of cart quantity events in the field arrived within 250ms of the
+    // previous one on the same line — a held key, one analytics row per repeat.
+    // What matters is that the line went from 1 to 7, not the six presses.
+    final sink = _FakeAnalyticsSink();
+    final engine = AnalyticsEngine(
+      sink,
+      storage: MemoryAnalyticsQueueStorage(installationId: 'qty'),
+      flushInterval: const Duration(hours: 1),
+    );
+    engine.setCurrentUser(1);
+    final apiService = _FakePosApiService();
+    final viewModel = _viewModel(apiService, analyticsEngine: engine);
+    addTearDown(viewModel.dispose);
+    addTearDown(engine.dispose);
+
+    await viewModel.loadCurrentRegisterSession();
+    await viewModel.resumeRegisterSession();
+    viewModel.addVariant(_coffeeVariant, source: 'product_tile');
+    await _settle();
+    final lineKey = viewModel.cart.single.lineKey;
+
+    for (var press = 0; press < 6; press += 1) {
+      viewModel.incrementCartLine(lineKey);
+    }
+    await _settle();
+    // Clearing the cart ends the run — a real boundary, not a test hook.
+    viewModel.clearCart();
+    await engine.flush();
+
+    final settled = sink.acceptedEvents
+        .where((event) => event.name == 'pos.cart.line.quantity_settled')
+        .toList(growable: false);
+
+    expect(settled, hasLength(1), reason: 'six presses, one event');
+    expect(settled.single.attributes['direction'], 'increase');
+    expect(settled.single.attributes['previous_quantity'], 1);
+    expect(settled.single.attributes['new_quantity'], 7);
+    expect(settled.single.metrics['step_count'], 6);
+    expect(settled.single.metrics['quantity_delta'], 6);
+  });
+
+  test('overshooting and correcting is recorded as one reversed run', () async {
+    // 1,611 times in the field a decrease immediately followed an increase on
+    // the same product. That is the press-and-hold being too eager, and it is
+    // only visible if the run says it reversed.
+    final sink = _FakeAnalyticsSink();
+    final engine = AnalyticsEngine(
+      sink,
+      storage: MemoryAnalyticsQueueStorage(installationId: 'reverse'),
+      flushInterval: const Duration(hours: 1),
+    );
+    engine.setCurrentUser(1);
+    final viewModel = _viewModel(_FakePosApiService(), analyticsEngine: engine);
+    addTearDown(viewModel.dispose);
+    addTearDown(engine.dispose);
+
+    await viewModel.loadCurrentRegisterSession();
+    await viewModel.resumeRegisterSession();
+    viewModel.addVariant(_coffeeVariant, source: 'product_tile');
+    await _settle();
+    final lineKey = viewModel.cart.single.lineKey;
+
+    viewModel.incrementCartLine(lineKey);
+    viewModel.incrementCartLine(lineKey);
+    viewModel.incrementCartLine(lineKey);
+    viewModel.decrementCartLine(lineKey);
+    await _settle();
+    viewModel.clearCart();
+    await engine.flush();
+
+    final settled = sink.acceptedEvents.firstWhere(
+      (event) => event.name == 'pos.cart.line.quantity_settled',
+    );
+
+    expect(settled.attributes['reversed'], isTrue);
+    expect(settled.metrics['reversals'], 1);
+    expect(settled.attributes['new_quantity'], 3);
+  });
+
+  test('a run that ends where it started records nothing', () async {
+    // Up and back down to the same number changed nothing; a row saying so is
+    // exactly the noise this removes.
+    final sink = _FakeAnalyticsSink();
+    final engine = AnalyticsEngine(
+      sink,
+      storage: MemoryAnalyticsQueueStorage(installationId: 'noop'),
+      flushInterval: const Duration(hours: 1),
+    );
+    engine.setCurrentUser(1);
+    final viewModel = _viewModel(_FakePosApiService(), analyticsEngine: engine);
+    addTearDown(viewModel.dispose);
+    addTearDown(engine.dispose);
+
+    await viewModel.loadCurrentRegisterSession();
+    await viewModel.resumeRegisterSession();
+    viewModel.addVariant(_coffeeVariant, source: 'product_tile');
+    await _settle();
+    final lineKey = viewModel.cart.single.lineKey;
+
+    viewModel.incrementCartLine(lineKey);
+    viewModel.decrementCartLine(lineKey);
+    await _settle();
+    viewModel.clearCart();
+    await engine.flush();
+
+    expect(
+      sink.acceptedEvents.where(
+        (event) => event.name == 'pos.cart.line.quantity_settled',
+      ),
+      isEmpty,
+    );
+  });
 }

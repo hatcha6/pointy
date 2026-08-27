@@ -161,7 +161,7 @@ class _UserHeader extends StatelessWidget {
       trailing: isRefreshing
           ? const SizedBox.square(
               dimension: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: PointySpinner(strokeWidth: 2),
             )
           : null,
       child: Column(
@@ -172,9 +172,9 @@ class _UserHeader extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               user.email.trim(),
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: context.pointyColors.mutedInk),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: context.pointyColors.mutedInk,
+              ),
             ),
           ],
           const SizedBox(height: 8),
@@ -247,12 +247,16 @@ class _PermissionsSection extends StatelessWidget {
               runSpacing: 8,
               children: [
                 PointyStatusPill(
-                  label: l10n.userPermissionsInheritedCount(inheritedCount ?? 0),
+                  label: l10n.userPermissionsInheritedCount(
+                    inheritedCount ?? 0,
+                  ),
                   icon: Icons.lock_outline,
                   color: colors.mutedInk,
                 ),
                 PointyStatusPill(
-                  label: l10n.userPermissionsExtraCount(user.extraPermissionCount),
+                  label: l10n.userPermissionsExtraCount(
+                    user.extraPermissionCount,
+                  ),
                   icon: Icons.tune,
                   color: user.hasExtraPermissions
                       ? colors.accentAmber

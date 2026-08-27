@@ -21,7 +21,10 @@ enum ProductCreateOutcome { failed, created, createdWithImageError }
 /// [Product] (null when creation failed) so callers — e.g. the purchasing
 /// workspace — can act on the fresh product, such as dropping its default
 /// variant straight into a purchase order.
-typedef ProductCreateResult = ({ProductCreateOutcome outcome, Product? product});
+typedef ProductCreateResult = ({
+  ProductCreateOutcome outcome,
+  Product? product,
+});
 
 class BulkActionResult {
   const BulkActionResult({required this.ok, required this.updated});
@@ -73,7 +76,9 @@ class CatalogViewModel extends ChangeNotifier {
   // form can mark the offending field instead of printing one red line.
   List<CatalogIdentityConflict> _saveConflicts = const [];
   // Browse "most bought" first by default (A–Z stays available in the filters).
-  ProductQuery _query = const ProductQuery(ordering: ProductOrdering.mostBought);
+  ProductQuery _query = const ProductQuery(
+    ordering: ProductOrdering.mostBought,
+  );
 
   final Set<int> _selectedIds = {};
   bool _selectionMode = false;
@@ -96,7 +101,8 @@ class CatalogViewModel extends ChangeNotifier {
   int get selectedCount => _selectedIds.length;
   bool isSelected(int id) => _selectedIds.contains(id);
   bool get allVisibleSelected =>
-      _products.isNotEmpty && _products.every((p) => _selectedIds.contains(p.id));
+      _products.isNotEmpty &&
+      _products.every((p) => _selectedIds.contains(p.id));
 
   void enterSelectionMode() {
     if (!_selectionMode) {

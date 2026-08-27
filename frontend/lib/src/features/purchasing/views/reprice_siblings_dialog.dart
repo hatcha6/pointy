@@ -8,6 +8,7 @@ import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../view_models/purchase_view_model.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Opens the reprice-siblings dialog for a purchase draft [line]: lists every
 /// variant of the line's product with an editable selling price, pre-filled from
@@ -159,10 +160,7 @@ class _RepriceSiblingsDialogState extends State<_RepriceSiblingsDialog> {
       content: SizedBox(
         width: 520,
         child: _loading
-            ? const SizedBox(
-                height: 96,
-                child: Center(child: CircularProgressIndicator()),
-              )
+            ? const SizedBox(height: 96, child: Center(child: PointySpinner()))
             : Form(
                 key: _formKey,
                 child: Column(
@@ -170,12 +168,10 @@ class _RepriceSiblingsDialogState extends State<_RepriceSiblingsDialog> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      l10n.repriceSiblingsSubtitle(
-                        formatMoney(_baseUnitCost),
-                      ),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colors.mutedInk,
-                      ),
+                      l10n.repriceSiblingsSubtitle(formatMoney(_baseUnitCost)),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
                     ),
                     if (_markupPercent != null) ...[
                       const SizedBox(height: 4),
@@ -215,16 +211,20 @@ class _RepriceSiblingsDialogState extends State<_RepriceSiblingsDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _submitting ? null : () => Navigator.of(context).pop(false),
+          onPressed: _submitting
+              ? null
+              : () => Navigator.of(context).pop(false),
           child: Text(l10n.cancelButton),
         ),
         FilledButton(
-          onPressed: _submitting || _loading || _variants.isEmpty ? null : _submit,
+          onPressed: _submitting || _loading || _variants.isEmpty
+              ? null
+              : _submit,
           child: _submitting
               ? const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : Text(l10n.changePricesSaveButton),
         ),
@@ -278,9 +278,9 @@ class _VariantPriceRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   '${l10n.currentPriceLabel}: ${formatMoney(variant.unitPrice)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.mutedInk,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
                 ),
               ],
             ),

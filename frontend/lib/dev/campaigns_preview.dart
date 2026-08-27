@@ -125,7 +125,12 @@ class _FakeCrmRepository extends CrmRepository {
   Future<Result<Campaign>> sendCampaign(int id) async {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     return const Ok(
-      Campaign(id: 1, name: 'عرض العيد', bodyTemplate: '', status: CampaignStatus.sending),
+      Campaign(
+        id: 1,
+        name: 'عرض العيد',
+        bodyTemplate: '',
+        status: CampaignStatus.sending,
+      ),
     );
   }
 }

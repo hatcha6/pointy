@@ -115,8 +115,7 @@ class PointyDataList<T> extends StatelessWidget {
   Widget _skeletonList(BuildContext context) {
     final builder =
         skeletonItemBuilder ?? (_) => const PointySkeletonListTile();
-    final separator =
-        separatorBuilder ?? (_, _) => const SizedBox(height: 8);
+    final separator = separatorBuilder ?? (_, _) => const SizedBox(height: 8);
     return PointySkeleton(
       child: ListView.separated(
         shrinkWrap: true,

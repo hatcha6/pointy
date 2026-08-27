@@ -5,20 +5,40 @@ import 'package:sqflite/sqflite.dart' as sqflite;
 // sqflite_common_ffi re-exports the sqflite_common api (DatabaseFactory, ...).
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'key_value_store.dart';
+import 'local_database.dart';
+import 'local_stores.dart';
+import 'sqlite_analytics_queue.dart';
 import 'sqlite_key_value_store.dart';
 import 'storage_migration.dart';
 
-/// Native build: open the durable SQLite store and run the one-time
-/// `shared_preferences` migration. Selected over [kv_open_stub.dart] whenever
-/// `dart.library.io` is available (i.e. every non-web platform).
-Future<KeyValueStore> openPlatformKeyValueStore() async {
+/// Native build: open the one local database, hand out the stores that live in
+/// it, and run the one-time migrations. Selected over [kv_open_stub.dart]
+/// whenever `dart.library.io` is available (i.e. every non-web platform).
+///
+/// One connection for both tables, deliberately: a second connection would be a
+/// second writer, and writers are what contend for the lock.
+Future<LocalStores> openPlatformStores() async {
   final factory = _databaseFactory();
   final dir = await getApplicationSupportDirectory();
   final path = '${dir.path}${Platform.pathSeparator}pointy_store.db';
-  final store = await SqliteKeyValueStore.open(factory: factory, path: path);
-  await migrateFromSharedPreferences(store);
-  return store;
+  final database = await LocalDatabase.open(
+    factory: factory,
+    path: path,
+    schema: const <String>[
+      SqliteKeyValueStore.schema,
+      SqliteAnalyticsQueue.schema,
+    ],
+  );
+  final keyValue = SqliteKeyValueStore(database);
+  final analyticsQueue = SqliteAnalyticsQueue(database);
+  await migrateFromSharedPreferences(keyValue);
+  // Lift any queue still sitting in the old single-row form into the table.
+  await analyticsQueue.migrateLegacyBlob(
+    keyValue,
+    legacyKey: legacyAnalyticsQueueKey,
+    clientEventIdOf: analyticsClientEventIdOf,
+  );
+  return LocalStores(keyValue: keyValue, analyticsQueue: analyticsQueue);
 }
 
 /// Desktop uses the bundled sqlite3 via FFI; the `sqflite` plugin is mobile-only

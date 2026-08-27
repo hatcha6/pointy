@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'components/pointy_skeleton.dart';
+import 'components/pointy_progress.dart';
 
 class InfiniteScrollView<T> extends StatefulWidget {
   const InfiniteScrollView({
@@ -121,7 +122,7 @@ class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
       return _withHeader(
         const Padding(
           padding: EdgeInsets.all(24),
-          child: Center(child: CircularProgressIndicator()),
+          child: Center(child: PointySpinner()),
         ),
       );
     }
@@ -138,8 +139,7 @@ class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
     return CustomScrollView(
       controller: _controller,
       slivers: [
-        if (widget.header != null)
-          SliverToBoxAdapter(child: widget.header),
+        if (widget.header != null) SliverToBoxAdapter(child: widget.header),
         SliverPadding(
           padding: widget.padding,
           sliver: widget.sliverBuilder(context, delegate),
@@ -148,7 +148,7 @@ class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: PointySpinner()),
             ),
           ),
       ],
@@ -159,7 +159,7 @@ class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
     final header = widget.header;
     if (header == null) {
       if (widget.isLoadingInitial && widget.items.isEmpty) {
-        return const Center(child: CircularProgressIndicator());
+        return const Center(child: PointySpinner());
       }
       return body;
     }

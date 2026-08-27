@@ -548,7 +548,13 @@ class PurchaseOrderDraft {
   /// in the editor actually clears them on the draft, rather than silently
   /// keeping the old value. Lines and landed costs are replaced wholesale either
   /// way.
-  Map<String, Object?> toJson({bool forUpdate = false}) {
+  /// Serializes with the buyer's confirmation of the cost warnings the backend
+  /// raised on the previous attempt. Only the purchasing screen may set this —
+  /// a POS cash purchase blocks outright and ignores it.
+  Map<String, Object?> toJson({
+    bool forUpdate = false,
+    bool acknowledgeCostWarnings = false,
+  }) {
     final invoiceNumber = supplierInvoiceNumber.trim();
     final normalizedDiscountCode = discountCode.trim();
     final invoiceDate = supplierInvoiceDate?.toIso8601String().split('T').first;
@@ -572,6 +578,7 @@ class PurchaseOrderDraft {
             : [normalizedDiscountCode],
       if (forUpdate || extraDiscountAmount > 0)
         'extra_discount_amount': extraDiscountAmount.toStringAsFixed(2),
+      if (acknowledgeCostWarnings) 'acknowledge_cost_warnings': true,
       'lines': lines.map((line) => line.toJson()).toList(),
     };
   }

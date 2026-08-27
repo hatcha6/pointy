@@ -114,3 +114,18 @@ def sync_relay_installation_task():
         logger.info("relay installation sync skipped (offline or unconfigured): %s", exc)
         return "relay unavailable"
     return "synced"
+
+
+@shared_task(name="core.purge_expired_idempotency_records")
+def purge_expired_idempotency_records_task():
+    """Keep the idempotency table to its retention window.
+
+    See ``purge_expired_idempotency_records``: the table only ever grew, and
+    every row carries a stored JSON response body.
+    """
+    from .idempotency import purge_expired_idempotency_records
+
+    deleted = purge_expired_idempotency_records()
+    if deleted:
+        logger.info("Purged %s expired idempotency records", deleted)
+    return deleted

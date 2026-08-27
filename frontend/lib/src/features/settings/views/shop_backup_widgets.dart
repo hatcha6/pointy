@@ -75,6 +75,10 @@ class _BackupOperationsPageState extends State<_BackupOperationsPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          if (status != null && status.health.isStale) ...[
+                            _BackupHealthBanner(health: status.health),
+                            SizedBox(height: spacing.md),
+                          ],
                           PointyDetailSection(
                             icon: Icons.backup_outlined,
                             title: l10n.backupScheduleSectionTitle,
@@ -528,7 +532,7 @@ class _BackupActionBar extends StatelessWidget {
           icon: isSavingSchedule
               ? const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : const Icon(Icons.save_outlined),
           label: Text(
@@ -542,7 +546,7 @@ class _BackupActionBar extends StatelessWidget {
           icon: isStartingBackup
               ? const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : const Icon(Icons.backup_outlined),
           label: Text(
@@ -597,7 +601,7 @@ class _BackupJobProgressCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            LinearProgressIndicator(value: progress),
+            PointyProgressBar(value: progress),
             if (job.progressMessage.trim().isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
@@ -645,7 +649,7 @@ class _RestoreBackupFields extends StatelessWidget {
             icon: isRestoring
                 ? const SizedBox.square(
                     dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PointySpinner(strokeWidth: 2),
                   )
                 : const Icon(Icons.upload_file_outlined),
             label: Text(
@@ -656,6 +660,41 @@ class _RestoreBackupFields extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The alarm a manager sees on the screen they came to for backups.
+///
+/// Only shown when the shop has no recent *verified* archive. It deliberately
+/// leads with the consequence ("there is no way back right now") rather than the
+/// mechanism, because the failure this exists to prevent went unnoticed for
+/// weeks behind a history list that showed nothing but completed jobs.
+class _BackupHealthBanner extends StatelessWidget {
+  const _BackupHealthBanner({required this.health});
+
+  final BackupHealth health;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final neverVerified = health.hasNeverVerified;
+    final message = neverVerified
+        ? l10n.backupHealthNeverMessage
+        : l10n.backupHealthStaleMessage(
+            _formatOptionalBackupDateTime(context, health.latestVerifiedAt),
+            health.staleAfterHours,
+          );
+
+    return PointyDetailCallout(
+      icon: Icons.report_problem_outlined,
+      tone: PointyCalloutTone.danger,
+      title: neverVerified
+          ? l10n.backupHealthNeverTitle
+          : l10n.backupHealthStaleTitle,
+      message: health.lastError.isEmpty
+          ? message
+          : '$message\n${l10n.backupHealthLastErrorLabel(health.lastError)}',
     );
   }
 }

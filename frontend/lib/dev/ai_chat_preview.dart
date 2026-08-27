@@ -161,7 +161,10 @@ class _PreviewHostState extends State<_PreviewHost> {
       productSearch: _fakeProductSearch,
       onOpenAiLink: (context, link) async {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فتح: $link'), duration: const Duration(seconds: 1)),
+          SnackBar(
+            content: Text('فتح: $link'),
+            duration: const Duration(seconds: 1),
+          ),
         );
         return true;
       },
@@ -169,7 +172,10 @@ class _PreviewHostState extends State<_PreviewHost> {
   }
 
   /// A handful of fake products so the product_picker sheet can be exercised.
-  Future<AsyncSelectionPage<int>> _fakeProductSearch(String search, int page) async {
+  Future<AsyncSelectionPage<int>> _fakeProductSearch(
+    String search,
+    int page,
+  ) async {
     await Future<void>.delayed(const Duration(milliseconds: 200));
     const all = [
       (10, 'حليب المراعي ١ لتر', 'MILK-1L • 6291000111'),
@@ -258,10 +264,22 @@ class _FakeAiChatRepository extends AiChatRepository {
         usage: _fakeUsage(fiveUsed: 24, weekUsed: 97),
         webSearched: true,
         sources: const [
-          AiSource(url: 'https://www.reuters.com/markets/gold', title: 'Reuters — Gold rises as dollar slips'),
-          AiSource(url: 'https://www.bloomberg.com/gold', title: 'Bloomberg — Precious metals'),
-          AiSource(url: 'https://goldprice.org/', title: 'GoldPrice.org — Live spot price'),
-          AiSource(url: 'https://www.kitco.com/', title: 'Kitco — Gold market news'),
+          AiSource(
+            url: 'https://www.reuters.com/markets/gold',
+            title: 'Reuters — Gold rises as dollar slips',
+          ),
+          AiSource(
+            url: 'https://www.bloomberg.com/gold',
+            title: 'Bloomberg — Precious metals',
+          ),
+          AiSource(
+            url: 'https://goldprice.org/',
+            title: 'GoldPrice.org — Live spot price',
+          ),
+          AiSource(
+            url: 'https://www.kitco.com/',
+            title: 'Kitco — Gold market news',
+          ),
         ],
       );
       return;
@@ -340,7 +358,8 @@ class _FakeAiChatRepository extends AiChatRepository {
   /// accented, persistent create actions, then a markdown summary — so the
   /// action-chip styling can be screenshotted next to a read chip.
   Stream<AiChatEvent> _actionsScript() async* {
-    const reasoning = 'مطعم — سأنشئ المنتج ثم وصفته ومكوّناته ليكتمل خصم المخزون.';
+    const reasoning =
+        'مطعم — سأنشئ المنتج ثم وصفته ومكوّناته ليكتمل خصم المخزون.';
     for (final word in reasoning.split(' ')) {
       await Future<void>.delayed(const Duration(milliseconds: 30));
       yield AiChatReasoning('$word ');
@@ -382,8 +401,12 @@ class _FakeAiChatRepository extends AiChatRepository {
         phase: 'done',
         ok: true,
         mutates: true,
-        arguments: {'resource': action.$2, 'data': {'name': 'برغر لحم'}},
-        output: '{\n  "ok": true,\n  "data": { "id": 42, "name": "برغر لحم" }\n}',
+        arguments: {
+          'resource': action.$2,
+          'data': {'name': 'برغر لحم'},
+        },
+        output:
+            '{\n  "ok": true,\n  "data": { "id": 42, "name": "برغر لحم" }\n}',
       );
     }
     const reply =
@@ -422,7 +445,8 @@ class _FakeAiChatRepository extends AiChatRepository {
       phase: 'done',
       ok: true,
     );
-    const reasoning = 'طابقتُ معظم البنود؛ بقي بند واحد لم أجد له منتجًا مطابقًا.';
+    const reasoning =
+        'طابقتُ معظم البنود؛ بقي بند واحد لم أجد له منتجًا مطابقًا.';
     for (final word in reasoning.split(' ')) {
       await Future<void>.delayed(const Duration(milliseconds: 35));
       yield AiChatReasoning('$word ');
@@ -436,7 +460,8 @@ class _FakeAiChatRepository extends AiChatRepository {
         AiQuestion(
           id: 'line3',
           type: AiQuestionType.productPicker,
-          prompt: 'راجع البند «حليب المراعي ١ لتر» — هل المطابق هو أحد المنتجات أدناه؟',
+          prompt:
+              'راجع البند «حليب المراعي ١ لتر» — هل المطابق هو أحد المنتجات أدناه؟',
           help: 'الكمية 12 — التكلفة 2.50 د.ل — سعر بيع مقترح 3.25 د.ل',
           config: const {
             'name': 'حليب المراعي ١ لتر',
@@ -446,7 +471,11 @@ class _FakeAiChatRepository extends AiChatRepository {
             'deny_label': 'أنشئ منتجًا جديدًا',
             // A pre-suggested candidate the AI matched — one tap to confirm.
             'options': [
-              {'value': '10', 'label': 'حليب المراعي ١ لتر (باركود: 6291000111، السعر الحالي: 3.00 د.ل)'},
+              {
+                'value': '10',
+                'label':
+                    'حليب المراعي ١ لتر (باركود: 6291000111، السعر الحالي: 3.00 د.ل)',
+              },
             ],
           },
         ),

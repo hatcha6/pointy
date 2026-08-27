@@ -203,7 +203,7 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
                   icon: _isSubmitting
                       ? const SizedBox.square(
                           dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: PointySpinner(strokeWidth: 2),
                         )
                       : const Icon(Icons.lock_outline),
                   label: Text(

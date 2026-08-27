@@ -35,6 +35,7 @@ import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/order_document_service.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
 import '../../../shared/unit_options.dart';
+import '../../../core/analytics_burst_coalescer.dart';
 
 part 'pos_cart_actions.dart';
 part 'pos_catalog_actions.dart';
@@ -163,10 +164,25 @@ class PosViewModel extends ChangeNotifier {
     ),
     ScanFeedbackPlayer? scanFeedback,
     Duration checkoutPrintDeadline = const Duration(seconds: 20),
+    this.cartQuantityIdleTimeout = const Duration(milliseconds: 700),
   }) : _analyticsEngine = analyticsEngine,
        _sessionStorage = sessionStorage,
        _scanFeedback = scanFeedback,
        _checkoutPrintDeadline = checkoutPrintDeadline;
+
+  /// How long a +/- run may pause before it counts as finished.
+  ///
+  /// Auto-repeat fires roughly every 100ms and a deliberate second press is far
+  /// slower than this, so the boundary lands where the cashier's intent
+  /// changes rather than where the keyboard happened to repeat.
+  final Duration cartQuantityIdleTimeout;
+
+  /// Open +/- runs, one per cart line — see PosCartActions.
+  late final BurstCoalescer<_CartQuantityRun> _cartQuantityRuns =
+      BurstCoalescer<_CartQuantityRun>(
+        idleTimeout: cartQuantityIdleTimeout,
+        onSettled: _emitCartQuantityRun,
+      );
 
   final CatalogRepository _catalogRepository;
   final RegisterSessionRepository _registerSessionRepository;
@@ -459,6 +475,8 @@ class PosViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    // Emit any run still open rather than losing what the cashier just did.
+    _cartQuantityRuns.dispose();
     _persistDebounce?.cancel();
     _searchFocusController.dispose();
     _searchResetController.dispose();
@@ -698,13 +716,18 @@ String _newCheckoutIdempotencyKey() {
 /// The sale's commercial identity — the lines, payments, customer, coupon and
 /// sale type the backend actually records.
 ///
-/// `print_invoice` is deliberately left out. Which printer the receipt goes to
-/// does not make it a different sale, and while it was part of the signature a
-/// printer config that resolved differently between two attempts (the shop
-/// settings failing to reload during the very outage that made the first
-/// attempt time out, clearing the manual print toggle) rotated the idempotency
-/// key and booked the sale twice.
+/// `print_invoice` and `receipt_delivery` are deliberately left out. Which
+/// printer the receipt goes to — and whether this till or an agent prints it —
+/// does not make it a different sale, and while `print_invoice` was part of the
+/// signature a printer config that resolved differently between two attempts
+/// (the shop settings failing to reload during the very outage that made the
+/// first attempt time out, clearing the manual print toggle) rotated the
+/// idempotency key and booked the sale twice. `receipt_delivery` is derived
+/// from the same settings and printer, so it can flip for exactly the same
+/// reason and must be excluded for exactly the same reason.
 String _checkoutSignature(SaleCheckoutDraft draft) {
-  final body = draft.toJson()..remove('print_invoice');
+  final body = draft.toJson()
+    ..remove('print_invoice')
+    ..remove('receipt_delivery');
   return jsonEncode(body);
 }

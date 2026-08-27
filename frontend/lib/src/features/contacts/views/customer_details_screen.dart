@@ -417,7 +417,7 @@ class _OutstandingBalanceCallout extends StatelessWidget {
           icon: busy
               ? const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : const Icon(Icons.add_card_outlined),
           label: Text(l10n.recordCustomerPaymentButton),

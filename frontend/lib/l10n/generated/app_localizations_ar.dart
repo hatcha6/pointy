@@ -4191,6 +4191,52 @@ class AppLocalizationsAr extends AppLocalizations {
   String get restoreStartedMessage => 'بدأت الاستعادة.';
 
   @override
+  String get purchaseCostWarningTitle => 'تحقق من التكلفة';
+
+  @override
+  String get purchaseCostWarningBody =>
+      'التكلفة المدخلة تبدو غير معتادة. راجعها قبل الحفظ — إن كانت صحيحة يمكنك المتابعة.';
+
+  @override
+  String get purchaseCostWarningBlockedBody =>
+      'التكلفة المدخلة غير منطقية ولا يمكن حفظها. تأكد من الكمية وسعر الوحدة، فربما أدخلت المبلغ الإجمالي بدل سعر القطعة.';
+
+  @override
+  String get purchaseCostWarningReviewButton => 'مراجعة';
+
+  @override
+  String get purchaseCostWarningFixButton => 'تصحيح';
+
+  @override
+  String get purchaseCostWarningConfirmButton => 'التكلفة صحيحة، تابع';
+
+  @override
+  String get backupHealthNeverTitle => 'لا توجد نسخة احتياطية مؤكدة';
+
+  @override
+  String get backupHealthNeverMessage =>
+      'لم يتم بعد التحقق من أي نسخة احتياطية لهذا المتجر. لا توجد حالياً وسيلة لاسترجاع البيانات إذا تعطل الجهاز.';
+
+  @override
+  String get backupHealthStaleTitle => 'النسخة الاحتياطية قديمة';
+
+  @override
+  String backupHealthStaleMessage(String verifiedAt, int hours) {
+    return 'آخر نسخة مؤكدة كانت $verifiedAt. الحد المسموح به $hours ساعة.';
+  }
+
+  @override
+  String backupHealthLastErrorLabel(String message) {
+    return 'آخر خطأ: $message';
+  }
+
+  @override
+  String get backupHealthVerifiedLabel => 'آخر نسخة مؤكدة';
+
+  @override
+  String get backupHealthVerifiedNever => 'لا توجد';
+
+  @override
   String get backupHistorySectionTitle => 'آخر العمليات';
 
   @override

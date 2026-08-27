@@ -113,6 +113,22 @@ def lookup_price(
     )
     matched_unit = None
     if variant is None:
+        # Scanned code is not a barcode we know — try it as a SKU before giving
+        # up. Shops label their own goods, and 2,996 variants here carry no
+        # barcode at all, so a printed SKU is often the only code on the item.
+        # Costs one indexed lookup, and only on the path that was already about
+        # to answer "not found".
+        variant = (
+            ProductVariant.objects.select_related("product")
+            .filter(
+                sku__iexact=code,
+                is_active=True,
+                product__is_active=True,
+                product__archived_at__isnull=True,
+            )
+            .first()
+        )
+    if variant is None:
         # Unit (carton/box) barcode: price one of that unit against the
         # product's default variant.
         unit_barcode = (

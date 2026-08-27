@@ -179,10 +179,11 @@ class PurchasingApiClient {
   Future<PurchaseOrder> createPurchaseOrder(
     PurchaseOrderDraft draft, {
     String? idempotencyKey,
+    bool acknowledgeCostWarnings = false,
   }) async {
     final response = await _session.post(
       'purchase-orders/',
-      body: draft.toJson(),
+      body: draft.toJson(acknowledgeCostWarnings: acknowledgeCostWarnings),
       idempotencyKey: idempotencyKey,
     );
     _session.throwApiException(

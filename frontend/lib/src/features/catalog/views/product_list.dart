@@ -75,7 +75,7 @@ class ProductList extends StatelessWidget {
             trailing: viewModel.isLoading
                 ? const SizedBox.square(
                     dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PointySpinner(strokeWidth: 2),
                   )
                 : (capabilities.canChangeProduct && !selectionMode)
                 ? _CatalogOverflowMenu(
@@ -117,7 +117,8 @@ class ProductList extends StatelessWidget {
               canCreateProduct: capabilities.canCreateProduct,
               onCreateProduct: onCreateProduct,
             ),
-            if (capabilities.canChangeProduct && viewModel.isViewingArchived) ...[
+            if (capabilities.canChangeProduct &&
+                viewModel.isViewingArchived) ...[
               SizedBox(height: spacing.sm),
               Align(
                 alignment: AlignmentDirectional.centerStart,
@@ -446,7 +447,7 @@ class _BulkSelectionBar extends StatelessWidget {
                 padding: EdgeInsets.symmetric(horizontal: 8),
                 child: SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 ),
               ),
             OutlinedButton.icon(

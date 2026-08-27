@@ -23,6 +23,20 @@ enum SaleType {
   };
 }
 
+/// How the till will get this sale's receipt to the customer.
+///
+/// The backend uses it to decide whether the sale needs a print-queue row at
+/// all. [local] means this device prints the document itself and no agent
+/// should ever see it.
+enum ReceiptDelivery {
+  local('local'),
+  agent('agent');
+
+  const ReceiptDelivery(this.apiValue);
+
+  final String apiValue;
+}
+
 class SaleCheckoutDraft {
   const SaleCheckoutDraft({
     required this.lines,
@@ -33,6 +47,7 @@ class SaleCheckoutDraft {
     this.saleType = SaleType.standard,
     this.validUntil,
     this.reserveStock = false,
+    this.receiptDelivery,
   });
 
   final List<SaleCheckoutLineDraft> lines;
@@ -48,6 +63,10 @@ class SaleCheckoutDraft {
   /// Quotation-only: hold the quoted quantities until [validUntil].
   final bool reserveStock;
 
+  /// Null from a caller that has not resolved its printer yet; the backend then
+  /// falls back to whether any agent is reading the queue.
+  final ReceiptDelivery? receiptDelivery;
+
   factory SaleCheckoutDraft.fromCart({
     required List<CartLine> cart,
     required List<SaleCheckoutPaymentDraft> payments,
@@ -57,6 +76,7 @@ class SaleCheckoutDraft {
     SaleType saleType = SaleType.standard,
     DateTime? validUntil,
     bool reserveStock = false,
+    ReceiptDelivery? receiptDelivery,
   }) {
     return SaleCheckoutDraft(
       lines: cart
@@ -77,6 +97,7 @@ class SaleCheckoutDraft {
       saleType: saleType,
       validUntil: validUntil,
       reserveStock: reserveStock,
+      receiptDelivery: receiptDelivery,
     );
   }
 
@@ -99,6 +120,14 @@ class SaleCheckoutDraft {
           'agent_id': invoicePrinterConfig!.agentId,
           'printer_endpoint': invoicePrinterConfig!.endpoint.toJson(),
         },
+      // Tells the backend whether to make a queue row for this sale at all. A
+      // driver/PDF printer is driven straight from here and never touches the
+      // queue, so a row created for it is one nothing will ever read — in the
+      // field that banked 24,264 unread receipt jobs while every receipt
+      // printed fine. Saying so per sale also keeps a mixed shop honest: an
+      // agent must not claim and re-print a receipt this till already produced.
+      if (receiptDelivery != null)
+        'receipt_delivery': receiptDelivery!.apiValue,
     };
   }
 }

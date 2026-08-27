@@ -930,6 +930,9 @@ class PurchaseOrderApiTests(TestCase):
         response = self.client.post(
             reverse("purchaseorder-list"),
             self.purchase_order_payload(
+                # Fixture costs are far above these variants' prices; the
+                # subject here is landed-cost weighting, not cost realism.
+                acknowledge_cost_warnings=True,
                 landed_cost_entries=[
                     {"name": "شحن", "amount": "3.42"},
                 ],

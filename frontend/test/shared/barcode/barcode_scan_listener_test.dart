@@ -270,31 +270,41 @@ void main() {
     expect(submitted, isEmpty);
   });
 
-  testWidgets('a ScanWedgeTarget field receives the raw wedge input untouched', (
-    tester,
-  ) async {
-    final controller = TextEditingController();
-    addTearDown(controller.dispose);
-    final submitted = <String>[];
-    final events = await pumpListener(
-      tester,
-      child: Material(
-        child: ScanWedgeTarget(
-          child: TextField(
-            controller: controller,
-            autofocus: true,
-            onSubmitted: submitted.add,
+  testWidgets(
+    'a ScanWedgeTarget field receives the raw wedge input untouched',
+    (tester) async {
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+      final submitted = <String>[];
+      final events = await pumpListener(
+        tester,
+        child: Material(
+          child: ScanWedgeTarget(
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              onSubmitted: submitted.add,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    await sendBurst(tester, events.clock, digits12345678, typeInto: controller);
-    await tester.pump();
+      await sendBurst(
+        tester,
+        events.clock,
+        digits12345678,
+        typeInto: controller,
+      );
+      await tester.pump();
 
-    expect(events.scanned, isEmpty);
-    expect(controller.text, '12345678', reason: 'exempt fields keep the wedge input');
-  });
+      expect(events.scanned, isEmpty);
+      expect(
+        controller.text,
+        '12345678',
+        reason: 'exempt fields keep the wedge input',
+      );
+    },
+  );
 
   testWidgets('function keys fire globally — with or without a focused text '
       'field', (tester) async {
@@ -308,10 +318,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.f2);
     await tester.pump();
 
-    expect(events.functionKeys, [
-      LogicalKeyboardKey.f1,
-      LogicalKeyboardKey.f2,
-    ]);
+    expect(events.functionKeys, [LogicalKeyboardKey.f1, LogicalKeyboardKey.f2]);
     expect(events.scanned, isEmpty);
   });
 
@@ -346,8 +353,11 @@ void main() {
     await tester.pump();
 
     expect(events.functionKeys, [LogicalKeyboardKey.f4]);
-    expect(events.scanned, isEmpty,
-        reason: 'the buffer died with the function key');
+    expect(
+      events.scanned,
+      isEmpty,
+      reason: 'the buffer died with the function key',
+    );
   });
 
   testWidgets('Ctrl+Enter fires the checkout chord instead of a scan submit', (

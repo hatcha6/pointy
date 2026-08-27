@@ -205,10 +205,7 @@ class _SelectableRow extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsetsDirectional.only(start: 8),
-            child: Checkbox(
-              value: selected,
-              onChanged: (_) => onToggle(),
-            ),
+            child: Checkbox(value: selected, onChanged: (_) => onToggle()),
           ),
           Expanded(child: child),
         ],

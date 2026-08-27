@@ -3,7 +3,9 @@ from rest_framework import serializers
 from .backup import (
     BackupValidationError,
     active_maintenance_job,
+    backup_health,
     latest_maintenance_job,
+    latest_verified_backup,
     next_scheduled_backup_at,
     validate_backup_destination,
 )
@@ -85,11 +87,29 @@ class SystemBackupScheduleSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class BackupHealthSerializer(serializers.Serializer):
+    """What the settings screen needs to answer "can we restore?".
+
+    The screen used to show only the last job's status, which reported success
+    for archives nobody had read. `latest_verified_at` is the honest field: it
+    moves only when an archive was written and read back intact.
+    """
+
+    enabled = serializers.BooleanField()
+    is_stale = serializers.BooleanField()
+    latest_verified_at = serializers.DateTimeField(allow_null=True)
+    stale_after_hours = serializers.IntegerField()
+    last_error = serializers.CharField(allow_blank=True)
+    last_attempt_at = serializers.DateTimeField(allow_null=True)
+
+
 class BackupOperationsStatusSerializer(serializers.Serializer):
     schedule = SystemBackupScheduleSerializer()
     active_job = SystemMaintenanceJobSerializer(allow_null=True)
     latest_backup_job = SystemMaintenanceJobSerializer(allow_null=True)
+    latest_verified_backup_job = SystemMaintenanceJobSerializer(allow_null=True)
     latest_restore_job = SystemMaintenanceJobSerializer(allow_null=True)
+    health = BackupHealthSerializer()
 
 
 def backup_operations_status_data():
@@ -100,7 +120,9 @@ def backup_operations_status_data():
         "latest_backup_job": latest_maintenance_job(
             SystemMaintenanceJob.Operation.BACKUP
         ),
+        "latest_verified_backup_job": latest_verified_backup(),
         "latest_restore_job": latest_maintenance_job(
             SystemMaintenanceJob.Operation.RESTORE
         ),
+        "health": backup_health(),
     }

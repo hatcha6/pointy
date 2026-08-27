@@ -1204,8 +1204,31 @@ def convert_quotation_to_sale(
     return new_order
 
 
-def create_receipt_print_job(order_id):
-    """Persist the receipt print job atomically with the sale.
+# What the till told us it will do with the receipt, sent on the checkout body.
+RECEIPT_DELIVERY_LOCAL = "local"
+RECEIPT_DELIVERY_AGENT = "agent"
+RECEIPT_DELIVERY_CHOICES = (RECEIPT_DELIVERY_LOCAL, RECEIPT_DELIVERY_AGENT)
+
+
+def requested_receipt_delivery(request):
+    """How the caller says this sale's receipt will reach the customer.
+
+    ``local`` means the till prints it itself and no queue row should be made.
+    ``agent`` (or nothing at all, from a client too old to say) leaves the
+    decision to whether an agent is actually reading the queue.
+    """
+    data = getattr(request, "data", None)
+    if not isinstance(data, dict):
+        return None
+    value = data.get("receipt_delivery")
+    if isinstance(value, str) and value in RECEIPT_DELIVERY_CHOICES:
+        return value
+    return None
+
+
+def create_receipt_print_job(order_id, *, request=None):
+    """Persist the receipt print job atomically with the sale — when anything
+    is going to read it.
 
     The print job is an outbox row that print agents poll for and print, so it
     does not depend on Redis or Celery for delivery. Creating it inside the
@@ -1213,15 +1236,37 @@ def create_receipt_print_job(order_id):
     outage or a crash in the post-commit window can never silently drop a paid
     order's receipt.
 
+    Two things can mean nothing will ever read it, and both skip creation:
+
+    The till said it prints the receipt itself. A driver/PDF printer is driven
+    straight from the client, which never touches the queue — so a row made for
+    that sale is one no consumer exists for. This is the exact per-sale answer
+    and it also keeps a mixed shop honest: with one agent-backed till and one
+    printing locally, the agent must not claim and re-print the other till's
+    receipt.
+
+    Or no agent has been seen recently, which is the fallback for callers with
+    no client to ask (a payment settled later, an operations job). In the field
+    a shop printing straight from the till banked 24,264 unread receipt jobs —
+    one per sale, each carrying a full receipt payload — while every receipt
+    printed perfectly by the other route.
+
+    Skipping loses nothing that was not already lost: the receipt is reprintable
+    from the order either way, which is what this outbox has always fallen back
+    on when printing fails.
+
     Job creation runs in its own savepoint and any failure is swallowed and
     logged: a printing misconfiguration (for example a broken default
-    template) must never roll back a completed, paid sale. When that happens
-    the sale still commits and staff can reprint the receipt from the order.
+    template) must never roll back a completed, paid sale.
     """
-    from apps.printing.services import enqueue_receipt_print_job
+    from apps.printing.services import enqueue_receipt_print_job, print_agent_is_live
 
     try:
+        if requested_receipt_delivery(request) == RECEIPT_DELIVERY_LOCAL:
+            return
         with transaction.atomic():
+            if not print_agent_is_live():
+                return
             enqueue_receipt_print_job(order_id)
     except Exception:
         logger.exception(
@@ -1253,7 +1298,7 @@ def mark_order_paid(order, *, request=None, stock_already_recorded=False):
 
     locked_order.status = Order.Status.PAID
     locked_order.save(update_fields=["status", "updated_at"])
-    create_receipt_print_job(locked_order.pk)
+    create_receipt_print_job(locked_order.pk, request=request)
     record_domain_event(
         name="sales.order.paid",
         event_type=AnalyticsEvent.EventType.AUDIT,

@@ -18,9 +18,10 @@ String priceCheckerStatusLabel(
     PriceCheckerStatus.active => l10n.priceCheckerStatusActive,
     PriceCheckerStatus.discovered => l10n.priceCheckerStatusDiscovered,
     PriceCheckerStatus.disabled => l10n.priceCheckerStatusDisabled,
-    PriceCheckerStatus.unknown => device.statusRaw.isEmpty
-        ? l10n.priceCheckerStatusDisabled
-        : device.statusRaw,
+    PriceCheckerStatus.unknown =>
+      device.statusRaw.isEmpty
+          ? l10n.priceCheckerStatusDisabled
+          : device.statusRaw,
   };
 }
 
@@ -62,9 +63,10 @@ String priceCheckerTransportLabel(
     PriceCheckerTransport.http => 'HTTP',
     PriceCheckerTransport.tcp => 'TCP',
     PriceCheckerTransport.udp => 'UDP',
-    PriceCheckerTransport.unknown => device.transportRaw.isEmpty
-        ? priceCheckerEmptyValue
-        : device.transportRaw.toUpperCase(),
+    PriceCheckerTransport.unknown =>
+      device.transportRaw.isEmpty
+          ? priceCheckerEmptyValue
+          : device.transportRaw.toUpperCase(),
   };
 }
 
@@ -76,9 +78,10 @@ String priceCheckerDiscoveryLabel(
     PriceCheckerDiscoveryMethod.manual => l10n.priceCheckerDiscoveryManual,
     PriceCheckerDiscoveryMethod.scan => l10n.priceCheckerDiscoveryScan,
     PriceCheckerDiscoveryMethod.self => l10n.priceCheckerDiscoverySelf,
-    PriceCheckerDiscoveryMethod.unknown => device.discoveryMethodRaw.isEmpty
-        ? priceCheckerEmptyValue
-        : device.discoveryMethodRaw,
+    PriceCheckerDiscoveryMethod.unknown =>
+      device.discoveryMethodRaw.isEmpty
+          ? priceCheckerEmptyValue
+          : device.discoveryMethodRaw,
   };
 }
 
@@ -91,9 +94,10 @@ String priceCheckerArabicSupportLabel(
     PriceCheckerArabicSupport.unicode => l10n.priceCheckerArabicUnicode,
     PriceCheckerArabicSupport.cp1256 => l10n.priceCheckerArabicCp1256,
     PriceCheckerArabicSupport.glyphs => l10n.priceCheckerArabicGlyphs,
-    PriceCheckerArabicSupport.unknown => device.arabicSupportRaw.isEmpty
-        ? priceCheckerEmptyValue
-        : device.arabicSupportRaw,
+    PriceCheckerArabicSupport.unknown =>
+      device.arabicSupportRaw.isEmpty
+          ? priceCheckerEmptyValue
+          : device.arabicSupportRaw,
   };
 }
 
@@ -106,7 +110,9 @@ String priceCheckerHardwareLabel(PriceCheckerDevice device) {
   if (parts.isNotEmpty) {
     return parts.join(' ');
   }
-  return device.driver.trim().isNotEmpty ? device.driver.trim() : priceCheckerEmptyValue;
+  return device.driver.trim().isNotEmpty
+      ? device.driver.trim()
+      : priceCheckerEmptyValue;
 }
 
 String priceCheckResultLabel(AppLocalizations l10n, PriceCheckEvent event) {
@@ -114,9 +120,8 @@ String priceCheckResultLabel(AppLocalizations l10n, PriceCheckEvent event) {
     PriceCheckResult.found => l10n.priceCheckResultFound,
     PriceCheckResult.notFound => l10n.priceCheckResultNotFound,
     PriceCheckResult.error => l10n.priceCheckResultError,
-    PriceCheckResult.unknown => event.resultRaw.isEmpty
-        ? priceCheckerEmptyValue
-        : event.resultRaw,
+    PriceCheckResult.unknown =>
+      event.resultRaw.isEmpty ? priceCheckerEmptyValue : event.resultRaw,
   };
 }
 

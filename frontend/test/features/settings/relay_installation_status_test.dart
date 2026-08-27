@@ -68,16 +68,18 @@ void main() {
     test('subscriptionExpired is false with no end date or a future date', () {
       expect(build(endsAt: null).subscriptionExpired, isFalse);
       expect(
-        build(endsAt: DateTime.now().add(const Duration(days: 5)))
-            .subscriptionExpired,
+        build(
+          endsAt: DateTime.now().add(const Duration(days: 5)),
+        ).subscriptionExpired,
         isFalse,
       );
     });
 
     test('subscriptionExpired is true once the end date has passed', () {
       expect(
-        build(endsAt: DateTime.now().subtract(const Duration(days: 1)))
-            .subscriptionExpired,
+        build(
+          endsAt: DateTime.now().subtract(const Duration(days: 1)),
+        ).subscriptionExpired,
         isTrue,
       );
     });
@@ -87,8 +89,9 @@ void main() {
       expect(build(aiEnabled: false).aiAvailable, isFalse);
       expect(build(subscriptionActive: false).aiAvailable, isFalse);
       expect(
-        build(endsAt: DateTime.now().subtract(const Duration(days: 1)))
-            .aiAvailable,
+        build(
+          endsAt: DateTime.now().subtract(const Duration(days: 1)),
+        ).aiAvailable,
         isFalse,
       );
     });
@@ -96,8 +99,9 @@ void main() {
     test('daysUntilExpiry is null without an end date', () {
       expect(build(endsAt: null).daysUntilExpiry, isNull);
       expect(
-        build(endsAt: DateTime.now().add(const Duration(days: 10, hours: 1)))
-            .daysUntilExpiry,
+        build(
+          endsAt: DateTime.now().add(const Duration(days: 10, hours: 1)),
+        ).daysUntilExpiry,
         10,
       );
     });

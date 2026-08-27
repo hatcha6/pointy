@@ -61,7 +61,9 @@ void main() {
 
   // A real, decodable PNG so the brand-mark raster path actually emits image
   // bytes (the encoder decodes + downscales it).
-  final markBytes = Uint8List.fromList(img.encodePng(img.Image(width: 16, height: 16)));
+  final markBytes = Uint8List.fromList(
+    img.encodePng(img.Image(width: 16, height: 16)),
+  );
 
   const base = PrinterEndpoint(
     kind: PrintTransportKind.fake,
@@ -72,45 +74,55 @@ void main() {
   // ESC 3 26 — the reduced line-spacing command a compact slip emits after reset.
   const tightSpacing = [0x1b, 0x33, 26];
 
-  test('compact mode emits the tight line-spacing command; standard does not', () async {
-    const encoder = EscPosReceiptEncoder(brandLogoLoader: _StubBrandLogoLoader(null));
+  test(
+    'compact mode emits the tight line-spacing command; standard does not',
+    () async {
+      const encoder = EscPosReceiptEncoder(
+        brandLogoLoader: _StubBrandLogoLoader(null),
+      );
 
-    final standard = await encoder.encodePayload(
-      payload: _salePayload(),
-      endpoint: base,
-    );
-    final compact = await encoder.encodePayload(
-      payload: _salePayload(),
-      endpoint: base.copyWith(compactReceipt: true),
-    );
+      final standard = await encoder.encodePayload(
+        payload: _salePayload(),
+        endpoint: base,
+      );
+      final compact = await encoder.encodePayload(
+        payload: _salePayload(),
+        endpoint: base.copyWith(compactReceipt: true),
+      );
 
-    expect(_containsSequence(standard, tightSpacing), isFalse);
-    expect(_containsSequence(compact, tightSpacing), isTrue);
-  });
+      expect(_containsSequence(standard, tightSpacing), isFalse);
+      expect(_containsSequence(compact, tightSpacing), isTrue);
+    },
+  );
 
-  test('the closing tagline renders the brand mark when its bytes are available', () async {
-    final withMark = EscPosReceiptEncoder(
-      brandLogoLoader: _StubBrandLogoLoader(markBytes),
-    );
-    const withoutMark = EscPosReceiptEncoder(
-      brandLogoLoader: _StubBrandLogoLoader(null),
-    );
+  test(
+    'the closing tagline renders the brand mark when its bytes are available',
+    () async {
+      final withMark = EscPosReceiptEncoder(
+        brandLogoLoader: _StubBrandLogoLoader(markBytes),
+      );
+      const withoutMark = EscPosReceiptEncoder(
+        brandLogoLoader: _StubBrandLogoLoader(null),
+      );
 
-    final marked = await withMark.encodePayload(
-      payload: _salePayload(),
-      endpoint: base,
-    );
-    final plain = await withoutMark.encodePayload(
-      payload: _salePayload(),
-      endpoint: base,
-    );
+      final marked = await withMark.encodePayload(
+        payload: _salePayload(),
+        endpoint: base,
+      );
+      final plain = await withoutMark.encodePayload(
+        payload: _salePayload(),
+        endpoint: base,
+      );
 
-    // The raster image adds a substantial run of bytes over the text-only tagline.
-    expect(marked.length, greaterThan(plain.length));
-  });
+      // The raster image adds a substantial run of bytes over the text-only tagline.
+      expect(marked.length, greaterThan(plain.length));
+    },
+  );
 
   test('a compact z-report also tightens line spacing', () async {
-    const encoder = EscPosReceiptEncoder(brandLogoLoader: _StubBrandLogoLoader(null));
+    const encoder = EscPosReceiptEncoder(
+      brandLogoLoader: _StubBrandLogoLoader(null),
+    );
     final bytes = await encoder.encodePayload(
       endpoint: base.copyWith(compactReceipt: true),
       payload: {

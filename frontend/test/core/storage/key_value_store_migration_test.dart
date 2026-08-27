@@ -14,12 +14,15 @@ void main() {
 
     await migrateFromSharedPreferences(store);
 
-    expect(await store.getString('pointy.connection.device_id.v1'), 'device-abc');
-    expect(await store.getString('device_usage_mode'), 'multi_user');
     expect(
-      await store.getStringList('pointy.analytics.queue.v1'),
-      ['{"a":1}', '{"b":2}'],
+      await store.getString('pointy.connection.device_id.v1'),
+      'device-abc',
     );
+    expect(await store.getString('device_usage_mode'), 'multi_user');
+    expect(await store.getStringList('pointy.analytics.queue.v1'), [
+      '{"a":1}',
+      '{"b":2}',
+    ]);
     // Sentinel is written so the migration knows it has run.
     expect(await store.getString(kMigratedFromPrefsKey), isNotNull);
   });
@@ -45,19 +48,22 @@ void main() {
     expect(await store.getString('late_key'), isNull);
   });
 
-  test('marks the legacy file so a consumed migration is recorded there too', () async {
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'device_usage_mode': 'multi_user',
-    });
-    final store = MemoryKeyValueStore();
+  test(
+    'marks the legacy file so a consumed migration is recorded there too',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'device_usage_mode': 'multi_user',
+      });
+      final store = MemoryKeyValueStore();
 
-    await migrateFromSharedPreferences(store);
+      await migrateFromSharedPreferences(store);
 
-    // The marker lands in the legacy file (not only the store), so it survives
-    // a later store rebuild.
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString(kMigratedFromPrefsKey), isNotNull);
-  });
+      // The marker lands in the legacy file (not only the store), so it survives
+      // a later store rebuild.
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(kMigratedFromPrefsKey), isNotNull);
+    },
+  );
 
   test(
     'a rebuilt (quarantined) store never re-imports the stale legacy file',

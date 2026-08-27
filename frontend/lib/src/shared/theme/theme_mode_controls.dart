@@ -19,9 +19,7 @@ class ThemeModeToggleButton extends StatelessWidget {
     final isDark = controller.resolvedIsDark;
     return IconButton(
       tooltip: isDark ? l10n.switchToLightAction : l10n.switchToDarkAction,
-      icon: Icon(
-        isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-      ),
+      icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
       onPressed: controller.toggleLightDark,
     );
   }

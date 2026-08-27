@@ -93,6 +93,7 @@ class DeviceSettingsScreen extends StatelessWidget {
                   printingSettingsViewModel: printingSettingsViewModel,
                   printingRepository: printingRepository,
                   prepStationRepository: prepStationRepository,
+                  capabilities: capabilities,
                   priceCheckerController: priceCheckerController,
                   priceCheckerRepository: priceCheckerRepository,
                   analyticsEngine: analyticsEngine,
@@ -114,6 +115,7 @@ class _DeviceSettingsBody extends StatelessWidget {
     required this.prepStationRepository,
     required this.priceCheckerController,
     required this.priceCheckerRepository,
+    required this.capabilities,
     required this.analyticsEngine,
   });
 
@@ -121,6 +123,7 @@ class _DeviceSettingsBody extends StatelessWidget {
   final PrintingSettingsViewModel printingSettingsViewModel;
   final PrintingRepository printingRepository;
   final PrepStationRepository prepStationRepository;
+  final AuthorizationCapabilities capabilities;
   final PriceCheckerModeController priceCheckerController;
   final PriceCheckerRepository priceCheckerRepository;
   final AnalyticsEngine? analyticsEngine;
@@ -245,6 +248,7 @@ class _DeviceSettingsBody extends StatelessWidget {
                 KitchenPrintersPanel(
                   printingRepository: printingRepository,
                   prepStationRepository: prepStationRepository,
+                  capabilities: capabilities,
                   analyticsEngine: analyticsEngine,
                 ),
               ],

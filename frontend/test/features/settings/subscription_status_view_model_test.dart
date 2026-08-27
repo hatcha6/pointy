@@ -98,21 +98,24 @@ void main() {
       expect(vm.status, isNotNull);
     });
 
-    test('keeps the cached snapshot and flags failure when sync fails', () async {
-      final repo = _FakeRepo(
-        statusResult: Ok(status()),
-        usageResult: Ok(usage()),
-      );
-      final vm = SubscriptionStatusViewModel(repo);
-      await vm.load();
+    test(
+      'keeps the cached snapshot and flags failure when sync fails',
+      () async {
+        final repo = _FakeRepo(
+          statusResult: Ok(status()),
+          usageResult: Ok(usage()),
+        );
+        final vm = SubscriptionStatusViewModel(repo);
+        await vm.load();
 
-      repo.statusResult = Error(Exception('relay unreachable'));
-      final ok = await vm.sync();
+        repo.statusResult = Error(Exception('relay unreachable'));
+        final ok = await vm.sync();
 
-      expect(ok, isFalse);
-      expect(vm.lastSyncFailed, isTrue);
-      expect(vm.status, isNotNull, reason: 'cached snapshot is kept');
-    });
+        expect(ok, isFalse);
+        expect(vm.lastSyncFailed, isTrue);
+        expect(vm.status, isNotNull, reason: 'cached snapshot is kept');
+      },
+    );
   });
 }
 
@@ -125,7 +128,9 @@ class _FakeRepo extends SubscriptionRepository {
   int usageCalls = 0;
 
   @override
-  Future<Result<RelayInstallationStatus>> loadStatus({bool sync = false}) async {
+  Future<Result<RelayInstallationStatus>> loadStatus({
+    bool sync = false,
+  }) async {
     return statusResult;
   }
 

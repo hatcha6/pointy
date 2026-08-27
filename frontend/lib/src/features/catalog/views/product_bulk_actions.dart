@@ -65,10 +65,14 @@ class _BulkRepriceDialogState extends State<_BulkRepriceDialog> {
   String _modeLabel(AppLocalizations l10n, ProductBulkRepriceMode mode) {
     return switch (mode) {
       ProductBulkRepriceMode.set => l10n.bulkRepriceModeSet,
-      ProductBulkRepriceMode.increasePercent => l10n.bulkRepriceModeIncreasePercent,
-      ProductBulkRepriceMode.decreasePercent => l10n.bulkRepriceModeDecreasePercent,
-      ProductBulkRepriceMode.increaseAmount => l10n.bulkRepriceModeIncreaseAmount,
-      ProductBulkRepriceMode.decreaseAmount => l10n.bulkRepriceModeDecreaseAmount,
+      ProductBulkRepriceMode.increasePercent =>
+        l10n.bulkRepriceModeIncreasePercent,
+      ProductBulkRepriceMode.decreasePercent =>
+        l10n.bulkRepriceModeDecreasePercent,
+      ProductBulkRepriceMode.increaseAmount =>
+        l10n.bulkRepriceModeIncreaseAmount,
+      ProductBulkRepriceMode.decreaseAmount =>
+        l10n.bulkRepriceModeDecreaseAmount,
     };
   }
 
@@ -79,7 +83,9 @@ class _BulkRepriceDialogState extends State<_BulkRepriceDialog> {
       setState(() => _error = l10n.bulkRepriceValueRequired);
       return;
     }
-    if (_mode.isPercent && value > 100 && _mode == ProductBulkRepriceMode.decreasePercent) {
+    if (_mode.isPercent &&
+        value > 100 &&
+        _mode == ProductBulkRepriceMode.decreasePercent) {
       setState(() => _error = l10n.bulkRepriceValueRequired);
       return;
     }
@@ -103,7 +109,10 @@ class _BulkRepriceDialogState extends State<_BulkRepriceDialog> {
               decoration: InputDecoration(labelText: l10n.bulkRepriceModeLabel),
               items: [
                 for (final mode in ProductBulkRepriceMode.values)
-                  DropdownMenuItem(value: mode, child: Text(_modeLabel(l10n, mode))),
+                  DropdownMenuItem(
+                    value: mode,
+                    child: Text(_modeLabel(l10n, mode)),
+                  ),
               ],
               onChanged: (mode) {
                 if (mode != null) {
@@ -115,7 +124,9 @@ class _BulkRepriceDialogState extends State<_BulkRepriceDialog> {
             TextField(
               controller: _controller,
               autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
               ],
@@ -208,10 +219,15 @@ class _BulkCategorizeDialogState extends State<_BulkCategorizeDialog> {
           children: [
             DropdownButtonFormField<ProductBulkCategorizeMode>(
               initialValue: _mode,
-              decoration: InputDecoration(labelText: l10n.bulkCategorizeModeLabel),
+              decoration: InputDecoration(
+                labelText: l10n.bulkCategorizeModeLabel,
+              ),
               items: [
                 for (final mode in ProductBulkCategorizeMode.values)
-                  DropdownMenuItem(value: mode, child: Text(_modeLabel(l10n, mode))),
+                  DropdownMenuItem(
+                    value: mode,
+                    child: Text(_modeLabel(l10n, mode)),
+                  ),
               ],
               onChanged: (mode) {
                 if (mode != null) {

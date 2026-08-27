@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/modifier_group.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Compact multi-select for assigning reusable modifier groups to a product.
 /// Shared by the create form and the parent-edit sheet.
@@ -43,7 +44,7 @@ class ModifierGroupSelector extends StatelessWidget {
             if (isLoading)
               const SizedBox.square(
                 dimension: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: PointySpinner(strokeWidth: 2),
               ),
           ],
         ),

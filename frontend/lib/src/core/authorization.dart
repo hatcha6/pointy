@@ -71,6 +71,8 @@ enum AppCapability {
   manageJobMaterials,
   manageWorkflows,
   manageRecipes,
+  viewRecipes,
+  viewPrepStations,
   viewDiscountRules,
   createDiscountRule,
   changeDiscountRule,
@@ -528,10 +530,24 @@ class AuthorizationCapabilities {
         capabilities.add(AppCapability.manageWorkflows);
       }
       if (_hasAny(user, const [
+        'view_billofmaterials',
+        'catalog.view_billofmaterials',
+      ])) {
+        capabilities.add(AppCapability.viewRecipes);
+      }
+      if (_hasAny(user, const [
         'change_billofmaterials',
         'catalog.change_billofmaterials',
       ])) {
-        capabilities.add(AppCapability.manageRecipes);
+        capabilities
+          ..add(AppCapability.viewRecipes)
+          ..add(AppCapability.manageRecipes);
+      }
+      if (_hasAny(user, const [
+        'view_prepstation',
+        'printing.view_prepstation',
+      ])) {
+        capabilities.add(AppCapability.viewPrepStations);
       }
       if (_hasAny(user, const [
         'view_discountrule',
@@ -736,6 +752,14 @@ class AuthorizationCapabilities {
   bool get canManageJobMaterials => allows(AppCapability.manageJobMaterials);
   bool get canManageWorkflows => allows(AppCapability.manageWorkflows);
   bool get canManageRecipes => allows(AppCapability.manageRecipes);
+
+  /// Whether `boms/` and `prep-stations/` may be requested at all.
+  ///
+  /// Gate the *call*, not the response. A cashier client was polling both — 278
+  /// and 63 requests answered 403 — and a 403 costs a round trip, a
+  /// permission check, a 5xx-tracking row and a log line before it says no.
+  bool get canViewRecipes => allows(AppCapability.viewRecipes);
+  bool get canViewPrepStations => allows(AppCapability.viewPrepStations);
   bool get canViewDiscountRules => allows(AppCapability.viewDiscountRules);
   bool get canCreateDiscountRule => allows(AppCapability.createDiscountRule);
   bool get canChangeDiscountRule => allows(AppCapability.changeDiscountRule);

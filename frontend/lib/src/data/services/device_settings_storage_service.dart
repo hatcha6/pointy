@@ -113,10 +113,7 @@ class DeviceSettingsStorageService {
       await store.getString(_printerRoleConfigsKey),
     );
     roleConfigs[printerRoleToJson(role)] = config.toJson();
-    await store.setString(
-      _printerRoleConfigsKey,
-      jsonEncode(roleConfigs),
-    );
+    await store.setString(_printerRoleConfigsKey, jsonEncode(roleConfigs));
     if (role != PrinterRole.posReceipt) {
       return;
     }

@@ -5,8 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'backend_discovery_udp_stub.dart'
     if (dart.library.io) 'backend_discovery_udp_io.dart';
-import 'subnet_sweep_stub.dart'
-    if (dart.library.io) 'subnet_sweep_io.dart';
+import 'subnet_sweep_stub.dart' if (dart.library.io) 'subnet_sweep_io.dart';
 
 /// UDP broadcast discovery, injectable so tests stay hermetic (no real sockets).
 typedef UdpDiscovery = Future<List<Uri>> Function({Duration timeout});
@@ -258,7 +257,10 @@ String _normalizeApiBaseUrl(String value) {
   final uri = Uri.tryParse(trimmed);
   if (uri != null && uri.host.isNotEmpty && !uri.hasPort && uri.path.isEmpty) {
     // Bare host/IP with no port and no path — default to the backend port.
-    trimmed = uri.replace(port: 8000).toString().replaceFirst(RegExp(r'/+$'), '');
+    trimmed = uri
+        .replace(port: 8000)
+        .toString()
+        .replaceFirst(RegExp(r'/+$'), '');
   }
   if (trimmed.endsWith('/api')) {
     return trimmed;

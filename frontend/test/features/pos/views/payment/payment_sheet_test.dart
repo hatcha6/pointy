@@ -273,7 +273,10 @@ void main() {
     await tester.pump();
 
     // The due-date picker is offered for a debt sale.
-    expect(find.byKey(const ValueKey('credit_due_date_picker')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('credit_due_date_picker')),
+      findsOneWidget,
+    );
 
     // One tap on the "+ a week" chip sets the due date to today + 7 days.
     final weekChip = find.byKey(const ValueKey('credit_due_date_preset_7'));

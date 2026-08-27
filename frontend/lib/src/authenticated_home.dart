@@ -91,6 +91,7 @@ import 'shared/command_palette/command_palette.dart';
 import 'shared/formatters.dart';
 import 'shared/navigation/ai_deep_link.dart';
 import 'shared/navigation/app_navigation.dart';
+import 'core/analytics_screen_tracker.dart';
 
 class AuthenticatedHome extends StatelessWidget {
   const AuthenticatedHome({
@@ -330,20 +331,22 @@ class _AuthenticatedRoutes implements AppNavigation {
           analyticsEngine: dependencies.analyticsEngine,
         ),
         onOpenJob: (job) {
-          _trackScreenView('job_details');
           push(
             routeContext,
-            (_) => JobDetailsScreen(
-              viewModel: JobDetailsViewModel(
-                dependencies.operationsRepository,
-                jobId: job.id,
-                analyticsEngine: dependencies.analyticsEngine,
+            (_) => _screen(
+              'job_details',
+              JobDetailsScreen(
+                viewModel: JobDetailsViewModel(
+                  dependencies.operationsRepository,
+                  jobId: job.id,
+                  analyticsEngine: dependencies.analyticsEngine,
+                ),
+                capabilities: capabilities,
+                currentUser: currentUser,
+                catalogRepository: dependencies.catalogRepository,
+                operationsRepository: dependencies.operationsRepository,
+                employeeRepository: dependencies.employeeRepository,
               ),
-              capabilities: capabilities,
-              currentUser: currentUser,
-              catalogRepository: dependencies.catalogRepository,
-              operationsRepository: dependencies.operationsRepository,
-              employeeRepository: dependencies.employeeRepository,
             ),
           );
         },
@@ -414,18 +417,20 @@ class _AuthenticatedRoutes implements AppNavigation {
         onOpenInvoice: guardedSaleOrderAction(AppCapability.viewInvoices, (
           order,
         ) async {
-          _trackScreenView('invoice_details');
           await push(
             routeContext,
-            (context) => InvoiceDetailsScreen(
-              saleRepository: dependencies.saleRepository,
-              printingRepository: dependencies.printingRepository,
-              shopSettingsRepository: dependencies.shopSettingsRepository,
-              catalogRepository: dependencies.catalogRepository,
-              contactRepository: dependencies.contactRepository,
-              initialOrder: order,
-              capabilities: capabilities,
-              analyticsEngine: dependencies.analyticsEngine,
+            (context) => _screen(
+              'invoice_details',
+              InvoiceDetailsScreen(
+                saleRepository: dependencies.saleRepository,
+                printingRepository: dependencies.printingRepository,
+                shopSettingsRepository: dependencies.shopSettingsRepository,
+                catalogRepository: dependencies.catalogRepository,
+                contactRepository: dependencies.contactRepository,
+                initialOrder: order,
+                capabilities: capabilities,
+                analyticsEngine: dependencies.analyticsEngine,
+              ),
             ),
           );
           await dependencies.invoiceListViewModel.loadInvoices();
@@ -475,17 +480,19 @@ class _AuthenticatedRoutes implements AppNavigation {
         onOpenUserDetails: guardedValueAction(AppCapability.manageUsers, (
           user,
         ) {
-          _trackScreenView('user_details');
           push(
             routeContext,
-            (_) => UserDetailsScreen(
-              viewModel: UserDetailsViewModel(
-                dependencies.userRepository,
-                initialUser: user,
+            (_) => _screen(
+              'user_details',
+              UserDetailsScreen(
+                viewModel: UserDetailsViewModel(
+                  dependencies.userRepository,
+                  initialUser: user,
+                ),
+                capabilities: capabilities,
+                onManagePermissions: (target) =>
+                    _openUserPermissions(routeContext, target),
               ),
-              capabilities: capabilities,
-              onManagePermissions: (target) =>
-                  _openUserPermissions(routeContext, target),
             ),
           );
         }),
@@ -497,13 +504,15 @@ class _AuthenticatedRoutes implements AppNavigation {
     if (!capabilities.allows(AppCapability.manageUsers)) {
       return false;
     }
-    _trackScreenView('user_permissions');
     final updated = await push<PosUser>(
       context,
-      (_) => UserPermissionsScreen(
-        viewModel: UserPermissionsViewModel(
-          dependencies.userRepository,
-          user: user,
+      (_) => _screen(
+        'user_permissions',
+        UserPermissionsScreen(
+          viewModel: UserPermissionsViewModel(
+            dependencies.userRepository,
+            user: user,
+          ),
         ),
       ),
     );
@@ -604,10 +613,7 @@ class _AuthenticatedRoutes implements AppNavigation {
     return _screen(
       'payments_hub',
       PaymentsHubScreen(
-        viewModel: PaymentsHubViewModel(
-          dependencies.paymentsRepository,
-          analyticsEngine: dependencies.analyticsEngine,
-        ),
+        viewModel: PaymentsHubViewModel(dependencies.paymentsRepository),
         printingRepository: dependencies.printingRepository,
         shopSettingsRepository: dependencies.shopSettingsRepository,
         capabilities: capabilities,
@@ -782,18 +788,21 @@ class _AuthenticatedRoutes implements AppNavigation {
         onOpenPurchaseOrder: guardedPurchaseOrderAction(
           AppCapability.accessPurchasing,
           (order) async {
-            _trackScreenView('purchase_order_details');
             await push(
               routeContext,
-              (context) => PurchaseOrderDetailsScreen(
-                purchaseRepository: dependencies.purchaseRepository,
-                printingRepository: dependencies.printingRepository,
-                shopSettingsRepository: dependencies.shopSettingsRepository,
-                initialOrder: order,
-                capabilities: capabilities,
-                onEditDraft: capabilities.canEditDraftPurchaseOrder
-                    ? (draft) => openPurchaseOrderEditor(routeContext, draft.id)
-                    : null,
+              (context) => _screen(
+                'purchase_order_details',
+                PurchaseOrderDetailsScreen(
+                  purchaseRepository: dependencies.purchaseRepository,
+                  printingRepository: dependencies.printingRepository,
+                  shopSettingsRepository: dependencies.shopSettingsRepository,
+                  initialOrder: order,
+                  capabilities: capabilities,
+                  onEditDraft: capabilities.canEditDraftPurchaseOrder
+                      ? (draft) =>
+                            openPurchaseOrderEditor(routeContext, draft.id)
+                      : null,
+                ),
               ),
             );
             await dependencies.purchaseOrderListViewModel.loadOrders();
@@ -840,17 +849,19 @@ class _AuthenticatedRoutes implements AppNavigation {
   /// in its own isolated, non-persisted workspace. Completes when the editor is
   /// dismissed so callers can refresh.
   Future<void> openPurchaseOrderEditor(BuildContext context, int orderId) {
-    _trackScreenView('purchase_edit');
     return push(
       context,
-      (_) => PurchaseOrderEditScreen(
-        purchaseOrderId: orderId,
-        catalogRepository: dependencies.catalogRepository,
-        purchaseRepository: dependencies.purchaseRepository,
-        contactRepository: dependencies.contactRepository,
-        analyticsEngine: dependencies.analyticsEngine,
-        capabilities: capabilities,
-        navigation: this,
+      (_) => _screen(
+        'purchase_edit',
+        PurchaseOrderEditScreen(
+          purchaseOrderId: orderId,
+          catalogRepository: dependencies.catalogRepository,
+          purchaseRepository: dependencies.purchaseRepository,
+          contactRepository: dependencies.contactRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+          capabilities: capabilities,
+          navigation: this,
+        ),
       ),
     );
   }
@@ -952,17 +963,32 @@ class _AuthenticatedRoutes implements AppNavigation {
     }
   }
 
+  /// Names a screen for analytics. [TrackedScreen] owns *when* that takes
+  /// effect — on mount and on returning from a pushed route, never on a plain
+  /// rebuild. This used to call setCurrentScreen inline during build, which
+  /// both missed the way back (a scan on the POS after visiting the invoice
+  /// list was filed under `invoices`) and fired on rebuilds that were not
+  /// navigation at all.
   Widget _screen(String screenName, Widget child) {
-    _trackScreenView(screenName);
-    return child;
+    return TrackedScreen(
+      name: screenName,
+      onEnter: _trackScreenView,
+      child: child,
+    );
   }
 
-  void _trackScreenView(String screenName) {
-    dependencies.analyticsEngine.setCurrentScreen(screenName);
+  void _trackScreenView(String screenName, ScreenEntry entry) {
     unawaited(
       dependencies.analyticsEngine.trackUsage(
         AnalyticsEventName.frontendScreenViewed,
-        attributes: {'screen': screenName, 'role': currentUser.role.toJson()},
+        attributes: {
+          'screen': screenName,
+          'role': currentUser.role.toJson(),
+          // Returning to a screen is a view too, but it is a new kind of one:
+          // this event previously could not see it at all. Tagged so a count
+          // of first arrivals is still recoverable.
+          'entry': entry.name,
+        },
       ),
     );
   }
@@ -1730,100 +1756,112 @@ class _AuthenticatedRoutes implements AppNavigation {
   }
 
   void _openProduct(BuildContext context, Product product) {
-    _trackScreenView('product_variant_details');
     push(
       context,
-      (_) => ProductVariantDetailsScreen(
-        viewModel: ProductStockViewModel(
-          dependencies.inventoryRepository,
-          dependencies.purchaseRepository,
-          product,
+      (_) => _screen(
+        'product_variant_details',
+        ProductVariantDetailsScreen(
+          viewModel: ProductStockViewModel(
+            dependencies.inventoryRepository,
+            dependencies.purchaseRepository,
+            product,
+            analyticsEngine: dependencies.analyticsEngine,
+          ),
+          printingRepository: dependencies.printingRepository,
+          capabilities: capabilities,
           analyticsEngine: dependencies.analyticsEngine,
         ),
-        printingRepository: dependencies.printingRepository,
-        capabilities: capabilities,
-        analyticsEngine: dependencies.analyticsEngine,
       ),
     );
   }
 
   void _openCustomer(BuildContext context, Customer customer) {
-    _trackScreenView('customer_details');
     push(
       context,
-      (_) => CustomerDetailsScreen(
-        customer: customer,
-        contactRepository: dependencies.contactRepository,
-        printingRepository: dependencies.printingRepository,
-        shopSettingsRepository: dependencies.shopSettingsRepository,
+      (_) => _screen(
+        'customer_details',
+        CustomerDetailsScreen(
+          customer: customer,
+          contactRepository: dependencies.contactRepository,
+          printingRepository: dependencies.printingRepository,
+          shopSettingsRepository: dependencies.shopSettingsRepository,
+        ),
       ),
     );
   }
 
   void _openSupplier(BuildContext context, SupplierContact supplier) {
-    _trackScreenView('supplier_details');
     push(
       context,
-      (_) => SupplierDetailsScreen(
-        supplier: supplier,
-        contactRepository: dependencies.contactRepository,
-        purchaseRepository: dependencies.purchaseRepository,
-        printingRepository: dependencies.printingRepository,
-        shopSettingsRepository: dependencies.shopSettingsRepository,
-        capabilities: capabilities,
+      (_) => _screen(
+        'supplier_details',
+        SupplierDetailsScreen(
+          supplier: supplier,
+          contactRepository: dependencies.contactRepository,
+          purchaseRepository: dependencies.purchaseRepository,
+          printingRepository: dependencies.printingRepository,
+          shopSettingsRepository: dependencies.shopSettingsRepository,
+          capabilities: capabilities,
+        ),
       ),
     );
   }
 
   void _openInvoice(BuildContext context, SaleOrder order) {
-    _trackScreenView('invoice_details');
     push(
       context,
-      (_) => InvoiceDetailsScreen(
-        saleRepository: dependencies.saleRepository,
-        printingRepository: dependencies.printingRepository,
-        shopSettingsRepository: dependencies.shopSettingsRepository,
-        catalogRepository: dependencies.catalogRepository,
-        contactRepository: dependencies.contactRepository,
-        initialOrder: order,
-        capabilities: capabilities,
-        analyticsEngine: dependencies.analyticsEngine,
+      (_) => _screen(
+        'invoice_details',
+        InvoiceDetailsScreen(
+          saleRepository: dependencies.saleRepository,
+          printingRepository: dependencies.printingRepository,
+          shopSettingsRepository: dependencies.shopSettingsRepository,
+          catalogRepository: dependencies.catalogRepository,
+          contactRepository: dependencies.contactRepository,
+          initialOrder: order,
+          capabilities: capabilities,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
       ),
     );
   }
 
   void _openPurchaseOrder(BuildContext context, PurchaseOrder order) {
-    _trackScreenView('purchase_order_details');
     push(
       context,
-      (_) => PurchaseOrderDetailsScreen(
-        purchaseRepository: dependencies.purchaseRepository,
-        printingRepository: dependencies.printingRepository,
-        shopSettingsRepository: dependencies.shopSettingsRepository,
-        initialOrder: order,
-        capabilities: capabilities,
-        onEditDraft: capabilities.canEditDraftPurchaseOrder
-            ? (draft) => openPurchaseOrderEditor(context, draft.id)
-            : null,
+      (_) => _screen(
+        'purchase_order_details',
+        PurchaseOrderDetailsScreen(
+          purchaseRepository: dependencies.purchaseRepository,
+          printingRepository: dependencies.printingRepository,
+          shopSettingsRepository: dependencies.shopSettingsRepository,
+          initialOrder: order,
+          capabilities: capabilities,
+          onEditDraft: capabilities.canEditDraftPurchaseOrder
+              ? (draft) => openPurchaseOrderEditor(context, draft.id)
+              : null,
+        ),
       ),
     );
   }
 
   void _openJobById(BuildContext context, int jobId) {
-    _trackScreenView('job_details');
     push(
       context,
-      (_) => JobDetailsScreen(
-        viewModel: JobDetailsViewModel(
-          dependencies.operationsRepository,
-          jobId: jobId,
-          analyticsEngine: dependencies.analyticsEngine,
+      (_) => _screen(
+        'job_details',
+        JobDetailsScreen(
+          viewModel: JobDetailsViewModel(
+            dependencies.operationsRepository,
+            jobId: jobId,
+            analyticsEngine: dependencies.analyticsEngine,
+          ),
+          capabilities: capabilities,
+          currentUser: currentUser,
+          catalogRepository: dependencies.catalogRepository,
+          operationsRepository: dependencies.operationsRepository,
+          employeeRepository: dependencies.employeeRepository,
         ),
-        capabilities: capabilities,
-        currentUser: currentUser,
-        catalogRepository: dependencies.catalogRepository,
-        operationsRepository: dependencies.operationsRepository,
-        employeeRepository: dependencies.employeeRepository,
       ),
     );
   }

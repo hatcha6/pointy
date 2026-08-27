@@ -141,6 +141,12 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "apps.channels.middleware.SalesChannelMiddleware",
     "apps.analytics.middleware.BackendPerformanceAnalyticsMiddleware",
+    # Bounds unauthenticated /api/ traffic. Sits inside the analytics
+    # middleware so a refusal is still measured, and ahead of routing and the
+    # view so a runaway costs a cache read. DRF throttles cannot cover this:
+    # they run after permission checks, so a request destined to 401 never
+    # reaches one.
+    "apps.core.anonymous_throttle.AnonymousBurstCeilingMiddleware",
     # Pushes the catalog version to clients on every API response so POS-side
     # scan/search caches invalidate deterministically (apps.catalog.cache).
     "apps.catalog.middleware.CatalogVersionHeaderMiddleware",
@@ -367,7 +373,101 @@ POINTY_BACKUP_ALLOWED_ROOTS = env.list(
 POINTY_BACKUP_STAGING_ROOT = Path(
     env("POINTY_BACKUP_STAGING_ROOT", default="/tmp/pointy-backup-staging")
 )
+# Ceiling on unauthenticated API requests per device (or per peer address when
+# the client sends no device id), per window. Real anonymous use is a few calls a
+# minute — sign-in, first-run setup, price-checker lookups, discovery — so this
+# sits an order of magnitude above it and only ever bites a runaway client.
+# 0 disables the ceiling.
+# Disabled under tests, which hammer endpoints far faster than any human and
+# authenticate through DRF's force_authenticate — which sets no session cookie,
+# so this middleware (running ahead of DRF) would read them as anonymous. The
+# authenticated ceiling is switched off for the same reason.
+# A purchase cost that is obviously a typo must not become the cost of record.
+# Both ratios compare BASE-UNIT figures (a 162-per-carton egg line is 0.45 an
+# egg), and both are read at two levels: the warning level asks the buyer to
+# confirm on the purchasing screen, the blocking level refuses outright on the
+# POS cash-purchase path, where the operator is a cashier with no override. The
+# blocking level is deliberately looser so a genuinely thin-margin cash purchase
+# still goes through. Calibrated against the field data rather than picked round:
+# every actual typo in the client's dump was 5x or worse (bread 138x, stock cube
+# 84x, ice cream 50x, bottled water 10x), while the items genuinely sold below
+# cost sat at 1.1-1.8x. Anything under 3x is a thin margin, not a mistake, and
+# warning about it would only teach people to click through. See
+# apps.purchasing.cost_guard.
+POINTY_PURCHASE_COST_WARN_PRICE_RATIO = env.float(
+    "POINTY_PURCHASE_COST_WARN_PRICE_RATIO", default=3.0
+)
+POINTY_PURCHASE_COST_WARN_SPIKE_RATIO = env.float(
+    "POINTY_PURCHASE_COST_WARN_SPIKE_RATIO", default=5.0
+)
+POINTY_PURCHASE_COST_BLOCK_PRICE_RATIO = env.float(
+    "POINTY_PURCHASE_COST_BLOCK_PRICE_RATIO", default=5.0
+)
+POINTY_PURCHASE_COST_BLOCK_SPIKE_RATIO = env.float(
+    "POINTY_PURCHASE_COST_BLOCK_SPIKE_RATIO", default=10.0
+)
+# The receipt queue is an outbox for print agents. It exists so a receipt
+# survives an agent being briefly unreachable — not so it can accumulate for an
+# agent that never existed, which is what a shop printing straight from the till
+# did to the tune of 24,264 unread rows. A job is only created when an agent has
+# polled within this window (0 disables the check and always creates).
+POINTY_PRINT_AGENT_LIVENESS_WINDOW_MINUTES = env.int(
+    "POINTY_PRINT_AGENT_LIVENESS_WINDOW_MINUTES", default=60
+)
+# Backstop for the other direction: rows created while an agent WAS alive and
+# then abandoned when it went away. A receipt still unclaimed this long after
+# the sale will not be handed to that customer, and printing it then would be
+# worse than not printing it. It stays reprintable from the order. 0 disables.
+POINTY_PRINT_JOB_QUEUE_RETENTION_HOURS = env.int(
+    "POINTY_PRINT_JOB_QUEUE_RETENTION_HOURS", default=12
+)
+POINTY_PRINT_JOB_QUEUE_SWEEP_MINUTES = max(
+    env.int("POINTY_PRINT_JOB_QUEUE_SWEEP_MINUTES", default=60), 1
+)
+# How many telemetry uploads one worker may process at once. A rate limit still
+# admits a burst inside its window, and the burst is what buried the box: three
+# uvicorn workers against 37 requests a second of nested-serializer validation
+# left product-list taking 104 seconds and the till unable to sell. Over this,
+# callers are refused immediately rather than queueing for a worker the POS
+# needs; the events stay on the device. Per worker process, so the real ceiling
+# is this times POINTY_ASGI_WORKERS. 0 disables the limit.
+POINTY_ANALYTICS_INGEST_CONCURRENCY = env.int(
+    "POINTY_ANALYTICS_INGEST_CONCURRENCY", default=2
+)
+POINTY_ANONYMOUS_BURST_LIMIT = (
+    0 if TESTING else env.int("POINTY_ANONYMOUS_BURST_LIMIT", default=120)
+)
+POINTY_ANONYMOUS_BURST_WINDOW_SECONDS = env.int(
+    "POINTY_ANONYMOUS_BURST_WINDOW_SECONDS", default=60
+)
 POINTY_BACKUP_RESTORE_MAX_BYTES = env("POINTY_BACKUP_RESTORE_MAX_BYTES")
+# A scheduled backup that fails gets this many goes before the day is written
+# off, spaced this far apart. The common field failures -- the USB drive not
+# plugged in yet, a container restarting mid-run -- clear within the hour, and
+# without a retry a single one of them cost a shop 24 hours of backups.
+POINTY_BACKUP_MAX_ATTEMPTS_PER_DAY = max(
+    env.int("POINTY_BACKUP_MAX_ATTEMPTS_PER_DAY", default=3), 1
+)
+POINTY_BACKUP_RETRY_INTERVAL_MINUTES = max(
+    env.int("POINTY_BACKUP_RETRY_INTERVAL_MINUTES", default=30), 1
+)
+# How long the shop may go without a verified backup before the notification
+# feed escalates. Two days covers a single missed night plus its retries.
+POINTY_BACKUP_STALE_AFTER_HOURS = max(
+    env.int("POINTY_BACKUP_STALE_AFTER_HOURS", default=48), 1
+)
+# Tables left out of the archive: telemetry and machine exhaust, not business
+# records. Excluding a table is only safe while nothing that IS kept references
+# it, which apps.core.backup_database enforces at dump time.
+POINTY_BACKUP_EXCLUDED_TABLES = env.list(
+    "POINTY_BACKUP_EXCLUDED_TABLES",
+    default=[
+        "analytics_analyticsevent",
+        "core_idempotencyrecord",
+        "printing_printjobevent",
+        "django_session",
+    ],
+)
 POINTY_SMS_DEBT_REMINDERS_ENABLED = env.bool(
     "POINTY_SMS_DEBT_REMINDERS_ENABLED", default=False
 )
@@ -387,6 +487,12 @@ POINTY_SMS_AI_SUGGESTIONS_ENABLED = env.bool(
 POINTY_MESSAGING_WEBHOOK_BASE_URL = env(
     "POINTY_MESSAGING_WEBHOOK_BASE_URL", default=""
 )
+# How long an idempotency record can still match a retry. Clients retry within
+# seconds; two days is generous.
+POINTY_IDEMPOTENCY_RETENTION_HOURS = int(
+    os.getenv("POINTY_IDEMPOTENCY_RETENTION_HOURS", "48")
+)
+
 CELERY_BEAT_SCHEDULE = {
     "notifications.sync-business-notifications": {
         "task": "notifications.sync_business_notifications",
@@ -403,6 +509,17 @@ CELERY_BEAT_SCHEDULE = {
     "employees.draft-monthly-payroll": {
         "task": "employees.draft_monthly_payroll",
         "schedule": crontab(minute=10, hour=0, day_of_month="1"),
+    },
+    # Retire receipt jobs nothing claimed — see printing.expire_stale_print_jobs.
+    "printing.expire-stale-print-jobs": {
+        "task": "printing.expire_stale_print_jobs",
+        "schedule": timedelta(minutes=POINTY_PRINT_JOB_QUEUE_SWEEP_MINUTES),
+    },
+    # Idempotency records outlive their usefulness in hours, but nothing ever
+    # deleted them: 28,406 rows and zero replays in the field.
+    "core.purge-expired-idempotency-records": {
+        "task": "core.purge_expired_idempotency_records",
+        "schedule": crontab(minute=45, hour=3),
     },
     "core.run-due-scheduled-backup": {
         "task": "core.run_due_scheduled_backup",
@@ -728,6 +845,15 @@ REST_FRAMEWORK = {
         "login_username": env("DJANGO_THROTTLE_LOGIN_USERNAME", default="6/min"),
         "setup": env("DJANGO_THROTTLE_SETUP", default="5/hour"),
         "password_change": env("DJANGO_THROTTLE_PASSWORD_CHANGE", default="10/min"),
+        # Telemetry has its own bucket so a backlog flush can only ever refuse
+        # telemetry. Steady-state ingest across the whole fleet is a handful of
+        # requests a minute; this sits far above that and far below the 2,242 a
+        # minute that stopped sales on 2026-08-17.
+        "analytics_ingest": (
+            None
+            if TESTING
+            else env("POINTY_ANALYTICS_INGEST_THROTTLE_RATE", default="120/min")
+        ),
         "authenticated_ceiling": (
             None
             if TESTING

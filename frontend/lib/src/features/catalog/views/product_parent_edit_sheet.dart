@@ -317,7 +317,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                               widget.viewModel.isSavingImage
                           ? const SizedBox.square(
                               dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: PointySpinner(strokeWidth: 2),
                             )
                           : const Icon(Icons.save_outlined),
                       label: Text(

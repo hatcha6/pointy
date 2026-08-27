@@ -48,9 +48,8 @@ class JobsBoardViewModel extends ChangeNotifier {
   bool get hasLoadError => _hasLoadError;
   bool get hasMutationError => _hasMutationError;
 
-  List<WorkflowTemplate> get enabledTemplates => _templates
-      .where((template) => template.isActive)
-      .toList(growable: false);
+  List<WorkflowTemplate> get enabledTemplates =>
+      _templates.where((template) => template.isActive).toList(growable: false);
 
   /// Whether the technician has narrowed the board away from its default view.
   ///

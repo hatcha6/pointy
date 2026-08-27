@@ -1,10 +1,11 @@
 import hashlib
 import json
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import F
 from django.http import QueryDict
@@ -153,3 +154,27 @@ def normalize_json_value(value):
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     return str(value)
+
+
+def purge_expired_idempotency_records(retention=None, now=None):
+    """Delete idempotency records past their usefulness.
+
+    A record exists so a retried write is recognised as the same write. That
+    window is short — a client retries within seconds, not weeks — but nothing
+    ever deleted them: in the field the table held 28,406 rows and had served
+    **zero** replays, which is pure write amplification plus a JSON response
+    body per row kept forever.
+
+    The rows are not useless (the one time a till retries a checkout through a
+    flaky link, this is what stops the customer being billed twice) so the fix
+    is retention, not removal. Anything older than the retention window can no
+    longer match a live retry.
+
+    Returns the number deleted.
+    """
+    window = retention or timedelta(
+        hours=getattr(settings, "POINTY_IDEMPOTENCY_RETENTION_HOURS", 48)
+    )
+    cutoff = (now or timezone.now()) - window
+    deleted, _ = IdempotencyRecord.objects.filter(created_at__lt=cutoff).delete()
+    return deleted

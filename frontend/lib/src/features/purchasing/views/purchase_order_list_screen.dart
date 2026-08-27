@@ -522,7 +522,9 @@ class _PayableCard extends StatelessWidget {
                     supplier.isEmpty ? '—' : supplier,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colors.mutedInk,
+                    ),
                   ),
                   const Spacer(),
                   Text(
@@ -565,7 +567,7 @@ class _PayableLoadingCard extends StatelessWidget {
         child: const Center(
           child: SizedBox.square(
             dimension: 22,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: PointySpinner(strokeWidth: 2),
           ),
         ),
       ),

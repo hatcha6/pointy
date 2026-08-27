@@ -77,7 +77,9 @@ class _FakeSubscriptionRepository extends SubscriptionRepository {
   final String scenario;
 
   @override
-  Future<Result<RelayInstallationStatus>> loadStatus({bool sync = false}) async {
+  Future<Result<RelayInstallationStatus>> loadStatus({
+    bool sync = false,
+  }) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
     if (scenario == 'sync_fail' && sync) {
       return Error(Exception('relay unreachable'));

@@ -416,17 +416,13 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
     }
 
     await _runAdjustment(
-      () => widget.onReturn!(
-        widget.order,
-        [
-          for (final selection in result.lines)
-            SaleReturnLineDraft(
-              lineId: selection.lineId,
-              quantity: selection.quantity,
-            ),
-        ],
-        result.reason,
-      ),
+      () => widget.onReturn!(widget.order, [
+        for (final selection in result.lines)
+          SaleReturnLineDraft(
+            lineId: selection.lineId,
+            quantity: selection.quantity,
+          ),
+      ], result.reason),
       successMessage: l10n.saleReturnSuccess,
       errorMessage: l10n.saleReturnError,
     );
@@ -543,7 +539,7 @@ class _ActionsSection extends StatelessWidget {
               icon: isConverting
                   ? const SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     )
                   : const Icon(Icons.swap_horiz_outlined),
               label: Text(l10n.convertQuotationButton),
@@ -557,7 +553,7 @@ class _ActionsSection extends StatelessWidget {
               icon: isAssigningCustomer
                   ? const SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     )
                   : Icon(
                       hasCustomer
@@ -576,7 +572,7 @@ class _ActionsSection extends StatelessWidget {
               icon: isReprinting
                   ? const SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     )
                   : const Icon(Icons.print_outlined),
               label: Text(
@@ -595,7 +591,7 @@ class _ActionsSection extends StatelessWidget {
               icon: isSharing
                   ? const SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     )
                   : const Icon(Icons.ios_share_outlined),
               label: Text(
@@ -632,7 +628,7 @@ class _ActionsSection extends StatelessWidget {
               icon: isAdjusting
                   ? const SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     )
                   : const Icon(Icons.block_outlined),
               label: Text(l10n.saleVoidButton),
@@ -870,7 +866,10 @@ class _ExchangeReplacement {
 /// priced at current price, with a live net-difference summary. The backend is
 /// authoritative on money; the summary is an estimate from current prices.
 class _SaleExchangeDialog extends StatefulWidget {
-  const _SaleExchangeDialog({required this.order, required this.onProductSearch});
+  const _SaleExchangeDialog({
+    required this.order,
+    required this.onProductSearch,
+  });
 
   final SaleOrder order;
   final ExchangeProductSearch onProductSearch;
@@ -1002,7 +1001,10 @@ class _SaleExchangeDialogState extends State<_SaleExchangeDialog> {
                     },
                   ),
               const Divider(height: 24),
-              Text(l10n.saleExchangeReplacementSectionTitle, style: sectionStyle),
+              Text(
+                l10n.saleExchangeReplacementSectionTitle,
+                style: sectionStyle,
+              ),
               const SizedBox(height: 8),
               DebouncedSearchField(
                 value: _query,
@@ -1013,7 +1015,7 @@ class _SaleExchangeDialogState extends State<_SaleExchangeDialog> {
               if (_searching)
                 const Padding(
                   padding: EdgeInsets.only(top: 8),
-                  child: LinearProgressIndicator(minHeight: 2),
+                  child: PointyProgressBar(minHeight: 2),
                 ),
               if (_results.isNotEmpty)
                 for (final option in _results)
@@ -1119,10 +1121,7 @@ class _SaleExchangeDialogState extends State<_SaleExchangeDialog> {
     final lines = [
       for (final line in widget.order.lines)
         if ((_outbound[line.id] ?? 0) > 0)
-          SaleReturnLineDraft(
-            lineId: line.id,
-            quantity: _outbound[line.id]!,
-          ),
+          SaleReturnLineDraft(lineId: line.id, quantity: _outbound[line.id]!),
     ];
     final replacementLines = [
       for (final replacement in _replacements)
@@ -1236,7 +1235,7 @@ class _CreditBalanceCallout extends StatelessWidget {
               icon: isRecordingPayment
                   ? const SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     )
                   : const Icon(Icons.add_card_outlined),
               label: Text(l10n.recordInvoicePaymentButton),

@@ -75,7 +75,9 @@ class _Router extends StatelessWidget {
     switch (_screen()) {
       case 'empty':
         return PriceCheckersPage(
-          viewModel: PriceCheckersViewModel(_FakePriceCheckerRepository.empty()),
+          viewModel: PriceCheckersViewModel(
+            _FakePriceCheckerRepository.empty(),
+          ),
         );
       case 'details':
         final repo = _FakePriceCheckerRepository.seeded();
@@ -115,9 +117,7 @@ class _FakePriceCheckerRepository extends PriceCheckerRepository {
   @override
   Future<Result<PriceCheckerScanSummary>> runScan() async {
     await Future<void>.delayed(const Duration(milliseconds: 600));
-    return const Ok(
-      PriceCheckerScanSummary(found: 2, registeredCount: 1),
-    );
+    return const Ok(PriceCheckerScanSummary(found: 2, registeredCount: 1));
   }
 
   @override

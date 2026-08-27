@@ -67,7 +67,9 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
     if (!mounted) return;
     messenger.showSnackBar(
       SnackBar(
-        content: Text(ok ? l10n.messagingSavedMessage : l10n.messagingSaveError),
+        content: Text(
+          ok ? l10n.messagingSavedMessage : l10n.messagingSaveError,
+        ),
       ),
     );
   }
@@ -175,7 +177,10 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
           ? l10n.messagingStatusActive
           : l10n.messagingStatusInactive,
       pills: [
-        const PointyHeroPill(icon: Icons.smartphone_outlined, label: 'SMS Gate'),
+        const PointyHeroPill(
+          icon: Icons.smartphone_outlined,
+          label: 'SMS Gate',
+        ),
         if (gateway != null && gateway.lastError.isNotEmpty)
           PointyHeroPill(
             icon: Icons.error_outline,
@@ -272,7 +277,7 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
             icon: viewModel.isSaving
                 ? const SizedBox.square(
                     dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PointySpinner(strokeWidth: 2),
                   )
                 : const Icon(Icons.save_outlined),
             label: Text(l10n.messagingSaveButton),
@@ -283,7 +288,7 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
             icon: viewModel.isActivating
                 ? const SizedBox.square(
                     dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PointySpinner(strokeWidth: 2),
                   )
                 : const Icon(Icons.auto_fix_high_outlined),
             label: Text(l10n.messagingActivateButton),
@@ -308,8 +313,7 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
     MessagingSettingsViewModel viewModel,
   ) {
     final spacing = AdaptiveSpacing.of(context);
-    final canTest =
-        viewModel.canTest && _testPhone.text.trim().isNotEmpty;
+    final canTest = viewModel.canTest && _testPhone.text.trim().isNotEmpty;
     return PointyDetailSection(
       icon: Icons.send_outlined,
       title: l10n.messagingTestTitle,
@@ -341,7 +345,7 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
               icon: viewModel.isTesting
                   ? const SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     )
                   : const Icon(Icons.send_outlined),
               label: Text(l10n.messagingTestSendButton),

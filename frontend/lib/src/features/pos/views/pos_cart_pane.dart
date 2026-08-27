@@ -571,7 +571,10 @@ class _CartScrollContentState extends State<_CartScrollContent> {
 
     final digit = _digitFor(key);
     if (digit != null) {
-      final rollback = _scanBurstGuard.onDigit(_pendingQuantity, DateTime.now());
+      final rollback = _scanBurstGuard.onDigit(
+        _pendingQuantity,
+        DateTime.now(),
+      );
       if (rollback != null) {
         // A wedge is typing, not the cashier — roll the pending entry back to
         // its pre-burst value and swallow the keystroke. The scan itself is
@@ -590,7 +593,10 @@ class _CartScrollContentState extends State<_CartScrollContent> {
         key == LogicalKeyboardKey.numpadDecimal) {
       // Fractional entry (2.5 of anything) is the cashier's choice — allowed for
       // every product; at most one decimal point.
-      final rollback = _scanBurstGuard.onDigit(_pendingQuantity, DateTime.now());
+      final rollback = _scanBurstGuard.onDigit(
+        _pendingQuantity,
+        DateTime.now(),
+      );
       if (rollback != null) {
         if (_pendingQuantity != rollback) {
           setState(() => _pendingQuantity = rollback);
@@ -1130,7 +1136,7 @@ class _CheckoutFooter extends StatelessWidget {
           icon: viewModel.isCheckingOut
               ? const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : const Icon(Icons.payments_outlined),
           label: FittedBox(

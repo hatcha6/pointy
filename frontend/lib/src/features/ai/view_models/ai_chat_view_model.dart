@@ -66,6 +66,7 @@ class AiChatViewModel extends ChangeNotifier {
     final last = _messages.last;
     return last.isStreaming ? last : null;
   }
+
   bool get hasPendingAttachments => _pendingAttachments.isNotEmpty;
   AiChatErrorKind? get errorKind => _errorKind;
 
@@ -156,12 +157,13 @@ class AiChatViewModel extends ChangeNotifier {
       if (existing.title == title) {
         return;
       }
-      _conversations = [..._conversations]..[index] = AiConversationSummary(
-        id: existing.id,
-        title: title,
-        messageCount: existing.messageCount,
-        updatedAt: existing.updatedAt,
-      );
+      _conversations = [..._conversations]
+        ..[index] = AiConversationSummary(
+          id: existing.id,
+          title: title,
+          messageCount: existing.messageCount,
+          updatedAt: existing.updatedAt,
+        );
     } else {
       _conversations = [
         AiConversationSummary(
@@ -285,7 +287,10 @@ class AiChatViewModel extends ChangeNotifier {
   /// Answer the pending ask_user question and resume the agentic turn: a fresh
   /// assistant bubble streams the model's continuation. [declined] resumes with a
   /// skip instead of answers, so a flow never deadlocks on an ignored question.
-  Future<void> submitAnswer(List<AiAnswer> answers, {bool declined = false}) async {
+  Future<void> submitAnswer(
+    List<AiAnswer> answers, {
+    bool declined = false,
+  }) async {
     final pending = _pendingMessage;
     final question = pending?.pendingQuestion;
     final conversationId = _conversationId;
@@ -395,7 +400,12 @@ class AiChatViewModel extends ChangeNotifier {
         ):
           if (event.isStart) {
             assistant.startToolRun(
-              AiToolRun(name: name, resource: resource, label: label, mutates: mutates),
+              AiToolRun(
+                name: name,
+                resource: resource,
+                label: label,
+                mutates: mutates,
+              ),
             );
           } else {
             assistant.finishToolRun(

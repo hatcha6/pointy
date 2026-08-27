@@ -604,6 +604,67 @@ def _claim_locked_print_job(job, agent, *, user=None, printer_endpoint=None, now
     return job
 
 
+def print_agent_is_live(now=None):
+    """Whether any print agent is currently reading the queue.
+
+    ``claim_next_print_job`` refreshes ``last_seen_at`` on every poll, including
+    the empty ones, so this is a live signal rather than a record of the last
+    time something was actually printed.
+
+    The queue is an outbox: it exists so a receipt survives an agent being
+    briefly unreachable. It does not exist to accumulate for an agent that has
+    never existed. In the field a shop printing straight from the till banked
+    24,264 receipt jobs nothing was ever going to read — one row per sale, each
+    carrying a full receipt payload — while every receipt printed perfectly by
+    another route.
+
+    The window is deliberately far wider than the 15 minutes that marks an agent
+    stale in the notification feed: a brief outage must still queue. Beyond it,
+    the receipt is not lost either way — it can always be reprinted from the
+    order, which is what the outbox's own docstring promises.
+    """
+    window = getattr(settings, "POINTY_PRINT_AGENT_LIVENESS_WINDOW_MINUTES", 60)
+    if window <= 0:
+        return True
+    cutoff = (now or timezone.now()) - timedelta(minutes=window)
+    return PrintAgent.objects.filter(
+        is_active=True,
+        last_seen_at__gte=cutoff,
+    ).exists()
+
+
+def expire_stale_queued_print_jobs(now=None):
+    """Drop queued jobs old enough that nobody is going to print them.
+
+    The backstop for the other direction: rows created while an agent WAS alive
+    and then abandoned when it went away. A receipt still sitting unclaimed
+    hours after the sale is not going to be handed to that customer, and
+    printing it then would be worse than not printing it.
+    """
+    hours = getattr(settings, "POINTY_PRINT_JOB_QUEUE_RETENTION_HOURS", 12)
+    if hours <= 0:
+        return 0
+    cutoff = (now or timezone.now()) - timedelta(hours=hours)
+    stale = PrintJob.objects.filter(
+        status=PrintJob.Status.QUEUED,
+        created_at__lt=cutoff,
+    )
+    expired = 0
+    for job in stale.iterator(chunk_size=200):
+        job.status = PrintJob.Status.CANCELED
+        job.save(update_fields=["status", "updated_at"])
+        create_job_event(
+            job,
+            PrintJobEvent.Type.CANCELED,
+            message=(
+                "Queued longer than the retention window with no agent to print "
+                "it; reprint from the order if it is still needed."
+            ),
+        )
+        expired += 1
+    return expired
+
+
 def enqueue_receipt_print_job(order_id):
     order = Order.objects.get(pk=order_id)
     # A transient standard cart isn't a document until it's paid; credit (debt)

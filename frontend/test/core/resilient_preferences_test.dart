@@ -16,16 +16,17 @@ void main() {
     }
   });
 
-  String join(String name) =>
-      '${tempDir.path}${Platform.pathSeparator}$name';
+  String join(String name) => '${tempDir.path}${Platform.pathSeparator}$name';
 
   File storeFile() => File(join(ResilientPreferences.storeFileName));
 
   List<File> quarantineFiles() => tempDir
       .listSync()
       .whereType<File>()
-      .where((f) => f.path.contains(
-          '${ResilientPreferences.storeFileName}.corrupt-'))
+      .where(
+        (f) =>
+            f.path.contains('${ResilientPreferences.storeFileName}.corrupt-'),
+      )
       .toList();
 
   group('quarantineCorruptStore', () {
@@ -36,13 +37,19 @@ void main() {
       final moved = await ResilientPreferences.quarantineCorruptStore(tempDir);
 
       expect(moved, isTrue);
-      expect(storeFile().existsSync(), isFalse,
-          reason:
-              'the unreadable store must be gone so a fresh read starts empty');
+      expect(
+        storeFile().existsSync(),
+        isFalse,
+        reason:
+            'the unreadable store must be gone so a fresh read starts empty',
+      );
       final quarantined = quarantineFiles();
       expect(quarantined, hasLength(1));
-      expect(quarantined.single.readAsStringSync(), corruptBytes,
-          reason: 'the corrupt bytes are preserved for diagnosis');
+      expect(
+        quarantined.single.readAsStringSync(),
+        corruptBytes,
+        reason: 'the corrupt bytes are preserved for diagnosis',
+      );
     });
 
     test('returns false when there is no store file to reset', () async {
@@ -51,25 +58,28 @@ void main() {
       expect(quarantineFiles(), isEmpty);
     });
 
-    test('prunes old quarantine files, keeping only the most recent few',
-        () async {
-      // Seed more historical quarantines than we retain.
-      for (var i = 0; i < 6; i++) {
-        File(join('${ResilientPreferences.storeFileName}.corrupt-$i'))
-            .writeAsStringSync('old');
-      }
-      storeFile().writeAsStringSync('garbage');
+    test(
+      'prunes old quarantine files, keeping only the most recent few',
+      () async {
+        // Seed more historical quarantines than we retain.
+        for (var i = 0; i < 6; i++) {
+          File(
+            join('${ResilientPreferences.storeFileName}.corrupt-$i'),
+          ).writeAsStringSync('old');
+        }
+        storeFile().writeAsStringSync('garbage');
 
-      await ResilientPreferences.quarantineCorruptStore(
-        tempDir,
-        now: DateTime.fromMillisecondsSinceEpoch(9999999999999),
-      );
+        await ResilientPreferences.quarantineCorruptStore(
+          tempDir,
+          now: DateTime.fromMillisecondsSinceEpoch(9999999999999),
+        );
 
-      // The freshly quarantined file plus the retained history must stay
-      // bounded no matter how many outages a machine has suffered.
-      expect(quarantineFiles(), hasLength(3));
-      expect(storeFile().existsSync(), isFalse);
-    });
+        // The freshly quarantined file plus the retained history must stay
+        // bounded no matter how many outages a machine has suffered.
+        expect(quarantineFiles(), hasLength(3));
+        expect(storeFile().existsSync(), isFalse);
+      },
+    );
   });
 
   group('ensureHealthy', () {
@@ -104,8 +114,11 @@ void main() {
       await ResilientPreferences.ensureHealthy();
 
       expect(calls, 1);
-      expect(storeFile().existsSync(), isTrue,
-          reason: 'a healthy store is left untouched');
+      expect(
+        storeFile().existsSync(),
+        isTrue,
+        reason: 'a healthy store is left untouched',
+      );
       expect(quarantineFiles(), isEmpty);
     });
   });

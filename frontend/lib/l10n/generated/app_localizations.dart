@@ -7389,6 +7389,84 @@ abstract class AppLocalizations {
   /// **'بدأت الاستعادة.'**
   String get restoreStartedMessage;
 
+  /// No description provided for @purchaseCostWarningTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحقق من التكلفة'**
+  String get purchaseCostWarningTitle;
+
+  /// No description provided for @purchaseCostWarningBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة المدخلة تبدو غير معتادة. راجعها قبل الحفظ — إن كانت صحيحة يمكنك المتابعة.'**
+  String get purchaseCostWarningBody;
+
+  /// No description provided for @purchaseCostWarningBlockedBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة المدخلة غير منطقية ولا يمكن حفظها. تأكد من الكمية وسعر الوحدة، فربما أدخلت المبلغ الإجمالي بدل سعر القطعة.'**
+  String get purchaseCostWarningBlockedBody;
+
+  /// No description provided for @purchaseCostWarningReviewButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مراجعة'**
+  String get purchaseCostWarningReviewButton;
+
+  /// No description provided for @purchaseCostWarningFixButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصحيح'**
+  String get purchaseCostWarningFixButton;
+
+  /// No description provided for @purchaseCostWarningConfirmButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة صحيحة، تابع'**
+  String get purchaseCostWarningConfirmButton;
+
+  /// No description provided for @backupHealthNeverTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد نسخة احتياطية مؤكدة'**
+  String get backupHealthNeverTitle;
+
+  /// No description provided for @backupHealthNeverMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم بعد التحقق من أي نسخة احتياطية لهذا المتجر. لا توجد حالياً وسيلة لاسترجاع البيانات إذا تعطل الجهاز.'**
+  String get backupHealthNeverMessage;
+
+  /// No description provided for @backupHealthStaleTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'النسخة الاحتياطية قديمة'**
+  String get backupHealthStaleTitle;
+
+  /// Shown when the newest verified backup is older than the allowed window.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر نسخة مؤكدة كانت {verifiedAt}. الحد المسموح به {hours} ساعة.'**
+  String backupHealthStaleMessage(String verifiedAt, int hours);
+
+  /// The error message from the most recent failed backup attempt.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر خطأ: {message}'**
+  String backupHealthLastErrorLabel(String message);
+
+  /// No description provided for @backupHealthVerifiedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر نسخة مؤكدة'**
+  String get backupHealthVerifiedLabel;
+
+  /// No description provided for @backupHealthVerifiedNever.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد'**
+  String get backupHealthVerifiedNever;
+
   /// No description provided for @backupHistorySectionTitle.
   ///
   /// In ar, this message translates to:

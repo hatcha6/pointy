@@ -1,4 +1,6 @@
+import json
 import os
+import shutil
 import stat as stat_module
 import tempfile
 import zipfile
@@ -11,6 +13,7 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -20,13 +23,16 @@ from rest_framework.test import APIClient
 from . import backup as backup_module
 from .backup import (
     BackupValidationError,
+    BackupVerificationError,
     backup_destination_options,
+    backup_health,
     queue_backup_job,
     queue_due_scheduled_backup,
     run_backup,
     run_restore,
     validate_backup_destination,
 )
+from .backup_database import BackupDatabaseError
 from .models import ShopSettings, SystemBackupSchedule, SystemMaintenanceJob
 from .roles import MANAGER_GROUP, ensure_role_groups
 
@@ -101,9 +107,97 @@ class BackupArchiveTests(TestCase):
         self.assertFalse(old_backup.exists())
         with zipfile.ZipFile(archive_path) as archive:
             names = set(archive.namelist())
+            manifest = json.loads(archive.read("pointy-backup/manifest.json"))
         self.assertIn("pointy-backup/manifest.json", names)
-        self.assertIn("pointy-backup/database.json", names)
         self.assertIn("pointy-backup/media/products/image.txt", names)
+        if connection.vendor == "postgresql":
+            # Postgres ships COPY payloads, one archive entry per table.
+            self.assertEqual(manifest["database_format"], "pointy-pgcopy-v1")
+            self.assertIn("pointy-backup/database/index.json", names)
+            self.assertTrue(
+                any(
+                    name.endswith("_catalog_product") for name in names
+                ),
+                "a real table's COPY payload should be in the archive",
+            )
+        else:
+            self.assertEqual(manifest["database_format"], "django-fixture-json")
+            self.assertIn("pointy-backup/database.json", names)
+
+    def test_backup_records_what_it_verified(self):
+        ShopSettings.load()
+        schedule = SystemBackupSchedule.load()
+        schedule.destination_path = str(self.backup_root)
+        schedule.save()
+
+        job = queue_backup_job(dispatch=False)
+        run_backup(job.pk)
+        job.refresh_from_db()
+
+        self.assertTrue(job.metadata["verified"])
+        self.assertTrue(job.metadata["verified_at"])
+        self.assertGreater(job.metadata["row_count"], 0)
+        self.assertEqual(
+            backup_module.latest_verified_backup().pk,
+            job.pk,
+            "a verified backup must be the one the health check counts",
+        )
+
+    def test_telemetry_tables_are_left_out_of_the_archive(self):
+        """Analytics and its neighbours are machine exhaust, not shop records.
+
+        On the first client they were 86% of the database. Carrying them makes
+        the archive ten times larger and the restore ten times longer for data
+        nobody would miss.
+        """
+        if connection.vendor != "postgresql":
+            self.skipTest("COPY exports are Postgres-only")
+        ShopSettings.load()
+        schedule = SystemBackupSchedule.load()
+        schedule.destination_path = str(self.backup_root)
+        schedule.save()
+
+        job = queue_backup_job(dispatch=False)
+        run_backup(job.pk)
+        job.refresh_from_db()
+
+        with zipfile.ZipFile(Path(job.backup_file_path)) as archive:
+            index = json.loads(archive.read("pointy-backup/database/index.json"))
+        exported = {entry["table"] for entry in index["tables"]}
+        self.assertNotIn("analytics_analyticsevent", exported)
+        self.assertNotIn("django_session", exported)
+        self.assertNotIn(
+            "core_systemmaintenancejob",
+            exported,
+            "the row driving the restore must not be restored out from under it",
+        )
+        # ...but the business tables are all there.
+        self.assertIn("sales_order", exported)
+        self.assertIn("catalog_product", exported)
+        self.assertIn("payments_payment", exported)
+
+    def test_excluding_a_referenced_table_is_refused(self):
+        """The exclusion list is tunable, so it has to be checked.
+
+        Dropping `printing_printjob` looks as harmless as dropping its event log,
+        but print audit events carry its id: the archive would restore into a
+        foreign key violation, discovered only by the shop trying to recover.
+        """
+        if connection.vendor != "postgresql":
+            self.skipTest("COPY exports are Postgres-only")
+        ShopSettings.load()
+        schedule = SystemBackupSchedule.load()
+        schedule.destination_path = str(self.backup_root)
+        schedule.save()
+
+        job = queue_backup_job(dispatch=False)
+        with override_settings(POINTY_BACKUP_EXCLUDED_TABLES=["printing_printjob"]):
+            with self.assertRaises(BackupDatabaseError) as caught:
+                run_backup(job.pk)
+
+        self.assertIn("printing_printauditevent", str(caught.exception))
+        job.refresh_from_db()
+        self.assertEqual(job.status, SystemMaintenanceJob.Status.FAILED)
 
 
 class BackupRestoreTests(TransactionTestCase):
@@ -158,6 +252,81 @@ class BackupRestoreTests(TransactionTestCase):
             (self.media_root / "logos" / "logo.txt").read_text(encoding="utf-8"),
             "old logo",
         )
+
+    def test_restore_brings_back_linked_sales_data_with_its_keys_intact(self):
+        """The claim the whole feature rests on: a restore returns the shop.
+
+        A settings row round-tripping proves very little. This walks a real
+        relational chain -- product to variant to order to line to payment --
+        because the COPY restore reloads raw ids across 120-odd tables in one
+        deferred-constraint transaction, and the way that fails is dangling keys,
+        not missing rows. It also pins sequence reset: a restored database whose
+        sequences still start at 1 hands the next sale a duplicate primary key.
+        """
+        from decimal import Decimal
+
+        from apps.catalog.models import Product
+        from apps.payments.models import Payment
+        from apps.sales.models import Order, OrderLine
+
+        ShopSettings.load()
+        schedule = SystemBackupSchedule.load()
+        schedule.destination_path = str(self.backup_root)
+        schedule.save()
+
+        product = Product.objects.create(name="شاي أحمر")
+        variant = product.ensure_default_variant(unit_price=Decimal("2.50"))
+        order = Order.objects.create(
+            receipt_number="R-RESTORE-1",
+            status=Order.Status.PAID,
+            subtotal=Decimal("7.50"),
+            total=Decimal("7.50"),
+        )
+        OrderLine.objects.create(
+            order=order,
+            variant=variant,
+            quantity=Decimal("3"),
+            unit_price=Decimal("2.50"),
+            unit_cost=Decimal("1.75"),
+        )
+        Payment.objects.create(
+            order=order,
+            method=Payment.Method.CASH,
+            amount=Decimal("7.50"),
+        )
+        original_order_id = order.pk
+
+        backup_job = queue_backup_job(dispatch=False)
+        run_backup(backup_job.pk)
+        backup_job.refresh_from_db()
+        self.assertEqual(backup_job.status, SystemMaintenanceJob.Status.SUCCEEDED)
+
+        # The disaster: everything after the backup is gone.
+        Payment.objects.all().delete()
+        OrderLine.objects.all().delete()
+        Order.objects.all().delete()
+        Product.objects.all().delete()
+
+        restore_job = SystemMaintenanceJob.objects.create(
+            operation=SystemMaintenanceJob.Operation.RESTORE,
+            backup_file_name=backup_job.backup_file_name,
+            backup_file_path=backup_job.backup_file_path,
+        )
+        run_restore(restore_job.pk)
+        restore_job.refresh_from_db()
+
+        self.assertEqual(restore_job.status, SystemMaintenanceJob.Status.SUCCEEDED)
+        restored = Order.objects.get(receipt_number="R-RESTORE-1")
+        self.assertEqual(restored.pk, original_order_id)
+        self.assertEqual(restored.total, Decimal("7.50"))
+        line = restored.lines.get()
+        self.assertEqual(line.variant.product.name, "شاي أحمر")
+        self.assertEqual(line.quantity, Decimal("3"))
+        self.assertEqual(restored.payments.get().amount, Decimal("7.50"))
+
+        # Sequences have to continue past the restored rows, not collide with them.
+        next_order = Order.objects.create(receipt_number="R-AFTER-RESTORE")
+        self.assertGreater(next_order.pk, original_order_id)
 
 
 class BackupOperationsApiTests(TestCase):
@@ -450,3 +619,469 @@ class AbandonedMaintenanceJobTests(TestCase):
 
         with self.assertRaises(BackupValidationError):
             queue_backup_job(source="manual")
+
+
+class BackupVerificationTests(TestCase):
+    """A backup is only a backup once something has read it back.
+
+    The first client's database carried eighteen recorded backup jobs and no
+    recoverable archive: every one of them reported on having written bytes, and
+    nothing ever opened the result. These tests hold the line that a job may only
+    claim success for an archive that was re-read and matched what went in.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.root = Path(self.temp_dir.name)
+        self.media_root = self.root / "media"
+        self.backup_root = self.root / "usb"
+        self.staging_root = self.root / "staging"
+        self.media_root.mkdir()
+        self.backup_root.mkdir()
+        self.override = override_settings(
+            MEDIA_ROOT=self.media_root,
+            POINTY_BACKUP_ALLOWED_ROOTS=[str(self.backup_root)],
+            POINTY_BACKUP_STAGING_ROOT=self.staging_root,
+        )
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+        ShopSettings.load()
+        schedule = SystemBackupSchedule.load()
+        schedule.destination_path = str(self.backup_root)
+        schedule.retention_count = 1
+        schedule.save()
+
+    def test_a_corrupt_archive_fails_the_job_and_spares_the_old_backups(self):
+        """The dangerous ordering: verify before retention prunes.
+
+        Retention deletes the shop's previous archives. If the new one is only
+        checked afterwards -- or not at all -- a single bad write costs every
+        copy at once, which is the failure mode that turns a bad night into a
+        lost business.
+        """
+        backup_dir = self.backup_root / "pointy-backups"
+        backup_dir.mkdir()
+        old_backup = backup_dir / "pointy-backup-20000101-000000.zip"
+        old_backup.write_bytes(b"the only other copy")
+
+        real_replace = os.replace
+
+        def corrupting_replace(source, destination):
+            # Stand in for a bad sector or a USB stick that dropped writes: the
+            # archive lands under its final name with a damaged payload.
+            result = real_replace(source, destination)
+            with open(destination, "r+b") as handle:
+                # Mid-file, so the damage lands in an entry's payload and shows
+                # up as a CRC failure rather than a mangled directory.
+                handle.seek(os.path.getsize(destination) // 2)
+                handle.write(b"\x00" * 512)
+            return result
+
+        job = queue_backup_job(dispatch=False)
+        with mock.patch("os.replace", corrupting_replace):
+            with self.assertRaises(BackupVerificationError):
+                run_backup(job.pk)
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, SystemMaintenanceJob.Status.FAILED)
+        self.assertTrue(
+            old_backup.exists(),
+            "retention pruned the last good archive on the strength of a bad one",
+        )
+        self.assertEqual(
+            sorted(path.name for path in backup_dir.glob("pointy-backup-*.zip")),
+            [old_backup.name],
+            "an archive that failed verification was left where a restore would offer it",
+        )
+
+    def test_a_short_table_is_caught_by_name(self):
+        """Row counts, not just CRCs.
+
+        A zip whose entries all pass CRC can still be missing rows if the export
+        stopped early. The index records what was written per table so the check
+        can say which table, rather than failing the archive anonymously.
+        """
+        if connection.vendor != "postgresql":
+            self.skipTest("COPY exports are Postgres-only")
+
+        job = queue_backup_job(dispatch=False)
+        run_backup(job.pk)
+        job.refresh_from_db()
+        archive_path = Path(job.backup_file_path)
+
+        with zipfile.ZipFile(archive_path) as archive:
+            index = json.loads(archive.read("pointy-backup/database/index.json"))
+        # Claim one more row than was exported, the way a truncated export would.
+        target = next(
+            entry for entry in index["tables"] if entry["table"] == "core_shopsettings"
+        )
+        target["rows"] += 1
+
+        with zipfile.ZipFile(archive_path) as archive:
+            problems = backup_module.backup_database.verify_database_export(
+                archive, index
+            )
+
+        self.assertTrue(problems)
+        self.assertIn("core_shopsettings", problems[0])
+
+    def test_a_full_destination_fails_before_anything_is_written(self):
+        """Running out of room mid-write is the worst available outcome, so the
+        check happens before the first byte rather than after the last."""
+        job = queue_backup_job(dispatch=False)
+        usage = shutil.disk_usage(self.backup_root)
+        with mock.patch(
+            "shutil.disk_usage",
+            return_value=type(usage)(usage.total, usage.total, 1024),
+        ):
+            with self.assertRaises(BackupValidationError) as caught:
+                run_backup(job.pk)
+
+        self.assertIn("free", str(caught.exception))
+        job.refresh_from_db()
+        self.assertEqual(job.status, SystemMaintenanceJob.Status.FAILED)
+        self.assertEqual(
+            list((self.backup_root / "pointy-backups").glob("*"))
+            if (self.backup_root / "pointy-backups").exists()
+            else [],
+            [],
+        )
+
+
+class BackupHealthTests(TestCase):
+    """The 35 days of silence.
+
+    The first client's scheduler stopped queueing on 2026-07-20 and nobody found
+    out until someone read the database two months later. Backup health has to be
+    a thing the system asserts, not a thing a manager remembers to check.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.backup_root = Path(self.temp_dir.name) / "usb"
+        self.backup_root.mkdir()
+        self.override = override_settings(
+            POINTY_BACKUP_ALLOWED_ROOTS=[str(self.backup_root)],
+            POINTY_BACKUP_STALE_AFTER_HOURS=48,
+        )
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+        schedule = SystemBackupSchedule.load()
+        schedule.enabled = True
+        schedule.destination_path = str(self.backup_root)
+        schedule.save()
+
+    def _verified_backup(self, completed_at):
+        job = SystemMaintenanceJob.objects.create(
+            operation=SystemMaintenanceJob.Operation.BACKUP,
+            status=SystemMaintenanceJob.Status.SUCCEEDED,
+            completed_at=completed_at,
+            metadata={"source": "schedule", "verified": True},
+        )
+        return job
+
+    def test_a_shop_with_no_verified_backup_is_reported_stale(self):
+        health = backup_health()
+
+        self.assertTrue(health["enabled"])
+        self.assertTrue(health["is_stale"])
+        self.assertIsNone(health["latest_verified_at"])
+
+    def test_an_old_verified_backup_is_still_stale(self):
+        self._verified_backup(timezone.now() - timedelta(hours=72))
+
+        self.assertTrue(backup_health()["is_stale"])
+
+    def test_a_recent_verified_backup_is_healthy(self):
+        self._verified_backup(timezone.now() - timedelta(hours=6))
+
+        health = backup_health()
+        self.assertFalse(health["is_stale"])
+        self.assertIsNotNone(health["latest_verified_at"])
+
+    def test_an_unverified_success_does_not_count(self):
+        """Every one of the first client's eighteen jobs would have passed a
+        "did a job succeed lately" check. Only a verified archive counts."""
+        SystemMaintenanceJob.objects.create(
+            operation=SystemMaintenanceJob.Operation.BACKUP,
+            status=SystemMaintenanceJob.Status.SUCCEEDED,
+            completed_at=timezone.now(),
+            metadata={"source": "schedule"},
+        )
+
+        self.assertTrue(backup_health()["is_stale"])
+
+    def test_the_notification_feed_raises_and_clears_it(self):
+        from apps.notifications.models import BusinessNotification
+        from apps.notifications.services import sync_business_notifications
+
+        sync_business_notifications()
+        self.assertTrue(
+            BusinessNotification.objects.filter(
+                code="operations.backup_unhealthy",
+                status=BusinessNotification.Status.ACTIVE,
+            ).exists(),
+            "a shop with no way back must say so",
+        )
+
+        self._verified_backup(timezone.now())
+        sync_business_notifications()
+
+        self.assertFalse(
+            BusinessNotification.objects.filter(
+                code="operations.backup_unhealthy",
+                status=BusinessNotification.Status.ACTIVE,
+            ).exists(),
+            "the alarm must clear itself once a verified backup lands",
+        )
+
+
+class ScheduledBackupRetryTests(TestCase):
+    """One failure used to cost a whole day.
+
+    ``last_scheduled_backup_date`` was stamped when the job was *queued*, so a
+    backup that failed at 02:00 meant no further attempt until 02:00 tomorrow --
+    and the field failures that matter (drive not plugged in, container
+    restarting) usually clear within the hour.
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.backup_root = Path(self.temp_dir.name) / "usb"
+        self.backup_root.mkdir()
+        self.override = override_settings(
+            POINTY_BACKUP_ALLOWED_ROOTS=[str(self.backup_root)],
+            POINTY_BACKUP_MAX_ATTEMPTS_PER_DAY=3,
+            POINTY_BACKUP_RETRY_INTERVAL_MINUTES=30,
+        )
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+        schedule = SystemBackupSchedule.load()
+        schedule.enabled = True
+        schedule.destination_path = str(self.backup_root)
+        schedule.scheduled_time = time(hour=2, minute=0)
+        schedule.save()
+
+    def _fail(self, job, at):
+        SystemMaintenanceJob.objects.filter(pk=job.pk).update(
+            status=SystemMaintenanceJob.Status.FAILED,
+            error_message="destination unavailable",
+            created_at=at,
+            updated_at=at,
+        )
+
+    def test_a_failed_attempt_is_retried_later_the_same_day(self):
+        first_run = timezone.make_aware(datetime(2026, 6, 9, 2, 0))
+        with mock.patch("apps.core.tasks.run_backup_job.apply_async"):
+            first = queue_due_scheduled_backup(first_run)
+            self.assertIsNotNone(first)
+            self._fail(first, first_run)
+
+            too_soon = queue_due_scheduled_backup(first_run + timedelta(minutes=10))
+            self.assertIsNone(too_soon, "retries must be spaced, not immediate")
+
+            retry = queue_due_scheduled_backup(first_run + timedelta(minutes=45))
+
+        self.assertIsNotNone(
+            retry, "a failed nightly backup must try again before tomorrow"
+        )
+
+    def test_retries_are_bounded_so_a_broken_drive_cannot_storm_the_queue(self):
+        run_at = timezone.make_aware(datetime(2026, 6, 9, 2, 0))
+        with mock.patch("apps.core.tasks.run_backup_job.apply_async"):
+            for attempt in range(3):
+                moment = run_at + timedelta(hours=attempt)
+                job = queue_due_scheduled_backup(moment)
+                self.assertIsNotNone(job, f"attempt {attempt + 1} should be allowed")
+                self._fail(job, moment)
+
+            fourth = queue_due_scheduled_backup(run_at + timedelta(hours=4))
+
+        self.assertIsNone(fourth, "a permanently broken destination must not retry forever")
+
+    def test_a_successful_backup_stops_the_retries(self):
+        run_at = timezone.make_aware(datetime(2026, 6, 9, 2, 0))
+        with mock.patch("apps.core.tasks.run_backup_job.apply_async"):
+            job = queue_due_scheduled_backup(run_at)
+            SystemMaintenanceJob.objects.filter(pk=job.pk).update(
+                status=SystemMaintenanceJob.Status.SUCCEEDED,
+                completed_at=run_at,
+                created_at=run_at,
+                updated_at=run_at,
+            )
+
+            again = queue_due_scheduled_backup(run_at + timedelta(hours=2))
+
+        self.assertIsNone(again)
+
+    def test_the_screen_shows_the_pending_retry_not_tomorrow(self):
+        """Saying "tomorrow" while a retry is due in half an hour teaches people
+        to stop believing the screen."""
+        run_at = timezone.make_aware(datetime(2026, 6, 9, 2, 0))
+        with mock.patch("apps.core.tasks.run_backup_job.apply_async"):
+            job = queue_due_scheduled_backup(run_at)
+        self._fail(job, run_at)
+
+        schedule = SystemBackupSchedule.load()
+        next_at = backup_module.next_scheduled_backup_at(
+            schedule, run_at + timedelta(minutes=5)
+        )
+
+        self.assertEqual(next_at, run_at + timedelta(minutes=30))
+
+    def test_the_screen_falls_back_to_tomorrow_once_retries_are_spent(self):
+        run_at = timezone.make_aware(datetime(2026, 6, 9, 2, 0))
+        with mock.patch("apps.core.tasks.run_backup_job.apply_async"):
+            for attempt in range(3):
+                moment = run_at + timedelta(hours=attempt)
+                job = queue_due_scheduled_backup(moment)
+                self._fail(job, moment)
+
+        schedule = SystemBackupSchedule.load()
+        next_at = backup_module.next_scheduled_backup_at(
+            schedule, run_at + timedelta(hours=4)
+        )
+
+        self.assertEqual(timezone.localtime(next_at).date(), run_at.date() + timedelta(days=1))
+
+
+class BackupSchemaDriftTests(TransactionTestCase):
+    """Restores happen after an update as often as before one.
+
+    The shop is recovering from something, so the newest archive routinely
+    predates the running release. Harmless drift has to keep working; the two
+    shapes that genuinely cannot load have to say so up front, not fail opaquely
+    half way through a multi-gigabyte COPY.
+    """
+
+    reset_sequences = True
+
+    def setUp(self):
+        if connection.vendor != "postgresql":
+            self.skipTest("COPY exports are Postgres-only")
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.root = Path(self.temp_dir.name)
+        self.media_root = self.root / "media"
+        self.backup_root = self.root / "usb"
+        self.media_root.mkdir()
+        self.backup_root.mkdir()
+        self.override = override_settings(
+            MEDIA_ROOT=self.media_root,
+            POINTY_BACKUP_ALLOWED_ROOTS=[str(self.backup_root)],
+            POINTY_BACKUP_STAGING_ROOT=self.root / "staging",
+        )
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+        ShopSettings.load()
+        schedule = SystemBackupSchedule.load()
+        schedule.destination_path = str(self.backup_root)
+        schedule.save()
+
+    def _restore_job(self, backup_job):
+        return SystemMaintenanceJob.objects.create(
+            operation=SystemMaintenanceJob.Operation.RESTORE,
+            backup_file_name=backup_job.backup_file_name,
+            backup_file_path=backup_job.backup_file_path,
+        )
+
+    def test_a_new_nullable_column_does_not_block_an_older_backup(self):
+        job = queue_backup_job(dispatch=False)
+        run_backup(job.pk)
+        job.refresh_from_db()
+
+        with connection.cursor() as cursor:
+            cursor.execute("ALTER TABLE core_shopsettings ADD COLUMN drift_note text")
+        self.addCleanup(self._drop_column, "drift_note")
+
+        restore_job = self._restore_job(job)
+        run_restore(restore_job.pk)
+        restore_job.refresh_from_db()
+
+        self.assertEqual(
+            restore_job.status,
+            SystemMaintenanceJob.Status.SUCCEEDED,
+            "a column added since the backup must not stop a recovery",
+        )
+
+    def test_a_new_required_column_is_refused_with_a_readable_reason(self):
+        job = queue_backup_job(dispatch=False)
+        run_backup(job.pk)
+        job.refresh_from_db()
+
+        with connection.cursor() as cursor:
+            # Added with a default so the existing row can take it, then stripped
+            # of the default -- the exact shape a new required field lands in.
+            cursor.execute(
+                "ALTER TABLE core_shopsettings "
+                "ADD COLUMN drift_required text NOT NULL DEFAULT ''"
+            )
+            cursor.execute(
+                "ALTER TABLE core_shopsettings ALTER COLUMN drift_required DROP DEFAULT"
+            )
+        self.addCleanup(self._drop_column, "drift_required")
+
+        restore_job = self._restore_job(job)
+        with self.assertRaises(BackupDatabaseError) as caught:
+            run_restore(restore_job.pk)
+
+        message = str(caught.exception)
+        self.assertIn("drift_required", message)
+        self.assertIn("older version", message)
+
+    def _drop_column(self, column):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"ALTER TABLE core_shopsettings DROP COLUMN IF EXISTS {column}"
+            )
+
+
+class VerifiedArchiveSurvivalTests(TestCase):
+    """Once an archive is verified it is the shop's only copy, and nothing that
+    happens afterwards may take it away."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_dir.cleanup)
+        self.root = Path(self.temp_dir.name)
+        self.media_root = self.root / "media"
+        self.backup_root = self.root / "usb"
+        self.media_root.mkdir()
+        self.backup_root.mkdir()
+        self.override = override_settings(
+            MEDIA_ROOT=self.media_root,
+            POINTY_BACKUP_ALLOWED_ROOTS=[str(self.backup_root)],
+            POINTY_BACKUP_STAGING_ROOT=self.root / "staging",
+        )
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+        ShopSettings.load()
+        schedule = SystemBackupSchedule.load()
+        schedule.destination_path = str(self.backup_root)
+        schedule.save()
+
+    def test_a_failure_after_verification_keeps_the_archive(self):
+        """Retention has already pruned the older copies by this point, so
+        discarding this one over a bookkeeping error would leave nothing."""
+        job = queue_backup_job(dispatch=False)
+
+        with mock.patch.object(
+            SystemMaintenanceJob,
+            "mark_succeeded",
+            side_effect=RuntimeError("database went away at the last step"),
+        ):
+            with self.assertRaises(RuntimeError):
+                run_backup(job.pk)
+
+        backup_dir = self.backup_root / "pointy-backups"
+        archives = sorted(backup_dir.glob("pointy-backup-*.zip"))
+        self.assertEqual(
+            len(archives),
+            1,
+            "a verified archive was thrown away because a later step failed",
+        )
+        with zipfile.ZipFile(archives[0]) as archive:
+            self.assertIsNone(archive.testzip())

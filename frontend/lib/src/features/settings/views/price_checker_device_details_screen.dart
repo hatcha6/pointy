@@ -14,9 +14,8 @@ import 'price_checker_labels.dart';
 
 /// Loads a single device's recent scan events. Supplied by the list page so
 /// this screen needs no repository of its own.
-typedef PriceCheckEventLoader = Future<List<PriceCheckEvent>?> Function(
-  int deviceId,
-);
+typedef PriceCheckEventLoader =
+    Future<List<PriceCheckEvent>?> Function(int deviceId);
 
 /// Full read-only profile for one price-checker device: a status callout, its
 /// network + display specs, and its most recent scan activity.
@@ -253,7 +252,8 @@ class _PriceCheckerDeviceDetailsScreenState
             label: l10n.priceCheckerFieldDisplaySize,
             // Wrap in an LTR isolate (U+2066 … U+2069) so "5 × 20" keeps its
             // rows-before-cols order inside the RTL layout instead of flipping.
-            value: '\u{2066}'
+            value:
+                '\u{2066}'
                 '${l10n.priceCheckerDisplaySizeValue(device.displayRows, device.displayCols)}'
                 '\u{2069}',
             icon: Icons.grid_on_outlined,

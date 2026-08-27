@@ -773,10 +773,7 @@ class _DetailRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              label,
-              style: TextStyle(color: colors.mutedInk),
-            ),
+            child: Text(label, style: TextStyle(color: colors.mutedInk)),
           ),
           const SizedBox(width: 12),
           Expanded(

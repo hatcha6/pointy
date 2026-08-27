@@ -30,6 +30,7 @@ from .models import (
     prime_register_session_cash_totals,
 )
 from .services import (
+    RECEIPT_DELIVERY_CHOICES,
     assign_credit_invoice_customer,
     cashier_window_expired,
     can_adjust_order,
@@ -936,6 +937,15 @@ class CheckoutPaymentSerializer(serializers.Serializer):
 
 class CheckoutSerializer(serializers.Serializer):
     lines = CheckoutLineSerializer(many=True, allow_empty=False)
+    # How this till will deliver the receipt. "local" means it prints the
+    # document itself and no queue row should be created for the sale — see
+    # apps.sales.services.create_receipt_print_job. Absent from clients too old
+    # to say, which fall back to whether an agent is reading the queue.
+    receipt_delivery = serializers.ChoiceField(
+        choices=RECEIPT_DELIVERY_CHOICES,
+        required=False,
+        write_only=True,
+    )
     customer = serializers.PrimaryKeyRelatedField(
         queryset=Customer.objects.all(),
         required=False,

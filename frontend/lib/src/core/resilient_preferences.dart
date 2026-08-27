@@ -88,9 +88,7 @@ class ResilientPreferences {
       // Nothing to reset — either this isn't the file-backed desktop store, or
       // the support directory is unavailable. Don't mask the problem by
       // pretending we fixed it; leave lazy callers to fail as they would have.
-      debugPrint(
-        'SharedPreferences recovery found no store file to reset.',
-      );
+      debugPrint('SharedPreferences recovery found no store file to reset.');
       return;
     }
 
@@ -138,8 +136,7 @@ class ResilientPreferences {
     }
 
     final int stamp = (now ?? DateTime.now()).millisecondsSinceEpoch;
-    final String quarantinePath =
-        '${file.path}$_quarantineMarker$stamp';
+    final String quarantinePath = '${file.path}$_quarantineMarker$stamp';
     try {
       // Rename is itself atomic and keeps a copy for post-mortem inspection.
       file.renameSync(quarantinePath);
@@ -163,17 +160,19 @@ class ResilientPreferences {
   static void _pruneOldQuarantines(Directory supportDir) {
     try {
       const String prefix = '$storeFileName$_quarantineMarker';
-      final List<File> quarantines = supportDir
-          .listSync()
-          .whereType<File>()
-          .where((f) => _basename(f.path).startsWith(prefix))
-          .toList()
-        ..sort((a, b) => a.path.compareTo(b.path));
+      final List<File> quarantines =
+          supportDir
+              .listSync()
+              .whereType<File>()
+              .where((f) => _basename(f.path).startsWith(prefix))
+              .toList()
+            ..sort((a, b) => a.path.compareTo(b.path));
       if (quarantines.length <= _quarantineKeep) {
         return;
       }
-      for (final File stale
-          in quarantines.take(quarantines.length - _quarantineKeep)) {
+      for (final File stale in quarantines.take(
+        quarantines.length - _quarantineKeep,
+      )) {
         try {
           stale.deleteSync();
         } catch (_) {

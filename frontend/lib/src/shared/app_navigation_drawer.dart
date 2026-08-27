@@ -196,7 +196,6 @@ class AppNavigationDrawer extends StatelessWidget {
     }
     navigation.logout(context);
   }
-
 }
 
 class _NavigationGroup {
@@ -339,9 +338,7 @@ class _NavDestinationTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: foreground,
-                      fontWeight: selected
-                          ? FontWeight.w800
-                          : FontWeight.w600,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                     ),
                   ),
                 ),
@@ -379,9 +376,7 @@ class _CollapsedRailDestinationTile extends StatelessWidget {
             foregroundColor: selected ? colors.primaryDark : colors.mutedInk,
           ),
           onPressed: onTap,
-          icon: Icon(
-            selected ? destination.selectedIcon : destination.icon,
-          ),
+          icon: Icon(selected ? destination.selectedIcon : destination.icon),
         ),
       ),
     );

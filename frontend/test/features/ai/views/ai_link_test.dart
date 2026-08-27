@@ -48,19 +48,26 @@ class _ReplyRepo extends AiChatRepository {
     List<AiAttachment> attachments = const [],
   }) async* {
     yield AiChatDelta(reply);
-    yield AiChatDone(conversationId: 1, sources: sources, webSearched: webSearched);
+    yield AiChatDone(
+      conversationId: 1,
+      sources: sources,
+      webSearched: webSearched,
+    );
   }
 
   @override
   Future<Result<AiUsage>> loadUsage() async => Error(Exception('none'));
 
   @override
-  Future<Result<List<AiConversationSummary>>> loadConversations({int page = 1}) async =>
-      const Ok([]);
+  Future<Result<List<AiConversationSummary>>> loadConversations({
+    int page = 1,
+  }) async => const Ok([]);
 }
 
 void main() {
-  testWidgets('tapping a pointy:// link routes via onOpenAiLink', (tester) async {
+  testWidgets('tapping a pointy:// link routes via onOpenAiLink', (
+    tester,
+  ) async {
     AiDeepLink? captured;
     final repo = _ReplyRepo('راجع [المنتج](pointy://product/42) للتأكيد.');
     final viewModel = AiChatViewModel(repo);
@@ -110,12 +117,16 @@ void main() {
     expect(captured, const AiEntityLink('product', 42));
   });
 
-  testWidgets('tapping a web source citation opens it externally', (tester) async {
+  testWidgets('tapping a web source citation opens it externally', (
+    tester,
+  ) async {
     final fakeLauncher = _FakeUrlLauncher();
     UrlLauncherPlatform.instance = fakeLauncher;
 
     AiDeepLink? captured;
-    final repo = _ReplyRepo('حسب [المصدر](https://example.com/news) فإن السعر ارتفع.');
+    final repo = _ReplyRepo(
+      'حسب [المصدر](https://example.com/news) فإن السعر ارتفع.',
+    );
     final viewModel = AiChatViewModel(repo);
     addTearDown(viewModel.dispose);
     const user = PosUser(
@@ -164,68 +175,72 @@ void main() {
     expect(fakeLauncher.launched, ['https://example.com/news']);
   });
 
-  testWidgets('a web-searched reply shows a sources indicator that opens a sheet', (
-    tester,
-  ) async {
-    final fakeLauncher = _FakeUrlLauncher();
-    UrlLauncherPlatform.instance = fakeLauncher;
+  testWidgets(
+    'a web-searched reply shows a sources indicator that opens a sheet',
+    (tester) async {
+      final fakeLauncher = _FakeUrlLauncher();
+      UrlLauncherPlatform.instance = fakeLauncher;
 
-    final repo = _ReplyRepo(
-      'ارتفع سعر الذهب اليوم.',
-      webSearched: true,
-      sources: const [
-        AiSource(url: 'https://goldprice.org/news', title: 'Gold Price Today'),
-        AiSource(url: 'https://news.test/gold', title: 'Gold News'),
-      ],
-    );
-    final viewModel = AiChatViewModel(repo);
-    addTearDown(viewModel.dispose);
-    const user = PosUser(
-      id: 1,
-      username: 'manager',
-      role: UserRole.manager,
-      isActive: true,
-      aiAvailable: true,
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        locale: const Locale('ar'),
-        supportedLocales: AppLocalizations.supportedLocales,
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
+      final repo = _ReplyRepo(
+        'ارتفع سعر الذهب اليوم.',
+        webSearched: true,
+        sources: const [
+          AiSource(
+            url: 'https://goldprice.org/news',
+            title: 'Gold Price Today',
+          ),
+          AiSource(url: 'https://news.test/gold', title: 'Gold News'),
         ],
-        theme: PointyTheme.light(),
-        builder: (context, child) => PointyNavigationRailScope(
-          isActive: false,
-          controller: PointyNavigationRailController(),
-          child: child ?? const SizedBox.shrink(),
+      );
+      final viewModel = AiChatViewModel(repo);
+      addTearDown(viewModel.dispose);
+      const user = PosUser(
+        id: 1,
+        username: 'manager',
+        role: UserRole.manager,
+        isActive: true,
+        aiAvailable: true,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          locale: const Locale('ar'),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          theme: PointyTheme.light(),
+          builder: (context, child) => PointyNavigationRailScope(
+            isActive: false,
+            controller: PointyNavigationRailController(),
+            child: child ?? const SizedBox.shrink(),
+          ),
+          home: AiAssistantScreen(
+            viewModel: viewModel,
+            navigation: FakeAppNavigation(currentUser: user),
+          ),
         ),
-        home: AiAssistantScreen(
-          viewModel: viewModel,
-          navigation: FakeAppNavigation(currentUser: user),
-        ),
-      ),
-    );
-    await tester.pump();
-    await viewModel.sendMessage('كم سعر الذهب؟');
-    await tester.pumpAndSettle();
+      );
+      await tester.pump();
+      await viewModel.sendMessage('كم سعر الذهب؟');
+      await tester.pumpAndSettle();
 
-    // The "searched the web" favicon indicator is shown next to the copy action.
-    final indicator = find.byTooltip('بحث في الويب');
-    expect(indicator, findsOneWidget);
+      // The "searched the web" favicon indicator is shown next to the copy action.
+      final indicator = find.byTooltip('بحث في الويب');
+      expect(indicator, findsOneWidget);
 
-    // Tapping it opens a sheet listing the sources; tapping a source opens it.
-    await tester.tap(indicator);
-    await tester.pumpAndSettle();
-    expect(find.text('المصادر'), findsOneWidget);
-    expect(find.text('Gold Price Today'), findsOneWidget);
+      // Tapping it opens a sheet listing the sources; tapping a source opens it.
+      await tester.tap(indicator);
+      await tester.pumpAndSettle();
+      expect(find.text('المصادر'), findsOneWidget);
+      expect(find.text('Gold Price Today'), findsOneWidget);
 
-    await tester.tap(find.text('Gold Price Today'));
-    await tester.pumpAndSettle();
-    expect(fakeLauncher.launched, contains('https://goldprice.org/news'));
-  });
+      await tester.tap(find.text('Gold Price Today'));
+      await tester.pumpAndSettle();
+      expect(fakeLauncher.launched, contains('https://goldprice.org/news'));
+    },
+  );
 }

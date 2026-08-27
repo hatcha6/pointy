@@ -56,8 +56,9 @@ class _AskRepo extends AiChatRepository {
   Future<Result<AiUsage>> loadUsage() async => Error(Exception('none'));
 
   @override
-  Future<Result<List<AiConversationSummary>>> loadConversations({int page = 1}) async =>
-      const Ok([]);
+  Future<Result<List<AiConversationSummary>>> loadConversations({
+    int page = 1,
+  }) async => const Ok([]);
 }
 
 class _FakeNavigation implements AppNavigation {
@@ -93,11 +94,22 @@ class _FakeNavigation implements AppNavigation {
   void logout(BuildContext context) {}
 }
 
-Future<AsyncSelectionPage<int>> _fakeProductSearch(String search, int page) async {
+Future<AsyncSelectionPage<int>> _fakeProductSearch(
+  String search,
+  int page,
+) async {
   return const AsyncSelectionPage<int>(
     options: [
-      AsyncSelectionOption<int>(id: 10, label: 'حليب المراعي ١ لتر', subtitle: '6291000111'),
-      AsyncSelectionOption<int>(id: 11, label: 'حليب نادك ١ لتر', subtitle: '6291000222'),
+      AsyncSelectionOption<int>(
+        id: 10,
+        label: 'حليب المراعي ١ لتر',
+        subtitle: '6291000111',
+      ),
+      AsyncSelectionOption<int>(
+        id: 11,
+        label: 'حليب نادك ١ لتر',
+        subtitle: '6291000222',
+      ),
     ],
     hasMore: false,
   );
@@ -135,7 +147,9 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('single-select card resumes with the chosen option', (tester) async {
+  testWidgets('single-select card resumes with the chosen option', (
+    tester,
+  ) async {
     final repo = _AskRepo([
       AiQuestion(
         id: 'branch',
@@ -174,7 +188,9 @@ void main() {
     expect(find.text('الرئيسي'), findsWidgets);
   });
 
-  testWidgets('a required question blocks submit until answered', (tester) async {
+  testWidgets('a required question blocks submit until answered', (
+    tester,
+  ) async {
     final repo = _AskRepo([
       AiQuestion(
         id: 'name',
@@ -203,7 +219,9 @@ void main() {
     expect(repo.resumeAnswers.single.value, 'عصير');
   });
 
-  testWidgets('single-select "other" submits the typed custom value', (tester) async {
+  testWidgets('single-select "other" submits the typed custom value', (
+    tester,
+  ) async {
     final repo = _AskRepo([
       AiQuestion(
         id: 'branch',
@@ -260,7 +278,9 @@ void main() {
     expect(repo.resumeAnswers.single.value, 7);
   });
 
-  testWidgets('product picker "create new" resumes with is_other', (tester) async {
+  testWidgets('product picker "create new" resumes with is_other', (
+    tester,
+  ) async {
     final repo = _AskRepo([
       AiQuestion(
         id: 'line1',
@@ -288,41 +308,48 @@ void main() {
     expect(find.text('سيُنشأ منتج جديد'), findsWidgets);
   });
 
-  testWidgets('product picker confirms a pre-suggested candidate with one tap', (tester) async {
-    final repo = _AskRepo([
-      AiQuestion(
-        id: 'line1',
-        type: AiQuestionType.productPicker,
-        prompt: 'راجع البند غير المطابق',
-        config: const {
-          'name': 'كابل يو اس بي سي',
-          'deny_label': 'أنشئ منتجًا جديدًا',
-          'options': [
-            {'value': '23', 'label': 'كابل USB-C — 8.00 د.ل'},
-          ],
-        },
-      ),
-    ]);
-    final viewModel = AiChatViewModel(repo);
-    addTearDown(viewModel.dispose);
+  testWidgets(
+    'product picker confirms a pre-suggested candidate with one tap',
+    (tester) async {
+      final repo = _AskRepo([
+        AiQuestion(
+          id: 'line1',
+          type: AiQuestionType.productPicker,
+          prompt: 'راجع البند غير المطابق',
+          config: const {
+            'name': 'كابل يو اس بي سي',
+            'deny_label': 'أنشئ منتجًا جديدًا',
+            'options': [
+              {'value': '23', 'label': 'كابل USB-C — 8.00 د.ل'},
+            ],
+          },
+        ),
+      ]);
+      final viewModel = AiChatViewModel(repo);
+      addTearDown(viewModel.dispose);
 
-    await _pump(tester, viewModel, productSearch: _fakeProductSearch);
-    await viewModel.sendMessage('hi');
-    await tester.pumpAndSettle();
+      await _pump(tester, viewModel, productSearch: _fakeProductSearch);
+      await viewModel.sendMessage('hi');
+      await tester.pumpAndSettle();
 
-    // The candidate renders as a one-tap option — no need to open the search.
-    expect(find.text('كابل USB-C — 8.00 د.ل'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('ai_product_candidate_line1_23')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('إرسال الإجابة'));
-    await tester.pumpAndSettle();
+      // The candidate renders as a one-tap option — no need to open the search.
+      expect(find.text('كابل USB-C — 8.00 د.ل'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey('ai_product_candidate_line1_23')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('إرسال الإجابة'));
+      await tester.pumpAndSettle();
 
-    expect(repo.resumeCalled, isTrue);
-    expect(repo.resumeAnswers.single.value, 23);
-    expect(repo.resumeAnswers.single.isOther, isFalse);
-  });
+      expect(repo.resumeCalled, isTrue);
+      expect(repo.resumeAnswers.single.value, 23);
+      expect(repo.resumeAnswers.single.isOther, isFalse);
+    },
+  );
 
-  testWidgets('product picker resumes with the chosen variant id', (tester) async {
+  testWidgets('product picker resumes with the chosen variant id', (
+    tester,
+  ) async {
     final repo = _AskRepo([
       AiQuestion(
         id: 'line1',

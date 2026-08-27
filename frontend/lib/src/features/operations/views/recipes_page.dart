@@ -12,16 +12,19 @@ import '../../../shared/shell/shell.dart';
 import '../view_models/recipes_view_model.dart';
 import 'jobs_screen.dart' show formatQuantity, unitLabel;
 import 'variant_picker_sheet.dart';
+import '../../../core/authorization.dart';
 
 class RecipesPage extends StatefulWidget {
   const RecipesPage({
     super.key,
     required this.viewModel,
     required this.catalogRepository,
+    required this.capabilities,
   });
 
   final RecipesViewModel viewModel;
   final CatalogRepository catalogRepository;
+  final AuthorizationCapabilities capabilities;
 
   @override
   State<RecipesPage> createState() => _RecipesPageState();
@@ -32,7 +35,10 @@ class _RecipesPageState extends State<RecipesPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
+      // Gate the call on the permission, not the response: this list used to
+      // fire boms/ and take a 403 for a cashier who can open the operations
+      // board but not read recipes.
+      if (mounted && widget.capabilities.canViewRecipes) {
         unawaited(widget.viewModel.loadRecipes());
       }
     });

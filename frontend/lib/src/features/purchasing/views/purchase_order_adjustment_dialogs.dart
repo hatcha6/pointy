@@ -194,9 +194,7 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
     ]);
     final replacementLines = <PurchaseReplacementLineDraft>[];
     for (final editor in _replacementEditors) {
-      final quantity = double.tryParse(
-        editor.quantityController.text.trim(),
-      );
+      final quantity = double.tryParse(editor.quantityController.text.trim());
       final unitCost = double.tryParse(editor.unitCostController.text.trim());
       if (quantity == null ||
           unitCost == null ||

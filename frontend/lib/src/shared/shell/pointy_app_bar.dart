@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design/design.dart';
 import 'pointy_shell_action_scope.dart';
+import '../components/pointy_progress.dart';
 
 enum PointyAppBarStyle { standard, highFocus }
 
@@ -102,7 +103,7 @@ class _AppBarProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox.square(
       dimension: 18,
-      child: CircularProgressIndicator(
+      child: PointySpinner(
         strokeWidth: 2,
         color: color ?? PointyColors.primary,
       ),

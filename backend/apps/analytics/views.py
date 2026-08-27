@@ -29,6 +29,11 @@ from .services import (
     ingest_events,
     iter_events_export_zip,
 )
+from .throttling import (
+    AnalyticsIngestRateThrottle,
+    IngestCapacityExceeded,
+    ingest_capacity,
+)
 
 
 ANALYTICS_EVENT_ACTIONS = {
@@ -445,8 +450,30 @@ class AnalyticsEventViewSet(
             return [IsAuthenticated(), IsManager(), HasPointyPermission()]
         return super().get_permissions()
 
+    def get_throttles(self):
+        # Telemetry gets its own bucket rather than sharing the per-user
+        # ceiling with the shop's real work. On 2026-08-17 a till flushing a
+        # backlog spent that shared budget on history and had its own
+        # backup-destinations and backup-operations calls refused as a result.
+        if self.action == "ingest":
+            return [AnalyticsIngestRateThrottle()]
+        return super().get_throttles()
+
     @action(detail=False, methods=["post"])
     def ingest(self, request):
+        try:
+            with ingest_capacity():
+                return self._ingest(request)
+        except IngestCapacityExceeded:
+            # 429 with Retry-After, not 503: this is the caller being asked to
+            # slow down, and the events are safe on the device until it does.
+            return Response(
+                {"detail": "Telemetry ingestion is busy; retry later."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"Retry-After": "60"},
+            )
+
+    def _ingest(self, request):
         serializer = AnalyticsEventBatchSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         result = ingest_events(

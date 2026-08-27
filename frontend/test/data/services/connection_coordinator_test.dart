@@ -407,100 +407,116 @@ void main() {
     coordinator.dispose();
   });
 
-  test('stale stored IP is ignored; UDP result for the right shop wins', () async {
-    // The server moved from old.lan to new.lan. old.lan now answers as a
-    // *different* shop (installation-other) — a classic DHCP reassignment.
-    final storage = MemoryConnectionProfileStorage(
-      profile: const ConnectionProfile(
-        localApiBaseUrl: 'http://old.lan/api',
-        relayApiBaseUrl: '',
-        relayToken: '',
-        installationId: 'installation-1',
-        shopName: 'متجر آمن',
-      ),
-    );
-    final client = MockClient((request) async {
-      final url = request.url.toString();
-      if (url == 'http://old.lan/api/discovery/service/') {
-        return _jsonResponse(
-          _backendPayload(
-            installationId: 'installation-other',
-            apiBaseUrl: 'http://old.lan/api',
-          ),
-        );
-      }
-      if (url == 'http://new.lan/api/discovery/service/') {
-        return _jsonResponse(
-          _backendPayload(
-            installationId: 'installation-1',
-            apiBaseUrl: 'http://new.lan/api',
-          ),
-        );
-      }
-      return http.Response('', 404);
-    });
-    final service = PosApiService(client: client, baseUrl: 'http://old.lan/api');
-    final coordinator = ConnectionCoordinator(
-      service: service,
-      discovery: BackendDiscoveryService(
+  test(
+    'stale stored IP is ignored; UDP result for the right shop wins',
+    () async {
+      // The server moved from old.lan to new.lan. old.lan now answers as a
+      // *different* shop (installation-other) — a classic DHCP reassignment.
+      final storage = MemoryConnectionProfileStorage(
+        profile: const ConnectionProfile(
+          localApiBaseUrl: 'http://old.lan/api',
+          relayApiBaseUrl: '',
+          relayToken: '',
+          installationId: 'installation-1',
+          shopName: 'متجر آمن',
+        ),
+      );
+      final client = MockClient((request) async {
+        final url = request.url.toString();
+        if (url == 'http://old.lan/api/discovery/service/') {
+          return _jsonResponse(
+            _backendPayload(
+              installationId: 'installation-other',
+              apiBaseUrl: 'http://old.lan/api',
+            ),
+          );
+        }
+        if (url == 'http://new.lan/api/discovery/service/') {
+          return _jsonResponse(
+            _backendPayload(
+              installationId: 'installation-1',
+              apiBaseUrl: 'http://new.lan/api',
+            ),
+          );
+        }
+        return http.Response('', 404);
+      });
+      final service = PosApiService(
         client: client,
-        defaultApiBaseUrl: 'http://old.lan/api',
-        udpDiscovery: ({Duration timeout = const Duration(seconds: 2)}) async =>
-            [Uri.parse('http://new.lan/api')],
-      ),
-      storage: storage,
-    );
+        baseUrl: 'http://old.lan/api',
+      );
+      final coordinator = ConnectionCoordinator(
+        service: service,
+        discovery: BackendDiscoveryService(
+          client: client,
+          defaultApiBaseUrl: 'http://old.lan/api',
+          udpDiscovery:
+              ({Duration timeout = const Duration(seconds: 2)}) async => [
+                Uri.parse('http://new.lan/api'),
+              ],
+        ),
+        storage: storage,
+      );
 
-    await coordinator.bootstrap();
+      await coordinator.bootstrap();
 
-    // The stale IP (wrong shop) is rejected; the moved server wins.
-    expect(service.baseUrl, 'http://new.lan/api');
-    final profile = await storage.loadProfile();
-    expect(profile?.localApiBaseUrl, 'http://new.lan/api');
-    expect(profile?.installationId, 'installation-1');
-    coordinator.dispose();
-  });
+      // The stale IP (wrong shop) is rejected; the moved server wins.
+      expect(service.baseUrl, 'http://new.lan/api');
+      final profile = await storage.loadProfile();
+      expect(profile?.localApiBaseUrl, 'http://new.lan/api');
+      expect(profile?.installationId, 'installation-1');
+      coordinator.dispose();
+    },
+  );
 
-  test('subnet sweep recovers the backend when broadcast finds nothing', () async {
-    final storage = MemoryConnectionProfileStorage(
-      profile: const ConnectionProfile(
-        localApiBaseUrl: 'http://old.lan/api',
-        relayApiBaseUrl: '',
-        relayToken: '',
-        installationId: 'installation-1',
-        shopName: 'متجر آمن',
-      ),
-    );
-    final client = MockClient((request) async {
-      if (request.url.toString() == 'http://swept.lan/api/discovery/service/') {
-        return _jsonResponse(
-          _backendPayload(
-            installationId: 'installation-1',
-            apiBaseUrl: 'http://swept.lan/api',
-          ),
-        );
-      }
-      return http.Response('', 404);
-    });
-    final service = PosApiService(client: client, baseUrl: 'http://old.lan/api');
-    final coordinator = ConnectionCoordinator(
-      service: service,
-      discovery: BackendDiscoveryService(
+  test(
+    'subnet sweep recovers the backend when broadcast finds nothing',
+    () async {
+      final storage = MemoryConnectionProfileStorage(
+        profile: const ConnectionProfile(
+          localApiBaseUrl: 'http://old.lan/api',
+          relayApiBaseUrl: '',
+          relayToken: '',
+          installationId: 'installation-1',
+          shopName: 'متجر آمن',
+        ),
+      );
+      final client = MockClient((request) async {
+        if (request.url.toString() ==
+            'http://swept.lan/api/discovery/service/') {
+          return _jsonResponse(
+            _backendPayload(
+              installationId: 'installation-1',
+              apiBaseUrl: 'http://swept.lan/api',
+            ),
+          );
+        }
+        return http.Response('', 404);
+      });
+      final service = PosApiService(
         client: client,
-        defaultApiBaseUrl: 'http://old.lan/api',
-        udpDiscovery: _noUdp,
-        subnetSweep: ({String? expectedInstallationId}) async =>
-            ['http://swept.lan/api'],
-      ),
-      storage: storage,
-    );
+        baseUrl: 'http://old.lan/api',
+      );
+      final coordinator = ConnectionCoordinator(
+        service: service,
+        discovery: BackendDiscoveryService(
+          client: client,
+          defaultApiBaseUrl: 'http://old.lan/api',
+          udpDiscovery: _noUdp,
+          subnetSweep: ({String? expectedInstallationId}) async => [
+            'http://swept.lan/api',
+          ],
+        ),
+        storage: storage,
+      );
 
-    final found = await coordinator.rediscover(includeSweep: true);
+      final found = await coordinator.rediscover(includeSweep: true);
 
-    expect(found, isTrue);
-    expect(service.baseUrl, 'http://swept.lan/api');
-    coordinator.dispose();
-  });
+      expect(found, isTrue);
+      expect(service.baseUrl, 'http://swept.lan/api');
+      coordinator.dispose();
+    },
+  );
 
   test('connectManually connects to a typed address and saves it', () async {
     final storage = MemoryConnectionProfileStorage();
@@ -516,7 +532,10 @@ void main() {
       }
       return http.Response('', 404);
     });
-    final service = PosApiService(client: client, baseUrl: 'http://127.0.0.1:8000/api');
+    final service = PosApiService(
+      client: client,
+      baseUrl: 'http://127.0.0.1:8000/api',
+    );
     final coordinator = ConnectionCoordinator(
       service: service,
       discovery: BackendDiscoveryService(
@@ -537,26 +556,34 @@ void main() {
     coordinator.dispose();
   });
 
-  test('connectManually returns false when the address does not answer', () async {
-    final storage = MemoryConnectionProfileStorage();
-    final client = MockClient((request) async => http.Response('', 404));
-    final service = PosApiService(client: client, baseUrl: 'http://127.0.0.1:8000/api');
-    final coordinator = ConnectionCoordinator(
-      service: service,
-      discovery: BackendDiscoveryService(
+  test(
+    'connectManually returns false when the address does not answer',
+    () async {
+      final storage = MemoryConnectionProfileStorage();
+      final client = MockClient((request) async => http.Response('', 404));
+      final service = PosApiService(
         client: client,
-        defaultApiBaseUrl: 'http://127.0.0.1:8000/api',
-        udpDiscovery: _noUdp,
-      ),
-      storage: storage,
-    );
+        baseUrl: 'http://127.0.0.1:8000/api',
+      );
+      final coordinator = ConnectionCoordinator(
+        service: service,
+        discovery: BackendDiscoveryService(
+          client: client,
+          defaultApiBaseUrl: 'http://127.0.0.1:8000/api',
+          udpDiscovery: _noUdp,
+        ),
+        storage: storage,
+      );
 
-    final connected = await coordinator.connectManually('http://nope.lan/api');
+      final connected = await coordinator.connectManually(
+        'http://nope.lan/api',
+      );
 
-    expect(connected, isFalse);
-    expect(service.baseUrl, 'http://127.0.0.1:8000/api');
-    coordinator.dispose();
-  });
+      expect(connected, isFalse);
+      expect(service.baseUrl, 'http://127.0.0.1:8000/api');
+      coordinator.dispose();
+    },
+  );
 
   test('rediscover is single-flight', () async {
     final storage = MemoryConnectionProfileStorage();
@@ -571,7 +598,10 @@ void main() {
       }
       return http.Response('', 404);
     });
-    final service = PosApiService(client: client, baseUrl: 'http://lan.test/api');
+    final service = PosApiService(
+      client: client,
+      baseUrl: 'http://lan.test/api',
+    );
     final coordinator = ConnectionCoordinator(
       service: service,
       discovery: BackendDiscoveryService(
@@ -605,7 +635,10 @@ void main() {
       }
       return http.Response('', 404);
     });
-    final service = PosApiService(client: client, baseUrl: 'http://lan.test/api');
+    final service = PosApiService(
+      client: client,
+      baseUrl: 'http://lan.test/api',
+    );
     final coordinator = ConnectionCoordinator(
       service: service,
       discovery: BackendDiscoveryService(
@@ -626,7 +659,9 @@ void main() {
 }
 
 /// No-op UDP discovery so tests never open real sockets.
-Future<List<Uri>> _noUdp({Duration timeout = const Duration(seconds: 2)}) async {
+Future<List<Uri>> _noUdp({
+  Duration timeout = const Duration(seconds: 2),
+}) async {
   return const [];
 }
 

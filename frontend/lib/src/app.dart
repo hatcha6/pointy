@@ -23,6 +23,7 @@ import 'shared/design/design.dart';
 import 'shared/price_checker/price_checker_mode_controller.dart';
 import 'shared/shell/shell.dart';
 import 'shared/theme/theme_controller.dart';
+import 'core/analytics_screen_tracker.dart';
 
 class PointyApp extends StatefulWidget {
   const PointyApp({super.key, this.apiService});
@@ -40,6 +41,10 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
   // each other as routes, so per-route PageStorage forgets the list position
   // on every navigation.
   final PageStorageBucket _navigationScrollBucket = PageStorageBucket();
+
+  /// Lives as long as the app: [TrackedScreen]s subscribe to it so a screen
+  /// knows when the route above it is popped and it is on show again.
+  final AnalyticsRouteObserver _routeObserver = AnalyticsRouteObserver();
   void Function(FlutterErrorDetails details)? _previousFlutterErrorHandler;
   ErrorCallback? _previousPlatformErrorHandler;
   late final TimingsCallback _frameTimingsCallback;
@@ -64,8 +69,15 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
     // network may have changed (Wi-Fi reconnected, roamed APs, DHCP renewed).
     // Re-hunt for the LAN backend unless we already hold a healthy one.
     if (state == AppLifecycleState.resumed &&
-        _dependencies.connectionStatus.phase != ConnectionPhase.connectedLocal) {
+        _dependencies.connectionStatus.phase !=
+            ConnectionPhase.connectedLocal) {
       unawaited(_dependencies.connectionCoordinator.rediscover());
+    }
+    if (state != AppLifecycleState.resumed) {
+      // Telemetry is written on a short delay rather than once per event, so
+      // leaving the foreground is the last reliable moment to get it on disk:
+      // the process may be suspended or killed before the timer would fire.
+      unawaited(_dependencies.analyticsEngine.flushPendingWrites());
     }
   }
 
@@ -135,21 +147,26 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
       theme: PointyTheme.light(),
       darkTheme: PointyTheme.dark(),
       themeMode: _dependencies.themeController.mode,
+      navigatorObservers: [_routeObserver],
       builder: (context, child) => ThemeControllerScope(
         controller: _dependencies.themeController,
         child: PriceCheckerModeScope(
           controller: _dependencies.priceCheckerModeController,
-          child: AnalyticsInteractionTracker(
+          child: AnalyticsScreenScope(
             analyticsEngine: _dependencies.analyticsEngine,
-            child: _PrinterConnectionNotifier(
-              authViewModel: _dependencies.authViewModel,
-              printingSettingsViewModel:
-                  _dependencies.printingSettingsViewModel,
-              child: PointyNavigationRailScope(
-                isActive: false,
-                controller: _navigationRailController,
-                navigationBucket: _navigationScrollBucket,
-                child: child ?? const SizedBox.shrink(),
+            routeObserver: _routeObserver,
+            child: AnalyticsInteractionTracker(
+              analyticsEngine: _dependencies.analyticsEngine,
+              child: _PrinterConnectionNotifier(
+                authViewModel: _dependencies.authViewModel,
+                printingSettingsViewModel:
+                    _dependencies.printingSettingsViewModel,
+                child: PointyNavigationRailScope(
+                  isActive: false,
+                  controller: _navigationRailController,
+                  navigationBucket: _navigationScrollBucket,
+                  child: child ?? const SizedBox.shrink(),
+                ),
               ),
             ),
           ),

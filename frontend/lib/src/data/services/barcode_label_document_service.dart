@@ -428,8 +428,7 @@ class _BarcodeLabelSheet {
     // job overshot by exactly that run-up and the print walked one offset down
     // the roll per job. The ceiling covers the rare geometry whose sticker plus
     // run-up is longer than one pitch, at the cost of a blank label.
-    final minStripHeightMm =
-        offsetYMm + (perStrip - 1) * pitchMm + heightMm;
+    final minStripHeightMm = offsetYMm + (perStrip - 1) * pitchMm + heightMm;
     final stripHeightMm = stripMode
         ? (minStripHeightMm / pitchMm).ceil() * pitchMm
         : offsetYMm + heightMm;

@@ -2493,6 +2493,38 @@
   "restoreConfirmMessage": "سيتم استبدال بيانات المتجر الحالية بعد بدء الاستعادة. تأكد أن ملف النسخة صحيح.",
   "restoreConfirmButton": "بدء الاستعادة",
   "restoreStartedMessage": "بدأت الاستعادة.",
+  "purchaseCostWarningTitle": "تحقق من التكلفة",
+  "purchaseCostWarningBody": "التكلفة المدخلة تبدو غير معتادة. راجعها قبل الحفظ — إن كانت صحيحة يمكنك المتابعة.",
+  "purchaseCostWarningBlockedBody": "التكلفة المدخلة غير منطقية ولا يمكن حفظها. تأكد من الكمية وسعر الوحدة، فربما أدخلت المبلغ الإجمالي بدل سعر القطعة.",
+  "purchaseCostWarningReviewButton": "مراجعة",
+  "purchaseCostWarningFixButton": "تصحيح",
+  "purchaseCostWarningConfirmButton": "التكلفة صحيحة، تابع",
+  "backupHealthNeverTitle": "لا توجد نسخة احتياطية مؤكدة",
+  "backupHealthNeverMessage": "لم يتم بعد التحقق من أي نسخة احتياطية لهذا المتجر. لا توجد حالياً وسيلة لاسترجاع البيانات إذا تعطل الجهاز.",
+  "backupHealthStaleTitle": "النسخة الاحتياطية قديمة",
+  "backupHealthStaleMessage": "آخر نسخة مؤكدة كانت {verifiedAt}. الحد المسموح به {hours} ساعة.",
+  "@backupHealthStaleMessage": {
+    "description": "Shown when the newest verified backup is older than the allowed window.",
+    "placeholders": {
+      "verifiedAt": {
+        "type": "String"
+      },
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "backupHealthLastErrorLabel": "آخر خطأ: {message}",
+  "@backupHealthLastErrorLabel": {
+    "description": "The error message from the most recent failed backup attempt.",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "backupHealthVerifiedLabel": "آخر نسخة مؤكدة",
+  "backupHealthVerifiedNever": "لا توجد",
   "backupHistorySectionTitle": "آخر العمليات",
   "latestBackupLabel": "آخر نسخة احتياطية",
   "latestRestoreLabel": "آخر استعادة",

@@ -30,11 +30,18 @@ void main() {
   });
 
   test('falls back to the generic message for a blank 4xx', () {
-    const error = PosApiException(message: '', statusCode: 400, responseBody: '');
+    const error = PosApiException(
+      message: '',
+      statusCode: 400,
+      responseBody: '',
+    );
     expect(errorMessageFor(error, l10n), l10n.errorUnexpectedMessage);
   });
 
   test('falls back to the generic message for non-API errors', () {
-    expect(errorMessageFor(Exception('boom'), l10n), l10n.errorUnexpectedMessage);
+    expect(
+      errorMessageFor(Exception('boom'), l10n),
+      l10n.errorUnexpectedMessage,
+    );
   });
 }

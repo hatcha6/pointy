@@ -164,7 +164,11 @@ void main() {
         payload: _payload(),
         endpoint: endpoint.copyWith(compactReceipt: true),
       );
-      final width = switch (mm) { <= 58 => 42, <= 72 => 56, _ => 64 };
+      final width = switch (mm) {
+        <= 58 => 42,
+        <= 72 => 56,
+        _ => 64,
+      };
 
       for (final row in _textLines(
         compact,
@@ -183,10 +187,7 @@ void main() {
         endpoint: endpoint.copyWith(compactReceipt: true),
       );
 
-      expect(
-        _textLines(compact).length,
-        lessThan(_textLines(standard).length),
-      );
+      expect(_textLines(compact).length, lessThan(_textLines(standard).length));
     });
   }
 

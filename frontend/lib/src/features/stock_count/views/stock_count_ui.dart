@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/stock_count.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Cross-screen building blocks for the stock-count feature so the sessions,
 /// counting, and reconciliation surfaces share one visual language.
@@ -169,7 +170,7 @@ class StockCountProgressBar extends StatelessWidget {
         SizedBox(height: compact ? 6 : 10),
         ClipRRect(
           borderRadius: BorderRadius.circular(PointyRadii.pill),
-          child: LinearProgressIndicator(
+          child: PointyProgressBar(
             value: total <= 0 ? null : progress,
             minHeight: compact ? 8 : 10,
             backgroundColor: track,

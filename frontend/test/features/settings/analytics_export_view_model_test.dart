@@ -50,30 +50,33 @@ void main() {
     expect(vm.analyticsExportProgress, isNull, reason: 'cleared when finished');
   });
 
-  test('cancelling stops the export without reporting it as a failure', () async {
-    final repo = _FakeRepo();
-    final vm = ShopSettingsViewModel(repo);
-    final export = vm.exportAnalyticsEvents(query);
+  test(
+    'cancelling stops the export without reporting it as a failure',
+    () async {
+      final repo = _FakeRepo();
+      final vm = ShopSettingsViewModel(repo);
+      final export = vm.exportAnalyticsEvents(query);
 
-    await repo.started.future;
-    expect(vm.canCancelAnalyticsExport, isTrue);
+      await repo.started.future;
+      expect(vm.canCancelAnalyticsExport, isTrue);
 
-    vm.cancelAnalyticsExport();
-    expect(repo.cancellation!.isCanceled, isTrue);
+      vm.cancelAnalyticsExport();
+      expect(repo.cancellation!.isCanceled, isTrue);
 
-    // The receiver turns a cancelled stream into this exception.
-    repo.complete(Error(const AnalyticsExportCanceledException()));
-    final result = await export;
+      // The receiver turns a cancelled stream into this exception.
+      repo.complete(Error(const AnalyticsExportCanceledException()));
+      final result = await export;
 
-    expect(result, isNull);
-    expect(vm.isExportingAnalytics, isFalse);
-    expect(
-      vm.hasAnalyticsExportError,
-      isFalse,
-      reason: 'the user asked for this; it is not an error to show them',
-    );
-    expect(vm.canCancelAnalyticsExport, isFalse);
-  });
+      expect(result, isNull);
+      expect(vm.isExportingAnalytics, isFalse);
+      expect(
+        vm.hasAnalyticsExportError,
+        isFalse,
+        reason: 'the user asked for this; it is not an error to show them',
+      );
+      expect(vm.canCancelAnalyticsExport, isFalse);
+    },
+  );
 
   test('a real failure is still reported as one', () async {
     final repo = _FakeRepo();
@@ -96,7 +99,8 @@ class _FakeRepo extends ShopSettingsRepository {
   void Function(AnalyticsExportProgress)? _onProgress;
   AnalyticsExportCancellation? cancellation;
 
-  void emitProgress(AnalyticsExportProgress progress) => _onProgress?.call(progress);
+  void emitProgress(AnalyticsExportProgress progress) =>
+      _onProgress?.call(progress);
 
   void complete(Result<AnalyticsExportFile> result) => _result.complete(result);
 

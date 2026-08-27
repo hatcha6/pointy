@@ -31,7 +31,10 @@ void main() {
         'username': 'sam',
         'assigned_role': 'inventory_clerk',
         'is_active': true,
-        'role_permissions': ['inventory.view_stockitem', 'inventory.add_stockcount'],
+        'role_permissions': [
+          'inventory.view_stockitem',
+          'inventory.add_stockcount',
+        ],
         'extra_permissions': ['payments.view_payment'],
         'effective_permissions': [
           'inventory.view_stockitem',
@@ -134,10 +137,7 @@ void main() {
       expect(catalog.groups, hasLength(1));
       expect(catalog.totalCount, 2);
       expect(catalog.grantableCodes, {'inventory.apply_stockcount'});
-      expect(
-        catalog.labelsByCode['inventory.view_stockitem'],
-        'عرض المخزون',
-      );
+      expect(catalog.labelsByCode['inventory.view_stockitem'], 'عرض المخزون');
     });
   });
 }

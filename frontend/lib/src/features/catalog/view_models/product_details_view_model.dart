@@ -276,9 +276,7 @@ class ProductDetailsViewModel extends ChangeNotifier {
   void _trackArchiveChange(Product product, {required bool archived}) {
     trackAuditEvent(
       _analyticsEngine,
-      name: archived
-          ? 'catalog.product.archived'
-          : 'catalog.product.restored',
+      name: archived ? 'catalog.product.archived' : 'catalog.product.restored',
       entityType: 'product',
       entityId: product.id,
       attributes: {

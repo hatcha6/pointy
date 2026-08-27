@@ -24,6 +24,14 @@ relay/.connector-state-remote.json
 pyarmor-regfile-1941/
 pyarmor.bug.log
 
+# Production database dumps pulled from a client for analysis. Multi-gigabyte,
+# and they carry the shop's real sales, customers and staff — never commit one.
+*.sql
+*.sql.gz
+*.sql.tar.gz
+*.dump
+*.pgdump
+
 # Legacy client DB exports for data migration (large binaries)
 *.mdb
 fahd_data.sqlite

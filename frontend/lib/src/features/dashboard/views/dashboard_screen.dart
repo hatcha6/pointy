@@ -131,7 +131,9 @@ class DashboardScreen extends StatelessWidget {
   /// shop's AI entitlement is inactive — which also hides the insight band and
   /// morning brief, since both route through this callback.
   OpenAiChat? _aiChatAction(BuildContext context) {
-    if (!navigation.isDestinationAvailable(AppNavigationDestination.aiAssistant)) {
+    if (!navigation.isDestinationAvailable(
+      AppNavigationDestination.aiAssistant,
+    )) {
       return null;
     }
     return (seedPrompt, {bool autoSend = false}) => navigation.openAiChat(

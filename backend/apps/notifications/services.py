@@ -19,6 +19,7 @@ from django.db.models import (
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
+from apps.core.backup import backup_health
 from apps.core.dispatch import enqueue_best_effort
 from apps.core.roles import user_is_manager
 from apps.discounts.models import DiscountRule
@@ -53,6 +54,7 @@ MANAGED_CODES = (
     "discounts.expiring_rule",
     "employees.payroll_ready",
     "operations.backend_error",
+    "operations.backup_unhealthy",
 )
 MONEY_FIELD = DecimalField(max_digits=12, decimal_places=2)
 NOTIFICATION_AUDIENCE_RULES = {
@@ -104,6 +106,10 @@ NOTIFICATION_AUDIENCE_RULES = {
         "permissions": ("employees.view_payrollrun", "employees.approve_payrollrun"),
         "manager_only": True,
     },
+    "operations.backup_unhealthy": {
+        "permissions": ("core.change_shopsettings",),
+        "manager_only": True,
+    },
 }
 
 
@@ -118,6 +124,7 @@ def sync_business_notifications(now=None):
     desired.extend(_fraud_notifications(now))
     desired.extend(_discount_notifications(now))
     desired.extend(_payroll_notifications(now))
+    desired.extend(_backup_notifications(now))
 
     fingerprints = set()
     changed = 0
@@ -863,6 +870,49 @@ def _payroll_notifications(now):
             )
         )
     return specs
+
+
+def _backup_notifications(now):
+    """Escalate when the shop has no recent, verified way back.
+
+    This is the alarm whose absence let a first client run 35 days on a wedged
+    backup job and 18 straight failures without anyone noticing. It is
+    deliberately a single notification rather than one per failed job: the
+    question a manager needs answered is "can I restore?", not "which nights
+    failed". It resolves itself the moment a verified backup lands, because
+    sync_business_notifications retires managed codes whose fingerprint stops
+    being generated.
+    """
+    health = backup_health(now)
+    if not health["enabled"] or not health["is_stale"]:
+        return []
+
+    latest = health["latest_verified_at"]
+    age = health["latest_verified_age"]
+    return [
+        _spec(
+            code="operations.backup_unhealthy",
+            category=BusinessNotification.Category.OPERATIONS,
+            severity=BusinessNotification.Severity.CRITICAL,
+            fingerprint="operations.backup_unhealthy",
+            entity_type="core.systembackupschedule",
+            entity_id="1",
+            payload={
+                "last_verified_at": latest.isoformat() if latest else None,
+                "hours_since_verified": (
+                    round(age.total_seconds() / 3600, 1) if age is not None else None
+                ),
+                "stale_after_hours": health["stale_after_hours"],
+                "last_error": health["last_error"][:240],
+                "last_attempt_at": (
+                    health["last_attempt_at"].isoformat()
+                    if health["last_attempt_at"]
+                    else None
+                ),
+                "count": 1,
+            },
+        )
+    ]
 
 
 def _json_safe_payload(value):

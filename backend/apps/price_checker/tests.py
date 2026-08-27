@@ -1,5 +1,6 @@
 import asyncio
 import socket
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -13,6 +14,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.attachments.models import Attachment, StorageVolume
+from apps.catalog.models import Product, ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import DiscountRule
@@ -690,4 +692,115 @@ class RolePermissionApiTests(TestCase):
         self.assertEqual(
             self.cashier_client.get(self.event_url).status_code,
             status.HTTP_403_FORBIDDEN,
+        )
+
+
+class KioskSkuFallbackTests(TestCase):
+    """A shop that labels its own goods still gets an answer.
+
+    One kiosk scan in eight came back not_found, against a catalogue where
+    2,996 variants carry no barcode at all. When the scanned code is not a
+    barcode we know, try it as a SKU before telling a customer nothing.
+    """
+
+    def setUp(self):
+        self.product = Product.objects.create(name="خبز", is_active=True)
+        self.variant = ProductVariant.objects.create(
+            product=self.product,
+            name="رغيف",
+            sku="BREAD-01",
+            barcode="",
+            unit_price=Decimal("1.00"),
+            is_active=True,
+        )
+
+    def test_scanning_a_sku_finds_the_product(self):
+        result = lookup_price("BREAD-01")
+        self.assertTrue(result.found)
+        self.assertEqual(result.variant_id, self.variant.id)
+
+    def test_sku_match_is_case_insensitive(self):
+        self.assertTrue(lookup_price("bread-01").found)
+
+    def test_a_barcode_still_wins_over_a_similar_sku(self):
+        other = Product.objects.create(name="حليب", is_active=True)
+        ProductVariant.objects.create(
+            product=other,
+            name="علبة",
+            sku="MILK-01",
+            barcode="BREAD-01",
+            unit_price=Decimal("3.00"),
+            is_active=True,
+        )
+        result = lookup_price("BREAD-01")
+        self.assertTrue(result.found)
+        # The barcode match is looked up first and must not be shadowed.
+        self.assertEqual(result.product_name, "حليب")
+
+    def test_an_unknown_code_is_still_not_found(self):
+        self.assertFalse(lookup_price("NOTHING-HERE").found)
+
+    def test_an_archived_product_is_not_resurrected_by_its_sku(self):
+        self.product.archived_at = timezone.now()
+        self.product.save(update_fields=["archived_at"])
+        self.assertFalse(lookup_price("BREAD-01").found)
+
+
+class UnmatchedScanWorklistTests(TestCase):
+    """816 misses are 816 unread audit rows; grouped they are a worklist."""
+
+    def setUp(self):
+        ensure_role_groups()
+        self.user = get_user_model().objects.create_user(
+            username="manager", password="pw"
+        )
+        self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.url = reverse("price-check-event-unmatched")
+
+    def _scan(self, barcode, result):
+        return PriceCheckEvent.objects.create(
+            barcode=barcode, result=result, device_identifier="kiosk-1"
+        )
+
+    def test_ranks_codes_by_how_often_they_were_scanned(self):
+        for _ in range(3):
+            self._scan("111", PriceCheckEvent.Result.NOT_FOUND)
+        self._scan("222", PriceCheckEvent.Result.NOT_FOUND)
+        self._scan("333", PriceCheckEvent.Result.FOUND)
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        rows = response.data["results"]
+        self.assertEqual([row["barcode"] for row in rows], ["111", "222"])
+        self.assertEqual(rows[0]["scans"], 3)
+
+    def test_ignores_scans_that_found_something(self):
+        self._scan("999", PriceCheckEvent.Result.FOUND)
+        response = self.client.get(self.url)
+        self.assertEqual(response.data["results"], [])
+
+    def test_ignores_empty_codes(self):
+        self._scan("", PriceCheckEvent.Result.NOT_FOUND)
+        self.assertEqual(self.client.get(self.url).data["results"], [])
+
+    def test_window_excludes_older_scans(self):
+        old = self._scan("111", PriceCheckEvent.Result.NOT_FOUND)
+        PriceCheckEvent.objects.filter(pk=old.pk).update(
+            created_at=timezone.now() - timedelta(days=45)
+        )
+        self.assertEqual(self.client.get(self.url).data["results"], [])
+        rows = self.client.get(self.url, {"days": 60}).data["results"]
+        self.assertEqual(len(rows), 1)
+
+    def test_a_cashier_cannot_read_the_worklist(self):
+        cashier = get_user_model().objects.create_user(
+            username="till", password="pw"
+        )
+        cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
+        client = APIClient()
+        client.force_authenticate(cashier)
+        self.assertEqual(
+            client.get(self.url).status_code, status.HTTP_403_FORBIDDEN
         )
