@@ -128,6 +128,41 @@ class EscPosReceiptEncoder {
     return compute(_encodeEscPosResolved, request);
   }
 
+  /// The requested code table if this printer's profile defines it, else the
+  /// best Arabic one it does — and failing that, none at all.
+  ///
+  /// The code table is configured per printer, the capability profile is chosen
+  /// separately, and nothing checked that the two agreed. When they did not,
+  /// `getCodePageId` threw *mid-encode* and the whole receipt was lost —
+  /// inside a `compute` isolate, so it surfaced as an unhandled error rather
+  /// than a message anyone could act on. A receipt in the wrong code page is a
+  /// bad receipt; a receipt that never prints is a customer left waiting.
+  static String? _supportedCodeTable(
+    CapabilityProfile profile,
+    String requested,
+  ) {
+    final available = profile.codePages.map((page) => page.name).toSet();
+    if (available.contains(requested)) {
+      return requested;
+    }
+    for (final fallback in _arabicCodeTableFallbacks) {
+      if (available.contains(fallback)) {
+        return fallback;
+      }
+    }
+    // Null leaves the generator on the printer's default table.
+    return null;
+  }
+
+  /// Tried in order when the configured table is missing, most Arabic-capable
+  /// first.
+  static const List<String> _arabicCodeTableFallbacks = <String>[
+    'CP864',
+    'Windows-Arabic',
+    'ISO8859-6',
+    'CP1256',
+  ];
+
   /// Synchronous encode against an already-loaded [CapabilityProfile]. Public so
   /// the isolate entry point can reach it; call [encodePayload] instead.
   List<int> _encodeWithProfile(_EscPosEncodeRequest request) {
@@ -137,9 +172,10 @@ class EscPosReceiptEncoder {
       _paperSize(endpoint.paperWidthMm),
       request.profile,
     );
-    final codeTable = endpoint.codeTable.trim().isEmpty
-        ? 'CP864'
-        : endpoint.codeTable.trim();
+    final codeTable = _supportedCodeTable(
+      request.profile,
+      endpoint.codeTable.trim().isEmpty ? 'CP864' : endpoint.codeTable.trim(),
+    );
     // A compact/dense receipt: tighter line spacing, single-height headings, and
     // trimmed blank feeds so the slip uses less paper. Kitchen chits stay large
     // on purpose (the line reads them across the pass), so they ignore this.
@@ -375,7 +411,7 @@ class EscPosReceiptEncoder {
     required Map<String, Object?> payload,
     required PrinterEndpoint endpoint,
     required Generator generator,
-    required String codeTable,
+    required String? codeTable,
   }) {
     final order = _map(payload['order']);
     final station = _map(payload['station']);
@@ -533,7 +569,7 @@ class EscPosReceiptEncoder {
     required Map<String, Object?> payload,
     required PrinterEndpoint endpoint,
     required Generator generator,
-    required String codeTable,
+    required String? codeTable,
     bool dense = false,
     Uint8List? brandLogoBytes,
   }) {
@@ -546,7 +582,9 @@ class EscPosReceiptEncoder {
     final createdAt = _formatDateTime(proof['created_at']);
 
     final bytes = <int>[];
-    bytes.addAll(_shopMasthead(generator, shop, codeTable, width, dense: dense));
+    bytes.addAll(
+      _shopMasthead(generator, shop, codeTable, width, dense: dense),
+    );
 
     bytes.addAll(generator.hr());
     // Document title, big and bold: this slip is a receipt/disbursement.
@@ -690,7 +728,7 @@ class EscPosReceiptEncoder {
     required Map<String, Object?> payload,
     required PrinterEndpoint endpoint,
     required Generator generator,
-    required String codeTable,
+    required String? codeTable,
     bool dense = false,
     Uint8List? brandLogoBytes,
   }) {
@@ -700,7 +738,9 @@ class EscPosReceiptEncoder {
     final width = _charsPerLine(endpoint.paperWidthMm);
 
     final bytes = <int>[];
-    bytes.addAll(_shopMasthead(generator, shop, codeTable, width, dense: dense));
+    bytes.addAll(
+      _shopMasthead(generator, shop, codeTable, width, dense: dense),
+    );
 
     bytes.addAll(generator.hr());
     bytes.addAll(
@@ -793,7 +833,7 @@ class EscPosReceiptEncoder {
   void _addReportRow(
     List<int> bytes,
     Generator generator,
-    String codeTable,
+    String? codeTable,
     int width,
     String label,
     String value, {
@@ -830,7 +870,7 @@ class EscPosReceiptEncoder {
   List<int> _shopMasthead(
     Generator generator,
     Map<String, Object?> shop,
-    String codeTable,
+    String? codeTable,
     int width, {
     bool includeHeaderLines = true,
     bool dense = false,
@@ -877,7 +917,7 @@ class EscPosReceiptEncoder {
   List<int> _shopFooter(
     Generator generator,
     Map<String, Object?> shop,
-    String codeTable,
+    String? codeTable,
     int width, {
     bool dense = false,
   }) {
@@ -909,7 +949,7 @@ class EscPosReceiptEncoder {
   /// Z-Report.
   List<int> _brandTagline(
     Generator generator,
-    String codeTable,
+    String? codeTable,
     Uint8List? brandLogoBytes, {
     bool dense = false,
   }) {
@@ -992,7 +1032,7 @@ class EscPosReceiptEncoder {
   void _addPaymentReceiptRow(
     List<int> bytes,
     Generator generator,
-    String codeTable,
+    String? codeTable,
     int width,
     String label,
     String value,

@@ -23,6 +23,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/unit_options.dart';
 import 'pos_variant_picker_sheet.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Opens the POS quick cash-purchase sheet. Returns the recorded submission,
 /// or null when dismissed.
@@ -470,7 +471,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
                     padding: EdgeInsets.all(12),
                     child: SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     ),
                   )
                 : null,
@@ -538,7 +539,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
                     padding: EdgeInsets.all(12),
                     child: SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     ),
                   )
                 : null,
@@ -667,7 +668,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
           icon: _submitting
               ? const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : const Icon(Icons.point_of_sale_outlined),
           label: Text(

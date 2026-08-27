@@ -13,6 +13,7 @@ import '../../../data/services/payment_proof_printer.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/payments/record_payment_dialog.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Opens the focused collect-debt flow as a dialog (used from the POS).
 Future<void> showCollectDebtDialog(
@@ -252,7 +253,7 @@ class _CollectDebtDialogState extends State<CollectDebtDialog> {
     if (_isLoadingSummary) {
       return const Padding(
         padding: EdgeInsets.all(16),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: PointySpinner()),
       );
     }
     if (_hasSummaryError) {
@@ -296,7 +297,7 @@ class _CollectDebtDialogState extends State<CollectDebtDialog> {
             icon: _isRecording
                 ? const SizedBox.square(
                     dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PointySpinner(strokeWidth: 2),
                   )
                 : const Icon(Icons.payments_outlined),
             label: Text(l10n.collectDebtRecordPayment),

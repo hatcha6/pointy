@@ -11,6 +11,7 @@ import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/order/sale_order_details_content.dart';
 import '../../invoices/view_models/invoice_details_view_model.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Returns desk: enter an invoice's receipt number to fetch that single invoice
 /// and return or exchange items on it — without access to the full invoice
@@ -128,7 +129,7 @@ class _ReturnsExchangeLookupScreenState
                       icon: _searching
                           ? const SizedBox.square(
                               dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: PointySpinner(strokeWidth: 2),
                             )
                           : const Icon(Icons.search),
                       label: Text(l10n.returnsLookupSearchButton),

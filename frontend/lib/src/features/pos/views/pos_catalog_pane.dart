@@ -469,7 +469,7 @@ class _BarcodeScanStatusLine extends StatelessWidget {
         if (status == BarcodeScanStatus.resolving)
           const SizedBox.square(
             dimension: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: PointySpinner(strokeWidth: 2),
           )
         else
           Icon(

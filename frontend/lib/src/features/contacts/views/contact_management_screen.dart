@@ -265,7 +265,7 @@ class _ContactManagementBody extends StatelessWidget {
           ),
         Expanded(
           child: viewModel.isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: PointySpinner())
               : TabBarView(
                   controller: tabController,
                   children: [

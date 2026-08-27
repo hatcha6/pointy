@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'design/design.dart';
 import 'network_image_caching.dart';
+import 'components/pointy_progress.dart';
 
 class ProductImageThumbnail extends StatelessWidget {
   const ProductImageThumbnail({
@@ -45,7 +46,7 @@ class ProductImageThumbnail extends StatelessWidget {
                   placeholder: (context, imageUrl) => Center(
                     child: SizedBox.square(
                       dimension: size * 0.28,
-                      child: const CircularProgressIndicator(strokeWidth: 2),
+                      child: const PointySpinner(strokeWidth: 2),
                     ),
                   ),
                 ),

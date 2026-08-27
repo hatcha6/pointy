@@ -67,6 +67,7 @@ import 'features/user_settings/view_models/user_settings_view_model.dart';
 import 'shared/barcode/scan_feedback_sounds.dart';
 import 'shared/price_checker/price_checker_mode_controller.dart';
 import 'shared/theme/theme_controller.dart';
+import 'core/authorization.dart';
 
 /// Default API base URL for a fresh install.
 ///
@@ -91,7 +92,14 @@ class PointyAppDependencies {
        _enableAutomaticConnection =
            enableAutomaticConnection ?? apiService == null {
     analyticsRepository = AnalyticsRepository(service);
-    analyticsEngine = AnalyticsEngine(analyticsRepository);
+    analyticsEngine = AnalyticsEngine(
+      analyticsRepository,
+      // The installation id is only known once the engine has started; stamp it
+      // on the API session then, so even a rejected request identifies its
+      // device instead of arriving anonymous.
+      onIdentityResolved: (deviceId, platform) =>
+          service.describeClient(deviceId: deviceId, platform: platform),
+    );
     service.performanceRecorder = analyticsEngine.recordApiRequest;
     attendanceRepository = AttendanceRepository(service);
     migrationRepository = MigrationRepository(service);
@@ -228,6 +236,16 @@ class PointyAppDependencies {
     // Resolve kiosk mode before the first frame so a price-checker device boots
     // straight into the kiosk instead of flashing the login screen.
     await priceCheckerModeController.load();
+    // A kiosk renders the price checker INSTEAD of the auth gate (see app.dart),
+    // so it never signs in — and the ingest endpoint only accepts authenticated
+    // callers. Every event such a device records is therefore undeliverable, and
+    // in the field one of these produced 5.1M rejected requests, a flat 24/7
+    // stream that was 85% of everything the backend served. Collect nothing on a
+    // device that structurally cannot deliver it.
+    await analyticsEngine.setCollectionEnabled(
+      !priceCheckerModeController.enabled,
+    );
+    priceCheckerModeController.addListener(_handlePriceCheckerModeChanged);
     if (_enableAutomaticConnection) {
       await connectionCoordinator.bootstrap();
     } else {
@@ -250,6 +268,13 @@ class PointyAppDependencies {
     // own. Registered after the first load so it only handles later transitions.
     _wasConnectionReady = connectionStatus.isReady;
     connectionStatus.addListener(_handleConnectionStatusChanged);
+  }
+
+  void _handlePriceCheckerModeChanged() {
+    // Entering kiosk mode drops the queue; leaving it starts collecting again.
+    unawaited(
+      analyticsEngine.setCollectionEnabled(!priceCheckerModeController.enabled),
+    );
   }
 
   DeviceUsageMode _usageMode = DeviceUsageMode.singleUser;
@@ -314,7 +339,18 @@ class PointyAppDependencies {
       MigrationViewModel(migrationRepository, analyticsEngine: analyticsEngine);
 
   DashboardViewModel get dashboardViewModel =>
-      _dashboardViewModel ??= DashboardViewModel(dashboardRepository);
+      _dashboardViewModel ??= DashboardViewModel(
+        dashboardRepository,
+        // Read at call time, not at construction: the view model outlives a
+        // sign-out, and the next user may have a different entitlement.
+        canRequestAiDigest: () {
+          final user = authViewModel.currentUser;
+          return user != null &&
+              AuthorizationCapabilities.forUser(
+                user,
+              ).allows(AppCapability.useAiAssistant);
+        },
+      );
 
   ActivityLogViewModel get activityLogViewModel => _activityLogViewModel ??=
       ActivityLogViewModel(analyticsRepository, userRepository);
@@ -426,6 +462,7 @@ class PointyAppDependencies {
     connectionCoordinator.dispose();
     analyticsEngine.dispose();
     themeController.dispose();
+    priceCheckerModeController.removeListener(_handlePriceCheckerModeChanged);
     priceCheckerModeController.dispose();
     authViewModel.dispose();
     posViewModel.dispose();

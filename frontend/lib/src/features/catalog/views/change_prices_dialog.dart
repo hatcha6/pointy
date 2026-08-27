@@ -7,6 +7,7 @@ import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../view_models/product_details_view_model.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Opens the "Change prices" dialog for a product: every variant is listed with
 /// its lowest/highest/last cost (read-only) and an editable new-price field so
@@ -173,7 +174,7 @@ class _ChangePricesDialogState extends State<_ChangePricesDialog> {
               ? const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : Text(l10n.changePricesSaveButton),
         ),

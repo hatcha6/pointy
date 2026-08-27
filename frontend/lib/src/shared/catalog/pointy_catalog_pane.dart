@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design/design.dart';
 import '../responsive/responsive.dart';
+import '../components/pointy_progress.dart';
 
 /// Shared chrome for the POS and purchasing catalog browsers.
 ///
@@ -126,7 +127,7 @@ class _CatalogHeader extends StatelessWidget {
             padding: EdgeInsetsDirectional.only(start: 8),
             child: SizedBox.square(
               dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: PointySpinner(strokeWidth: 2),
             ),
           ),
       ],

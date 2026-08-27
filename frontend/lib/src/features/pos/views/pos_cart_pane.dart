@@ -1130,7 +1130,7 @@ class _CheckoutFooter extends StatelessWidget {
           icon: viewModel.isCheckingOut
               ? const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : const Icon(Icons.payments_outlined),
           label: FittedBox(

@@ -272,7 +272,7 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
             icon: viewModel.isSaving
                 ? const SizedBox.square(
                     dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PointySpinner(strokeWidth: 2),
                   )
                 : const Icon(Icons.save_outlined),
             label: Text(l10n.messagingSaveButton),
@@ -283,7 +283,7 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
             icon: viewModel.isActivating
                 ? const SizedBox.square(
                     dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PointySpinner(strokeWidth: 2),
                   )
                 : const Icon(Icons.auto_fix_high_outlined),
             label: Text(l10n.messagingActivateButton),
@@ -341,7 +341,7 @@ class _MessagingSettingsPageState extends State<MessagingSettingsPage> {
               icon: viewModel.isTesting
                   ? const SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     )
                   : const Icon(Icons.send_outlined),
               label: Text(l10n.messagingTestSendButton),

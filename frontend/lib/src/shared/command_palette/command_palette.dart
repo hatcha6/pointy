@@ -11,6 +11,7 @@ import '../design/design.dart';
 import '../navigation/app_navigation.dart';
 import '../navigation/navigation_catalog.dart';
 import '../responsive/responsive.dart';
+import '../components/pointy_progress.dart';
 
 /// Module-global handle to the mounted palette, so any screen — including
 /// routes pushed over the home route, which are not descendants of the scope —
@@ -727,7 +728,7 @@ class _CommandPaletteSheetState extends State<_CommandPaletteSheet> {
               SizedBox(
                 height: 2,
                 child: _isSearching
-                    ? const LinearProgressIndicator(minHeight: 2)
+                    ? const PointyProgressBar(minHeight: 2)
                     : null,
               ),
               Divider(height: 1, color: colors.line),

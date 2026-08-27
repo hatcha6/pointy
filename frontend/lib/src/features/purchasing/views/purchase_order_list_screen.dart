@@ -550,7 +550,7 @@ class _PayableLoadingCard extends StatelessWidget {
         child: const Center(
           child: SizedBox.square(
             dimension: 22,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: PointySpinner(strokeWidth: 2),
           ),
         ),
       ),

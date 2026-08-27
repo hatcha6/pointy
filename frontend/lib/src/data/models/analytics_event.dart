@@ -272,11 +272,51 @@ class AnalyticsEventDraft {
         'entity_type': entityType,
       if (entityId != null && entityId!.isNotEmpty) 'entity_id': entityId,
       if (riskScore != null) 'risk_score': riskScore,
-      'attributes': attributes,
-      'metrics': metrics,
+      'attributes': _encodableAttributes(attributes),
+      'metrics': _encodableMetrics(metrics),
     };
   }
 }
+
+/// Replaces anything `jsonEncode` cannot represent.
+///
+/// A double can be `Infinity` or `NaN` — a division by zero away — and
+/// `jsonEncode` throws on both. That throw does not stay local: the queue is
+/// encoded as a whole, so one poisoned metric makes *every* later write fail,
+/// each failure is itself recorded as an error, and recording it triggers
+/// another write. In the field that ran at seventeen errors a second for two
+/// minutes and produced 1,999 of the dump's 2,167 platform errors — 92% of
+/// them — burying every other signal.
+///
+/// Telemetry is not worth a loop, so a value that cannot be encoded is replaced
+/// by a string naming what it was. The reading stays legible and the queue
+/// always encodes.
+Map<String, num> _encodableMetrics(Map<String, num> metrics) {
+  if (metrics.values.every(_isEncodableNumber)) {
+    return metrics;
+  }
+  return {
+    for (final entry in metrics.entries)
+      if (_isEncodableNumber(entry.value)) entry.key: entry.value,
+  };
+}
+
+Map<String, Object?> _encodableAttributes(Map<String, Object?> attributes) {
+  if (attributes.values.every(
+    (value) => value is! num || _isEncodableNumber(value),
+  )) {
+    return attributes;
+  }
+  return {
+    for (final entry in attributes.entries)
+      entry.key: (entry.value is num && !_isEncodableNumber(entry.value as num))
+          ? '${entry.value}'
+          : entry.value,
+  };
+}
+
+bool _isEncodableNumber(num value) => value is! double || value.isFinite;
+
 
 class AnalyticsIngestResult {
   const AnalyticsIngestResult({

@@ -528,7 +528,7 @@ class _BackupActionBar extends StatelessWidget {
           icon: isSavingSchedule
               ? const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : const Icon(Icons.save_outlined),
           label: Text(
@@ -542,7 +542,7 @@ class _BackupActionBar extends StatelessWidget {
           icon: isStartingBackup
               ? const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : const Icon(Icons.backup_outlined),
           label: Text(
@@ -597,7 +597,7 @@ class _BackupJobProgressCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            LinearProgressIndicator(value: progress),
+            PointyProgressBar(value: progress),
             if (job.progressMessage.trim().isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
@@ -645,7 +645,7 @@ class _RestoreBackupFields extends StatelessWidget {
             icon: isRestoring
                 ? const SizedBox.square(
                     dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PointySpinner(strokeWidth: 2),
                   )
                 : const Icon(Icons.upload_file_outlined),
             label: Text(

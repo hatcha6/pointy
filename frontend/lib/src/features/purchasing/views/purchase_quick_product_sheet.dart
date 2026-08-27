@@ -14,6 +14,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/purchase_view_model.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Resolves a scanned code — variant barcode or packaging (unit) barcode — or
 /// walks the user through creating the product when nothing matches. A failed
@@ -252,7 +253,7 @@ class _PurchaseQuickProductSheetState extends State<PurchaseQuickProductSheet> {
                       icon: _isSaving
                           ? const SizedBox.square(
                               dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: PointySpinner(strokeWidth: 2),
                             )
                           : const Icon(Icons.add),
                       label: Text(

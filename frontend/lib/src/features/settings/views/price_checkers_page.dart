@@ -56,7 +56,7 @@ class _PriceCheckersPageState extends State<PriceCheckersPage> {
                 icon: viewModel.isScanning
                     ? const SizedBox.square(
                         dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: PointySpinner(strokeWidth: 2),
                       )
                     : const Icon(Icons.wifi_find_outlined),
               ),

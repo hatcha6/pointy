@@ -394,7 +394,7 @@ class _CampaignEditorScreenState extends State<CampaignEditorScreen> {
                 icon: viewModel.isSaving
                     ? const SizedBox.square(
                         dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: PointySpinner(strokeWidth: 2),
                       )
                     : const Icon(Icons.save_outlined),
                 label: Text(l10n.campaignSaveButton),
@@ -435,7 +435,7 @@ class _CampaignEditorScreenState extends State<CampaignEditorScreen> {
             icon: viewModel.isPreviewing
                 ? const SizedBox.square(
                     dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PointySpinner(strokeWidth: 2),
                   )
                 : const Icon(Icons.query_stats_outlined),
             label: Text(l10n.campaignPreviewButton),
@@ -481,7 +481,7 @@ class _CampaignEditorScreenState extends State<CampaignEditorScreen> {
                 icon: viewModel.isSending
                     ? const SizedBox.square(
                         dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: PointySpinner(strokeWidth: 2),
                       )
                     : const Icon(Icons.send),
                 label: Text(l10n.campaignSendButton),

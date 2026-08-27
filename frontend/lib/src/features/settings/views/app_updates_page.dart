@@ -106,7 +106,7 @@ class _AppUpdatesPageState extends State<AppUpdatesPage> {
   Widget _body(BuildContext context, AppLocalizations l10n) {
     if (_checking) {
       return _centered(
-        const CircularProgressIndicator(),
+        const PointySpinner(),
         l10n.appUpdatesChecking,
       );
     }
@@ -142,7 +142,7 @@ class _AppUpdatesPageState extends State<AppUpdatesPage> {
         ),
         const SizedBox(height: 24),
         if (_installing) ...[
-          LinearProgressIndicator(value: _progress > 0 ? _progress : null),
+          PointyProgressBar(value: _progress > 0 ? _progress : null),
           const SizedBox(height: 12),
           Text(l10n.appUpdatesDownloading, textAlign: TextAlign.center),
         ] else

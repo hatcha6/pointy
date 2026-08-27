@@ -12,6 +12,7 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_image_thumbnail.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 const _productImageSearchPageSize = 30;
 
@@ -351,7 +352,7 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
                   icon: _isSearching
                       ? const SizedBox.square(
                           dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: PointySpinner(strokeWidth: 2),
                         )
                       : const Icon(Icons.search),
                   label: Text(l10n.productImageSearchSubmitButton),

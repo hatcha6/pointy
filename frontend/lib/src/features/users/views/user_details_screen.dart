@@ -161,7 +161,7 @@ class _UserHeader extends StatelessWidget {
       trailing: isRefreshing
           ? const SizedBox.square(
               dimension: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: PointySpinner(strokeWidth: 2),
             )
           : null,
       child: Column(

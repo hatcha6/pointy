@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pointy_frontend/src/core/storage/local_database.dart';
 import 'package:pointy_frontend/src/core/storage/sqlite_key_value_store.dart';
 // sqflite_common_ffi re-exports the sqflite_common api (DatabaseFactory).
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -29,6 +30,97 @@ void main() {
   Future<SqliteKeyValueStore> openStore([String? path]) {
     return SqliteKeyValueStore.open(factory: dbFactory, path: path ?? dbPath());
   }
+
+  test('SQLite is told to wait for a lock, not to give up', () async {
+    // Neither sqflite_common nor sqflite_common_ffi sets a busy timeout, so
+    // without this the desktop build inherits SQLite's default of zero and any
+    // contention is an instant `database is locked`.
+    final database = await LocalDatabase.open(
+      factory: dbFactory,
+      path: dbPath(),
+      schema: const <String>[SqliteKeyValueStore.schema],
+    );
+    final rows = await database.debugPragma('busy_timeout');
+    expect(rows.first.values.first, greaterThanOrEqualTo(1000));
+
+    final limit = await database.debugPragma('journal_size_limit');
+    expect(limit.first.values.first, greaterThan(0));
+    await database.close();
+  });
+
+  test('two connections to one file stay consistent', () async {
+    // Not a contention test — the ffi driver serialises every call in a
+    // process, so two connections here cannot actually collide. What this does
+    // check is that a second connection (in the field: a second process, or an
+    // Android client's thread pool) opening and writing the same file finds a
+    // sane schema and sees the other's writes.
+    final path = dbPath();
+    final a = await openStore(path);
+    final b = await openStore(path);
+
+    await Future.wait<void>([
+      for (var i = 0; i < 20; i += 1) a.setString('a$i', 'from-a-$i'),
+      for (var i = 0; i < 20; i += 1) b.setString('b$i', 'from-b-$i'),
+    ]);
+
+    expect(await a.getString('b19'), 'from-b-19');
+    expect(await b.getString('a19'), 'from-a-19');
+    expect((await a.getKeys()).length, 40);
+    expect(a.lockRetries, 0);
+    await a.close();
+    await b.close();
+  });
+
+  group('a locked database is waited out, not reported', () {
+    test('retries until the lock clears', () async {
+      var attempts = 0;
+      var retries = 0;
+      final value = await LocalDatabase.retryOnLock<String>(
+        () async {
+          attempts += 1;
+          if (attempts < 3) {
+            throw StateError('database is locked (code 5 SQLITE_BUSY)');
+          }
+          return 'written';
+        },
+        initialBackoff: Duration.zero,
+        onRetry: () => retries += 1,
+      );
+      expect(value, 'written');
+      expect(attempts, 3);
+      expect(retries, 2);
+    });
+
+    test('gives up rather than hanging forever', () async {
+      var attempts = 0;
+      await expectLater(
+        LocalDatabase.retryOnLock<void>(
+          () async {
+            attempts += 1;
+            throw StateError('database is locked');
+          },
+          maxRetries: 2,
+          initialBackoff: Duration.zero,
+        ),
+        throwsA(isA<StateError>()),
+      );
+      expect(attempts, 3, reason: 'the first try plus two retries');
+    });
+
+    test('a failure that is not a lock is not retried', () async {
+      // Retrying a real fault (bad SQL, disk full) would only delay the report
+      // and bury the cause.
+      var attempts = 0;
+      await expectLater(
+        LocalDatabase.retryOnLock<void>(() async {
+          attempts += 1;
+          throw StateError('no such table: kv');
+        }, initialBackoff: Duration.zero),
+        throwsA(isA<StateError>()),
+      );
+      expect(attempts, 1);
+    });
+  });
 
   test('round-trips strings and string lists', () async {
     final store = await openStore();

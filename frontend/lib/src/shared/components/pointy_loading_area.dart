@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design/design.dart';
 import '../responsive/responsive.dart';
+import 'pointy_progress.dart';
 
 class PointyLoadingArea extends StatelessWidget {
   const PointyLoadingArea({
@@ -28,7 +29,7 @@ class PointyLoadingArea extends StatelessWidget {
           children: [
             SizedBox.square(
               dimension: progressSize,
-              child: const CircularProgressIndicator(strokeWidth: 2.6),
+              child: const PointySpinner(strokeWidth: 2.6),
             ),
             if (label != null) ...[
               SizedBox(height: spacing.md),

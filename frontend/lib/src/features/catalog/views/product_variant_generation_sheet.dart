@@ -12,6 +12,7 @@ import '../view_models/product_details_view_model.dart';
 import '../view_models/variant_generation.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 class ProductVariantGenerationSheet extends StatefulWidget {
   const ProductVariantGenerationSheet({
@@ -270,7 +271,7 @@ class _ProductVariantGenerationSheetState
                     icon: widget.viewModel.isSavingVariant
                         ? const SizedBox.square(
                             dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: PointySpinner(strokeWidth: 2),
                           )
                         : const Icon(Icons.auto_awesome_motion_outlined),
                     label: Text(

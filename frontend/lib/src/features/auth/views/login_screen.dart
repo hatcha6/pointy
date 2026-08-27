@@ -361,7 +361,7 @@ class _LoginForm extends StatelessWidget {
                   icon: isSubmitting
                       ? const SizedBox.square(
                           dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: PointySpinner(strokeWidth: 2),
                         )
                       : const Icon(Icons.login),
                   label: Text(

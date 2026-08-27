@@ -9,8 +9,22 @@ class AuthApiClient {
 
   final PosApiSession _session;
 
+  /// How long the sign-in path waits before giving up.
+  ///
+  /// Sized against a person standing at a till, not against the network stack.
+  /// Nothing here set a timeout, so these calls inherited the 60s default and
+  /// in practice hit the operating system first: Windows retries an unanswered
+  /// TCP SYN at 3s, 6s and 12s before failing, which is exactly the 21.0–21.1s
+  /// wall these four endpoints all stopped at. A cashier stared at a spinner
+  /// for 21 seconds to be told the shop's server is unreachable — something the
+  /// app could have said in five.
+  ///
+  /// Short on purpose: sign-in carries no cart and changes nothing that a
+  /// retry could double up, so failing early is free.
+  static const Duration authTimeout = Duration(seconds: 5);
+
   Future<OnboardingStatus> fetchOnboardingStatus() async {
-    final response = await _session.get('setup/status/');
+    final response = await _session.get('setup/status/', timeout: authTimeout);
     _session.ensureSuccess(
       response,
       'Onboarding status request failed with status',
@@ -37,19 +51,20 @@ class AuthApiClient {
       'auth/login/',
       body: {'username': username, 'password': password},
       includeCsrf: false,
+      timeout: authTimeout,
     );
     _session.ensureSuccess(response, 'Login failed with status');
     return _decodeUserResponse(response);
   }
 
   Future<void> logout() async {
-    final response = await _session.post('auth/logout/');
+    final response = await _session.post('auth/logout/', timeout: authTimeout);
     _session.ensureSuccess(response, 'Logout failed with status');
     _session.clearAuthState();
   }
 
   Future<PosUser?> fetchCurrentUser() async {
-    final response = await _session.get('auth/me/');
+    final response = await _session.get('auth/me/', timeout: authTimeout);
     if (response.statusCode == 401 || response.statusCode == 403) {
       return null;
     }

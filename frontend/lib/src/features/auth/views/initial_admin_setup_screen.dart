@@ -295,7 +295,7 @@ class _SetupForm extends StatelessWidget {
                 icon: isSubmitting
                     ? const SizedBox.square(
                         dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: PointySpinner(strokeWidth: 2),
                       )
                     : const Icon(Icons.admin_panel_settings_outlined),
                 label: Text(

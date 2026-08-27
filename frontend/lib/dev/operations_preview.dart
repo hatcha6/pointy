@@ -165,6 +165,7 @@ Widget _recipes() {
   );
   final vm = RecipesViewModel(repo);
   return RecipesPage(
+    capabilities: _managerCaps,
     viewModel: vm,
     catalogRepository: _FakeCatalogRepository(),
   );

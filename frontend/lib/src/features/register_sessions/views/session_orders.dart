@@ -105,7 +105,7 @@ class _SessionSummaryPanel extends StatelessWidget {
     final summary = viewModel.selectedSummary;
 
     if (summary == null && viewModel.isLoadingSummary) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: PointySpinner());
     }
     if (summary == null && viewModel.hasSummaryLoadError) {
       return PointyErrorState(
@@ -160,7 +160,7 @@ class _ZReportActions extends StatelessWidget {
           ? const SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: PointySpinner(strokeWidth: 2),
             )
           : null,
       child: Wrap(

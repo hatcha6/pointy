@@ -203,7 +203,7 @@ class _StartSessionGate extends StatelessWidget {
               icon: viewModel.isStartingRegisterSession
                   ? const SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     )
                   : const Icon(Icons.play_arrow),
               label: Text(

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import '../../core/app_version.dart';
 
 typedef ApiPerformanceRecorder =
     void Function(ApiRequestPerformance performance);
@@ -187,6 +188,7 @@ class PosApiSession {
     String path, {
     Map<String, String>? query,
     bool conditionalCache = false,
+    Duration? timeout,
   }) {
     final key =
         '${conditionalCache ? 'c' : 'p'}:${uri(path, queryParameters: query)}';
@@ -195,7 +197,12 @@ class PosApiSession {
       return pending;
     }
     late final Future<http.Response> future;
-    future = _getOnce(path, query: query, conditionalCache: conditionalCache)
+    future = _getOnce(
+      path,
+      query: query,
+      conditionalCache: conditionalCache,
+      timeout: timeout,
+    )
         .whenComplete(() {
           // Evict only our own entry: a mutation may have cleared the map and
           // a fresh identical GET may already be registered under this key.
@@ -211,11 +218,13 @@ class PosApiSession {
     String path, {
     Map<String, String>? query,
     bool conditionalCache = false,
+    Duration? timeout,
   }) async {
     if (!conditionalCache) {
       return _send(
         method: 'GET',
         path: path,
+        timeout: timeout,
         request: () =>
             client.get(uri(path, queryParameters: query), headers: headers()),
       );
@@ -223,10 +232,12 @@ class PosApiSession {
 
     // Look the entry up once and hold the reference: eviction by a concurrent
     // request must not turn a 304 into an empty response.
-    final cached = _conditionalCache[uri(path, queryParameters: query).toString()];
+    final cached =
+        _conditionalCache[uri(path, queryParameters: query).toString()];
     final response = await _send(
       method: 'GET',
       path: path,
+      timeout: timeout,
       request: () {
         final requestHeaders = headers();
         if (cached != null) {
@@ -234,8 +245,10 @@ class PosApiSession {
         }
         // uri() is re-resolved per attempt so the relay-fallback retry inside
         // _send targets the switched base URL, same as the plain path above.
-        return client.get(uri(path, queryParameters: query),
-            headers: requestHeaders);
+        return client.get(
+          uri(path, queryParameters: query),
+          headers: requestHeaders,
+        );
       },
     );
 
@@ -289,12 +302,14 @@ class PosApiSession {
     Object? body,
     bool includeCsrf = true,
     String? idempotencyKey,
+    Duration? timeout,
   }) async {
     final encodedBody = body == null ? null : jsonEncode(body);
     return _send(
       method: 'POST',
       path: path,
       requestSizeBytes: _encodedSize(encodedBody),
+      timeout: timeout,
       request: () => client.post(
         uri(path),
         headers: headers(
@@ -434,6 +449,25 @@ class PosApiSession {
     );
   }
 
+  /// Identifies this install on every request, authenticated or not.
+  ///
+  /// Backend telemetry used to take the device from the request's session, so a
+  /// rejected request recorded nothing at all — which is why 5.1M unauthenticated
+  /// ingest calls in the field could not be traced to a machine.
+  String _deviceId = '';
+  String _clientPlatform = '';
+  String _appVersion = '';
+
+  void describeClient({
+    required String deviceId,
+    required String platform,
+    String appVersion = kAppVersion,
+  }) {
+    _deviceId = deviceId.trim();
+    _clientPlatform = platform.trim();
+    _appVersion = appVersion.trim();
+  }
+
   Map<String, String> headers({
     bool includeCsrf = false,
     String? idempotencyKey,
@@ -441,6 +475,9 @@ class PosApiSession {
     final normalizedIdempotencyKey = idempotencyKey?.trim() ?? '';
     return {
       'Content-Type': 'application/json',
+      if (_deviceId.isNotEmpty) 'X-Pointy-Device-Id': _deviceId,
+      if (_clientPlatform.isNotEmpty) 'X-Pointy-Platform': _clientPlatform,
+      if (_appVersion.isNotEmpty) 'X-Pointy-App-Version': _appVersion,
       if (_cookies.isNotEmpty)
         'Cookie': _cookies.entries
             .map((entry) => '${entry.key}=${entry.value}')
@@ -502,7 +539,14 @@ class PosApiSession {
     required String path,
     required Future<http.Response> Function() request,
     int requestSizeBytes = 0,
+    Duration? timeout,
   }) async {
+    // Only bounded where a caller asks for it. Nothing here had a deadline, so
+    // a request that got no answer waited on the operating system: Windows
+    // retries an unanswered TCP SYN at 3s, 6s and 12s, which is the 21-second
+    // wall the sign-in path stopped at in the field.
+    Future<http.Response> attempt() =>
+        timeout == null ? request() : request().timeout(timeout);
     if (method != 'GET') {
       // A write is about to change server state: GETs issued from here on
       // must not join responses computed before it.
@@ -511,7 +555,7 @@ class PosApiSession {
     final stopwatch = Stopwatch()..start();
     final bool wasLocal = !usesRelay;
     try {
-      final response = await request();
+      final response = await attempt();
       stopwatch.stop();
       captureResponseState(response);
       _recordPerformance(
@@ -532,7 +576,7 @@ class PosApiSession {
           relayToken: fallback.relayToken,
         );
         try {
-          final response = await request();
+          final response = await attempt();
           stopwatch.stop();
           captureResponseState(response);
           _recordPerformance(

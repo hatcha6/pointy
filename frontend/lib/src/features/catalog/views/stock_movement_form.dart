@@ -6,6 +6,7 @@ import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'stock_movement_labels.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 class StockMovementForm extends StatefulWidget {
   const StockMovementForm({
@@ -125,7 +126,7 @@ class _StockMovementFormState extends State<StockMovementForm> {
                       icon: widget.viewModel.isSavingMovement
                           ? const SizedBox.square(
                               dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: PointySpinner(strokeWidth: 2),
                             )
                           : const Icon(Icons.save_outlined),
                       label: Text(

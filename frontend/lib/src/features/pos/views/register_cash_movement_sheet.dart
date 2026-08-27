@@ -6,6 +6,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/register_cash_movement.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 class RegisterCashMovementSheet extends StatefulWidget {
   const RegisterCashMovementSheet({
@@ -126,7 +127,7 @@ class _RegisterCashMovementSheetState extends State<RegisterCashMovementSheet> {
                       icon: _isSubmitting
                           ? const SizedBox.square(
                               dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: PointySpinner(strokeWidth: 2),
                             )
                           : Icon(isPayIn ? Icons.input : Icons.output),
                       label: Text(

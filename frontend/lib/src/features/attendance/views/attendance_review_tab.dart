@@ -92,7 +92,7 @@ class _AttendanceReviewTabState extends State<AttendanceReviewTab> {
             else if (viewModel.isLoading)
               const Padding(
                 padding: EdgeInsets.all(32),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: PointySpinner()),
               )
             else if (viewModel.hasLoadError)
               PointyErrorState(

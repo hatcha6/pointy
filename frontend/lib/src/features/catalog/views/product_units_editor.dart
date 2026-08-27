@@ -270,7 +270,7 @@ class _ProductUnitsEditorState extends State<ProductUnitsEditor> {
     if (widget.isLoading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: PointySpinner()),
       );
     }
     if (widget.hasError) {

@@ -74,7 +74,7 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
                 icon: viewModel.isSyncing
                     ? const SizedBox.square(
                         dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: PointySpinner(strokeWidth: 2),
                       )
                     : const Icon(Icons.sync),
               ),
@@ -492,7 +492,7 @@ class _UsageBar extends StatelessWidget {
         SizedBox(height: spacing.xs),
         ClipRRect(
           borderRadius: BorderRadius.circular(6),
-          child: LinearProgressIndicator(
+          child: PointyProgressBar(
             value: unlimited ? 0 : window.fraction.clamp(0.0, 1.0).toDouble(),
             minHeight: 7,
             backgroundColor: colors.line,

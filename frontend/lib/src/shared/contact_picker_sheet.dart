@@ -717,7 +717,7 @@ class _CustomerFormState extends State<CustomerForm> {
               icon: _isSaving
                   ? const SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     )
                   : const Icon(Icons.save_outlined),
               label: Text(
@@ -919,7 +919,7 @@ class _SupplierFormState extends State<SupplierForm> {
               icon: _isSaving
                   ? const SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     )
                   : const Icon(Icons.save_outlined),
               label: Text(

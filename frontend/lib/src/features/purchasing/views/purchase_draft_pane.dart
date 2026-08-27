@@ -188,7 +188,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       icon: viewModel.isSubmitting
           ? const SizedBox.square(
               dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: PointySpinner(strokeWidth: 2),
             )
           : const Icon(Icons.inventory_outlined),
       label: FittedBox(
@@ -209,7 +209,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       icon: viewModel.isSubmitting
           ? const SizedBox.square(
               dimension: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: PointySpinner(strokeWidth: 2),
             )
           : const Icon(Icons.save_outlined),
       label: FittedBox(

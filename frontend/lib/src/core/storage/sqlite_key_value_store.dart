@@ -1,108 +1,53 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:sqflite_common/sqlite_api.dart';
 
 import 'key_value_store.dart';
+import 'local_database.dart';
 
-/// SQLite-backed [KeyValueStore] for native platforms.
+/// SQLite-backed [KeyValueStore]: the app's settings, profiles and snapshots.
 ///
-/// Every value lives in a single `kv(key, value, type)` table. Writes are
-/// atomic, fsync'd SQLite transactions (WAL journal, `synchronous=FULL`), so a
-/// power cut mid-write can never leave a torn store the way the old
-/// `shared_preferences` JSON file could — an interrupted write is rolled back
-/// whole and committed writes survive the outage.
+/// Every value lives in a single `kv(key, value, type)` table inside the shared
+/// [LocalDatabase], which owns the connection and the durability rules (WAL,
+/// fsync'd commits, lock waiting, corruption recovery).
 ///
-/// [open] is also self-healing: a database that won't open or fails an
-/// integrity check is quarantined aside (for post-mortem) and recreated empty,
-/// so a damaged store can never stop the app from starting — the same guarantee
-/// `ResilientPreferences` gives the legacy file. The only thing lost is local
-/// convenience state, which is re-discovered or re-entered.
+/// This holds *settings* — things read occasionally and written when a person
+/// changes something. Anything append-heavy wants a table of its own rather
+/// than a row here: see `SqliteAnalyticsQueue`.
 class SqliteKeyValueStore implements KeyValueStore {
-  SqliteKeyValueStore._(this._db);
+  SqliteKeyValueStore(this._database);
 
-  final Database _db;
+  final LocalDatabase _database;
 
-  static const String _table = 'kv';
+  static const String table = 'kv';
   static const String _typeString = 's';
   static const String _typeStringList = 'sl';
 
-  /// Suffix marking a quarantined (previously unreadable) database file.
-  static const String _quarantineMarker = '.corrupt-';
+  /// DDL for this store's table, handed to [LocalDatabase.open].
+  static const String schema =
+      'CREATE TABLE IF NOT EXISTS $table ('
+      'key TEXT PRIMARY KEY NOT NULL, '
+      'value TEXT NOT NULL, '
+      "type TEXT NOT NULL DEFAULT '$_typeString')";
 
-  /// The SQLite files that make up the store — the DB plus its WAL sidecars.
-  static const List<String> _dbSuffixes = <String>['', '-wal', '-shm'];
-
-  /// Keep at most this many quarantined files so a machine that corrupts on
-  /// every boot can't accumulate them without bound.
-  static const int _quarantineKeepFiles = 9; // ~3 incidents × 3 sidecar files
-
-  /// Opens (creating if needed) the store at [path] using [factory], recovering
-  /// from an unreadable database by quarantining it and starting fresh. Never
-  /// throws for a corrupt store.
+  /// Opens a database at [path] holding only this store. The app opens the
+  /// shared database once instead (see `openPlatformStores`); this is for tests
+  /// and for callers that genuinely want an isolated file.
   static Future<SqliteKeyValueStore> open({
     required DatabaseFactory factory,
     required String path,
   }) async {
-    Database? db;
-    try {
-      db = await _rawOpen(factory, path);
-      await _ensureSchema(db);
-      await _assertHealthy(db);
-      return SqliteKeyValueStore._(db);
-    } catch (error, stackTrace) {
-      // Treat an unreadable DB like a corrupt shared_preferences file: move it
-      // aside and rebuild empty so boot never blocks.
-      debugPrint('SQLite store failed to open, recovering: $error');
-      debugPrintStack(stackTrace: stackTrace);
-      if (db != null) {
-        try {
-          await db.close();
-        } catch (_) {
-          // Best effort — we're about to move the file aside regardless.
-        }
-      }
-      _quarantine(path);
-      final fresh = await _rawOpen(factory, path);
-      await _ensureSchema(fresh);
-      return SqliteKeyValueStore._(fresh);
-    }
-  }
-
-  static Future<Database> _rawOpen(DatabaseFactory factory, String path) {
-    return factory.openDatabase(
-      path,
-      options: OpenDatabaseOptions(
-        onConfigure: (db) async {
-          // WAL + FULL: no corruption on power loss, and each commit is fsync'd
-          // so the write survives the outage. Writes are tiny and infrequent,
-          // so the durability cost is irrelevant.
-          await db.rawQuery('PRAGMA journal_mode=WAL');
-          await db.execute('PRAGMA synchronous=FULL');
-        },
-      ),
+    final database = await LocalDatabase.open(
+      factory: factory,
+      path: path,
+      schema: const <String>[schema],
     );
+    return SqliteKeyValueStore(database);
   }
 
-  static Future<void> _ensureSchema(Database db) async {
-    await db.execute(
-      'CREATE TABLE IF NOT EXISTS $_table ('
-      'key TEXT PRIMARY KEY NOT NULL, '
-      'value TEXT NOT NULL, '
-      "type TEXT NOT NULL DEFAULT '$_typeString')",
-    );
-  }
-
-  static Future<void> _assertHealthy(Database db) async {
-    final rows = await db.rawQuery('PRAGMA quick_check');
-    final ok = rows.length == 1 &&
-        rows.first.values.length == 1 &&
-        rows.first.values.first?.toString().toLowerCase() == 'ok';
-    if (!ok) {
-      throw StateError('SQLite quick_check failed: $rows');
-    }
-  }
+  /// How many times a lock error was retried, for diagnostics.
+  int get lockRetries => _database.lockRetries;
 
   @override
   Future<String?> getString(String key) async {
@@ -147,97 +92,46 @@ class SqliteKeyValueStore implements KeyValueStore {
 
   @override
   Future<void> remove(String key) async {
-    await _db.rawDelete('DELETE FROM $_table WHERE key = ?', <Object?>[key]);
+    await _database.guard(
+      () => _database.db.rawDelete(
+        'DELETE FROM $table WHERE key = ?',
+        <Object?>[key],
+      ),
+    );
   }
 
   @override
   Future<Set<String>> getKeys() async {
-    final rows = await _db.query(_table, columns: <String>['key']);
+    final rows = await _database.guard(
+      () => _database.db.query(table, columns: <String>['key']),
+    );
     return rows.map((row) => row['key'] as String).toSet();
   }
 
   /// Closes the underlying database. Exposed for tests; the app keeps the
   /// process-lifetime singleton open.
   @visibleForTesting
-  Future<void> close() => _db.close();
+  Future<void> close() => _database.close();
 
   Future<Map<String, Object?>?> _readRow(String key) async {
-    final rows = await _db.query(
-      _table,
-      columns: <String>['value', 'type'],
-      where: 'key = ?',
-      whereArgs: <Object?>[key],
-      limit: 1,
+    final rows = await _database.guard(
+      () => _database.db.query(
+        table,
+        columns: <String>['value', 'type'],
+        where: 'key = ?',
+        whereArgs: <Object?>[key],
+        limit: 1,
+      ),
     );
     return rows.isEmpty ? null : rows.first;
   }
 
   Future<void> _write(String key, String value, String type) async {
-    await _db.rawInsert(
-      'INSERT OR REPLACE INTO $_table (key, value, type) VALUES (?, ?, ?)',
-      <Object?>[key, value, type],
+    await _database.guard(
+      () => _database.db.rawInsert(
+        'INSERT OR REPLACE INTO $table (key, value, type) VALUES (?, ?, ?)',
+        <Object?>[key, value, type],
+      ),
     );
-  }
-
-  /// Renames the store (and its `-wal`/`-shm` sidecars) to timestamped
-  /// `.corrupt-*` siblings, deleting instead if the rename fails, then prunes
-  /// old quarantines.
-  static void _quarantine(String path) {
-    final int stamp = DateTime.now().millisecondsSinceEpoch;
-    for (final suffix in _dbSuffixes) {
-      final file = File('$path$suffix');
-      if (!file.existsSync()) {
-        continue;
-      }
-      final target = '$path$suffix$_quarantineMarker$stamp';
-      try {
-        file.renameSync(target);
-      } catch (_) {
-        try {
-          file.deleteSync();
-        } catch (_) {
-          // Leftover file is harmless; the fresh DB overwrites the live name.
-        }
-      }
-    }
-    _pruneQuarantines(path);
-  }
-
-  static void _pruneQuarantines(String path) {
-    try {
-      final dbFile = File(path);
-      final Directory dir = dbFile.parent;
-      final String base = _basename(path);
-      final quarantines = dir
-          .listSync()
-          .whereType<File>()
-          .where((f) {
-            final name = _basename(f.path);
-            return name.startsWith(base) && name.contains(_quarantineMarker);
-          })
-          .toList()
-        ..sort(
-          (a, b) =>
-              a.lastModifiedSync().compareTo(b.lastModifiedSync()),
-        );
-      if (quarantines.length <= _quarantineKeepFiles) {
-        return;
-      }
-      for (final stale
-          in quarantines.take(quarantines.length - _quarantineKeepFiles)) {
-        try {
-          stale.deleteSync();
-        } catch (_) {
-          // Best effort.
-        }
-      }
-    } catch (error) {
-      debugPrint('Could not prune quarantined SQLite stores: $error');
-    }
-  }
-
-  static String _basename(String path) {
-    final int index = path.lastIndexOf(Platform.pathSeparator);
-    return index == -1 ? path : path.substring(index + 1);
   }
 }

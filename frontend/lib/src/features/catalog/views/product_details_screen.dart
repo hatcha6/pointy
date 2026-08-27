@@ -123,7 +123,7 @@ class ProductDetailsView extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             if (viewModel.isLoading) ...[
-              const LinearProgressIndicator(),
+              const PointyProgressBar(),
               const SizedBox(height: 12),
             ],
             if (viewModel.errorMessage == 'product_detail_load_error') ...[
@@ -604,7 +604,7 @@ class _PricingAndCostSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (viewModel.isLoadingCostSummary && summaries.isEmpty)
-            const Center(child: CircularProgressIndicator())
+            const Center(child: PointySpinner())
           else if (viewModel.hasCostSummaryError && summaries.isEmpty)
             PointyInlineMessage.error(
               message: l10n.changePricesLoadError,

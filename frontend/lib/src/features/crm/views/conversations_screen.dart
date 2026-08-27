@@ -438,7 +438,7 @@ class _Composer extends StatelessWidget {
                 icon: isSending
                     ? const SizedBox.square(
                         dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: PointySpinner(strokeWidth: 2),
                       )
                     : const Icon(Icons.send_outlined),
               ),

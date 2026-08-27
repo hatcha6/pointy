@@ -390,7 +390,7 @@ class _AttendanceSettingsPageState extends State<AttendanceSettingsPage> {
             icon: viewModel.isSyncing
                 ? const SizedBox.square(
                     dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: PointySpinner(strokeWidth: 2),
                   )
                 : const Icon(Icons.sync),
             label: Text(

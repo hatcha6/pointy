@@ -97,7 +97,12 @@ class RegisterSession {
     if (value is int) {
       return value;
     }
-    return int.parse(value.toString());
+    // Tolerant on purpose: the backend serialises DecimalField as a string, and
+    // a whole number can arrive as "3.0". int.parse throws on that — a
+    // FormatException from deep inside a model constructor, which in the field
+    // masked the real error it was decoding. Same shape as sale_order's parser.
+    final text = value.toString();
+    return int.tryParse(text) ?? double.tryParse(text)?.toInt() ?? 0;
   }
 
   static DateTime? _dateTimeFromJson(Object? value) {

@@ -8,6 +8,7 @@ import '../../../data/models/variant_option_value.dart';
 import '../../../data/models/variant_option_value_draft.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 Future<VariantOption?> showCreateVariantOptionDialog({
   required BuildContext context,
@@ -114,7 +115,7 @@ class _CreateVariantOptionDialogState
           icon: _isSaving
               ? const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : const Icon(Icons.save_outlined),
           label: Text(l10n.createVariantOptionButton),
@@ -239,7 +240,7 @@ class _CreateVariantOptionValueDialogState
           icon: _isSaving
               ? const SizedBox.square(
                   dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : const Icon(Icons.save_outlined),
           label: Text(l10n.createVariantOptionValueButton),

@@ -601,7 +601,7 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
         SizedBox(height: spacing.xs),
         ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(value: percent == 0 ? null : percent),
+          child: PointyProgressBar(value: percent == 0 ? null : percent),
         ),
       ],
     );
@@ -972,7 +972,7 @@ class _Spinner extends StatelessWidget {
   Widget build(BuildContext context) {
     return const SizedBox.square(
       dimension: 18,
-      child: CircularProgressIndicator(strokeWidth: 2),
+      child: PointySpinner(strokeWidth: 2),
     );
   }
 }

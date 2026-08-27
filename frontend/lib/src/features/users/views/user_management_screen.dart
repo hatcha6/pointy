@@ -629,7 +629,7 @@ class _CreateUserFormState extends State<_CreateUserForm> {
                         icon: widget.viewModel.isSaving
                             ? const SizedBox.square(
                                 dimension: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: PointySpinner(strokeWidth: 2),
                               )
                             : const Icon(Icons.person_add_alt_1),
                         label: Text(l10n.createUserButton),
@@ -827,7 +827,7 @@ class _EditUserFormState extends State<_EditUserForm> {
                         icon: widget.viewModel.isSaving
                             ? const SizedBox.square(
                                 dimension: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: PointySpinner(strokeWidth: 2),
                               )
                             : const Icon(Icons.check),
                         label: Text(l10n.saveButton),

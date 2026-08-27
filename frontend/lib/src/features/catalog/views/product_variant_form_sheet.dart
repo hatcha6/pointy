@@ -12,6 +12,7 @@ import 'product_form_fields.dart';
 import 'product_form_section.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 class ProductVariantFormSheet extends StatefulWidget {
   const ProductVariantFormSheet({
@@ -141,7 +142,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
                     icon: widget.viewModel.isSavingVariant
                         ? const SizedBox.square(
                             dimension: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: PointySpinner(strokeWidth: 2),
                           )
                         : Icon(_isEditing ? Icons.save_outlined : Icons.add),
                     label: Text(

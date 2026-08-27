@@ -12,6 +12,7 @@ import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 class BarcodeLabelPrintDialogResult {
   const BarcodeLabelPrintDialogResult({
@@ -112,7 +113,7 @@ class _BarcodeLabelPrintButtonState extends State<BarcodeLabelPrintButton> {
         icon: _isPrinting
             ? const SizedBox.square(
                 dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: PointySpinner(strokeWidth: 2),
               )
             : const Icon(Icons.print_outlined),
       );
@@ -126,7 +127,7 @@ class _BarcodeLabelPrintButtonState extends State<BarcodeLabelPrintButton> {
     final icon = _isPrinting
         ? const SizedBox.square(
             dimension: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: PointySpinner(strokeWidth: 2),
           )
         : const Icon(Icons.print_outlined);
     final button = widget.style == BarcodeLabelPrintButtonStyle.outlined

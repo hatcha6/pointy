@@ -45,6 +45,11 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
   final AnalyticsEngine? _analyticsEngine;
   bool _isPrintingZReport = false;
 
+  /// Set when building or sending the Z-Report threw, so the screen can say so
+  /// instead of silently doing nothing.
+  bool _hasZReportError = false;
+  bool get hasZReportError => _hasZReportError;
+
   List<RegisterSession> _sessions = [];
   List<SaleOrder> _orders = [];
   List<RegisterCashMovement> _cashMovements = [];
@@ -311,6 +316,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
       return false;
     }
     _isPrintingZReport = true;
+    _hasZReportError = false;
     notifyListeners();
     try {
       final shopSettings = await _loadShopSettings();
@@ -318,6 +324,29 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
       final delivered = await action(summary, shopSettings, logoBytes);
       _trackZReportDelivered(summary, format: format, delivered: delivered);
       return delivered;
+    } catch (error, stackTrace) {
+      // PDF layout can throw on text the shaper cannot handle: the bidi
+      // package raised a RangeError composing certain Arabic sequences, four
+      // times in the field, and it escaped as an unhandled crash from a button
+      // press. What the text was is not recorded anywhere, so this reports the
+      // failure *with the session it came from* — enough to reproduce it —
+      // and returns false so the cashier gets "it did not print" instead of a
+      // crash.
+      _hasZReportError = true;
+      unawaited(
+        _analyticsEngine?.captureError(
+              error,
+              stackTrace,
+              name: AnalyticsEventName.appPlatformError,
+              attributes: {
+                'operation': 'z_report',
+                'format': format,
+                'session_id': summary.sessionId.toString(),
+              },
+            ) ??
+            Future<void>.value(),
+      );
+      return false;
     } finally {
       _isPrintingZReport = false;
       notifyListeners();

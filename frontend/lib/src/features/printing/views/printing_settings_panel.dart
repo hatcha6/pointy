@@ -15,6 +15,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/printing_settings_view_model.dart';
+import '../../../core/authorization.dart';
 
 class PrintingSettingsPanel extends StatelessWidget {
   const PrintingSettingsPanel({super.key, required this.viewModel});
@@ -71,7 +72,7 @@ class PrintingSettingsPanel extends StatelessWidget {
                   icon: viewModel.isCheckingConnection
                       ? const SizedBox.square(
                           dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: PointySpinner(strokeWidth: 2),
                         )
                       : const Icon(Icons.sensors_outlined),
                   label: Text(l10n.checkPrinterConnectionButton),
@@ -84,7 +85,7 @@ class PrintingSettingsPanel extends StatelessWidget {
                           !viewModel.isTestingBarcodeLabelPrinter
                       ? const SizedBox.square(
                           dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: PointySpinner(strokeWidth: 2),
                         )
                       : const Icon(Icons.print_outlined),
                   label: Text(
@@ -101,7 +102,7 @@ class PrintingSettingsPanel extends StatelessWidget {
                   icon: viewModel.isTestingBarcodeLabelPrinter
                       ? const SizedBox.square(
                           dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: PointySpinner(strokeWidth: 2),
                         )
                       : const Icon(Icons.label_outline),
                   label: Text(
@@ -142,11 +143,13 @@ class KitchenPrintersPanel extends StatefulWidget {
     super.key,
     required this.printingRepository,
     required this.prepStationRepository,
+    required this.capabilities,
     this.analyticsEngine,
   });
 
   final PrintingRepository printingRepository;
   final PrepStationRepository prepStationRepository;
+  final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
 
   @override
@@ -156,6 +159,7 @@ class KitchenPrintersPanel extends StatefulWidget {
 class _KitchenPrintersPanelState extends State<KitchenPrintersPanel> {
   bool _isLoading = true;
   bool _hasError = false;
+  bool _isForbidden = false;
   List<PrepStation> _stations = const [];
   Map<int, PrinterConfig> _configs = const {};
 
@@ -166,6 +170,17 @@ class _KitchenPrintersPanelState extends State<KitchenPrintersPanel> {
   }
 
   Future<void> _load() async {
+    // Gate the call on the permission, not the response. A cashier opening
+    // printer settings used to fire prep-stations/ and get a 403 every time —
+    // a round trip, a permission check and a log line to be told what the
+    // client already knew.
+    if (!widget.capabilities.canViewPrepStations) {
+      setState(() {
+        _isForbidden = true;
+        _isLoading = false;
+      });
+      return;
+    }
     setState(() {
       _isLoading = true;
       _hasError = false;
@@ -235,11 +250,14 @@ class _KitchenPrintersPanelState extends State<KitchenPrintersPanel> {
     if (_isLoading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: PointySpinner()),
       );
     }
     if (_hasError) {
       return PointyInlineMessage.error(message: l10n.kitchenPrintersLoadError);
+    }
+    if (_isForbidden) {
+      return const SizedBox.shrink();
     }
     if (_stations.isEmpty) {
       return PointyInlineMessage(
@@ -619,7 +637,7 @@ class _PrinterRoleDialogState extends State<_PrinterRoleDialog> {
                           icon: widget.viewModel.isDetectingBarcodeLabelLanguage
                               ? const SizedBox.square(
                                   dimension: 18,
-                                  child: CircularProgressIndicator(
+                                  child: PointySpinner(
                                     strokeWidth: 2,
                                   ),
                                 )
@@ -819,7 +837,7 @@ class _DiscoveredPrinterDropdown extends StatelessWidget {
               icon: isDiscovering
                   ? const SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: PointySpinner(strokeWidth: 2),
                     )
                   : const Icon(Icons.search_outlined),
             ),

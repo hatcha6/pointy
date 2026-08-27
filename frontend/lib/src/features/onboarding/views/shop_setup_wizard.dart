@@ -155,7 +155,7 @@ class _ShopSetupWizardState extends State<ShopSetupWizard> {
                       icon: _isSubmitting
                           ? const SizedBox.square(
                               dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: PointySpinner(strokeWidth: 2),
                             )
                           : const Icon(Icons.check),
                       label: Text(l10n.shopSetupFinish),

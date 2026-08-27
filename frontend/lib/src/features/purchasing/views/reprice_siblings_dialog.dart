@@ -8,6 +8,7 @@ import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../view_models/purchase_view_model.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 /// Opens the reprice-siblings dialog for a purchase draft [line]: lists every
 /// variant of the line's product with an editable selling price, pre-filled from
@@ -146,7 +147,7 @@ class _RepriceSiblingsDialogState extends State<_RepriceSiblingsDialog> {
         child: _loading
             ? const SizedBox(
                 height: 96,
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: PointySpinner()),
               )
             : Form(
                 key: _formKey,
@@ -208,7 +209,7 @@ class _RepriceSiblingsDialogState extends State<_RepriceSiblingsDialog> {
               ? const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: PointySpinner(strokeWidth: 2),
                 )
               : Text(l10n.changePricesSaveButton),
         ),

@@ -1024,7 +1024,7 @@ class _ReportActionProgress extends StatelessWidget {
       children: [
         const SizedBox.square(
           dimension: 18,
-          child: CircularProgressIndicator(strokeWidth: 2.5),
+          child: PointySpinner(strokeWidth: 2.5),
         ),
         const SizedBox(width: 8),
         Flexible(
@@ -1048,7 +1048,7 @@ class _ReportActionIcon extends StatelessWidget {
     }
     return const SizedBox.square(
       dimension: 18,
-      child: CircularProgressIndicator(strokeWidth: 2.5),
+      child: PointySpinner(strokeWidth: 2.5),
     );
   }
 }

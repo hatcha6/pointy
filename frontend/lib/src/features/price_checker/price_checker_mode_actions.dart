@@ -1,21 +1,17 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../data/repositories/price_checker_repository.dart';
 import '../../data/services/auto_start_service.dart';
 import '../../shared/price_checker/price_checker_mode_controller.dart';
 import 'views/price_checker_setup_dialog.dart';
+import '../../shared/barcode/camera_scanning_support.dart';
 
-/// Whether kiosk camera scanning works on this platform. mobile_scanner has no
-/// Windows/Linux implementation; kiosks there scan with a wedge scanner and
-/// hide all camera UI (kiosk viewfinder + Device Settings rows).
-bool get priceCheckerCameraScanningSupported =>
-    kIsWeb ||
-    defaultTargetPlatform == TargetPlatform.android ||
-    defaultTargetPlatform == TargetPlatform.iOS ||
-    defaultTargetPlatform == TargetPlatform.macOS;
+/// Whether kiosk camera scanning works on this platform. Kiosks on Windows and
+/// Linux scan with a wedge scanner and hide all camera UI (kiosk viewfinder +
+/// Device Settings rows). Delegates so there is one answer in the app.
+bool get priceCheckerCameraScanningSupported => cameraScanningSupported;
 
 /// Enters price-checker (kiosk) mode. Re-enters immediately when the device is
 /// already configured (just flip the flag — no PIN needed to *enter*), otherwise

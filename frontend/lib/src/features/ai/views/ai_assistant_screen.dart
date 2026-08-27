@@ -2085,7 +2085,7 @@ class _ToolRunChip extends StatelessWidget {
             SizedBox(
               width: 12,
               height: 12,
-              child: CircularProgressIndicator(
+              child: PointySpinner(
                 strokeWidth: 2,
                 valueColor: AlwaysStoppedAnimation<Color>(colors.primary),
               ),
@@ -2806,7 +2806,7 @@ class _UsageRing extends StatelessWidget {
             child: SizedBox(
               width: 24,
               height: 24,
-              child: CircularProgressIndicator(
+              child: PointySpinner(
                 value: window.unlimited
                     ? 0
                     : window.fraction.clamp(0.04, 1.0).toDouble(),
@@ -2846,7 +2846,7 @@ class _SendButton extends StatelessWidget {
             height: 38,
             child: Padding(
               padding: EdgeInsets.all(10),
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: PointySpinner(strokeWidth: 2),
             ),
           );
         }
@@ -3280,7 +3280,7 @@ class _UsageWindowRow extends StatelessWidget {
         SizedBox(height: spacing.xs),
         ClipRRect(
           borderRadius: BorderRadius.circular(6),
-          child: LinearProgressIndicator(
+          child: PointyProgressBar(
             value: unlimited ? 0 : window.fraction.clamp(0.0, 1.0).toDouble(),
             minHeight: 7,
             backgroundColor: colors.line,
@@ -3335,7 +3335,7 @@ class _HistorySheet extends StatelessWidget {
               if (viewModel.isLoadingHistory)
                 Padding(
                   padding: spacing.pagePadding,
-                  child: const Center(child: CircularProgressIndicator()),
+                  child: const Center(child: PointySpinner()),
                 )
               else if (conversations.isEmpty)
                 Padding(

@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/business_alert.dart';
 import '../../../shared/design/design.dart';
 import '../view_models/notification_center_view_model.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 class NotificationBell extends StatelessWidget {
   const NotificationBell({super.key, required this.viewModel});
@@ -59,7 +60,7 @@ class _BellIcon extends StatelessWidget {
     if (isLoading && count == 0) {
       return const SizedBox.square(
         dimension: 20,
-        child: CircularProgressIndicator(strokeWidth: 2),
+        child: PointySpinner(strokeWidth: 2),
       );
     }
 

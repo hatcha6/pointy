@@ -28,6 +28,7 @@ import 'pos_shortcuts_sheet.dart';
 import 'register_cash_movement_sheet.dart';
 import 'register_session_close_sheet.dart';
 import 'register_session_gate.dart';
+import '../../../shared/components/pointy_progress.dart';
 
 class PosScreen extends StatelessWidget {
   const PosScreen({
@@ -416,7 +417,7 @@ class _RegisterSessionPill extends StatelessWidget {
                     if (busy)
                       SizedBox.square(
                         dimension: 16,
-                        child: CircularProgressIndicator(
+                        child: PointySpinner(
                           strokeWidth: 2,
                           color: onBar,
                         ),
