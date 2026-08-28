@@ -65,6 +65,14 @@ class Payment(TimeStampedModel):
                 fields=["method", "-created_at"],
                 name="payments_method_created_idx",
             ),
+            # ``paid_at`` is the money date (apps.core.money_dates): the money
+            # position, its drill-down and the profit report's commission line
+            # all range-scan it, and the drill-down orders by it. Without this
+            # they seq-scan the busiest table in the shop.
+            models.Index(
+                fields=["method", "-paid_at"],
+                name="payments_method_paid_idx",
+            ),
         ]
 
     def __str__(self) -> str:

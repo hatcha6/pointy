@@ -959,6 +959,14 @@ class SupplierPayment(TimeStampedModel):
 
     class Meta:
         ordering = ["-paid_at", "-created_at"]
+        indexes = [
+            # The money position sums supplier payments by method over a date
+            # range; ``paid_at`` is the money date and carried no index.
+            models.Index(
+                fields=["method", "-paid_at"],
+                name="supplier_payment_method_idx",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.method} {self.amount} for supplier {self.supplier_id}"

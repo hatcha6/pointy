@@ -14,14 +14,24 @@ queryset by a period. Adding a money model means adding a line here; a surface
 that hand-rolls its own boundary is caught by
 ``apps.core.test_money_definitions``.
 
-Period semantics are business-local days, inclusive on both ends: "1 August to
-31 August" means every money event stamped inside those days in the shop's own
-timezone, whichever column carries the stamp.
+Period semantics are calendar days on the **app-wide** clock, inclusive on both
+ends: "1 August to 31 August" means every money event stamped inside those days,
+whichever column carries the stamp.
+
+The clock is deliberately ``django.utils.timezone`` (``TIME_ZONE = "UTC"``), not
+``timeutils.business_timezone``. ``timeutils`` says so in its own docstring: the
+shop timezone is scoped to the holidays calendar, and reports, fraud lookback
+and payroll all use the UTC calendar date. ``reports._period_from_params``
+builds its ``start_date``/``end_date`` with ``timezone.localdate()``, so slicing
+those same days in Tripoli time would move every window two hours and file a
+22:30 sale under the next day. Promoting the whole app to shop-local days is a
+separate, deliberate migration — when it happens, it happens here and in
+``_period_from_params`` together.
 """
 
 from datetime import date, datetime, time, timedelta
 
-from apps.core.timeutils import business_local_date, business_timezone
+from django.utils import timezone
 
 # model label -> the field that says when the money moved.
 MONEY_DATE_FIELDS = {
@@ -29,7 +39,10 @@ MONEY_DATE_FIELDS = {
     "sales.Order": "created_at",
     "sales.OrderAdjustment": "created_at",
     "sales.RegisterCashMovement": "created_at",
-    "sales.RegisterSession": "opened_at",
+    # ``opened_at`` and ``created_at`` are the same instant on this model
+    # (both are set at creation); ``created_at`` is the one that carries an
+    # index, so the register-closure report keeps its index scan.
+    "sales.RegisterSession": "created_at",
     "expenses.Expense": "spent_at",
     "purchasing.SupplierPayment": "paid_at",
     "purchasing.PurchaseOrder": "created_at",
@@ -79,8 +92,8 @@ def _is_date_field(model, field_name) -> bool:
 
 
 def day_range_start(value: date | None = None) -> datetime:
-    """Business-local midnight at the start of ``value`` (today when omitted)."""
-    value = value or business_local_date()
+    """Midnight at the start of ``value`` (today when omitted)."""
+    value = value or timezone.localdate()
     return _localize(datetime.combine(value, time.min))
 
 
@@ -90,7 +103,7 @@ def day_range_end(value: date) -> datetime:
 
 
 def _localize(naive: datetime) -> datetime:
-    return naive.replace(tzinfo=business_timezone())
+    return timezone.make_aware(naive, timezone.get_current_timezone())
 
 
 __all__ = [

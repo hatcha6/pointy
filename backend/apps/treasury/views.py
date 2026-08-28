@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import mixins, viewsets
 from rest_framework.exceptions import NotFound, ValidationError
@@ -9,7 +10,6 @@ from rest_framework.views import APIView
 
 from apps.core.idempotency import run_idempotent_request
 from apps.core.permissions import HasPointyPermission
-from apps.core.timeutils import business_local_date
 
 from .models import MoneyAccount, MoneyCount, MoneyTransfer
 from .movements import account_movements
@@ -107,7 +107,7 @@ class TreasuryPositionView(APIView):
     permission_map = {"GET": ("treasury.view_moneyaccount",)}
 
     def get(self, request):
-        as_of = _parse_date(request.query_params.get("as_of"), business_local_date())
+        as_of = _parse_date(request.query_params.get("as_of"), timezone.localdate())
         position = treasury_position(as_of=as_of)
         return Response(TreasuryPositionSerializer(position).data)
 
@@ -124,7 +124,7 @@ class AccountMovementsView(APIView):
         except MoneyAccount.DoesNotExist as exc:
             raise NotFound("الحساب غير موجود.") from exc
 
-        today = business_local_date()
+        today = timezone.localdate()
         end = _parse_date(request.query_params.get("end"), today)
         start = _parse_date(
             request.query_params.get("start"),

@@ -404,7 +404,9 @@ class PayrollRun(TimeStampedModel):
     )
     period_start = models.DateField()
     period_end = models.DateField()
-    payment_date = models.DateField(blank=True, null=True)
+    # The money date (apps.core.money_dates): the profit report and the money
+    # position both filter paid runs by it.
+    payment_date = models.DateField(blank=True, null=True, db_index=True)
     notes = models.TextField(blank=True)
     gross_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     additions_total = models.DecimalField(max_digits=12, decimal_places=2, default=0)

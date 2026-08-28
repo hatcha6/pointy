@@ -28,6 +28,7 @@ total they cannot see inside.
 from decimal import Decimal
 
 from django.db.models import DecimalField, Q, Sum, Value
+from django.utils import timezone
 from django.db.models.functions import Coalesce
 
 from apps.core.money_dates import day_range_end, day_range_start
@@ -41,6 +42,9 @@ from .models import MoneyAccount, MoneyCount, MoneyTransfer
 MONEY_FIELD = DecimalField(max_digits=14, decimal_places=2)
 MONEY_PLACES = Decimal("0.01")
 ZERO = Decimal("0.00")
+
+# Distinguishes "caller passed no batched count" from "this account has none".
+_UNSET = object()
 
 # Stable component codes. The frontend maps these to Arabic labels, so they are
 # part of the API contract — add, don't rename.
@@ -205,16 +209,57 @@ def _payroll_outflow(start, end):
     )
 
 
-def _transfer_components(account, *, end):
-    incoming = _sum(
-        MoneyTransfer.objects.filter(to_account=account, moved_at__lte=end)
-    )
-    outgoing = _sum(
-        MoneyTransfer.objects.filter(from_account=account, moved_at__lte=end)
-    )
+def _transfer_totals(*, end):
+    """Transfers in and out for *every* account, in two grouped queries.
+
+    Asking per account cost three queries a piece (two sides plus its last
+    count), so a shop with a cash box, a safe and three banks paid fifteen
+    queries for rows that fit in two GROUP BYs. Derived flows were already
+    batched by kind; this is the other half.
+    """
+    incoming = {
+        row["to_account"]: row["total"] or ZERO
+        for row in MoneyTransfer.objects.filter(
+            to_account__isnull=False, moved_at__lte=end
+        )
+        .values("to_account")
+        .annotate(total=Sum("amount"))
+    }
+    outgoing = {
+        row["from_account"]: row["total"] or ZERO
+        for row in MoneyTransfer.objects.filter(
+            from_account__isnull=False, moved_at__lte=end
+        )
+        .values("from_account")
+        .annotate(total=Sum("amount"))
+    }
+    return incoming, outgoing
+
+
+def _last_counts(accounts):
+    """The most recent count per account, in one query.
+
+    ``account.counts.first()`` is ordered ``-counted_at`` and is therefore a
+    query per card. One ordered pass and a first-wins dict costs the same for
+    one account as for ten.
+    """
+    latest = {}
+    counts = MoneyCount.objects.filter(
+        account__in=[account.pk for account in accounts]
+    ).order_by("account_id", "-counted_at", "-created_at")
+    for count in counts:
+        latest.setdefault(count.account_id, count)
+    return latest
+
+
+def _transfer_components(account, *, incoming, outgoing):
     return [
-        _component(COMPONENT_TRANSFER_IN, incoming, direction="in"),
-        _component(COMPONENT_TRANSFER_OUT, -outgoing, direction="out"),
+        _component(
+            COMPONENT_TRANSFER_IN, incoming.get(account.pk, ZERO), direction="in"
+        ),
+        _component(
+            COMPONENT_TRANSFER_OUT, -outgoing.get(account.pk, ZERO), direction="out"
+        ),
     ]
 
 
@@ -236,15 +281,30 @@ def _default_account_ids(accounts):
     return defaults
 
 
-def account_position(account, *, as_of=None, components=None):
-    """One account's expected balance, with the arithmetic that produced it."""
-    as_of = as_of or day_range_start(None).date()
+def account_position(
+    account,
+    *,
+    as_of=None,
+    components=None,
+    transfers=None,
+    last_count=_UNSET,
+):
+    """One account's expected balance, with the arithmetic that produced it.
+
+    ``transfers`` and ``last_count`` are the batched lookups ``treasury_position``
+    already made. Passing them is what keeps a page of accounts flat; omitting
+    them (a single-account caller) falls back to fetching just this account's.
+    """
+    as_of = as_of or timezone.localdate()
+    incoming, outgoing = transfers or _transfer_totals(end=as_of)
+    if last_count is _UNSET:
+        last_count = account.counts.first()
+
     parts = [_component(COMPONENT_OPENING, account.opening_balance, direction="in")]
     parts.extend(components or [])
-    parts.extend(_transfer_components(account, end=as_of))
+    parts.extend(_transfer_components(account, incoming=incoming, outgoing=outgoing))
     expected = sum((part["amount"] for part in parts), ZERO).quantize(MONEY_PLACES)
 
-    last_count = account.counts.first()
     return {
         "account": account,
         "expected_balance": expected,
@@ -259,11 +319,12 @@ def account_position(account, *, as_of=None, components=None):
 def treasury_position(*, as_of=None):
     """Every active account's expected balance, plus the shop-wide totals.
 
-    Derived flows are computed once per *kind* and attributed to that kind's
-    default account, so adding a second bank account costs no extra queries and
-    cannot silently double-count the same payment into two accounts.
+    Flat in the number of accounts: derived flows are computed once per *kind*
+    and attributed to that kind's default account (which also stops the same
+    payment being counted into two accounts), and transfers and last counts are
+    batched across every account. Adding a bank account costs nothing.
     """
-    as_of = as_of or day_range_start(None).date()
+    as_of = as_of or timezone.localdate()
     accounts = list(MoneyAccount.objects.filter(is_active=True))
     if not accounts:
         return {"accounts": [], "totals": _totals([]), "as_of": as_of}
@@ -271,11 +332,23 @@ def treasury_position(*, as_of=None):
     defaults = _default_account_ids(accounts)
     derived = {}
     for kind, account in defaults.items():
-        builder = _cash_components if kind == MoneyAccount.Kind.CASH else _bank_components
+        builder = (
+            _cash_components if kind == MoneyAccount.Kind.CASH else _bank_components
+        )
         derived[account.pk] = builder(start=account.opening_at, end=as_of)
 
+    # Two grouped queries and one ordered pass, whatever the account count.
+    transfers = _transfer_totals(end=as_of)
+    last_counts = _last_counts(accounts)
+
     positions = [
-        account_position(account, as_of=as_of, components=derived.get(account.pk))
+        account_position(
+            account,
+            as_of=as_of,
+            components=derived.get(account.pk),
+            transfers=transfers,
+            last_count=last_counts.get(account.pk),
+        )
         for account in accounts
     ]
     return {"accounts": positions, "totals": _totals(positions), "as_of": as_of}
@@ -312,7 +385,7 @@ def _totals(positions):
 def expected_balance_for(account, *, as_of=None):
     """The single expected balance for one account — used when recording a
     count, so the snapshot a count stores is the same number the screen showed."""
-    as_of = as_of or day_range_start(None).date()
+    as_of = as_of or timezone.localdate()
     accounts = list(MoneyAccount.objects.filter(is_active=True))
     defaults = _default_account_ids(accounts)
     components = None
