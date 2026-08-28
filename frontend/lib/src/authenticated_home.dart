@@ -48,6 +48,8 @@ import 'features/operations/views/job_details_screen.dart';
 import 'features/operations/views/jobs_screen.dart';
 import 'features/payments/view_models/payments_hub_view_model.dart';
 import 'features/payments/views/payments_hub_screen.dart';
+import 'features/treasury/view_models/money_position_view_model.dart';
+import 'features/treasury/views/money_position_screen.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'features/pos/views/pos_screen.dart';
 import 'features/purchasing/views/purchase_order_details_screen.dart';
@@ -609,15 +611,35 @@ class _AuthenticatedRoutes implements AppNavigation {
     );
   }
 
+  /// الخزينة — the money position. This route used to open the payment ledger,
+  /// which listed individual payments the expenses screen already covered. The
+  /// ledger is still reachable from here for row-level proof and reprints; the
+  /// route itself now answers the question the screen is named after.
   Widget paymentsRouteBuilder(BuildContext routeContext) {
     return _screen(
-      'payments_hub',
-      PaymentsHubScreen(
-        viewModel: PaymentsHubViewModel(dependencies.paymentsRepository),
-        printingRepository: dependencies.printingRepository,
-        shopSettingsRepository: dependencies.shopSettingsRepository,
+      'money_position',
+      MoneyPositionScreen(
+        viewModel: MoneyPositionViewModel(dependencies.treasuryRepository),
         capabilities: capabilities,
         navigation: this,
+        onOpenPaymentsLedger: () => _openPaymentsLedger(routeContext),
+      ),
+    );
+  }
+
+  void _openPaymentsLedger(BuildContext routeContext) {
+    Navigator.of(routeContext).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _screen(
+          'payments_hub',
+          PaymentsHubScreen(
+            viewModel: PaymentsHubViewModel(dependencies.paymentsRepository),
+            printingRepository: dependencies.printingRepository,
+            shopSettingsRepository: dependencies.shopSettingsRepository,
+            capabilities: capabilities,
+            navigation: this,
+          ),
+        ),
       ),
     );
   }

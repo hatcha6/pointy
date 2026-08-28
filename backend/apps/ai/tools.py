@@ -290,12 +290,21 @@ def get_expense_ledger(*, user, start=None, end=None, source=None):
 # ── Aggregation ─────────────────────────────────────────────────────────────
 
 
+# Every money aggregate in this module lands in the same 2dp decimal.
+_MONEY = DecimalField(max_digits=18, decimal_places=2)
+
+
 def _line_revenue():
-    # line_total is a Python property, so compute it in SQL: price*qty - discount.
-    return ExpressionWrapper(
-        F("lines__unit_price") * F("lines__quantity") - F("lines__discount_total"),
-        output_field=DecimalField(max_digits=18, decimal_places=2),
-    )
+    """Line revenue addressed from an ``Order`` queryset.
+
+    The arithmetic is not restated here: it comes from ``sales.models``, which
+    is the single definition every money surface reads. This function used to
+    carry its own copy, and so kept reporting a revenue the reports had already
+    abandoned for disagreeing with the document total on half-cent lines.
+    """
+    from apps.sales.models import sold_revenue_expression
+
+    return ExpressionWrapper(sold_revenue_expression("lines__"), output_field=_MONEY)
 
 
 # Per-resource group-by/metric whitelist. Every aggregate reuses the resource's
@@ -608,51 +617,58 @@ def _scoped_orders(user, *, start=None, end=None):
     return qs, None
 
 
+# The three per-line money expressions, on an ``OrderLine`` queryset. Each is
+# the shared definition from ``sales.models`` wrapped for aggregation, so the
+# assistant's answers and the reports cannot drift apart.
 def _line_profit_expr():
-    """Per-line profit in SQL: qty*(price - cost) - line discount. Identical to the
-    dashboard's profit formula so advice and dashboard agree."""
-    return ExpressionWrapper(
-        F("quantity") * (F("unit_price") - F("unit_cost")) - F("discount_total"),
-        output_field=DecimalField(max_digits=18, decimal_places=2),
-    )
+    from apps.sales.models import SOLD_PROFIT_EXPRESSION
+
+    return ExpressionWrapper(SOLD_PROFIT_EXPRESSION, output_field=_MONEY)
 
 
 def _line_revenue_expr():
-    return ExpressionWrapper(
-        F("unit_price") * F("quantity") - F("discount_total"),
-        output_field=DecimalField(max_digits=18, decimal_places=2),
-    )
+    from apps.sales.models import SOLD_REVENUE_EXPRESSION
+
+    return ExpressionWrapper(SOLD_REVENUE_EXPRESSION, output_field=_MONEY)
 
 
 def _line_cost_expr():
-    return ExpressionWrapper(
-        F("unit_cost") * F("quantity"),
-        output_field=DecimalField(max_digits=18, decimal_places=2),
-    )
+    from apps.sales.models import SOLD_COST_EXPRESSION
+
+    return ExpressionWrapper(SOLD_COST_EXPRESSION, output_field=_MONEY)
 
 
 def _core_metrics(orders_qs):
     """Recognized revenue, profit, units and order count over an order queryset —
-    the basis for the comparison and health tools. ``revenue`` (Σ line_total)
-    equals Σ order.total by construction (order.total is derived from the same
-    line figures), so it reconciles with the dashboard's net-sales line."""
+    the basis for the comparison and health tools.
+
+    ``revenue`` is ``Σ Order.total``: the money the documents actually charged,
+    which is what the sales-summary and profit reports state. It is deliberately
+    *not* re-derived from raw line arithmetic — the two disagree by a cent
+    whenever ``unit_price × quantity`` lands on a half-cent (0.750 kg at 5.50 is
+    4.125), because the document rounds each line before adding them up. The
+    assistant answering with a different total than the report it cites is the
+    exact drift this module used to carry.
+    """
     from apps.sales.models import OrderLine
 
     recognized = orders_qs.committed_sales()
+    # Two queries, not one: ``total`` is an order-level column, so summing it
+    # across the ``lines`` join would multiply it by the line count.
     head = recognized.aggregate(
-        revenue=Sum(_line_revenue()),
-        units=Sum("lines__quantity"),
+        revenue=Sum("total"),
         order_count=Count("id", distinct=True),
     )
-    profit = OrderLine.objects.filter(order__in=recognized).aggregate(
-        value=Sum(_line_profit_expr())
-    )["value"]
+    lines = OrderLine.objects.filter(order__in=recognized).aggregate(
+        profit=Sum(_line_profit_expr()),
+        units=Sum("quantity"),
+    )
     revenue = _money(head["revenue"])
-    profit = _money(profit)
+    profit = _money(lines["profit"])
     return {
         "revenue": revenue,
         "profit": profit,
-        "units": _qty(head["units"]),
+        "units": _qty(lines["units"]),
         "order_count": head["order_count"] or 0,
         "margin_percent": _margin_percent(profit, revenue),
     }

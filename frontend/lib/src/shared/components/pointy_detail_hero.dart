@@ -104,36 +104,34 @@ class PointyDetailHero extends StatelessWidget {
           ),
           if (value case final headline?) ...[
             SizedBox(height: spacing.md),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            // A Wrap, not a Row: the headline is the reason this hero exists,
+            // and a Row gave the subtitle an Expanded share of the width while
+            // the value only got what was left — so on a phone the *figure*
+            // ellipsized ("1180.7…") to make room for the word describing it.
+            // Wrapping keeps them side by side whenever they fit and drops the
+            // subtitle to its own line when they do not, so the number is
+            // never the thing that gets cut.
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.end,
+              spacing: spacing.sm,
               children: [
-                Flexible(
-                  child: Text(
-                    headline,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.displaySmall?.copyWith(
-                      color: onPrimary,
-                      fontWeight: FontWeight.w800,
-                    ),
+                Text(
+                  headline,
+                  style: textTheme.displaySmall?.copyWith(
+                    color: onPrimary,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                if (valueSubtitle case final subtitle?) ...[
-                  SizedBox(width: spacing.sm),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsetsDirectional.only(bottom: 6),
-                      child: Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: textTheme.bodyMedium?.copyWith(
-                          color: onPrimary.withValues(alpha: 0.85),
-                        ),
+                if (valueSubtitle case final subtitle?)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(bottom: 6),
+                    child: Text(
+                      subtitle,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: onPrimary.withValues(alpha: 0.85),
                       ),
                     ),
                   ),
-                ],
               ],
             ),
           ],

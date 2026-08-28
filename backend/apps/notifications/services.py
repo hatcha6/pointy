@@ -33,6 +33,8 @@ from apps.sales.models import (
     OrderLine,
     RegisterCashMovement,
     RegisterSession,
+    SOLD_COST_EXPRESSION,
+    SOLD_REVENUE_EXPRESSION,
 )
 
 from .cache import bump_notifications_version, bump_user_notifications_version
@@ -757,8 +759,8 @@ def _sales_notifications(now):
         created_at__gte=period_start,
         created_at__lt=now,
     )
-    revenue_expr = F("quantity") * F("unit_price") - F("discount_total")
-    cost_expr = F("quantity") * F("unit_cost")
+    revenue_expr = SOLD_REVENUE_EXPRESSION
+    cost_expr = SOLD_COST_EXPRESSION
     line_values = OrderLine.objects.filter(order__in=orders).aggregate(
         revenue=Coalesce(
             Sum(revenue_expr, output_field=MONEY_FIELD),

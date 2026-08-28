@@ -195,10 +195,14 @@ class ReportRunApiTests(TestCase):
         self.assertEqual(payload["summary"]["gross_profit"], "5.00")
         self.assertEqual(payload["summary"]["net_operating_profit"], "5.00")
         section = self._section(payload, "cost_breakdown")
-        self.assertEqual(len(section["rows"]), 4)
+        self.assertEqual(len(section["rows"]), 5)
         cost_items = {row["cost_item"] for row in section["rows"]}
         self.assertIn("ad_hoc_expense_total", cost_items)
+        # Goods lost to counts and adjustments are a cost like any other; a
+        # shop that lost nothing this period reports zero rather than silence.
+        self.assertIn("shrinkage_total", cost_items)
         self.assertEqual(payload["summary"]["ad_hoc_expense_total"], "0.00")
+        self.assertEqual(payload["summary"]["shrinkage_total"], "0.00")
 
     def test_user_without_source_permission_cannot_run_report_but_failure_is_audited(
         self,

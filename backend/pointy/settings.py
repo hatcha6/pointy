@@ -121,6 +121,7 @@ INSTALLED_APPS = [
     "apps.employees",
     "apps.attendance",
     "apps.expenses",
+    "apps.treasury",
     "apps.price_checker",
     "apps.ai",
     "apps.migration",

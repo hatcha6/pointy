@@ -309,8 +309,26 @@ invoices, customer portal, a `regional/` isolation layer before any second count
 2. ~~**Valuation method:**~~ **Resolved 2026-08-26:** all three are offered (moving average default,
    FIFO, LIFO), chosen at setup and guarded afterwards. Moving average is the default because the shop
    already running predates the setting, and it is the method closest to what it was getting.
-3. **Does any current or pipeline customer have an accountant who wants formal statements?** That decides
-   whether Phase 4 is real work or a correctness-only shadow ledger.
+3. ~~**Does any current or pipeline customer have an accountant who wants formal statements?**~~
+   **Resolved 2026-08-28: Phase 4 is deferred, and the ledger is not being built yet.** The evidence
+   came from the competitor dumps we already hold. Aboghris ships a full double-entry module — chart
+   of accounts, `QYODAT` journal entries, trial balance, `ميزانية`, bank transfers, a dedicated
+   `حسابات` user group — and the live shop running it has **889 sales, 195 purchases, 7 configured
+   banks, and zero accounts, zero journal entries, zero balances**. The accounting surface is a sales
+   checkbox nobody touches; the *bank list* is maintained. Fahd's shop (751,901 sales) likewise
+   carries no receivable records. Meanwhile a GL would have prevented only 2 of the 4 money bugs we
+   have actually fixed (`e2f8827f`, `6b9e86ce`) — the other two were below its granularity and were
+   caught by the oracle, which is the cheaper mechanism we already own.
+
+   What was built instead (2026-08-28), covering the three holes a ledger would have closed:
+   - **`apps/treasury`** — derived cash/bank balances, transfers, counts. No posting, no accounts
+     tree: balances are read from the money events that already exist.
+   - **Shrinkage and cost-basis stock value surfaced** from the valuation ledger, which had been
+     computing both correctly and reporting neither.
+   - **One definition per money figure, enforced** by `apps/core/test_money_definitions.py`.
+
+   Revisit the ledger when a named customer's accountant asks for a trial balance, or when
+   multi-warehouse/multi-branch lands and money starts moving between locations.
 4. **Credit limits: block or warn by default?** Blocking is safer for the owner, riskier at the counter.
 5. **Self-service reports: build a query builder, or invest that budget in making the AI assistant the
    reporting surface?** The second is more differentiated and cheaper, but harder to make deterministic.

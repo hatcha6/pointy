@@ -72,6 +72,7 @@ MANAGER_PERMISSION_DOMAINS = (
     "employees",
     "attendance",
     "expenses",
+    "treasury",
     "migration",
     "messaging",
     "crm",
@@ -193,6 +194,13 @@ ACCOUNTANT_PERMISSION_CODES = (
     "expenses.change_expensecategory",
     "expenses.delete_expensecategory",
     "expenses.view_expensecategory",
+    "treasury.view_moneyaccount",
+    "treasury.add_moneyaccount",
+    "treasury.change_moneyaccount",
+    "treasury.view_moneytransfer",
+    "treasury.add_moneytransfer",
+    "treasury.view_moneycount",
+    "treasury.add_moneycount",
     "attendance.view_biotimeconnection",
     "attendance.change_biotimeconnection",
     "attendance.view_attendanceprofile",
@@ -321,6 +329,9 @@ AUDITOR_PERMISSION_CODES = (
     "customers.view_asset",
     "discounts.view_discountrule",
     "expenses.view_expense",
+    "treasury.view_moneyaccount",
+    "treasury.view_moneytransfer",
+    "treasury.view_moneycount",
     "catalog.view_product",
     "catalog.view_productcategory",
     "catalog.view_unitofmeasure",
@@ -492,6 +503,12 @@ def _model_has_initial_setup_blocking_data(model, model_label):
         return queryset.exclude(name__in=DEFAULT_EXPENSE_CATEGORY_NAMES).exists()
     if model_label == ("operations", "workflowstage"):
         return queryset.filter(template__is_system=False).exists()
+    if model_label == ("treasury", "moneyaccount"):
+        # The seeded cash box and bank account are scaffolding created by
+        # migration so money always has somewhere to land — same reasoning as
+        # the default warehouse below. A shop that added its own account has
+        # actually done something.
+        return queryset.filter(is_default=False).exists()
     if model_label == ("inventory", "warehouse"):
         # The default "Main" warehouse is created by migration so the valuation
         # ledger always has somewhere to post. It is scaffolding, not activity —

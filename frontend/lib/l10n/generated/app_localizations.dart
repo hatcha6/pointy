@@ -24172,6 +24172,408 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'ما زلنا نبحث تلقائيًا في الخلفية…'**
   String get connectionManualSearchingHint;
+
+  /// Title of the money position screen: cash and bank balances.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخزينة'**
+  String get treasuryTitle;
+
+  /// Drawer label for the money position screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخزينة'**
+  String get treasuryDrawerLabel;
+
+  /// Tooltip for refreshing the money position.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث الأرصدة'**
+  String get treasuryRefreshTooltip;
+
+  /// Hero title: the shop's total money across all accounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي أموال المحل'**
+  String get treasuryHeroTitle;
+
+  /// Hero subtitle explaining the total is what Pointy expects.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما يفترض أن يكون لديك الآن'**
+  String get treasuryHeroSubtitle;
+
+  /// Label for the cash total.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقدًا'**
+  String get treasuryCashLabel;
+
+  /// Label for the bank total.
+  ///
+  /// In ar, this message translates to:
+  /// **'في المصرف'**
+  String get treasuryBankLabel;
+
+  /// Section header for cash accounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصناديق النقدية'**
+  String get treasurySectionCash;
+
+  /// Section header for bank accounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحسابات المصرفية'**
+  String get treasurySectionBank;
+
+  /// Label for an account's expected balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتوقع'**
+  String get treasuryExpectedLabel;
+
+  /// Label for the counted amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'المجرود'**
+  String get treasuryCountedLabel;
+
+  /// Status pill for an account that has never been counted.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُجرد بعد'**
+  String get treasuryNeverCounted;
+
+  /// Status pill showing when an account was last counted.
+  ///
+  /// In ar, this message translates to:
+  /// **'جُرد في {date}'**
+  String treasuryCountedOn(String date);
+
+  /// Pill for a negative variance (less money than expected).
+  ///
+  /// In ar, this message translates to:
+  /// **'عجز {amount}'**
+  String treasuryVarianceShort(String amount);
+
+  /// Pill for a positive variance (more money than expected).
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة {amount}'**
+  String treasuryVarianceOver(String amount);
+
+  /// Pill shown when a count matched the expectation exactly.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطابق'**
+  String get treasuryVarianceMatched;
+
+  /// Callout warning that accounts disagree with their last count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{حساب واحد لا يطابق الجرد} other{{count} حسابات لا تطابق الجرد}}'**
+  String treasuryVarianceCalloutTitle(int count);
+
+  /// Callout supporting message pointing at the drill-down.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح الحساب لمعرفة أين ذهب الفرق.'**
+  String get treasuryVarianceCalloutMessage;
+
+  /// Callout title when some accounts were never counted.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تجرد كل الحسابات بعد'**
+  String get treasuryUncountedCalloutTitle;
+
+  /// Callout explaining an expected balance is derived, not counted.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد المعروض حساب من الحركات، لا عدّ فعلي. اجرد لتتأكد.'**
+  String get treasuryUncountedCalloutMessage;
+
+  /// Empty state title when no money accounts exist.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد حسابات بعد'**
+  String get treasuryEmptyTitle;
+
+  /// Empty state message for the money position screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف صندوقًا نقديًا أو حسابًا مصرفيًا لتتابع أموال المحل.'**
+  String get treasuryEmptyMessage;
+
+  /// Error state title for the money position screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل الأرصدة'**
+  String get treasuryErrorTitle;
+
+  /// Retry button on the money position error state.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة'**
+  String get treasuryRetry;
+
+  /// Button that records a physical count of an account.
+  ///
+  /// In ar, this message translates to:
+  /// **'جرد'**
+  String get treasuryActionCount;
+
+  /// Button that records a transfer between the shop's accounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل'**
+  String get treasuryActionTransfer;
+
+  /// Primary action: move cash from the box to the bank.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيداع في المصرف'**
+  String get treasuryActionDeposit;
+
+  /// Section header for the balance breakdown.
+  ///
+  /// In ar, this message translates to:
+  /// **'من أين جاء هذا الرصيد'**
+  String get treasuryBreakdownTitle;
+
+  /// Section header for the account movements list.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر الحركات'**
+  String get treasuryMovementsTitle;
+
+  /// Empty state for the account movements list.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا حركات في هذه الفترة.'**
+  String get treasuryMovementsEmpty;
+
+  /// Error message for the account movements list.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل الحركات.'**
+  String get treasuryMovementsError;
+
+  /// Notice shown when the movements list was truncated.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرضنا أحدث الحركات فقط. اختر فترة أقصر لرؤية الباقي.'**
+  String get treasuryMovementsTruncated;
+
+  /// Hint that this account receives untagged money events of its kind.
+  ///
+  /// In ar, this message translates to:
+  /// **'المقبوضات والمدفوعات غير المخصصة تدخل هنا.'**
+  String get treasuryRoutedHint;
+
+  /// Hint showing the day an account started counting from.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُحسب من {date}'**
+  String treasuryOpeningAtHint(String date);
+
+  /// Breakdown line: the opening balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد الافتتاحي'**
+  String get treasuryComponentOpening;
+
+  /// Breakdown line: money in from sales, net of refunds.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات والمقبوضات'**
+  String get treasuryComponentSales;
+
+  /// Breakdown line: register pay-ins.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيداعات في الصندوق'**
+  String get treasuryComponentDrawerIn;
+
+  /// Breakdown line: standalone register pay-outs.
+  ///
+  /// In ar, this message translates to:
+  /// **'سحوبات من الصندوق'**
+  String get treasuryComponentDrawerOut;
+
+  /// Breakdown line: expenses paid from this account.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصروفات'**
+  String get treasuryComponentExpenses;
+
+  /// Breakdown line: supplier payments.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوعات الموردين'**
+  String get treasuryComponentSuppliers;
+
+  /// Breakdown line: paid payroll.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرواتب'**
+  String get treasuryComponentPayroll;
+
+  /// Breakdown line: card processor commissions.
+  ///
+  /// In ar, this message translates to:
+  /// **'عمولات الدفع'**
+  String get treasuryComponentCommission;
+
+  /// Breakdown line: transfers into this account.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويلات واردة'**
+  String get treasuryComponentTransferIn;
+
+  /// Breakdown line: transfers out of this account.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويلات صادرة'**
+  String get treasuryComponentTransferOut;
+
+  /// Note making the payroll routing assumption visible and correctable.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرواتب محسوبة نقدًا. إن كنت تدفعها تحويلًا، سجّل تحويلًا من المصرف إلى الخزينة.'**
+  String get treasuryPayrollAssumptionNote;
+
+  /// Title of the count sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'جرد {account}'**
+  String treasuryCountSheetTitle(String account);
+
+  /// Prompt asking for the physically counted amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'كم المبلغ الموجود فعلًا؟'**
+  String get treasuryCountSheetPrompt;
+
+  /// Field label for the counted amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ الفعلي'**
+  String get treasuryCountFieldLabel;
+
+  /// Field label for the count note.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة (اختياري)'**
+  String get treasuryCountNoteLabel;
+
+  /// Submit button on the count sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ الجرد'**
+  String get treasuryCountSubmit;
+
+  /// Snack message when a count matched exactly.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطابق تمامًا.'**
+  String get treasuryCountResultMatched;
+
+  /// Snack message when a count came up short.
+  ///
+  /// In ar, this message translates to:
+  /// **'عجز {amount} عن المتوقع.'**
+  String treasuryCountResultShort(String amount);
+
+  /// Snack message when a count came up over.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة {amount} عن المتوقع.'**
+  String treasuryCountResultOver(String amount);
+
+  /// Snack message when recording a count failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ الجرد.'**
+  String get treasuryCountFailed;
+
+  /// Title of the transfer sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل أموال'**
+  String get treasuryTransferSheetTitle;
+
+  /// Label for the source account.
+  ///
+  /// In ar, this message translates to:
+  /// **'من'**
+  String get treasuryTransferFrom;
+
+  /// Label for the destination account.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى'**
+  String get treasuryTransferTo;
+
+  /// Option meaning money comes from or goes outside the shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'خارج المحل'**
+  String get treasuryTransferOutside;
+
+  /// Field label for the transfer amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get treasuryTransferAmount;
+
+  /// Field label for the transfer reason.
+  ///
+  /// In ar, this message translates to:
+  /// **'السبب (اختياري)'**
+  String get treasuryTransferReason;
+
+  /// Submit button on the transfer sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل التحويل'**
+  String get treasuryTransferSubmit;
+
+  /// Snack message after a successful transfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل التحويل.'**
+  String get treasuryTransferSaved;
+
+  /// Snack message when a transfer failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تسجيل التحويل.'**
+  String get treasuryTransferFailed;
+
+  /// Validation message when neither side of a transfer is chosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر حسابًا على الأقل.'**
+  String get treasuryTransferNeedsSide;
+
+  /// Validation message when both sides are the same account.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن التحويل إلى نفس الحساب.'**
+  String get treasuryTransferSameAccount;
+
+  /// Validation message for an invalid money amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغًا صحيحًا.'**
+  String get treasuryAmountInvalid;
+
+  /// Link from the money position to the detailed payments ledger.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل المقبوضات والمدفوعات'**
+  String get treasuryLedgerLink;
 }
 
 class _AppLocalizationsDelegate

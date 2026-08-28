@@ -4,151 +4,209 @@
     {
       "name": "backend",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["backend-run"],
+      "runtimeArgs": [
+        "backend-run"
+      ],
       "port": 8000
     },
     {
       "name": "frontend-web",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-web"],
+      "runtimeArgs": [
+        "frontend-web"
+      ],
       "port": 8080
     },
     {
       "name": "stock-count-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-preview"],
+      "runtimeArgs": [
+        "frontend-preview"
+      ],
       "port": 8080
     },
     {
       "name": "operations-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-operations-preview"],
+      "runtimeArgs": [
+        "frontend-operations-preview"
+      ],
       "port": 8080
     },
     {
       "name": "categories-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-categories-preview"],
+      "runtimeArgs": [
+        "frontend-categories-preview"
+      ],
+      "port": 8080
+    },
+    {
+      "name": "treasury-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-treasury-preview"
+      ],
       "port": 8080
     },
     {
       "name": "discounts-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-discounts-preview"],
+      "runtimeArgs": [
+        "frontend-discounts-preview"
+      ],
       "port": 8080
     },
     {
       "name": "purchasing-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-purchasing-preview"],
+      "runtimeArgs": [
+        "frontend-purchasing-preview"
+      ],
       "port": 8080
     },
     {
       "name": "users-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-users-preview"],
+      "runtimeArgs": [
+        "frontend-users-preview"
+      ],
       "port": 8080
     },
     {
       "name": "pos-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-pos-preview"],
+      "runtimeArgs": [
+        "frontend-pos-preview"
+      ],
       "port": 8080
     },
     {
       "name": "conversations-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-conversations-preview"],
+      "runtimeArgs": [
+        "frontend-conversations-preview"
+      ],
       "port": 8080
     },
     {
       "name": "units-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-units-preview"],
+      "runtimeArgs": [
+        "frontend-units-preview"
+      ],
       "port": 8080
     },
     {
       "name": "product-units-editor-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-product-units-editor-preview"],
+      "runtimeArgs": [
+        "frontend-product-units-editor-preview"
+      ],
       "port": 8080
     },
     {
       "name": "product-form-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-product-form-preview"],
+      "runtimeArgs": [
+        "frontend-product-form-preview"
+      ],
       "port": 8080
     },
     {
       "name": "command-palette-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-command-palette-preview"],
+      "runtimeArgs": [
+        "frontend-command-palette-preview"
+      ],
       "port": 8080
     },
     {
       "name": "price-checker-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-price-checker-preview"],
+      "runtimeArgs": [
+        "frontend-price-checker-preview"
+      ],
       "port": 8080
     },
     {
       "name": "kiosk-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-price-checker-kiosk-preview"],
+      "runtimeArgs": [
+        "frontend-price-checker-kiosk-preview"
+      ],
       "port": 8080
     },
     {
       "name": "theme-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-theme-preview"],
+      "runtimeArgs": [
+        "frontend-theme-preview"
+      ],
       "port": 8080
     },
     {
       "name": "shop-setup-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-shop-setup-preview"],
+      "runtimeArgs": [
+        "frontend-shop-setup-preview"
+      ],
       "port": 8080
     },
     {
       "name": "migration-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-migration-preview"],
+      "runtimeArgs": [
+        "frontend-migration-preview"
+      ],
       "port": 8080
     },
     {
       "name": "register-session-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-register-session-preview"],
+      "runtimeArgs": [
+        "frontend-register-session-preview"
+      ],
       "port": 8080
     },
     {
       "name": "ai-chat-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-ai-preview"],
+      "runtimeArgs": [
+        "frontend-ai-preview"
+      ],
       "port": 8080
     },
     {
       "name": "subscription-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-subscription-preview"],
+      "runtimeArgs": [
+        "frontend-subscription-preview"
+      ],
       "port": 8080
     },
     {
       "name": "login-preview",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["frontend-login-preview"],
+      "runtimeArgs": [
+        "frontend-login-preview"
+      ],
       "port": 8080
     },
     {
       "name": "relay",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["relay-run"],
+      "runtimeArgs": [
+        "relay-run"
+      ],
       "port": 8091
     },
     {
       "name": "redis",
       "runtimeExecutable": "make",
-      "runtimeArgs": ["redis"],
+      "runtimeArgs": [
+        "redis"
+      ],
       "port": 6379
     }
   ]

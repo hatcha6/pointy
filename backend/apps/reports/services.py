@@ -27,6 +27,8 @@ from apps.purchasing.models import (
     Supplier,
     SupplierPayment,
 )
+from apps.core.money_dates import money_period
+from apps.inventory.reporting import shrinkage_value, stock_cost_value
 from apps.sales.models import (
     Order,
     OrderAdjustment,
@@ -34,6 +36,7 @@ from apps.sales.models import (
     RegisterCashMovement,
     RegisterSession,
     SOLD_COST_EXPRESSION,
+    prime_register_session_cash_totals,
     gross_profit_total,
     net_product_rollups,
     rank_rollups,
@@ -447,24 +450,24 @@ def _payment_methods_report(user, period):
 
 
 def _register_closure_report(user, period):
-    sessions = _register_sessions(user).filter(
-        created_at__gte=period["start"],
-        created_at__lt=period["end"],
+    sessions = money_period(
+        _register_sessions(user), period["start_date"], period["end_date"]
     )
     session_count = sessions.count()
     open_count = sessions.filter(status=RegisterSession.Status.OPEN).count()
     closed_sessions = sessions.filter(status=RegisterSession.Status.CLOSED)
     closed_count = closed_sessions.count()
-    cash_totals = _register_session_cash_totals(sessions)
     session_rows = _bounded_queryset(
         sessions.order_by("-opened_at"),
         limit=_section_row_limit("register_sessions"),
     )
-    rows = [
-        _register_session_row(session, cash_totals.get(session.pk, {}))
-        for session in session_rows.rows
-    ]
-    variance_total = _register_variance_total(closed_sessions, cash_totals)
+    # The drawer arithmetic lives on RegisterSession and nowhere else; priming
+    # only batches the *fetching*, so a report row and the register screen can
+    # never state a different expected cash. This report used to carry its own
+    # copy of both the batching and the sums.
+    prime_register_session_cash_totals(session_rows.rows)
+    rows = [_register_session_row(session) for session in session_rows.rows]
+    variance_total = _register_variance_total(closed_sessions)
     return {
         "summary": {
             "open_count": open_count,
@@ -501,79 +504,7 @@ def _register_closure_report(user, period):
     }
 
 
-def _register_session_cash_totals(sessions):
-    session_ids = sessions.values_list("pk", flat=True)
-    totals = {}
-
-    cash_sales = (
-        # Attribute cash to the session that collected the payment (its own
-        # register_session), independent of order status — see
-        # RegisterSession.cash_sales_total.
-        Payment.objects.filter(
-            register_session_id__in=session_ids,
-            method=Payment.Method.CASH,
-            amount__gt=0,
-        )
-        .values("register_session_id")
-        .annotate(
-            total=Coalesce(
-                Sum("amount"),
-                Value(Decimal("0.00")),
-                output_field=MONEY_FIELD,
-            )
-        )
-    )
-    for row in cash_sales:
-        totals.setdefault(row["register_session_id"], {})["cash_sales_total"] = (
-            row["total"]
-        )
-
-    cash_refunds = (
-        # ``cash_amount`` is the cash-drawer share of each refund, so summing it
-        # reconciles the drawer correctly for cash, card and split-tender refunds
-        # alike (a card refund contributes 0).
-        OrderAdjustment.objects.filter(
-            register_session_id__in=session_ids,
-        )
-        .values("register_session_id")
-        .annotate(
-            total=Coalesce(
-                Sum("cash_amount"),
-                Value(Decimal("0.00")),
-                output_field=MONEY_FIELD,
-            )
-        )
-    )
-    for row in cash_refunds:
-        totals.setdefault(row["register_session_id"], {})["cash_refund_total"] = row[
-            "total"
-        ]
-
-    cash_movements = (
-        RegisterCashMovement.objects.filter(register_session_id__in=session_ids)
-        .values("register_session_id", "movement_type")
-        .annotate(
-            total=Coalesce(
-                Sum("amount"),
-                Value(Decimal("0.00")),
-                output_field=MONEY_FIELD,
-            )
-        )
-    )
-    for row in cash_movements:
-        key = (
-            "pay_in_total"
-            if row["movement_type"] == RegisterCashMovement.MovementType.PAY_IN
-            else "pay_out_total"
-        )
-        totals.setdefault(row["register_session_id"], {})[key] = row["total"]
-
-    return totals
-
-
-def _register_session_row(session, totals):
-    expected_cash = _register_expected_cash(session, totals)
-    cash_variance = _register_cash_variance(session, expected_cash)
+def _register_session_row(session):
     return {
         "session_number": session.session_number,
         "status": session.status,
@@ -581,40 +512,21 @@ def _register_session_row(session, totals):
         "closed_at": session.closed_at.isoformat() if session.closed_at else "",
         "opening_cash": _money(session.opening_cash),
         "closing_cash": _money(session.closing_cash),
-        "expected_cash": _money(expected_cash),
-        "cash_variance": _money(cash_variance),
-        "pay_in_total": _money(totals.get("pay_in_total")),
-        "pay_out_total": _money(totals.get("pay_out_total")),
+        "expected_cash": _money(session.expected_cash),
+        "cash_variance": _money(session.cash_variance),
+        "pay_in_total": _money(session.pay_in_total),
+        "pay_out_total": _money(session.pay_out_total),
     }
 
 
-def _register_variance_total(sessions, cash_totals):
-    total = Decimal("0.00")
-    for session in sessions.only("id", "opening_cash", "closing_cash"):
-        expected_cash = _register_expected_cash(
-            session,
-            cash_totals.get(session.pk, {}),
-        )
-        cash_variance = _register_cash_variance(session, expected_cash)
-        total += _decimal_from(cash_variance)
-    return total
-
-
-def _register_expected_cash(session, totals):
-    total = (
-        _decimal_from(session.opening_cash)
-        + _decimal_from(totals.get("cash_sales_total"))
-        + _decimal_from(totals.get("pay_in_total"))
+def _register_variance_total(sessions):
+    closed = prime_register_session_cash_totals(
+        sessions.only("id", "opening_cash", "closing_cash")
     )
-    total -= _decimal_from(totals.get("pay_out_total"))
-    total -= _decimal_from(totals.get("cash_refund_total"))
-    return total.quantize(MONEY_PLACES)
-
-
-def _register_cash_variance(session, expected_cash):
-    if session.closing_cash is None:
-        return None
-    return (_decimal_from(session.closing_cash) - expected_cash).quantize(MONEY_PLACES)
+    return sum(
+        (_decimal_from(session.cash_variance) for session in closed),
+        Decimal("0.00"),
+    )
 
 
 def _inventory_status_report(user, period):
@@ -627,6 +539,9 @@ def _inventory_status_report(user, period):
             output_field=MONEY_FIELD,
         )
     )["total"]
+    # Retail value is what the shelf would fetch; cost value is what the shop
+    # actually has tied up in it, and it is the one that ties to the ledger.
+    cost_value = stock_cost_value()
     low_stock = stock.filter(quantity_on_hand__lte=F("reorder_level"))
     stock_rows = _bounded_queryset(
         _with_variant_labels(
@@ -661,6 +576,7 @@ def _inventory_status_report(user, period):
             "low_stock_count": low_stock_count,
             "out_of_stock_count": out_of_stock_count,
             "retail_stock_value": _money(retail_value),
+            "cost_stock_value": _money(cost_value),
         },
         "sections": [
             _metric_section(
@@ -669,6 +585,7 @@ def _inventory_status_report(user, period):
                     ("stock_item_count", stock_item_count),
                     ("low_stock_count", low_stock_count),
                     ("out_of_stock_count", out_of_stock_count),
+                    ("cost_stock_value", _money(cost_value)),
                     ("retail_stock_value", _money(retail_value)),
                 ]
             ),
@@ -1065,14 +982,13 @@ def _payroll_summary_report(user, period):
 
 
 def _profit_costs_report(user, period):
-    orders = _settled_orders(user).filter(
-        created_at__gte=period["start"],
-        created_at__lt=period["end"],
-    )
-    adjustments = _order_adjustments(user).filter(
-        created_at__gte=period["start"],
-        created_at__lt=period["end"],
-    )
+    # Every source below is sliced through ``money_period``, so the sale, the
+    # wage and the expense inside one report are dated by the same rule: the
+    # day the money moved. Hand-rolled boundaries here once let a period
+    # include a wage and exclude the sale that paid it.
+    start, end = period["start_date"], period["end_date"]
+    orders = money_period(_settled_orders(user), start, end)
+    adjustments = money_period(_order_adjustments(user), start, end)
     refund_total = adjustments.aggregate(
         total=Coalesce(
             Sum("amount"),
@@ -1102,10 +1018,8 @@ def _profit_costs_report(user, period):
         adjustments=adjustments,
     )
 
-    payroll_paid = PayrollRun.objects.filter(
-        status=PayrollRun.Status.PAID,
-        payment_date__gte=period["start_date"],
-        payment_date__lte=period["end_date"],
+    payroll_paid = money_period(
+        PayrollRun.objects.filter(status=PayrollRun.Status.PAID), start, end
     ).aggregate(
         total=Coalesce(
             Sum("net_total"),
@@ -1113,10 +1027,7 @@ def _profit_costs_report(user, period):
             output_field=MONEY_FIELD,
         )
     )["total"]
-    payment_commissions = Payment.objects.filter(
-        created_at__gte=period["start"],
-        created_at__lt=period["end"],
-    ).aggregate(
+    payment_commissions = money_period(Payment.objects.all(), start, end).aggregate(
         total=Coalesce(
             Sum("commission_amount"),
             Value(Decimal("0.00")),
@@ -1124,10 +1035,10 @@ def _profit_costs_report(user, period):
         )
     )["total"]
     purchase_spend = (
-        PurchaseOrder.objects.exclude(status=PurchaseOrder.Status.CANCELLED)
-        .filter(
-            created_at__gte=period["start"],
-            created_at__lt=period["end"],
+        money_period(
+            PurchaseOrder.objects.exclude(status=PurchaseOrder.Status.CANCELLED),
+            start,
+            end,
         )
         .aggregate(
             total=Coalesce(
@@ -1137,17 +1048,20 @@ def _profit_costs_report(user, period):
             )
         )["total"]
     )
-    ad_hoc_expenses = Expense.objects.filter(
-        spent_at__gte=period["start_date"],
-        spent_at__lte=period["end_date"],
-    ).aggregate(
+    ad_hoc_expenses = money_period(Expense.objects.all(), start, end).aggregate(
         total=Coalesce(
             Sum("amount"),
             Value(Decimal("0.00")),
             output_field=MONEY_FIELD,
         )
     )["total"]
-    operating_expense = payroll_paid + payment_commissions + ad_hoc_expenses
+    # Goods that left without being sold — a stock count's write-off, a manual
+    # adjustment. The valued ledger has always known what they cost; until now
+    # nothing reported it, so theft and spoilage never reached the P&L.
+    shrinkage = shrinkage_value(start, end)
+    operating_expense = (
+        payroll_paid + payment_commissions + ad_hoc_expenses + shrinkage
+    )
     net_operating_profit = gross_profit - operating_expense
 
     return {
@@ -1156,6 +1070,7 @@ def _profit_costs_report(user, period):
             "payroll_paid_total": _money(payroll_paid),
             "payment_commission_total": _money(payment_commissions),
             "ad_hoc_expense_total": _money(ad_hoc_expenses),
+            "shrinkage_total": _money(shrinkage),
             "purchase_spend_total": _money(purchase_spend),
             "operating_expense_total": _money(operating_expense),
             "net_operating_profit": _money(net_operating_profit),
@@ -1167,6 +1082,7 @@ def _profit_costs_report(user, period):
                     ("payroll_paid_total", _money(payroll_paid)),
                     ("payment_commission_total", _money(payment_commissions)),
                     ("ad_hoc_expense_total", _money(ad_hoc_expenses)),
+                    ("shrinkage_total", _money(shrinkage)),
                     ("purchase_spend_total", _money(purchase_spend)),
                     ("operating_expense_total", _money(operating_expense)),
                     ("net_operating_profit", _money(net_operating_profit)),
@@ -1187,6 +1103,10 @@ def _profit_costs_report(user, period):
                     {
                         "cost_item": "ad_hoc_expense_total",
                         "amount": _money(ad_hoc_expenses),
+                    },
+                    {
+                        "cost_item": "shrinkage_total",
+                        "amount": _money(shrinkage),
                     },
                     {
                         "cost_item": "purchase_spend_total",

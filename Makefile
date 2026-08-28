@@ -278,6 +278,9 @@ frontend-operations-preview: frontend-install ## Run the operations UI preview h
 frontend-categories-preview: frontend-install ## Run the categories UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/categories_preview.dart
 
+frontend-treasury-preview: frontend-install ## Run the treasury (money position) UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/treasury_preview.dart
+
 frontend-users-preview: frontend-install ## Run the users + roles/permissions UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/users_preview.dart
 

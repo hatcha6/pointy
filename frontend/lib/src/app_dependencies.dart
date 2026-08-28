@@ -26,6 +26,7 @@ import 'data/repositories/inventory_repository.dart';
 import 'data/repositories/operations_repository.dart';
 import 'data/repositories/modifier_group_repository.dart';
 import 'data/repositories/payments_repository.dart';
+import 'data/repositories/treasury_repository.dart';
 import 'data/repositories/price_checker_repository.dart';
 import 'data/repositories/printing_repository.dart';
 import 'data/repositories/purchase_repository.dart';
@@ -129,6 +130,7 @@ class PointyAppDependencies {
     aiChatRepository = AiChatRepository(service);
     purchaseRepository = PurchaseRepository(service);
     paymentsRepository = PaymentsRepository(service);
+    treasuryRepository = TreasuryRepository(service);
     stockCountRepository = StockCountRepository(service);
     subscriptionRepository = SubscriptionRepository(service);
     messagingRepository = MessagingRepository(service);
@@ -200,6 +202,7 @@ class PointyAppDependencies {
   late final AiChatRepository aiChatRepository;
   late final PurchaseRepository purchaseRepository;
   late final PaymentsRepository paymentsRepository;
+  late final TreasuryRepository treasuryRepository;
   late final StockCountRepository stockCountRepository;
   late final SubscriptionRepository subscriptionRepository;
   late final MessagingRepository messagingRepository;

@@ -31,6 +31,7 @@ from apps.employees.models import Employee, EmployeeLoan, PayrollRun
 from apps.expenses.models import Expense
 from apps.fraud.models import FraudFinding
 from apps.inventory.models import StockItem, StockMovement
+from apps.inventory.reporting import stock_cost_value
 from apps.payments.models import Payment
 from apps.printing.models import PrintAgent, PrintJob
 from apps.purchasing.models import (
@@ -424,6 +425,9 @@ def _inventory_section(period):
             "committed_units": stock_totals["committed_units"],
             "expected_units": stock_totals["expected_units"],
             "retail_stock_value": _money(stock_totals["retail_stock_value"]),
+            # What the shelf cost, not what it would fetch: the money actually
+            # tied up in stock, read straight off the valuation ledger.
+            "cost_stock_value": _money(stock_cost_value()),
         },
         "low_stock_items": [
             _stock_item_row(item)

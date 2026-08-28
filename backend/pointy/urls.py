@@ -49,6 +49,13 @@ from apps.expenses.views import (
     ExpenseLedgerView,
     ExpenseViewSet,
 )
+from apps.treasury.views import (
+    AccountMovementsView,
+    MoneyAccountViewSet,
+    MoneyCountViewSet,
+    MoneyTransferViewSet,
+    TreasuryPositionView,
+)
 from apps.employees.views import (
     CompensationPlanViewSet,
     EmployeeViewSet,
@@ -164,6 +171,9 @@ router.register("payment-cards", PaymentCardViewSet, basename="payment-card")
 router.register("discount-rules", DiscountRuleViewSet)
 router.register("expense-categories", ExpenseCategoryViewSet)
 router.register("expenses", ExpenseViewSet)
+router.register("money-accounts", MoneyAccountViewSet, basename="money-account")
+router.register("money-transfers", MoneyTransferViewSet, basename="money-transfer")
+router.register("money-counts", MoneyCountViewSet, basename="money-count")
 router.register("suppliers", SupplierViewSet)
 router.register("supplier-payments", SupplierPaymentViewSet)
 router.register("purchase-orders", PurchaseOrderViewSet)
@@ -265,6 +275,16 @@ urlpatterns = [
         "api/expense-ledger/",
         ExpenseLedgerView.as_view(),
         name="expense-ledger",
+    ),
+    path(
+        "api/treasury/position/",
+        TreasuryPositionView.as_view(),
+        name="treasury-position",
+    ),
+    path(
+        "api/treasury/accounts/<int:pk>/movements/",
+        AccountMovementsView.as_view(),
+        name="treasury-account-movements",
     ),
     path(
         "api/discovery/service/",

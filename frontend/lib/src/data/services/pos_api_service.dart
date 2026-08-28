@@ -41,6 +41,7 @@ import '../models/employee.dart';
 import '../models/expense.dart';
 import '../models/expense_category.dart';
 import '../models/expense_ledger_entry.dart';
+import '../models/money_position.dart';
 import '../models/fraud_finding.dart';
 import '../models/purchase_submission.dart';
 import '../models/query.dart';
@@ -90,6 +91,7 @@ import 'dashboard_api_client.dart';
 import 'discount_api_client.dart';
 import 'employee_api_client.dart';
 import 'expense_api_client.dart';
+import 'treasury_api_client.dart';
 import 'fraud_api_client.dart';
 import 'inventory_api_client.dart';
 import 'operations_api_client.dart';
@@ -140,6 +142,7 @@ class PosApiService {
     _discounts = DiscountApiClient(_session);
     _employees = EmployeeApiClient(_session);
     _expenses = ExpenseApiClient(_session);
+    _treasury = TreasuryApiClient(_session);
     _fraud = FraudApiClient(_session);
     _inventory = InventoryApiClient(_session);
     _operations = OperationsApiClient(_session);
@@ -194,6 +197,7 @@ class PosApiService {
   late final DiscountApiClient _discounts;
   late final EmployeeApiClient _employees;
   late final ExpenseApiClient _expenses;
+  late final TreasuryApiClient _treasury;
   late final FraudApiClient _fraud;
   late final InventoryApiClient _inventory;
   late final OperationsApiClient _operations;
@@ -1433,6 +1437,56 @@ class PosApiService {
     required DateTime end,
   }) {
     return _expenses.fetchLedger(start: start, end: end);
+  }
+
+  // --- treasury (الخزينة) ----------------------------------------------------
+
+  Future<MoneyPosition> fetchMoneyPosition({DateTime? asOf}) {
+    return _treasury.fetchPosition(asOf: asOf);
+  }
+
+  Future<MoneyMovementPage> fetchMoneyAccountMovements(
+    int accountId, {
+    DateTime? start,
+    DateTime? end,
+  }) {
+    return _treasury.fetchAccountMovements(accountId, start: start, end: end);
+  }
+
+  Future<MoneyCount> recordMoneyCount({
+    required int accountId,
+    required double countedAmount,
+    String note = '',
+    String? idempotencyKey,
+  }) {
+    return _treasury.recordCount(
+      accountId: accountId,
+      countedAmount: countedAmount,
+      note: note,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<void> recordMoneyTransfer(
+    MoneyTransferDraft draft, {
+    String? idempotencyKey,
+  }) {
+    return _treasury.recordTransfer(draft, idempotencyKey: idempotencyKey);
+  }
+
+  Future<List<MoneyAccount>> fetchMoneyAccounts() {
+    return _treasury.fetchAccounts();
+  }
+
+  Future<MoneyAccount> createMoneyAccount(MoneyAccount account) {
+    return _treasury.createAccount(account);
+  }
+
+  Future<MoneyAccount> updateMoneyAccount(
+    int accountId,
+    Map<String, Object?> changes,
+  ) {
+    return _treasury.updateAccount(accountId, changes);
   }
 
   Future<Expense> fetchExpense(int expenseId) {

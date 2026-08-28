@@ -8455,5 +8455,313 @@
   "connectionManualSearchingHint": "ما زلنا نبحث تلقائيًا في الخلفية…",
   "@connectionManualSearchingHint": {
     "description": "Hint that background auto-discovery is still running on the manual connection screen."
+  },
+  "treasuryTitle": "الخزينة",
+  "@treasuryTitle": {
+    "description": "Title of the money position screen: cash and bank balances."
+  },
+  "treasuryDrawerLabel": "الخزينة",
+  "@treasuryDrawerLabel": {
+    "description": "Drawer label for the money position screen."
+  },
+  "treasuryRefreshTooltip": "تحديث الأرصدة",
+  "@treasuryRefreshTooltip": {
+    "description": "Tooltip for refreshing the money position."
+  },
+  "treasuryHeroTitle": "إجمالي أموال المحل",
+  "@treasuryHeroTitle": {
+    "description": "Hero title: the shop's total money across all accounts."
+  },
+  "treasuryHeroSubtitle": "ما يفترض أن يكون لديك الآن",
+  "@treasuryHeroSubtitle": {
+    "description": "Hero subtitle explaining the total is what Pointy expects."
+  },
+  "treasuryCashLabel": "نقدًا",
+  "@treasuryCashLabel": {
+    "description": "Label for the cash total."
+  },
+  "treasuryBankLabel": "في المصرف",
+  "@treasuryBankLabel": {
+    "description": "Label for the bank total."
+  },
+  "treasurySectionCash": "الصناديق النقدية",
+  "@treasurySectionCash": {
+    "description": "Section header for cash accounts."
+  },
+  "treasurySectionBank": "الحسابات المصرفية",
+  "@treasurySectionBank": {
+    "description": "Section header for bank accounts."
+  },
+  "treasuryExpectedLabel": "المتوقع",
+  "@treasuryExpectedLabel": {
+    "description": "Label for an account's expected balance."
+  },
+  "treasuryCountedLabel": "المجرود",
+  "@treasuryCountedLabel": {
+    "description": "Label for the counted amount."
+  },
+  "treasuryNeverCounted": "لم يُجرد بعد",
+  "@treasuryNeverCounted": {
+    "description": "Status pill for an account that has never been counted."
+  },
+  "treasuryCountedOn": "جُرد في {date}",
+  "@treasuryCountedOn": {
+    "description": "Status pill showing when an account was last counted.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryVarianceShort": "عجز {amount}",
+  "@treasuryVarianceShort": {
+    "description": "Pill for a negative variance (less money than expected).",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryVarianceOver": "زيادة {amount}",
+  "@treasuryVarianceOver": {
+    "description": "Pill for a positive variance (more money than expected).",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryVarianceMatched": "مطابق",
+  "@treasuryVarianceMatched": {
+    "description": "Pill shown when a count matched the expectation exactly."
+  },
+  "treasuryVarianceCalloutTitle": "{count, plural, =1{حساب واحد لا يطابق الجرد} other{{count} حسابات لا تطابق الجرد}}",
+  "@treasuryVarianceCalloutTitle": {
+    "description": "Callout warning that accounts disagree with their last count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "treasuryVarianceCalloutMessage": "افتح الحساب لمعرفة أين ذهب الفرق.",
+  "@treasuryVarianceCalloutMessage": {
+    "description": "Callout supporting message pointing at the drill-down."
+  },
+  "treasuryUncountedCalloutTitle": "لم تجرد كل الحسابات بعد",
+  "@treasuryUncountedCalloutTitle": {
+    "description": "Callout title when some accounts were never counted."
+  },
+  "treasuryUncountedCalloutMessage": "الرصيد المعروض حساب من الحركات، لا عدّ فعلي. اجرد لتتأكد.",
+  "@treasuryUncountedCalloutMessage": {
+    "description": "Callout explaining an expected balance is derived, not counted."
+  },
+  "treasuryEmptyTitle": "لا توجد حسابات بعد",
+  "@treasuryEmptyTitle": {
+    "description": "Empty state title when no money accounts exist."
+  },
+  "treasuryEmptyMessage": "أضف صندوقًا نقديًا أو حسابًا مصرفيًا لتتابع أموال المحل.",
+  "@treasuryEmptyMessage": {
+    "description": "Empty state message for the money position screen."
+  },
+  "treasuryErrorTitle": "تعذر تحميل الأرصدة",
+  "@treasuryErrorTitle": {
+    "description": "Error state title for the money position screen."
+  },
+  "treasuryRetry": "إعادة المحاولة",
+  "@treasuryRetry": {
+    "description": "Retry button on the money position error state."
+  },
+  "treasuryActionCount": "جرد",
+  "@treasuryActionCount": {
+    "description": "Button that records a physical count of an account."
+  },
+  "treasuryActionTransfer": "تحويل",
+  "@treasuryActionTransfer": {
+    "description": "Button that records a transfer between the shop's accounts."
+  },
+  "treasuryActionDeposit": "إيداع في المصرف",
+  "@treasuryActionDeposit": {
+    "description": "Primary action: move cash from the box to the bank."
+  },
+  "treasuryBreakdownTitle": "من أين جاء هذا الرصيد",
+  "@treasuryBreakdownTitle": {
+    "description": "Section header for the balance breakdown."
+  },
+  "treasuryMovementsTitle": "آخر الحركات",
+  "@treasuryMovementsTitle": {
+    "description": "Section header for the account movements list."
+  },
+  "treasuryMovementsEmpty": "لا حركات في هذه الفترة.",
+  "@treasuryMovementsEmpty": {
+    "description": "Empty state for the account movements list."
+  },
+  "treasuryMovementsError": "تعذر تحميل الحركات.",
+  "@treasuryMovementsError": {
+    "description": "Error message for the account movements list."
+  },
+  "treasuryMovementsTruncated": "عرضنا أحدث الحركات فقط. اختر فترة أقصر لرؤية الباقي.",
+  "@treasuryMovementsTruncated": {
+    "description": "Notice shown when the movements list was truncated."
+  },
+  "treasuryRoutedHint": "المقبوضات والمدفوعات غير المخصصة تدخل هنا.",
+  "@treasuryRoutedHint": {
+    "description": "Hint that this account receives untagged money events of its kind."
+  },
+  "treasuryOpeningAtHint": "يُحسب من {date}",
+  "@treasuryOpeningAtHint": {
+    "description": "Hint showing the day an account started counting from.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryComponentOpening": "الرصيد الافتتاحي",
+  "@treasuryComponentOpening": {
+    "description": "Breakdown line: the opening balance."
+  },
+  "treasuryComponentSales": "المبيعات والمقبوضات",
+  "@treasuryComponentSales": {
+    "description": "Breakdown line: money in from sales, net of refunds."
+  },
+  "treasuryComponentDrawerIn": "إيداعات في الصندوق",
+  "@treasuryComponentDrawerIn": {
+    "description": "Breakdown line: register pay-ins."
+  },
+  "treasuryComponentDrawerOut": "سحوبات من الصندوق",
+  "@treasuryComponentDrawerOut": {
+    "description": "Breakdown line: standalone register pay-outs."
+  },
+  "treasuryComponentExpenses": "المصروفات",
+  "@treasuryComponentExpenses": {
+    "description": "Breakdown line: expenses paid from this account."
+  },
+  "treasuryComponentSuppliers": "مدفوعات الموردين",
+  "@treasuryComponentSuppliers": {
+    "description": "Breakdown line: supplier payments."
+  },
+  "treasuryComponentPayroll": "الرواتب",
+  "@treasuryComponentPayroll": {
+    "description": "Breakdown line: paid payroll."
+  },
+  "treasuryComponentCommission": "عمولات الدفع",
+  "@treasuryComponentCommission": {
+    "description": "Breakdown line: card processor commissions."
+  },
+  "treasuryComponentTransferIn": "تحويلات واردة",
+  "@treasuryComponentTransferIn": {
+    "description": "Breakdown line: transfers into this account."
+  },
+  "treasuryComponentTransferOut": "تحويلات صادرة",
+  "@treasuryComponentTransferOut": {
+    "description": "Breakdown line: transfers out of this account."
+  },
+  "treasuryPayrollAssumptionNote": "الرواتب محسوبة نقدًا. إن كنت تدفعها تحويلًا، سجّل تحويلًا من المصرف إلى الخزينة.",
+  "@treasuryPayrollAssumptionNote": {
+    "description": "Note making the payroll routing assumption visible and correctable."
+  },
+  "treasuryCountSheetTitle": "جرد {account}",
+  "@treasuryCountSheetTitle": {
+    "description": "Title of the count sheet.",
+    "placeholders": {
+      "account": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryCountSheetPrompt": "كم المبلغ الموجود فعلًا؟",
+  "@treasuryCountSheetPrompt": {
+    "description": "Prompt asking for the physically counted amount."
+  },
+  "treasuryCountFieldLabel": "المبلغ الفعلي",
+  "@treasuryCountFieldLabel": {
+    "description": "Field label for the counted amount."
+  },
+  "treasuryCountNoteLabel": "ملاحظة (اختياري)",
+  "@treasuryCountNoteLabel": {
+    "description": "Field label for the count note."
+  },
+  "treasuryCountSubmit": "حفظ الجرد",
+  "@treasuryCountSubmit": {
+    "description": "Submit button on the count sheet."
+  },
+  "treasuryCountResultMatched": "مطابق تمامًا.",
+  "@treasuryCountResultMatched": {
+    "description": "Snack message when a count matched exactly."
+  },
+  "treasuryCountResultShort": "عجز {amount} عن المتوقع.",
+  "@treasuryCountResultShort": {
+    "description": "Snack message when a count came up short.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryCountResultOver": "زيادة {amount} عن المتوقع.",
+  "@treasuryCountResultOver": {
+    "description": "Snack message when a count came up over.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryCountFailed": "تعذر حفظ الجرد.",
+  "@treasuryCountFailed": {
+    "description": "Snack message when recording a count failed."
+  },
+  "treasuryTransferSheetTitle": "تحويل أموال",
+  "@treasuryTransferSheetTitle": {
+    "description": "Title of the transfer sheet."
+  },
+  "treasuryTransferFrom": "من",
+  "@treasuryTransferFrom": {
+    "description": "Label for the source account."
+  },
+  "treasuryTransferTo": "إلى",
+  "@treasuryTransferTo": {
+    "description": "Label for the destination account."
+  },
+  "treasuryTransferOutside": "خارج المحل",
+  "@treasuryTransferOutside": {
+    "description": "Option meaning money comes from or goes outside the shop."
+  },
+  "treasuryTransferAmount": "المبلغ",
+  "@treasuryTransferAmount": {
+    "description": "Field label for the transfer amount."
+  },
+  "treasuryTransferReason": "السبب (اختياري)",
+  "@treasuryTransferReason": {
+    "description": "Field label for the transfer reason."
+  },
+  "treasuryTransferSubmit": "تسجيل التحويل",
+  "@treasuryTransferSubmit": {
+    "description": "Submit button on the transfer sheet."
+  },
+  "treasuryTransferSaved": "تم تسجيل التحويل.",
+  "@treasuryTransferSaved": {
+    "description": "Snack message after a successful transfer."
+  },
+  "treasuryTransferFailed": "تعذر تسجيل التحويل.",
+  "@treasuryTransferFailed": {
+    "description": "Snack message when a transfer failed."
+  },
+  "treasuryTransferNeedsSide": "اختر حسابًا على الأقل.",
+  "@treasuryTransferNeedsSide": {
+    "description": "Validation message when neither side of a transfer is chosen."
+  },
+  "treasuryTransferSameAccount": "لا يمكن التحويل إلى نفس الحساب.",
+  "@treasuryTransferSameAccount": {
+    "description": "Validation message when both sides are the same account."
+  },
+  "treasuryAmountInvalid": "أدخل مبلغًا صحيحًا.",
+  "@treasuryAmountInvalid": {
+    "description": "Validation message for an invalid money amount."
+  },
+  "treasuryLedgerLink": "سجل المقبوضات والمدفوعات",
+  "@treasuryLedgerLink": {
+    "description": "Link from the money position to the detailed payments ledger."
   }
 }

@@ -717,12 +717,12 @@ def returned_cost_total(adjustments) -> Decimal:
     return (total or Decimal("0.00")).quantize(Decimal("0.01"))
 
 
-# Cost of one sold line, for aggregation. Kept next to ``returned_cost_total``
-# because the two answer opposite halves of the same question and must use the
-# same convention: raw product, summed, rounded once at the end. If a sale
-# subtracted a per-line-rounded cost while its return added back a raw-summed
-# one, undoing the sale would not return profit to where it started.
-SOLD_COST_EXPRESSION = models.F("quantity") * models.F("unit_cost")
+# Cost of one sold line lives with its revenue and profit siblings below, in
+# ``sold_cost_expression`` — the three must share one convention: raw product,
+# summed, rounded once at the end. If a sale subtracted a per-line-rounded cost
+# while its return added back a raw-summed one, undoing the sale would not
+# return profit to where it started. ``returned_cost_total`` above is the other
+# half of that pair.
 
 
 # ---------------------------------------------------------------------------
@@ -743,12 +743,36 @@ SOLD_COST_EXPRESSION = models.F("quantity") * models.F("unit_cost")
 # were. That is the conservation law these rollups are chosen to satisfy, and it
 # is why both sides are summed raw and rounded once by the caller (the
 # convention ``SOLD_COST_EXPRESSION`` and ``returned_cost_total`` already share).
-SOLD_REVENUE_EXPRESSION = (
-    models.F("quantity") * models.F("unit_price") - models.F("discount_total")
-)
-SOLD_PROFIT_EXPRESSION = models.F("quantity") * (
-    models.F("unit_price") - models.F("unit_cost")
-) - models.F("discount_total")
+def sold_revenue_expression(prefix=""):
+    """Revenue of a sold line, addressable from a parent queryset.
+
+    ``prefix`` is the relation path to the line — ``"lines__"`` when
+    aggregating over ``Order``. It exists so a caller that needs line-level
+    money one join away reuses *this* arithmetic instead of retyping it: the AI
+    tools kept their own copy of exactly this expression, which is how they
+    ended up reporting a revenue the reports had already stopped reporting.
+    """
+    return (
+        models.F(f"{prefix}quantity") * models.F(f"{prefix}unit_price")
+        - models.F(f"{prefix}discount_total")
+    )
+
+
+def sold_profit_expression(prefix=""):
+    """Profit of a sold line — revenue less what the goods cost."""
+    return models.F(f"{prefix}quantity") * (
+        models.F(f"{prefix}unit_price") - models.F(f"{prefix}unit_cost")
+    ) - models.F(f"{prefix}discount_total")
+
+
+def sold_cost_expression(prefix=""):
+    """Cost of a sold line."""
+    return models.F(f"{prefix}quantity") * models.F(f"{prefix}unit_cost")
+
+
+SOLD_REVENUE_EXPRESSION = sold_revenue_expression()
+SOLD_PROFIT_EXPRESSION = sold_profit_expression()
+SOLD_COST_EXPRESSION = sold_cost_expression()
 RETURNED_REVENUE_EXPRESSION = (
     models.F("quantity") * models.F("unit_price") - models.F("discount_total")
 )

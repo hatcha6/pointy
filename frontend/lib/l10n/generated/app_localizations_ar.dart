@@ -13924,4 +13924,232 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get connectionManualSearchingHint =>
       'ما زلنا نبحث تلقائيًا في الخلفية…';
+
+  @override
+  String get treasuryTitle => 'الخزينة';
+
+  @override
+  String get treasuryDrawerLabel => 'الخزينة';
+
+  @override
+  String get treasuryRefreshTooltip => 'تحديث الأرصدة';
+
+  @override
+  String get treasuryHeroTitle => 'إجمالي أموال المحل';
+
+  @override
+  String get treasuryHeroSubtitle => 'ما يفترض أن يكون لديك الآن';
+
+  @override
+  String get treasuryCashLabel => 'نقدًا';
+
+  @override
+  String get treasuryBankLabel => 'في المصرف';
+
+  @override
+  String get treasurySectionCash => 'الصناديق النقدية';
+
+  @override
+  String get treasurySectionBank => 'الحسابات المصرفية';
+
+  @override
+  String get treasuryExpectedLabel => 'المتوقع';
+
+  @override
+  String get treasuryCountedLabel => 'المجرود';
+
+  @override
+  String get treasuryNeverCounted => 'لم يُجرد بعد';
+
+  @override
+  String treasuryCountedOn(String date) {
+    return 'جُرد في $date';
+  }
+
+  @override
+  String treasuryVarianceShort(String amount) {
+    return 'عجز $amount';
+  }
+
+  @override
+  String treasuryVarianceOver(String amount) {
+    return 'زيادة $amount';
+  }
+
+  @override
+  String get treasuryVarianceMatched => 'مطابق';
+
+  @override
+  String treasuryVarianceCalloutTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count حسابات لا تطابق الجرد',
+      one: 'حساب واحد لا يطابق الجرد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get treasuryVarianceCalloutMessage =>
+      'افتح الحساب لمعرفة أين ذهب الفرق.';
+
+  @override
+  String get treasuryUncountedCalloutTitle => 'لم تجرد كل الحسابات بعد';
+
+  @override
+  String get treasuryUncountedCalloutMessage =>
+      'الرصيد المعروض حساب من الحركات، لا عدّ فعلي. اجرد لتتأكد.';
+
+  @override
+  String get treasuryEmptyTitle => 'لا توجد حسابات بعد';
+
+  @override
+  String get treasuryEmptyMessage =>
+      'أضف صندوقًا نقديًا أو حسابًا مصرفيًا لتتابع أموال المحل.';
+
+  @override
+  String get treasuryErrorTitle => 'تعذر تحميل الأرصدة';
+
+  @override
+  String get treasuryRetry => 'إعادة المحاولة';
+
+  @override
+  String get treasuryActionCount => 'جرد';
+
+  @override
+  String get treasuryActionTransfer => 'تحويل';
+
+  @override
+  String get treasuryActionDeposit => 'إيداع في المصرف';
+
+  @override
+  String get treasuryBreakdownTitle => 'من أين جاء هذا الرصيد';
+
+  @override
+  String get treasuryMovementsTitle => 'آخر الحركات';
+
+  @override
+  String get treasuryMovementsEmpty => 'لا حركات في هذه الفترة.';
+
+  @override
+  String get treasuryMovementsError => 'تعذر تحميل الحركات.';
+
+  @override
+  String get treasuryMovementsTruncated =>
+      'عرضنا أحدث الحركات فقط. اختر فترة أقصر لرؤية الباقي.';
+
+  @override
+  String get treasuryRoutedHint => 'المقبوضات والمدفوعات غير المخصصة تدخل هنا.';
+
+  @override
+  String treasuryOpeningAtHint(String date) {
+    return 'يُحسب من $date';
+  }
+
+  @override
+  String get treasuryComponentOpening => 'الرصيد الافتتاحي';
+
+  @override
+  String get treasuryComponentSales => 'المبيعات والمقبوضات';
+
+  @override
+  String get treasuryComponentDrawerIn => 'إيداعات في الصندوق';
+
+  @override
+  String get treasuryComponentDrawerOut => 'سحوبات من الصندوق';
+
+  @override
+  String get treasuryComponentExpenses => 'المصروفات';
+
+  @override
+  String get treasuryComponentSuppliers => 'مدفوعات الموردين';
+
+  @override
+  String get treasuryComponentPayroll => 'الرواتب';
+
+  @override
+  String get treasuryComponentCommission => 'عمولات الدفع';
+
+  @override
+  String get treasuryComponentTransferIn => 'تحويلات واردة';
+
+  @override
+  String get treasuryComponentTransferOut => 'تحويلات صادرة';
+
+  @override
+  String get treasuryPayrollAssumptionNote =>
+      'الرواتب محسوبة نقدًا. إن كنت تدفعها تحويلًا، سجّل تحويلًا من المصرف إلى الخزينة.';
+
+  @override
+  String treasuryCountSheetTitle(String account) {
+    return 'جرد $account';
+  }
+
+  @override
+  String get treasuryCountSheetPrompt => 'كم المبلغ الموجود فعلًا؟';
+
+  @override
+  String get treasuryCountFieldLabel => 'المبلغ الفعلي';
+
+  @override
+  String get treasuryCountNoteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String get treasuryCountSubmit => 'حفظ الجرد';
+
+  @override
+  String get treasuryCountResultMatched => 'مطابق تمامًا.';
+
+  @override
+  String treasuryCountResultShort(String amount) {
+    return 'عجز $amount عن المتوقع.';
+  }
+
+  @override
+  String treasuryCountResultOver(String amount) {
+    return 'زيادة $amount عن المتوقع.';
+  }
+
+  @override
+  String get treasuryCountFailed => 'تعذر حفظ الجرد.';
+
+  @override
+  String get treasuryTransferSheetTitle => 'تحويل أموال';
+
+  @override
+  String get treasuryTransferFrom => 'من';
+
+  @override
+  String get treasuryTransferTo => 'إلى';
+
+  @override
+  String get treasuryTransferOutside => 'خارج المحل';
+
+  @override
+  String get treasuryTransferAmount => 'المبلغ';
+
+  @override
+  String get treasuryTransferReason => 'السبب (اختياري)';
+
+  @override
+  String get treasuryTransferSubmit => 'تسجيل التحويل';
+
+  @override
+  String get treasuryTransferSaved => 'تم تسجيل التحويل.';
+
+  @override
+  String get treasuryTransferFailed => 'تعذر تسجيل التحويل.';
+
+  @override
+  String get treasuryTransferNeedsSide => 'اختر حسابًا على الأقل.';
+
+  @override
+  String get treasuryTransferSameAccount => 'لا يمكن التحويل إلى نفس الحساب.';
+
+  @override
+  String get treasuryAmountInvalid => 'أدخل مبلغًا صحيحًا.';
+
+  @override
+  String get treasuryLedgerLink => 'سجل المقبوضات والمدفوعات';
 }

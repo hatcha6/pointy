@@ -46,8 +46,10 @@ from apps.sales.models import (
     RegisterCashMovement,
     RegisterSession,
     SOLD_COST_EXPRESSION,
+    SOLD_REVENUE_EXPRESSION,
     gross_profit_total,
     net_line_rollups,
+    prime_register_session_cash_totals,
     net_product_rollups,
     rank_rollups,
     returned_items_total,
@@ -74,7 +76,7 @@ __all__ = [
     "_rank",
     "_variant_full_name", "_top_categories",
     "_recent_orders", "_register_summary", "_register_variance_summary",
-    "_register_cash_movement_totals", "_totals_by_key",
+    "_totals_by_key",
     "_purchase_order_balance_rows", "_purchase_order_balance_due",
     "_top_supplier_balances", "_stock_item_row", "_settled_orders",
     "_order_adjustments", "_payments", "_print_jobs", "_owner_key",
@@ -297,7 +299,7 @@ def _top_categories(orders):
         ),
         Value(1),
     )
-    revenue_expr = F("quantity") * F("unit_price") - F("discount_total")
+    revenue_expr = SOLD_REVENUE_EXPRESSION
     allocated_revenue = ExpressionWrapper(
         revenue_expr / category_count,
         output_field=MONEY_FIELD,
@@ -366,99 +368,29 @@ def _register_summary(request, period):
 
 
 def _register_variance_summary(closed_sessions):
-    session_rows = list(
-        closed_sessions.values(
-            "id",
-            "opening_cash",
-            "closing_cash",
-        )
-    )
-    if not session_rows:
-        return {"count": 0, "total": Decimal("0.00")}
+    """How many closed drawers disagreed with Pointy, and by how much.
 
-    session_ids = [row["id"] for row in session_rows]
-    cash_sales_by_session = _totals_by_key(
-        # Attribute cash to the session that collected the payment (its own
-        # register_session), independent of order status — see
-        # RegisterSession.cash_sales_total.
-        Payment.objects.filter(
-            register_session_id__in=session_ids,
-            method=Payment.Method.CASH,
-            amount__gt=0,
-        )
-        .values("register_session_id")
-        .annotate(
-            total=Coalesce(
-                Sum("amount"),
-                Value(Decimal("0.00")),
-                output_field=MONEY_FIELD,
-            )
-        ),
-        key="register_session_id",
+    The arithmetic is ``RegisterSession.expected_cash`` — the one definition —
+    reached through ``prime_register_session_cash_totals``, which batches the
+    four aggregates behind it into three queries. This function used to inline
+    its own copy of that sum, which is how the dashboard, the register-closure
+    report and the register screen came to state the same figure three ways.
+    """
+    sessions = prime_register_session_cash_totals(
+        closed_sessions.only("id", "opening_cash", "closing_cash")
     )
-    cash_refunds_by_session = _totals_by_key(
-        # ``cash_amount`` is the cash-drawer share of each refund (full amount for
-        # a cash refund, 0 for card/transfer, the cash part for a split sale), so
-        # summing it attributes refunds to the drawer correctly without filtering
-        # on ``refund_method``.
-        OrderAdjustment.objects.filter(
-            register_session_id__in=session_ids,
-        )
-        .values("register_session_id")
-        .annotate(
-            total=Coalesce(
-                Sum("cash_amount"),
-                Value(Decimal("0.00")),
-                output_field=MONEY_FIELD,
-            )
-        ),
-        key="register_session_id",
-    )
-    pay_ins_by_session = _register_cash_movement_totals(
-        session_ids,
-        RegisterCashMovement.MovementType.PAY_IN,
-    )
-    pay_outs_by_session = _register_cash_movement_totals(
-        session_ids,
-        RegisterCashMovement.MovementType.PAY_OUT,
-    )
+    if not sessions:
+        return {"count": 0, "total": Decimal("0.00")}
 
     variance_count = 0
     variance_total = Decimal("0.00")
-    for row in session_rows:
-        session_id = row["id"]
-        if row["closing_cash"] is None:
+    for session in sessions:
+        variance = session.cash_variance
+        if variance is None or variance == Decimal("0.00"):
             continue
-        expected_cash = (
-            row["opening_cash"]
-            + cash_sales_by_session[session_id]
-            + pay_ins_by_session[session_id]
-            - pay_outs_by_session[session_id]
-            - cash_refunds_by_session[session_id]
-        ).quantize(MONEY_PLACES)
-        variance = (row["closing_cash"] - expected_cash).quantize(MONEY_PLACES)
-        if variance != Decimal("0.00"):
-            variance_count += 1
-            variance_total += variance
+        variance_count += 1
+        variance_total += variance
     return {"count": variance_count, "total": variance_total}
-
-
-def _register_cash_movement_totals(session_ids, movement_type):
-    return _totals_by_key(
-        RegisterCashMovement.objects.filter(
-            register_session_id__in=session_ids,
-            movement_type=movement_type,
-        )
-        .values("register_session_id")
-        .annotate(
-            total=Coalesce(
-                Sum("amount"),
-                Value(Decimal("0.00")),
-                output_field=MONEY_FIELD,
-            )
-        ),
-        key="register_session_id",
-    )
 
 
 def _totals_by_key(rows, *, key):
