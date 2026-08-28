@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
@@ -11,6 +12,8 @@ import '../models/printer_config.dart';
 import '../models/purchase_submission.dart';
 import '../models/sale_order.dart';
 import '../models/shop_settings.dart';
+import 'cups_pdf_spooler_stub.dart'
+    if (dart.library.io) 'cups_pdf_spooler_io.dart';
 import 'order_document_action.dart';
 import 'order_document_web_delivery.dart';
 import 'print_transport.dart';
@@ -107,7 +110,7 @@ class OrderDocumentService {
   Future<PrintTransportResult> printTest(PrinterEndpoint endpoint) async {
     try {
       final printed = await _printPdf(
-        bytesBuilder: () => _buildTestPdf(
+        renderBuilder: () => _buildTestPdf(
           pageSize: endpoint.pdfPageSize,
           compact: endpoint.compactReceipt,
         ),
@@ -130,7 +133,7 @@ class OrderDocumentService {
   }) {
     final pageSize = endpoint?.pdfPageSize ?? PdfPageSize.a4;
     return _printPdf(
-      bytesBuilder: () => buildSaleInvoiceBytes(
+      renderBuilder: () => buildSaleInvoiceRender(
         order: order,
         shopSettings: shopSettings,
         shopLogoBytes: shopLogoBytes,
@@ -150,7 +153,7 @@ class OrderDocumentService {
   }) {
     final pageSize = endpoint?.pdfPageSize ?? PdfPageSize.a4;
     return _printPdf(
-      bytesBuilder: () => buildPurchaseOrderBytes(
+      renderBuilder: () => buildPurchaseOrderRender(
         order: order,
         shopSettings: shopSettings,
         shopLogoBytes: shopLogoBytes,
@@ -170,7 +173,7 @@ class OrderDocumentService {
   }) {
     final pageSize = endpoint?.pdfPageSize ?? PdfPageSize.a4;
     return _printPdf(
-      bytesBuilder: () => buildProofOfPaymentBytes(
+      renderBuilder: () => buildProofOfPaymentRender(
         proof: proof,
         shopSettings: shopSettings,
         shopLogoBytes: shopLogoBytes,
@@ -235,6 +238,23 @@ class OrderDocumentService {
     PdfPageSize pageSize = PdfPageSize.a4,
     bool compact = false,
   }) async {
+    final render = await buildSaleInvoiceRender(
+      order: order,
+      shopSettings: shopSettings,
+      shopLogoBytes: shopLogoBytes,
+      pageSize: pageSize,
+      compact: compact,
+    );
+    return render.bytes;
+  }
+
+  Future<OrderDocumentRender> buildSaleInvoiceRender({
+    required SaleOrder order,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+    PdfPageSize pageSize = PdfPageSize.a4,
+    bool compact = false,
+  }) async {
     final fontData = await fontLoader.loadData();
     final brandLogoBytes = await brandLogoLoader.load();
     final template = saleInvoiceTemplate(
@@ -252,6 +272,23 @@ class OrderDocumentService {
   }
 
   Future<Uint8List> buildPurchaseOrderBytes({
+    required PurchaseOrder order,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+    PdfPageSize pageSize = PdfPageSize.a4,
+    bool compact = false,
+  }) async {
+    final render = await buildPurchaseOrderRender(
+      order: order,
+      shopSettings: shopSettings,
+      shopLogoBytes: shopLogoBytes,
+      pageSize: pageSize,
+      compact: compact,
+    );
+    return render.bytes;
+  }
+
+  Future<OrderDocumentRender> buildPurchaseOrderRender({
     required PurchaseOrder order,
     ShopSettings? shopSettings,
     Uint8List? shopLogoBytes,
@@ -281,6 +318,23 @@ class OrderDocumentService {
     PdfPageSize pageSize = PdfPageSize.a4,
     bool compact = false,
   }) async {
+    final render = await buildProofOfPaymentRender(
+      proof: proof,
+      shopSettings: shopSettings,
+      shopLogoBytes: shopLogoBytes,
+      pageSize: pageSize,
+      compact: compact,
+    );
+    return render.bytes;
+  }
+
+  Future<OrderDocumentRender> buildProofOfPaymentRender({
+    required PaymentProof proof,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+    PdfPageSize pageSize = PdfPageSize.a4,
+    bool compact = false,
+  }) async {
     final fontData = await fontLoader.loadData();
     final brandLogoBytes = await brandLogoLoader.load();
     final template = proofOfPaymentTemplate(
@@ -302,7 +356,7 @@ class OrderDocumentService {
   /// share/print) never blocks the UI thread; the web target has no isolates,
   /// so it renders inline. [pageSize] picks the full A4 document or a compact
   /// receipt-width roll.
-  Future<Uint8List> _renderDocument(
+  Future<OrderDocumentRender> _renderDocument(
     OrderDocumentTemplate template,
     Uint8List? logoBytes,
     PointyPdfFontData fontData,
@@ -320,9 +374,9 @@ class OrderDocumentService {
       brandLogoBytes: brandLogoBytes,
     );
     if (kIsWeb) {
-      return _buildOrderDocumentBytes(request);
+      return _buildOrderDocumentRender(request);
     }
-    return compute(_buildOrderDocumentBytes, request);
+    return compute(_buildOrderDocumentRender, request);
   }
 
   OrderDocumentTemplate saleInvoiceTemplate({
@@ -620,13 +674,61 @@ class OrderDocumentService {
     return '$prefix-${_safeReference(proof.reference)}.pdf';
   }
 
+  /// Hands the rendered document to the platform.
+  ///
+  /// A receipt-roll page goes through CUPS (`lp`) with its measured media size
+  /// on Linux and macOS, for the same reason barcode labels do: the printing
+  /// plugin cannot express roll media there. Its Linux job builder ignores the
+  /// requested page size outright (a fresh `GtkPageSetup`, i.e. the locale
+  /// default A4), so the driver falls back to the queue's own page — 80 × 297 mm
+  /// on a typical thermal PPD — and every slip feeds that length whatever the
+  /// content. A compact receipt then costs exactly as much paper as a standard
+  /// one, which is the "they come out the same height" report.
+  ///
+  /// The plugin stays the fallback: A4, Windows, Android, any box without a
+  /// CUPS client, and — deliberately — a failed `lp`. Printing a receipt is on
+  /// the checkout path, so a spooler that is missing or misconfigured must
+  /// degrade to a too-long slip, never to no slip at all.
+  ///
+  /// Windows has no `lp`, and there the same defect has a different cause:
+  /// `usePrinterSettings: true` hands the plugin a null `DEVMODE` so the
+  /// driver's own paper governs — again the queue's fixed roll page, again the
+  /// same length for every slip. A roll job therefore asks for its measured
+  /// page instead ([OrderDocumentRender.platformPageFormat]), which the plugin
+  /// turns into `dmPaperSize = 0` plus `dmPaperWidth`/`dmPaperLength` in tenths
+  /// of a millimetre. A4 keeps the driver's configuration, which is right for a
+  /// sheet printer.
   Future<bool> _printPdf({
-    required Future<Uint8List> Function() bytesBuilder,
+    required Future<OrderDocumentRender> Function() renderBuilder,
     required String jobName,
     PrinterEndpoint? endpoint,
   }) async {
-    final bytes = await bytesBuilder();
-    final format = _platformPageFormat(endpoint?.pdfPageSize ?? PdfPageSize.a4);
+    final render = await renderBuilder();
+    final bytes = render.bytes;
+    final width = render.mediaWidthMm;
+    final height = render.mediaHeightMm;
+    if (endpoint != null && width != null && height != null) {
+      final spooled = await spoolPdfToCups(
+        bytes: bytes,
+        queue: endpoint.address,
+        jobName: jobName,
+        mediaWidthMm: width,
+        mediaHeightMm: height,
+        // A receipt is not die-cut stock: there is no gap to seek, and the roll
+        // is left wherever the slip ended either way.
+        registerLabelTop: false,
+        // Bounded well inside the checkout print deadline, because a failure
+        // here still has the plugin fallback to pay for.
+        timeout: const Duration(seconds: 8),
+      );
+      if (spooled.succeeded) {
+        return true;
+      }
+    }
+    final format = render.platformPageFormat;
+    // Deferring to the driver's paper is what pads a roll slip out to the
+    // queue's page, so a roll states its page and a sheet does not.
+    final usePrinterSettings = width == null || height == null;
     final selectedPrinter = endpoint == null
         ? null
         : await _resolvePrinter(endpoint);
@@ -636,13 +738,13 @@ class OrderDocumentService {
         name: jobName,
         format: format,
         onLayout: (_) async => bytes,
-        usePrinterSettings: true,
+        usePrinterSettings: usePrinterSettings,
       );
     }
     return Printing.layoutPdf(
       name: jobName,
       format: format,
-      usePrinterSettings: true,
+      usePrinterSettings: usePrinterSettings,
       onLayout: (_) async => bytes,
     );
   }
@@ -711,7 +813,7 @@ class OrderDocumentService {
     };
   }
 
-  Future<Uint8List> _buildTestPdf({
+  Future<OrderDocumentRender> _buildTestPdf({
     PdfPageSize pageSize = PdfPageSize.a4,
     bool compact = false,
   }) async {
@@ -760,29 +862,65 @@ class OrderDocumentService {
   }
 }
 
-/// Page format handed to the platform print channel. The true page geometry is
-/// baked into the rendered PDF bytes (a content-height roll for receipt widths),
-/// so this only seeds the platform's custom-paper fallback. The height must stay
-/// finite — the method channel cannot carry `double.infinity` — and because the
-/// print calls pass `usePrinterSettings: true` the driver's own roll config
-/// governs the real feed/cut anyway.
-PdfPageFormat _platformPageFormat(PdfPageSize size) {
-  final widthMm = pdfPageSizeReceiptWidthMm(size);
-  if (widthMm == null) {
-    return PdfPageFormat.a4;
+/// A rendered document together with the media it was laid out for, so the
+/// print job can ask the spooler for exactly that page instead of leaving the
+/// driver to guess.
+///
+/// [mediaWidthMm]/[mediaHeightMm] are set for receipt rolls only — an A4
+/// document is a standard page every driver already knows. The height is the
+/// **measured** page height (rounded up to a whole millimetre), which is the
+/// whole point: a one-item compact slip is ~86 mm and a standard one ~117 mm,
+/// and without saying so every slip comes out at the queue's own roll page
+/// (80 × 297 mm on a typical thermal PPD) — the same length regardless.
+class OrderDocumentRender {
+  const OrderDocumentRender({
+    required this.bytes,
+    this.mediaWidthMm,
+    this.mediaHeightMm,
+  });
+
+  final Uint8List bytes;
+  final double? mediaWidthMm;
+  final double? mediaHeightMm;
+
+  /// Page format handed to the platform print channel when the CUPS path is
+  /// unavailable (Windows, Android, a box with no CUPS client). The true page
+  /// geometry is baked into the bytes; this states it in the terms the platform
+  /// understands — a Windows custom paper length, a macOS `paperSize` — and the
+  /// height must stay finite because the method channel cannot carry
+  /// `double.infinity`.
+  PdfPageFormat get platformPageFormat {
+    final width = mediaWidthMm;
+    final height = mediaHeightMm;
+    if (width == null || height == null) {
+      return PdfPageFormat.a4;
+    }
+    // Both platforms flip a page that is wider than tall into landscape — the
+    // Windows plugin swaps `dmPaperWidth`/`dmPaperLength`, macOS sets
+    // `NSPrintInfo.orientation` — which on a roll would lay the slip across the
+    // paper. No real receipt is shorter than the roll is wide, but the failure
+    // would be silent, so keep the page portrait by construction.
+    final portraitHeight = math.max(height, width + 1);
+    return PdfPageFormat(
+      width * PdfPageFormat.mm,
+      portraitHeight * PdfPageFormat.mm,
+    );
   }
-  final width = widthMm * PdfPageFormat.mm;
-  return PdfPageFormat(width, width * _kRollPageHeightMultiple);
 }
 
+/// The page height of a receipt roll, in whole millimetres of media. Rounded up
+/// so a sub-millimetre remainder can never clip the last line off the slip.
+double _rollMediaHeightMm(double heightPoints) =>
+    (heightPoints / PdfPageFormat.mm).ceilToDouble();
+
 /// A single roll "segment" is at most this many times the paper width tall. It
-/// bounds both the platform page-format hint ([_platformPageFormat]) and the
+/// bounds both the media height a roll job asks the spooler for and the
 /// point at which a long receipt stops being one continuous page and paginates
 /// ([_ReceiptFrame]) — keeping the two in agreement so a driver never receives a
 /// page taller than the hint (which pushed a long receipt's total off the top).
 const double _kRollPageHeightMultiple = 6;
 
-/// Sendable bundle for [_buildOrderDocumentBytes] so PDF rendering can run in a
+/// Sendable bundle for [_buildOrderDocumentRender] so PDF rendering can run in a
 /// background isolate. Every field is plain data (the template and labels) or
 /// raw bytes (the logo and font data) — no pdf widgets or closures cross over.
 class _OrderDocumentBuildRequest {
@@ -812,7 +950,9 @@ class _OrderDocumentBuildRequest {
 /// Top-level so it can serve as an isolate entry point: parses the font bytes
 /// and performs the heavy synchronous PDF encoding. Renders the full A4
 /// document or, for a receipt-roll [PdfPageSize], the compact receipt frame.
-Future<Uint8List> _buildOrderDocumentBytes(_OrderDocumentBuildRequest request) {
+Future<OrderDocumentRender> _buildOrderDocumentRender(
+  _OrderDocumentBuildRequest request,
+) {
   final receiptWidthMm = pdfPageSizeReceiptWidthMm(request.pageSize);
   final fonts = request.fontData.toFonts();
   if (receiptWidthMm != null) {
@@ -1148,7 +1288,7 @@ class _DocumentFrame {
   /// Brand mark for the closing tagline in the page footer.
   final Uint8List? brandLogoBytes;
 
-  Future<Uint8List> build() async {
+  Future<OrderDocumentRender> build() async {
     final pdf = pw.Document(
       title: '${template.title} ${template.reference}',
       author: template.shopName,
@@ -1174,7 +1314,8 @@ class _DocumentFrame {
       ),
     );
 
-    return pdf.save();
+    // A4 is a page every driver already knows: no media override needed.
+    return OrderDocumentRender(bytes: await pdf.save());
   }
 
   pw.Widget _hero() {
@@ -1498,8 +1639,8 @@ class _ReceiptFrame {
       widthMm * PdfPageFormat.mm - 2 * _horizontalMarginMm * PdfPageFormat.mm;
 
   /// The tallest a single continuous roll page may be before it is paginated.
-  /// Matches the platform page-format hint ([_platformPageFormat]) so no page
-  /// ever exceeds what the driver is told to expect.
+  /// Matches the media height a paginated roll job asks for, so no page ever
+  /// exceeds what the driver is told to expect.
   double get _maxPageHeight =>
       widthMm * PdfPageFormat.mm * _kRollPageHeightMultiple;
 
@@ -1508,22 +1649,32 @@ class _ReceiptFrame {
     vertical: _verticalMargin * PdfPageFormat.mm,
   );
 
-  Future<Uint8List> build() async {
+  Future<OrderDocumentRender> build() async {
     // Render as one continuous roll page (content-height, no blank tail) — the
     // right shape for the common short receipt.
     final continuous = _continuousDocument();
     final bytes = await continuous.save();
     // `save()` resolves the infinite-height page to its measured content height.
+    // That measurement is the media the job asks for, so a short slip costs
+    // short paper: the roll advances the receipt, not the queue's page.
     final pages = continuous.document.pdfPageList.pages;
     final measured = pages.isEmpty ? 0.0 : pages.first.pageFormat.height;
     if (measured <= _maxPageHeight) {
-      return bytes;
+      return OrderDocumentRender(
+        bytes: bytes,
+        mediaWidthMm: widthMm.toDouble(),
+        mediaHeightMm: _rollMediaHeightMm(measured),
+      );
     }
     // A long receipt (many items) whose content overruns a roll segment: a
     // single over-tall page overflows the driver's page and lands the total at
     // the top of a garbled slip. Re-render paginated so every item prints and
     // the total sits at the end, across as many segments as it takes.
-    return _paginatedDocument().save();
+    return OrderDocumentRender(
+      bytes: await _paginatedDocument().save(),
+      mediaWidthMm: widthMm.toDouble(),
+      mediaHeightMm: _rollMediaHeightMm(_maxPageHeight),
+    );
   }
 
   pw.Document _newDocument() => pw.Document(

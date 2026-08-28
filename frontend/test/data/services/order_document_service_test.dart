@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf/pdf.dart';
 import 'package:pointy_frontend/src/data/models/printer_config.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
@@ -450,6 +451,125 @@ void main() {
         lessThan(_mediaBoxHeights(standard).single),
       );
     });
+
+    test('a roll render carries the media the slip actually needs', () async {
+      // The whole reason a compact receipt used to come out the same length as
+      // a standard one: nothing told the driver how long the slip was, so it
+      // fed the queue's own roll page (80 x 297 mm on a thermal PPD) either
+      // way. The render now names the media, per slip.
+      final order = _saleOrder(
+        receiptNumber: 'R-media',
+        subtotal: 5,
+        total: 5,
+        lines: const [
+          SaleOrderLine(
+            id: 1,
+            productId: 10,
+            variantId: 0,
+            quantity: 1,
+            returnedQuantity: 0,
+            returnableQuantity: 1,
+            unitLabel: 'قطعة',
+            unitPrice: 5,
+            total: 5,
+            productName: 'شاي',
+          ),
+        ],
+      );
+      final standard = await service.buildSaleInvoiceRender(
+        order: order,
+        shopSettings: _settings,
+        pageSize: PdfPageSize.roll80,
+      );
+      final compact = await service.buildSaleInvoiceRender(
+        order: order,
+        shopSettings: _settings,
+        pageSize: PdfPageSize.roll80,
+        compact: true,
+      );
+
+      for (final render in [standard, compact]) {
+        expect(render.mediaWidthMm, 80);
+        // The media is the page that was rendered, rounded up to a whole
+        // millimetre so a remainder can never clip the last line.
+        final pageHeight = _mediaBoxHeights(render.bytes).single;
+        expect(render.mediaHeightMm, (pageHeight / mm(1)).ceilToDouble());
+        // Comfortably inside a 297 mm roll page — which is exactly what the
+        // driver fed before, for every slip.
+        expect(render.mediaHeightMm, lessThan(297));
+      }
+
+      // And the dense slip asks for less paper than the standard one.
+      expect(compact.mediaHeightMm, lessThan(standard.mediaHeightMm!));
+    });
+
+    test(
+      'a roll render hands the platform its measured page, kept portrait',
+      () async {
+        // Windows has no `lp`: the plugin builds a DEVMODE from this format, so
+        // it is the only thing standing between a compact slip and the driver's
+        // fixed roll page. It also swaps width and length for anything wider
+        // than tall, hence the portrait floor below.
+        final render = await service.buildSaleInvoiceRender(
+          order: _saleOrder(
+            receiptNumber: 'R-platform',
+            subtotal: 40,
+            total: 40,
+            lines: [
+              // Enough rows that the slip is unambiguously taller than the roll
+              // is wide, so this measures the page and not the portrait floor.
+              for (var i = 0; i < 8; i++)
+                SaleOrderLine(
+                  id: i + 1,
+                  productId: 10 + i,
+                  variantId: 0,
+                  quantity: 1,
+                  returnedQuantity: 0,
+                  returnableQuantity: 1,
+                  unitLabel: 'قطعة',
+                  unitPrice: 5,
+                  total: 5,
+                  productName: 'شاي $i',
+                ),
+            ],
+          ),
+          shopSettings: _settings,
+          pageSize: PdfPageSize.roll80,
+          compact: true,
+        );
+        final format = render.platformPageFormat;
+        expect(format.width, closeTo(mm(80), 0.01));
+        expect(format.height, closeTo(mm(render.mediaHeightMm!), 0.01));
+        expect(format.height, greaterThan(format.width));
+      },
+    );
+
+    test('a page shorter than the roll is wide stays portrait', () {
+      // A slip with no line items really is shorter than 80 mm — a test print
+      // measures ~55 mm — and a landscape flip would lay it across the paper
+      // without a word. The floor costs a few millimetres of feed on the
+      // plugin path only; the CUPS path still asks for the exact measurement.
+      final render = OrderDocumentRender(
+        bytes: Uint8List(0),
+        mediaWidthMm: 80,
+        mediaHeightMm: 40,
+      );
+      expect(render.platformPageFormat.width, closeTo(mm(80), 0.01));
+      expect(render.platformPageFormat.height, closeTo(mm(81), 0.01));
+    });
+
+    test(
+      'an A4 document names no media, so the driver keeps its own',
+      () async {
+        final render = await service.buildSaleInvoiceRender(
+          order: _saleOrder(receiptNumber: 'R-a4-media'),
+          shopSettings: _settings,
+        );
+        expect(render.mediaWidthMm, isNull);
+        expect(render.mediaHeightMm, isNull);
+        expect(render.platformPageFormat, PdfPageFormat.a4);
+      },
+    );
 
     test('a compact A4 invoice still renders a full-width page', () async {
       final bytes = await service.buildSaleInvoiceBytes(
