@@ -2336,9 +2336,34 @@ class BootstrapAdminTests(TestCase):
         self.assertTrue(initial_admin_setup_required())
 
     def test_initial_admin_setup_rejects_existing_domain_data(self):
-        ShopSettings.load()
+        settings_row = ShopSettings.load()
+        settings_row.shop_type = ShopSettings.ShopType.GROCERY
+        settings_row.save(update_fields=["shop_type"])
 
         self.assertFalse(initial_admin_setup_required())
+
+    def test_initial_admin_setup_ignores_untouched_shop_settings_singleton(self):
+        # Boot code (relay enrollment) materialises the singleton before the
+        # first admin exists; that must not lock the shop out of onboarding.
+        ShopSettings.load()
+
+        self.assertTrue(initial_admin_setup_required())
+
+    def test_initial_admin_setup_ignores_relay_enrollment_records(self):
+        # Everything a licensed install writes for itself at first boot, before
+        # anyone has logged in: the shop settings singleton, the installation
+        # record, and the connector's setup token. None of it is shop activity,
+        # so the first-run wizard must still be reachable.
+        ShopSettings.load()
+        RelayInstallation.objects.create(
+            installation_id="install-1",
+            relay_public_api_url="https://relay.example.com",
+            connector_token="ptc1.install-1.secret",
+            access_token="ptr1.install-1.secret",
+        )
+        RelayConnectorSetupToken.objects.create(token_hash="hash-1")
+
+        self.assertTrue(initial_admin_setup_required())
 
     def test_initial_admin_creates_superuser_once_when_no_users_exist(self):
         admin = create_initial_admin_user(

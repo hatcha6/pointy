@@ -36,6 +36,13 @@ INITIAL_SETUP_IGNORED_MODELS = {
     ("auth", "permission"),
     ("auth", "user"),
     ("contenttypes", "contenttype"),
+    # Relay plumbing: the licence record and the connector's bootstrap secret
+    # are written during boot, before anyone has logged in, so they can never
+    # be evidence that a shop has started working. Counting them as activity
+    # would tell a brand-new install its setup was already done and leave the
+    # first-run wizard with no way in.
+    ("core", "relayinstallation"),
+    ("core", "relayconnectorsetuptoken"),
     ("sessions", "session"),
 }
 INITIAL_SETUP_VARIANT_OPTION_CODES = {
@@ -497,6 +504,14 @@ def _model_has_initial_setup_blocking_data(model, model_label):
     if model_label == ("channels", "saleschannel"):
         # The built-in POS channel is seeded data, not shop activity.
         return queryset.filter(is_system=False).exists()
+    if model_label == ("core", "shopsettings"):
+        # The singleton is materialised during boot — relay enrollment reads the
+        # shop name before anyone has ever logged in — so its bare existence is
+        # scaffolding, not shop activity. Treating it as activity would answer
+        # "setup already done" on an install that has no users at all, leaving
+        # the first-run wizard with no way in. The wizard is what fills in
+        # shop_type, so that is the mark of a shop that has actually onboarded.
+        return queryset.exclude(shop_type="").exists()
     if model_label == ("attendance", "biotimeconnection"):
         # An untouched singleton row is configuration scaffolding, not activity.
         return queryset.exclude(base_url="").exists()
