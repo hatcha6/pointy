@@ -257,6 +257,38 @@ class OperationsApiClient {
     );
   }
 
+  Future<CustomerAssetTypePage> fetchAssetTypes({
+    bool? isActive,
+    int page = 1,
+  }) async {
+    final response = await _session.get(
+      'asset-types/',
+      query: {
+        if (isActive != null) 'is_active': isActive ? 'true' : 'false',
+        'page': '$page',
+      },
+    );
+    _session.ensureSuccess(response, 'Asset type list failed with status');
+    return CustomerAssetTypePage.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<CustomerAssetType> saveAssetType(CustomerAssetType type) async {
+    final response = type.id > 0
+        ? await _session.patch('asset-types/${type.id}/', body: type.toJson())
+        : await _session.post('asset-types/', body: type.toJson());
+    _session.ensureSuccess(response, 'Asset type save failed with status');
+    return CustomerAssetType.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<void> deleteAssetType(int typeId) async {
+    final response = await _session.delete('asset-types/$typeId/');
+    _session.ensureSuccess(response, 'Asset type delete failed with status');
+  }
+
   Future<CustomerAssetDetail> fetchCustomerAsset(int assetId) async {
     final response = await _session.get('assets/$assetId/');
     _session.ensureSuccess(

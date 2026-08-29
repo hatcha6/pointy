@@ -3600,6 +3600,88 @@ class AppLocalizationsAr extends AppLocalizations {
   String get assetTypeVehicle => 'مركبة';
 
   @override
+  String get assetTypesSectionTitle => 'أنواع الأجهزة والمركبات';
+
+  @override
+  String get assetTypesSectionHint =>
+      'ما الذي تستقبله الورشة؟ أضف نوعاً جديداً وحدد الأرقام التي يُعرف بها.';
+
+  @override
+  String get assetTypeAddButton => 'نوع جديد';
+
+  @override
+  String get assetTypeEditTitle => 'تعديل النوع';
+
+  @override
+  String get assetTypeCreateTitle => 'نوع جديد';
+
+  @override
+  String get assetTypeNameLabel => 'الاسم';
+
+  @override
+  String get assetTypeSlugLabel => 'المعرّف (بالإنجليزية)';
+
+  @override
+  String get assetTypeIconLabel => 'الأيقونة';
+
+  @override
+  String get assetTypeIdentifiersLabel => 'الأرقام التي يُعرف بها';
+
+  @override
+  String get assetTypeCustomLabelLabel => 'اسم رقم خاص (اختياري)';
+
+  @override
+  String get assetTypeCustomLabelHint => 'مثال: رقم الهيكل، رقم العداد';
+
+  @override
+  String get assetTypeTracksSerial => 'رقم تسلسلي';
+
+  @override
+  String get assetTypeTracksImei => 'IMEI';
+
+  @override
+  String get assetTypeTracksVin => 'رقم الشاصي';
+
+  @override
+  String get assetTypeTracksPlate => 'رقم اللوحة';
+
+  @override
+  String get assetTypeTracksEngine => 'رقم المحرك';
+
+  @override
+  String get assetTypeTracksYear => 'سنة الصنع';
+
+  @override
+  String get assetTypeTracksOdometer => 'قراءة العداد';
+
+  @override
+  String get assetTypeInactiveBadge => 'غير مفعّل';
+
+  @override
+  String get assetTypeBuiltInBadge => 'أساسي';
+
+  @override
+  String assetTypeItemCount(int count) {
+    return '$count جهاز';
+  }
+
+  @override
+  String get assetTypeDeleteConfirmTitle => 'حذف النوع؟';
+
+  @override
+  String get assetTypeDeleteConfirmBody =>
+      'لن يظهر هذا النوع عند استلام جهاز جديد.';
+
+  @override
+  String get assetTypeSlugRequired => 'المعرّف مطلوب، بالحروف الإنجليزية.';
+
+  @override
+  String get assetTypeActiveLabel => 'مفعّل عند الاستلام';
+
+  @override
+  String get assetCustomIdentifierFallbackLabel => 'رقم التعريف';
+
+  @override
   String get shopSetupKitchenScreenTitle => 'شاشة مطبخ بدل الورقة';
 
   @override

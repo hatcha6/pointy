@@ -16,7 +16,7 @@ from django.urls import reverse
 
 from apps.customers.models import Asset, Customer
 
-from .tests import OperationsTestCase, authenticated_client
+from .tests import OperationsTestCase, asset_type, authenticated_client
 
 
 @override_settings(
@@ -32,7 +32,7 @@ class AssetListQueryScalingTests(OperationsTestCase):
             )
             asset = Asset.objects.create(
                 customer=owner,
-                asset_type=Asset.AssetType.VEHICLE,
+                asset_type=asset_type("vehicle"),
                 brand="Toyota",
                 model_name="Hilux",
                 vin=f"VIN{index:014d}",

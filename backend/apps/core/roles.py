@@ -503,6 +503,11 @@ def _model_has_initial_setup_blocking_data(model, model_label):
     if model_label == ("operations", "workflowtemplate"):
         # Seeded default workflows are configuration, not shop activity.
         return queryset.filter(is_system=False).exists()
+    if model_label == ("customers", "assettype"):
+        # The built-in kinds of item a repair shop takes in (phone, vehicle, …)
+        # are seeded configuration. A shop that added its own — "تلفاز" for an
+        # electronics repairer — has actually done something.
+        return queryset.filter(is_system=False).exists()
     if model_label == ("expenses", "expensecategory"):
         # Seeded default expense categories are configuration, not activity.
         return queryset.exclude(name__in=DEFAULT_EXPENSE_CATEGORY_NAMES).exists()

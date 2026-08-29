@@ -1,9 +1,11 @@
 import secrets
+from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
+from django.utils import timezone
 
 from apps.catalog.models import BillOfMaterials, ProductVariant
 from apps.core.models import TimeStampedModel
@@ -281,6 +283,32 @@ class Job(TimeStampedModel):
     @property
     def custody_state(self) -> str:
         return "released" if self.handed_over_at is not None else "with_shop"
+
+    @property
+    def warranty_expires_on(self):
+        """The day this repair's warranty runs out, or None if it has none.
+
+        Counted from the handover, not the invoice: the customer's cover starts
+        when they get the thing back. Derived rather than stored, so a corrected
+        ``warranty_days`` or a reopened job cannot leave a stale date behind.
+        """
+        if self.warranty_days <= 0 or self.handed_over_at is None:
+            return None
+        return timezone.localtime(self.handed_over_at).date() + timedelta(
+            days=self.warranty_days
+        )
+
+    @property
+    def is_under_warranty(self) -> bool:
+        """Is this repair still covered today?
+
+        The comparison ERPNext's Serial No makes for "Under Warranty" vs "Out of
+        Warranty" — expiry on or after today is still covered — applied to the
+        repair rather than to a stock serial, because the cover a shop gives is
+        on the work it did, not on the item.
+        """
+        expiry = self.warranty_expires_on
+        return expiry is not None and expiry >= timezone.localdate()
 
     def save(self, *args, **kwargs):
         update_fields = kwargs.get("update_fields")

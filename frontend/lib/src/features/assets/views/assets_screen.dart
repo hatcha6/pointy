@@ -230,7 +230,7 @@ class _AssetCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 AssetIconBadge(
-                  type: asset.assetType,
+                  iconKey: asset.assetTypeIcon,
                   color: asset.isInShop
                       ? colors.primaryStrong
                       : colors.mutedInk,

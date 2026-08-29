@@ -7,47 +7,56 @@ import '../../../shared/design/design.dart';
 /// Cross-screen building blocks for the asset registry, so the list, the
 /// details page and the intake wizard name and picture an item the same way.
 
-String assetTypeName(AppLocalizations l10n, CustomerAssetType type) {
-  return switch (type) {
-    CustomerAssetType.phone => l10n.assetTypePhone,
-    CustomerAssetType.tablet => l10n.assetTypeTablet,
-    CustomerAssetType.laptop => l10n.assetTypeLaptop,
-    CustomerAssetType.console => l10n.assetTypeConsole,
-    CustomerAssetType.appliance => l10n.assetTypeAppliance,
-    CustomerAssetType.vehicle => l10n.assetTypeVehicle,
-    CustomerAssetType.other => l10n.assetTypeOther,
-  };
+/// Icons a shop-defined type can choose from, by key.
+///
+/// The type carries a *key*, not an icon: the server has no business knowing
+/// about Flutter, and a shop that invents "مولد كهرباء" picks from this list.
+/// An unknown key falls back to a generic device rather than rendering blank,
+/// so a type created by a newer client never breaks an older one.
+const Map<String, IconData> assetTypeIcons = {
+  'phone': Icons.smartphone_outlined,
+  'tablet': Icons.tablet_mac_outlined,
+  'laptop': Icons.laptop_mac_outlined,
+  'console': Icons.sports_esports_outlined,
+  'appliance': Icons.kitchen_outlined,
+  'vehicle': Icons.directions_car_outlined,
+  'motorcycle': Icons.two_wheeler_outlined,
+  'bicycle': Icons.pedal_bike_outlined,
+  'television': Icons.tv_outlined,
+  'camera': Icons.photo_camera_outlined,
+  'watch': Icons.watch_outlined,
+  'audio': Icons.headphones_outlined,
+  'generator': Icons.bolt_outlined,
+  'tool': Icons.handyman_outlined,
+  'furniture': Icons.chair_outlined,
+  'device': Icons.devices_other_outlined,
+};
+
+IconData assetIconForKey(String? key) {
+  return assetTypeIcons[key] ?? Icons.devices_other_outlined;
 }
 
-IconData assetTypeIcon(CustomerAssetType type) {
-  return switch (type) {
-    CustomerAssetType.phone => Icons.smartphone_outlined,
-    CustomerAssetType.tablet => Icons.tablet_mac_outlined,
-    CustomerAssetType.laptop => Icons.laptop_mac_outlined,
-    CustomerAssetType.console => Icons.sports_esports_outlined,
-    CustomerAssetType.appliance => Icons.kitchen_outlined,
-    CustomerAssetType.vehicle => Icons.directions_car_outlined,
-    CustomerAssetType.other => Icons.devices_other_outlined,
-  };
-}
-
-/// The item's name for a human: "Toyota Corolla", "iPhone 15 Pro", or the type
-/// when the shop only recorded a serial.
+/// The item's name for a human: "Toyota Corolla", "iPhone 15 Pro", or the type's
+/// own name when the shop only recorded a number.
 String assetTitle(AppLocalizations l10n, CustomerAsset asset) {
   final label = asset.displayName.trim();
-  return label.isEmpty ? assetTypeName(l10n, asset.assetType) : label;
+  if (label.isNotEmpty) {
+    return label;
+  }
+  final type = asset.assetTypeName.trim();
+  return type.isEmpty ? l10n.assetTypeOther : type;
 }
 
 /// A tinted circular badge carrying the item's type icon.
 class AssetIconBadge extends StatelessWidget {
   const AssetIconBadge({
     super.key,
-    required this.type,
+    required this.iconKey,
     this.size = 44,
     this.color,
   });
 
-  final CustomerAssetType type;
+  final String iconKey;
   final double size;
   final Color? color;
 
@@ -62,7 +71,7 @@ class AssetIconBadge extends StatelessWidget {
         color: tint.withValues(alpha: 0.12),
         shape: BoxShape.circle,
       ),
-      child: Icon(assetTypeIcon(type), color: tint, size: size * 0.5),
+      child: Icon(assetIconForKey(iconKey), color: tint, size: size * 0.5),
     );
   }
 }
@@ -126,5 +135,12 @@ List<({String label, String value})> assetIdentityFields(
   add(l10n.assetEngineLabel, asset.engineNumber);
   add(l10n.assetImeiLabel, asset.imei);
   add(l10n.assetSerialLabel, asset.serialNumber);
+  // Whatever this trade calls its own number, named by the type that defined it.
+  add(
+    asset.customIdentifierLabel.trim().isEmpty
+        ? l10n.assetCustomIdentifierFallbackLabel
+        : asset.customIdentifierLabel,
+    asset.customIdentifier,
+  );
   return fields;
 }

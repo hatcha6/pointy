@@ -6375,6 +6375,162 @@ abstract class AppLocalizations {
   /// **'مركبة'**
   String get assetTypeVehicle;
 
+  /// No description provided for @assetTypesSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنواع الأجهزة والمركبات'**
+  String get assetTypesSectionTitle;
+
+  /// No description provided for @assetTypesSectionHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما الذي تستقبله الورشة؟ أضف نوعاً جديداً وحدد الأرقام التي يُعرف بها.'**
+  String get assetTypesSectionHint;
+
+  /// No description provided for @assetTypeAddButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع جديد'**
+  String get assetTypeAddButton;
+
+  /// No description provided for @assetTypeEditTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل النوع'**
+  String get assetTypeEditTitle;
+
+  /// No description provided for @assetTypeCreateTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع جديد'**
+  String get assetTypeCreateTitle;
+
+  /// No description provided for @assetTypeNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم'**
+  String get assetTypeNameLabel;
+
+  /// No description provided for @assetTypeSlugLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعرّف (بالإنجليزية)'**
+  String get assetTypeSlugLabel;
+
+  /// No description provided for @assetTypeIconLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأيقونة'**
+  String get assetTypeIconLabel;
+
+  /// No description provided for @assetTypeIdentifiersLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأرقام التي يُعرف بها'**
+  String get assetTypeIdentifiersLabel;
+
+  /// No description provided for @assetTypeCustomLabelLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم رقم خاص (اختياري)'**
+  String get assetTypeCustomLabelLabel;
+
+  /// No description provided for @assetTypeCustomLabelHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: رقم الهيكل، رقم العداد'**
+  String get assetTypeCustomLabelHint;
+
+  /// No description provided for @assetTypeTracksSerial.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم تسلسلي'**
+  String get assetTypeTracksSerial;
+
+  /// No description provided for @assetTypeTracksImei.
+  ///
+  /// In ar, this message translates to:
+  /// **'IMEI'**
+  String get assetTypeTracksImei;
+
+  /// No description provided for @assetTypeTracksVin.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الشاصي'**
+  String get assetTypeTracksVin;
+
+  /// No description provided for @assetTypeTracksPlate.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم اللوحة'**
+  String get assetTypeTracksPlate;
+
+  /// No description provided for @assetTypeTracksEngine.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم المحرك'**
+  String get assetTypeTracksEngine;
+
+  /// No description provided for @assetTypeTracksYear.
+  ///
+  /// In ar, this message translates to:
+  /// **'سنة الصنع'**
+  String get assetTypeTracksYear;
+
+  /// No description provided for @assetTypeTracksOdometer.
+  ///
+  /// In ar, this message translates to:
+  /// **'قراءة العداد'**
+  String get assetTypeTracksOdometer;
+
+  /// No description provided for @assetTypeInactiveBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مفعّل'**
+  String get assetTypeInactiveBadge;
+
+  /// No description provided for @assetTypeBuiltInBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'أساسي'**
+  String get assetTypeBuiltInBadge;
+
+  /// How many assets are registered to an asset type.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} جهاز'**
+  String assetTypeItemCount(int count);
+
+  /// No description provided for @assetTypeDeleteConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف النوع؟'**
+  String get assetTypeDeleteConfirmTitle;
+
+  /// No description provided for @assetTypeDeleteConfirmBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن يظهر هذا النوع عند استلام جهاز جديد.'**
+  String get assetTypeDeleteConfirmBody;
+
+  /// No description provided for @assetTypeSlugRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعرّف مطلوب، بالحروف الإنجليزية.'**
+  String get assetTypeSlugRequired;
+
+  /// No description provided for @assetTypeActiveLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفعّل عند الاستلام'**
+  String get assetTypeActiveLabel;
+
+  /// No description provided for @assetCustomIdentifierFallbackLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم التعريف'**
+  String get assetCustomIdentifierFallbackLabel;
+
   /// No description provided for @shopSetupKitchenScreenTitle.
   ///
   /// In ar, this message translates to:

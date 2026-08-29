@@ -208,6 +208,34 @@ class OperationsRepository {
     );
   }
 
+  Future<Result<List<CustomerAssetType>>> loadAssetTypes({
+    bool? isActive,
+  }) async {
+    return Result.guard(() async {
+      final types = <CustomerAssetType>[];
+      var page = 1;
+      var hasMore = true;
+      while (hasMore) {
+        final result = await _service.fetchAssetTypes(
+          isActive: isActive,
+          page: page,
+        );
+        types.addAll(result.types);
+        hasMore = result.hasMore;
+        page += 1;
+      }
+      return types;
+    });
+  }
+
+  Future<Result<CustomerAssetType>> saveAssetType(CustomerAssetType type) async {
+    return Result.guard(() => _service.saveAssetType(type));
+  }
+
+  Future<Result<void>> deleteAssetType(int typeId) async {
+    return Result.guard(() => _service.deleteAssetType(typeId));
+  }
+
   Future<Result<CustomerAssetDetail>> loadCustomerAsset(int assetId) async {
     return Result.guard(() => _service.fetchCustomerAsset(assetId));
   }

@@ -101,21 +101,56 @@ class Customer(TimeStampedModel):
         return self.full_name
 
 
+class AssetType(TimeStampedModel):
+    """A kind of thing a shop works on, defined by the shop.
+
+    Was a fixed seven-value enum, which quietly decided that Pointy served phone
+    shops and car workshops and nobody else. An electronics repairer takes in
+    televisions, a generator shop takes in generators, a bicycle shop takes in
+    frames — each with its own name for its own number — and none of them should
+    need a code change to write that down.
+
+    The ``tracks_*`` flags say which identity fields intake asks for, so a
+    television is not asked for a number plate and a car is not asked for an
+    IMEI. ``custom_identifier_label`` is the escape hatch for whatever a trade
+    calls its own number ("رقم الهيكل", "رقم العداد") without adding a column per
+    trade.
+    """
+
+    name = models.CharField(max_length=120)
+    slug = models.SlugField(max_length=48, unique=True, allow_unicode=True)
+    # Names an icon the client maps; unknown keys fall back to a generic one, so
+    # a shop-invented type never renders blank.
+    icon_key = models.CharField(max_length=32, default="device")
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    # Seeded types cannot be deleted, only deactivated — the same rule the
+    # seeded workflow templates use, so a shop cannot delete its way into a
+    # registry with no types at all.
+    is_system = models.BooleanField(default=False)
+
+    tracks_serial_number = models.BooleanField(default=True)
+    tracks_imei = models.BooleanField(default=False)
+    tracks_vin = models.BooleanField(default=False)
+    tracks_plate_number = models.BooleanField(default=False)
+    tracks_engine_number = models.BooleanField(default=False)
+    tracks_model_year = models.BooleanField(default=False)
+    tracks_odometer = models.BooleanField(default=False)
+    custom_identifier_label = models.CharField(max_length=60, blank=True)
+
+    class Meta:
+        ordering = ["display_order", "name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Asset(TimeStampedModel):
     """A customer-owned item the shop works on (phone, laptop, console, …).
 
     Jobs link to assets so a returning customer's device history is one
     lookup away.
     """
-
-    class AssetType(models.TextChoices):
-        PHONE = "phone", "Phone"
-        TABLET = "tablet", "Tablet"
-        LAPTOP = "laptop", "Laptop"
-        CONSOLE = "console", "Game console"
-        APPLIANCE = "appliance", "Appliance"
-        VEHICLE = "vehicle", "Vehicle"
-        OTHER = "other", "Other"
 
     # ``customer`` is the item's CURRENT owner, denormalised so every existing
     # query keeps working. The full chain of owners lives in ``AssetOwnership``
@@ -126,10 +161,10 @@ class Asset(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="assets",
     )
-    asset_type = models.CharField(
-        max_length=24,
-        choices=AssetType.choices,
-        default=AssetType.OTHER,
+    asset_type = models.ForeignKey(
+        AssetType,
+        on_delete=models.PROTECT,
+        related_name="assets",
     )
     brand = models.CharField(max_length=120, blank=True)
     model_name = models.CharField(max_length=120, blank=True)
@@ -145,6 +180,8 @@ class Asset(TimeStampedModel):
     # Last odometer reading seen, in kilometres. A hint for service intervals,
     # not an audited measurement — it is whatever the last technician typed.
     odometer = models.PositiveIntegerField(blank=True, null=True)
+    # Whatever this trade calls its own number; the type supplies the label.
+    custom_identifier = models.CharField(max_length=120, blank=True)
     color = models.CharField(max_length=64, blank=True)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
@@ -163,6 +200,7 @@ class Asset(TimeStampedModel):
             models.Index(fields=["vin"], name="asset_vin_idx"),
             models.Index(fields=["plate_number"], name="asset_plate_idx"),
             models.Index(fields=["serial_number"], name="asset_serial_idx"),
+            models.Index(fields=["custom_identifier"], name="asset_custom_id_idx"),
         ]
 
     def __str__(self) -> str:
@@ -172,7 +210,7 @@ class Asset(TimeStampedModel):
     @property
     def display_name(self) -> str:
         label = " ".join(part for part in (self.brand, self.model_name) if part)
-        return label or self.get_asset_type_display()
+        return label or self.asset_type.name
 
     @property
     def identity_label(self) -> str:
@@ -181,7 +219,13 @@ class Asset(TimeStampedModel):
         Plate first for a vehicle — it is what the owner says on the phone —
         then chassis, then the phone identifiers.
         """
-        for value in (self.plate_number, self.vin, self.imei, self.serial_number):
+        for value in (
+            self.plate_number,
+            self.vin,
+            self.imei,
+            self.serial_number,
+            self.custom_identifier,
+        ):
             if value:
                 return value
         return ""

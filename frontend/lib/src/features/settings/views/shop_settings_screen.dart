@@ -24,6 +24,7 @@ import '../../attendance/view_models/attendance_view_model.dart';
 import '../../attendance/views/attendance_settings_page.dart';
 import '../../migration/view_models/migration_view_model.dart';
 import '../../migration/views/data_migration_page.dart';
+import '../../operations/view_models/asset_types_view_model.dart';
 import '../../operations/view_models/workflows_view_model.dart';
 import '../view_models/modifier_groups_view_model.dart';
 import '../view_models/prep_stations_view_model.dart';
@@ -49,6 +50,7 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.salesChannelsViewModel,
     required this.priceCheckersViewModel,
     required this.workflowsViewModel,
+    required this.assetTypesViewModel,
     required this.prepStationsViewModel,
     required this.modifierGroupsViewModel,
     required this.attendanceViewModel,
@@ -64,6 +66,7 @@ class ShopSettingsScreen extends StatelessWidget {
   final SalesChannelsViewModel salesChannelsViewModel;
   final PriceCheckersViewModel priceCheckersViewModel;
   final WorkflowsViewModel workflowsViewModel;
+  final AssetTypesViewModel assetTypesViewModel;
   final PrepStationsViewModel prepStationsViewModel;
   final ModifierGroupsViewModel modifierGroupsViewModel;
   final AttendanceViewModel attendanceViewModel;
@@ -110,6 +113,7 @@ class ShopSettingsScreen extends StatelessWidget {
               salesChannelsViewModel: salesChannelsViewModel,
               priceCheckersViewModel: priceCheckersViewModel,
               workflowsViewModel: workflowsViewModel,
+              assetTypesViewModel: assetTypesViewModel,
               prepStationsViewModel: prepStationsViewModel,
               modifierGroupsViewModel: modifierGroupsViewModel,
               attendanceViewModel: attendanceViewModel,
@@ -136,6 +140,7 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.salesChannelsViewModel,
     required this.priceCheckersViewModel,
     required this.workflowsViewModel,
+    required this.assetTypesViewModel,
     required this.prepStationsViewModel,
     required this.modifierGroupsViewModel,
     required this.attendanceViewModel,
@@ -154,6 +159,7 @@ class _ShopSettingsBody extends StatelessWidget {
   final SalesChannelsViewModel salesChannelsViewModel;
   final PriceCheckersViewModel priceCheckersViewModel;
   final WorkflowsViewModel workflowsViewModel;
+  final AssetTypesViewModel assetTypesViewModel;
   final PrepStationsViewModel prepStationsViewModel;
   final ModifierGroupsViewModel modifierGroupsViewModel;
   final AttendanceViewModel attendanceViewModel;
@@ -197,6 +203,7 @@ class _ShopSettingsBody extends StatelessWidget {
       salesChannelsViewModel: salesChannelsViewModel,
       priceCheckersViewModel: priceCheckersViewModel,
       workflowsViewModel: workflowsViewModel,
+      assetTypesViewModel: assetTypesViewModel,
       prepStationsViewModel: prepStationsViewModel,
       modifierGroupsViewModel: modifierGroupsViewModel,
       attendanceViewModel: attendanceViewModel,
@@ -220,6 +227,7 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.salesChannelsViewModel,
     required this.priceCheckersViewModel,
     required this.workflowsViewModel,
+    required this.assetTypesViewModel,
     required this.prepStationsViewModel,
     required this.modifierGroupsViewModel,
     required this.attendanceViewModel,
@@ -239,6 +247,7 @@ class _ShopSettingsForm extends StatefulWidget {
   final SalesChannelsViewModel salesChannelsViewModel;
   final PriceCheckersViewModel priceCheckersViewModel;
   final WorkflowsViewModel workflowsViewModel;
+  final AssetTypesViewModel assetTypesViewModel;
   final PrepStationsViewModel prepStationsViewModel;
   final ModifierGroupsViewModel modifierGroupsViewModel;
   final AttendanceViewModel attendanceViewModel;
@@ -1381,6 +1390,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         builder: (routeContext) => OperationsSettingsPage(
           shopSettingsViewModel: widget.viewModel,
           workflowsViewModel: widget.workflowsViewModel,
+          assetTypesViewModel: widget.assetTypesViewModel,
           prepStationsViewModel: widget.prepStationsViewModel,
           modifierGroupsViewModel: widget.modifierGroupsViewModel,
         ),

@@ -62,7 +62,7 @@ from apps.catalog.models import (
 )
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import ShopSettings
-from apps.customers.models import Asset, Customer
+from apps.customers.models import Asset, AssetType, Customer
 from apps.operations.models import Job, WorkflowTemplate
 from apps.operations.services import (
     _labor_variant,
@@ -1440,7 +1440,7 @@ class Simulation:
         self.assets = [
             Asset.objects.create(
                 customer=customer,
-                asset_type=Asset.AssetType.PHONE,
+                asset_type=AssetType.objects.get(slug="phone"),
                 brand="Brand",
                 model_name=f"Model {index}",
                 imei=f"35678901234{index:04d}",

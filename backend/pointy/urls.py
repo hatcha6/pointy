@@ -31,6 +31,7 @@ from apps.catalog.views import (
 from apps.channels.views import SalesChannelViewSet
 from apps.customers.views import CustomerViewSet, PaymentCardViewSet
 from apps.operations.views import (
+    AssetTypeViewSet,
     AssetViewSet,
     BillOfMaterialsViewSet,
     JobViewSet,
@@ -181,6 +182,7 @@ router.register("register-sessions", RegisterSessionViewSet, basename="register-
 router.register("sales-channels", SalesChannelViewSet, basename="sales-channel")
 router.register("jobs", JobViewSet, basename="job")
 router.register("assets", AssetViewSet, basename="asset")
+router.register("asset-types", AssetTypeViewSet, basename="asset-type")
 router.register(
     "workflow-templates",
     WorkflowTemplateViewSet,

@@ -44,6 +44,7 @@ import 'features/assets/view_models/asset_details_view_model.dart';
 import 'features/assets/view_models/assets_view_model.dart';
 import 'features/assets/views/asset_details_screen.dart';
 import 'features/assets/views/assets_screen.dart';
+import 'features/operations/view_models/asset_types_view_model.dart';
 import 'features/operations/view_models/job_details_view_model.dart';
 import 'features/operations/view_models/job_history_view_model.dart';
 import 'features/operations/view_models/jobs_board_view_model.dart';
@@ -708,6 +709,9 @@ class _AuthenticatedRoutes implements AppNavigation {
         viewModel: ShopSettingsViewModel(
           dependencies.shopSettingsRepository,
           analyticsEngine: dependencies.analyticsEngine,
+        ),
+        assetTypesViewModel: AssetTypesViewModel(
+          dependencies.operationsRepository,
         ),
         salesChannelsViewModel: SalesChannelsViewModel(
           dependencies.salesChannelRepository,

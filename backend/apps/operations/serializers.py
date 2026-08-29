@@ -4,7 +4,7 @@ from django.db.models.deletion import ProtectedError
 from rest_framework import serializers
 
 from apps.catalog.models import BillOfMaterials, BomLine, ProductVariant
-from apps.customers.models import Asset, AssetOwnership, Customer
+from apps.customers.models import Asset, AssetOwnership, AssetType, Customer
 from apps.employees.models import Employee
 from .models import (
     Job,
@@ -15,6 +15,41 @@ from .models import (
     WorkflowStage,
     WorkflowTemplate,
 )
+
+
+class AssetTypeSerializer(serializers.ModelSerializer):
+    """A kind of thing this shop works on, and which numbers it is identified by.
+
+    The ``tracks_*`` flags drive the intake form: they are the reason a
+    television is never asked for a number plate.
+    """
+
+    asset_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = AssetType
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "icon_key",
+            "display_order",
+            "is_active",
+            "is_system",
+            "asset_count",
+            "tracks_serial_number",
+            "tracks_imei",
+            "tracks_vin",
+            "tracks_plate_number",
+            "tracks_engine_number",
+            "tracks_model_year",
+            "tracks_odometer",
+            "custom_identifier_label",
+        ]
+        read_only_fields = ("is_system",)
+
+    def validate_slug(self, value):
+        return value.strip()
 
 
 class AssetOwnershipSerializer(serializers.ModelSerializer):
@@ -41,6 +76,16 @@ class AssetSerializer(serializers.ModelSerializer):
     customer_phone = serializers.CharField(source="customer.phone", read_only=True)
     display_name = serializers.CharField(read_only=True)
     identity_label = serializers.CharField(read_only=True)
+    asset_type_name = serializers.CharField(source="asset_type.name", read_only=True)
+    asset_type_slug = serializers.CharField(source="asset_type.slug", read_only=True)
+    asset_type_icon = serializers.CharField(
+        source="asset_type.icon_key", read_only=True
+    )
+    custom_identifier_label = serializers.CharField(
+        source="asset_type.custom_identifier_label",
+        read_only=True,
+        default="",
+    )
     job_count = serializers.IntegerField(read_only=True, default=0)
     # Annotated by the viewset: how many jobs on this item are still open, i.e.
     # "is this phone/car in the shop right now?".
@@ -55,6 +100,9 @@ class AssetSerializer(serializers.ModelSerializer):
             "customer_name",
             "customer_phone",
             "asset_type",
+            "asset_type_name",
+            "asset_type_slug",
+            "asset_type_icon",
             "brand",
             "model_name",
             "serial_number",
@@ -62,6 +110,8 @@ class AssetSerializer(serializers.ModelSerializer):
             "vin",
             "plate_number",
             "engine_number",
+            "custom_identifier",
+            "custom_identifier_label",
             "model_year",
             "odometer",
             "color",
@@ -95,6 +145,8 @@ class AssetJobHistorySerializer(serializers.Serializer):
     symptoms = serializers.CharField(read_only=True)
     diagnosis = serializers.CharField(read_only=True)
     warranty_days = serializers.IntegerField(read_only=True)
+    warranty_expires_on = serializers.DateField(read_only=True)
+    is_under_warranty = serializers.BooleanField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     completed_at = serializers.DateTimeField(read_only=True)
     handed_over_at = serializers.DateTimeField(read_only=True)
@@ -113,13 +165,32 @@ class AssetDetailSerializer(AssetSerializer):
     ownerships = AssetOwnershipSerializer(many=True, read_only=True)
     jobs = serializers.SerializerMethodField()
     total_spent = serializers.SerializerMethodField()
+    warranty_expires_on = serializers.SerializerMethodField()
 
     class Meta(AssetSerializer.Meta):
         fields = AssetSerializer.Meta.fields + [
             "ownerships",
             "jobs",
             "total_spent",
+            "warranty_expires_on",
         ]
+
+    def get_warranty_expires_on(self, asset) -> str | None:
+        """When this item's cover runs out, across every repair it has had.
+
+        The first question at a repair counter when a customer walks back in is
+        "is this still under your warranty?", and the answer is the latest cover
+        any past repair gave — not the latest repair, which may have carried
+        none. Modelled on ERPNext's Serial No ``maintenance_status``, but hung
+        off the work rather than off a stock serial: the cover a shop gives is
+        on what it did, not on the thing.
+        """
+        expiries = [
+            job.warranty_expires_on
+            for job in self._jobs(asset)
+            if job.warranty_expires_on is not None
+        ]
+        return max(expiries).isoformat() if expiries else None
 
     def _jobs(self, asset):
         return [link.job for link in asset.job_links.all()]

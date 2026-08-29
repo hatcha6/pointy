@@ -14,7 +14,7 @@ class AssetsViewModel extends ChangeNotifier {
   List<CustomerAsset> _assets = const [];
   String _searchQuery = '';
   bool _inShopOnly = false;
-  CustomerAssetType? _typeFilter;
+  int? _typeFilter;
   bool _isLoading = false;
   bool _hasLoadError = false;
   bool _hasMore = false;
@@ -27,7 +27,7 @@ class AssetsViewModel extends ChangeNotifier {
   List<CustomerAsset> get assets => _assets;
   String get searchQuery => _searchQuery;
   bool get inShopOnly => _inShopOnly;
-  CustomerAssetType? get typeFilter => _typeFilter;
+  int? get typeFilter => _typeFilter;
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   bool get hasLoadError => _hasLoadError;
@@ -53,7 +53,7 @@ class AssetsViewModel extends ChangeNotifier {
     load();
   }
 
-  set typeFilter(CustomerAssetType? value) {
+  set typeFilter(int? value) {
     if (_typeFilter == value) {
       return;
     }
@@ -123,7 +123,7 @@ class AssetsViewModel extends ChangeNotifier {
     return _repository.loadCustomerAssets(
       search: _searchQuery,
       inShop: _inShopOnly ? true : null,
-      assetType: _typeFilter?.toJson(),
+      assetType: _typeFilter?.toString(),
       page: page,
     );
   }

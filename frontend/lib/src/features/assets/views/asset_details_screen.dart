@@ -153,10 +153,10 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
   ) {
     final asset = detail.asset;
     return PointyDetailHero(
-      icon: assetTypeIcon(asset.assetType),
+      icon: assetIconForKey(asset.assetTypeIcon),
       title: assetTitle(l10n, asset),
       value: asset.identityLabel.isEmpty ? null : asset.identityLabel,
-      valueSubtitle: assetTypeName(l10n, asset.assetType),
+      valueSubtitle: asset.assetTypeName,
       description: asset.notes.trim().isEmpty ? null : asset.notes.trim(),
       pills: [
         if (asset.isInShop)

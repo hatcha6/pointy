@@ -19,19 +19,8 @@ import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/jobs_board_view_model.dart';
+import '../../assets/views/assets_ui.dart';
 import 'operations_ui.dart';
-
-String assetTypeLabel(AppLocalizations l10n, CustomerAssetType type) {
-  return switch (type) {
-    CustomerAssetType.phone => l10n.assetTypePhone,
-    CustomerAssetType.tablet => l10n.assetTypeTablet,
-    CustomerAssetType.laptop => l10n.assetTypeLaptop,
-    CustomerAssetType.console => l10n.assetTypeConsole,
-    CustomerAssetType.appliance => l10n.assetTypeAppliance,
-    CustomerAssetType.vehicle => l10n.assetTypeVehicle,
-    CustomerAssetType.other => l10n.assetTypeOther,
-  };
-}
 
 /// The warranty field ships pre-filled, so it only counts as an unsaved edit
 /// once it differs from this.
@@ -82,7 +71,12 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
   CustomerAsset? _selectedAsset;
   var _creatingAsset = false;
   var _skipAsset = false;
-  var _newAssetType = CustomerAssetType.phone;
+
+  /// The kinds of item this shop takes in, loaded once. Empty until they
+  /// arrive, which is why the type row only renders when it has something to
+  /// offer.
+  List<CustomerAssetType> _assetTypes = const [];
+  CustomerAssetType? _newAssetType;
   final _newAssetBrandController = TextEditingController();
   final _newAssetModelController = TextEditingController();
   final _newAssetSerialController = TextEditingController();
@@ -90,6 +84,8 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
   final _newAssetPlateController = TextEditingController();
   final _newAssetYearController = TextEditingController();
   final _newAssetOdometerController = TextEditingController();
+  final _newAssetEngineController = TextEditingController();
+  final _newAssetCustomIdController = TextEditingController();
   final _newAssetImeiController = TextEditingController();
   final _newAssetColorController = TextEditingController();
 
@@ -108,6 +104,7 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
   void initState() {
     super.initState();
     _searchCustomers('');
+    unawaited(_loadAssetTypes());
     unawaited(_applyShopTypeDefaults());
   }
 
@@ -127,8 +124,41 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
       return;
     }
     if (result.value.shopType == 'car_workshop') {
-      setState(() => _newAssetType = CustomerAssetType.vehicle);
+      _preferredTypeSlug = 'vehicle';
+      _applyPreferredType();
     }
+  }
+
+  String _preferredTypeSlug = 'phone';
+
+  /// The kinds of item this shop works on, and which numbers each is known by.
+  ///
+  /// Loaded rather than hardcoded: a shop that repairs televisions or
+  /// generators defines its own, and the intake form has to ask for the numbers
+  /// that type actually has.
+  Future<void> _loadAssetTypes() async {
+    final result = await widget.operationsRepository.loadAssetTypes(
+      isActive: true,
+    );
+    if (!mounted || result is! Ok<List<CustomerAssetType>>) {
+      return;
+    }
+    setState(() => _assetTypes = result.value);
+    _applyPreferredType();
+  }
+
+  void _applyPreferredType() {
+    if (!mounted || _assetTypes.isEmpty) {
+      return;
+    }
+    final preferred = _assetTypes.where(
+      (type) => type.slug == _preferredTypeSlug,
+    );
+    setState(() {
+      _newAssetType = preferred.isNotEmpty
+          ? preferred.first
+          : _assetTypes.first;
+    });
   }
 
   @override
@@ -144,6 +174,8 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
     _newAssetPlateController.dispose();
     _newAssetYearController.dispose();
     _newAssetOdometerController.dispose();
+    _newAssetEngineController.dispose();
+    _newAssetCustomIdController.dispose();
     _newAssetImeiController.dispose();
     _newAssetColorController.dispose();
     _symptomsController.dispose();
@@ -451,6 +483,7 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
   Widget _assetStep(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
+    final type = _newAssetType;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -480,7 +513,7 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
               title: Text(asset.displayName),
               subtitle: Text(
                 [
-                  assetTypeLabel(l10n, asset.assetType),
+                  asset.assetTypeName,
                   if (asset.imei.isNotEmpty) 'IMEI ${asset.imei}',
                   if (asset.serialNumber.isNotEmpty) asset.serialNumber,
                   l10n.jobCountLabel(asset.jobCount),
@@ -525,19 +558,30 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
         ),
         if (_creatingAsset) ...[
           SizedBox(height: spacing.md),
-          DropdownButtonFormField<CustomerAssetType>(
-            initialValue: _newAssetType,
+          DropdownButtonFormField<int>(
+            initialValue: _newAssetType?.id,
             decoration: InputDecoration(labelText: l10n.assetTypeLabel),
             items: [
-              for (final type in CustomerAssetType.values)
+              for (final type in _assetTypes)
                 DropdownMenuItem(
-                  value: type,
-                  child: Text(assetTypeLabel(l10n, type)),
+                  value: type.id,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(assetIconForKey(type.iconKey), size: 18),
+                      SizedBox(width: spacing.xs),
+                      Text(type.name),
+                    ],
+                  ),
                 ),
             ],
-            onChanged: (type) {
-              if (type != null) {
-                setState(() => _newAssetType = type);
+            onChanged: (id) {
+              if (id == null) {
+                return;
+              }
+              final chosen = _assetTypes.where((type) => type.id == id);
+              if (chosen.isNotEmpty) {
+                setState(() => _newAssetType = chosen.first);
               }
             },
           ),
@@ -551,53 +595,79 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
             controller: _newAssetModelController,
             decoration: InputDecoration(labelText: l10n.assetModelLabel),
           ),
-          // Identity fields follow the type: a car has no IMEI and a phone has
-          // no plate, and asking for both is how a counter ends up with an
-          // empty chassis field on every vehicle in the registry.
-          if (_newAssetType.isVehicle) ...[
-            SizedBox(height: spacing.sm),
-            TextField(
-              controller: _newAssetPlateController,
-              decoration: InputDecoration(labelText: l10n.assetPlateLabel),
-            ),
-            SizedBox(height: spacing.sm),
-            TextField(
-              controller: _newAssetVinController,
-              decoration: InputDecoration(labelText: l10n.assetVinLabel),
-            ),
-            SizedBox(height: spacing.sm),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _newAssetYearController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(labelText: l10n.assetYearLabel),
-                  ),
-                ),
-                SizedBox(width: spacing.sm),
-                Expanded(
-                  child: TextField(
-                    controller: _newAssetOdometerController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: l10n.assetOdometerLabel,
+          // Identity fields follow the TYPE's own declaration, field by field.
+          // A car has no IMEI, a phone has no plate, and a television has
+          // neither — asking for all of them is how a registry fills up with
+          // empty chassis fields, and hardcoding a vehicle/not-vehicle split is
+          // how it stops working the moment a shop repairs something else.
+          ...[
+            if (type?.tracksPlateNumber ?? false)
+              _identityField(
+                _newAssetPlateController,
+                l10n.assetPlateLabel,
+                spacing,
+              ),
+            if (type?.tracksVin ?? false)
+              _identityField(
+                _newAssetVinController,
+                l10n.assetVinLabel,
+                spacing,
+              ),
+            if (type?.tracksEngineNumber ?? false)
+              _identityField(
+                _newAssetEngineController,
+                l10n.assetEngineLabel,
+                spacing,
+              ),
+            if (type?.tracksImei ?? false)
+              _identityField(
+                _newAssetImeiController,
+                l10n.assetImeiLabel,
+                spacing,
+              ),
+            if (type?.tracksSerialNumber ?? true)
+              _identityField(
+                _newAssetSerialController,
+                l10n.assetSerialLabel,
+                spacing,
+              ),
+            if (type?.tracksCustomIdentifier ?? false)
+              _identityField(
+                _newAssetCustomIdController,
+                type!.customIdentifierLabel,
+                spacing,
+              ),
+            if ((type?.tracksModelYear ?? false) ||
+                (type?.tracksOdometer ?? false)) ...[
+              SizedBox(height: spacing.sm),
+              Row(
+                children: [
+                  if (type?.tracksModelYear ?? false)
+                    Expanded(
+                      child: TextField(
+                        controller: _newAssetYearController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: l10n.assetYearLabel,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ],
-            ),
-          ] else ...[
-            SizedBox(height: spacing.sm),
-            TextField(
-              controller: _newAssetImeiController,
-              decoration: InputDecoration(labelText: l10n.assetImeiLabel),
-            ),
-            SizedBox(height: spacing.sm),
-            TextField(
-              controller: _newAssetSerialController,
-              decoration: InputDecoration(labelText: l10n.assetSerialLabel),
-            ),
+                  if ((type?.tracksModelYear ?? false) &&
+                      (type?.tracksOdometer ?? false))
+                    SizedBox(width: spacing.sm),
+                  if (type?.tracksOdometer ?? false)
+                    Expanded(
+                      child: TextField(
+                        controller: _newAssetOdometerController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: l10n.assetOdometerLabel,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
           ],
           SizedBox(height: spacing.sm),
           TextField(
@@ -606,6 +676,20 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _identityField(
+    TextEditingController controller,
+    String label,
+    AdaptiveSpacing spacing,
+  ) {
+    return Padding(
+      padding: EdgeInsets.only(top: spacing.sm),
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(labelText: label),
+      ),
     );
   }
 
@@ -719,17 +803,21 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
               _newAssetModelController.text.trim().isNotEmpty ||
               _newAssetImeiController.text.trim().isNotEmpty ||
               _newAssetPlateController.text.trim().isNotEmpty ||
-              _newAssetVinController.text.trim().isNotEmpty)) {
+              _newAssetVinController.text.trim().isNotEmpty ||
+              _newAssetCustomIdController.text.trim().isNotEmpty) &&
+          _newAssetType != null) {
         final created = await widget.operationsRepository.createCustomerAsset(
           CustomerAssetDraft(
             customer: customer.id,
-            assetType: _newAssetType,
+            assetType: _newAssetType!.id,
             brand: _newAssetBrandController.text.trim(),
             modelName: _newAssetModelController.text.trim(),
             serialNumber: _newAssetSerialController.text.trim(),
             imei: _newAssetImeiController.text.trim(),
             vin: _newAssetVinController.text.trim(),
             plateNumber: _newAssetPlateController.text.trim(),
+            engineNumber: _newAssetEngineController.text.trim(),
+            customIdentifier: _newAssetCustomIdController.text.trim(),
             modelYear: int.tryParse(_newAssetYearController.text.trim()),
             odometer: int.tryParse(_newAssetOdometerController.text.trim()),
             color: _newAssetColorController.text.trim(),

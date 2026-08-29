@@ -1,4 +1,6 @@
 from datetime import timedelta
+
+from django.utils import timezone
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -18,7 +20,7 @@ from apps.core.roles import (
     ensure_role_groups,
     pointy_domain_data_exists,
 )
-from apps.customers.models import Asset, Customer
+from apps.customers.models import Asset, AssetType, Customer
 from apps.employees.models import Employee
 from apps.inventory.models import StockItem
 from apps.purchasing.models import PurchaseLine, PurchaseOrder, Supplier
@@ -39,6 +41,14 @@ def authenticated_client(user):
     client = APIClient()
     client.force_authenticate(user=user)
     return client
+
+
+def asset_type(slug="phone"):
+    """A seeded asset type by slug — the shop-editable replacement for the old
+    ``Asset.AssetType`` enum."""
+    from apps.customers.models import AssetType
+
+    return AssetType.objects.get(slug=slug)
 
 
 def repair_template():
@@ -62,7 +72,7 @@ class OperationsTestCase(TestCase):
         self.customer = Customer.objects.create(full_name="أحمد علي", phone="0911")
         self.asset = Asset.objects.create(
             customer=self.customer,
-            asset_type=Asset.AssetType.PHONE,
+            asset_type=asset_type("phone"),
             brand="Apple",
             model_name="iPhone 15 Pro",
             imei="356789",
@@ -1686,7 +1696,7 @@ class AssetRegistryTests(OperationsTestCase):
         self.owner = Customer.objects.create(full_name="سالم", phone="0921")
         self.car = Asset.objects.create(
             customer=self.owner,
-            asset_type=Asset.AssetType.VEHICLE,
+            asset_type=asset_type("vehicle"),
             brand="Toyota",
             model_name="Corolla",
             vin="JTDBR32E520012345",
@@ -1928,3 +1938,180 @@ class JobMaterialCostBasisTests(OperationsTestCase):
         self.assertEqual(line.unit_cost, Decimal("2.00"))
         # …and so the order's profit is computed against the goods' real value.
         self.assertEqual(line.line_cost, Decimal("4.00"))
+
+
+class AssetTypeFlexibilityTests(OperationsTestCase):
+    """A shop that repairs something we never thought of can still write it down.
+
+    The type used to be a seven-value enum, which quietly decided Pointy served
+    phone shops and car workshops and nobody else.
+    """
+
+    def test_builtin_types_are_seeded_with_their_identity_fields(self):
+        phone = AssetType.objects.get(slug="phone")
+        vehicle = AssetType.objects.get(slug="vehicle")
+
+        # A phone has an IMEI and no number plate; a car is the other way round.
+        self.assertTrue(phone.tracks_imei)
+        self.assertFalse(phone.tracks_plate_number)
+        self.assertTrue(vehicle.tracks_plate_number)
+        self.assertTrue(vehicle.tracks_vin)
+        self.assertFalse(vehicle.tracks_imei)
+        self.assertTrue(vehicle.tracks_odometer)
+
+    def test_a_shop_can_add_its_own_kind_of_item(self):
+        client = authenticated_client(self.manager)
+
+        response = client.post(
+            reverse("asset-type-list"),
+            {
+                "name": "تلفاز",
+                "slug": "television",
+                "icon_key": "device",
+                "tracks_serial_number": True,
+                "custom_identifier_label": "رقم اللوحة الأم",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        created = AssetType.objects.get(slug="television")
+        self.assertFalse(created.is_system)
+        self.assertEqual(created.custom_identifier_label, "رقم اللوحة الأم")
+
+    def test_an_item_of_a_shop_defined_type_is_found_by_its_own_number(self):
+        # The whole point: one search box over whatever this trade calls its
+        # number, without a column per trade.
+        generator = AssetType.objects.create(
+            name="مولد كهرباء",
+            slug="generator",
+            custom_identifier_label="رقم العداد",
+        )
+        asset = Asset.objects.create(
+            customer=self.customer,
+            asset_type=generator,
+            brand="Perkins",
+            custom_identifier="MTR-99881",
+        )
+        client = authenticated_client(self.cashier)
+
+        response = client.get(reverse("asset-list"), {"search": "MTR-99881"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        rows = response.data["results"]
+        self.assertEqual([row["id"] for row in rows], [asset.pk])
+        self.assertEqual(rows[0]["asset_type_name"], "مولد كهرباء")
+        # The label travels with the asset so the UI can name the field.
+        self.assertEqual(rows[0]["custom_identifier_label"], "رقم العداد")
+        self.assertEqual(rows[0]["identity_label"], "MTR-99881")
+
+    def test_a_builtin_type_can_be_deactivated_but_not_deleted(self):
+        client = authenticated_client(self.manager)
+        console = AssetType.objects.get(slug="console")
+
+        deleted = client.delete(reverse("asset-type-detail", args=[console.pk]))
+        self.assertEqual(deleted.status_code, status.HTTP_400_BAD_REQUEST)
+
+        deactivated = client.patch(
+            reverse("asset-type-detail", args=[console.pk]),
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(deactivated.status_code, status.HTTP_200_OK)
+        console.refresh_from_db()
+        self.assertFalse(console.is_active)
+
+    def test_a_type_with_items_registered_to_it_cannot_be_deleted(self):
+        client = authenticated_client(self.manager)
+        drone = AssetType.objects.create(name="درون", slug="drone")
+        Asset.objects.create(customer=self.customer, asset_type=drone)
+
+        response = client.delete(reverse("asset-type-detail", args=[drone.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(AssetType.objects.filter(pk=drone.pk).exists())
+
+    def test_an_unused_shop_type_can_be_deleted(self):
+        client = authenticated_client(self.manager)
+        typo = AssetType.objects.create(name="خطأ", slug="typo")
+
+        response = client.delete(reverse("asset-type-detail", args=[typo.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(AssetType.objects.filter(pk=typo.pk).exists())
+
+    def test_the_intake_list_is_readable_by_front_desk(self):
+        # The intake form needs the types and their flags to know which fields
+        # to show, so a cashier must be able to read them.
+        response = authenticated_client(self.cashier).get(reverse("asset-type-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertGreaterEqual(len(response.data["results"]), 7)
+
+
+class JobWarrantyTests(OperationsTestCase):
+    """"Is this still under your warranty?" — the first question at the counter.
+
+    We stored ``warranty_days`` and never answered it. Derived from the handover
+    rather than stored, so a corrected warranty or a reopened job cannot leave a
+    stale date behind. Same comparison ERPNext's Serial No makes for "Under
+    Warranty" vs "Out of Warranty", applied to the repair rather than the item —
+    the cover a shop gives is on the work it did.
+    """
+
+    def _delivered_job(self, warranty_days, handed_over_days_ago):
+        client = authenticated_client(self.manager)
+        data = self.create_repair_job(client=client, warranty_days=warranty_days)
+        job = Job.objects.get(pk=data["id"])
+        job.handed_over_at = timezone.now() - timedelta(days=handed_over_days_ago)
+        job.status = Job.Status.COMPLETED
+        job.save(update_fields=["handed_over_at", "status"])
+        return job
+
+    def test_a_recent_repair_is_still_covered(self):
+        job = self._delivered_job(warranty_days=90, handed_over_days_ago=10)
+
+        self.assertTrue(job.is_under_warranty)
+        self.assertEqual(
+            job.warranty_expires_on,
+            timezone.localtime(job.handed_over_at).date() + timedelta(days=90),
+        )
+
+    def test_cover_that_has_run_out_reads_as_expired(self):
+        job = self._delivered_job(warranty_days=30, handed_over_days_ago=45)
+
+        self.assertFalse(job.is_under_warranty)
+
+    def test_the_last_day_of_cover_still_counts(self):
+        # Expiry on today is covered, not expired — the boundary a customer
+        # turning up on the final day depends on.
+        job = self._delivered_job(warranty_days=30, handed_over_days_ago=30)
+
+        self.assertEqual(job.warranty_expires_on, timezone.localdate())
+        self.assertTrue(job.is_under_warranty)
+
+    def test_a_job_with_no_warranty_or_no_handover_has_no_expiry(self):
+        no_cover = self._delivered_job(warranty_days=0, handed_over_days_ago=1)
+        self.assertIsNone(no_cover.warranty_expires_on)
+        self.assertFalse(no_cover.is_under_warranty)
+
+        # Still on the bench: cover starts when the customer gets it back.
+        client = authenticated_client(self.manager)
+        data = self.create_repair_job(client=client, warranty_days=90)
+        self.assertIsNone(Job.objects.get(pk=data["id"]).warranty_expires_on)
+
+    def test_the_asset_reports_the_longest_cover_any_repair_gave(self):
+        # A later repair with no warranty must not shorten the cover an earlier
+        # one gave: the answer is the latest expiry across every visit.
+        self._delivered_job(warranty_days=180, handed_over_days_ago=5)
+        self._delivered_job(warranty_days=0, handed_over_days_ago=1)
+
+        response = authenticated_client(self.cashier).get(
+            reverse("asset-detail", args=[self.asset.pk])
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        expected = (timezone.localdate() - timedelta(days=5)) + timedelta(days=180)
+        self.assertEqual(response.data["warranty_expires_on"], expected.isoformat())
+        covered = [job for job in response.data["jobs"] if job["is_under_warranty"]]
+        self.assertEqual(len(covered), 1)

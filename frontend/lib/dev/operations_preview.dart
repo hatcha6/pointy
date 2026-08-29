@@ -6,11 +6,13 @@
 //
 //   flutter run -d web-server --web-port 8080 -t lib/dev/operations_preview.dart
 //
-// Screens: board | board-empty | history | details | details-done
+// Screens: board | board-empty | history | details | details-done | asset-types
 //          | intake | recipes | assets | assets-empty | asset-details
 //
 // See AGENTS.md ("UI preview harness") for the pattern. Not part of the
 // shipping app. Safe to delete.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
@@ -27,6 +29,8 @@ import 'package:pointy_frontend/src/data/repositories/employee_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/operations_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/assets/view_models/asset_details_view_model.dart';
+import 'package:pointy_frontend/src/features/operations/view_models/asset_types_view_model.dart';
+import 'package:pointy_frontend/src/features/settings/views/asset_types_section.dart';
 import 'package:pointy_frontend/src/features/assets/view_models/assets_view_model.dart';
 import 'package:pointy_frontend/src/features/assets/views/asset_details_screen.dart';
 import 'package:pointy_frontend/src/features/assets/views/assets_screen.dart';
@@ -40,6 +44,7 @@ import 'package:pointy_frontend/src/features/operations/views/job_intake_wizard.
 import 'package:pointy_frontend/src/features/operations/views/jobs_screen.dart';
 import 'package:pointy_frontend/src/features/operations/views/recipes_page.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
+import 'package:pointy_frontend/src/shared/responsive/responsive.dart';
 import 'package:pointy_frontend/src/shared/navigation/app_navigation.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
@@ -100,6 +105,8 @@ class _Router extends StatelessWidget {
         return _assets(assets: const []);
       case 'asset-details':
         return _assetDetails();
+      case 'asset-types':
+        return _assetTypes();
       case 'details':
         return _details(_richJob);
       case 'details-done':
@@ -160,6 +167,32 @@ Widget _assets({List<CustomerAsset>? assets}) {
     capabilities: _managerCaps,
     navigation: _FakeNavigation(_managerCaps, _managerUser),
     onOpenAsset: (_) {},
+  );
+}
+
+Widget _assetTypes() {
+  final repo = _FakeOperationsRepository(
+    jobs: const [],
+    templates: _templates,
+    boms: _boms,
+    assetTypes: _previewAssetTypes,
+  );
+  final vm = AssetTypesViewModel(repo);
+  unawaited(vm.load());
+  return PointyScaffold(
+    appBar: const PointyAppBar(title: Text('إعدادات التشغيل')),
+    body: ListenableBuilder(
+      listenable: vm,
+      builder: (context, _) => ListView(
+        padding: AdaptiveSpacing.of(context).pagePadding,
+        children: [
+          AdaptiveMaxWidth(
+            width: AppContentWidth.form,
+            child: AssetTypesSection(viewModel: vm),
+          ),
+        ],
+      ),
+    ),
   );
 }
 
@@ -269,12 +302,14 @@ class _FakeOperationsRepository extends OperationsRepository {
     required this.templates,
     required this.boms,
     this.assets = const [],
+    this.assetTypes = const [],
   }) : super(PosApiService());
 
   final List<OperationsJob> jobs;
   final List<WorkflowTemplate> templates;
   final List<BillOfMaterials> boms;
   final List<CustomerAsset> assets;
+  final List<CustomerAssetType> assetTypes;
 
   @override
   Future<Result<List<WorkflowTemplate>>> loadAllWorkflowTemplates({
@@ -357,6 +392,11 @@ class _FakeOperationsRepository extends OperationsRepository {
   }
 
   @override
+  Future<Result<List<CustomerAssetType>>> loadAssetTypes({bool? isActive}) async {
+    return Ok(assetTypes);
+  }
+
+  @override
   Future<Result<CustomerAssetDetail>> loadCustomerAsset(int assetId) async {
     final asset = assets.firstWhere(
       (candidate) => candidate.id == assetId,
@@ -421,7 +461,10 @@ final List<CustomerAsset> _previewAssets = [
     customer: 1,
     customerName: 'سالم المبروك',
     customerPhone: '0921234567',
-    assetType: CustomerAssetType.vehicle,
+    assetType: 1,
+    assetTypeName: 'مركبة',
+    assetTypeSlug: 'vehicle',
+    assetTypeIcon: 'vehicle',
     brand: 'Toyota',
     modelName: 'Corolla',
     serialNumber: '',
@@ -445,7 +488,10 @@ final List<CustomerAsset> _previewAssets = [
     customer: 2,
     customerName: 'أحمد علي',
     customerPhone: '0911111111',
-    assetType: CustomerAssetType.phone,
+    assetType: 2,
+    assetTypeName: 'هاتف',
+    assetTypeSlug: 'phone',
+    assetTypeIcon: 'phone',
     brand: 'Apple',
     modelName: 'iPhone 15 Pro',
     serialNumber: 'F2LX9K3PQ1',
@@ -458,6 +504,50 @@ final List<CustomerAsset> _previewAssets = [
     openJobCount: 0,
     lastJobAt: DateTime(2026, 6, 2),
     isActive: true,
+  ),
+];
+
+final List<CustomerAssetType> _previewAssetTypes = const [
+  CustomerAssetType(
+    id: 1,
+    name: 'هاتف',
+    slug: 'phone',
+    iconKey: 'phone',
+    isSystem: true,
+    assetCount: 42,
+    tracksImei: true,
+  ),
+  CustomerAssetType(
+    id: 2,
+    name: 'مركبة',
+    slug: 'vehicle',
+    iconKey: 'vehicle',
+    isSystem: true,
+    assetCount: 17,
+    tracksSerialNumber: false,
+    tracksVin: true,
+    tracksPlateNumber: true,
+    tracksEngineNumber: true,
+    tracksModelYear: true,
+    tracksOdometer: true,
+  ),
+  // A type this shop invented: the thing the fixed enum could never express.
+  CustomerAssetType(
+    id: 3,
+    name: 'مولد كهرباء',
+    slug: 'generator',
+    iconKey: 'generator',
+    assetCount: 6,
+    customIdentifierLabel: 'رقم العداد',
+  ),
+  CustomerAssetType(
+    id: 4,
+    name: 'جهاز ألعاب',
+    slug: 'console',
+    iconKey: 'console',
+    isSystem: true,
+    isActive: false,
+    assetCount: 0,
   ),
 ];
 
@@ -717,7 +807,9 @@ final OperationsJob _richJob = _job(
       asset: 1,
       assetDetails: CustomerAsset.fromJson(const {
         'id': 1,
-        'asset_type': 'phone',
+        'asset_type': 2,
+        'asset_type_name': 'هاتف',
+        'asset_type_icon': 'phone',
         'brand': 'Apple',
         'model_name': 'iPhone 15 Pro',
         'imei': '356789012345678',

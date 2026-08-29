@@ -1226,6 +1226,18 @@ class PosApiService {
     );
   }
 
+  Future<CustomerAssetTypePage> fetchAssetTypes({bool? isActive, int page = 1}) {
+    return _operations.fetchAssetTypes(isActive: isActive, page: page);
+  }
+
+  Future<CustomerAssetType> saveAssetType(CustomerAssetType type) {
+    return _operations.saveAssetType(type);
+  }
+
+  Future<void> deleteAssetType(int typeId) {
+    return _operations.deleteAssetType(typeId);
+  }
+
   Future<CustomerAssetDetail> fetchCustomerAsset(int assetId) {
     return _operations.fetchCustomerAsset(assetId);
   }

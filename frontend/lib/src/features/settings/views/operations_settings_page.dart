@@ -9,6 +9,8 @@ import '../../../data/models/workflow.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import 'asset_types_section.dart';
+import '../../operations/view_models/asset_types_view_model.dart';
 import '../../operations/view_models/workflows_view_model.dart';
 import '../view_models/modifier_groups_view_model.dart';
 import '../view_models/prep_stations_view_model.dart';
@@ -21,12 +23,14 @@ class OperationsSettingsPage extends StatefulWidget {
     super.key,
     required this.shopSettingsViewModel,
     required this.workflowsViewModel,
+    required this.assetTypesViewModel,
     required this.prepStationsViewModel,
     required this.modifierGroupsViewModel,
   });
 
   final ShopSettingsViewModel shopSettingsViewModel;
   final WorkflowsViewModel workflowsViewModel;
+  final AssetTypesViewModel assetTypesViewModel;
   final PrepStationsViewModel prepStationsViewModel;
   final ModifierGroupsViewModel modifierGroupsViewModel;
 
@@ -43,6 +47,7 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
         return;
       }
       unawaited(widget.workflowsViewModel.loadTemplates());
+      unawaited(widget.assetTypesViewModel.load());
       if (widget.shopSettingsViewModel.settings == null) {
         unawaited(widget.shopSettingsViewModel.loadSettings());
       }
@@ -55,6 +60,7 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
       listenable: Listenable.merge([
         widget.shopSettingsViewModel,
         widget.workflowsViewModel,
+        widget.assetTypesViewModel,
       ]),
       builder: (context, _) {
         final l10n = AppLocalizations.of(context)!;
@@ -62,7 +68,8 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
         final settings = widget.shopSettingsViewModel.settings;
         final isBusy =
             widget.shopSettingsViewModel.isSaving ||
-            widget.workflowsViewModel.isMutating;
+            widget.workflowsViewModel.isMutating ||
+            widget.assetTypesViewModel.isMutating;
 
         return PointyScaffold(
           appBar: PointyAppBar(
@@ -70,6 +77,7 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
             isLoading:
                 widget.shopSettingsViewModel.isLoading ||
                 widget.workflowsViewModel.isLoading ||
+                widget.assetTypesViewModel.isLoading ||
                 isBusy,
           ),
           body: settings == null
@@ -205,6 +213,14 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
                                   ),
                               ],
                             ),
+                          // What the shop works ON, beside how work moves. A
+                          // television repairer and a car workshop run the same
+                          // workflow engine and differ only here.
+                          SizedBox(height: spacing.lg),
+                          AssetTypesSection(
+                            viewModel: widget.assetTypesViewModel,
+                            canEdit: !isBusy,
+                          ),
                         ],
                       ),
                     ),

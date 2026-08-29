@@ -22,8 +22,8 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/job_details_view_model.dart';
-import 'job_intake_wizard.dart' show assetTypeLabel;
 import 'jobs_screen.dart' show formatQuantity, unitLabel;
+import '../../assets/views/assets_ui.dart';
 import 'operations_ui.dart';
 import 'variant_picker_sheet.dart';
 
@@ -632,14 +632,14 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
             if (link.assetDetails != null)
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const OperationsIconBadge(
-                  icon: Icons.smartphone_outlined,
+                leading: OperationsIconBadge(
+                  icon: assetIconForKey(link.assetDetails!.assetTypeIcon),
                   size: 40,
                 ),
                 title: Text(link.assetDetails!.displayName),
                 subtitle: Text(
                   [
-                    assetTypeLabel(l10n, link.assetDetails!.assetType),
+                    link.assetDetails!.assetTypeName,
                     if (link.assetDetails!.imei.isNotEmpty)
                       'IMEI ${link.assetDetails!.imei}',
                     if (link.assetDetails!.serialNumber.isNotEmpty)
