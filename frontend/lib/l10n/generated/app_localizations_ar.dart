@@ -3600,6 +3600,27 @@ class AppLocalizationsAr extends AppLocalizations {
   String get assetTypeVehicle => 'مركبة';
 
   @override
+  String get shopSetupKitchenScreenTitle => 'شاشة مطبخ بدل الورقة';
+
+  @override
+  String get shopSetupKitchenScreenSubtitle =>
+      'الطلب يظهر على لوحة المهام ويتحرك: تم الاستلام ← قيد التحضير ← جاهز ← تم التقديم. اتركه مغلقاً إذا كان الطباخ يعمل على الفاتورة المطبوعة فقط.';
+
+  @override
+  String get workflowStageSettlementLabel => 'يشترط السداد قبل الدخول';
+
+  @override
+  String get workflowStageSettlementHelp =>
+      'لا يمكن نقل المهمة إلى هذه المرحلة قبل إصدار الفاتورة واستلام المبلغ أو تسجيلها آجل.';
+
+  @override
+  String get workflowStageCustodyLabel => 'تسليم الجهاز للزبون';
+
+  @override
+  String get workflowStageCustodyHelp =>
+      'دخول هذه المرحلة يعني أن الزبون استلم جهازه.';
+
+  @override
   String get shopTypeCarWorkshop => 'ورشة سيارات';
 
   @override

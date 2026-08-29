@@ -573,6 +573,11 @@ OperationsJob _job({
   List<JobMaterial> materials = const [],
   List<JobStageEvent> stageEvents = const [],
   double materialsTotal = 0,
+  List<JobServiceLine> services = const [],
+  double servicesTotal = 0,
+  JobSettlementState settlementState = JobSettlementState.notInvoiced,
+  JobCustodyState custodyState = JobCustodyState.withShop,
+  String holdReason = '',
   DateTime? createdAt,
 }) {
   return OperationsJob(
@@ -604,6 +609,12 @@ OperationsJob _job({
     quotedPrice: quotedPrice,
     approvedPrice: approvedPrice,
     dueAt: dueAt,
+    services: services,
+    servicesTotal: servicesTotal,
+    settlementState: settlementState,
+    custodyState: custodyState,
+    isOnHold: holdReason.isNotEmpty,
+    holdReason: holdReason,
     createdAt: createdAt ?? DateTime(2026, 6, 14, 10, 30),
   );
 }
@@ -638,6 +649,19 @@ final List<OperationsJob> _boardJobs = [
     customerName: 'محمد عبدالله',
     assignedEmployeeName: 'سارة',
     symptoms: 'لا يشحن',
+    holdReason: 'بانتظار وصول منفذ الشحن',
+  ),
+  _job(
+    id: 5,
+    jobNumber: 'REP-100',
+    currentStage: 6,
+    nextStage: _repairStages[6],
+    customerName: 'يوسف الصادق',
+    assignedEmployeeName: 'خالد',
+    symptoms: 'تغيير بطارية',
+    materialsTotal: 90,
+    settlementState: JobSettlementState.settled,
+    orderReceiptNumber: 'INV-2051',
   ),
   _job(
     id: 4,
@@ -665,6 +689,28 @@ final OperationsJob _richJob = _job(
   approvedPrice: 180,
   dueAt: DateTime(2026, 6, 16, 17, 0),
   materialsTotal: 120,
+  servicesTotal: 60,
+  services: const [
+    JobServiceLine(
+      id: 1,
+      variant: 90,
+      productName: 'كشف وتشخيص',
+      variantName: '',
+      quantity: 1,
+      unitPrice: 25,
+      lineTotal: 25,
+      note: 'فحص أولي',
+    ),
+    JobServiceLine(
+      id: 2,
+      variant: 91,
+      productName: 'فك وتركيب شاشة',
+      variantName: '',
+      quantity: 1,
+      unitPrice: 35,
+      lineTotal: 35,
+    ),
+  ],
   assets: [
     JobAssetLink(
       id: 1,

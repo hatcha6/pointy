@@ -602,6 +602,7 @@ class PosApiService {
     bool? requireOpeningCash,
     bool? autoPrintReceipts,
     bool? autoPrintKitchenTickets,
+    bool? kitchenAutoComplete,
     InventoryValuationMethod? inventoryValuationMethod,
   }) {
     return _shopSettings.setupShop(
@@ -611,6 +612,7 @@ class PosApiService {
       requireOpeningCash: requireOpeningCash,
       autoPrintReceipts: autoPrintReceipts,
       autoPrintKitchenTickets: autoPrintKitchenTickets,
+      kitchenAutoComplete: kitchenAutoComplete,
       inventoryValuationMethod: inventoryValuationMethod,
     );
   }

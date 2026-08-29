@@ -260,14 +260,15 @@ def transition_job(
         job.handed_over_at = timezone.now()
         job.handed_over_to = handed_over_to
         update_fields += ["handed_over_at", "handed_over_to"]
-        # A job cannot be both "on hold, waiting for a part" and back with its
-        # owner. Releasing custody ends any hold so the board and the ageing
-        # numbers agree with reality.
-        if job.on_hold_since is not None:
-            job.held_seconds += _held_seconds_since(job.on_hold_since)
-            job.on_hold_since = None
-            job.hold_reason = ""
-            update_fields += ["held_seconds", "on_hold_since", "hold_reason"]
+    # Moving a job forward *is* resuming it: the part arrived, or whatever it
+    # was waiting on stopped mattering. Leaving the hold set would keep the card
+    # badged "waiting for a screen" three stages later and keep counting that
+    # wait as time the job was blocked.
+    if moved_forward and job.on_hold_since is not None:
+        job.held_seconds += _held_seconds_since(job.on_hold_since)
+        job.on_hold_since = None
+        job.hold_reason = ""
+        update_fields += ["held_seconds", "on_hold_since", "hold_reason"]
     if to_stage.is_terminal:
         job.status = Job.Status.COMPLETED
         job.completed_at = timezone.now()

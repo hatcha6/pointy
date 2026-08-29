@@ -552,3 +552,7 @@ class ShopSetupSerializer(serializers.Serializer):
     require_opening_cash = serializers.BooleanField(required=False)
     auto_print_receipts = serializers.BooleanField(required=False)
     auto_print_kitchen_tickets = serializers.BooleanField(required=False)
+    # Whether the kitchen works off a printed chit (the default: the job is
+    # finished at the sale) or off a screen (the staged
+    # received→preparing→ready→served lane a pickup counter needs).
+    kitchen_auto_complete = serializers.BooleanField(required=False)

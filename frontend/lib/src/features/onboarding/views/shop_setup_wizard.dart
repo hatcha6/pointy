@@ -33,10 +33,18 @@ class _ShopSetupWizardState extends State<ShopSetupWizard> {
   bool _allowOverselling = false;
   bool _requireOpeningCash = true;
   bool _autoPrintReceipts = false;
+  // Chit-only is the default: cooks read a printed slip and touch nothing. A
+  // café with a pickup counter wants the opposite — the staged
+  // received→preparing→ready→served lane on the board — so this is asked, in
+  // plain language, only of the shop types that have a kitchen.
+  bool _kitchenScreen = false;
   InventoryValuationMethod _valuationMethod =
       InventoryValuationMethod.movingAverage;
   bool _isSubmitting = false;
   bool _hasError = false;
+
+  static bool _hasKitchen(String? shopType) =>
+      shopType == 'restaurant' || shopType == 'bakery';
 
   @override
   void dispose() {
@@ -60,6 +68,7 @@ class _ShopSetupWizardState extends State<ShopSetupWizard> {
       allowOverselling: _allowOverselling,
       requireOpeningCash: _requireOpeningCash,
       autoPrintReceipts: _autoPrintReceipts,
+      kitchenAutoComplete: _hasKitchen(type) ? !_kitchenScreen : null,
       inventoryValuationMethod: _valuationMethod,
     );
     if (!mounted) {
@@ -131,6 +140,10 @@ class _ShopSetupWizardState extends State<ShopSetupWizard> {
                       setState(() => _requireOpeningCash = v),
                   onAutoPrintReceiptsChanged: (v) =>
                       setState(() => _autoPrintReceipts = v),
+                  showKitchenScreen: _hasKitchen(_shopType),
+                  kitchenScreen: _kitchenScreen,
+                  onKitchenScreenChanged: (v) =>
+                      setState(() => _kitchenScreen = v),
                   valuationMethod: _valuationMethod,
                   onValuationMethodChanged: (v) =>
                       setState(() => _valuationMethod = v),
@@ -288,6 +301,9 @@ class _SettingsStep extends StatelessWidget {
     required this.onAllowOversellingChanged,
     required this.onRequireOpeningCashChanged,
     required this.onAutoPrintReceiptsChanged,
+    required this.showKitchenScreen,
+    required this.kitchenScreen,
+    required this.onKitchenScreenChanged,
     required this.valuationMethod,
     required this.onValuationMethodChanged,
   });
@@ -299,6 +315,12 @@ class _SettingsStep extends StatelessWidget {
   final ValueChanged<bool> onAllowOversellingChanged;
   final ValueChanged<bool> onRequireOpeningCashChanged;
   final ValueChanged<bool> onAutoPrintReceiptsChanged;
+
+  /// Only shops with a kitchen are asked this; for everyone else the question
+  /// is meaningless and the row would be noise.
+  final bool showKitchenScreen;
+  final bool kitchenScreen;
+  final ValueChanged<bool> onKitchenScreenChanged;
   final InventoryValuationMethod valuationMethod;
   final ValueChanged<InventoryValuationMethod> onValuationMethodChanged;
 
@@ -380,6 +402,14 @@ class _SettingsStep extends StatelessWidget {
           value: autoPrintReceipts,
           onChanged: onAutoPrintReceiptsChanged,
         ),
+        if (showKitchenScreen)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.shopSetupKitchenScreenTitle),
+            subtitle: Text(l10n.shopSetupKitchenScreenSubtitle),
+            value: kitchenScreen,
+            onChanged: onKitchenScreenChanged,
+          ),
       ],
     );
   }

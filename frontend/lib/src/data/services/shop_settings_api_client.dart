@@ -44,6 +44,7 @@ class ShopSettingsApiClient {
     bool? requireOpeningCash,
     bool? autoPrintReceipts,
     bool? autoPrintKitchenTickets,
+    bool? kitchenAutoComplete,
     InventoryValuationMethod? inventoryValuationMethod,
   }) async {
     final body = <String, Object?>{'shop_type': shopType};
@@ -60,6 +61,9 @@ class ShopSettingsApiClient {
     }
     if (autoPrintKitchenTickets != null) {
       body['auto_print_kitchen_tickets'] = autoPrintKitchenTickets;
+    }
+    if (kitchenAutoComplete != null) {
+      body['kitchen_auto_complete'] = kitchenAutoComplete;
     }
     final response = await _session.post('shop-settings/setup/', body: body);
     _session.ensureSuccess(response, 'Shop setup failed with status');

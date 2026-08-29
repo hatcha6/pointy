@@ -1620,9 +1620,45 @@ class JobHoldTests(OperationsTestCase):
         )
         self.assertEqual(again.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_handing_a_job_over_ends_any_open_hold(self):
+    def test_moving_a_job_forward_ends_its_hold(self):
+        """Advancing *is* resuming: the part arrived.
+
+        Leaving the hold set would keep the card badged "waiting for a screen"
+        three stages later, and keep counting the wait as blocked time.
+        """
         client = authenticated_client(self.manager)
         data = self.create_repair_job(client=client)
+        client.post(
+            reverse("job-hold", args=[data["id"]]),
+            {"reason": "بانتظار قطعة"},
+            format="json",
+        )
+        job = Job.objects.get(pk=data["id"])
+        job.on_hold_since = job.on_hold_since - timedelta(minutes=30)
+        job.save(update_fields=["on_hold_since"])
+
+        response = client.post(
+            reverse("job-transition", args=[data["id"]]),
+            {"to_stage": stage(repair_template(), "diagnosing").pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        job.refresh_from_db()
+        self.assertIsNone(job.on_hold_since)
+        self.assertEqual(job.hold_reason, "")
+        # The wait it did spend blocked is still counted.
+        self.assertGreaterEqual(job.held_seconds, 30 * 60)
+
+    def test_moving_a_job_backwards_leaves_its_hold_alone(self):
+        # A manager correcting a mis-click has not made the part arrive.
+        client = authenticated_client(self.manager)
+        data = self.create_repair_job(client=client)
+        client.post(
+            reverse("job-transition", args=[data["id"]]),
+            {"to_stage": stage(repair_template(), "diagnosing").pk},
+            format="json",
+        )
         client.post(
             reverse("job-hold", args=[data["id"]]),
             {"reason": "بانتظار قطعة"},
@@ -1631,13 +1667,13 @@ class JobHoldTests(OperationsTestCase):
 
         client.post(
             reverse("job-transition", args=[data["id"]]),
-            {"to_stage": stage(repair_template(), "delivered").pk},
+            {"to_stage": stage(repair_template(), "received").pk, "note": "تصحيح"},
             format="json",
         )
 
         job = Job.objects.get(pk=data["id"])
-        self.assertIsNone(job.on_hold_since)
-        self.assertEqual(job.hold_reason, "")
+        self.assertIsNotNone(job.on_hold_since)
+        self.assertEqual(job.hold_reason, "بانتظار قطعة")
 
 
 class AssetRegistryTests(OperationsTestCase):
@@ -1746,3 +1782,59 @@ class AssetRegistryTests(OperationsTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertEqual(self.car.ownerships.count(), 1)
+
+
+class ShopSetupKitchenModeTests(OperationsTestCase):
+    """The café's choice, made in plain language at setup.
+
+    Chit-only finishes the job at the sale, so nothing ever reaches a board.
+    That is right for a kitchen where cooks read a printed slip and wrong for a
+    counter where the customer pays, waits, and is called when it is ready —
+    which is the flow this asks about.
+    """
+
+    def setUp(self):
+        super().setUp()
+        ShopSettings.load()
+
+    def test_setup_can_choose_the_staged_kitchen_lane(self):
+        client = authenticated_client(self.manager)
+
+        response = client.post(
+            reverse("shop-setup"),
+            {"shop_type": "restaurant", "kitchen_auto_complete": False},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        settings = ShopSettings.load()
+        self.assertTrue(settings.enable_kitchen_operations)
+        self.assertFalse(settings.kitchen_auto_complete)
+
+    def test_setup_keeps_the_chit_only_default_when_not_asked(self):
+        client = authenticated_client(self.manager)
+
+        response = client.post(
+            reverse("shop-setup"),
+            {"shop_type": "restaurant"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertTrue(ShopSettings.load().kitchen_auto_complete)
+
+    def test_car_workshop_preset_turns_on_repairs_only(self):
+        client = authenticated_client(self.manager)
+
+        response = client.post(
+            reverse("shop-setup"),
+            {"shop_type": "car_workshop"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        settings = ShopSettings.load()
+        self.assertTrue(settings.enable_repair_operations)
+        self.assertTrue(settings.enable_job_tracking)
+        self.assertFalse(settings.enable_kitchen_operations)
+        self.assertFalse(settings.enable_production_operations)

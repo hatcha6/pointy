@@ -337,6 +337,8 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
                 isInitial: stage.isInitial,
                 isTerminal: stage.isTerminal,
                 requiresCustomerApproval: stage.requiresCustomerApproval,
+                requiresSettlement: stage.requiresSettlement,
+                releasesCustody: stage.releasesCustody,
                 consumesMaterials: stage.consumesMaterials,
                 producesOutput: stage.producesOutput,
               ),
@@ -407,6 +409,8 @@ class _EditableStage {
     this.isInitial = false,
     this.isTerminal = false,
     this.requiresCustomerApproval = false,
+    this.requiresSettlement = false,
+    this.releasesCustody = false,
     this.consumesMaterials = false,
     this.producesOutput = false,
   });
@@ -417,6 +421,8 @@ class _EditableStage {
   bool isInitial;
   bool isTerminal;
   bool requiresCustomerApproval;
+  bool requiresSettlement;
+  bool releasesCustody;
   bool consumesMaterials;
   bool producesOutput;
 }
@@ -451,6 +457,8 @@ class _WorkflowStageEditorPageState extends State<_WorkflowStageEditorPage> {
           isInitial: stage.isInitial,
           isTerminal: stage.isTerminal,
           requiresCustomerApproval: stage.requiresCustomerApproval,
+          requiresSettlement: stage.requiresSettlement,
+          releasesCustody: stage.releasesCustody,
           consumesMaterials: stage.consumesMaterials,
           producesOutput: stage.producesOutput,
         ),
@@ -572,6 +580,8 @@ class _WorkflowStageEditorPageState extends State<_WorkflowStageEditorPage> {
               isInitial: _stages[index].isInitial,
               isTerminal: _stages[index].isTerminal,
               requiresCustomerApproval: _stages[index].requiresCustomerApproval,
+              requiresSettlement: _stages[index].requiresSettlement,
+              releasesCustody: _stages[index].releasesCustody,
               consumesMaterials: _stages[index].consumesMaterials,
               producesOutput: _stages[index].producesOutput,
             ),
@@ -716,6 +726,21 @@ class _StageEditorCardState extends State<_StageEditorCard> {
                   widget.stage.requiresCustomerApproval,
                   (value) => widget.stage.requiresCustomerApproval = value,
                 ),
+                // The two gates that decide whether a customer's property
+                // can leave. Without them here, editing a workflow would
+                // silently clear whatever the seeded template had set.
+                _flagSwitch(
+                  l10n.workflowStageSettlementLabel,
+                  widget.stage.requiresSettlement,
+                  (value) => widget.stage.requiresSettlement = value,
+                  helpText: l10n.workflowStageSettlementHelp,
+                ),
+                _flagSwitch(
+                  l10n.workflowStageCustodyLabel,
+                  widget.stage.releasesCustody,
+                  (value) => widget.stage.releasesCustody = value,
+                  helpText: l10n.workflowStageCustodyHelp,
+                ),
                 _flagSwitch(
                   l10n.workflowStageConsumesLabel,
                   widget.stage.consumesMaterials,
@@ -734,11 +759,17 @@ class _StageEditorCardState extends State<_StageEditorCard> {
     );
   }
 
-  Widget _flagSwitch(String label, bool value, ValueChanged<bool> apply) {
+  Widget _flagSwitch(
+    String label,
+    bool value,
+    ValueChanged<bool> apply, {
+    String? helpText,
+  }) {
     return SwitchListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
       title: Text(label),
+      subtitle: helpText == null ? null : Text(helpText),
       value: value,
       onChanged: widget.enabled
           ? (next) {

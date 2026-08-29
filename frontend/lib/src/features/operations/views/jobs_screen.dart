@@ -12,6 +12,7 @@ import '../../../data/models/workflow.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/operations_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/units.dart';
 import '../../../shared/components/components.dart';
@@ -42,6 +43,7 @@ class JobsScreen extends StatefulWidget {
     required this.recipesViewModel,
     required this.onOpenJob,
     required this.onOpenHistory,
+    this.shopSettingsRepository,
   });
 
   final JobsBoardViewModel viewModel;
@@ -52,6 +54,10 @@ class JobsScreen extends StatefulWidget {
   final OperationsRepository operationsRepository;
   final CatalogRepository catalogRepository;
   final RecipesViewModel recipesViewModel;
+
+  /// Handed to the intake wizard so it can open on the kind of item this shop
+  /// works on. Optional: the preview harness and tests do without it.
+  final ShopSettingsRepository? shopSettingsRepository;
   final ValueChanged<OperationsJob> onOpenJob;
 
   /// Opens the finished-work list. The board deliberately cannot show it: what
@@ -350,6 +356,7 @@ class _JobsScreenState extends State<JobsScreen> {
               boardViewModel: widget.viewModel,
               contactRepository: widget.contactRepository,
               operationsRepository: widget.operationsRepository,
+              shopSettingsRepository: widget.shopSettingsRepository,
             ),
           ),
         );

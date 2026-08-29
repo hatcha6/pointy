@@ -33,6 +33,7 @@ enum InventoryValuationMethod {
 class ShopSettings {
   const ShopSettings({
     required this.shopName,
+    this.shopType = '',
     required this.receiptHeader,
     required this.receiptFooter,
     required this.enableOnlineInvoices,
@@ -65,6 +66,11 @@ class ShopSettings {
   });
 
   final String shopName;
+
+  /// The shop's vertical, picked in the first-run wizard. Empty until then.
+  /// Drives small per-vertical defaults — the intake wizard reads it to open on
+  /// "vehicle" for a workshop instead of making every car a two-tap correction.
+  final String shopType;
   final String receiptHeader;
   final String receiptFooter;
   final bool enableOnlineInvoices;
@@ -113,6 +119,7 @@ class ShopSettings {
     final logoJson = json['logo_attachment'];
     return ShopSettings(
       shopName: json['shop_name']?.toString() ?? '',
+      shopType: json['shop_type']?.toString() ?? '',
       receiptHeader: json['receipt_header']?.toString() ?? '',
       receiptFooter: json['receipt_footer']?.toString() ?? '',
       enableOnlineInvoices: _boolFromJson(

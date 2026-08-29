@@ -9,7 +9,9 @@ import '../../../data/models/customer_asset.dart';
 import '../../../data/models/operations_job.dart';
 import '../../../data/models/workflow.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/operations_repository.dart';
+import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
@@ -44,12 +46,17 @@ class JobIntakeWizard extends StatefulWidget {
     required this.boardViewModel,
     required this.contactRepository,
     required this.operationsRepository,
+    this.shopSettingsRepository,
   });
 
   final WorkflowTemplate template;
   final JobsBoardViewModel boardViewModel;
   final ContactRepository contactRepository;
   final OperationsRepository operationsRepository;
+
+  /// Read once, to open the device step on the kind of item this shop actually
+  /// works on. Optional so the preview harness and tests need not supply it.
+  final ShopSettingsRepository? shopSettingsRepository;
 
   @override
   State<JobIntakeWizard> createState() => _JobIntakeWizardState();
@@ -101,6 +108,27 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
   void initState() {
     super.initState();
     _searchCustomers('');
+    unawaited(_applyShopTypeDefaults());
+  }
+
+  /// Open the device step on the kind of item this shop works on.
+  ///
+  /// A workshop takes in nothing but cars, so defaulting to "phone" makes every
+  /// single intake a two-tap correction. Best-effort: if the settings call
+  /// fails the wizard simply keeps its generic default, which is what it did
+  /// before this existed.
+  Future<void> _applyShopTypeDefaults() async {
+    final repository = widget.shopSettingsRepository;
+    if (repository == null) {
+      return;
+    }
+    final result = await repository.loadSettings();
+    if (!mounted || result is! Ok<ShopSettings>) {
+      return;
+    }
+    if (result.value.shopType == 'car_workshop') {
+      setState(() => _newAssetType = CustomerAssetType.vehicle);
+    }
   }
 
   @override

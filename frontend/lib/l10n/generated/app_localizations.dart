@@ -6375,6 +6375,42 @@ abstract class AppLocalizations {
   /// **'مركبة'**
   String get assetTypeVehicle;
 
+  /// No description provided for @shopSetupKitchenScreenTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'شاشة مطبخ بدل الورقة'**
+  String get shopSetupKitchenScreenTitle;
+
+  /// No description provided for @shopSetupKitchenScreenSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطلب يظهر على لوحة المهام ويتحرك: تم الاستلام ← قيد التحضير ← جاهز ← تم التقديم. اتركه مغلقاً إذا كان الطباخ يعمل على الفاتورة المطبوعة فقط.'**
+  String get shopSetupKitchenScreenSubtitle;
+
+  /// No description provided for @workflowStageSettlementLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'يشترط السداد قبل الدخول'**
+  String get workflowStageSettlementLabel;
+
+  /// No description provided for @workflowStageSettlementHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن نقل المهمة إلى هذه المرحلة قبل إصدار الفاتورة واستلام المبلغ أو تسجيلها آجل.'**
+  String get workflowStageSettlementHelp;
+
+  /// No description provided for @workflowStageCustodyLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسليم الجهاز للزبون'**
+  String get workflowStageCustodyLabel;
+
+  /// No description provided for @workflowStageCustodyHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'دخول هذه المرحلة يعني أن الزبون استلم جهازه.'**
+  String get workflowStageCustodyHelp;
+
   /// No description provided for @shopTypeCarWorkshop.
   ///
   /// In ar, this message translates to:

@@ -42,6 +42,7 @@ class ShopSettingsRepository {
     bool? requireOpeningCash,
     bool? autoPrintReceipts,
     bool? autoPrintKitchenTickets,
+    bool? kitchenAutoComplete,
     InventoryValuationMethod? inventoryValuationMethod,
   }) async {
     return Result.guard(
@@ -52,6 +53,7 @@ class ShopSettingsRepository {
         requireOpeningCash: requireOpeningCash,
         autoPrintReceipts: autoPrintReceipts,
         autoPrintKitchenTickets: autoPrintKitchenTickets,
+        kitchenAutoComplete: kitchenAutoComplete,
         inventoryValuationMethod: inventoryValuationMethod,
       ),
     );

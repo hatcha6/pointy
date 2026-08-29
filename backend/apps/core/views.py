@@ -419,6 +419,7 @@ class ShopSetupView(views.APIView):
             "require_opening_cash",
             "auto_print_receipts",
             "auto_print_kitchen_tickets",
+            "kitchen_auto_complete",
         ):
             if field in data:
                 setattr(settings, field, data[field])
