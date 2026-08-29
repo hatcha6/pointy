@@ -11,7 +11,7 @@ from apps.core.discovery import request_is_relayed
 from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
-from apps.customers.models import Asset, AssetOwnership
+from apps.customers.models import Asset, AssetOwnership, AssetType
 from apps.employees.models import Employee
 from apps.sales.models import RegisterSession
 from apps.sales.views import register_session_owner_key
@@ -20,6 +20,7 @@ from .serializers import (
     AssetDetailSerializer,
     AssetSerializer,
     AssetTransferSerializer,
+    AssetTypeSerializer,
     BillOfMaterialsSerializer,
     JobAssignSerializer,
     JobCreateSerializer,
@@ -112,6 +113,14 @@ class JobViewSet(
             # ``lines__variant__option_values`` prefetch.
             Prefetch(
                 "materials__variant__option_values",
+                queryset=VariantOptionValue.objects.select_related("option"),
+            ),
+            # Service lines read ``display_name`` too, and fall back to
+            # ``option_values_label`` the same way — so without this a board of
+            # invoiced jobs paid one query per service line, exactly the N+1 the
+            # materials prefetch above exists to stop.
+            Prefetch(
+                "services__variant__option_values",
                 queryset=VariantOptionValue.objects.select_related("option"),
             ),
             Prefetch(
@@ -384,7 +393,7 @@ class AssetViewSet(viewsets.ModelViewSet):
         "destroy": ("customers.delete_asset",),
         "transfer": ("customers.change_asset",),
     }
-    queryset = Asset.objects.select_related("customer").annotate(
+    queryset = Asset.objects.select_related("customer", "asset_type").annotate(
         job_count=Count("job_links", distinct=True),
         open_job_count=Count(
             "job_links",
@@ -402,6 +411,9 @@ class AssetViewSet(viewsets.ModelViewSet):
         "vin",
         "plate_number",
         "engine_number",
+        # Whatever this trade calls its own number — a frame number, a meter
+        # number — has to be findable by the same one search box.
+        "custom_identifier",
     )
     ordering_fields = ("created_at", "last_job_at")
 
@@ -470,6 +482,47 @@ class AssetViewSet(viewsets.ModelViewSet):
         except ProtectedError:
             return Response(
                 {"detail": "This item has job history and cannot be deleted."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+
+class AssetTypeViewSet(viewsets.ModelViewSet):
+    """The kinds of thing this shop works on.
+
+    Readable by anyone who can see assets — the intake form needs the list and
+    its ``tracks_*`` flags to know which identity fields to ask for — and
+    editable only by someone who can change them.
+    """
+
+    serializer_class = AssetTypeSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("customers.view_asset",),
+        "retrieve": ("customers.view_asset",),
+        "create": ("customers.change_asset",),
+        "update": ("customers.change_asset",),
+        "partial_update": ("customers.change_asset",),
+        "destroy": ("customers.change_asset",),
+    }
+    queryset = AssetType.objects.annotate(asset_count=Count("assets"))
+    filterset_fields = ("is_active",)
+    search_fields = ("name", "slug")
+    ordering = ("display_order", "name")
+
+    def destroy(self, request, *args, **kwargs):
+        asset_type = self.get_object()
+        if asset_type.is_system:
+            # Same rule the seeded workflows use: a shop can turn a built-in
+            # type off, but cannot delete its way to a registry with no types.
+            return Response(
+                {"detail": "Built-in types can be deactivated, not deleted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "This type has items registered to it."},
                 status=status.HTTP_409_CONFLICT,
             )
 

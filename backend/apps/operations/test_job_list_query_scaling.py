@@ -16,9 +16,10 @@ from django.urls import reverse
 
 from apps.catalog.testing import create_product_with_default_variant
 from apps.inventory.models import StockItem
+from apps.sales.models import RegisterSession
 
 from .models import Job
-from .services import add_job_material
+from .services import add_job_material, add_job_service
 from .tests import OperationsTestCase, authenticated_client
 
 MATERIALS_PER_JOB = 3
@@ -42,14 +43,48 @@ class JobListQueryScalingTests(OperationsTestCase):
                 quantity_on_hand=Decimal("10000"),
             )
             self.material_variants.append(product.default_variant)
+        service = create_product_with_default_variant(
+            sku="SVC-SCALE",
+            name="كشف",
+            unit_price=Decimal("25.00"),
+        )
+        service.is_service = True
+        service.save(update_fields=["is_service"])
+        self.service_variant = service.default_variant
 
     def _add_jobs(self, count):
+        """Jobs shaped like the ones a real board carries.
+
+        Parts, priced services, and an invoice — the last two matter because the
+        serializer reads ``services__variant__product`` for every service line
+        and sums the linked order's payments in Python for ``settlement_state``
+        and ``order_balance_due``. Both are one query per row when unprefetched,
+        and neither was reachable by this test's original fixture.
+        """
         client = authenticated_client(self.technician)
+        cashier = authenticated_client(self.cashier)
+        RegisterSession.objects.get_or_create(
+            owner=self.cashier,
+            owner_key=f"user:{self.cashier.pk}",
+            status=RegisterSession.Status.OPEN,
+        )
         for _ in range(count):
             data = self.create_repair_job(client=client)
             job = Job.objects.get(pk=data["id"])
             for variant in self.material_variants:
                 add_job_material(job=job, variant=variant, quantity=Decimal("1"))
+            add_job_service(job=job, variant=self.service_variant, request=None)
+            # Invoice it, so the row carries an order whose payments the
+            # settlement state has to read.
+            response = cashier.post(
+                reverse("job-invoice", args=[job.pk]),
+                {
+                    "labor_total": "5.00",
+                    "payments": [{"method": "cash", "amount": "60.00"}],
+                },
+                format="json",
+            )
+            assert response.status_code == 200, response.data
 
     def _list_query_count(self):
         url = reverse("job-list")
