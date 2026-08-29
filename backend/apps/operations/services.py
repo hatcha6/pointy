@@ -475,9 +475,31 @@ def cancel_job(*, job, request=None, reason=""):
 
 
 def _job_material_unit_cost(variant):
-    from apps.sales.services import latest_sale_unit_cost
+    """What a part consumed by a job cost, per base unit.
 
-    return latest_sale_unit_cost(variant)
+    The same basis every other issue of stock uses: the valuation ledger, via
+    ``sale_cost_basis`` — the source of truth for COGS since the valued stock
+    ledger landed.
+
+    This used to read ``latest_sale_unit_cost``, the pre-ledger "whatever it
+    last cost to buy" rule, which was never migrated when the ledger arrived. A
+    screen fitted on a repair was therefore costed on a different basis from the
+    identical screen sold over the counter, so every margin on repair revenue was
+    computed against a number nothing else in the shop agreed with — the same
+    phantom-loss shape the UoM cost normalisation closed. Production inherits it
+    too: ``receive_finished_goods`` divides these costs to price what it made,
+    and that price becomes the fallback cost basis for selling the output.
+
+    ``sale_cost_basis`` already falls back to the last purchase cost for stock
+    that has never been valued; ``latest_sale_unit_cost`` is kept underneath it
+    only for produced goods, which were never purchased at all.
+    """
+    from apps.sales.services import latest_sale_unit_cost, sale_cost_basis
+
+    cost = sale_cost_basis([variant]).get(variant.pk)
+    if cost is None:
+        return latest_sale_unit_cost(variant)
+    return cost
 
 
 @transaction.atomic

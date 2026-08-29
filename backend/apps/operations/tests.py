@@ -21,6 +21,8 @@ from apps.core.roles import (
 from apps.customers.models import Asset, Customer
 from apps.employees.models import Employee
 from apps.inventory.models import StockItem
+from apps.purchasing.models import PurchaseLine, PurchaseOrder, Supplier
+from apps.purchasing.services import receive_purchase_order, submit_purchase_order
 from apps.sales.models import Order, RegisterSession
 from apps.sales.services import latest_sale_unit_cost
 from .models import Job, WorkflowTemplate
@@ -1838,3 +1840,91 @@ class ShopSetupKitchenModeTests(OperationsTestCase):
         self.assertTrue(settings.enable_job_tracking)
         self.assertFalse(settings.enable_kitchen_operations)
         self.assertFalse(settings.enable_production_operations)
+
+
+class JobMaterialCostBasisTests(OperationsTestCase):
+    """A part fitted on a repair costs what the same part costs over the counter.
+
+    Job materials used to snapshot ``latest_sale_unit_cost`` — the pre-ledger
+    "whatever it last cost to buy" rule — while every sale line snapshots the
+    valuation ledger. Two purchases at different prices are enough to tell the
+    two apart, and with them apart every margin on repair revenue was computed
+    on a basis nothing else in the shop used.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.supplier = Supplier.objects.create(name="مورد")
+        self.variant = self.part_variant
+        StockItem.objects.filter(variant=self.variant).update(quantity_on_hand=0)
+
+    def _receive(self, quantity, unit_cost):
+        order = PurchaseOrder.objects.create(supplier=self.supplier)
+        PurchaseLine.objects.create(
+            purchase_order=order,
+            variant=self.variant,
+            quantity=quantity,
+            unit_cost=Decimal(unit_cost),
+        )
+        submit_purchase_order(order)
+        receive_purchase_order(
+            order,
+            lines_data=[
+                {
+                    "line": line,
+                    "accepted_quantity": line.quantity,
+                    "damaged_quantity": 0,
+                    "cancelled_quantity": 0,
+                }
+                for line in order.lines.all()
+            ],
+        )
+
+    def test_material_cost_is_the_valuation_rate_not_the_last_purchase(self):
+        # Moving average of 10@1.00 and 10@3.00 is 2.00; the last purchase is
+        # 3.00. Anything that reads 3.00 here is on the old basis.
+        self._receive(10, "1.00")
+        self._receive(10, "3.00")
+
+        client = authenticated_client(self.technician)
+        data = self.create_repair_job(client=client)
+        response = client.post(
+            reverse("job-add-material", args=[data["id"]]),
+            {"variant": self.variant.pk, "quantity": 1},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        material = Job.objects.get(pk=data["id"]).materials.get()
+        self.assertEqual(material.unit_cost, Decimal("2.00"))
+
+    def test_the_invoiced_order_line_carries_that_same_cost(self):
+        # The cost only matters because it reaches the order line every margin
+        # is computed from.
+        self._receive(10, "1.00")
+        self._receive(10, "3.00")
+        tech = authenticated_client(self.technician)
+        data = self.create_repair_job(client=tech)
+        tech.post(
+            reverse("job-add-material", args=[data["id"]]),
+            {"variant": self.variant.pk, "quantity": 2},
+            format="json",
+        )
+        cashier = authenticated_client(self.cashier)
+        RegisterSession.objects.create(
+            owner=self.cashier,
+            owner_key=f"user:{self.cashier.pk}",
+            status=RegisterSession.Status.OPEN,
+        )
+
+        invoiced = cashier.post(
+            reverse("job-invoice", args=[data["id"]]),
+            {"payments": [{"method": "cash", "amount": "240.00"}]},
+            format="json",
+        )
+
+        self.assertEqual(invoiced.status_code, status.HTTP_200_OK, invoiced.data)
+        line = Job.objects.get(pk=data["id"]).order.lines.get(variant=self.variant)
+        self.assertEqual(line.unit_cost, Decimal("2.00"))
+        # …and so the order's profit is computed against the goods' real value.
+        self.assertEqual(line.line_cost, Decimal("4.00"))
