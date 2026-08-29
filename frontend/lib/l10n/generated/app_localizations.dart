@@ -5952,7 +5952,7 @@ abstract class AppLocalizations {
   /// No description provided for @assetHistoryTitle.
   ///
   /// In ar, this message translates to:
-  /// **'سجل الجهاز'**
+  /// **'سجل الصيانة'**
   String get assetHistoryTitle;
 
   /// No description provided for @assetHistoryEmpty.
@@ -6368,6 +6368,540 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أخرى'**
   String get assetTypeOther;
+
+  /// No description provided for @assetTypeVehicle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مركبة'**
+  String get assetTypeVehicle;
+
+  /// No description provided for @shopTypeCarWorkshop.
+  ///
+  /// In ar, this message translates to:
+  /// **'ورشة سيارات'**
+  String get shopTypeCarWorkshop;
+
+  /// No description provided for @shopTypeCarWorkshopDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام السيارات، تشخيص، تسعيرة، تصليح، ثم التسليم بعد السداد.'**
+  String get shopTypeCarWorkshopDescription;
+
+  /// No description provided for @assetVinLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الشاصي (VIN)'**
+  String get assetVinLabel;
+
+  /// No description provided for @assetPlateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم اللوحة'**
+  String get assetPlateLabel;
+
+  /// No description provided for @assetEngineLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم المحرك'**
+  String get assetEngineLabel;
+
+  /// No description provided for @assetYearLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سنة الصنع'**
+  String get assetYearLabel;
+
+  /// No description provided for @assetOdometerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'قراءة العداد (كم)'**
+  String get assetOdometerLabel;
+
+  /// No description provided for @assetsDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجهزة والمركبات'**
+  String get assetsDrawerLabel;
+
+  /// No description provided for @assetsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجهزة والمركبات'**
+  String get assetsTitle;
+
+  /// No description provided for @assetsSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشاصي، اللوحة، IMEI، الرقم التسلسلي…'**
+  String get assetsSearchHint;
+
+  /// No description provided for @assetsInShopFilter.
+  ///
+  /// In ar, this message translates to:
+  /// **'عندنا الآن'**
+  String get assetsInShopFilter;
+
+  /// No description provided for @assetsAllFilter.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get assetsAllFilter;
+
+  /// No description provided for @assetsEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد أجهزة مسجّلة'**
+  String get assetsEmptyTitle;
+
+  /// No description provided for @assetsEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل جهاز أو مركبة تدخل الورشة تُسجَّل هنا مع سجلها الكامل.'**
+  String get assetsEmptyMessage;
+
+  /// No description provided for @assetsInShopEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد شيء عندنا الآن'**
+  String get assetsInShopEmptyTitle;
+
+  /// No description provided for @assetsInShopEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل ما دخل الورشة تم تسليمه لأصحابه.'**
+  String get assetsInShopEmptyMessage;
+
+  /// No description provided for @assetsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الأجهزة'**
+  String get assetsLoadError;
+
+  /// No description provided for @assetsLoadErrorDetail.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل هذا الجهاز'**
+  String get assetsLoadErrorDetail;
+
+  /// No description provided for @assetInShopBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'عندنا الآن'**
+  String get assetInShopBadge;
+
+  /// No description provided for @assetOwnerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المالك الحالي'**
+  String get assetOwnerLabel;
+
+  /// No description provided for @assetOwnershipHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الملكية'**
+  String get assetOwnershipHistoryTitle;
+
+  /// No description provided for @assetOwnershipCurrent.
+  ///
+  /// In ar, this message translates to:
+  /// **'المالك الحالي'**
+  String get assetOwnershipCurrent;
+
+  /// Start of an ownership period on the asset details screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'منذ {date}'**
+  String assetOwnershipSince(String date);
+
+  /// A closed ownership period on the asset details screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {from} إلى {to}'**
+  String assetOwnershipRange(String from, String to);
+
+  /// No description provided for @assetTransferButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل الملكية'**
+  String get assetTransferButton;
+
+  /// No description provided for @assetTransferDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل ملكية الجهاز'**
+  String get assetTransferDialogTitle;
+
+  /// No description provided for @assetTransferExplainer.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل الصيانة يبقى مع الجهاز، فيرى المالك الجديد كل ما عملناه عليه.'**
+  String get assetTransferExplainer;
+
+  /// No description provided for @assetTransferNoteLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة (اختياري)'**
+  String get assetTransferNoteLabel;
+
+  /// No description provided for @assetTransferConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل'**
+  String get assetTransferConfirm;
+
+  /// Snackbar after an asset ownership transfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تحويل الملكية إلى {customer}.'**
+  String assetTransferSuccess(String customer);
+
+  /// No description provided for @assetVisitsMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'الزيارات'**
+  String get assetVisitsMetric;
+
+  /// No description provided for @assetTotalSpentMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الفواتير'**
+  String get assetTotalSpentMetric;
+
+  /// No description provided for @assetLastVisitMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر زيارة'**
+  String get assetLastVisitMetric;
+
+  /// No description provided for @assetNeverVisited.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تدخل بعد'**
+  String get assetNeverVisited;
+
+  /// No description provided for @assetNoHistoryMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مهام على هذا الجهاز بعد.'**
+  String get assetNoHistoryMessage;
+
+  /// No description provided for @assetNewJobButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مهمة جديدة لهذا الجهاز'**
+  String get assetNewJobButton;
+
+  /// No description provided for @assetIdentitySectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات التعريف'**
+  String get assetIdentitySectionTitle;
+
+  /// No description provided for @jobServicesSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخدمات والأعمال'**
+  String get jobServicesSectionTitle;
+
+  /// No description provided for @jobAddServiceButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة خدمة'**
+  String get jobAddServiceButton;
+
+  /// No description provided for @jobServicesTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الخدمات'**
+  String get jobServicesTotalLabel;
+
+  /// No description provided for @jobRemoveServiceTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الخدمة'**
+  String get jobRemoveServiceTooltip;
+
+  /// No description provided for @jobNoServicesMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُضف أي خدمة بعد (كشف، تركيب، صيانة…).'**
+  String get jobNoServicesMessage;
+
+  /// No description provided for @jobNoServiceProductsMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد منتجات خدمية في الكتالوج. أضف منتجاً وفعّل خيار «خدمة».'**
+  String get jobNoServiceProductsMessage;
+
+  /// No description provided for @jobServicePickerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر خدمة'**
+  String get jobServicePickerTitle;
+
+  /// No description provided for @jobHoldButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعليق'**
+  String get jobHoldButton;
+
+  /// No description provided for @jobResumeButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'استئناف'**
+  String get jobResumeButton;
+
+  /// No description provided for @jobHoldDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعليق المهمة'**
+  String get jobHoldDialogTitle;
+
+  /// No description provided for @jobHoldExplainer.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوقت المعلّق لا يُحتسب ضمن مدة العمل، فيبقى عمر المهمة صادقاً.'**
+  String get jobHoldExplainer;
+
+  /// No description provided for @jobHoldReasonLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبب التعليق'**
+  String get jobHoldReasonLabel;
+
+  /// No description provided for @jobHoldReasonHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار وصول قطعة الغيار'**
+  String get jobHoldReasonHint;
+
+  /// No description provided for @jobOnHoldBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'معلّقة'**
+  String get jobOnHoldBadge;
+
+  /// Accumulated hold duration on a job.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدة التعليق: {duration}'**
+  String jobHeldTimeLabel(String duration);
+
+  /// No description provided for @jobSettlementNotInvoiced.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُفوتر'**
+  String get jobSettlementNotInvoiced;
+
+  /// No description provided for @jobSettlementDepositPaid.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة مقدمة'**
+  String get jobSettlementDepositPaid;
+
+  /// No description provided for @jobSettlementCreditOpen.
+  ///
+  /// In ar, this message translates to:
+  /// **'آجل'**
+  String get jobSettlementCreditOpen;
+
+  /// No description provided for @jobSettlementSettled.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوعة'**
+  String get jobSettlementSettled;
+
+  /// No description provided for @jobCustodyWithShop.
+  ///
+  /// In ar, this message translates to:
+  /// **'عندنا'**
+  String get jobCustodyWithShop;
+
+  /// No description provided for @jobCustodyReleased.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم التسليم'**
+  String get jobCustodyReleased;
+
+  /// No description provided for @jobHandoverButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسليم للزبون'**
+  String get jobHandoverButton;
+
+  /// No description provided for @jobHandoverDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسليم الجهاز للزبون'**
+  String get jobHandoverDialogTitle;
+
+  /// No description provided for @jobHandoverCollectorLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلمها (اختياري)'**
+  String get jobHandoverCollectorLabel;
+
+  /// No description provided for @jobHandoverCollectorHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم من استلم الجهاز'**
+  String get jobHandoverCollectorHint;
+
+  /// No description provided for @jobHandoverConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسليم'**
+  String get jobHandoverConfirm;
+
+  /// No description provided for @jobHandoverBlockedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن التسليم قبل السداد'**
+  String get jobHandoverBlockedTitle;
+
+  /// No description provided for @jobHandoverBlockedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أصدر الفاتورة واستلم المبلغ، أو سجّلها آجل على الزبون، قبل تسليم الجهاز.'**
+  String get jobHandoverBlockedMessage;
+
+  /// No description provided for @jobHandoverBlockedInvoiceAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إصدار الفاتورة'**
+  String get jobHandoverBlockedInvoiceAction;
+
+  /// No description provided for @jobAwaitingCollectionHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوعة وجاهزة — الجهاز ما زال عندنا حتى يستلمه الزبون.'**
+  String get jobAwaitingCollectionHint;
+
+  /// No description provided for @jobForceReleaseButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسليم بدون سداد'**
+  String get jobForceReleaseButton;
+
+  /// No description provided for @jobForceReleaseDialogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسليم دون استلام المبلغ'**
+  String get jobForceReleaseDialogTitle;
+
+  /// No description provided for @jobForceReleaseExplainer.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيخرج الجهاز والمبلغ لم يُسدَّد. تُسجَّل هذه العملية باسمك.'**
+  String get jobForceReleaseExplainer;
+
+  /// No description provided for @jobForceReleaseNoteLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'السبب'**
+  String get jobForceReleaseNoteLabel;
+
+  /// No description provided for @jobForceReleaseNoteHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'زبون قديم، يدفع الأسبوع القادم'**
+  String get jobForceReleaseNoteHint;
+
+  /// Outstanding balance on a job's invoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقي: {amount}'**
+  String jobBalanceDueLabel(String amount);
+
+  /// No description provided for @jobInvoiceOnCreditLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'آجل (دفعة مقدمة أو دفع لاحق)'**
+  String get jobInvoiceOnCreditLabel;
+
+  /// No description provided for @jobInvoiceOnCreditExplainer.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ المتبقي يُسجَّل ديناً على الزبون، ويمكن استلام دفعة مقدمة الآن.'**
+  String get jobInvoiceOnCreditExplainer;
+
+  /// No description provided for @jobInvoiceAmountNowLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ المستلم الآن'**
+  String get jobInvoiceAmountNowLabel;
+
+  /// No description provided for @jobInvoiceDueDateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الاستحقاق'**
+  String get jobInvoiceDueDateLabel;
+
+  /// No description provided for @jobInvoiceNeedsCustomerForCredit.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفاتورة الآجلة تحتاج زبوناً مسجَّلاً على المهمة.'**
+  String get jobInvoiceNeedsCustomerForCredit;
+
+  /// No description provided for @jobInvoiceServicesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخدمات'**
+  String get jobInvoiceServicesLabel;
+
+  /// No description provided for @jobOverQuoteTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ أعلى من السعر المتفق عليه'**
+  String get jobOverQuoteTitle;
+
+  /// Shown when a job invoice exceeds the customer-approved price.
+  ///
+  /// In ar, this message translates to:
+  /// **'وافق الزبون على {approved} والفاتورة {total}. أكّد المبلغ الجديد معه أولاً.'**
+  String jobOverQuoteMessage(String approved, String total);
+
+  /// No description provided for @jobOverQuoteConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'الزبون موافق، أصدر الفاتورة'**
+  String get jobOverQuoteConfirm;
+
+  /// No description provided for @jobsHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل المهام'**
+  String get jobsHistoryTitle;
+
+  /// No description provided for @jobsHistoryTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل المهام المنتهية'**
+  String get jobsHistoryTooltip;
+
+  /// No description provided for @jobsHistoryEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد مهام منتهية'**
+  String get jobsHistoryEmptyTitle;
+
+  /// No description provided for @jobsHistoryEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'المهام المكتملة والملغاة تظهر هنا.'**
+  String get jobsHistoryEmptyMessage;
+
+  /// No description provided for @jobsBoardBackToBoard.
+  ///
+  /// In ar, this message translates to:
+  /// **'لوحة العمل'**
+  String get jobsBoardBackToBoard;
+
+  /// Job count badge on a kanban column header.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count}'**
+  String jobsBoardStageCount(int count);
 
   /// No description provided for @intakeWorkflowLabel.
   ///

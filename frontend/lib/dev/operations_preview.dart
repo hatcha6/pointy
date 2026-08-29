@@ -6,8 +6,8 @@
 //
 //   flutter run -d web-server --web-port 8080 -t lib/dev/operations_preview.dart
 //
-// Screens: board | board-empty | board-done | details | details-done
-//          | intake | recipes
+// Screens: board | board-empty | history | details | details-done
+//          | intake | recipes | assets | assets-empty | asset-details
 //
 // See AGENTS.md ("UI preview harness") for the pattern. Not part of the
 // shipping app. Safe to delete.
@@ -26,10 +26,16 @@ import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/employee_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/operations_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
+import 'package:pointy_frontend/src/features/assets/view_models/asset_details_view_model.dart';
+import 'package:pointy_frontend/src/features/assets/view_models/assets_view_model.dart';
+import 'package:pointy_frontend/src/features/assets/views/asset_details_screen.dart';
+import 'package:pointy_frontend/src/features/assets/views/assets_screen.dart';
 import 'package:pointy_frontend/src/features/operations/view_models/job_details_view_model.dart';
+import 'package:pointy_frontend/src/features/operations/view_models/job_history_view_model.dart';
 import 'package:pointy_frontend/src/features/operations/view_models/jobs_board_view_model.dart';
 import 'package:pointy_frontend/src/features/operations/view_models/recipes_view_model.dart';
 import 'package:pointy_frontend/src/features/operations/views/job_details_screen.dart';
+import 'package:pointy_frontend/src/features/operations/views/job_history_screen.dart';
 import 'package:pointy_frontend/src/features/operations/views/job_intake_wizard.dart';
 import 'package:pointy_frontend/src/features/operations/views/jobs_screen.dart';
 import 'package:pointy_frontend/src/features/operations/views/recipes_page.dart';
@@ -86,8 +92,14 @@ class _Router extends StatelessWidget {
     switch (_screen()) {
       case 'board-empty':
         return _board(jobs: const []);
-      case 'board-done':
-        return _board(status: OperationsJobStatus.completed);
+      case 'history':
+        return _history();
+      case 'assets':
+        return _assets();
+      case 'assets-empty':
+        return _assets(assets: const []);
+      case 'asset-details':
+        return _assetDetails();
       case 'details':
         return _details(_richJob);
       case 'details-done':
@@ -103,17 +115,13 @@ class _Router extends StatelessWidget {
   }
 }
 
-Widget _board({
-  List<OperationsJob>? jobs,
-  OperationsJobStatus status = OperationsJobStatus.open,
-}) {
+Widget _board({List<OperationsJob>? jobs}) {
   final repo = _FakeOperationsRepository(
     jobs: jobs ?? _boardJobs,
     templates: _templates,
     boms: _boms,
   );
   final vm = JobsBoardViewModel(repo);
-  vm.statusFilter = status;
   return JobsScreen(
     viewModel: vm,
     capabilities: _managerCaps,
@@ -124,6 +132,49 @@ Widget _board({
     catalogRepository: _FakeCatalogRepository(),
     recipesViewModel: RecipesViewModel(repo),
     onOpenJob: (_) {},
+    onOpenHistory: () {},
+  );
+}
+
+Widget _history() {
+  final repo = _FakeOperationsRepository(
+    jobs: [_doneJob],
+    templates: _templates,
+    boms: _boms,
+  );
+  return JobHistoryScreen(
+    viewModel: JobHistoryViewModel(repo),
+    onOpenJob: (_) {},
+  );
+}
+
+Widget _assets({List<CustomerAsset>? assets}) {
+  final repo = _FakeOperationsRepository(
+    jobs: _boardJobs,
+    templates: _templates,
+    boms: _boms,
+    assets: assets ?? _previewAssets,
+  );
+  return AssetsScreen(
+    viewModel: AssetsViewModel(repo),
+    capabilities: _managerCaps,
+    navigation: _FakeNavigation(_managerCaps, _managerUser),
+    onOpenAsset: (_) {},
+  );
+}
+
+Widget _assetDetails() {
+  final repo = _FakeOperationsRepository(
+    jobs: _boardJobs,
+    templates: _templates,
+    boms: _boms,
+    assets: _previewAssets,
+  );
+  return AssetDetailsScreen(
+    viewModel: AssetDetailsViewModel(repo, assetId: _previewAssets.first.id),
+    capabilities: _managerCaps,
+    contactRepository: _FakeContactRepository(),
+    onNewJob: (_) {},
   );
 }
 
@@ -217,11 +268,13 @@ class _FakeOperationsRepository extends OperationsRepository {
     required this.jobs,
     required this.templates,
     required this.boms,
+    this.assets = const [],
   }) : super(PosApiService());
 
   final List<OperationsJob> jobs;
   final List<WorkflowTemplate> templates;
   final List<BillOfMaterials> boms;
+  final List<CustomerAsset> assets;
 
   @override
   Future<Result<List<WorkflowTemplate>>> loadAllWorkflowTemplates({
@@ -256,9 +309,66 @@ class _FakeOperationsRepository extends OperationsRepository {
   }
 
   @override
+  Future<Result<OperationsJobPage>> loadJobs({
+    OperationsJobStatus? status,
+    OperationsJobType? jobType,
+    int? assignedTo,
+    String search = '',
+    int? asset,
+    int? currentStage,
+    int? customer,
+    int? workflowTemplate,
+    int page = 1,
+  }) async {
+    return Ok(
+      OperationsJobPage(
+        jobs: jobs
+            .where((job) => status == null || job.status == status)
+            .toList(growable: false),
+        hasMore: false,
+      ),
+    );
+  }
+
+  @override
   Future<Result<OperationsJob>> loadJob(int jobId) async {
     return Ok(
       jobs.firstWhere((job) => job.id == jobId, orElse: () => jobs.first),
+    );
+  }
+
+  @override
+  Future<Result<CustomerAssetPage>> loadCustomerAssets({
+    int? customer,
+    String search = '',
+    bool? inShop,
+    String? assetType,
+    String ordering = '',
+    int page = 1,
+  }) async {
+    return Ok(
+      CustomerAssetPage(
+        assets: assets
+            .where((asset) => inShop != true || asset.isInShop)
+            .toList(growable: false),
+        hasMore: false,
+      ),
+    );
+  }
+
+  @override
+  Future<Result<CustomerAssetDetail>> loadCustomerAsset(int assetId) async {
+    final asset = assets.firstWhere(
+      (candidate) => candidate.id == assetId,
+      orElse: () => assets.first,
+    );
+    return Ok(
+      CustomerAssetDetail(
+        asset: asset,
+        ownerships: _previewOwnerships,
+        jobs: _previewAssetHistory,
+        totalSpent: 435,
+      ),
     );
   }
 }
@@ -298,10 +408,128 @@ WorkflowStage _stage(
     isInitial: initial,
     isTerminal: terminal,
     requiresCustomerApproval: approval,
+    requiresSettlement: terminal,
+    releasesCustody: terminal,
     consumesMaterials: consumes,
     producesOutput: produces,
   );
 }
+
+final List<CustomerAsset> _previewAssets = [
+  CustomerAsset(
+    id: 1,
+    customer: 1,
+    customerName: 'سالم المبروك',
+    customerPhone: '0921234567',
+    assetType: CustomerAssetType.vehicle,
+    brand: 'Toyota',
+    modelName: 'Corolla',
+    serialNumber: '',
+    imei: '',
+    vin: 'JTDBR32E520012345',
+    plateNumber: '12-3456',
+    engineNumber: '2ZR1234567',
+    modelYear: 2018,
+    odometer: 143000,
+    color: 'أبيض',
+    notes: 'صاحبها يفضل قطع أصلية.',
+    displayName: 'Toyota Corolla',
+    identityLabel: '12-3456',
+    jobCount: 3,
+    openJobCount: 1,
+    lastJobAt: DateTime(2026, 8, 20),
+    isActive: true,
+  ),
+  CustomerAsset(
+    id: 2,
+    customer: 2,
+    customerName: 'أحمد علي',
+    customerPhone: '0911111111',
+    assetType: CustomerAssetType.phone,
+    brand: 'Apple',
+    modelName: 'iPhone 15 Pro',
+    serialNumber: 'F2LX9K3PQ1',
+    imei: '356789012345678',
+    color: 'أسود',
+    notes: '',
+    displayName: 'Apple iPhone 15 Pro',
+    identityLabel: '356789012345678',
+    jobCount: 1,
+    openJobCount: 0,
+    lastJobAt: DateTime(2026, 6, 2),
+    isActive: true,
+  ),
+];
+
+final List<AssetOwnership> _previewOwnerships = [
+  AssetOwnership(
+    id: 2,
+    customer: 1,
+    customerName: 'سالم المبروك',
+    customerPhone: '0921234567',
+    isCurrent: true,
+    note: 'شراها من المالك السابق.',
+    acquiredAt: DateTime(2025, 11, 3),
+  ),
+  AssetOwnership(
+    id: 1,
+    customer: 3,
+    customerName: 'خالد الفيتوري',
+    customerPhone: '0913333333',
+    isCurrent: false,
+    note: '',
+    acquiredAt: DateTime(2022, 4, 15),
+    releasedAt: DateTime(2025, 11, 3),
+  ),
+];
+
+final List<AssetJobHistoryEntry> _previewAssetHistory = [
+  AssetJobHistoryEntry(
+    id: 31,
+    jobNumber: 'REP-20260820-000031',
+    jobType: 'repair',
+    status: 'open',
+    stageName: 'قيد التصليح',
+    customerName: 'سالم المبروك',
+    symptoms: 'صوت من ناحية الفرامل الأمامية',
+    diagnosis: 'تيل فرامل أمامي مستهلك',
+    warrantyDays: 30,
+    orderReceiptNumber: '',
+    createdAt: DateTime(2026, 8, 20),
+  ),
+  AssetJobHistoryEntry(
+    id: 22,
+    jobNumber: 'REP-20260412-000022',
+    jobType: 'repair',
+    status: 'completed',
+    stageName: 'تم التسليم',
+    customerName: 'سالم المبروك',
+    symptoms: 'تغيير زيت وفلاتر',
+    diagnosis: '',
+    warrantyDays: 0,
+    orderReceiptNumber: 'INV-000441',
+    total: 185,
+    createdAt: DateTime(2026, 4, 12),
+    completedAt: DateTime(2026, 4, 12),
+    handedOverAt: DateTime(2026, 4, 13),
+  ),
+  AssetJobHistoryEntry(
+    id: 9,
+    jobNumber: 'REP-20251201-000009',
+    jobType: 'repair',
+    status: 'completed',
+    stageName: 'تم التسليم',
+    customerName: 'خالد الفيتوري',
+    symptoms: 'قير أوتوماتيك يضرب',
+    diagnosis: 'تغيير زيت القير وفلتر',
+    warrantyDays: 90,
+    orderReceiptNumber: 'INV-000302',
+    total: 250,
+    createdAt: DateTime(2025, 12, 1),
+    completedAt: DateTime(2025, 12, 3),
+    handedOverAt: DateTime(2025, 12, 3),
+  ),
+];
 
 final List<WorkflowStage> _repairStages = [
   _stage(1, 'received', 'تم الاستلام', 0, initial: true),

@@ -14,24 +14,39 @@ import '../../../shared/responsive/responsive.dart';
 
 /// Search-and-pick a product variant by name/SKU/barcode.
 ///
-/// Returns the chosen [ProductVariant] or null.
+/// Returns the chosen [ProductVariant] or null. [where] narrows the results —
+/// the job-services picker passes `isService`, so a technician adding "كشف
+/// وتشخيص" is never offered a screen or a brake pad.
 Future<ProductVariant?> showVariantPickerSheet(
   BuildContext context, {
   required CatalogRepository catalogRepository,
   String? title,
+  bool Function(ProductVariant variant)? where,
+  String? emptyMessage,
 }) {
   return showAdaptiveModalBottomSheet<ProductVariant>(
     context: context,
-    builder: (sheetContext) =>
-        _VariantPickerSheet(catalogRepository: catalogRepository, title: title),
+    builder: (sheetContext) => _VariantPickerSheet(
+      catalogRepository: catalogRepository,
+      title: title,
+      where: where,
+      emptyMessage: emptyMessage,
+    ),
   );
 }
 
 class _VariantPickerSheet extends StatefulWidget {
-  const _VariantPickerSheet({required this.catalogRepository, this.title});
+  const _VariantPickerSheet({
+    required this.catalogRepository,
+    this.title,
+    this.where,
+    this.emptyMessage,
+  });
 
   final CatalogRepository catalogRepository;
   final String? title;
+  final bool Function(ProductVariant variant)? where;
+  final String? emptyMessage;
 
   @override
   State<_VariantPickerSheet> createState() => _VariantPickerSheetState();
@@ -81,6 +96,7 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
         case Ok<ProductVariantPage>():
           _variants = result.value.variants
               .where((variant) => variant.isActive)
+              .where((variant) => widget.where?.call(variant) ?? true)
               .toList(growable: false);
         case Error<ProductVariantPage>():
           _hasError = true;
@@ -132,7 +148,7 @@ class _VariantPickerSheetState extends State<_VariantPickerSheet> {
                   : _variants.isEmpty
                   ? PointyEmptyState(
                       icon: Icons.search_off_outlined,
-                      title: l10n.dashboardNoWidgetData,
+                      title: widget.emptyMessage ?? l10n.dashboardNoWidgetData,
                     )
                   : ListView.builder(
                       shrinkWrap: true,

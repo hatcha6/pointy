@@ -134,6 +134,85 @@ class JobMaterial {
   }
 }
 
+/// Where a job stands with money. Derived on the server from the linked order,
+/// so it can never drift from what the customer actually owes.
+enum JobSettlementState {
+  notInvoiced,
+  depositPaid,
+  creditOpen,
+  settled;
+
+  static JobSettlementState fromJson(Object? value) {
+    return switch (value?.toString()) {
+      'deposit_paid' => JobSettlementState.depositPaid,
+      'credit_open' => JobSettlementState.creditOpen,
+      'settled' => JobSettlementState.settled,
+      _ => JobSettlementState.notInvoiced,
+    };
+  }
+
+  bool get isSettled => this == JobSettlementState.settled;
+  bool get owesMoney =>
+      this == JobSettlementState.depositPaid ||
+      this == JobSettlementState.creditOpen;
+}
+
+/// Whether the shop still physically holds the customer's property. Separate
+/// from payment on purpose: a repaired car is paid for days before it is
+/// collected, and the shop is answerable for it the whole time.
+enum JobCustodyState {
+  withShop,
+  released;
+
+  static JobCustodyState fromJson(Object? value) {
+    return value?.toString() == 'released'
+        ? JobCustodyState.released
+        : JobCustodyState.withShop;
+  }
+}
+
+/// Priced work on a job — a diagnosis fee, an oil change, a screen swap.
+///
+/// Distinct from [JobMaterial]: a service holds no stock, so it has no cost,
+/// no consumption and nothing to reverse.
+class JobServiceLine {
+  const JobServiceLine({
+    required this.id,
+    required this.variant,
+    required this.productName,
+    required this.variantName,
+    required this.quantity,
+    required this.unitPrice,
+    required this.lineTotal,
+    this.note = '',
+    this.createdAt,
+  });
+
+  final int id;
+  final int variant;
+  final String productName;
+  final String variantName;
+  final double quantity;
+  final double unitPrice;
+  final double lineTotal;
+  final String note;
+  final DateTime? createdAt;
+
+  factory JobServiceLine.fromJson(Map<String, Object?> json) {
+    return JobServiceLine(
+      id: json['id'] as int,
+      variant: _intFromJson(json['variant']),
+      productName: json['product_name']?.toString() ?? '',
+      variantName: json['variant_name']?.toString() ?? '',
+      quantity: _qtyFromJson(json['quantity']),
+      unitPrice: _moneyFromJson(json['unit_price']),
+      lineTotal: _moneyFromJson(json['line_total']),
+      note: json['note']?.toString() ?? '',
+      createdAt: _dateTimeFromJson(json['created_at']),
+    );
+  }
+}
+
 class JobStageEvent {
   const JobStageEvent({
     required this.id,
@@ -197,6 +276,19 @@ class OperationsJob {
     required this.materials,
     required this.stageEvents,
     required this.materialsTotal,
+    this.services = const [],
+    this.servicesTotal = 0,
+    this.settlementState = JobSettlementState.notInvoiced,
+    this.custodyState = JobCustodyState.withShop,
+    this.isOnHold = false,
+    this.holdReason = '',
+    this.heldSeconds = 0,
+    this.onHoldSince,
+    this.handedOverAt,
+    this.handedOverTo = '',
+    this.orderBalanceDue,
+    this.orderAmountPaid,
+    this.orderSaleType = '',
     this.currentStageDetails,
     this.nextStage,
     this.customer,
@@ -258,15 +350,41 @@ class OperationsJob {
   final List<JobMaterial> materials;
   final List<JobStageEvent> stageEvents;
   final double materialsTotal;
+  final List<JobServiceLine> services;
+  final double servicesTotal;
+  final JobSettlementState settlementState;
+  final JobCustodyState custodyState;
+  final bool isOnHold;
+  final String holdReason;
+  final int heldSeconds;
+  final DateTime? onHoldSince;
+  final DateTime? handedOverAt;
+  final String handedOverTo;
+  final double? orderBalanceDue;
+  final double? orderAmountPaid;
+  final String orderSaleType;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
   bool get isOpen => status == OperationsJobStatus.open;
 
+  /// Everything billable on this job: parts plus services. The free-text labour
+  /// amount is typed at invoice time and is not part of this.
+  double get billableTotal => materialsTotal + servicesTotal;
+
+  /// Whether the next stage would hand the customer's property back — the cue
+  /// for the board to show a "collect" action rather than a plain "advance".
+  bool get nextStageReleasesCustody => nextStage?.releasesCustody ?? false;
+
+  /// Whether the shop may not release this item yet.
+  bool get blockedOnPayment =>
+      nextStage?.requiresSettlement == true && !settlementState.isSettled;
+
   factory OperationsJob.fromJson(Map<String, Object?> json) {
     final assetsJson = (json['assets'] as List<Object?>?) ?? const [];
     final materialsJson = (json['materials'] as List<Object?>?) ?? const [];
     final eventsJson = (json['stage_events'] as List<Object?>?) ?? const [];
+    final servicesJson = (json['services'] as List<Object?>?) ?? const [];
 
     return OperationsJob(
       id: json['id'] as int,
@@ -324,6 +442,22 @@ class OperationsJob {
           .map(JobStageEvent.fromJson)
           .toList(growable: false),
       materialsTotal: _moneyFromJson(json['materials_total']),
+      services: servicesJson
+          .whereType<Map<String, Object?>>()
+          .map(JobServiceLine.fromJson)
+          .toList(growable: false),
+      servicesTotal: _moneyFromJson(json['services_total']),
+      settlementState: JobSettlementState.fromJson(json['settlement_state']),
+      custodyState: JobCustodyState.fromJson(json['custody_state']),
+      isOnHold: json['is_on_hold'] == true,
+      holdReason: json['hold_reason']?.toString() ?? '',
+      heldSeconds: _intFromJson(json['held_seconds']),
+      onHoldSince: _dateTimeFromJson(json['on_hold_since']),
+      handedOverAt: _dateTimeFromJson(json['handed_over_at']),
+      handedOverTo: json['handed_over_to']?.toString() ?? '',
+      orderBalanceDue: _nullableMoneyFromJson(json['order_balance_due']),
+      orderAmountPaid: _nullableMoneyFromJson(json['order_amount_paid']),
+      orderSaleType: json['order_sale_type']?.toString() ?? '',
       createdAt: _dateTimeFromJson(json['created_at']),
       updatedAt: _dateTimeFromJson(json['updated_at']),
     );
@@ -403,17 +537,61 @@ class JobInvoicePayment {
 }
 
 class JobInvoiceDraft {
-  const JobInvoiceDraft({required this.laborTotal, required this.payments});
+  const JobInvoiceDraft({
+    required this.laborTotal,
+    required this.payments,
+    this.onCredit = false,
+    this.dueDate,
+    this.acknowledgeOverQuote = false,
+  });
 
   final double laborTotal;
   final List<JobInvoicePayment> payments;
 
+  /// آجل: book the balance against the customer instead of demanding it now.
+  /// This is what makes a deposit (a partial payment) or a pay-later repair
+  /// possible; a standard sale must still be paid in full.
+  final bool onCredit;
+  final DateTime? dueDate;
+
+  /// Set only after the cashier has confirmed a total above the price the
+  /// customer approved. The server refuses the invoice otherwise.
+  final bool acknowledgeOverQuote;
+
   Map<String, Object?> toJson() {
     return {
       'labor_total': laborTotal.toStringAsFixed(2),
+      'sale_type': onCredit ? 'credit' : 'standard',
+      if (dueDate != null)
+        'valid_until':
+            '${dueDate!.year.toString().padLeft(4, '0')}-'
+            '${dueDate!.month.toString().padLeft(2, '0')}-'
+            '${dueDate!.day.toString().padLeft(2, '0')}',
+      if (acknowledgeOverQuote) 'acknowledge_over_quote': true,
       'payments': payments
           .map((payment) => payment.toJson())
           .toList(growable: false),
+    };
+  }
+}
+
+/// Adding priced work to a job.
+class JobServiceDraft {
+  const JobServiceDraft({
+    required this.variant,
+    this.quantity = 1,
+    this.note = '',
+  });
+
+  final int variant;
+  final double quantity;
+  final String note;
+
+  Map<String, Object?> toJson() {
+    return {
+      'variant': variant,
+      'quantity': quantity.toStringAsFixed(3),
+      if (note.trim().isNotEmpty) 'note': note.trim(),
     };
   }
 }

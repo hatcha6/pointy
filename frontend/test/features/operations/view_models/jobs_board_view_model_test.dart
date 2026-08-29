@@ -20,29 +20,43 @@ void main() {
     expect(repo.loadJobsCount, 1);
   });
 
-  test('changing the status filter reloads with the new value', () async {
+  test('the board only ever asks for open work', () async {
+    // Finished jobs live on the history screen. If the board could be widened
+    // to "all", a shop with a year of repairs behind it would load every one of
+    // them into a kanban that loads its pages eagerly.
     final repo = _FakeOperationsRepository();
     final vm = JobsBoardViewModel(repo);
     addTearDown(vm.dispose);
+
     await vm.loadAll();
-    repo.loadJobsCount = 0;
 
-    vm.statusFilter = null; // default is `open`, so null is a change
+    expect(repo.lastStatus, OperationsJobStatus.open);
 
-    expect(repo.loadJobsCount, 1);
-    expect(repo.lastStatus, isNull);
+    vm.searchQuery = 'أحمد';
+    expect(repo.lastStatus, OperationsJobStatus.open);
   });
 
-  test('setting the status filter to the same value does not reload', () async {
-    final repo = _FakeOperationsRepository();
+  test('the selected template defaults to the first enabled one', () async {
+    final repo = _FakeOperationsRepository(templates: _twoTemplates);
     final vm = JobsBoardViewModel(repo);
     addTearDown(vm.dispose);
     await vm.loadAll();
-    repo.loadJobsCount = 0;
 
-    vm.statusFilter = OperationsJobStatus.open; // unchanged
+    expect(vm.selectedTemplate?.id, 1);
 
-    expect(repo.loadJobsCount, 0);
+    vm.selectedTemplateId = 2;
+    expect(vm.selectedTemplate?.id, 2);
+  });
+
+  test('a disabled template is never the selected board', () async {
+    // A shop that turns a lane off should not find the board showing it.
+    final repo = _FakeOperationsRepository(templates: _twoTemplates);
+    final vm = JobsBoardViewModel(repo);
+    addTearDown(vm.dispose);
+    await vm.loadAll();
+
+    vm.selectedTemplateId = 3; // the inactive one
+    expect(vm.selectedTemplate?.id, 1);
   });
 
   test('currentUserId reloads only while assignedToMe is on', () async {
@@ -77,7 +91,7 @@ void main() {
     // an invitation to clear filters that are hiding nothing.
     expect(vm.hasActiveFilters, isFalse);
 
-    vm.statusFilter = OperationsJobStatus.completed;
+    vm.assignedToMe = true;
     expect(vm.hasActiveFilters, isTrue);
   });
 
@@ -86,20 +100,19 @@ void main() {
     final vm = JobsBoardViewModel(repo);
     addTearDown(vm.dispose);
     await vm.loadAll();
-    vm.statusFilter = OperationsJobStatus.completed;
+    vm.jobTypeFilter = OperationsJobType.repair;
     vm.assignedToMe = true;
     vm.searchQuery = 'أحمد';
     repo.loadJobsCount = 0;
 
     vm.clearFilters();
 
-    expect(vm.statusFilter, OperationsJobStatus.open);
     expect(vm.assignedToMe, isFalse);
     expect(vm.jobTypeFilter, isNull);
     expect(vm.searchQuery, isEmpty);
     expect(vm.hasActiveFilters, isFalse);
-    // Resetting four fields through their setters would have fired four
-    // queries and flickered the board through the intermediate results.
+    // Resetting the fields through their setters would have fired a query each
+    // and flickered the board through the intermediate results.
     expect(repo.loadJobsCount, 1);
     expect(repo.lastStatus, OperationsJobStatus.open);
     expect(repo.lastAssignedTo, isNull);
@@ -118,9 +131,29 @@ void main() {
   });
 }
 
-class _FakeOperationsRepository extends OperationsRepository {
-  _FakeOperationsRepository() : super(PosApiService());
+WorkflowTemplate _template(int id, String name, {bool isActive = true}) {
+  return WorkflowTemplate(
+    id: id,
+    name: name,
+    jobType: OperationsJobType.repair,
+    isActive: isActive,
+    isSystem: true,
+    jobCount: 0,
+    stages: const [],
+  );
+}
 
+final List<WorkflowTemplate> _twoTemplates = [
+  _template(1, 'تصليح'),
+  _template(2, 'مطبخ'),
+  _template(3, 'قديم', isActive: false),
+];
+
+class _FakeOperationsRepository extends OperationsRepository {
+  _FakeOperationsRepository({this.templates = const []})
+    : super(PosApiService());
+
+  final List<WorkflowTemplate> templates;
   int loadJobsCount = 0;
   OperationsJobStatus? lastStatus;
   int? lastAssignedTo;
@@ -130,7 +163,7 @@ class _FakeOperationsRepository extends OperationsRepository {
     OperationsJobType? jobType,
     bool? isActive,
   }) async {
-    return const Ok([]);
+    return Ok(templates);
   }
 
   @override

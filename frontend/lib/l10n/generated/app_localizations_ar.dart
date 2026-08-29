@@ -3370,7 +3370,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get jobAssetSection => 'الجهاز';
 
   @override
-  String get assetHistoryTitle => 'سجل الجهاز';
+  String get assetHistoryTitle => 'سجل الصيانة';
 
   @override
   String get assetHistoryEmpty => 'لا يوجد سجل سابق لهذا الجهاز.';
@@ -3595,6 +3595,298 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get assetTypeOther => 'أخرى';
+
+  @override
+  String get assetTypeVehicle => 'مركبة';
+
+  @override
+  String get shopTypeCarWorkshop => 'ورشة سيارات';
+
+  @override
+  String get shopTypeCarWorkshopDescription =>
+      'استلام السيارات، تشخيص، تسعيرة، تصليح، ثم التسليم بعد السداد.';
+
+  @override
+  String get assetVinLabel => 'رقم الشاصي (VIN)';
+
+  @override
+  String get assetPlateLabel => 'رقم اللوحة';
+
+  @override
+  String get assetEngineLabel => 'رقم المحرك';
+
+  @override
+  String get assetYearLabel => 'سنة الصنع';
+
+  @override
+  String get assetOdometerLabel => 'قراءة العداد (كم)';
+
+  @override
+  String get assetsDrawerLabel => 'الأجهزة والمركبات';
+
+  @override
+  String get assetsTitle => 'الأجهزة والمركبات';
+
+  @override
+  String get assetsSearchHint => 'الشاصي، اللوحة، IMEI، الرقم التسلسلي…';
+
+  @override
+  String get assetsInShopFilter => 'عندنا الآن';
+
+  @override
+  String get assetsAllFilter => 'الكل';
+
+  @override
+  String get assetsEmptyTitle => 'لا توجد أجهزة مسجّلة';
+
+  @override
+  String get assetsEmptyMessage =>
+      'كل جهاز أو مركبة تدخل الورشة تُسجَّل هنا مع سجلها الكامل.';
+
+  @override
+  String get assetsInShopEmptyTitle => 'لا يوجد شيء عندنا الآن';
+
+  @override
+  String get assetsInShopEmptyMessage => 'كل ما دخل الورشة تم تسليمه لأصحابه.';
+
+  @override
+  String get assetsLoadError => 'تعذّر تحميل الأجهزة';
+
+  @override
+  String get assetsLoadErrorDetail => 'تعذّر تحميل هذا الجهاز';
+
+  @override
+  String get assetInShopBadge => 'عندنا الآن';
+
+  @override
+  String get assetOwnerLabel => 'المالك الحالي';
+
+  @override
+  String get assetOwnershipHistoryTitle => 'تاريخ الملكية';
+
+  @override
+  String get assetOwnershipCurrent => 'المالك الحالي';
+
+  @override
+  String assetOwnershipSince(String date) {
+    return 'منذ $date';
+  }
+
+  @override
+  String assetOwnershipRange(String from, String to) {
+    return 'من $from إلى $to';
+  }
+
+  @override
+  String get assetTransferButton => 'تحويل الملكية';
+
+  @override
+  String get assetTransferDialogTitle => 'تحويل ملكية الجهاز';
+
+  @override
+  String get assetTransferExplainer =>
+      'سجل الصيانة يبقى مع الجهاز، فيرى المالك الجديد كل ما عملناه عليه.';
+
+  @override
+  String get assetTransferNoteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String get assetTransferConfirm => 'تحويل';
+
+  @override
+  String assetTransferSuccess(String customer) {
+    return 'تم تحويل الملكية إلى $customer.';
+  }
+
+  @override
+  String get assetVisitsMetric => 'الزيارات';
+
+  @override
+  String get assetTotalSpentMetric => 'إجمالي الفواتير';
+
+  @override
+  String get assetLastVisitMetric => 'آخر زيارة';
+
+  @override
+  String get assetNeverVisited => 'لم تدخل بعد';
+
+  @override
+  String get assetNoHistoryMessage => 'لا توجد مهام على هذا الجهاز بعد.';
+
+  @override
+  String get assetNewJobButton => 'مهمة جديدة لهذا الجهاز';
+
+  @override
+  String get assetIdentitySectionTitle => 'بيانات التعريف';
+
+  @override
+  String get jobServicesSectionTitle => 'الخدمات والأعمال';
+
+  @override
+  String get jobAddServiceButton => 'إضافة خدمة';
+
+  @override
+  String get jobServicesTotalLabel => 'إجمالي الخدمات';
+
+  @override
+  String get jobRemoveServiceTooltip => 'حذف الخدمة';
+
+  @override
+  String get jobNoServicesMessage =>
+      'لم تُضف أي خدمة بعد (كشف، تركيب، صيانة…).';
+
+  @override
+  String get jobNoServiceProductsMessage =>
+      'لا توجد منتجات خدمية في الكتالوج. أضف منتجاً وفعّل خيار «خدمة».';
+
+  @override
+  String get jobServicePickerTitle => 'اختر خدمة';
+
+  @override
+  String get jobHoldButton => 'تعليق';
+
+  @override
+  String get jobResumeButton => 'استئناف';
+
+  @override
+  String get jobHoldDialogTitle => 'تعليق المهمة';
+
+  @override
+  String get jobHoldExplainer =>
+      'الوقت المعلّق لا يُحتسب ضمن مدة العمل، فيبقى عمر المهمة صادقاً.';
+
+  @override
+  String get jobHoldReasonLabel => 'سبب التعليق';
+
+  @override
+  String get jobHoldReasonHint => 'بانتظار وصول قطعة الغيار';
+
+  @override
+  String get jobOnHoldBadge => 'معلّقة';
+
+  @override
+  String jobHeldTimeLabel(String duration) {
+    return 'مدة التعليق: $duration';
+  }
+
+  @override
+  String get jobSettlementNotInvoiced => 'لم تُفوتر';
+
+  @override
+  String get jobSettlementDepositPaid => 'دفعة مقدمة';
+
+  @override
+  String get jobSettlementCreditOpen => 'آجل';
+
+  @override
+  String get jobSettlementSettled => 'مدفوعة';
+
+  @override
+  String get jobCustodyWithShop => 'عندنا';
+
+  @override
+  String get jobCustodyReleased => 'تم التسليم';
+
+  @override
+  String get jobHandoverButton => 'تسليم للزبون';
+
+  @override
+  String get jobHandoverDialogTitle => 'تسليم الجهاز للزبون';
+
+  @override
+  String get jobHandoverCollectorLabel => 'استلمها (اختياري)';
+
+  @override
+  String get jobHandoverCollectorHint => 'اسم من استلم الجهاز';
+
+  @override
+  String get jobHandoverConfirm => 'تسليم';
+
+  @override
+  String get jobHandoverBlockedTitle => 'لا يمكن التسليم قبل السداد';
+
+  @override
+  String get jobHandoverBlockedMessage =>
+      'أصدر الفاتورة واستلم المبلغ، أو سجّلها آجل على الزبون، قبل تسليم الجهاز.';
+
+  @override
+  String get jobHandoverBlockedInvoiceAction => 'إصدار الفاتورة';
+
+  @override
+  String get jobAwaitingCollectionHint =>
+      'مدفوعة وجاهزة — الجهاز ما زال عندنا حتى يستلمه الزبون.';
+
+  @override
+  String get jobForceReleaseButton => 'تسليم بدون سداد';
+
+  @override
+  String get jobForceReleaseDialogTitle => 'تسليم دون استلام المبلغ';
+
+  @override
+  String get jobForceReleaseExplainer =>
+      'سيخرج الجهاز والمبلغ لم يُسدَّد. تُسجَّل هذه العملية باسمك.';
+
+  @override
+  String get jobForceReleaseNoteLabel => 'السبب';
+
+  @override
+  String get jobForceReleaseNoteHint => 'زبون قديم، يدفع الأسبوع القادم';
+
+  @override
+  String jobBalanceDueLabel(String amount) {
+    return 'المتبقي: $amount';
+  }
+
+  @override
+  String get jobInvoiceOnCreditLabel => 'آجل (دفعة مقدمة أو دفع لاحق)';
+
+  @override
+  String get jobInvoiceOnCreditExplainer =>
+      'المبلغ المتبقي يُسجَّل ديناً على الزبون، ويمكن استلام دفعة مقدمة الآن.';
+
+  @override
+  String get jobInvoiceAmountNowLabel => 'المبلغ المستلم الآن';
+
+  @override
+  String get jobInvoiceDueDateLabel => 'تاريخ الاستحقاق';
+
+  @override
+  String get jobInvoiceNeedsCustomerForCredit =>
+      'الفاتورة الآجلة تحتاج زبوناً مسجَّلاً على المهمة.';
+
+  @override
+  String get jobInvoiceServicesLabel => 'الخدمات';
+
+  @override
+  String get jobOverQuoteTitle => 'المبلغ أعلى من السعر المتفق عليه';
+
+  @override
+  String jobOverQuoteMessage(String approved, String total) {
+    return 'وافق الزبون على $approved والفاتورة $total. أكّد المبلغ الجديد معه أولاً.';
+  }
+
+  @override
+  String get jobOverQuoteConfirm => 'الزبون موافق، أصدر الفاتورة';
+
+  @override
+  String get jobsHistoryTitle => 'سجل المهام';
+
+  @override
+  String get jobsHistoryTooltip => 'سجل المهام المنتهية';
+
+  @override
+  String get jobsHistoryEmptyTitle => 'لا توجد مهام منتهية';
+
+  @override
+  String get jobsHistoryEmptyMessage => 'المهام المكتملة والملغاة تظهر هنا.';
+
+  @override
+  String get jobsBoardBackToBoard => 'لوحة العمل';
+
+  @override
+  String jobsBoardStageCount(int count) {
+    return '$count';
+  }
 
   @override
   String get intakeWorkflowLabel => 'نوع المهمة';

@@ -432,6 +432,12 @@ List<_ShopTypeOption> _shopTypeOptions(AppLocalizations l10n) {
       description: l10n.shopTypePhoneRepairDescription,
     ),
     _ShopTypeOption(
+      value: 'car_workshop',
+      icon: Icons.car_repair_outlined,
+      label: l10n.shopTypeCarWorkshop,
+      description: l10n.shopTypeCarWorkshopDescription,
+    ),
+    _ShopTypeOption(
       value: 'bakery',
       icon: Icons.bakery_dining_outlined,
       label: l10n.shopTypeBakery,

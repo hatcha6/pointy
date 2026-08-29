@@ -10,6 +10,7 @@ enum AppNavigationDestination {
   pos,
   aiAssistant,
   operations,
+  assets,
   invoices,
   returnsExchange,
   purchasing,
@@ -45,6 +46,7 @@ AppCapability appNavigationDestinationCapability(
     AppNavigationDestination.pos => AppCapability.accessPos,
     AppNavigationDestination.aiAssistant => AppCapability.useAiAssistant,
     AppNavigationDestination.operations => AppCapability.viewOperations,
+    AppNavigationDestination.assets => AppCapability.viewAssets,
     AppNavigationDestination.invoices => AppCapability.viewInvoices,
     AppNavigationDestination.returnsExchange =>
       AppCapability.processReturnsByLookup,

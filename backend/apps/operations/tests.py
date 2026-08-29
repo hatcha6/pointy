@@ -774,6 +774,62 @@ class KitchenFromPosTests(_KitchenPosSetup):
         self.assertFalse(Job.objects.filter(order_id=data["id"]).exists())
 
 
+    def test_full_counter_loop_moves_ingredients_exactly_once(self):
+        """The café flow the customer described: order, pay, wait, collect.
+
+        The staged lane is what a counter with a pickup point actually needs —
+        the customer paid at the till and is standing there waiting for a name
+        to be called — and the one thing that must hold across all four steps is
+        that the meat leaves stock once, at "preparing", and never again.
+        """
+        data = self.checkout_burgers(2)
+        job = Job.objects.get(order_id=data["id"])
+        kitchen = job.workflow_template
+        client = authenticated_client(self.manager)
+
+        stock = lambda: StockItem.objects.get(  # noqa: E731
+            variant=self.meat.default_variant
+        ).quantity_on_hand
+
+        # Paid, but nothing has been cooked yet.
+        self.assertEqual(job.current_stage.code, "received")
+        self.assertEqual(stock(), Decimal("5.000"))
+
+        for code, expected_stock in (
+            ("preparing", Decimal("4.700")),
+            ("ready", Decimal("4.700")),
+            ("served", Decimal("4.700")),
+        ):
+            response = client.post(
+                reverse("job-transition", args=[job.pk]),
+                {"to_stage": stage(kitchen, code).pk},
+                format="json",
+            )
+            self.assertEqual(
+                response.status_code, status.HTTP_200_OK, f"{code}: {response.data}"
+            )
+            self.assertEqual(stock(), expected_stock, f"stock after {code}")
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, Job.Status.COMPLETED)
+        self.assertEqual(job.materials.get().consumed_at is None, False)
+
+    def test_kitchen_handover_is_not_gated_on_payment(self):
+        """A served plate is not custody, and the sale was already paid.
+
+        The settlement gate exists for repairs, where the shop is holding
+        someone's phone. Applying it to a kitchen order would wedge every café:
+        the job is born already linked to a paid order, and there is nothing to
+        hand back.
+        """
+        data = self.checkout_burgers(1)
+        job = Job.objects.get(order_id=data["id"])
+        served = stage(job.workflow_template, "served")
+
+        self.assertFalse(served.requires_settlement)
+        self.assertFalse(served.releases_custody)
+
+
 class KitchenChitOnlyTests(_KitchenPosSetup):
     """The default lane: the job auto-completes and consumes at checkout."""
 

@@ -4,6 +4,7 @@ import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
+import '../../../data/models/job_refusal.dart';
 import '../../../data/models/operations_job.dart';
 import '../../../data/repositories/operations_repository.dart';
 
@@ -23,12 +24,19 @@ class JobDetailsViewModel extends ChangeNotifier {
   bool _isMutating = false;
   bool _hasLoadError = false;
   bool _hasMutationError = false;
+  JobRefusal? _lastRefusal;
 
   OperationsJob? get job => _job;
   bool get isLoading => _isLoading;
   bool get isMutating => _isMutating;
   bool get hasLoadError => _hasLoadError;
   bool get hasMutationError => _hasMutationError;
+
+  /// Why the last mutation was refused, when the backend refused it for a
+  /// reason the screen can act on — an unsettled handover, or an invoice above
+  /// the approved price. Both are decisions, not mistakes, so the screen asks a
+  /// specific question instead of showing a generic failure.
+  JobRefusal? get lastRefusal => _lastRefusal;
 
   Future<void> loadJob() async {
     _isLoading = true;
@@ -63,15 +71,58 @@ class JobDetailsViewModel extends ChangeNotifier {
     return updated != null;
   }
 
-  Future<bool> transition(int toStage, {String note = ''}) async {
+  Future<bool> transition(
+    int toStage, {
+    String note = '',
+    String handedOverTo = '',
+    bool forceRelease = false,
+  }) async {
     final updated = await _mutate(
       () => _repository.transitionJob(
         jobId,
         toStage: toStage,
         note: note,
+        handedOverTo: handedOverTo,
+        forceRelease: forceRelease,
         idempotencyKey: _newIdempotencyKey(),
       ),
       eventName: 'operations.job.transitioned',
+    );
+    return updated != null;
+  }
+
+  Future<bool> addService(JobServiceDraft draft) async {
+    final updated = await _mutate(
+      () => _repository.addJobService(
+        jobId,
+        draft,
+        idempotencyKey: _newIdempotencyKey(),
+      ),
+      eventName: 'operations.job.service_added',
+    );
+    return updated != null;
+  }
+
+  Future<bool> removeService(int serviceId) async {
+    final updated = await _mutate(
+      () => _repository.removeJobService(jobId, serviceId),
+      eventName: 'operations.job.service_removed',
+    );
+    return updated != null;
+  }
+
+  Future<bool> hold({required String reason}) async {
+    final updated = await _mutate(
+      () => _repository.holdJob(jobId, reason: reason),
+      eventName: 'operations.job.held',
+    );
+    return updated != null;
+  }
+
+  Future<bool> resume() async {
+    final updated = await _mutate(
+      () => _repository.resumeJob(jobId),
+      eventName: 'operations.job.resumed',
     );
     return updated != null;
   }
@@ -135,6 +186,7 @@ class JobDetailsViewModel extends ChangeNotifier {
   }) async {
     _isMutating = true;
     _hasMutationError = false;
+    _lastRefusal = null;
     notifyListeners();
 
     final result = await operation();
@@ -146,6 +198,7 @@ class JobDetailsViewModel extends ChangeNotifier {
         _trackJobEvent(eventName, result.value);
       case Error<OperationsJob>():
         _hasMutationError = true;
+        _lastRefusal = jobRefusalFromException(result.exception);
     }
 
     _isMutating = false;

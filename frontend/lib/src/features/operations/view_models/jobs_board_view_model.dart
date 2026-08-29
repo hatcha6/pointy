@@ -13,11 +13,13 @@ class JobsBoardViewModel extends ChangeNotifier {
   JobsBoardViewModel(this._repository, {AnalyticsEngine? analyticsEngine})
     : _analyticsEngine = analyticsEngine;
 
-  /// The board opens on work that is still in progress; a finished job is
-  /// history, not something a technician needs on the board every morning.
-  /// Clearing the filters restores this rather than widening to every
-  /// status, so "clear" always means "back to the default view".
-  static const _defaultStatusFilter = OperationsJobStatus.open;
+  /// The board only ever shows work that is still in progress.
+  ///
+  /// Finished jobs are history, and history has its own screen. Keeping them
+  /// off the board is the whole point of it: a technician walking past a wall
+  /// display should see what is in front of them today, not a growing wall of
+  /// everything the shop has ever done.
+  static const _boardStatus = OperationsJobStatus.open;
 
   final OperationsRepository _repository;
   final AnalyticsEngine? _analyticsEngine;
@@ -25,8 +27,8 @@ class JobsBoardViewModel extends ChangeNotifier {
   List<OperationsJob> _jobs = const [];
   List<WorkflowTemplate> _templates = const [];
   List<BillOfMaterials> _boms = const [];
-  OperationsJobStatus? _statusFilter = _defaultStatusFilter;
   OperationsJobType? _jobTypeFilter;
+  int? _selectedTemplateId;
   String _searchQuery = '';
   bool _assignedToMe = false;
   int? _currentUserId;
@@ -38,7 +40,6 @@ class JobsBoardViewModel extends ChangeNotifier {
   List<OperationsJob> get jobs => _jobs;
   List<WorkflowTemplate> get templates => _templates;
   List<BillOfMaterials> get boms => _boms;
-  OperationsJobStatus? get statusFilter => _statusFilter;
   OperationsJobType? get jobTypeFilter => _jobTypeFilter;
   String get searchQuery => _searchQuery;
   bool get assignedToMe => _assignedToMe;
@@ -51,6 +52,32 @@ class JobsBoardViewModel extends ChangeNotifier {
   List<WorkflowTemplate> get enabledTemplates =>
       _templates.where((template) => template.isActive).toList(growable: false);
 
+  /// The workflow the board is currently showing.
+  ///
+  /// A shop running more than one lane (a café with a kitchen *and* a repair
+  /// counter) gets a switcher rather than two boards stacked on one screen —
+  /// a kanban only reads as a kanban when one set of columns owns the width.
+  WorkflowTemplate? get selectedTemplate {
+    final templates = enabledTemplates;
+    if (templates.isEmpty) {
+      return null;
+    }
+    for (final template in templates) {
+      if (template.id == _selectedTemplateId) {
+        return template;
+      }
+    }
+    return templates.first;
+  }
+
+  set selectedTemplateId(int? value) {
+    if (_selectedTemplateId == value) {
+      return;
+    }
+    _selectedTemplateId = value;
+    notifyListeners();
+  }
+
   /// Whether the technician has narrowed the board away from its default view.
   ///
   /// The search term is deliberately excluded: `QueryEmptyState` takes it
@@ -58,33 +85,20 @@ class JobsBoardViewModel extends ChangeNotifier {
   /// the work. The default "open only" status is excluded too — counting it
   /// would tell a brand-new shop with no jobs at all to clear filters that are
   /// hiding nothing.
-  bool get hasActiveFilters =>
-      _assignedToMe ||
-      _jobTypeFilter != null ||
-      _statusFilter != _defaultStatusFilter;
+  bool get hasActiveFilters => _assignedToMe || _jobTypeFilter != null;
 
   /// Restores the default view in one round trip.
   ///
-  /// Assigning the four setters in turn would fire up to four `loadJobs()`
-  /// calls and leave the board flickering through intermediate results, so the
-  /// fields are reset together and reloaded once.
+  /// Assigning the setters in turn would fire a `loadJobs()` per field and
+  /// leave the board flickering through intermediate results, so the fields are
+  /// reset together and reloaded once.
   void clearFilters() {
     if (!hasActiveFilters && _searchQuery.isEmpty) {
       return;
     }
-    _statusFilter = _defaultStatusFilter;
     _jobTypeFilter = null;
     _assignedToMe = false;
     _searchQuery = '';
-    notifyListeners();
-    loadJobs();
-  }
-
-  set statusFilter(OperationsJobStatus? value) {
-    if (_statusFilter == value) {
-      return;
-    }
-    _statusFilter = value;
     notifyListeners();
     loadJobs();
   }
@@ -215,7 +229,7 @@ class JobsBoardViewModel extends ChangeNotifier {
 
   Future<Result<List<OperationsJob>>> _loadAllJobs() {
     return _repository.loadAllJobs(
-      status: _statusFilter,
+      status: _boardStatus,
       jobType: _jobTypeFilter,
       assignedTo: _assignedToMe ? _currentUserId : null,
       search: _searchQuery,

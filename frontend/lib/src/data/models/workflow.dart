@@ -11,6 +11,8 @@ class WorkflowStage {
     required this.requiresCustomerApproval,
     required this.consumesMaterials,
     required this.producesOutput,
+    this.requiresSettlement = false,
+    this.releasesCustody = false,
   });
 
   final int id;
@@ -19,7 +21,16 @@ class WorkflowStage {
   final int displayOrder;
   final bool isInitial;
   final bool isTerminal;
+
+  /// Gate on *leaving* this stage: the customer-approved price must be recorded.
   final bool requiresCustomerApproval;
+
+  /// Gate on *entering* this stage: the job must be invoiced and either paid or
+  /// booked as آجل. This is what stops a phone or a car leaving unpaid.
+  final bool requiresSettlement;
+
+  /// Entering this stage hands the customer's property back.
+  final bool releasesCustody;
   final bool consumesMaterials;
   final bool producesOutput;
 
@@ -32,6 +43,8 @@ class WorkflowStage {
       isInitial: json['is_initial'] == true,
       isTerminal: json['is_terminal'] == true,
       requiresCustomerApproval: json['requires_customer_approval'] == true,
+      requiresSettlement: json['requires_settlement'] == true,
+      releasesCustody: json['releases_custody'] == true,
       consumesMaterials: json['consumes_materials'] == true,
       producesOutput: json['produces_output'] == true,
     );
@@ -108,6 +121,8 @@ class WorkflowStageDraft {
     this.isInitial = false,
     this.isTerminal = false,
     this.requiresCustomerApproval = false,
+    this.requiresSettlement = false,
+    this.releasesCustody = false,
     this.consumesMaterials = false,
     this.producesOutput = false,
   });
@@ -119,6 +134,8 @@ class WorkflowStageDraft {
   final bool isInitial;
   final bool isTerminal;
   final bool requiresCustomerApproval;
+  final bool requiresSettlement;
+  final bool releasesCustody;
   final bool consumesMaterials;
   final bool producesOutput;
 
@@ -131,6 +148,8 @@ class WorkflowStageDraft {
       'is_initial': isInitial,
       'is_terminal': isTerminal,
       'requires_customer_approval': requiresCustomerApproval,
+      'requires_settlement': requiresSettlement,
+      'releases_custody': releasesCustody,
       'consumes_materials': consumesMaterials,
       'produces_output': producesOutput,
     };

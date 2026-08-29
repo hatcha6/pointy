@@ -92,7 +92,6 @@ void main() {
 
       await tester.enterText(find.byType(TextField), 'أحمد');
       viewModel.searchQuery = 'أحمد';
-      viewModel.statusFilter = OperationsJobStatus.completed;
       viewModel.assignedToMe = true;
       await tester.pumpAndSettle();
 
@@ -102,7 +101,6 @@ void main() {
       expect(viewModel.searchQuery, isEmpty);
       expect(viewModel.assignedToMe, isFalse);
       expect(viewModel.jobTypeFilter, isNull);
-      expect(viewModel.statusFilter, OperationsJobStatus.open);
       expect(viewModel.hasActiveFilters, isFalse);
       // The search box owns its own controller, so the cleared term has to
       // disappear from the field as well as from the query.
@@ -144,6 +142,7 @@ Future<JobsBoardViewModel> _pumpBoard(WidgetTester tester) async {
         catalogRepository: CatalogRepository(PosApiService()),
         recipesViewModel: recipesViewModel,
         onOpenJob: (_) {},
+        onOpenHistory: () {},
       ),
     ),
   );

@@ -62,6 +62,7 @@ class ShopSettings(TimeStampedModel):
         GROCERY = "grocery", "Grocery / Supermarket"
         PHARMACY = "pharmacy", "Pharmacy"
         PHONE_REPAIR = "phone_repair", "Phone shop & repair"
+        CAR_WORKSHOP = "car_workshop", "Car workshop"
         BAKERY = "bakery", "Bakery / Pastry"
         RETAIL = "retail", "Clothing / Retail"
 
@@ -259,6 +260,16 @@ SHOP_TYPE_PRESETS = {
         "enable_repair_operations": True,
         "enable_job_tracking": True,
         "enable_kitchen_operations": False,
+    },
+    # A workshop is a repair shop whose items are cars: same job engine, same
+    # settlement gate, different identity fields at intake (the client picks
+    # "vehicle" by default from this shop type). Job tracking is on because a
+    # car in for two days is the case customers phone about.
+    ShopSettings.ShopType.CAR_WORKSHOP: {
+        "enable_repair_operations": True,
+        "enable_job_tracking": True,
+        "enable_kitchen_operations": False,
+        "enable_production_operations": False,
     },
     ShopSettings.ShopType.BAKERY: {
         "enable_kitchen_operations": True,

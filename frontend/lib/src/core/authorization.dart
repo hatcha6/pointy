@@ -68,6 +68,9 @@ enum AppCapability {
   createJobs,
   assignJobs,
   reopenJobs,
+  releaseUnpaidJobs,
+  viewAssets,
+  manageAssets,
   manageJobMaterials,
   manageWorkflows,
   manageRecipes,
@@ -517,6 +520,23 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewOperations)
           ..add(AppCapability.reopenJobs);
       }
+      // Handing a customer's property back before the job is settled. Managers
+      // only, and the button only appears for someone who can actually do it —
+      // offering an override that then 400s teaches staff to distrust the app.
+      if (_hasAny(user, const [
+        'release_unpaid_job',
+        'operations.release_unpaid_job',
+      ])) {
+        capabilities.add(AppCapability.releaseUnpaidJobs);
+      }
+      if (_hasAny(user, const ['view_asset', 'customers.view_asset'])) {
+        capabilities.add(AppCapability.viewAssets);
+      }
+      if (_hasAny(user, const ['change_asset', 'customers.change_asset'])) {
+        capabilities
+          ..add(AppCapability.viewAssets)
+          ..add(AppCapability.manageAssets);
+      }
       if (_hasAny(user, const [
         'add_jobmaterial',
         'operations.add_jobmaterial',
@@ -749,6 +769,9 @@ class AuthorizationCapabilities {
   bool get canCreateJobs => allows(AppCapability.createJobs);
   bool get canAssignJobs => allows(AppCapability.assignJobs);
   bool get canReopenJobs => allows(AppCapability.reopenJobs);
+  bool get canReleaseUnpaidJobs => allows(AppCapability.releaseUnpaidJobs);
+  bool get canViewAssets => allows(AppCapability.viewAssets);
+  bool get canManageAssets => allows(AppCapability.manageAssets);
   bool get canManageJobMaterials => allows(AppCapability.manageJobMaterials);
   bool get canManageWorkflows => allows(AppCapability.manageWorkflows);
   bool get canManageRecipes => allows(AppCapability.manageRecipes);

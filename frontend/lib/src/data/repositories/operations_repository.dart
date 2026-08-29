@@ -98,6 +98,8 @@ class OperationsRepository {
     int jobId, {
     required int toStage,
     String note = '',
+    String handedOverTo = '',
+    bool forceRelease = false,
     String? idempotencyKey,
   }) async {
     return Result.guard(
@@ -105,9 +107,39 @@ class OperationsRepository {
         jobId,
         toStage: toStage,
         note: note,
+        handedOverTo: handedOverTo,
+        forceRelease: forceRelease,
         idempotencyKey: idempotencyKey,
       ),
     );
+  }
+
+  Future<Result<OperationsJob>> addJobService(
+    int jobId,
+    JobServiceDraft draft, {
+    String? idempotencyKey,
+  }) async {
+    return Result.guard(
+      () => _service.addJobService(jobId, draft, idempotencyKey: idempotencyKey),
+    );
+  }
+
+  Future<Result<OperationsJob>> removeJobService(
+    int jobId,
+    int serviceId,
+  ) async {
+    return Result.guard(() => _service.removeJobService(jobId, serviceId));
+  }
+
+  Future<Result<OperationsJob>> holdJob(
+    int jobId, {
+    required String reason,
+  }) async {
+    return Result.guard(() => _service.holdJob(jobId, reason: reason));
+  }
+
+  Future<Result<OperationsJob>> resumeJob(int jobId) async {
+    return Result.guard(() => _service.resumeJob(jobId));
   }
 
   Future<Result<OperationsJob>> addJobMaterial(
@@ -159,13 +191,37 @@ class OperationsRepository {
   Future<Result<CustomerAssetPage>> loadCustomerAssets({
     int? customer,
     String search = '',
+    bool? inShop,
+    String? assetType,
+    String ordering = '',
     int page = 1,
   }) async {
     return Result.guard(
       () => _service.fetchCustomerAssets(
         customer: customer,
         search: search,
+        inShop: inShop,
+        assetType: assetType,
+        ordering: ordering,
         page: page,
+      ),
+    );
+  }
+
+  Future<Result<CustomerAssetDetail>> loadCustomerAsset(int assetId) async {
+    return Result.guard(() => _service.fetchCustomerAsset(assetId));
+  }
+
+  Future<Result<CustomerAsset>> transferCustomerAsset(
+    int assetId, {
+    required int customer,
+    String note = '',
+  }) async {
+    return Result.guard(
+      () => _service.transferCustomerAsset(
+        assetId,
+        customer: customer,
+        note: note,
       ),
     );
   }

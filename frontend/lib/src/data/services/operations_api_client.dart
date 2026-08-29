@@ -79,14 +79,19 @@ class OperationsApiClient {
     int jobId, {
     required int toStage,
     String note = '',
+    String handedOverTo = '',
+    bool forceRelease = false,
     String? idempotencyKey,
   }) async {
     final normalizedNote = note.trim();
+    final normalizedCollector = handedOverTo.trim();
     final response = await _session.post(
       'jobs/$jobId/transition/',
       body: {
         'to_stage': toStage,
         if (normalizedNote.isNotEmpty) 'note': normalizedNote,
+        if (normalizedCollector.isNotEmpty) 'handed_over_to': normalizedCollector,
+        if (forceRelease) 'force_release': true,
       },
       idempotencyKey: idempotencyKey,
     );
@@ -124,6 +129,49 @@ class OperationsApiClient {
       idempotencyKey: idempotencyKey,
     );
     _session.ensureSuccess(response, 'Job material add failed with status');
+    return OperationsJob.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<OperationsJob> addJobService(
+    int jobId,
+    JobServiceDraft draft, {
+    String? idempotencyKey,
+  }) async {
+    final response = await _session.post(
+      'jobs/$jobId/services/',
+      body: draft.toJson(),
+      idempotencyKey: idempotencyKey,
+    );
+    _session.ensureSuccess(response, 'Job service add failed with status');
+    return OperationsJob.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<OperationsJob> removeJobService(int jobId, int serviceId) async {
+    final response = await _session.delete('jobs/$jobId/services/$serviceId/');
+    _session.ensureSuccess(response, 'Job service remove failed with status');
+    return OperationsJob.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<OperationsJob> holdJob(int jobId, {required String reason}) async {
+    final response = await _session.post(
+      'jobs/$jobId/hold/',
+      body: {'reason': reason.trim()},
+    );
+    _session.ensureSuccess(response, 'Job hold failed with status');
+    return OperationsJob.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<OperationsJob> resumeJob(int jobId) async {
+    final response = await _session.post('jobs/$jobId/resume/', body: const {});
+    _session.ensureSuccess(response, 'Job resume failed with status');
     return OperationsJob.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -182,14 +230,21 @@ class OperationsApiClient {
   Future<CustomerAssetPage> fetchCustomerAssets({
     int? customer,
     String search = '',
+    bool? inShop,
+    String? assetType,
+    String ordering = '',
     int page = 1,
   }) async {
     final normalizedSearch = search.trim();
+    final normalizedOrdering = ordering.trim();
     final response = await _session.get(
       'assets/',
       query: {
         if (customer != null) 'customer': '$customer',
         if (normalizedSearch.isNotEmpty) 'search': normalizedSearch,
+        if (inShop != null) 'in_shop': inShop ? 'true' : 'false',
+        'asset_type': ?assetType,
+        if (normalizedOrdering.isNotEmpty) 'ordering': normalizedOrdering,
         'page': '$page',
       },
     );
@@ -198,6 +253,39 @@ class OperationsApiClient {
       'Customer asset list request failed with status',
     );
     return CustomerAssetPage.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<CustomerAssetDetail> fetchCustomerAsset(int assetId) async {
+    final response = await _session.get('assets/$assetId/');
+    _session.ensureSuccess(
+      response,
+      'Customer asset request failed with status',
+    );
+    return CustomerAssetDetail.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<CustomerAsset> transferCustomerAsset(
+    int assetId, {
+    required int customer,
+    String note = '',
+  }) async {
+    final normalizedNote = note.trim();
+    final response = await _session.post(
+      'assets/$assetId/transfer/',
+      body: {
+        'customer': customer,
+        if (normalizedNote.isNotEmpty) 'note': normalizedNote,
+      },
+    );
+    _session.ensureSuccess(
+      response,
+      'Customer asset transfer failed with status',
+    );
+    return CustomerAsset.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }

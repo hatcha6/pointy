@@ -40,11 +40,17 @@ import 'features/invoices/views/invoice_details_screen.dart';
 import 'features/returns_exchange/views/returns_exchange_lookup_screen.dart';
 import 'features/invoices/views/invoice_list_screen.dart';
 import 'features/notifications/views/notification_center_host.dart';
+import 'features/assets/view_models/asset_details_view_model.dart';
+import 'features/assets/view_models/assets_view_model.dart';
+import 'features/assets/views/asset_details_screen.dart';
+import 'features/assets/views/assets_screen.dart';
 import 'features/operations/view_models/job_details_view_model.dart';
+import 'features/operations/view_models/job_history_view_model.dart';
 import 'features/operations/view_models/jobs_board_view_model.dart';
 import 'features/operations/view_models/recipes_view_model.dart';
 import 'features/operations/view_models/workflows_view_model.dart';
 import 'features/operations/views/job_details_screen.dart';
+import 'features/operations/views/job_history_screen.dart';
 import 'features/operations/views/jobs_screen.dart';
 import 'features/payments/view_models/payments_hub_view_model.dart';
 import 'features/payments/views/payments_hub_screen.dart';
@@ -249,6 +255,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.userSettings => userSettingsRouteBuilder,
       AppNavigationDestination.aiAssistant => aiAssistantRouteBuilder,
       AppNavigationDestination.operations => operationsRouteBuilder,
+      AppNavigationDestination.assets => assetsRouteBuilder,
       AppNavigationDestination.invoices => invoicesRouteBuilder,
       AppNavigationDestination.returnsExchange => returnsExchangeRouteBuilder,
       AppNavigationDestination.purchasing => purchasingRouteBuilder,
@@ -332,26 +339,75 @@ class _AuthenticatedRoutes implements AppNavigation {
           dependencies.operationsRepository,
           analyticsEngine: dependencies.analyticsEngine,
         ),
-        onOpenJob: (job) {
+        onOpenHistory: () {
           push(
             routeContext,
             (_) => _screen(
-              'job_details',
-              JobDetailsScreen(
-                viewModel: JobDetailsViewModel(
+              'job_history',
+              JobHistoryScreen(
+                viewModel: JobHistoryViewModel(
                   dependencies.operationsRepository,
-                  jobId: job.id,
-                  analyticsEngine: dependencies.analyticsEngine,
                 ),
-                capabilities: capabilities,
-                currentUser: currentUser,
-                catalogRepository: dependencies.catalogRepository,
-                operationsRepository: dependencies.operationsRepository,
-                employeeRepository: dependencies.employeeRepository,
+                onOpenJob: (job) => openJobDetails(routeContext, job.id),
               ),
             ),
           );
         },
+        onOpenJob: (job) => openJobDetails(routeContext, job.id),
+      ),
+    );
+  }
+
+  /// Opens one job. Takes an id rather than a loaded job so the board, the
+  /// history list and an asset's service record can all land on the same screen.
+  void openJobDetails(BuildContext routeContext, int jobId) {
+    push(
+      routeContext,
+      (_) => _screen(
+        'job_details',
+        JobDetailsScreen(
+          viewModel: JobDetailsViewModel(
+            dependencies.operationsRepository,
+            jobId: jobId,
+            analyticsEngine: dependencies.analyticsEngine,
+          ),
+          capabilities: capabilities,
+          currentUser: currentUser,
+          catalogRepository: dependencies.catalogRepository,
+          operationsRepository: dependencies.operationsRepository,
+          employeeRepository: dependencies.employeeRepository,
+        ),
+      ),
+    );
+  }
+
+  Widget assetsRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'assets',
+      AssetsScreen(
+        viewModel: AssetsViewModel(dependencies.operationsRepository),
+        capabilities: capabilities,
+        navigation: this,
+        onOpenAsset: (asset) => openAssetDetails(routeContext, asset.id),
+      ),
+    );
+  }
+
+  /// Opens one item's registry page. Takes an id rather than a loaded asset so
+  /// a job's device chip and the assets list can both land on the same screen.
+  void openAssetDetails(BuildContext routeContext, int assetId) {
+    push(
+      routeContext,
+      (_) => _screen(
+        'asset_details',
+        AssetDetailsScreen(
+          viewModel: AssetDetailsViewModel(
+            dependencies.operationsRepository,
+            assetId: assetId,
+          ),
+          capabilities: capabilities,
+          contactRepository: dependencies.contactRepository,
+        ),
       ),
     );
   }

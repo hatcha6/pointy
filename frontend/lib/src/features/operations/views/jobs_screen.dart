@@ -41,6 +41,7 @@ class JobsScreen extends StatefulWidget {
     required this.catalogRepository,
     required this.recipesViewModel,
     required this.onOpenJob,
+    required this.onOpenHistory,
   });
 
   final JobsBoardViewModel viewModel;
@@ -52,6 +53,10 @@ class JobsScreen extends StatefulWidget {
   final CatalogRepository catalogRepository;
   final RecipesViewModel recipesViewModel;
   final ValueChanged<OperationsJob> onOpenJob;
+
+  /// Opens the finished-work list. The board deliberately cannot show it: what
+  /// is done is history, and history is a different screen.
+  final VoidCallback onOpenHistory;
 
   @override
   State<JobsScreen> createState() => _JobsScreenState();
@@ -99,6 +104,11 @@ class _JobsScreenState extends State<JobsScreen> {
             isLoading: viewModel.isLoading || viewModel.isMutating,
             reserveLoadingSlot: false,
             actions: [
+              IconButton(
+                tooltip: l10n.jobsHistoryTooltip,
+                onPressed: widget.onOpenHistory,
+                icon: const Icon(Icons.history),
+              ),
               if (widget.capabilities.canManageRecipes)
                 IconButton(
                   tooltip: l10n.recipesTitle,
@@ -173,11 +183,9 @@ class _JobsScreenState extends State<JobsScreen> {
 
   Widget _buildJobsArea(BuildContext context, AppLocalizations l10n) {
     final viewModel = widget.viewModel;
-    final spacing = AdaptiveSpacing.of(context);
-    final showBoard = viewModel.statusFilter == OperationsJobStatus.open;
 
     if (viewModel.jobs.isEmpty && !viewModel.isLoading) {
-      // The board is filtered four ways, so a blank result is far more often
+      // The board is filtered several ways, so a blank result is far more often
       // the technician's own search or filter than a shop with no work at all.
       // `QueryEmptyState` names whichever is hiding the job and offers the one
       // tap that brings it back; the "new job" invitation is reserved for the
@@ -201,120 +209,21 @@ class _JobsScreenState extends State<JobsScreen> {
       );
     }
 
-    if (!showBoard) {
-      final jobs = viewModel.jobs;
-      // Lazily build the filtered job list so a long backlog doesn't construct
-      // every card up front.
-      return ListView.builder(
-        padding: spacing.pagePadding,
-        itemCount: jobs.length,
-        itemBuilder: (context, index) {
-          final job = jobs[index];
-          return AdaptiveMaxWidth(
-            width: AppContentWidth.detail,
-            child: Padding(
-              padding: EdgeInsetsDirectional.only(bottom: spacing.sm),
-              child: _JobCard(
-                job: job,
-                stagePosition: jobStagePosition(job, viewModel.templates),
-                isBusy: _advancingJobIds.contains(job.id),
-                onTap: () => widget.onOpenJob(job),
-                onAdvance: null,
-              ),
-            ),
-          );
-        },
-      );
+    final template = viewModel.selectedTemplate;
+    if (template == null) {
+      return const SizedBox.shrink();
     }
-
-    final templates = viewModel.enabledTemplates
-        .where(
-          (template) =>
-              viewModel.jobTypeFilter == null ||
-              template.jobType == viewModel.jobTypeFilter,
-        )
-        .toList(growable: false);
-    final isWide =
-        AppBreakpoints.of(context).index >= AppBreakpoint.desktop.index;
-
-    if (isWide && templates.length == 1) {
-      return _KanbanBoard(
-        template: templates.first,
-        jobsByStage: viewModel.jobsByStage(templates.first),
-        advancingJobIds: _advancingJobIds,
-        onOpenJob: widget.onOpenJob,
-        onAdvance: _advanceJob,
-      );
-    }
-
-    return ListView(
-      padding: spacing.pagePadding,
-      children: [
-        AdaptiveMaxWidth(
-          width: AppContentWidth.detail,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final template in templates) ...[
-                if (templates.length > 1)
-                  Padding(
-                    padding: EdgeInsetsDirectional.only(
-                      top: spacing.sm,
-                      bottom: spacing.xs,
-                    ),
-                    child: Row(
-                      children: [
-                        OperationsIconBadge(
-                          icon: jobTypeIcon(template.jobType),
-                          size: 32,
-                        ),
-                        SizedBox(width: spacing.sm),
-                        Text(
-                          template.name,
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                      ],
-                    ),
-                  ),
-                ..._stageGroups(context, template),
-                SizedBox(height: spacing.md),
-              ],
-            ],
-          ),
-        ),
-      ],
+    // One board, at every width. A kanban read across a workshop wall and a
+    // kanban scrolled sideways on a phone are the same mental model — columns
+    // are the work, and moving right is progress — so the layout does not
+    // change shape underneath someone who learned it on the other device.
+    return _KanbanBoard(
+      template: template,
+      jobsByStage: viewModel.jobsByStage(template),
+      advancingJobIds: _advancingJobIds,
+      onOpenJob: widget.onOpenJob,
+      onAdvance: _advanceJob,
     );
-  }
-
-  List<Widget> _stageGroups(BuildContext context, WorkflowTemplate template) {
-    final spacing = AdaptiveSpacing.of(context);
-    final byStage = widget.viewModel.jobsByStage(template);
-    final widgets = <Widget>[];
-    for (final stage in template.stages) {
-      final jobs = byStage[stage.id] ?? const [];
-      // Hide empty stages: an active board should show work, not a wall of
-      // zero-count headers.
-      if (jobs.isEmpty) {
-        continue;
-      }
-      widgets.add(_StageHeader(name: stage.name, count: jobs.length));
-      widgets.add(SizedBox(height: spacing.sm));
-      for (final job in jobs) {
-        widgets.add(
-          _JobCard(
-            job: job,
-            stagePosition: jobStagePosition(job, widget.viewModel.templates),
-            isBusy: _advancingJobIds.contains(job.id),
-            onTap: () => widget.onOpenJob(job),
-            onAdvance: job.nextStage == null ? null : () => _advanceJob(job),
-          ),
-        );
-        widgets.add(SizedBox(height: spacing.sm));
-      }
-      widgets.add(SizedBox(height: spacing.sm));
-    }
-    return widgets;
   }
 
   Future<void> _openRecipes() async {
@@ -518,25 +427,29 @@ class _FilterBar extends StatelessWidget {
           ),
           onChanged: onSearchChanged,
         ),
-        SizedBox(height: spacing.sm),
-        SegmentedButton<OperationsJobStatus?>(
-          showSelectedIcon: false,
-          segments: [
-            ButtonSegment(
-              value: OperationsJobStatus.open,
-              label: Text(l10n.jobFilterOpenOnly),
+        // A shop running two lanes picks which board it is looking at; a shop
+        // running one never sees this.
+        if (viewModel.enabledTemplates.length > 1) ...[
+          SizedBox(height: spacing.sm),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final template in viewModel.enabledTemplates)
+                  Padding(
+                    padding: EdgeInsetsDirectional.only(end: spacing.xs),
+                    child: ChoiceChip(
+                      avatar: Icon(jobTypeIcon(template.jobType), size: 18),
+                      label: Text(template.name),
+                      selected: viewModel.selectedTemplate?.id == template.id,
+                      onSelected: (_) =>
+                          viewModel.selectedTemplateId = template.id,
+                    ),
+                  ),
+              ],
             ),
-            ButtonSegment(
-              value: OperationsJobStatus.completed,
-              label: Text(l10n.jobFilterDone),
-            ),
-            const ButtonSegment(value: null, label: _AllLabel()),
-          ],
-          selected: {viewModel.statusFilter},
-          onSelectionChanged: (selection) {
-            viewModel.statusFilter = selection.first;
-          },
-        ),
+          ),
+        ],
         SizedBox(height: spacing.sm),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -568,15 +481,6 @@ class _FilterBar extends StatelessWidget {
         ),
       ],
     );
-  }
-}
-
-class _AllLabel extends StatelessWidget {
-  const _AllLabel();
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(AppLocalizations.of(context)!.jobFilterAll);
   }
 }
 
@@ -640,6 +544,10 @@ class _JobCard extends StatelessWidget {
     final position = stagePosition;
     final overdue =
         job.isOpen && job.dueAt != null && job.dueAt!.isBefore(DateTime.now());
+    final awaitingCollection =
+        job.isOpen &&
+        job.settlementState.isSettled &&
+        job.custodyState == JobCustodyState.withShop;
     final subtitle = <String>[
       if (job.customerName.trim().isNotEmpty) job.customerName,
       if (job.outputVariantName.trim().isNotEmpty)
@@ -730,21 +638,45 @@ class _JobCard extends StatelessWidget {
                     total: position.total,
                   ),
                 ],
-                if (overdue) ...[
+                // The three things worth reading across a workshop from the
+                // other side of the room: it is late, it is stuck waiting on a
+                // part, or it is paid and just sitting here waiting to be
+                // collected.
+                if (overdue || job.isOnHold || awaitingCollection) ...[
                   SizedBox(height: spacing.sm),
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: PointyStatusPill(
-                      label: l10n.jobOverdueBadge,
-                      icon: Icons.schedule_outlined,
-                      color: colors.danger,
-                    ),
+                  Wrap(
+                    spacing: spacing.xs,
+                    runSpacing: spacing.xs / 2,
+                    children: [
+                      if (overdue)
+                        PointyStatusPill(
+                          label: l10n.jobOverdueBadge,
+                          icon: Icons.schedule_outlined,
+                          color: colors.danger,
+                        ),
+                      if (job.isOnHold)
+                        PointyStatusPill(
+                          label: job.holdReason.trim().isEmpty
+                              ? l10n.jobOnHoldBadge
+                              : '${l10n.jobOnHoldBadge} · ${job.holdReason}',
+                          icon: Icons.pause_circle_outline,
+                          color: colors.warning,
+                        ),
+                      if (awaitingCollection)
+                        PointyStatusPill(
+                          label: l10n.jobSettlementSettled,
+                          icon: Icons.inventory_2_outlined,
+                          color: colors.success,
+                        ),
+                    ],
                   ),
                 ],
                 if (onAdvance != null && job.nextStage != null) ...[
                   SizedBox(height: spacing.sm),
                   _AdvanceButton(
-                    label: job.nextStage!.name,
+                    label: job.nextStageReleasesCustody
+                        ? l10n.jobHandoverButton
+                        : job.nextStage!.name,
                     isBusy: isBusy,
                     onPressed: onAdvance,
                   ),
@@ -835,6 +767,14 @@ class _KanbanBoard extends StatelessWidget {
   Widget build(BuildContext context) {
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
+    // On a workshop screen the columns sit side by side; on a phone one column
+    // owns most of the width with a deliberate sliver of the next showing, so
+    // it reads as a board that scrolls rather than a list that ends. A fixed
+    // 320 on a 375pt phone leaves a stub too narrow to recognise as a column.
+    final available = MediaQuery.sizeOf(context).width;
+    final columnWidth = available < 480
+        ? (available - spacing.pageHorizontal * 2) * 0.86
+        : 320.0;
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -844,7 +784,7 @@ class _KanbanBoard extends StatelessWidget {
         children: [
           for (final stage in template.stages)
             Container(
-              width: 320,
+              width: columnWidth,
               margin: EdgeInsetsDirectional.only(end: spacing.md),
               padding: EdgeInsets.all(spacing.sm),
               decoration: BoxDecoration(

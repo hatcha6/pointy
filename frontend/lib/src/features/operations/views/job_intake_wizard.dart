@@ -26,6 +26,7 @@ String assetTypeLabel(AppLocalizations l10n, CustomerAssetType type) {
     CustomerAssetType.laptop => l10n.assetTypeLaptop,
     CustomerAssetType.console => l10n.assetTypeConsole,
     CustomerAssetType.appliance => l10n.assetTypeAppliance,
+    CustomerAssetType.vehicle => l10n.assetTypeVehicle,
     CustomerAssetType.other => l10n.assetTypeOther,
   };
 }
@@ -78,6 +79,10 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
   final _newAssetBrandController = TextEditingController();
   final _newAssetModelController = TextEditingController();
   final _newAssetSerialController = TextEditingController();
+  final _newAssetVinController = TextEditingController();
+  final _newAssetPlateController = TextEditingController();
+  final _newAssetYearController = TextEditingController();
+  final _newAssetOdometerController = TextEditingController();
   final _newAssetImeiController = TextEditingController();
   final _newAssetColorController = TextEditingController();
 
@@ -107,6 +112,10 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
     _newAssetBrandController.dispose();
     _newAssetModelController.dispose();
     _newAssetSerialController.dispose();
+    _newAssetVinController.dispose();
+    _newAssetPlateController.dispose();
+    _newAssetYearController.dispose();
+    _newAssetOdometerController.dispose();
     _newAssetImeiController.dispose();
     _newAssetColorController.dispose();
     _symptomsController.dispose();
@@ -514,16 +523,54 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
             controller: _newAssetModelController,
             decoration: InputDecoration(labelText: l10n.assetModelLabel),
           ),
-          SizedBox(height: spacing.sm),
-          TextField(
-            controller: _newAssetImeiController,
-            decoration: InputDecoration(labelText: l10n.assetImeiLabel),
-          ),
-          SizedBox(height: spacing.sm),
-          TextField(
-            controller: _newAssetSerialController,
-            decoration: InputDecoration(labelText: l10n.assetSerialLabel),
-          ),
+          // Identity fields follow the type: a car has no IMEI and a phone has
+          // no plate, and asking for both is how a counter ends up with an
+          // empty chassis field on every vehicle in the registry.
+          if (_newAssetType.isVehicle) ...[
+            SizedBox(height: spacing.sm),
+            TextField(
+              controller: _newAssetPlateController,
+              decoration: InputDecoration(labelText: l10n.assetPlateLabel),
+            ),
+            SizedBox(height: spacing.sm),
+            TextField(
+              controller: _newAssetVinController,
+              decoration: InputDecoration(labelText: l10n.assetVinLabel),
+            ),
+            SizedBox(height: spacing.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _newAssetYearController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: l10n.assetYearLabel),
+                  ),
+                ),
+                SizedBox(width: spacing.sm),
+                Expanded(
+                  child: TextField(
+                    controller: _newAssetOdometerController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: l10n.assetOdometerLabel,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            SizedBox(height: spacing.sm),
+            TextField(
+              controller: _newAssetImeiController,
+              decoration: InputDecoration(labelText: l10n.assetImeiLabel),
+            ),
+            SizedBox(height: spacing.sm),
+            TextField(
+              controller: _newAssetSerialController,
+              decoration: InputDecoration(labelText: l10n.assetSerialLabel),
+            ),
+          ],
           SizedBox(height: spacing.sm),
           TextField(
             controller: _newAssetColorController,
@@ -642,7 +689,9 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
       } else if (_creatingAsset &&
           (_newAssetBrandController.text.trim().isNotEmpty ||
               _newAssetModelController.text.trim().isNotEmpty ||
-              _newAssetImeiController.text.trim().isNotEmpty)) {
+              _newAssetImeiController.text.trim().isNotEmpty ||
+              _newAssetPlateController.text.trim().isNotEmpty ||
+              _newAssetVinController.text.trim().isNotEmpty)) {
         final created = await widget.operationsRepository.createCustomerAsset(
           CustomerAssetDraft(
             customer: customer.id,
@@ -651,6 +700,10 @@ class _JobIntakeWizardState extends State<JobIntakeWizard> {
             modelName: _newAssetModelController.text.trim(),
             serialNumber: _newAssetSerialController.text.trim(),
             imei: _newAssetImeiController.text.trim(),
+            vin: _newAssetVinController.text.trim(),
+            plateNumber: _newAssetPlateController.text.trim(),
+            modelYear: int.tryParse(_newAssetYearController.text.trim()),
+            odometer: int.tryParse(_newAssetOdometerController.text.trim()),
             color: _newAssetColorController.text.trim(),
           ),
         );

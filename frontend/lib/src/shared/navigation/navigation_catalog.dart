@@ -87,6 +87,32 @@ List<NavCatalogGroup> appNavigationCatalog(AppLocalizations l10n) {
             'صيانة',
           ],
         ),
+        NavCatalogEntry(
+          destination: AppNavigationDestination.assets,
+          icon: Icons.devices_other_outlined,
+          selectedIcon: Icons.devices_other,
+          label: l10n.assetsDrawerLabel,
+          // Every identity number the counter might be handed, in both
+          // scripts: someone reaching for this screen is holding a car with a
+          // plate or a phone with an IMEI, not thinking the word "assets".
+          keywords: const [
+            'assets',
+            'devices',
+            'vehicles',
+            'cars',
+            'vin',
+            'chassis',
+            'plate',
+            'imei',
+            'serial',
+            'أجهزة',
+            'مركبات',
+            'سيارات',
+            'شاصي',
+            'لوحة',
+            'رقم تسلسلي',
+          ],
+        ),
       ],
     ),
     NavCatalogGroup(

@@ -1132,14 +1132,42 @@ class PosApiService {
     int jobId, {
     required int toStage,
     String note = '',
+    String handedOverTo = '',
+    bool forceRelease = false,
     String? idempotencyKey,
   }) {
     return _operations.transitionJob(
       jobId,
       toStage: toStage,
       note: note,
+      handedOverTo: handedOverTo,
+      forceRelease: forceRelease,
       idempotencyKey: idempotencyKey,
     );
+  }
+
+  Future<OperationsJob> addJobService(
+    int jobId,
+    JobServiceDraft draft, {
+    String? idempotencyKey,
+  }) {
+    return _operations.addJobService(
+      jobId,
+      draft,
+      idempotencyKey: idempotencyKey,
+    );
+  }
+
+  Future<OperationsJob> removeJobService(int jobId, int serviceId) {
+    return _operations.removeJobService(jobId, serviceId);
+  }
+
+  Future<OperationsJob> holdJob(int jobId, {required String reason}) {
+    return _operations.holdJob(jobId, reason: reason);
+  }
+
+  Future<OperationsJob> resumeJob(int jobId) {
+    return _operations.resumeJob(jobId);
   }
 
   Future<OperationsJob> addJobMaterial(
@@ -1181,12 +1209,34 @@ class PosApiService {
   Future<CustomerAssetPage> fetchCustomerAssets({
     int? customer,
     String search = '',
+    bool? inShop,
+    String? assetType,
+    String ordering = '',
     int page = 1,
   }) {
     return _operations.fetchCustomerAssets(
       customer: customer,
       search: search,
+      inShop: inShop,
+      assetType: assetType,
+      ordering: ordering,
       page: page,
+    );
+  }
+
+  Future<CustomerAssetDetail> fetchCustomerAsset(int assetId) {
+    return _operations.fetchCustomerAsset(assetId);
+  }
+
+  Future<CustomerAsset> transferCustomerAsset(
+    int assetId, {
+    required int customer,
+    String note = '',
+  }) {
+    return _operations.transferCustomerAsset(
+      assetId,
+      customer: customer,
+      note: note,
     );
   }
 

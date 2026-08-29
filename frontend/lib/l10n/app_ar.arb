@@ -2110,6 +2110,158 @@
   "assetTypeConsole": "جهاز ألعاب",
   "assetTypeAppliance": "جهاز منزلي",
   "assetTypeOther": "أخرى",
+  "assetTypeVehicle": "مركبة",
+  "shopTypeCarWorkshop": "ورشة سيارات",
+  "shopTypeCarWorkshopDescription": "استلام السيارات، تشخيص، تسعيرة، تصليح، ثم التسليم بعد السداد.",
+  "assetVinLabel": "رقم الشاصي (VIN)",
+  "assetPlateLabel": "رقم اللوحة",
+  "assetEngineLabel": "رقم المحرك",
+  "assetYearLabel": "سنة الصنع",
+  "assetOdometerLabel": "قراءة العداد (كم)",
+  "assetsDrawerLabel": "الأجهزة والمركبات",
+  "assetsTitle": "الأجهزة والمركبات",
+  "assetsSearchHint": "الشاصي، اللوحة، IMEI، الرقم التسلسلي…",
+  "assetsInShopFilter": "عندنا الآن",
+  "assetsAllFilter": "الكل",
+  "assetsEmptyTitle": "لا توجد أجهزة مسجّلة",
+  "assetsEmptyMessage": "كل جهاز أو مركبة تدخل الورشة تُسجَّل هنا مع سجلها الكامل.",
+  "assetsInShopEmptyTitle": "لا يوجد شيء عندنا الآن",
+  "assetsInShopEmptyMessage": "كل ما دخل الورشة تم تسليمه لأصحابه.",
+  "assetsLoadError": "تعذّر تحميل الأجهزة",
+  "assetsLoadErrorDetail": "تعذّر تحميل هذا الجهاز",
+  "assetInShopBadge": "عندنا الآن",
+  "assetOwnerLabel": "المالك الحالي",
+  "assetOwnershipHistoryTitle": "تاريخ الملكية",
+  "assetOwnershipCurrent": "المالك الحالي",
+  "assetOwnershipSince": "منذ {date}",
+  "@assetOwnershipSince": {
+    "description": "Start of an ownership period on the asset details screen.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "assetOwnershipRange": "من {from} إلى {to}",
+  "@assetOwnershipRange": {
+    "description": "A closed ownership period on the asset details screen.",
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "assetTransferButton": "تحويل الملكية",
+  "assetTransferDialogTitle": "تحويل ملكية الجهاز",
+  "assetTransferExplainer": "سجل الصيانة يبقى مع الجهاز، فيرى المالك الجديد كل ما عملناه عليه.",
+  "assetTransferNoteLabel": "ملاحظة (اختياري)",
+  "assetTransferConfirm": "تحويل",
+  "assetTransferSuccess": "تم تحويل الملكية إلى {customer}.",
+  "@assetTransferSuccess": {
+    "description": "Snackbar after an asset ownership transfer.",
+    "placeholders": {
+      "customer": {
+        "type": "String"
+      }
+    }
+  },
+  "assetVisitsMetric": "الزيارات",
+  "assetTotalSpentMetric": "إجمالي الفواتير",
+  "assetLastVisitMetric": "آخر زيارة",
+  "assetNeverVisited": "لم تدخل بعد",
+  "assetHistoryTitle": "سجل الصيانة",
+  "assetNoHistoryMessage": "لا توجد مهام على هذا الجهاز بعد.",
+  "assetNewJobButton": "مهمة جديدة لهذا الجهاز",
+  "assetIdentitySectionTitle": "بيانات التعريف",
+  "jobServicesSectionTitle": "الخدمات والأعمال",
+  "jobAddServiceButton": "إضافة خدمة",
+  "jobServicesTotalLabel": "إجمالي الخدمات",
+  "jobRemoveServiceTooltip": "حذف الخدمة",
+  "jobNoServicesMessage": "لم تُضف أي خدمة بعد (كشف، تركيب، صيانة…).",
+  "jobNoServiceProductsMessage": "لا توجد منتجات خدمية في الكتالوج. أضف منتجاً وفعّل خيار «خدمة».",
+  "jobServicePickerTitle": "اختر خدمة",
+  "jobHoldButton": "تعليق",
+  "jobResumeButton": "استئناف",
+  "jobHoldDialogTitle": "تعليق المهمة",
+  "jobHoldExplainer": "الوقت المعلّق لا يُحتسب ضمن مدة العمل، فيبقى عمر المهمة صادقاً.",
+  "jobHoldReasonLabel": "سبب التعليق",
+  "jobHoldReasonHint": "بانتظار وصول قطعة الغيار",
+  "jobOnHoldBadge": "معلّقة",
+  "jobHeldTimeLabel": "مدة التعليق: {duration}",
+  "@jobHeldTimeLabel": {
+    "description": "Accumulated hold duration on a job.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "jobSettlementNotInvoiced": "لم تُفوتر",
+  "jobSettlementDepositPaid": "دفعة مقدمة",
+  "jobSettlementCreditOpen": "آجل",
+  "jobSettlementSettled": "مدفوعة",
+  "jobCustodyWithShop": "عندنا",
+  "jobCustodyReleased": "تم التسليم",
+  "jobHandoverButton": "تسليم للزبون",
+  "jobHandoverDialogTitle": "تسليم الجهاز للزبون",
+  "jobHandoverCollectorLabel": "استلمها (اختياري)",
+  "jobHandoverCollectorHint": "اسم من استلم الجهاز",
+  "jobHandoverConfirm": "تسليم",
+  "jobHandoverBlockedTitle": "لا يمكن التسليم قبل السداد",
+  "jobHandoverBlockedMessage": "أصدر الفاتورة واستلم المبلغ، أو سجّلها آجل على الزبون، قبل تسليم الجهاز.",
+  "jobHandoverBlockedInvoiceAction": "إصدار الفاتورة",
+  "jobAwaitingCollectionHint": "مدفوعة وجاهزة — الجهاز ما زال عندنا حتى يستلمه الزبون.",
+  "jobForceReleaseButton": "تسليم بدون سداد",
+  "jobForceReleaseDialogTitle": "تسليم دون استلام المبلغ",
+  "jobForceReleaseExplainer": "سيخرج الجهاز والمبلغ لم يُسدَّد. تُسجَّل هذه العملية باسمك.",
+  "jobForceReleaseNoteLabel": "السبب",
+  "jobForceReleaseNoteHint": "زبون قديم، يدفع الأسبوع القادم",
+  "jobBalanceDueLabel": "المتبقي: {amount}",
+  "@jobBalanceDueLabel": {
+    "description": "Outstanding balance on a job's invoice.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "jobInvoiceOnCreditLabel": "آجل (دفعة مقدمة أو دفع لاحق)",
+  "jobInvoiceOnCreditExplainer": "المبلغ المتبقي يُسجَّل ديناً على الزبون، ويمكن استلام دفعة مقدمة الآن.",
+  "jobInvoiceAmountNowLabel": "المبلغ المستلم الآن",
+  "jobInvoiceDueDateLabel": "تاريخ الاستحقاق",
+  "jobInvoiceNeedsCustomerForCredit": "الفاتورة الآجلة تحتاج زبوناً مسجَّلاً على المهمة.",
+  "jobInvoiceServicesLabel": "الخدمات",
+  "jobOverQuoteTitle": "المبلغ أعلى من السعر المتفق عليه",
+  "jobOverQuoteMessage": "وافق الزبون على {approved} والفاتورة {total}. أكّد المبلغ الجديد معه أولاً.",
+  "@jobOverQuoteMessage": {
+    "description": "Shown when a job invoice exceeds the customer-approved price.",
+    "placeholders": {
+      "approved": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "jobOverQuoteConfirm": "الزبون موافق، أصدر الفاتورة",
+  "jobsHistoryTitle": "سجل المهام",
+  "jobsHistoryTooltip": "سجل المهام المنتهية",
+  "jobsHistoryEmptyTitle": "لا توجد مهام منتهية",
+  "jobsHistoryEmptyMessage": "المهام المكتملة والملغاة تظهر هنا.",
+  "jobsBoardBackToBoard": "لوحة العمل",
+  "jobsBoardStageCount": "{count}",
+  "@jobsBoardStageCount": {
+    "description": "Job count badge on a kanban column header.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "intakeWorkflowLabel": "نوع المهمة",
   "intakeJobCreated": "تم إنشاء المهمة {jobNumber}.",
   "@intakeJobCreated": {
