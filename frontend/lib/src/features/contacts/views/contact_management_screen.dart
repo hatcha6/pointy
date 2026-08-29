@@ -594,7 +594,7 @@ class _CustomerList extends StatelessWidget {
             if (customer.marketingConsent) l10n.marketingAllowedLabel,
             if (!customer.isActive) l10n.inactiveContactLabel,
           ].join(' • '),
-          trailing: const Icon(Icons.chevron_left),
+          trailing: const PointyDisclosureChevron(),
           badges: [
             if (customer.rank != CustomerRank.inactive)
               Builder(
@@ -706,7 +706,7 @@ class _SupplierList extends StatelessWidget {
               l10n.supplierNetBalanceValue(formatMoney(supplier.netBalance)),
             if (!supplier.isActive) l10n.inactiveContactLabel,
           ].join(' • '),
-          trailing: const Icon(Icons.chevron_left),
+          trailing: const PointyDisclosureChevron(),
           selected: supplier.id == selectedSupplierId,
           onTap: () => _openSupplier(context, supplier),
         );

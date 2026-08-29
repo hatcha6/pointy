@@ -668,7 +668,7 @@ class _PayrollLineTile extends StatelessWidget {
                   ),
                   if (canEdit) ...[
                     SizedBox(width: spacing.xs),
-                    Icon(Icons.chevron_left, color: colors.mutedInk),
+                    PointyDisclosureChevron(color: colors.mutedInk),
                   ],
                 ],
               ),

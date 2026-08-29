@@ -954,7 +954,7 @@ class _RowLeading extends StatelessWidget {
                 child: PointySpinner(strokeWidth: 2),
               )
             : Icon(
-                isExpanded ? Icons.expand_more : Icons.chevron_left,
+                isExpanded ? Icons.expand_more : Icons.chevron_right,
                 color: colors.primaryStrong,
               ),
       ),

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
-/// Trailing "opens something" indicator that points along the reading
-/// direction: left in RTL, right in LTR.
+/// The "this row opens something" chevron, pointing the way the next screen
+/// comes from — right in LTR, left in RTL.
 ///
-/// Chevron glyphs do not auto-mirror like [Icons.arrow_back]/[Icons.arrow_forward]
-/// do, so every disclosure affordance should use this widget instead of a raw
-/// chevron icon.
+/// Always `chevron_right`. Material's `chevron_right` is declared with
+/// `matchTextDirection: true`, so Flutter already mirrors it under an RTL
+/// `Directionality`. Choosing `chevron_left` in RTL by hand flips it a second
+/// time and the two cancel, which is how every disclosure row in the app came
+/// to point backwards.
 class PointyDisclosureChevron extends StatelessWidget {
   const PointyDisclosureChevron({super.key, this.color, this.size});
 
@@ -14,11 +16,6 @@ class PointyDisclosureChevron extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isRtl = Directionality.of(context) == TextDirection.rtl;
-    return Icon(
-      isRtl ? Icons.chevron_left : Icons.chevron_right,
-      color: color,
-      size: size,
-    );
+    return Icon(Icons.chevron_right, color: color, size: size);
   }
 }
