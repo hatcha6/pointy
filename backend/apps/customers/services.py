@@ -216,3 +216,86 @@ def merge_customers(*, source: Customer, target: Customer) -> Customer:
 
     source.delete()
     return target
+
+
+# ---------------------------------------------------------------------------
+# Asset ownership
+# ---------------------------------------------------------------------------
+
+
+def open_asset_ownership(asset, *, note=""):
+    """Repair an asset whose current-owner row is missing or out of date.
+
+    New assets get their row from the ``post_save`` signal and transfers keep it
+    in step, so this is a self-heal for rows that predate either — data imported
+    straight into the table, or an ``Asset.customer`` changed by a bulk update
+    that bypassed :func:`transfer_asset`.
+    """
+    from .models import AssetOwnership
+
+    current = asset.ownerships.filter(released_at__isnull=True).first()
+    if current is not None and current.customer_id == asset.customer_id:
+        return current
+    if current is not None:
+        current.released_at = timezone.now()
+        current.save(update_fields=["released_at", "updated_at"])
+    return AssetOwnership.objects.create(
+        asset=asset,
+        customer=asset.customer,
+        acquired_at=asset.created_at or timezone.now(),
+        note=note,
+    )
+
+
+@transaction.atomic
+def transfer_asset(*, asset, customer, note="", request=None):
+    """Hand an asset to a new owner, keeping its whole service history.
+
+    Second-hand phones and used cars change hands constantly here, and they come
+    back to the shop that knows them. Re-pointing the asset instead of creating a
+    duplicate is what lets the new owner be told "this car had its gearbox done
+    here in March" — the history belongs to the item, not to whoever owned it at
+    the time.
+    """
+    from apps.analytics.models import AnalyticsEvent
+    from apps.analytics.services import record_domain_event
+    from rest_framework import serializers as drf_serializers
+
+    from .models import Asset, AssetOwnership
+
+    asset = Asset.objects.select_for_update().get(pk=asset.pk)
+    if customer is None:
+        raise drf_serializers.ValidationError(
+            {"customer": "An asset always has an owner."}
+        )
+    previous_customer_id = asset.customer_id
+    if previous_customer_id == customer.pk:
+        return asset
+
+    now = timezone.now()
+    asset.ownerships.filter(released_at__isnull=True).update(
+        released_at=now,
+        updated_at=now,
+    )
+    AssetOwnership.objects.create(
+        asset=asset,
+        customer=customer,
+        acquired_at=now,
+        note=note,
+    )
+    asset.customer = customer
+    asset.save(update_fields=["customer", "updated_at"])
+    record_domain_event(
+        name="customers.asset.transferred",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        user=getattr(request, "user", None),
+        entity_type="customers_asset",
+        entity_id=asset.pk,
+        attributes={
+            "previous_customer_id": previous_customer_id,
+            "customer_id": customer.pk,
+            "identity": asset.identity_label,
+            "note_present": bool(note),
+        },
+    )
+    return asset

@@ -125,6 +125,10 @@ CASHIER_PERMISSION_CODES = (
     "operations.view_workflowtemplate",
     "operations.view_workflowstage",
     "customers.add_asset",
+    # Front-desk staff take items in, so they also correct a mistyped IMEI and
+    # record a device that changed hands. Withholding this would mean a manager
+    # for every typo, which in practice means the typo stays.
+    "customers.change_asset",
     "customers.view_asset",
     # Front-desk staff can read and reply to customer SMS conversations.
     "crm.view_conversations",
@@ -254,6 +258,7 @@ SUPERVISOR_PERMISSION_CODES = (
     "customers.add_customer",
     "customers.change_customer",
     "customers.add_asset",
+    "customers.change_asset",
     "customers.view_asset",
     "discounts.view_discountrule",
     "discounts.add_discountrule",

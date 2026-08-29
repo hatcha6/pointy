@@ -57,8 +57,20 @@ class WorkflowStage(TimeStampedModel):
     display_order = models.PositiveIntegerField(default=0)
     is_initial = models.BooleanField(default=False)
     is_terminal = models.BooleanField(default=False)
-    # Forward moves past this stage require an approved price on the job.
+    # Forward moves *out of* this stage require an approved price on the job.
     requires_customer_approval = models.BooleanField(default=False)
+    # Moves *into* this stage require the job to be settled: invoiced, and
+    # either paid in full or booked to an آجل invoice against a customer.
+    #
+    # Note the deliberate asymmetry with ``requires_customer_approval`` above:
+    # approval gates *leaving* (you may sit in "awaiting approval" as long as
+    # you like, you just cannot move on), settlement gates *entering* (you may
+    # sit in "ready for pickup" as long as you like, you just cannot hand the
+    # customer's property back). Each is stated where a shop reads it.
+    requires_settlement = models.BooleanField(default=False)
+    # Entering this stage hands the customer's property back: it stamps
+    # ``Job.handed_over_at`` and ends the shop's custody of the job's assets.
+    releases_custody = models.BooleanField(default=False)
     # Entering this stage consumes the job's pending materials.
     consumes_materials = models.BooleanField(default=False)
     # Entering this stage receives the job's output into stock (production).
@@ -141,6 +153,18 @@ class Job(TimeStampedModel):
     due_at = models.DateTimeField(blank=True, null=True)
     completed_at = models.DateTimeField(blank=True, null=True)
     cancelled_at = models.DateTimeField(blank=True, null=True)
+    # Custody: when the customer's property actually went back to them, and who
+    # physically collected it ("his brother came for it" is the norm here). A
+    # job can be paid for days before this happens — a repaired car sits in the
+    # yard — so handover is its own fact, never inferred from payment.
+    handed_over_at = models.DateTimeField(blank=True, null=True)
+    handed_over_to = models.CharField(max_length=120, blank=True)
+    # Hold: work stopped for a reason outside the shop's control, almost always
+    # a part on order. Held time is accumulated into ``held_seconds`` on resume
+    # so a job's age can be read without counting the wait as workshop time.
+    on_hold_since = models.DateTimeField(blank=True, null=True)
+    hold_reason = models.CharField(max_length=200, blank=True)
+    held_seconds = models.PositiveIntegerField(default=0)
     symptoms = models.TextField(blank=True)
     diagnosis = models.TextField(blank=True)
     technician_notes = models.TextField(blank=True)
@@ -220,6 +244,10 @@ class Job(TimeStampedModel):
             ("approve_job_quote", "Can approve a job quote"),
             ("reopen_job", "Can reopen a completed or cancelled job"),
             ("assign_job", "Can assign jobs to users"),
+            (
+                "release_unpaid_job",
+                "Can hand a job's property back before it is settled",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -228,6 +256,31 @@ class Job(TimeStampedModel):
     @property
     def is_locked(self) -> bool:
         return self.status != self.Status.OPEN
+
+    @property
+    def is_on_hold(self) -> bool:
+        return self.on_hold_since is not None
+
+    @property
+    def settlement_state(self) -> str:
+        """Where this job stands with money, derived — never stored.
+
+        The order is the single source of truth (``amount_paid`` /
+        ``balance_due`` already net refunds), so this can never drift from what
+        the customer actually owes.
+        """
+        order = self.order
+        if order is None:
+            return "not_invoiced"
+        if order.balance_due <= Decimal("0.00"):
+            return "settled"
+        if order.amount_paid > Decimal("0.00"):
+            return "deposit_paid"
+        return "credit_open"
+
+    @property
+    def custody_state(self) -> str:
+        return "released" if self.handed_over_at is not None else "with_shop"
 
     def save(self, *args, **kwargs):
         update_fields = kwargs.get("update_fields")
@@ -292,6 +345,58 @@ class JobAsset(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.job_id} ↔ {self.asset_id}"
+
+
+class JobService(TimeStampedModel):
+    """Priced work done on a job: a diagnosis fee, an oil change, a screen swap.
+
+    Deliberately a separate table from :class:`JobMaterial` rather than a flag on
+    it. Two reasons, both load-bearing:
+
+    * ``_commissionable_jobs_total(..., base="labor")`` in
+      ``apps/employees/services.py`` computes a technician's labour as
+      ``approved_price − consumed parts at sale price``. Folding services into
+      materials would silently subtract them as parts and under-pay every
+      technician on a commission plan.
+    * Services point at ``Product.is_service`` variants, which hold no stock, so
+      none of the consume / reverse / stock-movement machinery applies. There is
+      nothing to reverse — a service line is added or removed, full stop.
+    """
+
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="services")
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="job_services",
+    )
+    quantity = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        default=Decimal("1"),
+        validators=[MinValueValidator(Decimal("0.001"))],
+    )
+    # Snapshot at the moment the service was added, like OrderLine.unit_price:
+    # re-pricing the catalog tomorrow must not silently re-price yesterday's
+    # agreed repair.
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    note = models.CharField(max_length=200, blank=True)
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.job_id}: {self.variant_id} ×{self.quantity}"
+
+    @property
+    def line_total(self):
+        return (self.unit_price * self.quantity).quantize(Decimal("0.01"))
 
 
 class JobMaterial(TimeStampedModel):

@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Prefetch
+from django.db.models import Count, F, Max, Prefetch, Q
 from django.db.models.deletion import ProtectedError
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -11,31 +11,40 @@ from apps.core.discovery import request_is_relayed
 from apps.core.idempotency import run_idempotent_request
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
-from apps.customers.models import Asset
+from apps.customers.models import Asset, AssetOwnership
 from apps.employees.models import Employee
 from apps.sales.models import RegisterSession
 from apps.sales.views import register_session_owner_key
 from .models import Job, JobAsset, WorkflowTemplate
 from .serializers import (
+    AssetDetailSerializer,
     AssetSerializer,
+    AssetTransferSerializer,
     BillOfMaterialsSerializer,
     JobAssignSerializer,
     JobCreateSerializer,
+    JobHoldSerializer,
     JobInvoiceSerializer,
     JobMaterialCreateSerializer,
     JobSerializer,
+    JobServiceCreateSerializer,
     JobTransitionSerializer,
     PublicJobSerializer,
     WorkflowTemplateSerializer,
 )
+from apps.customers.services import transfer_asset
 from .services import (
     add_job_material,
+    add_job_service,
     assign_job,
     cancel_job,
     create_job,
     explode_bom_into_job,
+    hold_job,
     invoice_job,
+    remove_job_service,
     reopen_job,
+    resume_job,
     reverse_job_material,
     transition_job,
 )
@@ -60,6 +69,10 @@ class JobViewSet(
         "assign": ("operations.assign_job",),
         "add_material": ("operations.add_jobmaterial",),
         "reverse_material": ("operations.change_jobmaterial",),
+        "add_service": ("operations.change_job",),
+        "remove_service": ("operations.change_job",),
+        "hold": ("operations.change_job",),
+        "resume": ("operations.change_job",),
         "cancel": ("operations.change_job",),
         "reopen": ("operations.reopen_job",),
         "invoice": (
@@ -82,8 +95,14 @@ class JobViewSet(
         )
         .prefetch_related(
             "workflow_template__stages",
+            # ``settlement_state`` / ``order_amount_paid`` sum the order's
+            # payments in Python (Order.amount_paid does, deliberately, so a
+            # prefetch is reused). Un-prefetched that is a query per row on the
+            # board — the exact shape the job-list scaling test guards.
+            "order__payments",
             "job_assets__asset__customer",
             "materials__variant__product",
+            "services__variant__product",
             # ``variant_name``/``output_variant_name`` read
             # ``ProductVariant.display_name``, which falls back to
             # ``option_values_label`` whenever the variant has no explicit name
@@ -196,6 +215,8 @@ class JobViewSet(
             to_stage=serializer.validated_data["to_stage"],
             request=request,
             note=serializer.validated_data.get("note", ""),
+            handed_over_to=serializer.validated_data.get("handed_over_to", ""),
+            force_release=serializer.validated_data.get("force_release", False),
         )
         return self._refreshed(request, job.pk)
 
@@ -247,6 +268,53 @@ class JobViewSet(
         reverse_job_material(job=job, material=material, request=request)
         return self._refreshed(request, job.pk)
 
+    @action(detail=True, methods=["post"], url_path="services")
+    def add_service(self, request, pk=None):
+        return run_idempotent_request(request, lambda: self._add_service(request))
+
+    def _add_service(self, request):
+        job = self.get_object()
+        serializer = JobServiceCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        add_job_service(
+            job=job,
+            variant=serializer.validated_data["variant"],
+            quantity=serializer.validated_data.get("quantity"),
+            note=serializer.validated_data.get("note", ""),
+            request=request,
+        )
+        return self._refreshed(request, job.pk)
+
+    @action(
+        detail=True,
+        methods=["delete"],
+        url_path="services/(?P<service_id>[0-9]+)",
+    )
+    def remove_service(self, request, pk=None, service_id=None):
+        job = self.get_object()
+        service = job.services.filter(pk=service_id).first()
+        if service is None:
+            return Response(
+                {"detail": "Service not found on this job."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        remove_job_service(job=job, service=service, request=request)
+        return self._refreshed(request, job.pk)
+
+    @action(detail=True, methods=["post"])
+    def hold(self, request, pk=None):
+        job = self.get_object()
+        serializer = JobHoldSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        hold_job(job=job, reason=serializer.validated_data["reason"], request=request)
+        return self._refreshed(request, job.pk)
+
+    @action(detail=True, methods=["post"])
+    def resume(self, request, pk=None):
+        job = self.get_object()
+        resume_job(job=job, request=request)
+        return self._refreshed(request, job.pk)
+
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         job = self.get_object()
@@ -282,6 +350,12 @@ class JobViewSet(
             payments_data=serializer.validated_data["payments"],
             labor_total=serializer.validated_data.get("labor_total"),
             request=request,
+            sale_type=serializer.validated_data.get("sale_type"),
+            valid_until=serializer.validated_data.get("valid_until"),
+            acknowledge_over_quote=serializer.validated_data.get(
+                "acknowledge_over_quote",
+                False,
+            ),
         )
         return self._refreshed(request, job.pk)
 
@@ -291,6 +365,14 @@ class JobViewSet(
 
 
 class AssetViewSet(viewsets.ModelViewSet):
+    """The registry of customer property the shop works on.
+
+    A repair counter's first move is a lookup: a chassis number, a plate, an
+    IMEI, a serial. One search box answers all four, and the answer carries the
+    item's whole history — including work done for a previous owner, which is
+    exactly why the registry is keyed on the item and not on the customer.
+    """
+
     serializer_class = AssetSerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
     permission_map = {
@@ -300,12 +382,87 @@ class AssetViewSet(viewsets.ModelViewSet):
         "update": ("customers.change_asset",),
         "partial_update": ("customers.change_asset",),
         "destroy": ("customers.delete_asset",),
+        "transfer": ("customers.change_asset",),
     }
     queryset = Asset.objects.select_related("customer").annotate(
-        job_count=Count("job_links"),
+        job_count=Count("job_links", distinct=True),
+        open_job_count=Count(
+            "job_links",
+            filter=Q(job_links__job__status=Job.Status.OPEN),
+            distinct=True,
+        ),
+        last_job_at=Max("job_links__job__created_at"),
     )
     filterset_fields = ("customer", "asset_type", "is_active")
-    search_fields = ("brand", "model_name", "serial_number", "imei")
+    search_fields = (
+        "brand",
+        "model_name",
+        "serial_number",
+        "imei",
+        "vin",
+        "plate_number",
+        "engine_number",
+    )
+    ordering_fields = ("created_at", "last_job_at")
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return AssetDetailSerializer
+        return AssetSerializer
+
+    def get_queryset(self):
+        # Aggregating clears the model's implicit Meta ordering (a GROUP BY
+        # drops it), which leaves pagination free to repeat or skip rows between
+        # pages. Order explicitly: most-recently-serviced first, since the
+        # counter is nearly always asking about something that was here lately,
+        # with never-serviced items last rather than first — where a plain DESC
+        # would put their NULLs on Postgres. ``-id`` breaks ties so a page
+        # boundary is stable. An explicit ``?ordering=`` still overrides this.
+        queryset = super().get_queryset().order_by(
+            F("last_job_at").desc(nulls_last=True),
+            "-id",
+        )
+        # "What is in the shop right now?" — the wall-board question. An item is
+        # in the shop while any job on it is still open.
+        in_shop = self.request.query_params.get("in_shop")
+        if in_shop in ("true", "1"):
+            queryset = queryset.filter(open_job_count__gt=0)
+        elif in_shop in ("false", "0"):
+            queryset = queryset.filter(open_job_count=0)
+        if self.action == "retrieve":
+            queryset = queryset.prefetch_related(
+                Prefetch(
+                    "ownerships",
+                    queryset=AssetOwnership.objects.select_related("customer"),
+                ),
+                Prefetch(
+                    "job_links",
+                    queryset=JobAsset.objects.select_related(
+                        "job",
+                        "job__current_stage",
+                        "job__customer",
+                        "job__order",
+                    ).order_by("-job__created_at"),
+                ),
+            )
+        return queryset
+
+    @action(detail=True, methods=["post"])
+    def transfer(self, request, pk=None):
+        """Move an item to a new owner, keeping its service history with it."""
+        asset = self.get_object()
+        serializer = AssetTransferSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        transfer_asset(
+            asset=asset,
+            customer=serializer.validated_data["customer"],
+            note=serializer.validated_data.get("note", ""),
+            request=request,
+        )
+        refreshed = self.get_queryset().get(pk=asset.pk)
+        return Response(
+            AssetSerializer(refreshed, context={"request": request}).data
+        )
 
     def destroy(self, request, *args, **kwargs):
         try:

@@ -114,8 +114,13 @@ class Asset(TimeStampedModel):
         LAPTOP = "laptop", "Laptop"
         CONSOLE = "console", "Game console"
         APPLIANCE = "appliance", "Appliance"
+        VEHICLE = "vehicle", "Vehicle"
         OTHER = "other", "Other"
 
+    # ``customer`` is the item's CURRENT owner, denormalised so every existing
+    # query keeps working. The full chain of owners lives in ``AssetOwnership``
+    # — a phone gets sold on and comes back to the same shop, and the new owner
+    # should be able to see what was done to it.
     customer = models.ForeignKey(
         Customer,
         on_delete=models.PROTECT,
@@ -130,12 +135,35 @@ class Asset(TimeStampedModel):
     model_name = models.CharField(max_length=120, blank=True)
     serial_number = models.CharField(max_length=120, blank=True)
     imei = models.CharField(max_length=64, blank=True)
+    # Vehicle identity. A workshop looks a car up by its chassis number or its
+    # plate; neither is optional in practice, but which one the counter staff
+    # have to hand varies, so both are searchable and neither is required.
+    vin = models.CharField(max_length=64, blank=True)
+    plate_number = models.CharField(max_length=32, blank=True)
+    engine_number = models.CharField(max_length=64, blank=True)
+    model_year = models.PositiveSmallIntegerField(blank=True, null=True)
+    # Last odometer reading seen, in kilometres. A hint for service intervals,
+    # not an audited measurement — it is whatever the last technician typed.
+    odometer = models.PositiveIntegerField(blank=True, null=True)
     color = models.CharField(max_length=64, blank=True)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["-created_at"]
+        # Identity numbers are indexed, not unique. Deliberately: the right
+        # answer to "this IMEI is already on file" is to open the device that
+        # already exists and show its history — that IS the feature — not to
+        # refuse the entry. A hard constraint would also fail the migration on
+        # any shop that has already typed the same number twice, and would turn
+        # a helpful "you've seen this car before" into a dead end. The API
+        # surfaces matches at intake instead (see the assets lookup endpoint).
+        indexes = [
+            models.Index(fields=["imei"], name="asset_imei_idx"),
+            models.Index(fields=["vin"], name="asset_vin_idx"),
+            models.Index(fields=["plate_number"], name="asset_plate_idx"),
+            models.Index(fields=["serial_number"], name="asset_serial_idx"),
+        ]
 
     def __str__(self) -> str:
         label = " ".join(part for part in (self.brand, self.model_name) if part)
@@ -145,6 +173,60 @@ class Asset(TimeStampedModel):
     def display_name(self) -> str:
         label = " ".join(part for part in (self.brand, self.model_name) if part)
         return label or self.get_asset_type_display()
+
+    @property
+    def identity_label(self) -> str:
+        """The number a person would actually quote to find this item again.
+
+        Plate first for a vehicle — it is what the owner says on the phone —
+        then chassis, then the phone identifiers.
+        """
+        for value in (self.plate_number, self.vin, self.imei, self.serial_number):
+            if value:
+                return value
+        return ""
+
+
+class AssetOwnership(TimeStampedModel):
+    """Who owned an asset, and when.
+
+    The open row (``released_at`` null) is the current owner and always agrees
+    with ``Asset.customer``. Closed rows are why a shop can answer "this is the
+    same car, the previous owner had the gearbox done here in March" — which is
+    the entire point of keeping an asset registry rather than just a note on a
+    job.
+    """
+
+    asset = models.ForeignKey(
+        Asset,
+        on_delete=models.CASCADE,
+        related_name="ownerships",
+    )
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.PROTECT,
+        related_name="asset_ownerships",
+    )
+    acquired_at = models.DateTimeField(default=timezone.now)
+    released_at = models.DateTimeField(blank=True, null=True)
+    note = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ["-acquired_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["asset"],
+                condition=models.Q(released_at__isnull=True),
+                name="one_current_owner_per_asset",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.asset_id} → {self.customer_id}"
+
+    @property
+    def is_current(self) -> bool:
+        return self.released_at is None
 
 
 class PaymentCard(TimeStampedModel):

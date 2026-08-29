@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -326,10 +327,14 @@ class JobInvoiceTests(OperationsTestCase):
         self.assertEqual(job.order.status, Order.Status.PAID)
         self.assertEqual(job.order.total, Decimal("150.00"))
         self.assertEqual(job.order.sales_channel.slug, "pos")
-        # Collecting payment finishes the job: it lands on its terminal stage.
-        self.assertEqual(job.status, Job.Status.COMPLETED)
-        self.assertTrue(job.current_stage.is_terminal)
-        self.assertIsNotNone(job.completed_at)
+        # Paying does NOT finish a repair: the shop is still holding the
+        # customer's phone. The job stays open on its stage until someone hands
+        # it back, which is a separate, recorded act.
+        self.assertEqual(job.status, Job.Status.OPEN)
+        self.assertFalse(job.current_stage.is_terminal)
+        self.assertIsNone(job.completed_at)
+        self.assertEqual(job.settlement_state, "settled")
+        self.assertEqual(job.custody_state, "with_shop")
         # Stock moved once, when the technician used the part.
         stock = StockItem.objects.get(variant=self.part_variant)
         self.assertEqual(stock.quantity_on_hand, 9)
@@ -368,7 +373,8 @@ class JobInvoiceTests(OperationsTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         job = Job.objects.get(pk=data["id"])
         self.assertEqual(job.order.total, Decimal("150.00"))
-        self.assertEqual(job.status, Job.Status.COMPLETED)
+        self.assertEqual(job.status, Job.Status.OPEN)
+        self.assertEqual(job.settlement_state, "settled")
         self.assertTrue(job.materials.get().is_consumed)
         # Stock moved exactly once, at invoice time.
         self.assertEqual(
@@ -1097,3 +1103,590 @@ class AssignJobTests(OperationsTestCase):
         job = Job.objects.get(pk=response.data["id"])
         self.assertEqual(job.assigned_employee_id, self.linked_employee.pk)
         self.assertEqual(job.assigned_to_id, self.technician.pk)
+
+
+class JobSettlementAndCustodyTests(OperationsTestCase):
+    """The repair loop's central promise: property does not leave unpaid.
+
+    Before the settlement gate, invoicing drove a repair straight to "تم
+    التسليم" and marked it complete, so the shop's records claimed the customer
+    had their phone back at the instant the cashier took the money — and a phone
+    that was never paid for could be handed over with nothing recording it.
+    """
+
+    def open_register(self, user):
+        return RegisterSession.objects.create(
+            owner=user,
+            owner_key=f"user:{user.pk}",
+            status=RegisterSession.Status.OPEN,
+        )
+
+    def bill_something(self, job_id, client=None):
+        """Put a real part on the job so there is money to settle."""
+        client = client or authenticated_client(self.technician)
+        response = client.post(
+            reverse("job-add-material", args=[job_id]),
+            {"variant": self.part_variant.pk, "quantity": 1},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+    def park_at_ready(self, job_id, approved_price="0.00"):
+        """Walk the job to "جاهز للتسليم", the stage before handover.
+
+        Only the *next* stage is an everyday move, so a test that jumps straight
+        to the last stage would trip the pre-existing skip-stages guard and
+        never reach the settlement gate it means to exercise. The approval gate
+        in the middle needs a price; zero is a real answer (a warranty repair
+        the customer approved at no charge).
+        """
+        manager_client = authenticated_client(self.manager)
+        manager_client.patch(
+            reverse("job-detail", args=[job_id]),
+            {"approved_price": approved_price},
+            format="json",
+        )
+        template = repair_template()
+        for code in ("diagnosing", "waiting_approval", "repairing", "testing", "ready"):
+            response = manager_client.post(
+                reverse("job-transition", args=[job_id]),
+                {"to_stage": stage(template, code).pk, "note": "تقدم"},
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+    def test_seeded_repair_terminal_stage_gates_on_settlement(self):
+        delivered = stage(repair_template(), "delivered")
+        self.assertTrue(delivered.requires_settlement)
+        self.assertTrue(delivered.releases_custody)
+
+    def test_unpaid_job_cannot_be_handed_over(self):
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        self.bill_something(data["id"])
+        self.park_at_ready(data["id"])
+
+        blocked = client.post(
+            reverse("job-transition", args=[data["id"]]),
+            {"to_stage": stage(repair_template(), "delivered").pk},
+            format="json",
+        )
+
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(blocked.data.get("code"), "settlement_required")
+        job = Job.objects.get(pk=data["id"])
+        self.assertEqual(job.status, Job.Status.OPEN)
+        self.assertIsNone(job.handed_over_at)
+
+    def test_paid_job_hands_over_and_records_who_collected(self):
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        self.bill_something(data["id"])
+        self.open_register(self.cashier)
+        invoiced = client.post(
+            reverse("job-invoice", args=[data["id"]]),
+            {
+                "labor_total": "30.00",
+                "payments": [{"method": "cash", "amount": "150.00"}],
+            },
+            format="json",
+        )
+        self.assertEqual(invoiced.status_code, status.HTTP_200_OK, invoiced.data)
+        self.park_at_ready(data["id"], approved_price="150.00")
+
+        handover = client.post(
+            reverse("job-transition", args=[data["id"]]),
+            {
+                "to_stage": stage(repair_template(), "delivered").pk,
+                "handed_over_to": "أخوه محمد",
+            },
+            format="json",
+        )
+
+        self.assertEqual(handover.status_code, status.HTTP_200_OK, handover.data)
+        job = Job.objects.get(pk=data["id"])
+        self.assertEqual(job.status, Job.Status.COMPLETED)
+        self.assertIsNotNone(job.handed_over_at)
+        self.assertEqual(job.handed_over_to, "أخوه محمد")
+        self.assertEqual(job.custody_state, "released")
+
+    def test_free_warranty_repair_needs_no_settlement(self):
+        # Nothing was billed, so there is nothing to settle and no override
+        # should be needed — otherwise staff learn to reach for the override.
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        self.park_at_ready(data["id"])
+
+        handover = client.post(
+            reverse("job-transition", args=[data["id"]]),
+            {"to_stage": stage(repair_template(), "delivered").pk},
+            format="json",
+        )
+
+        self.assertEqual(handover.status_code, status.HTTP_200_OK, handover.data)
+        self.assertEqual(
+            Job.objects.get(pk=data["id"]).status, Job.Status.COMPLETED
+        )
+
+    def test_cashier_cannot_force_release_but_manager_can(self):
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        self.bill_something(data["id"])
+        self.park_at_ready(data["id"])
+
+        refused = client.post(
+            reverse("job-transition", args=[data["id"]]),
+            {
+                "to_stage": stage(repair_template(), "delivered").pk,
+                "force_release": True,
+                "note": "زبون قديم",
+            },
+            format="json",
+        )
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+
+        manager_client = authenticated_client(self.manager)
+        allowed = manager_client.post(
+            reverse("job-transition", args=[data["id"]]),
+            {
+                "to_stage": stage(repair_template(), "delivered").pk,
+                "force_release": True,
+                "note": "زبون قديم، يدفع الأسبوع القادم",
+            },
+            format="json",
+        )
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK, allowed.data)
+        self.assertIsNotNone(Job.objects.get(pk=data["id"]).handed_over_at)
+
+    def test_force_release_requires_a_reason(self):
+        manager_client = authenticated_client(self.manager)
+        data = self.create_repair_job(client=manager_client)
+        self.bill_something(data["id"], client=manager_client)
+        self.park_at_ready(data["id"])
+
+        response = manager_client.post(
+            reverse("job-transition", args=[data["id"]]),
+            {
+                "to_stage": stage(repair_template(), "delivered").pk,
+                "force_release": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_credit_invoice_counts_as_settled_and_leaves_a_balance(self):
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        self.bill_something(data["id"])
+        self.open_register(self.cashier)
+
+        invoiced = client.post(
+            reverse("job-invoice", args=[data["id"]]),
+            {
+                "labor_total": "30.00",
+                "sale_type": "credit",
+                "payments": [{"method": "cash", "amount": "50.00"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(invoiced.status_code, status.HTTP_200_OK, invoiced.data)
+        job = Job.objects.get(pk=data["id"])
+        self.assertEqual(job.order.sale_type, Order.SaleType.CREDIT)
+        self.assertEqual(job.order.total, Decimal("150.00"))
+        self.assertEqual(job.order.amount_paid, Decimal("50.00"))
+        self.assertEqual(job.order.balance_due, Decimal("100.00"))
+        self.assertEqual(job.order.status, Order.Status.OPEN)
+        # آجل against a named customer is a decision, not an oversight: the
+        # customer may take their phone.
+        self.assertEqual(job.settlement_state, "deposit_paid")
+        self.park_at_ready(data["id"], approved_price="150.00")
+        handover = client.post(
+            reverse("job-transition", args=[data["id"]]),
+            {"to_stage": stage(repair_template(), "delivered").pk},
+            format="json",
+        )
+        self.assertEqual(handover.status_code, status.HTTP_200_OK, handover.data)
+
+    def test_credit_invoice_may_take_no_payment_at_all(self):
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        self.bill_something(data["id"])
+        self.open_register(self.cashier)
+
+        invoiced = client.post(
+            reverse("job-invoice", args=[data["id"]]),
+            {"labor_total": "30.00", "sale_type": "credit", "payments": []},
+            format="json",
+        )
+
+        self.assertEqual(invoiced.status_code, status.HTTP_200_OK, invoiced.data)
+        job = Job.objects.get(pk=data["id"])
+        self.assertEqual(job.order.balance_due, Decimal("150.00"))
+        self.assertEqual(job.settlement_state, "credit_open")
+
+    def test_standard_invoice_still_demands_the_full_amount(self):
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        self.bill_something(data["id"])
+        self.open_register(self.cashier)
+
+        response = client.post(
+            reverse("job-invoice", args=[data["id"]]),
+            {
+                "labor_total": "30.00",
+                "payments": [{"method": "cash", "amount": "50.00"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIsNone(Job.objects.get(pk=data["id"]).order)
+
+    def test_billing_above_the_approved_price_needs_acknowledgement(self):
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        self.bill_something(data["id"])
+        manager_client = authenticated_client(self.manager)
+        manager_client.patch(
+            reverse("job-detail", args=[data["id"]]),
+            {"approved_price": "100.00"},
+            format="json",
+        )
+        self.open_register(self.cashier)
+
+        blocked = client.post(
+            reverse("job-invoice", args=[data["id"]]),
+            {
+                "labor_total": "30.00",
+                "payments": [{"method": "cash", "amount": "150.00"}],
+            },
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(blocked.data.get("code"), "over_approved_price")
+
+        allowed = client.post(
+            reverse("job-invoice", args=[data["id"]]),
+            {
+                "labor_total": "30.00",
+                "acknowledge_over_quote": True,
+                "payments": [{"method": "cash", "amount": "150.00"}],
+            },
+            format="json",
+        )
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK, allowed.data)
+
+    def test_reopening_a_delivered_job_takes_custody_back(self):
+        manager_client = authenticated_client(self.manager)
+        data = self.create_repair_job(client=manager_client)
+        self.park_at_ready(data["id"])
+        manager_client.post(
+            reverse("job-transition", args=[data["id"]]),
+            {"to_stage": stage(repair_template(), "delivered").pk},
+            format="json",
+        )
+        self.assertIsNotNone(Job.objects.get(pk=data["id"]).handed_over_at)
+
+        reopened = manager_client.post(
+            reverse("job-reopen", args=[data["id"]]),
+            {"note": "رجع الزبون بنفس المشكلة"},
+            format="json",
+        )
+
+        self.assertEqual(reopened.status_code, status.HTTP_200_OK, reopened.data)
+        job = Job.objects.get(pk=data["id"])
+        self.assertIsNone(job.handed_over_at)
+        self.assertEqual(job.custody_state, "with_shop")
+
+
+class JobServiceLineTests(OperationsTestCase):
+    def setUp(self):
+        super().setUp()
+        self.diagnosis = create_product_with_default_variant(
+            sku="SVC-DIAG",
+            name="كشف وتشخيص",
+            unit_price=Decimal("25.00"),
+        )
+        self.diagnosis.is_service = True
+        self.diagnosis.save(update_fields=["is_service"])
+        self.diagnosis_variant = self.diagnosis.default_variant
+
+    def open_register(self, user):
+        return RegisterSession.objects.create(
+            owner=user,
+            owner_key=f"user:{user.pk}",
+            status=RegisterSession.Status.OPEN,
+        )
+
+    def test_service_is_added_priced_and_billed_as_its_own_line(self):
+        client = authenticated_client(self.technician)
+        data = self.create_repair_job(client=client)
+
+        added = client.post(
+            reverse("job-add-service", args=[data["id"]]),
+            {"variant": self.diagnosis_variant.pk, "note": "فحص أولي"},
+            format="json",
+        )
+
+        self.assertEqual(added.status_code, status.HTTP_200_OK, added.data)
+        self.assertEqual(added.data["services_total"], "25.00")
+        service = added.data["services"][0]
+        self.assertEqual(service["unit_price"], "25.00")
+        self.assertEqual(service["note"], "فحص أولي")
+
+        cashier_client = authenticated_client(self.cashier)
+        self.open_register(self.cashier)
+        invoiced = cashier_client.post(
+            reverse("job-invoice", args=[data["id"]]),
+            {"payments": [{"method": "cash", "amount": "25.00"}]},
+            format="json",
+        )
+        self.assertEqual(invoiced.status_code, status.HTTP_200_OK, invoiced.data)
+        order = Job.objects.get(pk=data["id"]).order
+        self.assertEqual(order.total, Decimal("25.00"))
+        line = order.lines.get(variant=self.diagnosis_variant)
+        # A service costs the shop nothing in goods; the technician's time is
+        # payroll's problem, and charging it here would double-count.
+        self.assertEqual(line.unit_cost, Decimal("0.00"))
+
+    def test_stock_products_are_refused_as_services(self):
+        client = authenticated_client(self.technician)
+        data = self.create_repair_job(client=client)
+
+        response = client.post(
+            reverse("job-add-service", args=[data["id"]]),
+            {"variant": self.part_variant.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_service_can_be_removed_before_invoicing(self):
+        client = authenticated_client(self.technician)
+        data = self.create_repair_job(client=client)
+        added = client.post(
+            reverse("job-add-service", args=[data["id"]]),
+            {"variant": self.diagnosis_variant.pk},
+            format="json",
+        )
+        service_id = added.data["services"][0]["id"]
+
+        removed = client.delete(
+            reverse("job-remove-service", args=[data["id"], service_id])
+        )
+
+        self.assertEqual(removed.status_code, status.HTTP_200_OK, removed.data)
+        self.assertEqual(removed.data["services"], [])
+        self.assertEqual(removed.data["services_total"], "0.00")
+
+    def test_a_job_with_only_a_service_still_gates_on_settlement(self):
+        # A diagnosis with no parts is still money owed — the commonest small
+        # repair-shop ticket there is.
+        client = authenticated_client(self.technician)
+        data = self.create_repair_job(client=client)
+        client.post(
+            reverse("job-add-service", args=[data["id"]]),
+            {"variant": self.diagnosis_variant.pk},
+            format="json",
+        )
+        manager_client = authenticated_client(self.manager)
+        manager_client.patch(
+            reverse("job-detail", args=[data["id"]]),
+            {"approved_price": "25.00"},
+            format="json",
+        )
+        for code in ("diagnosing", "waiting_approval", "repairing", "testing", "ready"):
+            manager_client.post(
+                reverse("job-transition", args=[data["id"]]),
+                {"to_stage": stage(repair_template(), code).pk},
+                format="json",
+            )
+
+        blocked = client.post(
+            reverse("job-transition", args=[data["id"]]),
+            {"to_stage": stage(repair_template(), "delivered").pk},
+            format="json",
+        )
+
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(blocked.data.get("code"), "settlement_required")
+
+
+class JobHoldTests(OperationsTestCase):
+    def test_hold_and_resume_accumulate_waiting_time(self):
+        client = authenticated_client(self.technician)
+        data = self.create_repair_job(client=client)
+
+        held = client.post(
+            reverse("job-hold", args=[data["id"]]),
+            {"reason": "بانتظار وصول الشاشة"},
+            format="json",
+        )
+
+        self.assertEqual(held.status_code, status.HTTP_200_OK, held.data)
+        self.assertTrue(held.data["is_on_hold"])
+        self.assertEqual(held.data["hold_reason"], "بانتظار وصول الشاشة")
+
+        # Backdate the hold so the accumulated wait is measurable without
+        # sleeping in the test.
+        job = Job.objects.get(pk=data["id"])
+        job.on_hold_since = job.on_hold_since - timedelta(minutes=90)
+        job.save(update_fields=["on_hold_since"])
+
+        resumed = client.post(reverse("job-resume", args=[data["id"]]), format="json")
+
+        self.assertEqual(resumed.status_code, status.HTTP_200_OK, resumed.data)
+        self.assertFalse(resumed.data["is_on_hold"])
+        self.assertEqual(resumed.data["hold_reason"], "")
+        job.refresh_from_db()
+        self.assertGreaterEqual(job.held_seconds, 90 * 60)
+
+    def test_hold_needs_a_reason_and_cannot_be_doubled(self):
+        client = authenticated_client(self.technician)
+        data = self.create_repair_job(client=client)
+
+        no_reason = client.post(
+            reverse("job-hold", args=[data["id"]]), {"reason": ""}, format="json"
+        )
+        self.assertEqual(no_reason.status_code, status.HTTP_400_BAD_REQUEST)
+
+        client.post(
+            reverse("job-hold", args=[data["id"]]),
+            {"reason": "قطعة غيار"},
+            format="json",
+        )
+        again = client.post(
+            reverse("job-hold", args=[data["id"]]),
+            {"reason": "قطعة غيار"},
+            format="json",
+        )
+        self.assertEqual(again.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_handing_a_job_over_ends_any_open_hold(self):
+        client = authenticated_client(self.manager)
+        data = self.create_repair_job(client=client)
+        client.post(
+            reverse("job-hold", args=[data["id"]]),
+            {"reason": "بانتظار قطعة"},
+            format="json",
+        )
+
+        client.post(
+            reverse("job-transition", args=[data["id"]]),
+            {"to_stage": stage(repair_template(), "delivered").pk},
+            format="json",
+        )
+
+        job = Job.objects.get(pk=data["id"])
+        self.assertIsNone(job.on_hold_since)
+        self.assertEqual(job.hold_reason, "")
+
+
+class AssetRegistryTests(OperationsTestCase):
+    """Looking an item up by its number, and following it between owners."""
+
+    def setUp(self):
+        super().setUp()
+        self.owner = Customer.objects.create(full_name="سالم", phone="0921")
+        self.car = Asset.objects.create(
+            customer=self.owner,
+            asset_type=Asset.AssetType.VEHICLE,
+            brand="Toyota",
+            model_name="Corolla",
+            vin="JTDBR32E520012345",
+            plate_number="12-3456",
+            model_year=2018,
+            odometer=143000,
+        )
+
+    def test_every_asset_is_born_with_an_ownership_row(self):
+        ownership = self.car.ownerships.get()
+        self.assertEqual(ownership.customer, self.owner)
+        self.assertTrue(ownership.is_current)
+        # The seeded phone from the base fixture too — the signal is not
+        # special-cased to vehicles.
+        self.assertEqual(self.asset.ownerships.count(), 1)
+
+    def test_lookup_by_chassis_plate_and_imei(self):
+        client = authenticated_client(self.cashier)
+        for query, expected in (
+            ("JTDBR32E520012345", self.car.pk),
+            ("12-3456", self.car.pk),
+            ("356789", self.asset.pk),
+        ):
+            response = client.get(reverse("asset-list"), {"search": query})
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+            results = response.data["results"]
+            self.assertEqual(
+                [row["id"] for row in results],
+                [expected],
+                f"searching {query!r}",
+            )
+
+    def test_identity_label_prefers_the_number_people_quote(self):
+        self.assertEqual(self.car.identity_label, "12-3456")
+        self.assertEqual(self.asset.identity_label, "356789")
+
+    def test_in_shop_filter_finds_items_with_open_work(self):
+        client = authenticated_client(self.technician)
+        self.create_repair_job(client=client)
+
+        in_shop = client.get(reverse("asset-list"), {"in_shop": "true"})
+
+        self.assertEqual(in_shop.status_code, status.HTTP_200_OK, in_shop.data)
+        rows = in_shop.data["results"]
+        self.assertEqual([row["id"] for row in rows], [self.asset.pk])
+        self.assertEqual(rows[0]["open_job_count"], 1)
+
+    def test_detail_carries_ownership_chain_and_job_history(self):
+        tech_client = authenticated_client(self.technician)
+        self.create_repair_job(client=tech_client)
+
+        response = tech_client.get(reverse("asset-detail", args=[self.asset.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(len(response.data["ownerships"]), 1)
+        history = response.data["jobs"]
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["symptoms"], "شاشة مكسورة")
+        self.assertEqual(response.data["total_spent"], "0.00")
+
+    def test_transfer_moves_the_owner_but_keeps_the_history(self):
+        client = authenticated_client(self.cashier)
+        tech_client = authenticated_client(self.technician)
+        self.create_repair_job(client=tech_client)
+        buyer = Customer.objects.create(full_name="مشتري", phone="0933")
+
+        response = client.post(
+            reverse("asset-transfer", args=[self.asset.pk]),
+            {"customer": buyer.pk, "note": "باعه لصاحبه"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.customer, buyer)
+        chain = list(self.asset.ownerships.order_by("acquired_at"))
+        self.assertEqual(len(chain), 2)
+        self.assertEqual(chain[0].customer, self.customer)
+        self.assertIsNotNone(chain[0].released_at)
+        self.assertEqual(chain[1].customer, buyer)
+        self.assertIsNone(chain[1].released_at)
+        # The new owner can see what the previous one had done — the point of
+        # keeping history on the item rather than on the person.
+        detail = client.get(reverse("asset-detail", args=[self.asset.pk]))
+        self.assertEqual(len(detail.data["jobs"]), 1)
+
+    def test_transferring_to_the_current_owner_changes_nothing(self):
+        client = authenticated_client(self.cashier)
+
+        response = client.post(
+            reverse("asset-transfer", args=[self.car.pk]),
+            {"customer": self.owner.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(self.car.ownerships.count(), 1)

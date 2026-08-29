@@ -4,22 +4,48 @@ from django.db.models.deletion import ProtectedError
 from rest_framework import serializers
 
 from apps.catalog.models import BillOfMaterials, BomLine, ProductVariant
-from apps.customers.models import Asset, Customer
+from apps.customers.models import Asset, AssetOwnership, Customer
 from apps.employees.models import Employee
 from .models import (
     Job,
     JobAsset,
     JobMaterial,
+    JobService,
     JobStageEvent,
     WorkflowStage,
     WorkflowTemplate,
 )
 
 
+class AssetOwnershipSerializer(serializers.ModelSerializer):
+    customer_name = serializers.CharField(source="customer.full_name", read_only=True)
+    customer_phone = serializers.CharField(source="customer.phone", read_only=True)
+    is_current = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = AssetOwnership
+        fields = [
+            "id",
+            "customer",
+            "customer_name",
+            "customer_phone",
+            "acquired_at",
+            "released_at",
+            "is_current",
+            "note",
+        ]
+
+
 class AssetSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source="customer.full_name", read_only=True)
+    customer_phone = serializers.CharField(source="customer.phone", read_only=True)
     display_name = serializers.CharField(read_only=True)
+    identity_label = serializers.CharField(read_only=True)
     job_count = serializers.IntegerField(read_only=True, default=0)
+    # Annotated by the viewset: how many jobs on this item are still open, i.e.
+    # "is this phone/car in the shop right now?".
+    open_job_count = serializers.IntegerField(read_only=True, default=0)
+    last_job_at = serializers.DateTimeField(read_only=True, default=None)
 
     class Meta:
         model = Asset
@@ -27,19 +53,96 @@ class AssetSerializer(serializers.ModelSerializer):
             "id",
             "customer",
             "customer_name",
+            "customer_phone",
             "asset_type",
             "brand",
             "model_name",
             "serial_number",
             "imei",
+            "vin",
+            "plate_number",
+            "engine_number",
+            "model_year",
+            "odometer",
             "color",
             "notes",
             "display_name",
+            "identity_label",
             "job_count",
+            "open_job_count",
+            "last_job_at",
             "is_active",
             "created_at",
             "updated_at",
         ]
+
+
+class AssetJobHistorySerializer(serializers.Serializer):
+    """One visit in an item's service history.
+
+    Deliberately not ``JobSerializer``: this is read from the asset's side, so
+    it carries what a person asks about a past repair — when, what was wrong,
+    what was done, what it cost — and none of the board's workflow machinery.
+    """
+
+    id = serializers.IntegerField(read_only=True)
+    job_number = serializers.CharField(read_only=True)
+    job_type = serializers.CharField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    stage_name = serializers.CharField(source="current_stage.name", read_only=True)
+    customer = serializers.IntegerField(source="customer_id", read_only=True)
+    customer_name = serializers.CharField(source="customer.full_name", read_only=True)
+    symptoms = serializers.CharField(read_only=True)
+    diagnosis = serializers.CharField(read_only=True)
+    warranty_days = serializers.IntegerField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    completed_at = serializers.DateTimeField(read_only=True)
+    handed_over_at = serializers.DateTimeField(read_only=True)
+    order_receipt_number = serializers.CharField(
+        source="order.receipt_number",
+        read_only=True,
+        default="",
+    )
+    total = serializers.SerializerMethodField()
+
+    def get_total(self, job) -> str | None:
+        return str(job.order.total) if job.order_id else None
+
+
+class AssetDetailSerializer(AssetSerializer):
+    ownerships = AssetOwnershipSerializer(many=True, read_only=True)
+    jobs = serializers.SerializerMethodField()
+    total_spent = serializers.SerializerMethodField()
+
+    class Meta(AssetSerializer.Meta):
+        fields = AssetSerializer.Meta.fields + [
+            "ownerships",
+            "jobs",
+            "total_spent",
+        ]
+
+    def _jobs(self, asset):
+        return [link.job for link in asset.job_links.all()]
+
+    def get_jobs(self, asset):
+        return AssetJobHistorySerializer(self._jobs(asset), many=True).data
+
+    def get_total_spent(self, asset) -> str:
+        total = sum(
+            (job.order.total for job in self._jobs(asset) if job.order_id),
+            Decimal("0.00"),
+        )
+        return str(total.quantize(Decimal("0.01")))
+
+
+class AssetTransferSerializer(serializers.Serializer):
+    customer = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.all())
+    note = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        max_length=200,
+    )
 
 
 class WorkflowStageSerializer(serializers.ModelSerializer):
@@ -55,6 +158,8 @@ class WorkflowStageSerializer(serializers.ModelSerializer):
             "is_initial",
             "is_terminal",
             "requires_customer_approval",
+            "requires_settlement",
+            "releases_custody",
             "consumes_materials",
             "produces_output",
         ]
@@ -202,6 +307,33 @@ class JobMaterialSerializer(serializers.ModelSerializer):
         )
 
 
+class JobServiceSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(
+        source="variant.product.name",
+        read_only=True,
+    )
+    variant_name = serializers.CharField(source="variant.display_name", read_only=True)
+    line_total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = JobService
+        fields = [
+            "id",
+            "variant",
+            "product_name",
+            "variant_name",
+            "quantity",
+            "unit_price",
+            "line_total",
+            "note",
+            "created_at",
+        ]
+        read_only_fields = ("unit_price",)
+
+    def get_line_total(self, service) -> str:
+        return str(service.line_total)
+
+
 class JobAssetSerializer(serializers.ModelSerializer):
     asset_details = AssetSerializer(source="asset", read_only=True)
 
@@ -241,8 +373,18 @@ class JobSerializer(serializers.ModelSerializer):
     )
     assets = JobAssetSerializer(source="job_assets", many=True, read_only=True)
     materials = JobMaterialSerializer(many=True, read_only=True)
+    services = JobServiceSerializer(many=True, read_only=True)
     stage_events = JobStageEventSerializer(many=True, read_only=True)
     materials_total = serializers.SerializerMethodField()
+    services_total = serializers.SerializerMethodField()
+    is_on_hold = serializers.BooleanField(read_only=True)
+    # Money and custody are two different facts about a job, and the board needs
+    # both: "paid but still on the shelf" is the state a repair shop lives in.
+    settlement_state = serializers.CharField(read_only=True)
+    custody_state = serializers.CharField(read_only=True)
+    order_balance_due = serializers.SerializerMethodField()
+    order_amount_paid = serializers.SerializerMethodField()
+    order_sale_type = serializers.CharField(source="order.sale_type", read_only=True)
 
     class Meta:
         model = Job
@@ -266,6 +408,14 @@ class JobSerializer(serializers.ModelSerializer):
             "due_at",
             "completed_at",
             "cancelled_at",
+            "handed_over_at",
+            "handed_over_to",
+            "on_hold_since",
+            "hold_reason",
+            "held_seconds",
+            "is_on_hold",
+            "settlement_state",
+            "custody_state",
             "symptoms",
             "diagnosis",
             "technician_notes",
@@ -282,11 +432,16 @@ class JobSerializer(serializers.ModelSerializer):
             "sales_channel_name",
             "order",
             "order_receipt_number",
+            "order_balance_due",
+            "order_amount_paid",
+            "order_sale_type",
             "public_token",
             "assets",
             "materials",
+            "services",
             "stage_events",
             "materials_total",
+            "services_total",
             "created_at",
             "updated_at",
         ]
@@ -299,6 +454,11 @@ class JobSerializer(serializers.ModelSerializer):
             "assigned_employee",
             "completed_at",
             "cancelled_at",
+            "handed_over_at",
+            "handed_over_to",
+            "on_hold_since",
+            "hold_reason",
+            "held_seconds",
             "bom",
             "output_variant",
             "output_quantity",
@@ -329,6 +489,19 @@ class JobSerializer(serializers.ModelSerializer):
             Decimal("0.00"),
         )
         return str(total.quantize(Decimal("0.01")))
+
+    def get_services_total(self, job) -> str:
+        total = sum(
+            (service.line_total for service in job.services.all()),
+            Decimal("0.00"),
+        )
+        return str(total.quantize(Decimal("0.01")))
+
+    def get_order_balance_due(self, job) -> str | None:
+        return str(job.order.balance_due) if job.order_id else None
+
+    def get_order_amount_paid(self, job) -> str | None:
+        return str(job.order.amount_paid) if job.order_id else None
 
     def validate(self, attrs):
         if self.instance is not None and self.instance.is_locked:
@@ -409,6 +582,40 @@ class JobAssignSerializer(serializers.Serializer):
 class JobTransitionSerializer(serializers.Serializer):
     to_stage = serializers.PrimaryKeyRelatedField(queryset=WorkflowStage.objects.all())
     note = serializers.CharField(required=False, allow_blank=True, default="")
+    # Who physically collected the property, when the target stage hands it back.
+    handed_over_to = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        max_length=120,
+    )
+    # Manager override for the settlement gate: let the customer take their
+    # property without settling. Requires ``operations.release_unpaid_job`` and
+    # a non-empty note, and is audited on its own event.
+    force_release = serializers.BooleanField(default=False)
+
+
+class JobHoldSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=200)
+
+
+class JobServiceCreateSerializer(serializers.Serializer):
+    variant = serializers.PrimaryKeyRelatedField(
+        queryset=ProductVariant.objects.active(),
+    )
+    quantity = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        min_value=Decimal("0.001"),
+        required=False,
+        default=Decimal("1"),
+    )
+    note = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        max_length=200,
+    )
 
 
 class JobMaterialCreateSerializer(serializers.Serializer):
@@ -440,7 +647,24 @@ class JobInvoiceSerializer(serializers.Serializer):
         default=Decimal("0.00"),
         min_value=Decimal("0.00"),
     )
-    payments = JobInvoicePaymentSerializer(many=True, allow_empty=False)
+    # A credit (آجل) job invoice may be paid partly or not at all — the deposit
+    # a workshop takes for parts, or a regular customer settling next week — so
+    # payments are only mandatory on a standard sale.
+    payments = JobInvoicePaymentSerializer(many=True, required=False, default=list)
+    sale_type = serializers.ChoiceField(
+        choices=("standard", "credit"),
+        required=False,
+        default="standard",
+    )
+    valid_until = serializers.DateField(required=False, allow_null=True)
+    acknowledge_over_quote = serializers.BooleanField(default=False)
+
+    def validate(self, attrs):
+        if attrs.get("sale_type") != "credit" and not attrs.get("payments"):
+            raise serializers.ValidationError(
+                {"payments": "A standard job invoice must be paid in full now."}
+            )
+        return attrs
 
 
 class BomLineSerializer(serializers.ModelSerializer):
