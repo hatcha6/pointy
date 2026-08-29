@@ -43,6 +43,9 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import ROUND_DOWN, ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal
 
+import os
+from types import SimpleNamespace
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.urls import reverse
@@ -59,11 +62,24 @@ from apps.catalog.models import (
 )
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import ShopSettings
-from apps.customers.models import Customer
+from apps.customers.models import Asset, Customer
+from apps.operations.models import Job, WorkflowTemplate
+from apps.operations.services import (
+    _labor_variant,
+    add_job_material,
+    add_job_service,
+    cancel_job,
+    create_job,
+    hold_job,
+    invoice_job,
+    resume_job,
+    reverse_job_material,
+    transition_job,
+)
 from apps.discounts.models import DiscountRule
 from apps.expenses.models import Expense, ExpenseCategory
 from apps.expenses.services import create_expense
-from apps.inventory.models import StockItem, StockMovement
+from apps.inventory.models import StockItem, StockValuationBin, Warehouse, StockMovement
 from apps.inventory.valuation import (
     ValuationMethod,
     consumed_unit_cost,
@@ -522,6 +538,11 @@ class OrderRec:
     sum_positive: Decimal = ZERO  # cumulative positive payments
     amount_paid: Decimal = ZERO  # all payments incl. negative refunds
     paid_by_method: dict = field(default_factory=lambda: defaultdict(lambda: ZERO))
+    # The method of the order's FIRST payment, mirroring production's
+    # ``refund_method_for_order`` (``order.payments.order_by("created_at").first()``,
+    # cash when the order was never paid). A refund whose tenders have all been
+    # drained to zero by earlier refunds falls back to this one.
+    first_payment_method: str | None = None
     has_service: bool = False
     voided: bool = False
     converted: bool = False
@@ -561,6 +582,82 @@ class OrderRec:
             and self.status == Order.Status.OPEN
             and not self.voided
         )
+
+
+@dataclass
+class JobMaterialRec:
+    """A part on a job. Quantities are base units — job materials have no pack."""
+
+    material_id: int
+    variant_id: int
+    quantity: Decimal
+    unit_price: Decimal
+    unit_cost: Decimal
+    consumed: bool = False
+    reversed: bool = False
+
+    @property
+    def billable(self) -> bool:
+        return self.consumed and not self.reversed
+
+
+@dataclass
+class JobServiceRec:
+    """Priced work on a job: no stock, no cost, billed at its snapshot price."""
+
+    service_id: int
+    variant_id: int
+    quantity: Decimal
+    unit_price: Decimal
+
+
+@dataclass
+class JobRec:
+    job_id: int
+    customer_id: int | None
+    stage_index: int
+    materials: list = field(default_factory=list)
+    services: list = field(default_factory=list)
+    order_id: int | None = None
+    labor_total: Decimal = ZERO
+    approved_price: Decimal | None = None
+    handed_over: bool = False
+    on_hold: bool = False
+    cancelled: bool = False
+    completed: bool = False
+
+    @property
+    def open(self) -> bool:
+        return not self.cancelled and not self.completed
+
+    @property
+    def billable_materials(self) -> list:
+        return [m for m in self.materials if m.billable]
+
+    @property
+    def materials_total(self) -> Decimal:
+        return even2(
+            sum((even2(m.unit_price * m.quantity) for m in self.billable_materials), ZERO)
+        )
+
+    @property
+    def services_total(self) -> Decimal:
+        return even2(
+            sum((even2(s.unit_price * s.quantity) for s in self.services), ZERO)
+        )
+
+    @property
+    def invoice_total(self) -> Decimal:
+        return even2(self.materials_total + self.services_total + self.labor_total)
+
+    @property
+    def has_anything_to_bill(self) -> bool:
+        """Mirrors ``apps.operations.services.job_has_anything_to_bill``."""
+        if self.billable_materials:
+            return True
+        if self.services:
+            return True
+        return self.approved_price is not None and self.approved_price > ZERO
 
 
 @dataclass
@@ -727,6 +824,9 @@ class Oracle:
         self.expected: dict = defaultdict(lambda: ZERO)
         self.seed_on_hand: dict = defaultdict(lambda: ZERO)
         self.orders: dict = {}
+        # Repair jobs by id. A job's invoice becomes a normal entry in
+        # ``orders``, so job revenue rides every identity the sales side has.
+        self.jobs: dict = {}
         self.sessions: dict = {}
         self.pos: dict = {}
         # Cost basis per BASE unit, keyed by variant: what the next sale of this
@@ -993,6 +1093,26 @@ class SimulationError(AssertionError):
     """Raised when the backend's stored state diverges from the oracle."""
 
 
+def response_body(response):
+    """The body of *any* response, DRF or not.
+
+    ``.data`` exists only on DRF ``Response``. Middleware answers with a plain
+    ``JsonResponse`` — the license gate (503 until enrolled) and the anonymous
+    burst ceiling (429) both do — so reading ``.data`` in a failure message
+    raises ``AttributeError`` and destroys the diagnostic at exactly the moment
+    it is needed: the run dies reporting a missing attribute instead of the
+    status and body that say what actually refused.
+    """
+    data = getattr(response, "data", None)
+    if data is not None:
+        return data
+    content = getattr(response, "content", b"")
+    try:
+        return content.decode("utf-8", "replace")[:500]
+    except Exception:  # pragma: no cover - defensive
+        return repr(content)[:500]
+
+
 # ---------------------------------------------------------------------------
 # The simulation driver
 # ---------------------------------------------------------------------------
@@ -1121,6 +1241,8 @@ class Simulation:
 
     def record_order_payment(self, order: OrderRec, method: str, amount: Decimal):
         amount = even2(amount)
+        if order.first_payment_method is None:
+            order.first_payment_method = method
         order.sum_positive = even2(order.sum_positive + amount)
         order.amount_paid = even2(order.amount_paid + amount)
         order.paid_by_method[method] = even2(order.paid_by_method[method] + amount)
@@ -1287,8 +1409,47 @@ class Simulation:
         ]
         self.expense_category = ExpenseCategory.objects.create(name="Misc")
 
+        self._build_operations_world()
         self._build_discounts()
         self._open_register()
+
+    def _build_operations_world(self):
+        """The repair counter: a workflow, some customer property, a labour SKU.
+
+        Jobs end in a normal ``sales.Order``, so once a job is invoiced its
+        order joins ``oracle.orders`` like any other sale and every conservation
+        identity already in this file — drawer cash, per-method net payments,
+        session summaries, revenue, profit — covers repair revenue too, without
+        a parallel set of assertions.
+        """
+        settings = ShopSettings.load()
+        settings.enable_repair_operations = True
+        settings.save(update_fields=["enable_repair_operations"])
+
+        self.repair_template = (
+            WorkflowTemplate.objects.filter(job_type="repair", is_system=True)
+            .prefetch_related("stages")
+            .first()
+        )
+        self.repair_stages = list(
+            self.repair_template.stages.order_by("display_order", "id")
+        )
+        # Materialise the labour SKU now so its variant id is known before any
+        # invoice needs it; production creates it lazily on first use.
+        self.labor_variant = _labor_variant()
+        self.assets = [
+            Asset.objects.create(
+                customer=customer,
+                asset_type=Asset.AssetType.PHONE,
+                brand="Brand",
+                model_name=f"Model {index}",
+                imei=f"35678901234{index:04d}",
+            )
+            for index, customer in enumerate(self.customers)
+        ]
+        # Service products the repair counter charges for, reusing the catalog's
+        # own non-stock items rather than inventing a second kind of service.
+        self.service_items = [item for item in self.items if not item.tracks_stock]
 
     def _add_product(
         self,
@@ -1454,7 +1615,7 @@ class Simulation:
             format="json",
         )
         if response.status_code != 200:
-            self.fail(f"register start failed: {response.status_code} {response.data}")
+            self.fail(f"register start failed: {response.status_code} {response_body(response)}")
         session_id = response.data["id"]
         self.current_session_id = session_id
         self.oracle.sessions[session_id] = SessionRec(
@@ -1729,6 +1890,501 @@ class Simulation:
                 self.oracle.on_hand[vid] = q3(self.oracle.on_hand[vid] - spec["base_qty"])
                 self.oracle.value_issue(vid, spec["base_qty"])
 
+    # -- jobs (apps.operations) -------------------------------------------
+    #
+    # Everything here recomputes from transaction inputs, never from what the
+    # backend stored. Stock moved by a job is the same oracle state a sale
+    # moves, so a part fitted on a repair and the same part sold over the
+    # counter are proven against one set of quantities and one valuation.
+
+    def _stage(self, code: str):
+        return next(stage for stage in self.repair_stages if stage.code == code)
+
+    def _stage_index(self, code: str) -> int:
+        return next(
+            index for index, stage in enumerate(self.repair_stages)
+            if stage.code == code
+        )
+
+    def _open_jobs(self) -> list:
+        return [rec for rec in self.oracle.jobs.values() if rec.open]
+
+    def _job_object(self, rec: JobRec):
+        return Job.objects.select_related("workflow_template", "current_stage").get(
+            pk=rec.job_id
+        )
+
+    def _expected_material_cost(self, variant_id: int) -> Decimal:
+        """What ``_job_material_unit_cost`` will snapshot, per base unit.
+
+        The valuation ledger's rate — the same basis a sale line uses. This is
+        read *before* the issue, which is sound at moving average because
+        issuing stock does not move the average.
+        """
+        return self._expected_unit_cost(variant_id, Decimal("1"))
+
+    def op_open_repair_job(self) -> bool:
+        if len(self._open_jobs()) >= 6:
+            return False
+        customer = self.rng.choice(self.customers)
+        job = create_job(
+            workflow_template=self.repair_template,
+            request=None,
+            customer=customer,
+            symptoms="sim intake",
+        )
+        rec = JobRec(
+            job_id=job.pk,
+            customer_id=customer.id,
+            stage_index=0,
+        )
+        self.oracle.jobs[job.pk] = rec
+        self._assert_job(rec)
+        return True
+
+    def op_job_add_material(self) -> bool:
+        candidates = [
+            rec for rec in self._open_jobs()
+            if rec.order_id is None and len(rec.materials) < 3
+        ]
+        if not candidates:
+            return False
+        rec = self.rng.choice(candidates)
+        item = self.rng.choice(self.stock_items)
+        quantity = Decimal(self.rng.randint(1, 3))
+        if self.oracle.on_hand[item.variant_id] < quantity:
+            return False
+        # Consume now or leave pending: a pending material must not move stock
+        # until a consuming stage or the invoice finalises it, and that is the
+        # single most important thing about the two modes.
+        consume_now = self.rng.random() < 0.5
+        unit_price = up2(Decimal(item.variant.unit_price))
+        unit_cost = self._expected_material_cost(item.variant_id)
+
+        material = add_job_material(
+            job=self._job_object(rec),
+            variant=item.variant,
+            quantity=quantity,
+            request=None,
+            consume_now=consume_now,
+        )
+        material_rec = JobMaterialRec(
+            material_id=material.pk,
+            variant_id=item.variant_id,
+            quantity=quantity,
+            unit_price=unit_price,
+            unit_cost=unit_cost,
+            consumed=consume_now,
+        )
+        rec.materials.append(material_rec)
+        if consume_now:
+            self._issue_job_material(material_rec)
+        self._assert_job(rec)
+        self._assert_variant(item.variant_id)
+        return True
+
+    def _issue_job_material(self, material: JobMaterialRec):
+        self.oracle.on_hand[material.variant_id] = q3(
+            self.oracle.on_hand[material.variant_id] - material.quantity
+        )
+        self.oracle.value_issue(material.variant_id, material.quantity)
+
+    def _return_job_material(self, material: JobMaterialRec):
+        """Unconsumed stock back on the shelf, at the shelf's own rate.
+
+        ``reverse_job_material`` writes an INCREASE movement with no declared
+        cost, and an undeclared incoming movement is valued at the bin's rate
+        before it (``post_movement_valuations``), falling back to the last
+        purchase cost and then to zero.
+        """
+        rate = (
+            self.oracle._bin_rate(material.variant_id)
+            or self.oracle._valuation_fallback(material.variant_id)
+            or ZERO
+        )
+        self.oracle.on_hand[material.variant_id] = q3(
+            self.oracle.on_hand[material.variant_id] + material.quantity
+        )
+        self.oracle.value_receipt(material.variant_id, material.quantity, rate)
+
+    def op_job_reverse_material(self) -> bool:
+        candidates = [
+            (rec, m)
+            for rec in self._open_jobs()
+            if rec.order_id is None
+            for m in rec.materials
+            if not m.reversed
+        ]
+        if not candidates:
+            return False
+        rec, material = self.rng.choice(candidates)
+        reverse_job_material(
+            job=self._job_object(rec),
+            material=self._job_object(rec).materials.get(pk=material.material_id),
+            request=None,
+        )
+        if material.consumed:
+            self._return_job_material(material)
+        material.reversed = True
+        self._assert_job(rec)
+        self._assert_variant(material.variant_id)
+        return True
+
+    def op_job_add_service(self) -> bool:
+        candidates = [
+            rec for rec in self._open_jobs()
+            if rec.order_id is None and len(rec.services) < 2
+        ]
+        if not candidates or not self.service_items:
+            return False
+        rec = self.rng.choice(candidates)
+        item = self.rng.choice(self.service_items)
+        quantity = Decimal(self.rng.randint(1, 2))
+        unit_price = up2(Decimal(item.variant.unit_price))
+
+        service = add_job_service(
+            job=self._job_object(rec),
+            variant=item.variant,
+            quantity=quantity,
+            request=None,
+        )
+        rec.services.append(
+            JobServiceRec(
+                service_id=service.pk,
+                variant_id=item.variant_id,
+                quantity=quantity,
+                unit_price=unit_price,
+            )
+        )
+        # A service moves no stock. Asserting the variant proves it: a service
+        # that quietly decremented something would show up here.
+        self._assert_job(rec)
+        return True
+
+    def op_job_advance(self) -> bool:
+        """Move a job one stage, and prove the two gates on the way.
+
+        The approval gate refuses to be left without an approved price; the
+        settlement gate refuses to be *entered* while the job still owes money.
+        Both are asserted by attempting the move and requiring the refusal.
+        """
+        candidates = [
+            rec for rec in self._open_jobs()
+            if rec.stage_index < len(self.repair_stages) - 1
+        ]
+        if not candidates:
+            return False
+        rec = self.rng.choice(candidates)
+        current = self.repair_stages[rec.stage_index]
+        target = self.repair_stages[rec.stage_index + 1]
+
+        if current.requires_customer_approval and rec.approved_price is None:
+            # Leaving the approval gate without a price must be refused, then
+            # allowed once the price is recorded.
+            self._assert_transition_refused(rec, target, "approval")
+            price = up2(Decimal(self.rng.randint(50, 400)))
+            job = self._job_object(rec)
+            job.approved_price = price
+            job.save(update_fields=["approved_price"])
+            rec.approved_price = price
+
+        if target.requires_settlement and not self._job_is_settled(rec):
+            self._assert_transition_refused(rec, target, "settlement")
+            return True
+
+        transition_job(job=self._job_object(rec), to_stage=target, request=None)
+        rec.stage_index += 1
+        if rec.on_hold:
+            # A forward move ends a hold: the part arrived.
+            rec.on_hold = False
+        if target.consumes_materials:
+            for material in rec.materials:
+                if not material.consumed and not material.reversed:
+                    material.consumed = True
+                    self._issue_job_material(material)
+        if target.releases_custody:
+            rec.handed_over = True
+        if target.is_terminal:
+            rec.completed = True
+        self._assert_job(rec)
+        for material in rec.materials:
+            self._assert_variant(material.variant_id)
+        return True
+
+    def _job_is_settled(self, rec: JobRec) -> bool:
+        """Mirrors ``apps.operations.services._job_is_settled``."""
+        if rec.order_id is None:
+            return not rec.has_anything_to_bill
+        order = self.oracle.orders[rec.order_id]
+        if order.balance_due <= ZERO:
+            return True
+        return order.sale_type == Order.SaleType.CREDIT and order.customer_id is not None
+
+    def _assert_transition_refused(self, rec: JobRec, target, gate: str):
+        try:
+            transition_job(job=self._job_object(rec), to_stage=target, request=None)
+        except DRFValidationError:
+            return
+        self.fail(
+            f"job#{rec.job_id} passed the {gate} gate into '{target.code}' "
+            f"when it should have been refused"
+        )
+
+    def op_job_invoice(self) -> bool:
+        candidates = [
+            rec for rec in self._open_jobs()
+            if rec.order_id is None and (rec.materials or rec.services)
+        ]
+        if not candidates:
+            return False
+        rec = self.rng.choice(candidates)
+        # Invoicing finalises every still-pending material, moving its stock
+        # exactly once — the same rule a consuming stage applies.
+        pending = [m for m in rec.materials if not m.consumed and not m.reversed]
+        for material in pending:
+            if self.oracle.on_hand[material.variant_id] < material.quantity:
+                return False
+
+        labor = (
+            up2(Decimal(self.rng.randint(1, 60)))
+            if self.rng.random() < 0.5
+            else ZERO
+        )
+        rec.labor_total = labor
+        for material in pending:
+            material.consumed = True
+        total = rec.invoice_total
+        if total <= ZERO:
+            for material in pending:
+                material.consumed = False
+            rec.labor_total = ZERO
+            return False
+
+        on_credit = self.rng.random() < 0.3
+        if on_credit:
+            paid_now = up2(total * Decimal(self.rng.choice(["0", "0.4", "1"])))
+        else:
+            paid_now = total
+        payments = (
+            self.split_amount(paid_now, list(self.PAYMENT_METHODS))
+            if paid_now > ZERO
+            else []
+        )
+        # Billing above the approved price is a deliberate act; the oracle takes
+        # it deliberately too rather than letting the guard fire at random.
+        acknowledge = rec.approved_price is not None and total > rec.approved_price
+
+        invoice_job(
+            job=self._job_object(rec),
+            register_session=self._register_session_obj(),
+            payments_data=[{"method": m, "amount": a} for m, a in payments],
+            labor_total=labor,
+            request=None,
+            sale_type=(
+                Order.SaleType.CREDIT if on_credit else Order.SaleType.STANDARD
+            ),
+            acknowledge_over_quote=acknowledge,
+        )
+        for material in pending:
+            self._issue_job_material(material)
+
+        job = self._job_object(rec)
+        rec.order_id = job.order_id
+        order_rec = self._build_job_order_rec(rec, job.order)
+        for method, amount in payments:
+            self.record_order_payment(order_rec, method, amount)
+        self._assert_order(order_rec)
+        self._assert_job(rec)
+        for material in rec.materials:
+            self._assert_variant(material.variant_id)
+        self._assert_session(self.current_session_id)
+        return True
+
+    def _build_job_order_rec(self, rec: JobRec, order) -> OrderRec:
+        """The job's invoice as a normal ``OrderRec``.
+
+        No discount engine runs on a job invoice — ``invoice_job`` writes the
+        lines and calls ``order.recalculate()``, which only sums them — so the
+        subtotal is the lines and the discount is zero. Materials keep the price
+        and cost they snapshotted when the technician fitted them; services and
+        labour carry no cost, because the shop's cost there is payroll's, and
+        charging it twice is what a cost on those lines would do.
+        """
+        # ``tracks_stock`` states what the VARIANT is, not what happened at
+        # invoice time. Invoicing moves no stock — the parts left when the
+        # technician fitted them, which is why the order is marked
+        # ``stock_already_recorded`` — but a job invoice is a normal order, so
+        # the returns desk can hand its parts back, and that DOES restock them.
+        # Saying "false" here because nothing moved on the way out silently lost
+        # every unit that came back on the way in.
+        stock_tracked = {item.variant_id for item in self.stock_items}
+        whole_only_of = {
+            item.variant_id: item.units[0].whole_only for item in self.items
+        }
+        expected = [
+            (m.variant_id, m.quantity, m.unit_price, m.unit_cost)
+            for m in rec.billable_materials
+        ]
+        expected += [
+            (s.variant_id, s.quantity, s.unit_price, ZERO) for s in rec.services
+        ]
+        if rec.labor_total > ZERO:
+            expected.append(
+                (self.labor_variant.pk, Decimal("1"), rec.labor_total, ZERO)
+            )
+
+        order_lines = list(order.lines.order_by("pk"))
+        if len(order_lines) != len(expected):
+            self.fail(
+                f"job#{rec.job_id} invoice line count: backend={len(order_lines)} "
+                f"oracle={len(expected)}"
+            )
+        line_recs = []
+        for order_line, (variant_id, quantity, unit_price, unit_cost) in zip(
+            order_lines, expected
+        ):
+            line_recs.append(
+                LineRec(
+                    order_line_id=order_line.pk,
+                    variant_id=variant_id,
+                    unit_price=unit_price,
+                    quantity=quantity,
+                    unit_factor=Decimal("1"),
+                    discount_total=ZERO,
+                    tracks_stock=variant_id in stock_tracked,
+                    whole_only=whole_only_of.get(variant_id, True),
+                    unit_cost=unit_cost,
+                )
+            )
+        subtotal = even2(
+            sum((even2(lr.unit_price * lr.quantity) for lr in line_recs), ZERO)
+        )
+        order_rec = OrderRec(
+            order_id=order.pk,
+            sale_type=order.sale_type,
+            register_session_id=self.current_session_id,
+            customer_id=rec.customer_id,
+            lines=line_recs,
+            subtotal=subtotal,
+            discount_total=ZERO,
+            total=subtotal,
+            has_service=bool(rec.services) or rec.labor_total > ZERO,
+            created_index=self.op_index,
+        )
+        self.oracle.orders[order.pk] = order_rec
+        return order_rec
+
+    def op_job_hold_resume(self) -> bool:
+        candidates = [rec for rec in self._open_jobs() if not rec.handed_over]
+        if not candidates:
+            return False
+        rec = self.rng.choice(candidates)
+        if rec.on_hold:
+            resume_job(job=self._job_object(rec), request=None)
+            rec.on_hold = False
+        else:
+            hold_job(job=self._job_object(rec), reason="waiting on a part", request=None)
+            rec.on_hold = True
+        self._assert_job(rec)
+        return True
+
+    def _manager_request(self):
+        """A request carrying the (superuser, therefore manager) sim operator.
+
+        Handed only to the services that gate on *authority*. Everything else
+        keeps ``request=None``: ``create_job`` and ``invoice_job`` stamp a sales
+        channel from the request's credentials, and giving them one would change
+        what those paths exercise.
+        """
+        return SimpleNamespace(user=self.user)
+
+    def op_job_cancel(self) -> bool:
+        """Cancelling puts every consumed part back on the shelf.
+
+        Proves the authority gate in both directions: a job that has already
+        eaten stock cannot be cancelled by someone with no manager standing,
+        and can be by someone with it — at which point every consumed part is
+        credited back at the shelf's own rate.
+        """
+        candidates = [
+            rec for rec in self._open_jobs()
+            if rec.order_id is None and rec.materials
+        ]
+        if not candidates:
+            return False
+        rec = self.rng.choice(candidates)
+
+        if any(material.billable for material in rec.materials):
+            try:
+                cancel_job(job=self._job_object(rec), request=None, reason="no rights")
+            except DRFValidationError:
+                pass
+            else:
+                self.fail(
+                    f"job#{rec.job_id} was cancelled with consumed materials by a "
+                    "caller with no manager standing"
+                )
+            self._assert_job(rec)
+
+        cancel_job(
+            job=self._job_object(rec),
+            request=self._manager_request(),
+            reason="sim cancel",
+        )
+        for material in rec.materials:
+            if material.billable:
+                self._return_job_material(material)
+                material.reversed = True
+        rec.cancelled = True
+        self._assert_job(rec)
+        for material in rec.materials:
+            self._assert_variant(material.variant_id)
+        return True
+
+    def _assert_job(self, rec: JobRec):
+        job = Job.objects.prefetch_related("materials", "services").get(pk=rec.job_id)
+        tag = f"job#{rec.job_id}"
+        expected_status = (
+            Job.Status.CANCELLED
+            if rec.cancelled
+            else Job.Status.COMPLETED
+            if rec.completed
+            else Job.Status.OPEN
+        )
+        self.assert_equal(job.status, expected_status, f"{tag} status")
+        self.assert_equal(
+            job.current_stage.code,
+            self.repair_stages[rec.stage_index].code,
+            f"{tag} stage",
+        )
+        self.assert_equal(job.is_on_hold, rec.on_hold, f"{tag} on_hold")
+        self.assert_equal(
+            job.handed_over_at is not None, rec.handed_over, f"{tag} handed_over"
+        )
+        self.assert_equal(job.order_id, rec.order_id, f"{tag} order")
+        self.assert_equal(
+            job.materials.count(), len(rec.materials), f"{tag} material count"
+        )
+        self.assert_equal(
+            job.services.count(), len(rec.services), f"{tag} service count"
+        )
+        for material in rec.materials:
+            stored = job.materials.get(pk=material.material_id)
+            mtag = f"{tag} material#{material.material_id}"
+            self.assert_qty(stored.quantity, material.quantity, f"{mtag} quantity")
+            self.assert_money(stored.unit_price, material.unit_price, f"{mtag} price")
+            # The cost basis: a part fitted on a repair must cost what the same
+            # part costs when it is sold over the counter.
+            self.assert_money(stored.unit_cost, material.unit_cost, f"{mtag} cost")
+            self.assert_equal(
+                stored.is_consumed, material.billable, f"{mtag} consumed"
+            )
+        for service in rec.services:
+            stored = job.services.get(pk=service.service_id)
+            stag = f"{tag} service#{service.service_id}"
+            self.assert_qty(stored.quantity, service.quantity, f"{stag} quantity")
+            self.assert_money(stored.unit_price, service.unit_price, f"{stag} price")
+
     # -- operations -------------------------------------------------------
 
     def op_standard_sale(self) -> bool:
@@ -1836,7 +2492,7 @@ class Simulation:
             if "coupon_codes" not in response.data:
                 self.fail(
                     f"api checkout rejected {unapplied} without naming the coupon: "
-                    f"{response.data}"
+                    f"{response_body(response)}"
                 )
             if Order.objects.count() != order_count_before:
                 self.fail("rejected api checkout still created an order")
@@ -1847,7 +2503,7 @@ class Simulation:
             # the one the order would go on to store.
             self.fail(
                 f"api checkout rejected a correct tender of {total}: "
-                f"{response.status_code} {response.data}"
+                f"{response.status_code} {response_body(response)}"
             )
         order = Order.objects.get(pk=response.data["id"])
         # The response body is the receipt, the drawer screen and the customer's
@@ -2130,6 +2786,15 @@ class Simulation:
             total = even2(total + amount)
         net_by_method = {m: v for m, v in rec.paid_by_method.items() if v > ZERO}
         allocations = refund_tender_allocations(net_by_method, total)
+        if not allocations:
+            # No tender left to attribute the refund to: earlier refunds have
+            # already drained every method's net to zero (or the order was never
+            # paid at all — an آجل invoice returned before it was settled).
+            # Production does not crash here, it falls back to the order's first
+            # tender (``refund_method_for_order``) and writes the whole refund
+            # against it, driving that method's net negative. The port returns []
+            # and documents that the caller owns this branch; this is that branch.
+            allocations = [(rec.first_payment_method or "cash", total)]
         cash_amount = sum((a for m, a in allocations if m == "cash"), ZERO)
         primary_method = max(allocations, key=lambda item: item[1])[0]
         for method, alloc in allocations:
@@ -2603,7 +3268,7 @@ class Simulation:
             format="json",
         )
         if response.status_code != 200:
-            self.fail(f"purchase preview HTTP {response.status_code}: {response.data}")
+            self.fail(f"purchase preview HTTP {response.status_code}: {response_body(response)}")
         data = response.data
         self.assert_money(data["subtotal"], rec.subtotal, "preview subtotal")
         self.assert_money(
@@ -2773,10 +3438,28 @@ class Simulation:
         )
         # Received stock is valued at what it cost to put on the shelf: net of
         # discounts and landed costs, per base unit.
+        #
+        # The expected portion and the overage are valued SEPARATELY, in the
+        # order the backend writes them, because the backend writes them as two
+        # movements (``receive_expected`` then ``increase``) and
+        # ``post_movement_valuations`` values one movement at a time, calling
+        # ``_write_bin`` after each.
+        #
+        # Collapsing them into one receipt of the combined quantity gets the
+        # same quantity and the same value, which is why this went unnoticed —
+        # but not the same *rate*. An emptied bin keeps the rate it held before
+        # the movement that emptied it, so when the two receipts straddle zero
+        # (the ledger runs negative here: this world seeds opening stock with no
+        # movement behind it, so every sale issues against nothing) the backend
+        # keeps the rate as of the intermediate state and a single combined
+        # receipt keeps the rate from before the whole batch. That kept rate is
+        # what the next sale of the variant snapshots as its cost, so the two
+        # disagree about what the goods cost from then on.
         self.oracle.value_receipt(
-            vid,
-            q3(accepted_expected_base + accepted_overage_base),
-            line.effective_base_unit_cost,
+            vid, accepted_expected_base, line.effective_base_unit_cost
+        )
+        self.oracle.value_receipt(
+            vid, accepted_overage_base, line.effective_base_unit_cost
         )
         # expected decremented (clamped at 0) for accepted_expected, damaged, cancelled
         for packs in (accepted_expected, damaged_expected, cancelled_expected):
@@ -2882,7 +3565,7 @@ class Simulation:
         if response.status_code not in (200, 201):
             self.fail(
                 f"po#{rec.po_id} line#{line.line_id} return of {packs} rejected: "
-                f"{response.status_code} {response.data}"
+                f"{response.status_code} {response_body(response)}"
             )
 
         # -- oracle state, from the quantities we asked for ------------------
@@ -2990,7 +3673,7 @@ class Simulation:
             format="json",
         )
         if response.status_code != 201:
-            self.fail(f"{movement} failed: {response.status_code} {response.data}")
+            self.fail(f"{movement} failed: {response.status_code} {response_body(response)}")
         self.oracle.cash_moves_log.append(
             (self.current_session_id, movement.replace("-", "_"), even2(amount))
         )
@@ -3002,7 +3685,7 @@ class Simulation:
             "/api/stock-counts/start/", {"scope": "full"}, format="json"
         )
         if response.status_code not in (200, 201):
-            self.fail(f"stock-count start failed: {response.status_code} {response.data}")
+            self.fail(f"stock-count start failed: {response.status_code} {response_body(response)}")
         count_id = response.data["id"]
         pool = list(self.stock_items)
         self.rng.shuffle(pool)
@@ -3080,7 +3763,7 @@ class Simulation:
             f"/api/register-sessions/{session_id}/close/", payload, format="json"
         )
         if response.status_code != 200:
-            self.fail(f"register close failed: {response.status_code} {response.data}")
+            self.fail(f"register close failed: {response.status_code} {response_body(response)}")
         rec.closed = True
         rec.closing_cash = even2(entered + denom_total)
         # verify close reconciliation immediately
@@ -3180,6 +3863,17 @@ class Simulation:
             (self.op_stock_count, 3),
             (self.op_cycle_register, 2),
             (self.op_attempt_oversell, 2),
+            # The repair counter. Weighted so a run builds real jobs — parts
+            # fitted, services added, stages walked, money taken — rather than
+            # opening jobs it never finishes.
+            (self.op_open_repair_job, 5),
+            (self.op_job_add_material, 7),
+            (self.op_job_add_service, 4),
+            (self.op_job_advance, 8),
+            (self.op_job_invoice, 5),
+            (self.op_job_reverse_material, 2),
+            (self.op_job_hold_resume, 2),
+            (self.op_job_cancel, 2),
         ]
 
     def run(self, operations_target: int):
@@ -3233,6 +3927,65 @@ class Simulation:
         self.assert_qty(
             stock.quantity_expected, self.oracle.expected[variant_id],
             f"variant {variant_id} expected",
+        )
+        self._assert_valuation(variant_id)
+
+    def _assert_valuation(self, variant_id: int):
+        """The valuation ledger, asserted where the stock event happens.
+
+        Quantities alone are not enough. A stock event the oracle models but the
+        backend does not (or the reverse) leaves the two *valuations* apart while
+        both quantity columns still agree — and nothing notices until, dozens of
+        operations later, some unrelated sale snapshots a cost from the drifted
+        rate and fails somewhere that has nothing to do with the cause. Two real
+        divergences hid exactly that way before this existed.
+
+        Compared against the oracle's own engine rather than ``on_hand``: this
+        world seeds opening stock straight into ``StockItem`` with no movement
+        behind it, so the ledger legitimately knows less than the shelf does.
+        Both sides here count only what actually moved.
+        """
+        engine = self.oracle.valuation.get(variant_id)
+        if engine is None:
+            return
+        bin_row = StockValuationBin.objects.filter(
+            variant_id=variant_id,
+            warehouse_id=Warehouse.default_id(),
+        ).first()
+        quantity, value = engine.get_total_stock_and_value()
+        if bin_row is None:
+            if quantity != ZERO or value != ZERO:
+                self.fail(
+                    f"variant {variant_id} valuation: backend has no bin, "
+                    f"oracle holds {quantity} @ {value}"
+                )
+            return
+        self.assert_qty(
+            bin_row.quantity, quantity, f"variant {variant_id} valued quantity"
+        )
+        # Compared at the precision the COLUMN holds, not at cents.
+        # ``stock_value`` is a 6dp field, so the backend has already rounded
+        # once; rounding that to cents and the oracle's raw value to cents
+        # rounds twice on one side and once on the other, and a value ending
+        # .894999 reads as 59.90 against 59.89 — a cent of pure arithmetic
+        # theatre. Quantising both sides the same way compares like with like.
+        self.assert_equal(
+            Decimal(bin_row.stock_value),
+            Decimal(value).quantize(Decimal("0.000001")),
+            f"variant {variant_id} stock value",
+        )
+        # The kept rate of an emptied bin, which nothing above can see.
+        #
+        # An emptied bin keeps the rate it last held, and that kept rate is what
+        # the next sale of this variant snapshots as its cost. Quantity and
+        # value are both zero either way, so a bin whose kept rate has drifted
+        # looks identical to one that has not until, dozens of operations later,
+        # some unrelated sale is costed from it. That is exactly how a receipt
+        # valued as one event instead of two hid here.
+        self.assert_equal(
+            even2(bin_row.valuation_rate),
+            even2(self.oracle._bin_rate(variant_id) or ZERO),
+            f"variant {variant_id} valuation rate",
         )
 
     def _assert_adjustment(self, adjustment, refund: RefundRec):
@@ -3696,7 +4449,7 @@ class Simulation:
             )
             if response.status_code != 200:
                 self.fail(
-                    f"summary#{session_id} failed: {response.status_code} {response.data}"
+                    f"summary#{session_id} failed: {response.status_code} {response_body(response)}"
                 )
             payload = response.data
             expected = self.oracle.session_method_summary(session_id)
@@ -3913,10 +4666,16 @@ class Simulation:
             )
         ]
         product_of = {item.variant_id: item.product_id for item in self.items}
+        # The labour SKU is a real product on real orders but is not one of the
+        # catalog items this world builds — production creates it on demand — so
+        # the ranking has to know it or every job invoice trips this map.
+        product_of[self.labor_variant.pk] = self.labor_variant.product_id
         name_of = {
             item.product_id: item.variant.product.name for item in self.items
         }
+        name_of[self.labor_variant.product_id] = self.labor_variant.product.name
         variant_name_of = {item.variant_id: item.variant.name for item in self.items}
+        variant_name_of[self.labor_variant.pk] = self.labor_variant.name
 
         def blank():
             return {"quantity": ZERO, "revenue": ZERO, "profit": ZERO, "returned": False}
@@ -4060,7 +4819,7 @@ class Simulation:
         cache.clear()
         response = self.client.get("/api/dashboard/", {"sections": "sales"})
         if response.status_code != 200:
-            self.fail(f"dashboard failed: {response.status_code} {response.data}")
+            self.fail(f"dashboard failed: {response.status_code} {response_body(response)}")
         return response.data["sections"]["sales"]["reports"]
 
     def _report_summary(self, report_type: str) -> dict:
@@ -4085,7 +4844,7 @@ class Simulation:
         )
         if response.status_code != 201:
             self.fail(
-                f"report {report_type} failed: {response.status_code} {response.data}"
+                f"report {report_type} failed: {response.status_code} {response_body(response)}"
             )
         return response.data["payload"]
 

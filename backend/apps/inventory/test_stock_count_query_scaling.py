@@ -13,6 +13,7 @@ changed only *where* the payload comes from, never what it says.
 """
 
 from decimal import Decimal
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -43,6 +44,95 @@ from .stock_count_serializers import (
     StockCountSerializer,
 )
 
+
+# ---------------------------------------------------------------------------
+# Signed-URL normalisation
+# ---------------------------------------------------------------------------
+#
+# ``AttachmentSummarySerializer.content_url`` appends ``?token=<signed>``, and
+# ``django.core.signing.dumps`` embeds a base62 timestamp. This test serialises
+# the same row twice; when the two calls straddle a second boundary the tokens
+# differ and a naive dict comparison fails at random — which is exactly what it
+# did in a full-suite run, with a diff whose only difference was
+# ``1x08B9`` vs ``1x08BA``.
+#
+# Stripping the token keeps the assertion honest: the point being proved is that
+# the prefetch did not change the payload, and a token that is *designed* to
+# differ between two calls is not part of that claim. The caller separately
+# asserts a token is present on both sides, so the field cannot silently vanish.
+
+
+def _strip_content_token(url: str) -> str:
+    parsed = urlsplit(url)
+    kept = [
+        (key, value)
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        if key != "token"
+    ]
+    return urlunsplit(parsed._replace(query=urlencode(kept)))
+
+
+def _without_content_tokens(payload):
+    """A deep copy of ``payload`` with every ``content_url`` token removed."""
+    if isinstance(payload, dict):
+        return {
+            key: (
+                _strip_content_token(value)
+                if key == "content_url" and isinstance(value, str)
+                else _without_content_tokens(value)
+            )
+            for key, value in payload.items()
+        }
+    if isinstance(payload, (list, tuple)):
+        return [_without_content_tokens(item) for item in payload]
+    return payload
+
+
+def _content_urls(payload):
+    """Every ``content_url`` string anywhere in ``payload``."""
+    found = []
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if key == "content_url" and isinstance(value, str):
+                found.append(value)
+            else:
+                found.extend(_content_urls(value))
+    elif isinstance(payload, (list, tuple)):
+        for item in payload:
+            found.extend(_content_urls(item))
+    return found
+
+
+class ContentTokenNormalisationTests(TestCase):
+    """The normaliser must hide the rotating token and nothing else."""
+
+    def test_two_payloads_differing_only_in_the_token_compare_equal(self):
+        # The exact shape that failed a full-suite run: consecutive signing
+        # timestamps on an otherwise identical payload.
+        first = {"variant_detail": {"image": {"content_url": "/a/1/?token=1x08B9:aaa"}}}
+        second = {"variant_detail": {"image": {"content_url": "/a/1/?token=1x08BA:bbb"}}}
+
+        self.assertNotEqual(first, second)
+        self.assertEqual(_without_content_tokens(first), _without_content_tokens(second))
+
+    def test_a_real_difference_still_fails(self):
+        # Stripping the token must not also mask the URL it is attached to.
+        first = {"image": {"content_url": "/a/1/?token=x", "id": 1}}
+        second = {"image": {"content_url": "/a/2/?token=x", "id": 1}}
+
+        self.assertNotEqual(_without_content_tokens(first), _without_content_tokens(second))
+
+    def test_other_query_parameters_survive(self):
+        stripped = _strip_content_token("/a/1/?size=thumb&token=x&v=2")
+
+        self.assertIn("size=thumb", stripped)
+        self.assertIn("v=2", stripped)
+        self.assertNotIn("token=", stripped)
+
+    def test_content_urls_finds_them_at_any_depth(self):
+        payload = {"rows": [{"a": {"content_url": "/x/?token=1"}}, {"b": 2}]}
+
+        self.assertEqual(_content_urls(payload), ["/x/?token=1"])
 
 @override_settings(
     CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
@@ -159,8 +249,21 @@ class StockCountQueryScalingTests(TestCase):
                 StockCountLine.objects.get(pk=line.pk),
                 context={"request": Request(request)},
             ).data
-            self.assertEqual(rows[line.pk], dict(cold))
+            self.assertEqual(
+                _without_content_tokens(rows[line.pk]),
+                _without_content_tokens(dict(cold)),
+            )
+            # The token is excluded from the comparison above, not from the
+            # payload: both sides must still carry one.
+            self._assert_content_tokens_present(rows[line.pk])
+            self._assert_content_tokens_present(dict(cold))
             self.assertEqual(rows[line.pk]["variant_detail"]["sku"], line.variant.sku)
+
+    def _assert_content_tokens_present(self, payload):
+        urls = _content_urls(payload)
+        self.assertTrue(urls, "payload carried no attachment content_url to check")
+        for url in urls:
+            self.assertIn("token=", url)
 
     def test_session_list_query_count_does_not_grow_with_rows(self):
         url = reverse("stock-count-list")
