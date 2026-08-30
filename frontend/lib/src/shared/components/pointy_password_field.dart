@@ -19,6 +19,9 @@ class PointyPasswordField extends StatefulWidget {
     this.autofillHints,
     this.validator,
     this.onFieldSubmitted,
+    this.onChanged,
+    this.helperText,
+    this.textDirection,
   });
 
   final TextEditingController controller;
@@ -31,6 +34,15 @@ class PointyPasswordField extends StatefulWidget {
   final Iterable<String>? autofillHints;
   final FormFieldValidator<String>? validator;
   final ValueChanged<String>? onFieldSubmitted;
+  final ValueChanged<String>? onChanged;
+
+  /// Supporting line under the field — e.g. "leave blank to keep the stored
+  /// password" on an edit form.
+  final String? helperText;
+
+  /// Force a direction for the *value*. Credentials are ASCII, so an RTL app
+  /// still wants them laid out left-to-right.
+  final TextDirection? textDirection;
 
   @override
   State<PointyPasswordField> createState() => _PointyPasswordFieldState();
@@ -50,8 +62,11 @@ class _PointyPasswordFieldState extends State<PointyPasswordField> {
       autofillHints: widget.autofillHints,
       validator: widget.validator,
       onFieldSubmitted: widget.onFieldSubmitted,
+      onChanged: widget.onChanged,
+      textDirection: widget.textDirection,
       decoration: InputDecoration(
         labelText: widget.labelText,
+        helperText: widget.helperText,
         prefixIcon: widget.prefixIcon == null ? null : Icon(widget.prefixIcon),
         suffixIcon: IconButton(
           onPressed: widget.enabled

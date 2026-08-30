@@ -16,6 +16,11 @@ class MessagingGatewaySerializer(serializers.ModelSerializer):
     )
     has_password = serializers.SerializerMethodField()
     has_webhook_signing_key = serializers.SerializerMethodField()
+    # Activation state. The token itself stays secret; the client only needs to
+    # know *whether* the device webhooks were ever registered, because a gateway
+    # that can send but was never activated receives nothing back — no inbound
+    # SMS, no delivery receipts — and that gap is otherwise invisible in the UI.
+    is_activated = serializers.SerializerMethodField()
 
     class Meta:
         model = MessagingGateway
@@ -39,6 +44,7 @@ class MessagingGatewaySerializer(serializers.ModelSerializer):
             "webhook_signing_key",
             "has_password",
             "has_webhook_signing_key",
+            "is_activated",
             "created_at",
             "updated_at",
         ]
@@ -55,6 +61,9 @@ class MessagingGatewaySerializer(serializers.ModelSerializer):
 
     def get_has_webhook_signing_key(self, obj) -> bool:
         return obj.has_secret("webhook_signing_key")
+
+    def get_is_activated(self, obj) -> bool:
+        return obj.has_secret("webhook_token")
 
     def _pop_secrets(self, validated_data) -> dict:
         return {k: validated_data.pop(k) for k in _SECRET_FIELDS if k in validated_data}

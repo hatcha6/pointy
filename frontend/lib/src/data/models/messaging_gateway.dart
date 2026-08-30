@@ -37,8 +37,10 @@ class MessagingGateway {
     this.sendTimeoutSeconds = 15,
     this.hasPassword = false,
     this.hasWebhookSigningKey = false,
+    this.isActivated = false,
     this.lastError = '',
     this.lastErrorAt,
+    this.lastSeenAt,
   });
 
   final int id;
@@ -53,8 +55,17 @@ class MessagingGateway {
   final int sendTimeoutSeconds;
   final bool hasPassword;
   final bool hasWebhookSigningKey;
+
+  /// Whether the device webhooks were registered (zero-touch activation ran).
+  /// Sending works without it, but nothing comes *back* — no inbound SMS and no
+  /// delivery receipts — so the settings page surfaces this as its own step.
+  final bool isActivated;
   final String lastError;
   final DateTime? lastErrorAt;
+
+  /// Last successful round-trip to the device (a send that the phone accepted,
+  /// or an activation). Null means Pointy has never reached it.
+  final DateTime? lastSeenAt;
 
   factory MessagingGateway.fromJson(Map<String, Object?> json) {
     final config =
@@ -72,12 +83,22 @@ class MessagingGateway {
       sendTimeoutSeconds: _int(json['send_timeout_seconds'], fallback: 15),
       hasPassword: _bool(json['has_password']),
       hasWebhookSigningKey: _bool(json['has_webhook_signing_key']),
+      isActivated: _bool(json['is_activated']),
       lastError: json['last_error']?.toString() ?? '',
       lastErrorAt: _dateOrNull(json['last_error_at']),
+      lastSeenAt: _dateOrNull(json['last_seen_at']),
     );
   }
 
+  /// Has everything needed to *send*. Two-way messaging additionally requires
+  /// [isActivated].
   bool get isConfigured => baseUrl.trim().isNotEmpty && hasPassword;
+
+  /// Fully wired: can send, and the device posts inbound messages and delivery
+  /// receipts back to us.
+  bool get isReady => isConfigured && isActivated;
+
+  bool get hasError => lastError.trim().isNotEmpty;
 }
 
 /// The mutable form payload for creating/updating a gateway. A null [password]

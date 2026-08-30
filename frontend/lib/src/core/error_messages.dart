@@ -22,3 +22,30 @@ String errorMessageFor(Object error, AppLocalizations l10n) {
   }
   return l10n.errorUnexpectedMessage;
 }
+
+/// The backend's own sentence for a failed call, when the response carries one.
+///
+/// DRF puts a human message in `detail` (our views write Arabic there), while
+/// field validation arrives as `{"field": ["message", ...]}`. Returns null for
+/// anything else — a transport failure, HTML from a proxy, an empty 5xx — so the
+/// caller falls back to its own localized copy instead of showing the developer
+/// string that [PosApiException.message] carries.
+String? backendDetailFor(Object error) {
+  if (error is! PosApiException) {
+    return null;
+  }
+  final decoded = error.decodedBody;
+  if (decoded is! Map) {
+    return null;
+  }
+  final detail = decoded['detail'];
+  final candidate =
+      detail ?? (decoded.values.isEmpty ? null : decoded.values.first);
+  final text = switch (candidate) {
+    String value => value,
+    List value when value.isNotEmpty => value.first?.toString() ?? '',
+    _ => '',
+  };
+  final trimmed = text.trim();
+  return trimmed.isEmpty ? null : trimmed;
+}

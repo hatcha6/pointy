@@ -2008,7 +2008,7 @@
   "jobCustomerSection": "الزبون",
   "jobNoCustomer": "بدون زبون",
   "jobAssetSection": "الجهاز",
-  "assetHistoryTitle": "سجل الجهاز",
+  "assetHistoryTitle": "سجل الصيانة",
   "assetHistoryEmpty": "لا يوجد سجل سابق لهذا الجهاز.",
   "customerAssetsTitle": "أجهزة الزبون",
   "customerAssetsEmpty": "لا توجد أجهزة مسجلة لهذا الزبون.",
@@ -2212,7 +2212,6 @@
   "assetTotalSpentMetric": "إجمالي الفواتير",
   "assetLastVisitMetric": "آخر زيارة",
   "assetNeverVisited": "لم تدخل بعد",
-  "assetHistoryTitle": "سجل الصيانة",
   "assetNoHistoryMessage": "لا توجد مهام على هذا الجهاز بعد.",
   "assetNewJobButton": "مهمة جديدة لهذا الجهاز",
   "assetIdentitySectionTitle": "بيانات التعريف",
@@ -8443,11 +8442,7 @@
   "messagingSettingsTitle": "إعدادات الرسائل",
   "messagingSettingsSubtitle": "بوابة الإرسال (هاتف SMS Gate) وحدود الإرسال ورسالة اختبار",
   "messagingHeroTitle": "بوابة الرسائل",
-  "messagingStatusActive": "جاهزة للإرسال",
   "messagingStatusInactive": "غير مُهيّأة",
-  "messagingHasRecentError": "خطأ حديث",
-  "messagingNotConfiguredTitle": "لم تُهيّأ البوابة بعد",
-  "messagingNotConfiguredMessage": "أدخل عنوان هاتف SMS Gate على الشبكة واسم المستخدم وكلمة المرور، ثم احفظ.",
   "messagingConnectionTitle": "الاتصال بالجهاز",
   "messagingBaseUrlLabel": "عنوان الجهاز (Base URL)",
   "messagingUsernameLabel": "اسم المستخدم",
@@ -8455,8 +8450,6 @@
   "messagingPasswordKeepHint": "اتركه فارغًا للإبقاء على كلمة المرور الحالية",
   "messagingRateLabel": "رسائل/الدقيقة",
   "messagingDailyCapLabel": "الحد اليومي (0 = بلا حد)",
-  "messagingSaveButton": "حفظ",
-  "messagingSavedMessage": "تم حفظ إعدادات البوابة",
   "messagingSaveError": "تعذّر حفظ الإعدادات",
   "messagingLoadError": "تعذّر تحميل إعدادات الرسائل",
   "messagingTestTitle": "إرسال رسالة اختبار",
@@ -8468,17 +8461,67 @@
   "messagingTestSentMessage": "غادرت رسالة الاختبار البوابة بنجاح.",
   "messagingTestFailedTitle": "فشل الإرسال",
   "messagingTestFailedMessage": "تعذّر إرسال رسالة الاختبار. تأكد من عنوان الجهاز وبيانات الدخول.",
-  "messagingActivateButton": "تفعيل تلقائي وضبط الروابط",
-  "messagingActivateHint": "يضبط الجهاز تلقائيًا لاستقبال الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي.",
-  "messagingActivateError": "تعذّر التفعيل التلقائي — تأكد من الاتصال بالجهاز.",
-  "messagingActivatedMessage": "تم التفعيل — سُجّلت {count} روابط تلقائيًا.",
-  "@messagingActivatedMessage": {
+  "messagingStatusReady": "جاهزة — إرسال واستقبال",
+  "messagingStatusSendOnly": "إرسال فقط — لم تُفعّل",
+  "messagingLastSeenLabel": "آخر اتصال {when}",
+  "@messagingLastSeenLabel": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "messagingUnsavedBadge": "تغييرات غير محفوظة",
+  "messagingSetupGuideTitle": "أين أجد هذه البيانات؟",
+  "messagingSetupGuideMessage": "على هاتف الرسائل: افتح تطبيق SMS Gate، فعّل «Local Server»، ثم اضغط زر الحالة في الأسفل حتى تصبح Online. سيعرض التطبيق عنوان الهاتف على الشبكة واسم المستخدم وكلمة المرور — انقلها هنا كما هي.",
+  "messagingBaseUrlHelper": "يكفي عنوان الهاتف على الشبكة؛ المنفذ الافتراضي 8080 يُضاف تلقائيًا.",
+  "messagingBaseUrlInvalid": "عنوان غير صالح. اكتب عنوان الهاتف على الشبكة، مثل 192.168.1.50",
+  "messagingBaseUrlNormalized": "سيُحفظ العنوان هكذا: {url}",
+  "@messagingBaseUrlNormalized": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "messagingRateHelper": "0 = بلا حد",
+  "messagingUnpacedTitle": "لا يوجد حد للإرسال في الدقيقة",
+  "messagingUnpacedMessage": "بدون حد، قد تُصنَّف الشريحة كمرسل مزعج فيُحظر الرقم. القيمة المقترحة 6 رسائل في الدقيقة.",
+  "messagingConnectButton": "حفظ وتفعيل",
+  "messagingActivateOnlyButton": "تفعيل الجهاز",
+  "messagingReactivateButton": "إعادة تسجيل الروابط",
+  "messagingConnectingLabel": "جارٍ التفعيل…",
+  "messagingConnectHint": "الحفظ يكفي للإرسال؛ التفعيل يضبط الهاتف ليُعيد إلينا الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي عليه.",
+  "messagingNotActivatedTitle": "لم يُفعّل الجهاز بعد",
+  "messagingNotActivatedMessage": "الإرسال يعمل، لكن الردود الواردة وتقارير التسليم لن تصل حتى تضغط «تفعيل الجهاز».",
+  "messagingConnectedTitle": "الجهاز جاهز",
+  "messagingConnectedMessage": "حُفظت الإعدادات وسُجّلت {count} روابط على الهاتف — الرسائل الواردة وتقارير التسليم تصل الآن تلقائيًا.",
+  "@messagingConnectedMessage": {
     "placeholders": {
       "count": {
         "type": "int"
       }
     }
   },
+  "messagingSavedNotActivatedTitle": "حُفظت الإعدادات — لم يُفعّل الجهاز",
+  "messagingSavedNotActivatedMessage": "تعذّر الوصول إلى الهاتف لتسجيل الروابط. تأكد أن الهاتف يعمل وأن «Local Server» في وضع Online على نفس الشبكة، ثم أعد المحاولة.",
+  "messagingReactivateFailedTitle": "حُفظت الإعدادات",
+  "messagingReactivateFailedMessage": "تعذّر الوصول إلى الهاتف الآن لإعادة تسجيل الروابط، والروابط المسجّلة سابقًا ما زالت تعمل.",
+  "messagingSaveFailedTitle": "تعذّر حفظ الإعدادات",
+  "messagingDeviceErrorTitle": "آخر خطأ من الجهاز",
+  "messagingDeviceErrorMessage": "{detail} — {when}",
+  "@messagingDeviceErrorMessage": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "messagingUnsavedTestHint": "احفظ التغييرات أولًا — الاختبار يجري على الإعدادات المحفوظة في الخادم، لا على ما تراه هنا.",
+  "messagingTestPhoneHelper": "استخدم رقمًا بين يديك الآن للتحقق من وصول الرسالة.",
   "conversationsTitle": "المحادثات",
   "conversationsDrawerLabel": "المحادثات",
   "conversationsEmpty": "لا توجد محادثات بعد",

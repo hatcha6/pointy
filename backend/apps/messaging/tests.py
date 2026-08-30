@@ -129,6 +129,31 @@ class DeliverTests(TestCase):
         self.assertTrue(msg.provider_message_id)
         self.assertEqual(len(fake.SENT_MESSAGES), 1)
 
+    def test_success_clears_the_gateway_error_and_stamps_last_seen(self):
+        """Health has to move in both directions.
+
+        A single failure used to pin ``last_error`` forever, so the settings page
+        kept warning about a gateway that had been healthy ever since, and
+        ``last_seen_at`` only ever reflected the last activation.
+        """
+        MessagingGateway.objects.filter(pk=self.gateway.pk).update(
+            last_error="unreachable: boom", last_error_at=timezone.now()
+        )
+        deliver_message(enqueue_message(to="+218912345678", body="hi"))
+        self.gateway.refresh_from_db()
+        self.assertEqual(self.gateway.last_error, "")
+        self.assertIsNone(self.gateway.last_error_at)
+        self.assertIsNotNone(self.gateway.last_seen_at)
+
+    def test_failure_records_the_reason_on_the_gateway(self):
+        gw = make_gateway(
+            name="flaky", is_default=False, config={"fail_with": "unreachable"}
+        )
+        deliver_message(enqueue_message(to="+218912345678", body="hi", gateway=gw))
+        gw.refresh_from_db()
+        self.assertIn("unreachable", gw.last_error)
+        self.assertIsNotNone(gw.last_error_at)
+
     def test_retryable_failure_requeues(self):
         gw = make_gateway(name="flaky", is_default=False, config={"fail_with": "unreachable"})
         msg = enqueue_message(to="+218912345678", body="hi", gateway=gw)
@@ -241,6 +266,25 @@ class GatewayApiTests(TestCase):
         self.assertEqual(resp.status_code, 200, resp.content)
         self.assertEqual(resp.data["status"], "sent")
         self.assertEqual(len(fake.SENT_MESSAGES), 1)
+
+    def test_activation_state_is_exposed_without_leaking_the_token(self):
+        """The client cannot otherwise tell a sending gateway from a wired one.
+
+        Without this flag the settings page shows "ready" for a gateway that was
+        never activated — one that can send but will never receive a reply or a
+        delivery report.
+        """
+        gateway = make_gateway()
+        self.client.force_authenticate(self.manager)
+
+        resp = self.client.get(f"/api/messaging/gateways/{gateway.pk}/")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertFalse(resp.data["is_activated"])
+
+        self.client.post(f"/api/messaging/gateways/{gateway.pk}/activate/")
+        resp = self.client.get(f"/api/messaging/gateways/{gateway.pk}/")
+        self.assertTrue(resp.data["is_activated"])
+        self.assertNotIn("webhook_token", resp.data)
 
     def test_cashier_cannot_manage_gateways(self):
         self.client.force_authenticate(self.cashier)

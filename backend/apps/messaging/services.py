@@ -112,6 +112,7 @@ def _apply_result(message: OutboundMessage, result: SendResult) -> None:
                 "error_code", "error_detail", "updated_at",
             ]
         )
+        _note_gateway_reachable(message.gateway, now=now)
         return
 
     message.error_code = result.error_code
@@ -134,6 +135,21 @@ def _note_gateway_error(gateway: MessagingGateway, result: SendResult) -> None:
     MessagingGateway.objects.filter(pk=gateway.pk).update(
         last_error=f"{result.error_code}: {result.error_detail}"[:2000],
         last_error_at=timezone.now(),
+    )
+
+
+def _note_gateway_reachable(gateway: MessagingGateway, *, now=None) -> None:
+    """Record a successful round-trip to the device.
+
+    Without this the health fields only ever move in one direction: a single
+    failure sets ``last_error`` forever, so the settings page keeps warning about
+    a gateway that has been healthy for weeks, and ``last_seen_at`` reflects the
+    last *activation* rather than the last time the phone actually answered.
+    """
+    MessagingGateway.objects.filter(pk=gateway.pk).update(
+        last_seen_at=now or timezone.now(),
+        last_error="",
+        last_error_at=None,
     )
 
 

@@ -13930,20 +13930,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get messagingHeroTitle => 'بوابة الرسائل';
 
   @override
-  String get messagingStatusActive => 'جاهزة للإرسال';
-
-  @override
   String get messagingStatusInactive => 'غير مُهيّأة';
-
-  @override
-  String get messagingHasRecentError => 'خطأ حديث';
-
-  @override
-  String get messagingNotConfiguredTitle => 'لم تُهيّأ البوابة بعد';
-
-  @override
-  String get messagingNotConfiguredMessage =>
-      'أدخل عنوان هاتف SMS Gate على الشبكة واسم المستخدم وكلمة المرور، ثم احفظ.';
 
   @override
   String get messagingConnectionTitle => 'الاتصال بالجهاز';
@@ -13966,12 +13953,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get messagingDailyCapLabel => 'الحد اليومي (0 = بلا حد)';
-
-  @override
-  String get messagingSaveButton => 'حفظ';
-
-  @override
-  String get messagingSavedMessage => 'تم حفظ إعدادات البوابة';
 
   @override
   String get messagingSaveError => 'تعذّر حفظ الإعدادات';
@@ -14009,20 +13990,113 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذّر إرسال رسالة الاختبار. تأكد من عنوان الجهاز وبيانات الدخول.';
 
   @override
-  String get messagingActivateButton => 'تفعيل تلقائي وضبط الروابط';
+  String get messagingStatusReady => 'جاهزة — إرسال واستقبال';
 
   @override
-  String get messagingActivateHint =>
-      'يضبط الجهاز تلقائيًا لاستقبال الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي.';
+  String get messagingStatusSendOnly => 'إرسال فقط — لم تُفعّل';
 
   @override
-  String get messagingActivateError =>
-      'تعذّر التفعيل التلقائي — تأكد من الاتصال بالجهاز.';
-
-  @override
-  String messagingActivatedMessage(int count) {
-    return 'تم التفعيل — سُجّلت $count روابط تلقائيًا.';
+  String messagingLastSeenLabel(String when) {
+    return 'آخر اتصال $when';
   }
+
+  @override
+  String get messagingUnsavedBadge => 'تغييرات غير محفوظة';
+
+  @override
+  String get messagingSetupGuideTitle => 'أين أجد هذه البيانات؟';
+
+  @override
+  String get messagingSetupGuideMessage =>
+      'على هاتف الرسائل: افتح تطبيق SMS Gate، فعّل «Local Server»، ثم اضغط زر الحالة في الأسفل حتى تصبح Online. سيعرض التطبيق عنوان الهاتف على الشبكة واسم المستخدم وكلمة المرور — انقلها هنا كما هي.';
+
+  @override
+  String get messagingBaseUrlHelper =>
+      'يكفي عنوان الهاتف على الشبكة؛ المنفذ الافتراضي 8080 يُضاف تلقائيًا.';
+
+  @override
+  String get messagingBaseUrlInvalid =>
+      'عنوان غير صالح. اكتب عنوان الهاتف على الشبكة، مثل 192.168.1.50';
+
+  @override
+  String messagingBaseUrlNormalized(String url) {
+    return 'سيُحفظ العنوان هكذا: $url';
+  }
+
+  @override
+  String get messagingRateHelper => '0 = بلا حد';
+
+  @override
+  String get messagingUnpacedTitle => 'لا يوجد حد للإرسال في الدقيقة';
+
+  @override
+  String get messagingUnpacedMessage =>
+      'بدون حد، قد تُصنَّف الشريحة كمرسل مزعج فيُحظر الرقم. القيمة المقترحة 6 رسائل في الدقيقة.';
+
+  @override
+  String get messagingConnectButton => 'حفظ وتفعيل';
+
+  @override
+  String get messagingActivateOnlyButton => 'تفعيل الجهاز';
+
+  @override
+  String get messagingReactivateButton => 'إعادة تسجيل الروابط';
+
+  @override
+  String get messagingConnectingLabel => 'جارٍ التفعيل…';
+
+  @override
+  String get messagingConnectHint =>
+      'الحفظ يكفي للإرسال؛ التفعيل يضبط الهاتف ليُعيد إلينا الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي عليه.';
+
+  @override
+  String get messagingNotActivatedTitle => 'لم يُفعّل الجهاز بعد';
+
+  @override
+  String get messagingNotActivatedMessage =>
+      'الإرسال يعمل، لكن الردود الواردة وتقارير التسليم لن تصل حتى تضغط «تفعيل الجهاز».';
+
+  @override
+  String get messagingConnectedTitle => 'الجهاز جاهز';
+
+  @override
+  String messagingConnectedMessage(int count) {
+    return 'حُفظت الإعدادات وسُجّلت $count روابط على الهاتف — الرسائل الواردة وتقارير التسليم تصل الآن تلقائيًا.';
+  }
+
+  @override
+  String get messagingSavedNotActivatedTitle =>
+      'حُفظت الإعدادات — لم يُفعّل الجهاز';
+
+  @override
+  String get messagingSavedNotActivatedMessage =>
+      'تعذّر الوصول إلى الهاتف لتسجيل الروابط. تأكد أن الهاتف يعمل وأن «Local Server» في وضع Online على نفس الشبكة، ثم أعد المحاولة.';
+
+  @override
+  String get messagingReactivateFailedTitle => 'حُفظت الإعدادات';
+
+  @override
+  String get messagingReactivateFailedMessage =>
+      'تعذّر الوصول إلى الهاتف الآن لإعادة تسجيل الروابط، والروابط المسجّلة سابقًا ما زالت تعمل.';
+
+  @override
+  String get messagingSaveFailedTitle => 'تعذّر حفظ الإعدادات';
+
+  @override
+  String get messagingDeviceErrorTitle => 'آخر خطأ من الجهاز';
+
+  @override
+  String messagingDeviceErrorMessage(String detail, String when) {
+    return '$detail — $when';
+  }
+
+  @override
+  String get messagingUnsavedTestHint =>
+      'احفظ التغييرات أولًا — الاختبار يجري على الإعدادات المحفوظة في الخادم، لا على ما تراه هنا.';
+
+  @override
+  String get messagingTestPhoneHelper =>
+      'استخدم رقمًا بين يديك الآن للتحقق من وصول الرسالة.';
 
   @override
   String get conversationsTitle => 'المحادثات';

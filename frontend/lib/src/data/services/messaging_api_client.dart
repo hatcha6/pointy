@@ -3,7 +3,13 @@ import 'api_session.dart';
 
 /// REST access to the messaging gateway endpoints (apps.messaging):
 /// `GET/POST/PATCH/DELETE /api/messaging/gateways/` and the per-gateway
-/// `POST .../test_send/` action. Mirrors [PrintingApiClient]'s shape.
+/// `POST .../test_send/` + `POST .../activate/` actions. Mirrors
+/// [PrintingApiClient]'s shape.
+///
+/// Failures throw [PosApiException] rather than a bare `Exception` so the
+/// settings page can show the backend's own reason (a rejected base URL, a
+/// permission denial) instead of a generic "couldn't save" — on a page whose
+/// whole job is diagnosing a connection, the reason *is* the feature.
 class MessagingApiClient {
   const MessagingApiClient(this._session);
 
@@ -11,7 +17,7 @@ class MessagingApiClient {
 
   Future<List<MessagingGateway>> fetchGateways() async {
     final response = await _session.get('messaging/gateways/');
-    _session.ensureSuccess(
+    _session.throwApiException(
       response,
       'Messaging gateways request failed with status',
     );
@@ -30,7 +36,7 @@ class MessagingApiClient {
       'messaging/gateways/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(response, 'Gateway creation failed with status');
+    _session.throwApiException(response, 'Gateway creation failed with status');
     return MessagingGateway.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -44,7 +50,7 @@ class MessagingApiClient {
       'messaging/gateways/$id/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(response, 'Gateway update failed with status');
+    _session.throwApiException(response, 'Gateway update failed with status');
     return MessagingGateway.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -52,7 +58,7 @@ class MessagingApiClient {
 
   Future<void> deleteGateway(int id) async {
     final response = await _session.delete('messaging/gateways/$id/');
-    _session.ensureSuccess(response, 'Gateway delete failed with status');
+    _session.throwApiException(response, 'Gateway delete failed with status');
   }
 
   Future<MessagingSendResult> testSend({
@@ -64,7 +70,7 @@ class MessagingApiClient {
       'messaging/gateways/$id/test_send/',
       body: {'to': to, if (body != null && body.isNotEmpty) 'body': body},
     );
-    _session.ensureSuccess(response, 'Test send failed with status');
+    _session.throwApiException(response, 'Test send failed with status');
     return MessagingSendResult.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
@@ -72,7 +78,10 @@ class MessagingApiClient {
 
   Future<GatewayActivation> activate(int id) async {
     final response = await _session.post('messaging/gateways/$id/activate/');
-    _session.ensureSuccess(response, 'Gateway activation failed with status');
+    _session.throwApiException(
+      response,
+      'Gateway activation failed with status',
+    );
     return GatewayActivation.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );

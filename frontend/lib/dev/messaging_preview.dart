@@ -6,7 +6,8 @@
 //
 //   flutter run -d web-server --web-port 8080 -t lib/dev/messaging_preview.dart
 //
-// Scenarios: configured | unconfigured | error | test_fail
+// Scenarios: configured | unconfigured | not_activated | device_error | error
+//            | test_fail | activate_fail
 //
 // See AGENTS.md ("UI preview harness") for the pattern. Not part of the shipping
 // app. Safe to delete.
@@ -74,27 +75,61 @@ class _FakeMessagingRepository extends MessagingRepository {
 
   final String scenario;
 
+  /// Flipped by [activate] so the `not_activated` scenario can be walked all
+  /// the way through to a connected gateway.
+  bool _activated = false;
+
   @override
   Future<Result<List<MessagingGateway>>> loadGateways() async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
     return switch (scenario) {
       'error' => Error(Exception('load failed')),
       'unconfigured' => const Ok(<MessagingGateway>[]),
-      _ => const Ok([
-        MessagingGateway(
-          id: 1,
-          name: 'هاتف الرسائل',
-          provider: MessagingProvider.smsGate,
-          baseUrl: 'http://192.168.1.50:8080',
-          username: 'pointy',
-          isDefault: true,
-          isActive: true,
-          maxMessagesPerMinute: 6,
-          dailyCap: 200,
-          hasPassword: true,
+      // Saved and able to send, but the device webhooks were never registered —
+      // the state the page exists to make visible.
+      'not_activated' => Ok([_gateway(activated: _activated)]),
+      'device_error' => Ok([
+        _gateway(
+          activated: true,
+          lastError: 'unreachable: Connection refused',
+          lastErrorAt: DateTime(2026, 8, 30, 9, 41),
         ),
       ]),
+      _ => Ok([_gateway(activated: true)]),
     };
+  }
+
+  static MessagingGateway _gateway({
+    required bool activated,
+    String lastError = '',
+    DateTime? lastErrorAt,
+  }) {
+    return MessagingGateway(
+      id: 1,
+      name: 'هاتف الرسائل',
+      provider: MessagingProvider.smsGate,
+      baseUrl: 'http://192.168.1.50:8080',
+      username: 'pointy',
+      isDefault: true,
+      isActive: true,
+      maxMessagesPerMinute: 6,
+      dailyCap: 200,
+      hasPassword: true,
+      isActivated: activated,
+      lastError: lastError,
+      lastErrorAt: lastErrorAt,
+      lastSeenAt: DateTime(2026, 8, 30, 10, 15),
+    );
+  }
+
+  @override
+  Future<Result<GatewayActivation>> activate(int id) async {
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    if (scenario == 'activate_fail') {
+      return const Ok(GatewayActivation(ok: false, registered: 0, total: 4));
+    }
+    _activated = true;
+    return const Ok(GatewayActivation(ok: true, registered: 4, total: 4));
   }
 
   @override
@@ -114,6 +149,7 @@ class _FakeMessagingRepository extends MessagingRepository {
         maxMessagesPerMinute: draft.maxMessagesPerMinute,
         dailyCap: draft.dailyCap,
         hasPassword: true,
+        isActivated: _activated,
       ),
     );
   }

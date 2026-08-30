@@ -24197,35 +24197,11 @@ abstract class AppLocalizations {
   /// **'بوابة الرسائل'**
   String get messagingHeroTitle;
 
-  /// No description provided for @messagingStatusActive.
-  ///
-  /// In ar, this message translates to:
-  /// **'جاهزة للإرسال'**
-  String get messagingStatusActive;
-
   /// No description provided for @messagingStatusInactive.
   ///
   /// In ar, this message translates to:
   /// **'غير مُهيّأة'**
   String get messagingStatusInactive;
-
-  /// No description provided for @messagingHasRecentError.
-  ///
-  /// In ar, this message translates to:
-  /// **'خطأ حديث'**
-  String get messagingHasRecentError;
-
-  /// No description provided for @messagingNotConfiguredTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'لم تُهيّأ البوابة بعد'**
-  String get messagingNotConfiguredTitle;
-
-  /// No description provided for @messagingNotConfiguredMessage.
-  ///
-  /// In ar, this message translates to:
-  /// **'أدخل عنوان هاتف SMS Gate على الشبكة واسم المستخدم وكلمة المرور، ثم احفظ.'**
-  String get messagingNotConfiguredMessage;
 
   /// No description provided for @messagingConnectionTitle.
   ///
@@ -24268,18 +24244,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الحد اليومي (0 = بلا حد)'**
   String get messagingDailyCapLabel;
-
-  /// No description provided for @messagingSaveButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'حفظ'**
-  String get messagingSaveButton;
-
-  /// No description provided for @messagingSavedMessage.
-  ///
-  /// In ar, this message translates to:
-  /// **'تم حفظ إعدادات البوابة'**
-  String get messagingSavedMessage;
 
   /// No description provided for @messagingSaveError.
   ///
@@ -24347,29 +24311,185 @@ abstract class AppLocalizations {
   /// **'تعذّر إرسال رسالة الاختبار. تأكد من عنوان الجهاز وبيانات الدخول.'**
   String get messagingTestFailedMessage;
 
-  /// No description provided for @messagingActivateButton.
+  /// No description provided for @messagingStatusReady.
   ///
   /// In ar, this message translates to:
-  /// **'تفعيل تلقائي وضبط الروابط'**
-  String get messagingActivateButton;
+  /// **'جاهزة — إرسال واستقبال'**
+  String get messagingStatusReady;
 
-  /// No description provided for @messagingActivateHint.
+  /// No description provided for @messagingStatusSendOnly.
   ///
   /// In ar, this message translates to:
-  /// **'يضبط الجهاز تلقائيًا لاستقبال الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي.'**
-  String get messagingActivateHint;
+  /// **'إرسال فقط — لم تُفعّل'**
+  String get messagingStatusSendOnly;
 
-  /// No description provided for @messagingActivateError.
+  /// No description provided for @messagingLastSeenLabel.
   ///
   /// In ar, this message translates to:
-  /// **'تعذّر التفعيل التلقائي — تأكد من الاتصال بالجهاز.'**
-  String get messagingActivateError;
+  /// **'آخر اتصال {when}'**
+  String messagingLastSeenLabel(String when);
 
-  /// No description provided for @messagingActivatedMessage.
+  /// No description provided for @messagingUnsavedBadge.
   ///
   /// In ar, this message translates to:
-  /// **'تم التفعيل — سُجّلت {count} روابط تلقائيًا.'**
-  String messagingActivatedMessage(int count);
+  /// **'تغييرات غير محفوظة'**
+  String get messagingUnsavedBadge;
+
+  /// No description provided for @messagingSetupGuideTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أين أجد هذه البيانات؟'**
+  String get messagingSetupGuideTitle;
+
+  /// No description provided for @messagingSetupGuideMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'على هاتف الرسائل: افتح تطبيق SMS Gate، فعّل «Local Server»، ثم اضغط زر الحالة في الأسفل حتى تصبح Online. سيعرض التطبيق عنوان الهاتف على الشبكة واسم المستخدم وكلمة المرور — انقلها هنا كما هي.'**
+  String get messagingSetupGuideMessage;
+
+  /// No description provided for @messagingBaseUrlHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يكفي عنوان الهاتف على الشبكة؛ المنفذ الافتراضي 8080 يُضاف تلقائيًا.'**
+  String get messagingBaseUrlHelper;
+
+  /// No description provided for @messagingBaseUrlInvalid.
+  ///
+  /// In ar, this message translates to:
+  /// **'عنوان غير صالح. اكتب عنوان الهاتف على الشبكة، مثل 192.168.1.50'**
+  String get messagingBaseUrlInvalid;
+
+  /// No description provided for @messagingBaseUrlNormalized.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُحفظ العنوان هكذا: {url}'**
+  String messagingBaseUrlNormalized(String url);
+
+  /// No description provided for @messagingRateHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'0 = بلا حد'**
+  String get messagingRateHelper;
+
+  /// No description provided for @messagingUnpacedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد حد للإرسال في الدقيقة'**
+  String get messagingUnpacedTitle;
+
+  /// No description provided for @messagingUnpacedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون حد، قد تُصنَّف الشريحة كمرسل مزعج فيُحظر الرقم. القيمة المقترحة 6 رسائل في الدقيقة.'**
+  String get messagingUnpacedMessage;
+
+  /// No description provided for @messagingConnectButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ وتفعيل'**
+  String get messagingConnectButton;
+
+  /// No description provided for @messagingActivateOnlyButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل الجهاز'**
+  String get messagingActivateOnlyButton;
+
+  /// No description provided for @messagingReactivateButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة تسجيل الروابط'**
+  String get messagingReactivateButton;
+
+  /// No description provided for @messagingConnectingLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ التفعيل…'**
+  String get messagingConnectingLabel;
+
+  /// No description provided for @messagingConnectHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحفظ يكفي للإرسال؛ التفعيل يضبط الهاتف ليُعيد إلينا الرسائل الواردة وتقارير التسليم دون أي إعداد يدوي عليه.'**
+  String get messagingConnectHint;
+
+  /// No description provided for @messagingNotActivatedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُفعّل الجهاز بعد'**
+  String get messagingNotActivatedTitle;
+
+  /// No description provided for @messagingNotActivatedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإرسال يعمل، لكن الردود الواردة وتقارير التسليم لن تصل حتى تضغط «تفعيل الجهاز».'**
+  String get messagingNotActivatedMessage;
+
+  /// No description provided for @messagingConnectedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجهاز جاهز'**
+  String get messagingConnectedTitle;
+
+  /// No description provided for @messagingConnectedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُفظت الإعدادات وسُجّلت {count} روابط على الهاتف — الرسائل الواردة وتقارير التسليم تصل الآن تلقائيًا.'**
+  String messagingConnectedMessage(int count);
+
+  /// No description provided for @messagingSavedNotActivatedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُفظت الإعدادات — لم يُفعّل الجهاز'**
+  String get messagingSavedNotActivatedTitle;
+
+  /// No description provided for @messagingSavedNotActivatedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الوصول إلى الهاتف لتسجيل الروابط. تأكد أن الهاتف يعمل وأن «Local Server» في وضع Online على نفس الشبكة، ثم أعد المحاولة.'**
+  String get messagingSavedNotActivatedMessage;
+
+  /// No description provided for @messagingReactivateFailedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُفظت الإعدادات'**
+  String get messagingReactivateFailedTitle;
+
+  /// No description provided for @messagingReactivateFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الوصول إلى الهاتف الآن لإعادة تسجيل الروابط، والروابط المسجّلة سابقًا ما زالت تعمل.'**
+  String get messagingReactivateFailedMessage;
+
+  /// No description provided for @messagingSaveFailedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الإعدادات'**
+  String get messagingSaveFailedTitle;
+
+  /// No description provided for @messagingDeviceErrorTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر خطأ من الجهاز'**
+  String get messagingDeviceErrorTitle;
+
+  /// No description provided for @messagingDeviceErrorMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'{detail} — {when}'**
+  String messagingDeviceErrorMessage(String detail, String when);
+
+  /// No description provided for @messagingUnsavedTestHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'احفظ التغييرات أولًا — الاختبار يجري على الإعدادات المحفوظة في الخادم، لا على ما تراه هنا.'**
+  String get messagingUnsavedTestHint;
+
+  /// No description provided for @messagingTestPhoneHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدم رقمًا بين يديك الآن للتحقق من وصول الرسالة.'**
+  String get messagingTestPhoneHelper;
 
   /// No description provided for @conversationsTitle.
   ///
