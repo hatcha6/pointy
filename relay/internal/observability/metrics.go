@@ -31,6 +31,8 @@ type Metrics struct {
 	requestBodyLimitRejections uint64
 	responseBodyLimitFailures  uint64
 	credentialRejections       uint64
+
+	connectorHandshakeRejections map[string]uint64
 }
 
 type Snapshot struct {
@@ -54,6 +56,11 @@ type Snapshot struct {
 	RequestBodyLimitRejections uint64            `json:"request_body_limit_rejections"`
 	ResponseBodyLimitFailures  uint64            `json:"response_body_limit_failures"`
 	CredentialRejections       uint64            `json:"credential_rejections"`
+	// ConnectorHandshakeRejections counts failed connector handshakes by
+	// reason. The connector port is internet-reachable, so scanners probe it
+	// constantly; counting them here keeps the burst measurable without
+	// putting a line per probe in the log.
+	ConnectorHandshakeRejections map[string]uint64 `json:"connector_handshake_rejections"`
 }
 
 type RelayRequestObservation struct {
@@ -224,6 +231,18 @@ func (m *Metrics) RecordCredentialRejected() {
 	m.mu.Unlock()
 }
 
+func (m *Metrics) RecordConnectorHandshakeRejected(reason string) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	if m.connectorHandshakeRejections == nil {
+		m.connectorHandshakeRejections = make(map[string]uint64)
+	}
+	m.connectorHandshakeRejections[reason]++
+	m.mu.Unlock()
+}
+
 func (m *Metrics) Snapshot() Snapshot {
 	if m == nil {
 		return NewMetrics().Snapshot()
@@ -237,26 +256,27 @@ func (m *Metrics) Snapshot() Snapshot {
 	}
 
 	return Snapshot{
-		ActiveConnectors:           m.activeConnectors,
-		ConnectorConnectionsTotal:  m.connectorConnectionsTotal,
-		ConnectorDisconnectsTotal:  m.connectorDisconnectsTotal,
-		RelayRequestsTotal:         m.relayRequestsTotal,
-		RelayRequestLatencyTotalMS: m.relayRequestLatencyTotalMS,
-		RelayRequestLatencyMaxMS:   m.relayRequestLatencyMaxMS,
-		RelayRequestsByOutcome:     copyStringMap(m.relayRequestsByOutcome),
-		RelayRequestsByStatus:      statuses,
-		TicketIssuanceTotal:        m.ticketIssuanceTotal,
-		TicketRefreshTotal:         m.ticketRefreshTotal,
-		TicketIssuanceFailures:     m.ticketIssuanceFailures,
-		SubscriptionRejections:     m.subscriptionRejections,
-		OfflineInstallations:       m.offlineInstallations,
-		BackendFailures:            m.backendFailures,
-		RequestLimitRejections:     m.requestLimitRejections,
-		RateLimitRejections:        m.rateLimitRejections,
-		RateLimitFailures:          m.rateLimitFailures,
-		RequestBodyLimitRejections: m.requestBodyLimitRejections,
-		ResponseBodyLimitFailures:  m.responseBodyLimitFailures,
-		CredentialRejections:       m.credentialRejections,
+		ActiveConnectors:             m.activeConnectors,
+		ConnectorConnectionsTotal:    m.connectorConnectionsTotal,
+		ConnectorDisconnectsTotal:    m.connectorDisconnectsTotal,
+		RelayRequestsTotal:           m.relayRequestsTotal,
+		RelayRequestLatencyTotalMS:   m.relayRequestLatencyTotalMS,
+		RelayRequestLatencyMaxMS:     m.relayRequestLatencyMaxMS,
+		RelayRequestsByOutcome:       copyStringMap(m.relayRequestsByOutcome),
+		RelayRequestsByStatus:        statuses,
+		TicketIssuanceTotal:          m.ticketIssuanceTotal,
+		TicketRefreshTotal:           m.ticketRefreshTotal,
+		TicketIssuanceFailures:       m.ticketIssuanceFailures,
+		SubscriptionRejections:       m.subscriptionRejections,
+		OfflineInstallations:         m.offlineInstallations,
+		BackendFailures:              m.backendFailures,
+		RequestLimitRejections:       m.requestLimitRejections,
+		RateLimitRejections:          m.rateLimitRejections,
+		RateLimitFailures:            m.rateLimitFailures,
+		RequestBodyLimitRejections:   m.requestBodyLimitRejections,
+		ResponseBodyLimitFailures:    m.responseBodyLimitFailures,
+		CredentialRejections:         m.credentialRejections,
+		ConnectorHandshakeRejections: copyStringMap(m.connectorHandshakeRejections),
 	}
 }
 

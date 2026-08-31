@@ -5,8 +5,12 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
+	"os"
+	"strings"
+	"syscall"
 	"time"
 
 	"pointy/relay/internal/control"
@@ -56,7 +60,28 @@ func (s ConnectorServer) handleConn(ctx context.Context, raw net.Conn, logger *s
 	_ = conn.SetDeadline(time.Now().Add(s.HandshakeTimeout))
 	frame, err := conn.ReadFrame()
 	if err != nil {
-		logger.Warn("relay connector handshake read failed", "error", err)
+		reason, couldBeConnector := classifyHandshakeFailure(err)
+		s.metrics().RecordConnectorHandshakeRejected(reason)
+		// The connector port is reachable from the internet, so health checks
+		// and vulnerability scanners probe it continuously. A probe that could
+		// never have been one of our connectors is counted, not warned about —
+		// otherwise the noise buries the handshake of a shop that really is
+		// misconfigured.
+		if couldBeConnector {
+			logger.Warn(
+				"relay connector handshake failed",
+				"reason", reason,
+				"remote_addr", remoteAddr(raw),
+				"error", err,
+			)
+		} else {
+			logger.Debug(
+				"relay connector handshake probe ignored",
+				"reason", reason,
+				"remote_addr", remoteAddr(raw),
+				"error", err,
+			)
+		}
 		_ = conn.Close()
 		return
 	}
@@ -113,6 +138,50 @@ func (s ConnectorServer) handleConn(ctx context.Context, raw net.Conn, logger *s
 		return
 	}
 	logger.Info("relay connector disconnected", "installation_id", installation.ID)
+}
+
+// classifyHandshakeFailure names why a connector handshake never happened, and
+// reports whether the peer could plausibly have been one of our connectors.
+//
+// Our connector is a Go client that speaks TLS 1.2+ and presents a client
+// certificate, so a peer that hangs up without a byte, speaks something that
+// isn't TLS, or offers only TLS 1.0/1.1 is definitionally not a connector — it
+// is a probe. A missing or rejected client certificate is the ambiguous case: a
+// scanner completing a handshake looks exactly like a shop whose certificate
+// expired, so that one stays a warning.
+func classifyHandshakeFailure(err error) (reason string, couldBeConnector bool) {
+	switch {
+	case errors.Is(err, io.EOF):
+		// io.ReadFull returns a bare io.EOF only when it read nothing at all;
+		// a truncated handshake surfaces as io.ErrUnexpectedEOF below.
+		return "closed_before_handshake", false
+	case errors.Is(err, syscall.ECONNRESET), errors.Is(err, syscall.EPIPE):
+		return "reset_before_handshake", false
+	case errors.As(err, new(tls.RecordHeaderError)):
+		return "not_tls", false
+	case strings.Contains(err.Error(), "unsupported versions"):
+		// Go exposes no typed error for this; the scanners that trip it offer
+		// SSLv3/TLS 1.0/1.1 against a listener with a TLS 1.2 floor.
+		return "obsolete_tls_version", false
+	case strings.Contains(err.Error(), "didn't provide a certificate"):
+		return "missing_client_certificate", true
+	case errors.Is(err, os.ErrDeadlineExceeded):
+		return "handshake_timeout", true
+	case errors.Is(err, io.ErrUnexpectedEOF):
+		return "truncated_handshake", true
+	default:
+		return "handshake_error", true
+	}
+}
+
+// remoteAddr is best-effort: under an L4 passthrough every connector shares the
+// proxy's address, so this identifies the hop, not the shop.
+func remoteAddr(conn net.Conn) string {
+	addr := conn.RemoteAddr()
+	if addr == nil {
+		return ""
+	}
+	return addr.String()
 }
 
 func validateConnectorCertificate(

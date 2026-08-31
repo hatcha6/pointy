@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -8,8 +9,11 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -363,4 +367,114 @@ func (noopPresenceLease) Refresh(context.Context) error {
 
 func (noopPresenceLease) Close(context.Context) error {
 	return nil
+}
+
+func TestConnectorServerDoesNotWarnOnBareProbeConnection(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	store, _ := provisionRelayInstallation(t)
+	var logged bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	server := ConnectorServer{
+		Store:            store,
+		Hub:              NewHub(),
+		Logger:           logger,
+		Metrics:          observability.NewMetrics(),
+		Presence:         &recordingPresence{},
+		HandshakeTimeout: time.Second,
+	}
+
+	serverRaw, clientRaw := net.Pipe()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		server.handleConn(ctx, serverRaw, logger)
+	}()
+	// A TCP health check connects and hangs up without sending a handshake.
+	_ = clientRaw.Close()
+	<-done
+
+	output := logged.String()
+	if strings.Contains(output, "level=WARN") {
+		t.Fatalf("probe connection should not warn, got: %s", output)
+	}
+	if !strings.Contains(output, "handshake probe ignored") {
+		t.Fatalf("expected debug probe line, got: %s", output)
+	}
+}
+
+func TestClassifyHandshakeFailureSeparatesProbesFromRealConnectors(t *testing.T) {
+	// The strings mirror what the PaaS listener actually logged: scanners
+	// sweeping the internet-reachable connector port.
+	cases := []struct {
+		name             string
+		err              error
+		reason           string
+		couldBeConnector bool
+	}{
+		{"bare close", io.EOF, "closed_before_handshake", false},
+		{"reset", syscall.ECONNRESET, "reset_before_handshake", false},
+		{
+			"plain http probe",
+			tls.RecordHeaderError{Msg: "first record does not look like a TLS handshake"},
+			"not_tls",
+			false,
+		},
+		{
+			"obsolete tls",
+			errors.New("tls: client offered only unsupported versions: [302 301]"),
+			"obsolete_tls_version",
+			false,
+		},
+		{
+			"no client cert",
+			errors.New("tls: client didn't provide a certificate"),
+			"missing_client_certificate",
+			true,
+		},
+		{"truncated", io.ErrUnexpectedEOF, "truncated_handshake", true},
+		{"timeout", os.ErrDeadlineExceeded, "handshake_timeout", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			reason, couldBeConnector := classifyHandshakeFailure(tc.err)
+			if reason != tc.reason || couldBeConnector != tc.couldBeConnector {
+				t.Fatalf(
+					"got (%s, %v), want (%s, %v)",
+					reason, couldBeConnector, tc.reason, tc.couldBeConnector,
+				)
+			}
+		})
+	}
+}
+
+func TestConnectorHandshakeProbesAreCounted(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	store, _ := provisionRelayInstallation(t)
+	metrics := observability.NewMetrics()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	server := ConnectorServer{
+		Store:            store,
+		Hub:              NewHub(),
+		Logger:           logger,
+		Metrics:          metrics,
+		Presence:         &recordingPresence{},
+		HandshakeTimeout: time.Second,
+	}
+
+	serverRaw, clientRaw := net.Pipe()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		server.handleConn(ctx, serverRaw, logger)
+	}()
+	_ = clientRaw.Close()
+	<-done
+
+	if got := metrics.Snapshot().ConnectorHandshakeRejections["closed_before_handshake"]; got != 1 {
+		t.Fatalf("expected the probe to be counted, got %d", got)
+	}
 }
