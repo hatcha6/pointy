@@ -3,6 +3,7 @@ package relay
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -265,5 +266,152 @@ func TestRunStopsWhenTheContextIsCancelled(t *testing.T) {
 	case <-done:
 	case <-time.After(3 * time.Second):
 		t.Fatal("expected Run to stop on cancellation")
+	}
+}
+
+// fulusSpecStub answers exactly as fulus.ly's published OpenAPI says each
+// endpoint does: /currencies lists the plan, /rates/current returns ONE rate as
+// an object, /rates/banks returns a list, and both rate shapes stamp the
+// instant in "timestamp" rather than "created_at".
+func fulusSpecStub(t *testing.T, plan []string) (*httptest.Server, *[]string) {
+	t.Helper()
+	var mu sync.Mutex
+	seen := []string{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seen = append(seen, r.URL.Path+"?"+r.URL.RawQuery)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case "/currencies":
+			entries := make([]map[string]any, 0, len(plan))
+			for _, code := range plan {
+				entries = append(entries, map[string]any{"code": code, "pair": code + "/LYD"})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"currencies": entries, "total": len(entries),
+			})
+		case "/rates/current":
+			currency := r.URL.Query().Get("currency")
+			allowed := false
+			for _, code := range plan {
+				if code == currency {
+					allowed = true
+				}
+			}
+			if !allowed {
+				w.WriteHeader(http.StatusForbidden)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": "This currency is not available on your plan",
+				})
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"currency":  currency,
+					"rate":      6.85,
+					"timestamp": "2026-08-31T14:23:45+02:00",
+				},
+			})
+		case "/rates/banks":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{{
+					"currency":     "USD",
+					"bank":         "ncb",
+					"bank_name":    "National Commercial Bank",
+					"bank_name_ar": "المصرف التجاري الوطني",
+					"rate":         8.15,
+					"rate_type":    "bank",
+					"timestamp":    "2026-08-31T14:23:45+02:00",
+				}},
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server, &seen
+}
+
+func TestPollOnceReadsTheShapesTheProviderActuallyServes(t *testing.T) {
+	// /rates/current answers with a single object, which the previous envelope
+	// could not decode at all — every poll of the current series failed.
+	server, _ := fulusSpecStub(t, []string{"USD", "EUR"})
+	store := newMemoryRateStore()
+
+	if blocked := pollerFor(server, store).PollOnce(context.Background()); blocked {
+		t.Fatal("did not expect a quota block")
+	}
+	// USD cash, EUR cash, and the NCB bank rate.
+	if store.count() != 3 {
+		t.Fatalf("expected 3 rates, got %d", store.count())
+	}
+	rates, err := store.ListExchangeRates(context.Background(), time.Time{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rate := range rates {
+		if rate.EffectiveAt.IsZero() {
+			t.Fatalf("rate %s carried no instant: %+v", rate.FromCode, rate)
+		}
+		if rate.Instrument == "bank" && rate.BankCode != "ncb" {
+			t.Fatalf("bank rate must key on the slug, got %q", rate.BankCode)
+		}
+	}
+}
+
+func TestPollOnceCoversEveryCurrencyOnThePlan(t *testing.T) {
+	// The current series serves one currency per request, so the poller has to
+	// ask per currency or the backstop only ever covers USD.
+	server, seen := fulusSpecStub(t, []string{"USD", "EUR", "GBP"})
+	store := newMemoryRateStore()
+	pollerFor(server, store).PollOnce(context.Background())
+
+	for _, want := range []string{"USD", "EUR", "GBP"} {
+		found := false
+		for _, path := range *seen {
+			if path == "/rates/current?currency="+want+"&rate_type=cash" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("expected the poller to ask for %s, saw %v", want, *seen)
+		}
+	}
+}
+
+func TestPollOnceSkipsCurrenciesOutsideThePlan(t *testing.T) {
+	// A 403 for one currency is routine and must not abort the sweep; a 403 for
+	// the subscription itself is a different error entirely.
+	server, _ := fulusSpecStub(t, []string{"USD"})
+	client := NewFulusClient(FulusConfig{BaseURL: server.URL, Token: "tok"})
+
+	if _, err := client.FetchCurrentRate(context.Background(), "EUR"); !errors.Is(err, errFulusOutsidePlan) {
+		t.Fatalf("expected errFulusOutsidePlan, got %v", err)
+	}
+	store := newMemoryRateStore()
+	poller := &FulusPoller{Client: client, Store: store, Interval: time.Millisecond}
+	if blocked := poller.PollOnce(context.Background()); blocked {
+		t.Fatal("a plan limit is not a quota block")
+	}
+	if store.count() != 2 { // USD cash + the bank series
+		t.Fatalf("expected the sweep to continue past the plan limit, got %d", store.count())
+	}
+}
+
+func TestFetchKeepsThePublishedDigits(t *testing.T) {
+	// A rate published as a JSON number must reach a shop as the digits fulus
+	// wrote. Decoding through float64 is how 0.20416667 becomes something else.
+	server := fulusStub(t, http.StatusOK, json.RawMessage(
+		`{"data":{"currency":"TRY","rate":0.20416667,"timestamp":"2026-08-31T14:23:45+02:00"}}`,
+	))
+	client := NewFulusClient(FulusConfig{BaseURL: server.URL, Token: "tok"})
+	rates, err := client.FetchCurrentRate(context.Background(), "TRY")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rates) != 1 || rates[0].Rate != "0.20416667" {
+		t.Fatalf("expected the published digits, got %+v", rates)
 	}
 }

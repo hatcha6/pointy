@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"strings"
 	"time"
 
 	"pointy/relay/internal/control"
@@ -115,21 +114,21 @@ func (p *FulusPoller) Run(ctx context.Context) {
 // down, and the fleet keeps serving the rates it already holds.
 func (p *FulusPoller) PollOnce(ctx context.Context) (quotaExhausted bool) {
 	stored := 0
-	for _, source := range []struct {
-		name  string
-		fetch func(context.Context) ([]control.ExchangeRate, error)
-	}{
-		{"current", p.Client.FetchCurrentRates},
-		{"banks", p.Client.FetchBankRates},
-	} {
+	for _, source := range p.sources(ctx) {
 		rates, err := source.fetch(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				return false
 			}
-			if isFulusQuotaError(err) {
+			if errors.Is(err, errFulusQuotaExhausted) {
 				p.logger().Warn("fulus poll hit the daily quota", "series", source.name)
 				return true
+			}
+			if errors.Is(err, errFulusOutsidePlan) || errors.Is(err, errFulusNoData) {
+				// Routine: this currency is not on the plan, or they have not
+				// published it yet. Neither is a fault to warn about.
+				p.logger().Debug("fulus series skipped", "series", source.name, "error", err)
+				continue
 			}
 			p.logger().Warn("fulus poll failed", "series", source.name, "error", err)
 			continue
@@ -155,8 +154,42 @@ func (p *FulusPoller) PollOnce(ctx context.Context) (quotaExhausted bool) {
 	return false
 }
 
-func isFulusQuotaError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "daily quota exhausted")
+// sources is one poll's worth of requests: the cash rate for every currency the
+// plan allows, plus the whole bank series in a single call.
+//
+// /rates/current serves ONE currency per request, so the currency list decides
+// how much of the feed the backstop actually covers. Polling USD alone would
+// leave every other pair depending on a webhook that may never arrive — the
+// exact gap this poller exists to close. The plan is asked for rather than
+// assumed, because requesting a currency outside it is a 403 per request and
+// the quota is daily.
+func (p *FulusPoller) sources(ctx context.Context) []fulusPollSource {
+	currencies, err := p.Client.FetchCurrencies(ctx)
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			p.logger().Warn(
+				"fulus currency list unavailable; polling the default pair only",
+				"error", err,
+			)
+		}
+		currencies = []string{fulusDefaultCurrency}
+	}
+
+	sources := make([]fulusPollSource, 0, len(currencies)+1)
+	for _, currency := range currencies {
+		sources = append(sources, fulusPollSource{
+			name: "current:" + currency,
+			fetch: func(ctx context.Context) ([]control.ExchangeRate, error) {
+				return p.Client.FetchCurrentRate(ctx, currency)
+			},
+		})
+	}
+	return append(sources, fulusPollSource{name: "banks", fetch: p.Client.FetchBankRates})
+}
+
+type fulusPollSource struct {
+	name  string
+	fetch func(context.Context) ([]control.ExchangeRate, error)
 }
 
 // nextFulusQuotaReset is the next midnight in UTC+2, where fulus resets.

@@ -3469,7 +3469,15 @@ func (s HTTPServer) handleFulusWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	rate, err := ParseFulusWebhook(body)
 	if err != nil {
-		s.logger().Warn("fulus webhook payload rejected", "error", err)
+		// The signature verified, so this body really is theirs: log a slice of
+		// it. A rejection that says only "unusable payload" cannot tell an
+		// operator whether the provider renamed a field or sent an empty row,
+		// and their delivery log shows nothing but the status code.
+		s.logger().Warn(
+			"fulus webhook payload rejected",
+			"error", err,
+			"payload", truncateForLog(body),
+		)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unusable payload"})
 		return
 	}
