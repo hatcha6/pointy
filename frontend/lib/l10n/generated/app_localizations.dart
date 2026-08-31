@@ -4197,6 +4197,114 @@ abstract class AppLocalizations {
   /// **'تم تغيير كلمة المرور.'**
   String get userSettingsPasswordChanged;
 
+  /// No description provided for @passwordRulesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'متطلبات كلمة المرور'**
+  String get passwordRulesTitle;
+
+  /// No description provided for @passwordAdviceTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لكلمة مرور أقوى (اختياري)'**
+  String get passwordAdviceTitle;
+
+  /// No description provided for @passwordAdviceNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه اقتراحات فقط — يمكنك الحفظ بدونها.'**
+  String get passwordAdviceNote;
+
+  /// No description provided for @passwordRuleMinLength.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} خانات على الأقل'**
+  String passwordRuleMinLength(int count);
+
+  /// No description provided for @passwordAdviceRecommendedLength.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} خانات أو أكثر'**
+  String passwordAdviceRecommendedLength(int count);
+
+  /// No description provided for @passwordAdviceNotNumeric.
+  ///
+  /// In ar, this message translates to:
+  /// **'ليست أرقامًا فقط'**
+  String get passwordAdviceNotNumeric;
+
+  /// No description provided for @passwordAdviceNotCommon.
+  ///
+  /// In ar, this message translates to:
+  /// **'ليست كلمة مرور شائعة'**
+  String get passwordAdviceNotCommon;
+
+  /// No description provided for @passwordAdviceNotSimilarToUser.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تشبه اسمك أو اسم المستخدم'**
+  String get passwordAdviceNotSimilarToUser;
+
+  /// No description provided for @passwordRuleNotCheckedYet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُتحقق منها بعد'**
+  String get passwordRuleNotCheckedYet;
+
+  /// No description provided for @passwordStrengthWeak.
+  ///
+  /// In ar, this message translates to:
+  /// **'مقبولة'**
+  String get passwordStrengthWeak;
+
+  /// No description provided for @passwordStrengthFair.
+  ///
+  /// In ar, this message translates to:
+  /// **'جيدة'**
+  String get passwordStrengthFair;
+
+  /// No description provided for @passwordStrengthStrong.
+  ///
+  /// In ar, this message translates to:
+  /// **'قوية'**
+  String get passwordStrengthStrong;
+
+  /// No description provided for @passwordCurrentIncorrectError.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور الحالية غير صحيحة.'**
+  String get passwordCurrentIncorrectError;
+
+  /// No description provided for @passwordChangeThrottledError.
+  ///
+  /// In ar, this message translates to:
+  /// **'محاولات كثيرة خلال وقت قصير. انتظر قليلًا ثم أعد المحاولة.'**
+  String get passwordChangeThrottledError;
+
+  /// No description provided for @passwordChangeRuleRejectedError.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور الجديدة لا تحقق المتطلبات الموضّحة أعلاه.'**
+  String get passwordChangeRuleRejectedError;
+
+  /// No description provided for @profileUsernameTakenError.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم هذا مستخدم بالفعل. اختر اسمًا آخر.'**
+  String get profileUsernameTakenError;
+
+  /// No description provided for @profileEmailInvalidError.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل بريدًا إلكترونيًا صحيحًا، أو اترك الحقل فارغًا.'**
+  String get profileEmailInvalidError;
+
+  /// No description provided for @profileNoChangesHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تغييرات لحفظها.'**
+  String get profileNoChangesHint;
+
   /// No description provided for @userSettingsLoansLoadError.
   ///
   /// In ar, this message translates to:
@@ -25420,6 +25528,330 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'سجل المقبوضات والمدفوعات'**
   String get treasuryLedgerLink;
+
+  /// Title of the exchange rates settings page.
+  ///
+  /// In ar, this message translates to:
+  /// **'أسعار الصرف'**
+  String get exchangeRatesTitle;
+
+  /// Navigation label for the exchange rates page.
+  ///
+  /// In ar, this message translates to:
+  /// **'أسعار الصرف'**
+  String get exchangeRatesDrawerLabel;
+
+  /// Shown when the rates fail to load.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل أسعار الصرف.'**
+  String get exchangeRatesLoadError;
+
+  /// Empty state when no rates are available.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد أسعار صرف بعد.'**
+  String get exchangeRatesEmpty;
+
+  /// Hint under the empty state.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم جلب الأسعار تلقائيًا، أو أدخل سعرًا يدويًا.'**
+  String get exchangeRatesEmptyHint;
+
+  /// Button pulling rates from the relay immediately.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث الآن'**
+  String get exchangeRatesSyncNow;
+
+  /// Confirmation after a manual sync.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تحديث أسعار الصرف.'**
+  String get exchangeRatesSyncedMessage;
+
+  /// Soft failure message after a failed sync.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحديث أسعار الصرف. سيتم استخدام آخر سعر معروف.'**
+  String get exchangeRatesSyncError;
+
+  /// Chip marking a rate that came from the feed.
+  ///
+  /// In ar, this message translates to:
+  /// **'من المزوّد'**
+  String get exchangeRateSourceRelay;
+
+  /// Chip marking a rate the shop typed.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُدخل يدويًا'**
+  String get exchangeRateSourceManual;
+
+  /// Badge on a rate older than the staleness threshold.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر قديم'**
+  String get exchangeRateStaleBadge;
+
+  /// Age of a rate in hours.
+  ///
+  /// In ar, this message translates to:
+  /// **'منذ {hours} ساعة'**
+  String exchangeRateAgeHours(int hours);
+
+  /// Age of a rate in days.
+  ///
+  /// In ar, this message translates to:
+  /// **'منذ {days} يوم'**
+  String exchangeRateAgeDays(int days);
+
+  /// Warning when a different settlement series was used.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد سعر لطريقة الدفع المختارة؛ تم استخدام سعر {instrument}.'**
+  String exchangeRateSubstitutedWarning(String instrument);
+
+  /// Cash settlement instrument.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقدًا'**
+  String get settlementInstrumentCash;
+
+  /// Bank transfer settlement instrument.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل مصرفي'**
+  String get settlementInstrumentBank;
+
+  /// Label for the settlement instrument setting.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة دفع المشتريات'**
+  String get settlementInstrumentLabel;
+
+  /// Explains that both series are parallel-market rates.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلا السعرين من السوق الموازي. اختر كيف تدفع فعليًا لمورديك.'**
+  String get settlementInstrumentHelp;
+
+  /// Label for the bank whose series to price off.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصرف'**
+  String get settlementBankLabel;
+
+  /// Title of the manual rate entry sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدخال سعر صرف'**
+  String get manualRateTitle;
+
+  /// Currency field on the manual rate sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملة'**
+  String get manualRateCurrencyLabel;
+
+  /// Rate value field label.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر الصرف مقابل {base}'**
+  String manualRateValueLabel(String base);
+
+  /// Note field on the manual rate sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة (اختياري)'**
+  String get manualRateNoteLabel;
+
+  /// Save button on the manual rate sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ السعر'**
+  String get manualRateSave;
+
+  /// Confirmation after saving a manual rate.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ سعر الصرف.'**
+  String get manualRateSavedMessage;
+
+  /// Validation message for a non-positive rate.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل سعر صرف أكبر من صفر.'**
+  String get manualRateInvalid;
+
+  /// Explains that a typed rate outranks the feed.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر الذي تُدخله يعلو على سعر المزوّد.'**
+  String get manualRateWinsHint;
+
+  /// Title of the repricing screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث الأسعار'**
+  String get repricingTitle;
+
+  /// Empty state when no product has drifted.
+  ///
+  /// In ar, this message translates to:
+  /// **'جميع الأسعار محدّثة.'**
+  String get repricingNothingToDo;
+
+  /// Count of drifted products.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} منتج تغيّر سعره بسبب تغيّر سعر الصرف'**
+  String repricingDriftCount(int count);
+
+  /// Apply button on the repricing screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق على المحدد'**
+  String get repricingApply;
+
+  /// Confirmation after applying a reprice.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تحديث {count} سعر.'**
+  String repricingAppliedMessage(int count);
+
+  /// Marker on a product whose currency has no rate.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد سعر صرف لهذه العملة'**
+  String get repricingUnpriceable;
+
+  /// Shows the rate move behind a proposal.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {oldRate} إلى {newRate}'**
+  String repricingOldNewRate(String oldRate, String newRate);
+
+  /// Label for a product's pricing currency.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملة التسعير'**
+  String get productPricingCurrencyLabel;
+
+  /// Option meaning the product is priced in the shop's own currency.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملة المتجر'**
+  String get productPricingCurrencyBase;
+
+  /// Explains what a product pricing currency does.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر المنتج مُسجَّل بهذه العملة ويُحوَّل إلى عملة المتجر عند البيع.'**
+  String get productPricingCurrencyHelp;
+
+  /// Field for the foreign price amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر بالعملة الأجنبية'**
+  String get productForeignPriceLabel;
+
+  /// Shows the frozen rate a base price was derived at.
+  ///
+  /// In ar, this message translates to:
+  /// **'محسوب بسعر صرف {rate}'**
+  String productPriceFrozenRateHint(String rate);
+
+  /// Shown when a product's pricing currency has no exchange rate yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد سعر صرف لـ {currency} بعد؛ سيُحدَّث السعر تلقائيًا عند وصوله.'**
+  String productPricingNoRate(String currency);
+
+  /// Shown after switching a product's pricing currency.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتم إعادة حساب السعر بالعملة الجديدة.'**
+  String get productPricingCurrencyChanged;
+
+  /// Label for the purchase order's supplier currency.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملة المورّد'**
+  String get supplierCurrencyLabel;
+
+  /// Label for the typed exchange rate on a purchase order.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر الصرف مقابل {currency}'**
+  String supplierExchangeRateLabel(String currency);
+
+  /// Explains that leaving the rate blank uses the invoice-date rate.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركه فارغًا لاستخدام سعر الصرف بتاريخ فاتورة المورّد.'**
+  String get supplierExchangeRateHelp;
+
+  /// Shown when no rate is available and none was typed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد سعر صرف لـ {currency}. أدخل سعر الصرف يدويًا.'**
+  String supplierExchangeRateMissing(String currency);
+
+  /// Marks a rate the buyer typed.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر صرف مُدخل يدويًا'**
+  String get supplierExchangeRateTyped;
+
+  /// Marks a rate that came from the feed.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر الصرف من المزوّد'**
+  String get supplierExchangeRateFromFeed;
+
+  /// Shown when the order has no supplier invoice date.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُحسب بسعر اليوم'**
+  String get supplierRateAsOfToday;
+
+  /// Shown with the supplier invoice date the rate is read as of.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُحسب بسعر تاريخ الفاتورة ({date})'**
+  String supplierRateAsOfInvoiceDate(String date);
+
+  /// Preview of the invoice total in both currencies.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الفاتورة {foreign} ≈ {base}'**
+  String supplierInvoiceTotalPreview(String foreign, String base);
+
+  /// Onboarding toggle: does this shop buy or price in a foreign currency.
+  ///
+  /// In ar, this message translates to:
+  /// **'أشتري ببضاعة بعملة أجنبية'**
+  String get shopSetupForeignCurrencyTitle;
+
+  /// Explains what enabling foreign currency does and does not change.
+  ///
+  /// In ar, this message translates to:
+  /// **'فعّل هذا إن كانت فواتير مورّديك أو قوائم أسعارك بالدولار أو عملة أخرى. الأسعار والتقارير تبقى بالدينار في كل الأحوال.'**
+  String get shopSetupForeignCurrencySubtitle;
+
+  /// Onboarding question: cash or bank settlement.
+  ///
+  /// In ar, this message translates to:
+  /// **'كيف تدفع لمورّديك؟'**
+  String get shopSetupSettlementTitle;
+
+  /// Clarifies that both settlement instruments are parallel-market rates.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلا السعرين من السوق الموازي؛ الفرق هو طريقة الدفع.'**
+  String get shopSetupSettlementSubtitle;
 }
 
 class _AppLocalizationsDelegate

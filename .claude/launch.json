@@ -90,6 +90,14 @@
       "port": 8080
     },
     {
+      "name": "user-settings-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-user-settings-preview"
+      ],
+      "port": 8080
+    },
+    {
       "name": "conversations-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [

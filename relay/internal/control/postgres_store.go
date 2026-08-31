@@ -290,13 +290,14 @@ func (s *PostgresStore) UpdateSubscription(
 		SET
 			relay_enabled = CASE WHEN $2 THEN $3 ELSE relay_enabled END,
 			ai_enabled = CASE WHEN $4 THEN $5 ELSE ai_enabled END,
-			subscription_active = CASE WHEN $6 THEN $7 ELSE subscription_active END,
+			fx_enabled = CASE WHEN $6 THEN $7 ELSE fx_enabled END,
+			subscription_active = CASE WHEN $8 THEN $9 ELSE subscription_active END,
 			subscription_ends_at = CASE
-				WHEN $8 THEN NULL
-				WHEN $9 THEN $10::timestamptz
+				WHEN $10 THEN NULL
+				WHEN $11 THEN $12::timestamptz
 				ELSE subscription_ends_at
 			END,
-			updated_at = $11::timestamptz
+			updated_at = $13::timestamptz
 		WHERE id = $1
 		RETURNING `+installationColumns,
 		id,
@@ -304,6 +305,8 @@ func (s *PostgresStore) UpdateSubscription(
 		boolValue(update.RelayEnabled),
 		update.AIEnabled != nil,
 		boolValue(update.AIEnabled),
+		update.FXEnabled != nil,
+		boolValue(update.FXEnabled),
 		update.SubscriptionActive != nil,
 		boolValue(update.SubscriptionActive),
 		update.ClearEnd,
@@ -344,13 +347,14 @@ func (s *PostgresStore) UpdateSubscriptionWithAudit(
 		SET
 			relay_enabled = CASE WHEN $2 THEN $3 ELSE relay_enabled END,
 			ai_enabled = CASE WHEN $4 THEN $5 ELSE ai_enabled END,
-			subscription_active = CASE WHEN $6 THEN $7 ELSE subscription_active END,
+			fx_enabled = CASE WHEN $6 THEN $7 ELSE fx_enabled END,
+			subscription_active = CASE WHEN $8 THEN $9 ELSE subscription_active END,
 			subscription_ends_at = CASE
-				WHEN $8 THEN NULL
-				WHEN $9 THEN $10::timestamptz
+				WHEN $10 THEN NULL
+				WHEN $11 THEN $12::timestamptz
 				ELSE subscription_ends_at
 			END,
-			updated_at = $11::timestamptz
+			updated_at = $13::timestamptz
 		WHERE id = $1
 		RETURNING `+installationColumns,
 		id,
@@ -358,6 +362,8 @@ func (s *PostgresStore) UpdateSubscriptionWithAudit(
 		boolValue(update.RelayEnabled),
 		update.AIEnabled != nil,
 		boolValue(update.AIEnabled),
+		update.FXEnabled != nil,
+		boolValue(update.FXEnabled),
 		update.SubscriptionActive != nil,
 		boolValue(update.SubscriptionActive),
 		update.ClearEnd,
@@ -1087,6 +1093,8 @@ const installationColumns = `id,
 	connector_certificate_expires_at,
 	relay_enabled,
 	ai_enabled,
+	fx_enabled,
+	last_fx_fetch_at,
 	subscription_active,
 	subscription_ends_at,
 	created_at,
@@ -1115,6 +1123,7 @@ FROM relay_certificate_materials`
 func scanInstallation(row pgx.Row) (Installation, error) {
 	var installation Installation
 	var connectorCertificateExpiresAt pgtype.Timestamptz
+	var lastFXFetchAt pgtype.Timestamptz
 	var subscriptionEndsAt pgtype.Timestamptz
 	var lastConnectorConnectedAt pgtype.Timestamptz
 	var lastUpdateAt pgtype.Timestamptz
@@ -1130,6 +1139,8 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 		&connectorCertificateExpiresAt,
 		&installation.RelayEnabled,
 		&installation.AIEnabled,
+		&installation.FXEnabled,
+		&lastFXFetchAt,
 		&installation.SubscriptionActive,
 		&subscriptionEndsAt,
 		&installation.CreatedAt,
@@ -1157,6 +1168,10 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 	if subscriptionEndsAt.Valid {
 		value := subscriptionEndsAt.Time.UTC()
 		installation.SubscriptionEndsAt = &value
+	}
+	if lastFXFetchAt.Valid {
+		value := lastFXFetchAt.Time.UTC()
+		installation.LastFXFetchAt = &value
 	}
 	if lastConnectorConnectedAt.Valid {
 		value := lastConnectorConnectedAt.Time.UTC()
@@ -1258,4 +1273,185 @@ func scanAdminAuditEvent(row adminAuditEventRow) (AdminAuditEvent, error) {
 
 func boolValue(value *bool) bool {
 	return value != nil && *value
+}
+
+// --- Exchange rates ---------------------------------------------------------
+
+func (s *PostgresStore) ValidateFXAccessToken(
+	ctx context.Context,
+	rawToken string,
+) (Installation, error) {
+	parsed, err := ParseToken(rawToken)
+	if err != nil {
+		return Installation{}, err
+	}
+	if parsed.Purpose != TokenPurposeAccess {
+		return Installation{}, ErrWrongPurpose
+	}
+	installation, err := scanInstallation(s.pool.QueryRow(
+		ctx,
+		selectInstallationSQL+" WHERE id = $1",
+		parsed.InstallationID,
+	))
+	if err != nil {
+		return Installation{}, err
+	}
+	if err := validateInstallationAccessTokenForFX(rawToken, installation, s.clock.Now()); err != nil {
+		return Installation{}, err
+	}
+	return installation, nil
+}
+
+func (s *PostgresStore) ListExchangeRates(
+	ctx context.Context,
+	since time.Time,
+	limit int,
+) ([]ExchangeRate, error) {
+	if limit <= 0 {
+		limit = defaultExchangeRateLimit
+	}
+	// Ordered ascending so a shop applies rates in publication order, but taken
+	// from the NEWEST end when the window overflows: a shop catching up after a
+	// week offline needs the current price, not the oldest row it missed.
+	rows, err := s.pool.Query(
+		ctx,
+		`SELECT `+exchangeRateColumns+` FROM (
+			SELECT `+exchangeRateColumns+` FROM relay_exchange_rates
+			WHERE ($1::timestamptz IS NULL OR effective_at >= $1::timestamptz)
+			ORDER BY effective_at DESC
+			LIMIT $2
+		) newest ORDER BY effective_at ASC, from_code ASC, id ASC`,
+		nullableTime(since),
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rates []ExchangeRate
+	for rows.Next() {
+		rate, err := scanExchangeRate(rows)
+		if err != nil {
+			return nil, err
+		}
+		rates = append(rates, rate)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return rates, nil
+}
+
+func (s *PostgresStore) UpsertExchangeRate(
+	ctx context.Context,
+	rate ExchangeRate,
+) (ExchangeRate, error) {
+	if strings.TrimSpace(rate.ID) == "" {
+		id, err := NewInstallationID()
+		if err != nil {
+			return ExchangeRate{}, err
+		}
+		rate.ID = id
+	}
+	if rate.CreatedAt.IsZero() {
+		rate.CreatedAt = s.clock.Now()
+	}
+	// ON CONFLICT on the natural identity, not the surrogate id: a webhook push
+	// and a scheduled poll routinely deliver the same publication, and they must
+	// collapse to one row rather than race to insert two.
+	return scanExchangeRate(s.pool.QueryRow(
+		ctx,
+		`INSERT INTO relay_exchange_rates (
+			id, from_code, to_code, instrument, bank_code, rate, effective_at, source, created_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (from_code, to_code, instrument, bank_code, effective_at)
+		DO UPDATE SET rate = EXCLUDED.rate, source = EXCLUDED.source
+		RETURNING `+exchangeRateColumns,
+		rate.ID,
+		strings.ToUpper(strings.TrimSpace(rate.FromCode)),
+		strings.ToUpper(strings.TrimSpace(rate.ToCode)),
+		strings.ToLower(strings.TrimSpace(rate.Instrument)),
+		strings.ToLower(strings.TrimSpace(rate.BankCode)),
+		rate.Rate,
+		rate.EffectiveAt,
+		rate.Source,
+		rate.CreatedAt,
+	))
+}
+
+func (s *PostgresStore) DeleteExchangeRate(ctx context.Context, id string) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM relay_exchange_rates WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrExchangeRateNotFound
+	}
+	return nil
+}
+
+// defaultExchangeRateLimit caps one sync response. Eight pairs published a few
+// times a day across cash and per-bank series is a few hundred rows a week, so
+// this covers a shop that has been offline for months while keeping the payload
+// bounded for one that has not.
+const defaultExchangeRateLimit = 2000
+
+const exchangeRateColumns = `id,
+	from_code,
+	to_code,
+	instrument,
+	bank_code,
+	rate::text,
+	effective_at,
+	source,
+	created_at`
+
+func scanExchangeRate(row pgx.Row) (ExchangeRate, error) {
+	var rate ExchangeRate
+	err := row.Scan(
+		&rate.ID,
+		&rate.FromCode,
+		&rate.ToCode,
+		&rate.Instrument,
+		&rate.BankCode,
+		&rate.Rate,
+		&rate.EffectiveAt,
+		&rate.Source,
+		&rate.CreatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ExchangeRate{}, ErrExchangeRateNotFound
+	}
+	if err != nil {
+		return ExchangeRate{}, err
+	}
+	return rate, nil
+}
+
+func nullableTime(value time.Time) any {
+	if value.IsZero() {
+		return nil
+	}
+	return value
+}
+
+func (s *PostgresStore) TouchFXFetch(
+	ctx context.Context,
+	installationID string,
+	at time.Time,
+) error {
+	tag, err := s.pool.Exec(
+		ctx,
+		`UPDATE relay_installations SET last_fx_fetch_at = $2 WHERE id = $1`,
+		installationID,
+		at.UTC(),
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

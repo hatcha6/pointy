@@ -98,6 +98,13 @@ var adminConsoleTemplate = template.Must(template.New("relay-admin").Parse(`<!do
         <option value="false">Disabled</option>
       </select>
     </label>
+    <label>Exchange rates
+      <select name="fx_enabled">
+        <option value="keep">Keep current</option>
+        <option value="true">Enabled</option>
+        <option value="false">Disabled</option>
+      </select>
+    </label>
     <label>Subscription end mode
       <select name="subscription_end_mode">
         <option value="keep">Keep current</option>
@@ -283,6 +290,9 @@ type HTTPServer struct {
 	Clock                         control.Clock
 	ConnectorCertificateIssuer    ConnectorCertificateIssuer
 	ConnectorCertificateTTL       time.Duration
+	// Fulus (exchange rates). The subscription token lives only here, for the
+	// same reason as the OpenRouter key: the fleet buys one and fans it out.
+	Fulus FulusConfig
 	// Relay-hosted AI (OpenRouter). The key and tier->model catalog live only
 	// here so AI billing and model routing stay company-controlled.
 	OpenRouterAPIKey  string
@@ -565,6 +575,28 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withAdmin(w, r, s.handleAdminSubscriptionForm)
+	case r.URL.Path == "/v1/exchange-rates" && r.Method == http.MethodGet:
+		// Shops pull published rates with an installation token, gated on the
+		// FX entitlement.
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.handleListExchangeRates(w, r)
+	case r.URL.Path == "/v1/exchange-rates/webhook" && r.Method == http.MethodPost:
+		// Fulus pushes new rates here. Authenticated by HMAC over the body, not
+		// by a relay token — the caller is the provider, not an installation.
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.handleFulusWebhook(w, r)
+	case r.URL.Path == "/v1/exchange-rates" && r.Method == http.MethodPost:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleAdminUpsertExchangeRate)
 	case r.URL.Path == "/v1/holidays" && r.Method == http.MethodGet:
 		// Shops pull their calendar (globals + own) with an installation token.
 		if !s.RouteMode.allowsPublic() {
@@ -2053,6 +2085,7 @@ func adminReason(r *http.Request, bodyReason string) string {
 func subscriptionUpdateHasChange(update control.SubscriptionUpdate) bool {
 	return update.RelayEnabled != nil ||
 		update.AIEnabled != nil ||
+		update.FXEnabled != nil ||
 		update.SubscriptionActive != nil ||
 		update.SubscriptionEndsAt != nil ||
 		update.ClearEnd
@@ -2070,6 +2103,7 @@ func adminInstallationPayload(
 		"subscription_active":               installation.SubscriptionActive,
 		"subscription_ends_at":              installation.SubscriptionEndsAt,
 		"ai_enabled":                        installation.AIEnabled,
+		"fx_enabled":                        installation.FXEnabled,
 		"relay_active":                      installation.RelayActive(now),
 		"created_at":                        installation.CreatedAt,
 		"updated_at":                        installation.UpdatedAt,
@@ -2107,6 +2141,11 @@ func subscriptionUpdateFromForm(r *http.Request) (control.SubscriptionUpdate, er
 		return control.SubscriptionUpdate{}, err
 	} else if set {
 		update.AIEnabled = &value
+	}
+	if value, set, err := optionalBoolFormValue(r, "fx_enabled"); err != nil {
+		return control.SubscriptionUpdate{}, err
+	} else if set {
+		update.FXEnabled = &value
 	}
 	update.ClearEnd = r.FormValue("subscription_end_mode") == "clear"
 	if rawEndsAt := strings.TrimSpace(r.FormValue("subscription_ends_at")); rawEndsAt != "" {
@@ -3301,4 +3340,188 @@ func (s HTTPServer) connectorCertificateTTL() time.Duration {
 		return s.ConnectorCertificateTTL
 	}
 	return 90 * 24 * time.Hour
+}
+
+// --- Exchange rates ---------------------------------------------------------
+
+func (s HTTPServer) exchangeRateStore(w http.ResponseWriter) (control.ExchangeRateStore, bool) {
+	store, ok := s.Store.(control.ExchangeRateStore)
+	if !ok {
+		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "exchange rate store unavailable"})
+		return nil, false
+	}
+	return store, true
+}
+
+// handleListExchangeRates serves a shop's rate sync. Gated on the FX
+// entitlement (subscription + fx_enabled), independent of remote access — an
+// importer can buy the feed without buying the tunnel.
+func (s HTTPServer) handleListExchangeRates(w http.ResponseWriter, r *http.Request) {
+	store, ok := s.exchangeRateStore(w)
+	if !ok {
+		return
+	}
+	rawToken := strings.TrimSpace(r.Header.Get(AccessTokenHeader))
+	if rawToken == "" {
+		s.metrics().RecordCredentialRejected()
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "relay token required"})
+		return
+	}
+	// Identity only. The entitlement decides how MUCH of the feed this shop
+	// gets, not whether it may ask — an unentitled shop still has a goodwill
+	// allowance of one fetch a day, so nobody ends up pricing off a rate from
+	// six months ago.
+	installation, err := s.Store.ValidateAccessTokenIdentity(r.Context(), rawToken)
+	if err != nil {
+		s.recordCredentialError(err)
+		writeRelayCredentialError(w, err)
+		return
+	}
+
+	now := s.clock().Now()
+	access := installation.FXAccessAt(now)
+	if access == control.FXAccessNone {
+		resetsAt := control.FXAllowanceResetsAt(now)
+		w.Header().Set(
+			"Retry-After",
+			strconv.Itoa(int(resetsAt.Sub(now).Seconds())),
+		)
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{
+			"error":     "daily exchange rate allowance already used",
+			"access":    access.String(),
+			"resets_at": resetsAt,
+			"entitled":  false,
+		})
+		return
+	}
+
+	var since time.Time
+	if raw := strings.TrimSpace(r.URL.Query().Get("since")); raw != "" {
+		parsed, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid since"})
+			return
+		}
+		since = parsed
+	}
+
+	rates, err := store.ListExchangeRates(r.Context(), since, 0)
+	if err != nil {
+		s.logger().Error(
+			"list exchange rates failed",
+			"installation_id", installation.ID,
+			"error", err,
+		)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "exchange rate store failed"})
+		return
+	}
+	if rates == nil {
+		rates = []control.ExchangeRate{}
+	}
+
+	// Spend the allowance only on a successful read, and only for a shop that
+	// is on it — an entitled shop never pays for a write here, and a failed
+	// fetch never costs a shop its one chance for the day.
+	if access == control.FXAccessDaily {
+		if err := store.TouchFXFetch(r.Context(), installation.ID, now); err != nil {
+			// Non-fatal: the shop has its rates. Failing to stamp means it may
+			// get a second fetch today, which is the harmless direction.
+			s.logger().Warn(
+				"stamping the fx daily allowance failed",
+				"installation_id", installation.ID,
+				"error", err,
+			)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rates": rates,
+		// The shop's own client shows "rates update once a day on your plan"
+		// off this, rather than guessing from how stale they look.
+		"access":    access.String(),
+		"entitled":  access == control.FXAccessFull,
+		"resets_at": control.FXAllowanceResetsAt(now),
+	})
+}
+
+// handleFulusWebhook accepts a push from the provider. The body is verified
+// against the shared secret before anything is parsed, and an unconfigured
+// secret disables the endpoint entirely rather than accepting unverified
+// writes — anyone who could write here could reprice every shop in the fleet.
+func (s HTTPServer) handleFulusWebhook(w http.ResponseWriter, r *http.Request) {
+	store, ok := s.exchangeRateStore(w)
+	if !ok {
+		return
+	}
+	if strings.TrimSpace(s.Fulus.WebhookSecret) == "" {
+		writeNotFound(w)
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unreadable body"})
+		return
+	}
+	if !VerifyFulusWebhook(s.Fulus.WebhookSecret, body, r.Header.Get("X-Webhook-Signature")) {
+		s.metrics().RecordCredentialRejected()
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid signature"})
+		return
+	}
+	rate, err := ParseFulusWebhook(body)
+	if err != nil {
+		s.logger().Warn("fulus webhook payload rejected", "error", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unusable payload"})
+		return
+	}
+	stored, err := store.UpsertExchangeRate(r.Context(), rate)
+	if err != nil {
+		s.logger().Error("store fulus rate failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "exchange rate store failed"})
+		return
+	}
+	s.logger().Info(
+		"fulus rate stored",
+		"from", stored.FromCode,
+		"instrument", stored.Instrument,
+		"bank", stored.BankCode,
+		"effective_at", stored.EffectiveAt,
+	)
+	writeJSON(w, http.StatusAccepted, map[string]any{"stored": stored.ID})
+}
+
+// handleAdminUpsertExchangeRate lets an operator publish or correct a rate by
+// hand — the escape hatch for when the provider is wrong or unreachable.
+func (s HTTPServer) handleAdminUpsertExchangeRate(w http.ResponseWriter, r *http.Request) {
+	store, ok := s.exchangeRateStore(w)
+	if !ok {
+		return
+	}
+	var payload control.ExchangeRate
+	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<10)).Decode(&payload); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
+		return
+	}
+	if strings.TrimSpace(payload.FromCode) == "" || strings.TrimSpace(payload.Rate) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "from and rate are required"})
+		return
+	}
+	if strings.TrimSpace(payload.ToCode) == "" {
+		payload.ToCode = fulusQuoteCurrency
+	}
+	if strings.TrimSpace(payload.Instrument) == "" {
+		payload.Instrument = fulusInstrumentCash
+	}
+	if payload.EffectiveAt.IsZero() {
+		payload.EffectiveAt = s.clock().Now()
+	}
+	if strings.TrimSpace(payload.Source) == "" {
+		payload.Source = "admin"
+	}
+	stored, err := store.UpsertExchangeRate(r.Context(), payload)
+	if err != nil {
+		s.logger().Error("admin upsert exchange rate failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "exchange rate store failed"})
+		return
+	}
+	writeJSON(w, http.StatusCreated, stored)
 }

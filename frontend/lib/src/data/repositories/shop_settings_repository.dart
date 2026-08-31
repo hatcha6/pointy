@@ -44,6 +44,8 @@ class ShopSettingsRepository {
     bool? autoPrintKitchenTickets,
     bool? kitchenAutoComplete,
     InventoryValuationMethod? inventoryValuationMethod,
+    bool? fxEnabled,
+    String? fxInstrument,
   }) async {
     return Result.guard(
       () => _service.setupShop(
@@ -55,6 +57,8 @@ class ShopSettingsRepository {
         autoPrintKitchenTickets: autoPrintKitchenTickets,
         kitchenAutoComplete: kitchenAutoComplete,
         inventoryValuationMethod: inventoryValuationMethod,
+        fxEnabled: fxEnabled,
+        fxInstrument: fxInstrument,
       ),
     );
   }

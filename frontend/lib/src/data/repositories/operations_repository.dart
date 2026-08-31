@@ -120,7 +120,8 @@ class OperationsRepository {
     String? idempotencyKey,
   }) async {
     return Result.guard(
-      () => _service.addJobService(jobId, draft, idempotencyKey: idempotencyKey),
+      () =>
+          _service.addJobService(jobId, draft, idempotencyKey: idempotencyKey),
     );
   }
 
@@ -228,7 +229,9 @@ class OperationsRepository {
     });
   }
 
-  Future<Result<CustomerAssetType>> saveAssetType(CustomerAssetType type) async {
+  Future<Result<CustomerAssetType>> saveAssetType(
+    CustomerAssetType type,
+  ) async {
     return Result.guard(() => _service.saveAssetType(type));
   }
 

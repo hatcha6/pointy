@@ -17,6 +17,7 @@ class ProductUpdateDraft {
     this.variantOptionIds,
     this.modifierGroupIds,
     this.variants = const [],
+    this.pricingCurrency = '',
   });
 
   final String name;
@@ -34,6 +35,12 @@ class ProductUpdateDraft {
   final List<int>? modifierGroupIds;
   final List<ProductVariantDraft> variants;
 
+  /// The currency this product's price sheet is written in; blank means the
+  /// shop's own. Changing it does NOT reprice on its own — the stored base
+  /// price stays put until the owner enters a new price or runs a repricing,
+  /// because a shelf price must never move as a side effect of a settings edit.
+  final String pricingCurrency;
+
   Map<String, Object?> toJson() {
     return {
       'name': name,
@@ -43,6 +50,9 @@ class ProductUpdateDraft {
       'is_service': isService,
       'is_prepared': isPrepared,
       'unit': unit,
+      // Explicit null (not omitted) so switching back to the shop's own
+      // currency actually clears it rather than being silently ignored.
+      'pricing_currency': pricingCurrency.isEmpty ? null : pricingCurrency,
       'default_sale_unit': defaultSaleUnit,
       'default_purchase_unit': defaultPurchaseUnit,
       if (units != null) 'units': [for (final unit in units!) unit.toJson()],

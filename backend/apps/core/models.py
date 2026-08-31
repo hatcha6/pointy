@@ -5,6 +5,11 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
+# Pure reference data (no Django imports, and no import of this module), so
+# core can read the settlement-instrument vocabulary without a circular
+# dependency on the fx app's models.
+from apps.fx import currencies as fx_ref
+
 
 class TimeStampedModel(models.Model):
     # Indexed because nearly every list, dashboard, and report query filters or
@@ -180,6 +185,44 @@ class ShopSettings(TimeStampedModel):
         null=True,
         validators=[MinValueValidator(0)],
     )
+    # --- Multi-currency ---------------------------------------------------
+    # ``currency_code`` above IS the base currency: the currency every total,
+    # balance, report and stored money column in this product is denominated
+    # in. It has carried that meaning implicitly since the first migration; the
+    # settings below are what finally give it arithmetic consequences.
+    #
+    # Master switch for the whole feature. Off means the product behaves exactly
+    # as it did before multi-currency existed — no rate lookups, no dual price
+    # display, no staleness banner — so a shop with no foreign exposure never
+    # pays the complexity.
+    fx_enabled = models.BooleanField(default=False)
+    # How this shop actually pays for foreign goods. BOTH values are
+    # parallel-market rates: ``bank`` is the parallel rate for settling by
+    # transfer / letter of credit / certificate rather than in physical cash,
+    # NOT the official CBL rate. Getting this wrong costs the shop the
+    # cash-to-transfer spread on every import, silently, so it is asked in setup
+    # rather than defaulted and forgotten. See ``apps.fx.currencies``.
+    fx_instrument = models.CharField(
+        max_length=8,
+        choices=[
+            (fx_ref.INSTRUMENT_CASH, fx_ref.INSTRUMENT_LABELS_EN[fx_ref.INSTRUMENT_CASH]),
+            (fx_ref.INSTRUMENT_BANK, fx_ref.INSTRUMENT_LABELS_EN[fx_ref.INSTRUMENT_BANK]),
+        ],
+        default=fx_ref.INSTRUMENT_CASH,
+    )
+    # Which bank's series to price off, when settling through a bank. Blank
+    # falls back to the generic bank rate, and the resolver reports which series
+    # it actually used rather than quietly substituting one.
+    fx_bank_code = models.CharField(max_length=32, blank=True, default="")
+    # How old a rate may be before the app says so. A stale rate is never an
+    # error — it is the last thing we knew, and a sale must never wait on the
+    # network — but it must be visible, because pricing off a nine-day-old
+    # parallel rate is a decision, not an accident.
+    fx_rate_staleness_hours = models.PositiveIntegerField(default=24)
+    # Ignore the relay feed entirely and use only rates the shop types. For
+    # owners who negotiate their own rate with a specific changer and do not
+    # want a published number moving their prices.
+    fx_manual_only = models.BooleanField(default=False)
 
     objects = ShopSettingsQuerySet.as_manager()
 

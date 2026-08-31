@@ -32,12 +32,14 @@ import '../view_models/price_checkers_view_model.dart';
 import '../view_models/sales_channels_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
 import '../view_models/messaging_settings_view_model.dart';
+import '../view_models/exchange_rates_view_model.dart';
 import '../view_models/subscription_status_view_model.dart';
 import 'operations_settings_page.dart';
 import 'app_updates_page.dart';
 import 'price_checkers_page.dart';
 import 'sales_channels_page.dart';
 import 'messaging_settings_page.dart';
+import 'exchange_rates_page.dart';
 import 'subscription_status_page.dart';
 
 part 'shop_settings_widgets.dart';
@@ -56,6 +58,7 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.attendanceViewModel,
     required this.migrationViewModel,
     required this.subscriptionViewModel,
+    required this.exchangeRatesViewModel,
     required this.messagingViewModel,
     required this.clientUpdateService,
     required this.capabilities,
@@ -72,6 +75,7 @@ class ShopSettingsScreen extends StatelessWidget {
   final AttendanceViewModel attendanceViewModel;
   final MigrationViewModel migrationViewModel;
   final SubscriptionStatusViewModel subscriptionViewModel;
+  final ExchangeRatesViewModel exchangeRatesViewModel;
   final MessagingSettingsViewModel messagingViewModel;
   final ClientUpdateService clientUpdateService;
   final AuthorizationCapabilities capabilities;
@@ -119,6 +123,7 @@ class ShopSettingsScreen extends StatelessWidget {
               attendanceViewModel: attendanceViewModel,
               migrationViewModel: migrationViewModel,
               subscriptionViewModel: subscriptionViewModel,
+              exchangeRatesViewModel: exchangeRatesViewModel,
               messagingViewModel: messagingViewModel,
               clientUpdateService: clientUpdateService,
               canManageSalesChannels: capabilities.canManageSalesChannels,
@@ -146,6 +151,7 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.attendanceViewModel,
     required this.migrationViewModel,
     required this.subscriptionViewModel,
+    required this.exchangeRatesViewModel,
     required this.messagingViewModel,
     required this.clientUpdateService,
     required this.canManageSalesChannels,
@@ -165,6 +171,7 @@ class _ShopSettingsBody extends StatelessWidget {
   final AttendanceViewModel attendanceViewModel;
   final MigrationViewModel migrationViewModel;
   final SubscriptionStatusViewModel subscriptionViewModel;
+  final ExchangeRatesViewModel exchangeRatesViewModel;
   final MessagingSettingsViewModel messagingViewModel;
   final ClientUpdateService clientUpdateService;
   final bool canManageSalesChannels;
@@ -209,6 +216,7 @@ class _ShopSettingsBody extends StatelessWidget {
       attendanceViewModel: attendanceViewModel,
       migrationViewModel: migrationViewModel,
       subscriptionViewModel: subscriptionViewModel,
+      exchangeRatesViewModel: exchangeRatesViewModel,
       messagingViewModel: messagingViewModel,
       clientUpdateService: clientUpdateService,
       canManageSalesChannels: canManageSalesChannels,
@@ -233,6 +241,7 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.attendanceViewModel,
     required this.migrationViewModel,
     required this.subscriptionViewModel,
+    required this.exchangeRatesViewModel,
     required this.messagingViewModel,
     required this.clientUpdateService,
     required this.canManageSalesChannels,
@@ -253,6 +262,7 @@ class _ShopSettingsForm extends StatefulWidget {
   final AttendanceViewModel attendanceViewModel;
   final MigrationViewModel migrationViewModel;
   final SubscriptionStatusViewModel subscriptionViewModel;
+  final ExchangeRatesViewModel exchangeRatesViewModel;
   final MessagingSettingsViewModel messagingViewModel;
   final ClientUpdateService clientUpdateService;
   final bool canManageSalesChannels;
@@ -640,6 +650,12 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                           onTap: widget.viewModel.isExportingAnalytics
                               ? null
                               : () => _openAnalyticsExport(context),
+                        ),
+                        PointySettingsTile(
+                          icon: Icons.currency_exchange_outlined,
+                          title: l10n.exchangeRatesTitle,
+                          subtitle: l10n.settlementInstrumentHelp,
+                          onTap: () => _openExchangeRates(context),
                         ),
                         PointySettingsTile(
                           icon: Icons.workspace_premium_outlined,
@@ -1366,6 +1382,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     );
   }
 
+  Future<void> _openExchangeRates(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) =>
+            ExchangeRatesPage(viewModel: widget.exchangeRatesViewModel),
+      ),
+    );
+  }
+
   Future<void> _openSubscriptionStatus(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -1579,8 +1604,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   }
 
   Future<bool> _confirmValuationMethodChange(AppLocalizations l10n) async {
-    final current = (widget.viewModel.settings ?? widget.settings)
-        .inventoryValuationMethod;
+    final current =
+        (widget.viewModel.settings ?? widget.settings).inventoryValuationMethod;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(

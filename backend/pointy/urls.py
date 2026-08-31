@@ -72,6 +72,11 @@ from apps.ai.views import (
     AiUsageView,
     DashboardAiDigestView,
 )
+from apps.fx.views import (
+    CurrencyViewSet,
+    ExchangeRateViewSet,
+    RepricingViewSet,
+)
 from apps.fraud.views import FraudFindingViewSet
 from apps.core.views import (
     PosUserViewSet,
@@ -82,6 +87,7 @@ from apps.core.views import (
     logout_view,
     me_view,
     password_change_view,
+    password_policy_view,
     enrollment_status_view,
     setup_initial_admin_view,
     setup_status_view,
@@ -170,6 +176,9 @@ router.register("fraud-findings", FraudFindingViewSet, basename="fraud-finding")
 router.register("customers", CustomerViewSet)
 router.register("payment-cards", PaymentCardViewSet, basename="payment-card")
 router.register("discount-rules", DiscountRuleViewSet)
+router.register("currencies", CurrencyViewSet, basename="currency")
+router.register("exchange-rates", ExchangeRateViewSet, basename="exchange-rate")
+router.register("repricing", RepricingViewSet, basename="repricing")
 router.register("expense-categories", ExpenseCategoryViewSet)
 router.register("expenses", ExpenseViewSet)
 router.register("money-accounts", MoneyAccountViewSet, basename="money-account")
@@ -271,6 +280,11 @@ urlpatterns = [
         "api/auth/password/change/",
         password_change_view,
         name="auth-password-change",
+    ),
+    path(
+        "api/auth/password/policy/",
+        password_policy_view,
+        name="auth-password-policy",
     ),
     path("api/dashboard/", DashboardView.as_view(), name="dashboard"),
     path(

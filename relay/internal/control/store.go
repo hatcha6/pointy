@@ -24,6 +24,8 @@ var (
 	ErrCertificateMaterialNameRequired         = errors.New("certificate material name is required")
 	ErrCertificateMaterialCreateRequired       = errors.New("certificate material create function is required")
 	ErrHolidayNotFound                         = errors.New("holiday not found")
+	ErrFXNotEntitled                           = errors.New("relay exchange rates are not entitled for this installation")
+	ErrExchangeRateNotFound                    = errors.New("exchange rate not found")
 )
 
 type Clock interface {
@@ -47,11 +49,19 @@ type Installation struct {
 	ConnectorCertificateExpiresAt   *time.Time `json:"connector_certificate_expires_at,omitempty"`
 	RelayEnabled                    bool       `json:"relay_enabled"`
 	AIEnabled                       bool       `json:"ai_enabled"`
-	SubscriptionActive              bool       `json:"subscription_active"`
-	SubscriptionEndsAt              *time.Time `json:"subscription_ends_at,omitempty"`
-	CreatedAt                       time.Time  `json:"created_at"`
-	UpdatedAt                       time.Time  `json:"updated_at"`
-	LastConnectorConnectedAt        *time.Time `json:"last_connector_connected_at,omitempty"`
+	// FXEnabled gates the exchange-rate feed. Its own entitlement, like AI:
+	// the relay holds one fulus.ly subscription for the whole fleet and serves
+	// the published rates, so this is what a shop is actually buying.
+	FXEnabled bool `json:"fx_enabled"`
+	// LastFXFetchAt stamps the goodwill allowance (see FXAccessAt). Written
+	// only for a shop WITHOUT the entitlement, so an entitled shop's fetches
+	// never cost a write.
+	LastFXFetchAt            *time.Time `json:"last_fx_fetch_at,omitempty"`
+	SubscriptionActive       bool       `json:"subscription_active"`
+	SubscriptionEndsAt       *time.Time `json:"subscription_ends_at,omitempty"`
+	CreatedAt                time.Time  `json:"created_at"`
+	UpdatedAt                time.Time  `json:"updated_at"`
+	LastConnectorConnectedAt *time.Time `json:"last_connector_connected_at,omitempty"`
 
 	// Remote-update fields. UpdateChannel selects which channel target this
 	// installation follows (default "stable"); PinnedVersion overrides the
@@ -97,11 +107,97 @@ func (i Installation) AIActive(now time.Time) bool {
 	return now.Before(*i.SubscriptionEndsAt)
 }
 
+// FXActive reports whether the installation may pull exchange rates right now.
+// Like AIActive, it is its own entitlement: an active, unexpired subscription
+// plus the FX flag, deliberately NOT requiring RelayEnabled. A shop can buy the
+// rate feed without buying remote access — and for an importer that is often
+// exactly the one thing it wants.
+func (i Installation) FXActive(now time.Time) bool {
+	if !i.FXEnabled {
+		return false
+	}
+	if !i.SubscriptionActive {
+		return false
+	}
+	if i.SubscriptionEndsAt == nil {
+		return true
+	}
+	return now.Before(*i.SubscriptionEndsAt)
+}
+
+// FXAccess is how much of the rate feed an installation may have right now.
+type FXAccess int
+
+const (
+	// FXAccessNone — the daily allowance is already spent today. Never means
+	// "unknown installation"; the caller is authenticated by this point.
+	FXAccessNone FXAccess = iota
+	// FXAccessDaily — the goodwill allowance. A shop WITHOUT the entitlement
+	// still gets one rate fetch per day, so it is never completely stale: a
+	// grocery that buys nothing abroad still sees a sane dinar rate, and a shop
+	// that might buy the feed can see what it would be getting. Deliberately far
+	// worse than the paid tier — a parallel rate moves several times a day, so
+	// once-a-day pricing is usable but not competitive.
+	FXAccessDaily
+	// FXAccessFull — the entitlement. As often as the shop likes.
+	FXAccessFull
+)
+
+func (a FXAccess) String() string {
+	switch a {
+	case FXAccessFull:
+		return "full"
+	case FXAccessDaily:
+		return "daily"
+	default:
+		return "spent"
+	}
+}
+
+// fxAllowanceZone is the day boundary for the daily allowance: midnight UTC+2,
+// the same reset fulus uses for its own quota, and the Libyan business day. A
+// calendar day rather than a rolling 24 hours, so "already fetched today" is
+// something a shopkeeper can reason about without knowing the clock time of
+// their last sync.
+var fxAllowanceZone = time.FixedZone("UTC+2", 2*60*60)
+
+// FXAccessAt reports how much of the feed this installation may have.
+//
+// The entitlement is checked first and is unconditional. Without it the
+// allowance is one fetch per calendar day — including for a shop whose
+// subscription has lapsed entirely, which is deliberate: nobody should be left
+// pricing off a rate from six months ago, and a shop watching a stale-rate badge
+// every afternoon is the most honest advertisement the paid tier has.
+func (i Installation) FXAccessAt(now time.Time) FXAccess {
+	if i.FXActive(now) {
+		return FXAccessFull
+	}
+	if i.LastFXFetchAt == nil {
+		return FXAccessDaily
+	}
+	last := i.LastFXFetchAt.In(fxAllowanceZone)
+	current := now.In(fxAllowanceZone)
+	if last.Year() == current.Year() && last.YearDay() == current.YearDay() {
+		return FXAccessNone
+	}
+	return FXAccessDaily
+}
+
+// FXAllowanceResetsAt is the next moment a spent daily allowance renews.
+func FXAllowanceResetsAt(now time.Time) time.Time {
+	local := now.In(fxAllowanceZone)
+	midnight := time.Date(
+		local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, fxAllowanceZone,
+	)
+	return midnight.Add(24 * time.Hour).UTC()
+}
+
 type ProvisionInstallationRequest struct {
 	BusinessID         string     `json:"business_id"`
 	ShopName           string     `json:"shop_name,omitempty"`
 	RelayEnabled       *bool      `json:"relay_enabled,omitempty"`
 	AIEnabled          bool       `json:"ai_enabled"`
+	FXEnabled          bool       `json:"fx_enabled"`
 	SubscriptionActive *bool      `json:"subscription_active,omitempty"`
 	SubscriptionEndsAt *time.Time `json:"subscription_ends_at,omitempty"`
 }
@@ -115,6 +211,7 @@ type ProvisionedInstallation struct {
 type SubscriptionUpdate struct {
 	RelayEnabled       *bool      `json:"relay_enabled,omitempty"`
 	AIEnabled          *bool      `json:"ai_enabled,omitempty"`
+	FXEnabled          *bool      `json:"fx_enabled,omitempty"`
 	SubscriptionActive *bool      `json:"subscription_active,omitempty"`
 	SubscriptionEndsAt *time.Time `json:"subscription_ends_at,omitempty"`
 	ClearEnd           bool       `json:"clear_subscription_end,omitempty"`
@@ -390,6 +487,47 @@ type Holiday struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
+// ExchangeRate is one published rate: this many ToCode per one FromCode, at
+// this instant, for this settlement instrument.
+//
+// Both instruments the feed publishes are PARALLEL-MARKET rates. "bank" is not
+// the official CBL rate — it is the parallel rate for settling through a bank
+// (transfer, letter of credit, certificate) rather than in physical cash, and it
+// is published per bank because that price differs between them. The axis is how
+// the shop pays, not which market. There is deliberately no official rate here.
+type ExchangeRate struct {
+	ID          string    `json:"id"`
+	FromCode    string    `json:"from"`
+	ToCode      string    `json:"to"`
+	Instrument  string    `json:"instrument"`
+	BankCode    string    `json:"bank_code,omitempty"`
+	Rate        string    `json:"rate"`
+	EffectiveAt time.Time `json:"effective_at"`
+	Source      string    `json:"source"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// ExchangeRateStore is an optional store capability, type-asserted by the HTTP
+// layer exactly like HolidayStore, so the core InstallationStore is unchanged.
+//
+// Rates are append-only: there is no update method, because a rate is a
+// historical fact and a shop that froze one onto a document must still be able
+// to resolve it. A correction is a new row at a new instant.
+type ExchangeRateStore interface {
+	// ListExchangeRates returns rates published at or after since (zero time
+	// means everything), newest last, capped by limit.
+	ListExchangeRates(ctx context.Context, since time.Time, limit int) ([]ExchangeRate, error)
+	// UpsertExchangeRate stores one rate, keyed on its natural identity
+	// (from, to, instrument, bank, effective_at) so a webhook that overlaps a
+	// poll cannot duplicate it.
+	UpsertExchangeRate(ctx context.Context, rate ExchangeRate) (ExchangeRate, error)
+	// DeleteExchangeRate removes one row (admin correction of a bad publish).
+	DeleteExchangeRate(ctx context.Context, id string) error
+	// TouchFXFetch stamps an installation's daily-allowance clock. Called only
+	// for a shop on the allowance, never for an entitled one.
+	TouchFXFetch(ctx context.Context, installationID string, at time.Time) error
+}
+
 // HolidayStore is an optional store capability (type-asserted by the HTTP layer
 // like AdminSubscriptionStore) so the core InstallationStore stays unchanged.
 type HolidayStore interface {
@@ -468,6 +606,20 @@ func validateInstallationAccessTokenForAI(
 	return nil
 }
 
+func validateInstallationAccessTokenForFX(
+	rawToken string,
+	installation Installation,
+	now time.Time,
+) error {
+	if err := installationTokenIdentityValid(rawToken, TokenPurposeAccess, installation); err != nil {
+		return err
+	}
+	if !installation.FXActive(now) {
+		return ErrFXNotEntitled
+	}
+	return nil
+}
+
 type FileStore struct {
 	path  string
 	clock Clock
@@ -480,6 +632,7 @@ type fileStoreData struct {
 	AdminAuditEvents                 map[string][]AdminAuditEvent              `json:"admin_audit_events,omitempty"`
 	RevokedConnectorCertFingerprints map[string]ConnectorCertificateRevocation `json:"revoked_connector_certificate_fingerprints,omitempty"`
 	Holidays                         map[string]Holiday                        `json:"holidays,omitempty"`
+	ExchangeRates                    map[string]ExchangeRate                   `json:"exchange_rates,omitempty"`
 	ChannelTargets                   map[string]ChannelTarget                  `json:"channel_targets,omitempty"`
 	EnrollmentTokens                 map[string]EnrollmentTokenRecord          `json:"enrollment_tokens,omitempty"`
 }
@@ -536,6 +689,7 @@ func (s *FileStore) ProvisionInstallation(
 		AccessTokenHash:    TokenHash(accessToken),
 		RelayEnabled:       relayEnabled,
 		AIEnabled:          request.AIEnabled,
+		FXEnabled:          request.FXEnabled,
 		SubscriptionActive: subscriptionActive,
 		SubscriptionEndsAt: request.SubscriptionEndsAt,
 		CreatedAt:          now,
@@ -584,6 +738,9 @@ func (s *FileStore) UpdateSubscription(
 	}
 	if update.AIEnabled != nil {
 		installation.AIEnabled = *update.AIEnabled
+	}
+	if update.FXEnabled != nil {
+		installation.FXEnabled = *update.FXEnabled
 	}
 	if update.SubscriptionActive != nil {
 		installation.SubscriptionActive = *update.SubscriptionActive
@@ -1110,6 +1267,156 @@ func (s *FileStore) ListHolidays(_ context.Context, installationID string) ([]Ho
 	return holidays, nil
 }
 
+func (s *FileStore) ValidateFXAccessToken(_ context.Context, rawToken string) (Installation, error) {
+	parsed, err := ParseToken(rawToken)
+	if err != nil {
+		return Installation{}, err
+	}
+	if parsed.Purpose != TokenPurposeAccess {
+		return Installation{}, ErrWrongPurpose
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	installation, ok := s.data.Installations[parsed.InstallationID]
+	if !ok {
+		return Installation{}, ErrNotFound
+	}
+	if err := validateInstallationAccessTokenForFX(rawToken, installation, s.clock.Now()); err != nil {
+		return Installation{}, err
+	}
+	return installation, nil
+}
+
+func (s *FileStore) ListExchangeRates(
+	_ context.Context,
+	since time.Time,
+	limit int,
+) ([]ExchangeRate, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rates := make([]ExchangeRate, 0, len(s.data.ExchangeRates))
+	for _, rate := range s.data.ExchangeRates {
+		if !since.IsZero() && rate.EffectiveAt.Before(since) {
+			continue
+		}
+		rates = append(rates, rate)
+	}
+	sortExchangeRates(rates)
+	if limit > 0 && len(rates) > limit {
+		// Keep the NEWEST when trimming: a shop catching up after a week
+		// offline needs the current price, not the oldest row in the window.
+		rates = rates[len(rates)-limit:]
+	}
+	return rates, nil
+}
+
+func (s *FileStore) UpsertExchangeRate(
+	_ context.Context,
+	rate ExchangeRate,
+) (ExchangeRate, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.data.ExchangeRates == nil {
+		s.data.ExchangeRates = map[string]ExchangeRate{}
+	}
+	// Natural identity, not the surrogate id: a webhook push and a poll can
+	// deliver the same publication, and they must collapse to one row.
+	identity := exchangeRateIdentity(rate)
+	for id, existing := range s.data.ExchangeRates {
+		if exchangeRateIdentity(existing) == identity {
+			rate.ID = id
+			rate.CreatedAt = existing.CreatedAt
+			s.data.ExchangeRates[id] = rate
+			if err := s.saveLocked(); err != nil {
+				s.data.ExchangeRates[id] = existing
+				return ExchangeRate{}, err
+			}
+			return rate, nil
+		}
+	}
+
+	if strings.TrimSpace(rate.ID) == "" {
+		id, err := NewInstallationID()
+		if err != nil {
+			return ExchangeRate{}, err
+		}
+		rate.ID = id
+	}
+	rate.CreatedAt = s.clock.Now()
+	s.data.ExchangeRates[rate.ID] = rate
+	if err := s.saveLocked(); err != nil {
+		delete(s.data.ExchangeRates, rate.ID)
+		return ExchangeRate{}, err
+	}
+	return rate, nil
+}
+
+func (s *FileStore) DeleteExchangeRate(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	existing, ok := s.data.ExchangeRates[id]
+	if !ok {
+		return ErrExchangeRateNotFound
+	}
+	delete(s.data.ExchangeRates, id)
+	if err := s.saveLocked(); err != nil {
+		s.data.ExchangeRates[id] = existing
+		return err
+	}
+	return nil
+}
+
+func (s *FileStore) TouchFXFetch(
+	_ context.Context,
+	installationID string,
+	at time.Time,
+) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	installation, ok := s.data.Installations[installationID]
+	if !ok {
+		return ErrNotFound
+	}
+	previous := installation.LastFXFetchAt
+	stamped := at.UTC()
+	installation.LastFXFetchAt = &stamped
+	s.data.Installations[installationID] = installation
+	if err := s.saveLocked(); err != nil {
+		installation.LastFXFetchAt = previous
+		s.data.Installations[installationID] = installation
+		return err
+	}
+	return nil
+}
+
+func exchangeRateIdentity(rate ExchangeRate) string {
+	return strings.Join([]string{
+		strings.ToUpper(strings.TrimSpace(rate.FromCode)),
+		strings.ToUpper(strings.TrimSpace(rate.ToCode)),
+		strings.ToLower(strings.TrimSpace(rate.Instrument)),
+		strings.ToLower(strings.TrimSpace(rate.BankCode)),
+		rate.EffectiveAt.UTC().Format(time.RFC3339Nano),
+	}, "|")
+}
+
+func sortExchangeRates(rates []ExchangeRate) {
+	sort.Slice(rates, func(i, j int) bool {
+		if !rates[i].EffectiveAt.Equal(rates[j].EffectiveAt) {
+			return rates[i].EffectiveAt.Before(rates[j].EffectiveAt)
+		}
+		if rates[i].FromCode != rates[j].FromCode {
+			return rates[i].FromCode < rates[j].FromCode
+		}
+		return rates[i].ID < rates[j].ID
+	})
+}
+
 func (s *FileStore) ListAllHolidays(_ context.Context) ([]Holiday, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -1275,6 +1582,9 @@ func applySubscriptionUpdate(
 	if update.AIEnabled != nil {
 		installation.AIEnabled = *update.AIEnabled
 	}
+	if update.FXEnabled != nil {
+		installation.FXEnabled = *update.FXEnabled
+	}
 	if update.SubscriptionActive != nil {
 		installation.SubscriptionActive = *update.SubscriptionActive
 	}
@@ -1319,6 +1629,7 @@ func InstallationSubscriptionAuditState(
 		"subscription_active":  installation.SubscriptionActive,
 		"subscription_ends_at": installation.SubscriptionEndsAt,
 		"ai_enabled":           installation.AIEnabled,
+		"fx_enabled":           installation.FXEnabled,
 		"relay_active":         installation.RelayActive(now),
 	}
 }

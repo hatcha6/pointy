@@ -90,7 +90,8 @@ class OperationsApiClient {
       body: {
         'to_stage': toStage,
         if (normalizedNote.isNotEmpty) 'note': normalizedNote,
-        if (normalizedCollector.isNotEmpty) 'handed_over_to': normalizedCollector,
+        if (normalizedCollector.isNotEmpty)
+          'handed_over_to': normalizedCollector,
         if (forceRelease) 'force_release': true,
       },
       idempotencyKey: idempotencyKey,

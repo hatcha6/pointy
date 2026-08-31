@@ -146,6 +146,13 @@ class PurchaseRepository {
     double extraDiscountAmount = 0,
     String? idempotencyKey,
 
+    /// The currency the supplier invoiced in; blank means the shop's own.
+    String currencyCode = '',
+
+    /// A rate the buyer typed. Null lets the server read the rate as of the
+    /// supplier's invoice date.
+    double? exchangeRate,
+
     /// Set after the buyer has seen and confirmed the backend's cost warnings.
     bool acknowledgeCostWarnings = false,
   }) async {
@@ -163,6 +170,8 @@ class PurchaseRepository {
         landedCostAllocationMethod: landedCostAllocationMethod,
         discountCode: discountCode,
         extraDiscountAmount: extraDiscountAmount,
+        currencyCode: currencyCode,
+        exchangeRate: exchangeRate,
       );
       final order = await _service.createPurchaseOrder(
         draft,

@@ -37,6 +37,35 @@ from .models import (
 from .serializers import ProductVariantSerializer
 
 
+def _without_signed_tokens(payload):
+    """Strip the per-call attachment token out of a serialized payload.
+
+    ``content_url`` carries a ``django.core.signing`` token, and that signer is a
+    *timestamp* signer: the string it produces depends on the second it was
+    generated in. Two serializations of the same row therefore differ whenever
+    they straddle a second boundary — which is intermittent, timing-dependent,
+    and has nothing to do with what this test is checking. Comparing the payloads
+    verbatim made the suite fail roughly two runs in five.
+
+    The token is deliberately *not* a value the prefetch can affect, so removing
+    it keeps the assertion's meaning — where a value came from must not change
+    what it says — while dropping the one field that is expected to differ.
+    """
+    if isinstance(payload, list):
+        return [_without_signed_tokens(item) for item in payload]
+    if isinstance(payload, dict):
+        return {
+            key: _TOKEN_PLACEHOLDER
+            if key == "content_url" and isinstance(value, str)
+            else _without_signed_tokens(value)
+            for key, value in payload.items()
+        }
+    return payload
+
+
+_TOKEN_PLACEHOLDER = "<signed-content-url>"
+
+
 @override_settings(
     CACHES={"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 )
@@ -140,4 +169,7 @@ class ProductVariantsActionQueryScalingTests(TestCase):
             many=True,
             context={"request": Request(request)},
         ).data
-        self.assertEqual(primed, cold)
+        self.assertEqual(
+            _without_signed_tokens(primed),
+            _without_signed_tokens(cold),
+        )

@@ -509,7 +509,10 @@ class PosViewModel extends ChangeNotifier {
       case Ok<ShopSettings>():
         _checkoutSettings = result.value;
         // Make every on-screen money display use the shop's currency symbol.
-        configureCurrencySymbol(result.value.currencySymbol);
+        configureCurrencySymbol(
+          result.value.currencySymbol,
+          code: result.value.currencyCode,
+        );
         _checkoutShopLogoBytes = await _loadShopLogoBytes(result.value);
         if (result.value.autoPrintReceipts) {
           _clearManualInvoiceActionsForSaleSessions();

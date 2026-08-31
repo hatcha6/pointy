@@ -67,6 +67,8 @@ class _FakeShopSettingsRepository extends ShopSettingsRepository {
     bool? autoPrintKitchenTickets,
     bool? kitchenAutoComplete,
     InventoryValuationMethod? inventoryValuationMethod,
+    bool? fxEnabled,
+    String? fxInstrument,
   }) async {
     return const Ok(
       ShopSettings(

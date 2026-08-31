@@ -163,6 +163,8 @@ POINTY_RELAY_DATABASE_URL=postgres://…
 POINTY_RELAY_REDIS_URL=redis://…
 POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME=relay.yourdomain.com   # public name connectors dial
 POINTY_RELAY_OPENROUTER_API_KEY=…                             # optional, enables AI
+POINTY_RELAY_FULUS_TOKEN=…                                    # optional, enables exchange rates
+POINTY_RELAY_FULUS_WEBHOOK_SECRET=…                           # optional, enables the rate webhook
 ```
 
 ### Container image
@@ -596,6 +598,70 @@ on the relay `server` command:
 
 Default tier model ids are sensible placeholders; set them to the OpenRouter
 models you want for free/small, balanced, and frontier work.
+
+## Exchange Rates (fulus.ly)
+
+The relay holds **one** `fulus.ly` subscription for the whole fleet and serves the
+published rates to shops, which **pull** them on a schedule
+(`GET /v1/exchange-rates?since=…`). Nothing is pushed down the connector tunnel. That topology is not
+incidental: their quota is daily and per-account, so N shops polling directly
+would be both expensive and rate-limit fragile — and it is why the feed sits
+behind the relay subscription rather than being something each shop configures.
+
+Gated per installation on the **FX entitlement** (`fx_enabled` + an active,
+unexpired subscription), independent of remote access — a shop can buy the rate
+feed without buying the tunnel.
+
+### Two secrets, opposite directions
+
+Both come from the fulus.ly dashboard and they are **not** interchangeable:
+
+| Variable | Direction | Purpose |
+|---|---|---|
+| `POINTY_RELAY_FULUS_TOKEN` | **outbound** | Bearer token on our polling requests to fulus. Empty disables polling. |
+| `POINTY_RELAY_FULUS_WEBHOOK_SECRET` | **inbound** | HMAC-SHA256 verified on rates fulus pushes to us. Empty **404s the webhook endpoint** rather than accepting unverified writes — anyone who could write there could reprice every shop in the fleet. |
+
+### Configuration
+
+- `POINTY_RELAY_FULUS_TOKEN` — fulus.ly API token; empty disables polling.
+- `POINTY_RELAY_FULUS_BASE_URL` — defaults to `https://fulus.ly/api/v1`.
+- `POINTY_RELAY_FULUS_WEBHOOK_SECRET` — shared secret for the inbound webhook;
+  empty disables the endpoint.
+- `POINTY_RELAY_FULUS_POLL_INTERVAL` — how often to sweep fulus as a backstop
+  behind the webhook (`30m`; floor `1m`). Their quota is **daily**, so keep it
+  modest — burning it would disable the very backstop this exists to be. A `429`
+  parks the poller until the quota resets at midnight UTC+2.
+
+### Webhook endpoint
+
+```
+POST <POINTY_RELAY_PUBLIC_API_URL>/v1/exchange-rates/webhook
+X-Webhook-Signature: <hex HMAC-SHA256 of the raw body>
+```
+
+Paste that URL into the fulus dashboard. It is authenticated by HMAC, not by a
+relay token — the caller is the provider, not an installation. Verify it before
+pointing fulus at it:
+
+```sh
+BODY='{"event":"rate.created","data":{"currency":"USD","rate":"6.85","rate_type":"cash","created_at":"2026-08-31T14:30:00+02:00"}}'
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$POINTY_RELAY_FULUS_WEBHOOK_SECRET" -hex | awk '{print $2}')
+curl -sS -X POST "$POINTY_RELAY_PUBLIC_API_URL/v1/exchange-rates/webhook" \
+  -H 'Content-Type: application/json' -H "X-Webhook-Signature: $SIG" -d "$BODY"
+```
+
+A `202` with `{"stored": "..."}` means the path works end to end.
+
+### Why both a webhook and a poller
+
+Webhooks are the fast path — a rate reaches shops within seconds of publication.
+But a webhook is one delivery attempt over a network we do not control: a relay
+restart, a deploy, a transient 502, or a dropped retry all end the same way, with
+a rate that was published and never stored, and **nothing about that failure is
+visible**. The poller sweeps regardless. Because the store keys on the
+publication's natural identity (`from, to, instrument, bank, effective_at`), a
+rate delivered both ways collapses into one row — the two paths cost nothing when
+they overlap, and the poll is what heals the gap when the push never came.
 
 ## State
 

@@ -1596,6 +1596,22 @@ def create_pos_cash_purchase(*, request, validated_data):
             {"detail": "An open register session is required for a POS cash purchase."}
         )
 
+    # A POS cash purchase is paid out of the drawer, and the drawer holds the
+    # shop's own currency. Letting a cashier record a foreign-currency purchase
+    # would put a converted figure against a cash pay-out that never happened in
+    # that currency, and the register would reconcile against a number nobody
+    # counted. Foreign purchases belong on the purchasing screen, where a buyer
+    # sets the rate deliberately.
+    if validated_data.get("currency") is not None:
+        raise serializers.ValidationError(
+            {
+                "currency": (
+                    "لا يمكن تسجيل شراء نقدي من نقطة البيع بعملة أجنبية. "
+                    "استخدم شاشة المشتريات."
+                )
+            }
+        )
+
     lines_data = validated_data.pop("lines", [])
     landed_cost_entries_data = validated_data.pop("landed_cost_entries", None)
 

@@ -72,6 +72,13 @@ RELAY_TLS_CERT ?=
 RELAY_TLS_KEY ?=
 RELAY_TLS_SERVER_NAME ?=
 RELAY_ADMIN_TOKEN ?=
+# fulus.ly exchange rates. TWO secrets, opposite directions: TOKEN is the bearer
+# on our OUTBOUND polling requests; WEBHOOK_SECRET verifies rates fulus pushes
+# INBOUND. Both empty by default — rates stay off until they are set.
+RELAY_FULUS_TOKEN ?=
+RELAY_FULUS_BASE_URL ?= https://fulus.ly/api/v1
+RELAY_FULUS_WEBHOOK_SECRET ?=
+RELAY_FULUS_POLL_INTERVAL ?= 30m
 RELAY_CONNECTOR_TOKEN ?=
 RELAY_CONNECTOR_SETUP_TOKEN ?=
 RELAY_CONNECTOR_CONFIG_URL ?=
@@ -332,6 +339,9 @@ frontend-subscription-preview: frontend-install ## Run the subscription / relay 
 frontend-messaging-preview: frontend-install ## Run the SMS device / messaging settings UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/messaging_preview.dart
 
+frontend-user-settings-preview: frontend-install ## Run the account settings (profile / password / loans) UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/user_settings_preview.dart
+
 frontend-conversations-preview: frontend-install ## Run the customer conversations (CRM inbox) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/conversations_preview.dart
 
@@ -394,6 +404,10 @@ relay-run: ## Run the relay server.
 		POINTY_RELAY_RATE_LIMIT_RELAY_REQUESTS="$(RELAY_RATE_LIMIT_RELAY_REQUESTS)" \
 		POINTY_RELAY_RATE_LIMIT_TICKET_ISSUE="$(RELAY_RATE_LIMIT_TICKET_ISSUE)" \
 		POINTY_RELAY_RATE_LIMIT_TICKET_REFRESH="$(RELAY_RATE_LIMIT_TICKET_REFRESH)" \
+		POINTY_RELAY_FULUS_TOKEN="$(RELAY_FULUS_TOKEN)" \
+		POINTY_RELAY_FULUS_BASE_URL="$(RELAY_FULUS_BASE_URL)" \
+		POINTY_RELAY_FULUS_WEBHOOK_SECRET="$(RELAY_FULUS_WEBHOOK_SECRET)" \
+		POINTY_RELAY_FULUS_POLL_INTERVAL="$(RELAY_FULUS_POLL_INTERVAL)" \
 		POINTY_RELAY_OPENROUTER_API_KEY="$(RELAY_OPENROUTER_API_KEY)" \
 		POINTY_RELAY_OPENROUTER_BASE_URL="$(RELAY_OPENROUTER_BASE_URL)" \
 		POINTY_RELAY_AI_MODEL_FAST="$(RELAY_AI_MODEL_FAST)" \

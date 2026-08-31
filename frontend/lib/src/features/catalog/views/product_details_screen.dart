@@ -344,6 +344,7 @@ class ProductDetailsView extends StatelessWidget {
             viewModel.saleRepository,
             seed,
             analyticsEngine: analyticsEngine,
+            pricingOptions: viewModel.pricingOptions,
             shouldLoadSaleHistory: capabilities.canViewRegisterSessionOrders,
             shouldLoadPurchaseHistory: capabilities.canAccessPurchasing,
           ),

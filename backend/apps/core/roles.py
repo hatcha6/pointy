@@ -7,6 +7,10 @@ from django.db.models import Q
 from apps.catalog.variant_option_defaults import DEFAULT_VARIANT_OPTIONS
 from apps.expenses.category_defaults import DEFAULT_EXPENSE_CATEGORY_NAMES
 from apps.holidays.rules import SOURCE_LOCAL as HOLIDAY_LOCAL_SOURCE
+from apps.fx.currencies import (
+    BUILTIN_CODES as FX_BUILTIN_CURRENCY_CODES,
+    SOURCE_MANUAL as FX_MANUAL_SOURCE,
+)
 
 MANAGER_GROUP = "manager"
 CASHIER_GROUP = "cashier"
@@ -60,6 +64,7 @@ INITIAL_SETUP_UNSPECIFIED_SUPPLIER_NOTES = (
 
 MANAGER_PERMISSION_DOMAINS = (
     "catalog",
+    "fx",
     "analytics",
     "channels",
     "core",
@@ -170,6 +175,12 @@ TECHNICIAN_PERMISSION_CODES = (
 ACCOUNTANT_PERMISSION_CODES = (
     "auth.view_user",
     "core.view_shopsettings",
+    # An accountant reconciling import costs needs to see which rate a price was
+    # struck at, and to enter the rate actually paid when it differed from the
+    # published one — but not to reconfigure the catalogue around it.
+    "fx.view_currency",
+    "fx.view_exchangerate",
+    "fx.add_exchangerate",
     "analytics.view_analyticsevent",
     "customers.view_customer",
     "discounts.view_discountrule",
@@ -546,6 +557,18 @@ def _model_has_initial_setup_blocking_data(model, model_label):
         # Built-in (migration-seeded) and relay-synced holidays are configuration,
         # not shop activity — only a shop-authored local holiday counts.
         return queryset.filter(source=HOLIDAY_LOCAL_SOURCE).exists()
+    if model_label == ("fx", "currency"):
+        # The built-in currency registry is migration-seeded reference data, on
+        # the same footing as the seeded units and expense categories. A shop
+        # that added a currency of its own has actually done something.
+        return queryset.exclude(pk__in=FX_BUILTIN_CURRENCY_CODES).exists()
+    if model_label == ("fx", "exchangerate"):
+        # Rates arrive from the relay feed on their own — before anyone has
+        # logged in, on an install that has not been set up — so a populated
+        # rate table is no evidence a shop has started working. Only a rate the
+        # owner typed is an act of the shop. Same reasoning as the holidays
+        # calendar directly above.
+        return queryset.filter(source=FX_MANUAL_SOURCE).exists()
     if model_label == ("catalog", "variantoption"):
         return queryset.exclude(
             code__in=INITIAL_SETUP_VARIANT_OPTION_CODES,

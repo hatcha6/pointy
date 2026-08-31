@@ -29,6 +29,11 @@ class PurchaseOrder {
     this.supplierAddress,
     this.supplierInvoiceNumber = '',
     this.supplierInvoiceDate,
+    this.currencyCode = '',
+    this.exchangeRate,
+    this.rateEffectiveAt,
+    this.rateSource = '',
+    this.foreignTotal,
     this.dueDate,
     this.paidTotal = 0,
     this.creditAppliedTotal = 0,
@@ -43,6 +48,32 @@ class PurchaseOrder {
 
   final int id;
   final String orderNumber;
+
+  /// The currency the SUPPLIER invoiced in; blank means the shop's own, which
+  /// is every order that existed before this feature.
+  ///
+  /// Every money figure on this order — [subtotal], [total], [balanceDue], each
+  /// line's [PurchaseOrderLine.unitCost] — stays in the shop's own currency
+  /// regardless. What the currency adds is the number the buyer read off the
+  /// invoice, plus the rate that turned it into dinars.
+  final String currencyCode;
+
+  /// The rate frozen on this order, and the instant it was effective. Frozen
+  /// because a purchase order records what the shop actually paid: re-deriving
+  /// its cost from today's rate would rewrite the margin on goods already sold.
+  final double? exchangeRate;
+  final DateTime? rateEffectiveAt;
+
+  /// Where the rate came from — the feed, or a number the buyer typed.
+  final String rateSource;
+
+  /// The order total as the supplier invoiced it, for checking the screen
+  /// against the paper invoice. Null for a base-currency order.
+  final double? foreignTotal;
+
+  bool get isForeignCurrency => currencyCode.isNotEmpty;
+
+  bool get hasTypedRate => rateSource == 'manual';
   final String status;
   final int lineCount;
   final List<PurchaseOrderLine> lines;
@@ -145,6 +176,11 @@ class PurchaseOrder {
         json['supplier_reference'],
       ]),
       supplierInvoiceDate: _dateTimeFromJson(json['supplier_invoice_date']),
+      currencyCode: json['currency']?.toString() ?? '',
+      exchangeRate: _nullableMoneyFromJson(json['exchange_rate']),
+      rateEffectiveAt: _dateTimeFromJson(json['rate_effective_at']),
+      rateSource: json['rate_source']?.toString() ?? '',
+      foreignTotal: _nullableMoneyFromJson(json['foreign_total']),
       // The list/payables rows carry a `line_count` and omit the line items
       // (the detail screen re-fetches the full order); the full detail response
       // has no `line_count`, so fall back to the parsed lines.
@@ -273,6 +309,7 @@ class PurchaseOrderLine {
     this.previousUnitCost,
     this.unitCostChange,
     this.unitCostChangePercent,
+    this.unitCostInCurrency,
     this.landedCostAllocation,
     this.landedUnitCost,
     this.effectiveUnitCost,
@@ -307,6 +344,12 @@ class PurchaseOrderLine {
   final double? previousUnitCost;
   final double? unitCostChange;
   final double? unitCostChangePercent;
+
+  /// What the supplier's invoice says for one of this unit, in the ORDER's
+  /// currency. Null on a base-currency order. [unitCost] above is always the
+  /// shop's own currency and is derived from this at the order's frozen rate,
+  /// so the two can never disagree.
+  final double? unitCostInCurrency;
   final double? landedCostAllocation;
   final double? landedUnitCost;
   final double? effectiveUnitCost;
@@ -415,6 +458,7 @@ class PurchaseOrderLine {
             json['cost_change_percent'] ??
             json['cost_delta_percent'],
       ),
+      unitCostInCurrency: _nullableMoneyFromJson(json['unit_cost_in_currency']),
       landedCostAllocation: _nullableMoneyFromJson(
         json['landed_cost_allocation'] ??
             json['allocated_landed_cost'] ??

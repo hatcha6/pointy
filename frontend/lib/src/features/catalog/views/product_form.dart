@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -18,6 +20,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/catalog_view_model.dart';
 import '../view_models/variant_generation.dart';
+import 'pricing_currency_field.dart';
 import 'product_form_fields.dart';
 import 'modifier_group_selector.dart';
 import 'product_form_section.dart';
@@ -67,6 +70,10 @@ class _ProductFormState extends State<ProductForm> {
   final Map<String, TextEditingController> _generatedBarcodeControllers = {};
   final Map<String, TextEditingController> _generatedPriceControllers = {};
   final Map<String, bool> _generatedActiveBySignature = {};
+
+  /// Blank = the shop's own currency, which is every product unless said
+  /// otherwise. Holds an ISO code once the owner picks a price-sheet currency.
+  String _pricingCurrency = '';
   List<AsyncSelectionOption<int>> _selectedCategories = [];
   List<VariantOption> _availableVariantOptions = [];
   final Set<int> _selectedVariantOptionIds = {};
@@ -123,6 +130,17 @@ class _ProductFormState extends State<ProductForm> {
 
   String? _defaultGeneratedSignature;
 
+  void _refreshPricePreview() {
+    if (_pricingCurrency.isEmpty || !mounted) {
+      return;
+    }
+    setState(() {});
+  }
+
+  void _onPricingCurrencyChanged(String code) {
+    setState(() => _pricingCurrency = code);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -136,6 +154,11 @@ class _ProductFormState extends State<ProductForm> {
     _nameController.addListener(_refreshImageSearchSeed);
     _skuController.addListener(_syncGeneratedSkusFromPrefix);
     _priceController.addListener(_syncGeneratedPricesFromBase);
+    // Redraws the conversion preview as the price is typed.
+    _priceController.addListener(_refreshPricePreview);
+    // Fire-and-forget: the picker stays hidden until (and unless) this lands,
+    // so a slow or unreachable rate endpoint never delays the form.
+    unawaited(widget.viewModel.loadPricingCurrencies());
     // Watches the single default variant's codes. When the product generates
     // variants instead, these two inputs become a SKU *prefix* and a base
     // price, so the watcher is left idle — see _usesGeneratedVariants.
@@ -183,6 +206,7 @@ class _ProductFormState extends State<ProductForm> {
     _skuController.dispose();
     _barcodeController.dispose();
     _priceController.removeListener(_syncGeneratedPricesFromBase);
+    _priceController.removeListener(_refreshPricePreview);
     _priceController.dispose();
     for (final controller in _generatedNameControllers.values) {
       controller.dispose();
@@ -445,7 +469,31 @@ class _ProductFormState extends State<ProductForm> {
                                             conflictsBySignature:
                                                 _generatedConflicts,
                                           )
-                                        else
+                                        else ...[
+                                          PricingCurrencyField(
+                                            currencies: widget
+                                                .viewModel
+                                                .pricingCurrencies,
+                                            baseCurrencyCode: widget
+                                                .viewModel
+                                                .baseCurrencyCode,
+                                            selectedCode: _pricingCurrency,
+                                            onChanged:
+                                                _onPricingCurrencyChanged,
+                                            rate: _pricingCurrency.isEmpty
+                                                ? null
+                                                : widget.viewModel.rateFor(
+                                                    _pricingCurrency,
+                                                  ),
+                                            enteredAmount: _parseNumber(
+                                              _priceController.text,
+                                            ),
+                                          ),
+                                          if (widget
+                                              .viewModel
+                                              .pricingCurrencies
+                                              .isNotEmpty)
+                                            const SizedBox(height: 12),
                                           ProductVariantFormFields(
                                             variantNameController:
                                                 _variantNameController,
@@ -486,6 +534,7 @@ class _ProductFormState extends State<ProductForm> {
                                             skuFieldKey: _skuFieldKey,
                                             barcodeFieldKey: _barcodeFieldKey,
                                           ),
+                                        ],
                                       ],
                                     ),
                                   ],
@@ -607,7 +656,14 @@ class _ProductFormState extends State<ProductForm> {
       return;
     }
 
-    final unitPrice = _parseNumber(_priceController.text)!;
+    final enteredPrice = _parseNumber(_priceController.text)!;
+    // With a pricing currency set, what the owner typed IS the foreign price.
+    // It is sent as `price_amount` and the server derives the base price at the
+    // rate it resolves — the client never computes a stored price itself, so
+    // there is exactly one place the conversion happens.
+    final isForeignPriced = _pricingCurrency.isNotEmpty;
+    final unitPrice = isForeignPriced ? 0.0 : enteredPrice;
+    final foreignPrice = isForeignPriced ? enteredPrice : null;
     final generatedVariants = _usesGeneratedVariants
         ? [
             for (final combination in _generatedCombinations)
@@ -620,9 +676,16 @@ class _ProductFormState extends State<ProductForm> {
                 barcode: _generatedBarcodeControllers[combination.signature]!
                     .text
                     .trim(),
-                unitPrice: _parseNumber(
-                  _generatedPriceControllers[combination.signature]!.text,
-                )!,
+                unitPrice: isForeignPriced
+                    ? 0
+                    : _parseNumber(
+                        _generatedPriceControllers[combination.signature]!.text,
+                      )!,
+                priceAmount: isForeignPriced
+                    ? _parseNumber(
+                        _generatedPriceControllers[combination.signature]!.text,
+                      )
+                    : null,
                 isActive:
                     _generatedActiveBySignature[combination.signature] ?? true,
                 isDefault: combination.signature == _defaultGeneratedSignature,
@@ -646,6 +709,8 @@ class _ProductFormState extends State<ProductForm> {
       variantSku: _skuController.text.trim(),
       variantBarcode: _barcodeController.text.trim(),
       variantUnitPrice: unitPrice,
+      pricingCurrency: _pricingCurrency,
+      variantPriceAmount: foreignPrice,
       variantOptionIds: [
         for (final option in _selectedVariantOptions) option.id,
       ],

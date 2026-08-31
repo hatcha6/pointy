@@ -76,6 +76,7 @@ import 'features/settings/view_models/price_checkers_view_model.dart';
 import 'features/settings/view_models/sales_channels_view_model.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
 import 'features/settings/view_models/messaging_settings_view_model.dart';
+import 'features/settings/view_models/exchange_rates_view_model.dart';
 import 'features/settings/view_models/subscription_status_view_model.dart';
 import 'features/settings/views/shop_settings_screen.dart';
 import 'features/user_settings/views/user_settings_screen.dart';
@@ -421,6 +422,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         viewModel: CatalogViewModel(
           dependencies.catalogRepository,
           analyticsEngine: dependencies.analyticsEngine,
+          fxRepository: dependencies.fxRepository,
         ),
         inventoryRepository: dependencies.inventoryRepository,
         printingRepository: dependencies.printingRepository,
@@ -737,6 +739,9 @@ class _AuthenticatedRoutes implements AppNavigation {
         migrationViewModel: dependencies.migrationViewModel,
         subscriptionViewModel: SubscriptionStatusViewModel(
           dependencies.subscriptionRepository,
+        ),
+        exchangeRatesViewModel: ExchangeRatesViewModel(
+          dependencies.fxRepository,
         ),
         messagingViewModel: MessagingSettingsViewModel(
           dependencies.messagingRepository,

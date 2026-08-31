@@ -1,14 +1,17 @@
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.models import Group, Permission
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
 from rest_framework import serializers
 
+from apps.fx import currencies as fx_currencies
 from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
 from apps.attachments.services import active_attachments_for
 
 from .models import ShopSettings
+from .password_policy import password_error_codes
 from .permission_catalog import catalog_codes, grantable_for
 from .roles import (
     ROLE_GROUPS,
@@ -102,9 +105,20 @@ class PasswordChangeSerializer(serializers.Serializer):
             raise serializers.ValidationError("Current password is incorrect.")
         return value
 
-    def validate_new_password(self, value):
-        validate_password(value, self.context["request"].user)
-        return value
+    def validate(self, attrs):
+        # Object-level, not field-level: a field validator's error is nested
+        # under its own key, and the machine codes have to sit at the top of the
+        # body where the client reads them.
+        try:
+            validate_password(attrs["new_password"], self.context["request"].user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(
+                {
+                    "new_password": list(exc.messages),
+                    "codes": password_error_codes(exc),
+                }
+            ) from exc
+        return attrs
 
     def save(self, **kwargs):
         user = self.context["request"].user
@@ -517,6 +531,13 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "require_customer_for_credit",
             "allow_cashier_customer_access",
             "pos_cash_purchase_limit",
+            # Multi-currency. Off by default: a shop with no foreign exposure
+            # never sees a currency picker anywhere in the app.
+            "fx_enabled",
+            "fx_instrument",
+            "fx_bank_code",
+            "fx_rate_staleness_hours",
+            "fx_manual_only",
             "logo_attachment",
             "updated_at",
             "valuation_method_change_acknowledged",
@@ -556,3 +577,17 @@ class ShopSetupSerializer(serializers.Serializer):
     # finished at the sale) or off a screen (the staged
     # received→preparing→ready→served lane a pickup counter needs).
     kitchen_auto_complete = serializers.BooleanField(required=False)
+    # Multi-currency, asked once at setup. Off is the right answer for the
+    # overwhelming majority of Libyan shops — they buy and sell in dinars — so
+    # the wizard asks a plain yes/no rather than presenting a currency matrix,
+    # and everything stays single-currency unless the owner says otherwise.
+    fx_enabled = serializers.BooleanField(required=False)
+    # How the shop pays for foreign goods, when it has any. Both values are
+    # parallel-market rates; see apps.fx.currencies.
+    fx_instrument = serializers.ChoiceField(
+        choices=fx_currencies.INSTRUMENTS,
+        required=False,
+    )
+    fx_bank_code = serializers.CharField(
+        max_length=32, required=False, allow_blank=True
+    )

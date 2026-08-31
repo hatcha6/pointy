@@ -334,6 +334,26 @@ func runServer(args []string) error {
 		envBool("POINTY_RELAY_PRODUCTION", false),
 		"enforce production relay security configuration",
 	)
+	fulusToken := flags.String(
+		"fulus-token",
+		envString("POINTY_RELAY_FULUS_TOKEN", ""),
+		"fulus.ly API token for the exchange-rate feed; empty disables polling",
+	)
+	fulusBaseURL := flags.String(
+		"fulus-base-url",
+		envString("POINTY_RELAY_FULUS_BASE_URL", "https://fulus.ly/api/v1"),
+		"fulus.ly API base URL",
+	)
+	fulusPollInterval := flags.Duration(
+		"fulus-poll-interval",
+		envDuration("POINTY_RELAY_FULUS_POLL_INTERVAL", 30*time.Minute),
+		"how often to sweep fulus.ly as a backstop behind the webhook; their quota is daily, so keep this modest",
+	)
+	fulusWebhookSecret := flags.String(
+		"fulus-webhook-secret",
+		envString("POINTY_RELAY_FULUS_WEBHOOK_SECRET", ""),
+		"shared secret verifying fulus.ly rate webhooks; empty disables the webhook endpoint",
+	)
 	openRouterAPIKey := flags.String(
 		"openrouter-api-key",
 		envString("POINTY_RELAY_OPENROUTER_API_KEY", ""),
@@ -812,8 +832,13 @@ func runServer(args []string) error {
 		TicketRefreshTTL:              *ticketRefreshTTL,
 		ConnectorCertificateIssuer:    connectorCertificateIssuer,
 		ConnectorCertificateTTL:       *connectorClientCertTTL,
-		OpenRouterAPIKey:              strings.TrimSpace(*openRouterAPIKey),
-		OpenRouterBaseURL:             strings.TrimSpace(*openRouterBaseURL),
+		Fulus: relayserver.FulusConfig{
+			BaseURL:       strings.TrimSpace(*fulusBaseURL),
+			Token:         strings.TrimSpace(*fulusToken),
+			WebhookSecret: strings.TrimSpace(*fulusWebhookSecret),
+		},
+		OpenRouterAPIKey:  strings.TrimSpace(*openRouterAPIKey),
+		OpenRouterBaseURL: strings.TrimSpace(*openRouterBaseURL),
 		AIModelTiers: map[string]string{
 			"fast":     strings.TrimSpace(*aiModelFast),
 			"smart":    strings.TrimSpace(*aiModelSmart),
@@ -855,6 +880,26 @@ func runServer(args []string) error {
 		adminHTTPServer = &http.Server{
 			Handler:           adminHTTPHandler,
 			ReadHeaderTimeout: 5 * time.Second,
+		}
+	}
+
+	// The exchange-rate poller is the backstop behind the fulus webhook: a push
+	// that never arrives (relay restart, transient 5xx, dropped retry) leaves a
+	// gap nothing else would notice, and the fleet would keep pricing imports
+	// off a stale rate. The store upserts on the publication's natural identity,
+	// so a rate delivered both ways collapses to one row.
+	if rateStore, ok := store.(control.ExchangeRateStore); ok {
+		poller := &relayserver.FulusPoller{
+			Client: relayserver.NewFulusClient(relayserver.FulusConfig{
+				BaseURL: strings.TrimSpace(*fulusBaseURL),
+				Token:   strings.TrimSpace(*fulusToken),
+			}),
+			Store:    rateStore,
+			Interval: *fulusPollInterval,
+			Logger:   logger,
+		}
+		if poller.Enabled() {
+			go poller.Run(ctx)
 		}
 	}
 

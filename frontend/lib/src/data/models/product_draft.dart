@@ -22,6 +22,8 @@ class ProductDraft {
     this.modifierGroupIds = const [],
     this.optionValueIds = const [],
     this.variants = const [],
+    this.pricingCurrency = '',
+    this.variantPriceAmount,
   });
 
   final String variantSku;
@@ -44,6 +46,14 @@ class ProductDraft {
   final List<int> optionValueIds;
   final List<ProductVariantDraft> variants;
 
+  /// The currency this product's price sheet is written in; blank means the
+  /// shop's own, which is what every product is unless the owner says otherwise.
+  final String pricingCurrency;
+
+  /// The default variant's price in [pricingCurrency]. Null when the product is
+  /// priced in the shop's own currency — then [variantUnitPrice] is the price.
+  final double? variantPriceAmount;
+
   Map<String, Object?> toJson() {
     return {
       'name': name,
@@ -53,6 +63,9 @@ class ProductDraft {
       'is_service': isService,
       'is_prepared': isPrepared,
       'unit': unit,
+      // Sent as null (not omitted) when cleared, so switching a product back to
+      // the shop's own currency actually clears it rather than being ignored.
+      'pricing_currency': pricingCurrency.isEmpty ? null : pricingCurrency,
       'default_sale_unit': defaultSaleUnit,
       'default_purchase_unit': defaultPurchaseUnit,
       'units': [for (final unit in units) unit.toJson()],
@@ -65,6 +78,8 @@ class ProductDraft {
           'sku': variantSku,
           'barcode': variantBarcode,
           'unit_price': variantUnitPrice.toStringAsFixed(2),
+          if (variantPriceAmount != null)
+            'price_amount': variantPriceAmount!.toStringAsFixed(2),
           'is_active': isActive,
           'option_values': optionValueIds,
         }

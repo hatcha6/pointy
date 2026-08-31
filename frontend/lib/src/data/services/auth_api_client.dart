@@ -1,6 +1,7 @@
 import 'package:http/http.dart' as http;
 
 import '../models/onboarding.dart';
+import '../models/password_policy.dart';
 import '../models/pos_user.dart';
 import 'api_session.dart';
 
@@ -84,7 +85,21 @@ class AuthApiClient {
       'auth/password/change/',
       body: draft.toJson(),
     );
-    _session.ensureSuccess(response, 'Password change failed with status');
+    // throwApiException, not ensureSuccess: the body carries which rule was
+    // broken (and whether it was the *current* password that was wrong), and
+    // that reason is the whole point of the form's feedback.
+    _session.throwApiException(response, 'Password change failed with status');
+  }
+
+  Future<PasswordPolicy> fetchPasswordPolicy() async {
+    final response = await _session.get('auth/password/policy/');
+    _session.ensureSuccess(
+      response,
+      'Password policy request failed with status',
+    );
+    return PasswordPolicy.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 
   PosUser _decodeUserResponse(http.Response response) {

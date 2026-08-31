@@ -1,5 +1,6 @@
 import '../../core/result.dart';
 import '../models/onboarding.dart';
+import '../models/password_policy.dart';
 import '../models/pos_user.dart';
 import '../services/pos_api_service.dart';
 
@@ -37,6 +38,10 @@ class AuthRepository {
 
   Future<Result<void>> changePassword(PasswordChangeDraft draft) async {
     return Result.guard(() => _service.changePassword(draft));
+  }
+
+  Future<Result<PasswordPolicy>> loadPasswordPolicy() {
+    return Result.guard(_service.fetchPasswordPolicy);
   }
 
   Future<Result<void>> forgetCurrentUser() async {

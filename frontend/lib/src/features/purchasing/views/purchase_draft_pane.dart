@@ -22,6 +22,7 @@ import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/unit_options.dart';
 import '../../../shared/units.dart';
+import 'supplier_currency_field.dart';
 import '../view_models/purchase_view_model.dart';
 import 'reprice_siblings_dialog.dart';
 import 'purchase_cost_warning_dialog.dart';
@@ -1196,6 +1197,24 @@ class _PurchaseDraftSettingsDialogState
                   label: Text(l10n.addLandedCostEntryButton),
                 ),
               ),
+              // The supplier's currency. Hidden entirely on a shop with no
+              // other currencies enabled, so a shop with no foreign suppliers
+              // never meets the concept.
+              if (widget.viewModel.supplierCurrencies.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                SupplierCurrencyField(
+                  currencies: widget.viewModel.supplierCurrencies,
+                  baseCurrencyCode: widget.viewModel.baseCurrencyCode,
+                  selectedCode: widget.viewModel.currencyCode,
+                  onChanged: widget.viewModel.updateCurrencyCode,
+                  rate: widget.viewModel.currentRate,
+                  typedRate: widget.viewModel.typedExchangeRate,
+                  onTypedRateChanged: widget.viewModel.updateTypedExchangeRate,
+                  invoiceDateText: widget.dateController.text,
+                  foreignTotal: widget.viewModel.foreignDraftTotal,
+                  enabled: !widget.viewModel.isSubmitting,
+                ),
+              ],
               const SizedBox(height: 12),
               // One-off order discount — a quick flat amount for THIS order
               // (decimals welcome: its main job is killing fraction totals).

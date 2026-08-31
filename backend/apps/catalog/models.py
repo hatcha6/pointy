@@ -147,6 +147,22 @@ class Product(TimeStampedModel):
         MILLILITER = "ml", "Milliliter"
 
     unit = models.CharField(max_length=32, default=Unit.PIECE)
+    # The currency this product's price sheet is written in. NULL means the
+    # shop's own currency, which is what every existing product is and stays.
+    #
+    # This is a *pricing* attribute, not a ledger one: the sale is still rung up,
+    # stored and reported in the shop's base currency. What it says is "the
+    # number the owner maintains for this product is 12.00 dollars", so that a
+    # rate move can be turned into a considered repricing instead of a
+    # re-keying session. The base-currency price stays on the variant exactly as
+    # before — see ``ProductVariant.price_amount``.
+    pricing_currency = models.ForeignKey(
+        "fx.Currency",
+        on_delete=models.PROTECT,
+        related_name="priced_products",
+        null=True,
+        blank=True,
+    )
     # Units pre-selected in POS / purchasing. Blank = the base ``unit``. Stored as
     # a ``UnitOfMeasure.code`` and resolved against this product's ProductUnit set.
     default_sale_unit = models.CharField(max_length=32, blank=True, default="")
@@ -394,6 +410,24 @@ class ProductUnit(TimeStampedModel):
         blank=True,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
+    # The same frozen-foreign-price trio as ``ProductVariant``, for a pack whose
+    # price sheet is written per box rather than per piece. Null throughout for
+    # a unit whose price is derived from the variant's.
+    price_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    price_rate = models.DecimalField(
+        max_digits=18,
+        decimal_places=8,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    price_rate_at = models.DateTimeField(null=True, blank=True)
     is_sellable = models.BooleanField(default=True)
     is_purchasable = models.BooleanField(default=True)
     display_order = models.PositiveIntegerField(default=0)
@@ -652,11 +686,36 @@ class ProductVariant(TimeStampedModel):
     name = models.CharField(max_length=160, blank=True)
     sku = models.CharField(max_length=64, unique=True)
     barcode = models.CharField(max_length=64, blank=True, db_index=True)
+    # ALWAYS the shop's base currency. This is the invariant the whole
+    # multi-currency design rests on: every money column in this product keeps
+    # meaning base currency, so nothing downstream — stock value, margin, the
+    # loss guard, discounts, reports — has to learn about currencies.
     unit_price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         validators=[MinValueValidator(Decimal("0.00"))],
     )
+    # The foreign price this product is maintained in, when its product carries
+    # a ``pricing_currency``, plus the rate that produced ``unit_price`` from it
+    # and the instant that rate was effective. Frozen: nothing re-reads a rate to
+    # re-derive ``unit_price``, because a price that changed itself between a
+    # customer asking and paying is not a price. Repricing is an explicit,
+    # previewed action — see ``apps.catalog.pricing``.
+    price_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    price_rate = models.DecimalField(
+        max_digits=18,
+        decimal_places=8,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    price_rate_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_default = models.BooleanField(default=False)
     option_signature = models.CharField(

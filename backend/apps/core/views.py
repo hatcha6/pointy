@@ -20,6 +20,7 @@ from apps.attachments.serializers import AttachmentSerializer
 from apps.attachments.services import active_attachments_for, content_type_for_upload
 
 from .models import ShopSettings
+from .password_policy import password_policy
 from .permission_catalog import grouped_for
 from .permissions import HasPointyPermission
 from .relay import push_shop_name_to_relay, relay_ai_available
@@ -185,6 +186,17 @@ def me_view(request):
             ),
         }
     )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def password_policy_view(request):
+    """The password rules, so the change form can state them before the attempt.
+
+    Served from the configured validators rather than duplicated in the client,
+    so the checklist cannot drift from what the server will actually enforce.
+    """
+    return Response(password_policy())
 
 
 @api_view(["POST"])
@@ -420,6 +432,9 @@ class ShopSetupView(views.APIView):
             "auto_print_receipts",
             "auto_print_kitchen_tickets",
             "kitchen_auto_complete",
+            "fx_enabled",
+            "fx_instrument",
+            "fx_bank_code",
         ):
             if field in data:
                 setattr(settings, field, data[field])

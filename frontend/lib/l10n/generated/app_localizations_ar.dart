@@ -2400,6 +2400,68 @@ class AppLocalizationsAr extends AppLocalizations {
   String get userSettingsPasswordChanged => 'تم تغيير كلمة المرور.';
 
   @override
+  String get passwordRulesTitle => 'متطلبات كلمة المرور';
+
+  @override
+  String get passwordAdviceTitle => 'لكلمة مرور أقوى (اختياري)';
+
+  @override
+  String get passwordAdviceNote => 'هذه اقتراحات فقط — يمكنك الحفظ بدونها.';
+
+  @override
+  String passwordRuleMinLength(int count) {
+    return '$count خانات على الأقل';
+  }
+
+  @override
+  String passwordAdviceRecommendedLength(int count) {
+    return '$count خانات أو أكثر';
+  }
+
+  @override
+  String get passwordAdviceNotNumeric => 'ليست أرقامًا فقط';
+
+  @override
+  String get passwordAdviceNotCommon => 'ليست كلمة مرور شائعة';
+
+  @override
+  String get passwordAdviceNotSimilarToUser => 'لا تشبه اسمك أو اسم المستخدم';
+
+  @override
+  String get passwordRuleNotCheckedYet => 'لم يُتحقق منها بعد';
+
+  @override
+  String get passwordStrengthWeak => 'مقبولة';
+
+  @override
+  String get passwordStrengthFair => 'جيدة';
+
+  @override
+  String get passwordStrengthStrong => 'قوية';
+
+  @override
+  String get passwordCurrentIncorrectError => 'كلمة المرور الحالية غير صحيحة.';
+
+  @override
+  String get passwordChangeThrottledError =>
+      'محاولات كثيرة خلال وقت قصير. انتظر قليلًا ثم أعد المحاولة.';
+
+  @override
+  String get passwordChangeRuleRejectedError =>
+      'كلمة المرور الجديدة لا تحقق المتطلبات الموضّحة أعلاه.';
+
+  @override
+  String get profileUsernameTakenError =>
+      'اسم المستخدم هذا مستخدم بالفعل. اختر اسمًا آخر.';
+
+  @override
+  String get profileEmailInvalidError =>
+      'أدخل بريدًا إلكترونيًا صحيحًا، أو اترك الحقل فارغًا.';
+
+  @override
+  String get profileNoChangesHint => 'لا توجد تغييرات لحفظها.';
+
+  @override
   String get userSettingsLoansLoadError => 'تعذر تحميل طلبات السلفة.';
 
   @override
@@ -14621,4 +14683,200 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get treasuryLedgerLink => 'سجل المقبوضات والمدفوعات';
+
+  @override
+  String get exchangeRatesTitle => 'أسعار الصرف';
+
+  @override
+  String get exchangeRatesDrawerLabel => 'أسعار الصرف';
+
+  @override
+  String get exchangeRatesLoadError => 'تعذر تحميل أسعار الصرف.';
+
+  @override
+  String get exchangeRatesEmpty => 'لا توجد أسعار صرف بعد.';
+
+  @override
+  String get exchangeRatesEmptyHint =>
+      'سيتم جلب الأسعار تلقائيًا، أو أدخل سعرًا يدويًا.';
+
+  @override
+  String get exchangeRatesSyncNow => 'تحديث الآن';
+
+  @override
+  String get exchangeRatesSyncedMessage => 'تم تحديث أسعار الصرف.';
+
+  @override
+  String get exchangeRatesSyncError =>
+      'تعذر تحديث أسعار الصرف. سيتم استخدام آخر سعر معروف.';
+
+  @override
+  String get exchangeRateSourceRelay => 'من المزوّد';
+
+  @override
+  String get exchangeRateSourceManual => 'مُدخل يدويًا';
+
+  @override
+  String get exchangeRateStaleBadge => 'سعر قديم';
+
+  @override
+  String exchangeRateAgeHours(int hours) {
+    return 'منذ $hours ساعة';
+  }
+
+  @override
+  String exchangeRateAgeDays(int days) {
+    return 'منذ $days يوم';
+  }
+
+  @override
+  String exchangeRateSubstitutedWarning(String instrument) {
+    return 'لا يوجد سعر لطريقة الدفع المختارة؛ تم استخدام سعر $instrument.';
+  }
+
+  @override
+  String get settlementInstrumentCash => 'نقدًا';
+
+  @override
+  String get settlementInstrumentBank => 'تحويل مصرفي';
+
+  @override
+  String get settlementInstrumentLabel => 'طريقة دفع المشتريات';
+
+  @override
+  String get settlementInstrumentHelp =>
+      'كلا السعرين من السوق الموازي. اختر كيف تدفع فعليًا لمورديك.';
+
+  @override
+  String get settlementBankLabel => 'المصرف';
+
+  @override
+  String get manualRateTitle => 'إدخال سعر صرف';
+
+  @override
+  String get manualRateCurrencyLabel => 'العملة';
+
+  @override
+  String manualRateValueLabel(String base) {
+    return 'سعر الصرف مقابل $base';
+  }
+
+  @override
+  String get manualRateNoteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String get manualRateSave => 'حفظ السعر';
+
+  @override
+  String get manualRateSavedMessage => 'تم حفظ سعر الصرف.';
+
+  @override
+  String get manualRateInvalid => 'أدخل سعر صرف أكبر من صفر.';
+
+  @override
+  String get manualRateWinsHint => 'السعر الذي تُدخله يعلو على سعر المزوّد.';
+
+  @override
+  String get repricingTitle => 'تحديث الأسعار';
+
+  @override
+  String get repricingNothingToDo => 'جميع الأسعار محدّثة.';
+
+  @override
+  String repricingDriftCount(int count) {
+    return '$count منتج تغيّر سعره بسبب تغيّر سعر الصرف';
+  }
+
+  @override
+  String get repricingApply => 'تطبيق على المحدد';
+
+  @override
+  String repricingAppliedMessage(int count) {
+    return 'تم تحديث $count سعر.';
+  }
+
+  @override
+  String get repricingUnpriceable => 'لا يوجد سعر صرف لهذه العملة';
+
+  @override
+  String repricingOldNewRate(String oldRate, String newRate) {
+    return 'من $oldRate إلى $newRate';
+  }
+
+  @override
+  String get productPricingCurrencyLabel => 'عملة التسعير';
+
+  @override
+  String get productPricingCurrencyBase => 'عملة المتجر';
+
+  @override
+  String get productPricingCurrencyHelp =>
+      'سعر المنتج مُسجَّل بهذه العملة ويُحوَّل إلى عملة المتجر عند البيع.';
+
+  @override
+  String get productForeignPriceLabel => 'السعر بالعملة الأجنبية';
+
+  @override
+  String productPriceFrozenRateHint(String rate) {
+    return 'محسوب بسعر صرف $rate';
+  }
+
+  @override
+  String productPricingNoRate(String currency) {
+    return 'لا يوجد سعر صرف لـ $currency بعد؛ سيُحدَّث السعر تلقائيًا عند وصوله.';
+  }
+
+  @override
+  String get productPricingCurrencyChanged =>
+      'سيتم إعادة حساب السعر بالعملة الجديدة.';
+
+  @override
+  String get supplierCurrencyLabel => 'عملة المورّد';
+
+  @override
+  String supplierExchangeRateLabel(String currency) {
+    return 'سعر الصرف مقابل $currency';
+  }
+
+  @override
+  String get supplierExchangeRateHelp =>
+      'اتركه فارغًا لاستخدام سعر الصرف بتاريخ فاتورة المورّد.';
+
+  @override
+  String supplierExchangeRateMissing(String currency) {
+    return 'لا يوجد سعر صرف لـ $currency. أدخل سعر الصرف يدويًا.';
+  }
+
+  @override
+  String get supplierExchangeRateTyped => 'سعر صرف مُدخل يدويًا';
+
+  @override
+  String get supplierExchangeRateFromFeed => 'سعر الصرف من المزوّد';
+
+  @override
+  String get supplierRateAsOfToday => 'يُحسب بسعر اليوم';
+
+  @override
+  String supplierRateAsOfInvoiceDate(String date) {
+    return 'يُحسب بسعر تاريخ الفاتورة ($date)';
+  }
+
+  @override
+  String supplierInvoiceTotalPreview(String foreign, String base) {
+    return 'إجمالي الفاتورة $foreign ≈ $base';
+  }
+
+  @override
+  String get shopSetupForeignCurrencyTitle => 'أشتري ببضاعة بعملة أجنبية';
+
+  @override
+  String get shopSetupForeignCurrencySubtitle =>
+      'فعّل هذا إن كانت فواتير مورّديك أو قوائم أسعارك بالدولار أو عملة أخرى. الأسعار والتقارير تبقى بالدينار في كل الأحوال.';
+
+  @override
+  String get shopSetupSettlementTitle => 'كيف تدفع لمورّديك؟';
+
+  @override
+  String get shopSetupSettlementSubtitle =>
+      'كلا السعرين من السوق الموازي؛ الفرق هو طريقة الدفع.';
 }

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../models/attachment_summary.dart';
+import '../models/password_policy.dart';
 import '../models/pos_user.dart';
 import '../models/analytics_export.dart';
 import '../models/analytics_event.dart';
@@ -59,6 +60,7 @@ import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
 import '../models/modifier_group.dart';
 import '../models/prep_station.dart';
+import '../models/exchange_rate.dart';
 import '../models/sales_channel.dart';
 import '../models/shop_settings.dart';
 import '../models/stock_count.dart';
@@ -112,6 +114,7 @@ import 'sales_api_client.dart';
 import 'modifier_group_api_client.dart';
 import 'prep_station_api_client.dart';
 import 'unit_of_measure_api_client.dart';
+import 'fx_api_client.dart';
 import 'sales_channel_api_client.dart';
 import 'shop_settings_api_client.dart';
 import 'stock_count_api_client.dart';
@@ -151,6 +154,7 @@ class PosApiService {
     _reports = ReportsApiClient(_session);
     _sales = SalesApiClient(_session);
     _salesChannels = SalesChannelApiClient(_session);
+    _fx = FxApiClient(_session);
     _prepStations = PrepStationApiClient(_session);
     _modifierGroups = ModifierGroupApiClient(_session);
     _unitsOfMeasure = UnitOfMeasureApiClient(_session);
@@ -206,6 +210,7 @@ class PosApiService {
   late final ReportsApiClient _reports;
   late final SalesApiClient _sales;
   late final SalesChannelApiClient _salesChannels;
+  late final FxApiClient _fx;
   late final PrepStationApiClient _prepStations;
   late final ModifierGroupApiClient _modifierGroups;
   late final UnitOfMeasureApiClient _unitsOfMeasure;
@@ -262,6 +267,8 @@ class PosApiService {
   Future<PosUser> updateCurrentUser(CurrentUserProfileDraft draft) {
     return _auth.updateCurrentUser(draft);
   }
+
+  Future<PasswordPolicy> fetchPasswordPolicy() => _auth.fetchPasswordPolicy();
 
   Future<void> changePassword(PasswordChangeDraft draft) {
     return _auth.changePassword(draft);
@@ -604,6 +611,8 @@ class PosApiService {
     bool? autoPrintKitchenTickets,
     bool? kitchenAutoComplete,
     InventoryValuationMethod? inventoryValuationMethod,
+    bool? fxEnabled,
+    String? fxInstrument,
   }) {
     return _shopSettings.setupShop(
       shopType: shopType,
@@ -1226,7 +1235,10 @@ class PosApiService {
     );
   }
 
-  Future<CustomerAssetTypePage> fetchAssetTypes({bool? isActive, int page = 1}) {
+  Future<CustomerAssetTypePage> fetchAssetTypes({
+    bool? isActive,
+    int page = 1,
+  }) {
     return _operations.fetchAssetTypes(isActive: isActive, page: page);
   }
 
@@ -1476,6 +1488,25 @@ class PosApiService {
   Future<SalesChannelKeyGrant> rotateSalesChannelKey(int channelId) {
     return _salesChannels.rotateSalesChannelKey(channelId);
   }
+
+  Future<CurrentRates> fetchCurrentRates() => _fx.fetchCurrentRates();
+
+  Future<List<Currency>> fetchCurrencies() => _fx.fetchCurrencies();
+
+  Future<List<ExchangeRate>> fetchRateHistory({String? fromCode}) =>
+      _fx.fetchRateHistory(fromCode: fromCode);
+
+  Future<ExchangeRate> recordManualRate(ManualRateDraft draft) =>
+      _fx.recordManualRate(draft);
+
+  Future<Map<String, Object?>> syncExchangeRates() => _fx.syncNow();
+
+  Future<RepricePreview> fetchRepricePreview() => _fx.fetchRepricePreview();
+
+  Future<int> applyReprice(
+    List<PriceProposal> approved, {
+    DateTime? resolvedAt,
+  }) => _fx.applyReprice(approved, resolvedAt: resolvedAt);
 
   Future<ExpenseCategoryPage> fetchExpenseCategories({int page = 1}) {
     return _expenses.fetchCategories(page: page);

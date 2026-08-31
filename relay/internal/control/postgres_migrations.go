@@ -253,6 +253,54 @@ ALTER TABLE relay_enrollment_tokens
 	ADD COLUMN IF NOT EXISTS subscription_duration_seconds bigint NOT NULL DEFAULT 0;
 `,
 	},
+	{
+		version: 11,
+		name:    "exchange rate feed",
+		sql: `
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS fx_enabled boolean NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS relay_exchange_rates (
+	id text PRIMARY KEY,
+	from_code text NOT NULL,
+	to_code text NOT NULL,
+	instrument text NOT NULL DEFAULT 'cash',
+	bank_code text NOT NULL DEFAULT '',
+	rate numeric(18, 8) NOT NULL,
+	effective_at timestamptz NOT NULL,
+	source text NOT NULL DEFAULT 'fulus',
+	created_at timestamptz NOT NULL
+);
+
+-- The natural identity of a publication. A webhook push and a scheduled poll
+-- routinely deliver the same rate; without this they would become two rows that
+-- both claim the same instant.
+CREATE UNIQUE INDEX IF NOT EXISTS relay_exchange_rates_identity_idx
+	ON relay_exchange_rates (from_code, to_code, instrument, bank_code, effective_at);
+
+-- The only query shape shops issue: everything published since their last sync.
+CREATE INDEX IF NOT EXISTS relay_exchange_rates_effective_at_idx
+	ON relay_exchange_rates (effective_at);
+
+-- A rate must describe a real exchange. A zero or negative rate arriving from
+-- upstream would divide a shop's costing by nonsense.
+ALTER TABLE relay_exchange_rates
+	DROP CONSTRAINT IF EXISTS relay_exchange_rates_rate_positive;
+ALTER TABLE relay_exchange_rates
+	ADD CONSTRAINT relay_exchange_rates_rate_positive CHECK (rate > 0);
+`,
+	},
+	{
+		version: 12,
+		name:    "exchange rate daily allowance",
+		sql: `
+-- Stamps the goodwill allowance: a shop WITHOUT the FX entitlement still gets
+-- one rate fetch per day, so nobody is left pricing off a months-old rate.
+-- Written only for unentitled shops, so an entitled shop's fetches cost no write.
+ALTER TABLE relay_installations
+	ADD COLUMN IF NOT EXISTS last_fx_fetch_at timestamptz;
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

@@ -21,6 +21,7 @@ class PointyPasswordField extends StatefulWidget {
     this.onFieldSubmitted,
     this.onChanged,
     this.helperText,
+    this.errorText,
     this.textDirection,
   });
 
@@ -39,6 +40,10 @@ class PointyPasswordField extends StatefulWidget {
   /// Supporting line under the field — e.g. "leave blank to keep the stored
   /// password" on an edit form.
   final String? helperText;
+
+  /// Error line under the field. Use for state a [validator] cannot see, such
+  /// as a confirmation that has to match a *different* field as it is typed.
+  final String? errorText;
 
   /// Force a direction for the *value*. Credentials are ASCII, so an RTL app
   /// still wants them laid out left-to-right.
@@ -67,6 +72,7 @@ class _PointyPasswordFieldState extends State<PointyPasswordField> {
       decoration: InputDecoration(
         labelText: widget.labelText,
         helperText: widget.helperText,
+        errorText: widget.errorText,
         prefixIcon: widget.prefixIcon == null ? null : Icon(widget.prefixIcon),
         suffixIcon: IconButton(
           onPressed: widget.enabled

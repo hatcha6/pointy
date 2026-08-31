@@ -13,6 +13,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
 import '../view_models/product_details_view_model.dart';
 import 'modifier_group_selector.dart';
+import 'pricing_currency_field.dart';
 import 'product_form_fields.dart';
 import 'product_form_section.dart';
 import 'product_image_picker.dart';
@@ -57,6 +58,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
   late bool _isActive;
   late bool _tracksExpiry;
   late String _unit;
+  late String _pricingCurrency;
   late bool _isService;
   late bool _isPrepared;
   late final String _initialSignature;
@@ -91,6 +93,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
     _isActive = product.isActive;
     _tracksExpiry = product.tracksExpiry;
     _unit = product.unit;
+    _pricingCurrency = product.pricingCurrency;
     _isService = product.isService;
     _isPrepared = product.isPrepared;
     _units = product.units;
@@ -133,6 +136,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
       _isActive,
       _tracksExpiry,
       _unit,
+      _pricingCurrency,
       _isService,
       _isPrepared,
       _defaultSaleUnit,
@@ -215,6 +219,29 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                               requiredValidator: (value) =>
                                   _requiredValidator(context, value),
                             ),
+                            if (widget
+                                .viewModel
+                                .pricingCurrencies
+                                .isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              PricingCurrencyField(
+                                currencies: widget.viewModel.pricingCurrencies,
+                                baseCurrencyCode:
+                                    widget.viewModel.baseCurrencyCode,
+                                selectedCode: _pricingCurrency,
+                                onChanged: (code) =>
+                                    setState(() => _pricingCurrency = code),
+                                rate: _pricingCurrency.isEmpty
+                                    ? null
+                                    : widget.viewModel.rateFor(
+                                        _pricingCurrency,
+                                      ),
+                                // No price field on this sheet — prices live on
+                                // the variants — so the preview shows the rate
+                                // rather than a converted amount.
+                                enteredAmount: null,
+                              ),
+                            ],
                             const SizedBox(height: 12),
                             ProductImageField(
                               catalogRepository:
@@ -358,6 +385,7 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
         isActive: _isActive,
         tracksExpiry: _tracksExpiry,
         unit: _unit,
+        pricingCurrency: _pricingCurrency,
         isService: _isService,
         isPrepared: _isPrepared,
         defaultSaleUnit: _defaultSaleUnit,

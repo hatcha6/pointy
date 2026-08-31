@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/employee.dart';
+import '../../../data/models/password_policy.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -181,6 +183,26 @@ class _ProfileFormState extends State<_ProfileForm> {
       text: widget.currentUser.username,
     );
     _emailController = TextEditingController(text: widget.currentUser.email);
+    // Save is gated on there being something to save, so every keystroke has to
+    // reach the button's enabled state.
+    for (final controller in [
+      _firstNameController,
+      _lastNameController,
+      _usernameController,
+      _emailController,
+    ]) {
+      controller.addListener(_onEdited);
+    }
+  }
+
+  void _onEdited() => setState(() {});
+
+  bool get _isDirty {
+    final user = widget.currentUser;
+    return _firstNameController.text.trim() != user.firstName.trim() ||
+        _lastNameController.text.trim() != user.lastName.trim() ||
+        _usernameController.text.trim() != user.username.trim() ||
+        _emailController.text.trim() != user.email.trim();
   }
 
   @override
@@ -197,10 +219,15 @@ class _ProfileFormState extends State<_ProfileForm> {
 
   @override
   void dispose() {
-    _firstNameController.dispose();
-    _lastNameController.dispose();
-    _usernameController.dispose();
-    _emailController.dispose();
+    for (final controller in [
+      _firstNameController,
+      _lastNameController,
+      _usernameController,
+      _emailController,
+    ]) {
+      controller.removeListener(_onEdited);
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -234,7 +261,19 @@ class _ProfileFormState extends State<_ProfileForm> {
               ),
               TextFormField(
                 controller: _usernameController,
-                decoration: InputDecoration(labelText: l10n.usernameLabel),
+                decoration: InputDecoration(
+                  labelText: l10n.usernameLabel,
+                  // The server rejects a duplicate username; showing that on the
+                  // field says which of the four inputs to change.
+                  errorText:
+                      widget.viewModel.profileIssue ==
+                          ProfileFieldIssue.usernameTaken
+                      ? l10n.profileUsernameTakenError
+                      : null,
+                ),
+                textDirection: TextDirection.ltr,
+                autocorrect: false,
+                enableSuggestions: false,
                 textInputAction: TextInputAction.next,
                 validator: (value) => (value ?? '').trim().isEmpty
                     ? l10n.requiredFieldError
@@ -242,13 +281,32 @@ class _ProfileFormState extends State<_ProfileForm> {
               ),
               TextFormField(
                 controller: _emailController,
-                decoration: InputDecoration(labelText: l10n.emailLabel),
+                decoration: InputDecoration(
+                  labelText: l10n.emailLabel,
+                  errorText:
+                      widget.viewModel.profileIssue ==
+                          ProfileFieldIssue.emailInvalid
+                      ? l10n.profileEmailInvalidError
+                      : null,
+                ),
+                textDirection: TextDirection.ltr,
+                autocorrect: false,
                 keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.done,
+                validator: (value) {
+                  final email = (value ?? '').trim();
+                  if (email.isEmpty) return null;
+                  return _looksLikeEmail(email)
+                      ? null
+                      : l10n.profileEmailInvalidError;
+                },
               ),
             ],
           ),
-          if (widget.viewModel.hasProfileSaveError) ...[
+          // A field-level error already points at the offending input; repeating
+          // it in a banner would say the same thing twice, less usefully.
+          if (widget.viewModel.hasProfileSaveError &&
+              widget.viewModel.profileIssue == ProfileFieldIssue.other) ...[
             SizedBox(height: spacing.md),
             PointyInlineMessage.error(
               message: l10n.userSettingsProfileSaveError,
@@ -258,7 +316,9 @@ class _ProfileFormState extends State<_ProfileForm> {
           Align(
             alignment: AlignmentDirectional.centerEnd,
             child: FilledButton.icon(
-              onPressed: widget.viewModel.isSavingProfile ? null : _save,
+              onPressed: widget.viewModel.isSavingProfile || !_isDirty
+                  ? null
+                  : _save,
               icon: const Icon(Icons.save_outlined),
               label: Text(l10n.saveChangesButton),
             ),
@@ -307,7 +367,18 @@ class _PasswordFormState extends State<_PasswordForm> {
   final _confirmPasswordController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    // The confirmation's match state has to update as either field changes, not
+    // only when Save is pressed.
+    _confirmPasswordController.addListener(_onEdited);
+  }
+
+  void _onEdited() => setState(() {});
+
+  @override
   void dispose() {
+    _confirmPasswordController.removeListener(_onEdited);
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
@@ -318,6 +389,13 @@ class _PasswordFormState extends State<_PasswordForm> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
+    final viewModel = widget.viewModel;
+    final assessment = viewModel.passwordAssessment;
+    final newPassword = _newPasswordController.text;
+    final confirmation = _confirmPasswordController.text;
+    // Flagged only once something has been typed — complaining about an empty
+    // box is nagging, not helping.
+    final mismatch = confirmation.isNotEmpty && confirmation != newPassword;
 
     return Form(
       key: _formKey,
@@ -331,6 +409,8 @@ class _PasswordFormState extends State<_PasswordForm> {
                 labelText: l10n.currentPasswordLabel,
                 prefixIcon: null,
                 textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.password],
+                onChanged: (_) => setState(() {}),
                 validator: (value) =>
                     (value ?? '').isEmpty ? l10n.requiredFieldError : null,
               ),
@@ -339,6 +419,11 @@ class _PasswordFormState extends State<_PasswordForm> {
                 labelText: l10n.newPasswordLabel,
                 prefixIcon: null,
                 textInputAction: TextInputAction.next,
+                autofillHints: const [AutofillHints.newPassword],
+                onChanged: (value) {
+                  viewModel.setNewPassword(value);
+                  setState(() {});
+                },
                 validator: (value) =>
                     (value ?? '').isEmpty ? l10n.requiredFieldError : null,
               ),
@@ -347,6 +432,14 @@ class _PasswordFormState extends State<_PasswordForm> {
                 labelText: l10n.confirmPasswordLabel,
                 prefixIcon: null,
                 textInputAction: TextInputAction.done,
+                autofillHints: const [AutofillHints.newPassword],
+                // Live, not on-submit: a mismatch you only learn about after
+                // pressing the button means retyping both fields.
+                helperText: mismatch ? null : ' ',
+                errorText: mismatch ? l10n.passwordConfirmationMismatch : null,
+                onFieldSubmitted: (_) {
+                  if (_canSubmit(mismatch)) _save();
+                },
                 validator: (value) {
                   if ((value ?? '').isEmpty) {
                     return l10n.requiredFieldError;
@@ -359,17 +452,31 @@ class _PasswordFormState extends State<_PasswordForm> {
               ),
             ],
           ),
-          if (widget.viewModel.hasPasswordChangeError) ...[
+          SizedBox(height: spacing.md),
+          _PasswordGuidance(
+            policy: viewModel.passwordPolicy,
+            assessment: assessment,
+          ),
+          if (viewModel.hasPasswordChangeError) ...[
             SizedBox(height: spacing.md),
             PointyInlineMessage.error(
-              message: l10n.userSettingsPasswordChangeError,
+              message: switch (viewModel.passwordFailure) {
+                PasswordChangeFailure.currentPasswordWrong =>
+                  l10n.passwordCurrentIncorrectError,
+                PasswordChangeFailure.throttled =>
+                  l10n.passwordChangeThrottledError,
+                PasswordChangeFailure.ruleRejected =>
+                  l10n.passwordChangeRuleRejectedError,
+                PasswordChangeFailure.none || PasswordChangeFailure.unknown =>
+                  l10n.userSettingsPasswordChangeError,
+              },
             ),
           ],
           SizedBox(height: spacing.md),
           Align(
             alignment: AlignmentDirectional.centerEnd,
             child: FilledButton.icon(
-              onPressed: widget.viewModel.isChangingPassword ? null : _save,
+              onPressed: _canSubmit(mismatch) ? _save : null,
               icon: const Icon(Icons.lock_reset_outlined),
               label: Text(l10n.changePasswordButton),
             ),
@@ -377,6 +484,19 @@ class _PasswordFormState extends State<_PasswordForm> {
         ],
       ),
     );
+  }
+
+  /// Only the *requirements* gate the button. Ignoring every suggestion still
+  /// saves — that is the point of them being suggestions.
+  /// All three boxes have to be filled: an enabled button that only paints
+  /// "this field is required" once pressed is a button that lied about what
+  /// pressing it would do.
+  bool _canSubmit(bool mismatch) {
+    return !widget.viewModel.isChangingPassword &&
+        !mismatch &&
+        _currentPasswordController.text.isNotEmpty &&
+        _confirmPasswordController.text.isNotEmpty &&
+        widget.viewModel.canChangePassword;
   }
 
   Future<void> _save() async {
@@ -396,9 +516,137 @@ class _PasswordFormState extends State<_PasswordForm> {
     _currentPasswordController.clear();
     _newPasswordController.clear();
     _confirmPasswordController.clear();
+    setState(() {});
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(l10n.userSettingsPasswordChanged)));
+  }
+}
+
+/// The rules, stated before the attempt rather than after it.
+///
+/// Two lists, kept visually distinct on purpose: what the password *must* be
+/// (one short floor) and what would make it stronger. The second list never
+/// blocks anything — staff sign in on a shared terminal all shift and pick a
+/// short PIN, and a form that refuses that is a form they route around.
+class _PasswordGuidance extends StatelessWidget {
+  const _PasswordGuidance({required this.policy, required this.assessment});
+
+  final PasswordPolicy policy;
+  final PasswordAssessment assessment;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (policy.required.isNotEmpty) ...[
+          Text(l10n.passwordRulesTitle, style: theme.textTheme.titleSmall),
+          SizedBox(height: spacing.xs),
+          for (final rule in policy.required)
+            _RuleLine(
+              label: switch (rule) {
+                PasswordRequirement.minLength => l10n.passwordRuleMinLength(
+                  policy.minLength,
+                ),
+              },
+              state: assessment.requirements[rule] ?? PasswordRuleState.pending,
+              isAdvice: false,
+            ),
+        ],
+        if (policy.advisory.isNotEmpty) ...[
+          SizedBox(height: spacing.md),
+          Text(l10n.passwordAdviceTitle, style: theme.textTheme.titleSmall),
+          Text(
+            l10n.passwordAdviceNote,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          SizedBox(height: spacing.xs),
+          for (final item in policy.advisory)
+            _RuleLine(
+              label: switch (item) {
+                PasswordAdvice.recommendedLength =>
+                  l10n.passwordAdviceRecommendedLength(
+                    policy.recommendedMinLength,
+                  ),
+                PasswordAdvice.notNumeric => l10n.passwordAdviceNotNumeric,
+                PasswordAdvice.notCommon => l10n.passwordAdviceNotCommon,
+                PasswordAdvice.notSimilarToUser =>
+                  l10n.passwordAdviceNotSimilarToUser,
+              },
+              state: assessment.advice[item] ?? PasswordRuleState.pending,
+              isAdvice: true,
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _RuleLine extends StatelessWidget {
+  const _RuleLine({
+    required this.label,
+    required this.state,
+    required this.isAdvice,
+  });
+
+  final String label;
+  final PasswordRuleState state;
+  final bool isAdvice;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+    final spacing = AdaptiveSpacing.of(context);
+
+    // An unmet suggestion is not an error, so it never turns red — it simply
+    // stays un-ticked. Only a broken requirement earns the danger colour.
+    final (icon, color) = switch ((state, isAdvice)) {
+      (PasswordRuleState.satisfied, _) => (
+        Icons.check_circle_outline,
+        colors.success,
+      ),
+      (PasswordRuleState.failed, false) => (
+        Icons.cancel_outlined,
+        colors.danger,
+      ),
+      (PasswordRuleState.failed, true) => (
+        Icons.radio_button_unchecked,
+        colors.mutedInk,
+      ),
+      (PasswordRuleState.pending, _) => (
+        Icons.radio_button_unchecked,
+        colors.mutedInk,
+      ),
+    };
+
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: spacing.xs / 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: color),
+          SizedBox(width: spacing.sm),
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: state == PasswordRuleState.satisfied
+                    ? theme.colorScheme.onSurface
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -630,6 +878,13 @@ class _LoanList extends StatelessWidget {
       ],
     );
   }
+}
+
+/// A deliberately loose check — enough to catch a fat-fingered address before a
+/// round trip, without inventing rules the server does not have. Django decides
+/// for real; an empty field is fine, since email is optional here.
+bool _looksLikeEmail(String value) {
+  return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value);
 }
 
 String? _positiveMoneyValidator(BuildContext context, String? value) {

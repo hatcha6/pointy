@@ -46,12 +46,18 @@ class ShopSettingsApiClient {
     bool? autoPrintKitchenTickets,
     bool? kitchenAutoComplete,
     InventoryValuationMethod? inventoryValuationMethod,
+    bool? fxEnabled,
+    String? fxInstrument,
   }) async {
     final body = <String, Object?>{'shop_type': shopType};
     if (inventoryValuationMethod != null) {
       body['inventory_valuation_method'] = inventoryValuationMethod.wireValue;
     }
     if (shopName != null) body['shop_name'] = shopName;
+    // Multi-currency, answered once at setup. Sent only when the wizard asked,
+    // so an older client's payload leaves the shop single-currency.
+    if (fxEnabled != null) body['fx_enabled'] = fxEnabled;
+    if (fxInstrument != null) body['fx_instrument'] = fxInstrument;
     if (allowOverselling != null) body['allow_overselling'] = allowOverselling;
     if (requireOpeningCash != null) {
       body['require_opening_cash'] = requireOpeningCash;

@@ -25,6 +25,8 @@ class ProductVariant {
     this.optionValues = const [],
     this.primaryImage,
     this.imageAttachments = const [],
+    this.priceAmount,
+    this.pricingCurrency = '',
   });
 
   final int id;
@@ -48,6 +50,21 @@ class ProductVariant {
   final List<VariantOptionValue> optionValues;
   final AttachmentSummary? primaryImage;
   final List<AttachmentSummary> imageAttachments;
+
+  /// The price in the product's own pricing currency, when it has one. Null for
+  /// every product priced in the shop's own currency, which is the default and
+  /// what all existing products are.
+  ///
+  /// [unitPrice] above is ALWAYS the shop's base currency — this is an extra
+  /// number beside it, never a reinterpretation of it. That invariant is what
+  /// lets carts, totals, discounts and reports stay currency-free.
+  final double? priceAmount;
+
+  /// The ISO code [priceAmount] is denominated in; blank when base-priced.
+  final String pricingCurrency;
+
+  /// Whether this row is maintained in a foreign price sheet.
+  bool get hasForeignPrice => priceAmount != null && pricingCurrency.isNotEmpty;
 
   String get displayLabel {
     final parent = productLabel;
@@ -178,6 +195,13 @@ class ProductVariant {
       optionValues: optionValues,
       primaryImage: _primaryImageFromJson(json),
       imageAttachments: _imageAttachmentsFromJson(json),
+      priceAmount: _optionalMoneyFromJson(json['price_amount']),
+      // The currency lives on the parent product (it describes the price sheet,
+      // not the row), so it is read from the embedded detail when present.
+      pricingCurrency:
+          productDetail?.pricingCurrency ??
+          json['pricing_currency']?.toString() ??
+          '',
     );
   }
 
@@ -382,4 +406,12 @@ double _stockQuantityFromJson(Object? value) {
     return value.toDouble();
   }
   return double.tryParse((value ?? 0).toString()) ?? 0;
+}
+
+double? _optionalMoneyFromJson(Object? value) {
+  final raw = value?.toString().trim();
+  if (raw == null || raw.isEmpty) {
+    return null;
+  }
+  return double.tryParse(raw);
 }

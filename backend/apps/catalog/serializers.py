@@ -443,12 +443,19 @@ class ProductUnitSerializer(serializers.ModelSerializer):
             "unit",
             "unit_detail",
             "factor_to_base",
+            # Base currency, like every other stored price.
             "price",
+            # The frozen foreign price for a pack priced per box rather than
+            # per piece; read-only for the same reason as the variant's.
+            "price_amount",
+            "price_rate",
+            "price_rate_at",
             "is_sellable",
             "is_purchasable",
             "display_order",
             "barcodes",
         ]
+        read_only_fields = ("price_rate", "price_rate_at")
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -518,6 +525,9 @@ class ProductCatalogSummarySerializer(serializers.ModelSerializer):
             "is_service",
             "is_prepared",
             "unit",
+            # The currency this product's price sheet is written in. NULL (the
+            # default, and every existing product) means the shop's own.
+            "pricing_currency",
             "default_sale_unit",
             "default_purchase_unit",
             "units",
@@ -578,6 +588,17 @@ class DefaultProductVariantInputSerializer(serializers.Serializer):
         required=False,
         min_value=0,
     )
+    # The price as written in the product's own pricing currency. When present
+    # it DERIVES ``unit_price`` (see ``_derive_base_price``) rather than sitting
+    # beside it, so a client never has to send both and cannot send two numbers
+    # that disagree.
+    price_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        min_value=0,
+    )
     is_active = serializers.BooleanField(required=False)
     option_values = serializers.PrimaryKeyRelatedField(
         queryset=VariantOptionValue.objects.all(),
@@ -610,6 +631,26 @@ class DefaultProductVariantField(serializers.Field):
         )
         serializer.is_valid(raise_exception=True)
         return serializer.validated_data
+
+
+def _derive_base_price(target, foreign_amount):
+    """Turn a written foreign price into this row's stored base price.
+
+    Called after the row exists so the product (and therefore its pricing
+    currency) is resolvable. A ``None`` amount means the client did not touch the
+    foreign price and the base price it sent stands; a product with no pricing
+    currency is left entirely alone, which is every product that existed before
+    multi-currency.
+
+    Returning quietly when no rate resolves is deliberate: the foreign number is
+    still recorded, so the row reprices itself the moment a rate arrives, and the
+    price on the shelf until then is the last one somebody agreed to.
+    """
+    if foreign_amount is None:
+        return
+    from apps.catalog.pricing import set_foreign_price
+
+    set_foreign_price(target, foreign_amount)
 
 
 class ProductVariantSerializer(serializers.ModelSerializer):
@@ -683,7 +724,16 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "full_name",
             "sku",
             "barcode",
+            # Always the shop's base currency — see ProductVariant.unit_price.
             "unit_price",
+            # The foreign price this row is maintained in, and the frozen rate
+            # that produced ``unit_price`` from it. Read-only: a price is set by
+            # writing ``price_amount``, which derives the base price through
+            # apps.catalog.pricing rather than letting a client post both and
+            # have them disagree.
+            "price_amount",
+            "price_rate",
+            "price_rate_at",
             "is_active",
             "tracks_expiry",
             "is_service",
@@ -698,7 +748,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ("created_at", "updated_at")
+        read_only_fields = ("created_at", "updated_at", "price_rate", "price_rate_at")
 
     def validate_unit_price(self, value):
         if value < 0:
@@ -768,7 +818,9 @@ class ProductVariantSerializer(serializers.ModelSerializer):
                         product=validated_data["product"],
                         is_default=True,
                     ).update(is_default=False)
+                foreign_amount = validated_data.pop("price_amount", None)
                 variant = ProductVariant.objects.create(**validated_data)
+                _derive_base_price(variant, foreign_amount)
                 if option_values:
                     variant.option_values.set(option_values)
                     variant.refresh_from_db(fields=["option_signature"])
@@ -791,9 +843,11 @@ class ProductVariantSerializer(serializers.ModelSerializer):
                         product=instance.product,
                         is_default=True,
                     ).exclude(pk=instance.pk).update(is_default=False)
+                foreign_amount = validated_data.pop("price_amount", None)
                 for field, value in validated_data.items():
                     setattr(instance, field, value)
                 instance.save()
+                _derive_base_price(instance, foreign_amount)
                 if option_values is not None:
                     instance.option_values.set(option_values)
                     instance.refresh_from_db(fields=["option_signature"])
@@ -827,6 +881,17 @@ class ProductVariantInputSerializer(serializers.Serializer):
         max_digits=10,
         decimal_places=2,
         required=True,
+        min_value=0,
+    )
+    # The price as written in the product's own pricing currency. When present
+    # it DERIVES ``unit_price`` (see ``_derive_base_price``) rather than sitting
+    # beside it, so a client never has to send both and cannot send two numbers
+    # that disagree.
+    price_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
         min_value=0,
     )
     is_active = serializers.BooleanField(required=False, default=True)
@@ -926,6 +991,9 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "is_service",
             "is_prepared",
             "unit",
+            # The currency this product's price sheet is written in. NULL (the
+            # default, and every existing product) means the shop's own.
+            "pricing_currency",
             "default_sale_unit",
             "default_purchase_unit",
             "units",
@@ -1124,6 +1192,10 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                 is_purchasable=data.get("is_purchasable", True),
                 display_order=data.get("display_order", index),
             )
+            # A pack priced from a foreign price sheet derives its base price
+            # the same way a variant does, rather than storing the foreign
+            # number with nothing to sell at.
+            _derive_base_price(product_unit, data.get("price_amount"))
             barcodes = data.get("barcodes")
             if barcodes is None:
                 barcodes = existing_barcodes.get(unit.pk, [])
@@ -1268,7 +1340,13 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             return
         variant_data = dict(default_variant_data)
         option_values = variant_data.pop("option_values", None)
+        # ``ensure_default_variant`` writes the row directly rather than through
+        # ProductVariantSerializer, so the foreign price has to be applied here
+        # or a product created in one request would store the dollar figure and
+        # never derive a dinar one.
+        foreign_amount = variant_data.pop("price_amount", None)
         variant = product.ensure_default_variant(**variant_data)
+        _derive_base_price(variant, foreign_amount)
         if option_values is not None:
             validate_variant_option_values(product, option_values, variant=variant)
             variant.option_values.set(option_values)
@@ -1312,6 +1390,9 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         data = dict(variant_data)
         variant_id = data.pop("id", None)
         option_values = data.pop("option_values", [])
+        # Same reason as the default-variant path: this writes the model
+        # directly, so the derivation has to happen explicitly.
+        foreign_amount = data.pop("price_amount", None)
 
         if variant_id is None:
             variant = None
@@ -1339,6 +1420,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             for field, value in data.items():
                 setattr(variant, field, value)
             variant.save()
+        _derive_base_price(variant, foreign_amount)
         variant.option_values.set(option_values)
 
 

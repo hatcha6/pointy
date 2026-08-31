@@ -53,6 +53,10 @@ x-backend-environment: &backend-environment
   POINTY_BACKUP_ALLOWED_ROOTS: /var/lib/pointy/backups,/mnt/pointy-external
   POINTY_BACKUP_STAGING_ROOT: /tmp/pointy-backup-staging
   POINTY_BACKUP_RETENTION_COUNT: "14"
+  # Enforced password floor. Everything above it (length 8, not numeric-only,
+  # not a common password) is advice the UI shows, not a rule that blocks a
+  # cashier from picking the PIN they will actually remember.
+  POINTY_PASSWORD_MIN_LENGTH: "${POINTY_PASSWORD_MIN_LENGTH:-4}"
   POINTY_RELAY_CONTROL_URL: "${POINTY_RELAY_CONTROL_URL:?Set POINTY_RELAY_CONTROL_URL in deploy/onprem/.env}"
   POINTY_RELAY_PUBLIC_API_URL: "${POINTY_RELAY_PUBLIC_API_URL:?Set POINTY_RELAY_PUBLIC_API_URL in deploy/onprem/.env}"
   POINTY_RELAY_CONNECTOR_ADDR: "${POINTY_RELAY_CONNECTOR_ADDR:?Set POINTY_RELAY_CONNECTOR_ADDR in deploy/onprem/.env}"

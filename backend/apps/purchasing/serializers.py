@@ -23,6 +23,11 @@ from apps.discounts.services import (
     allocate_discount_amount,
     rounding_metadata_payload,
 )
+from django.utils import timezone
+
+from apps.fx import currencies as fx_currencies
+
+from . import currency as purchase_currency
 from .cost_guard import block_thresholds, find_cost_anomalies, warn_thresholds
 from .models import (
     prime_supplier_balances,
@@ -291,6 +296,10 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "unit_cost_change",
             "unit_cost_change_percent",
             "unit_cost_changed",
+            # What the supplier's invoice says, in the ORDER's currency. Sending
+            # it DERIVES "unit_cost" at the order's frozen rate, so a client
+            # never sends two numbers that could disagree.
+            "unit_cost_in_currency",
             "allocated_landed_cost",
             "landed_unit_cost",
             "effective_unit_cost",
@@ -1383,8 +1392,26 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class _CurrencyCarrier:
+    """Adapts serializer attrs to what ``apps.purchasing.currency`` reads.
+
+    The service takes "something with ``currency_id`` and ``exchange_rate``" so
+    it works identically on a saved order and on the attrs of one being
+    validated — the conversion has one implementation, not two.
+    """
+
+    def __init__(self, currency_id, exchange_rate):
+        self.currency_id = currency_id
+        self.exchange_rate = exchange_rate
+
+
 class PurchaseOrderSerializer(serializers.ModelSerializer):
     lines = PurchaseLineSerializer(many=True, allow_empty=False)
+    # What the supplier invoiced, summed. Derived rather than stored: it exists
+    # so a buyer can check the screen against the paper invoice, and it never
+    # feeds an aggregate — the stored totals stay base currency, which is what
+    # every report reads.
+    foreign_total = serializers.SerializerMethodField()
     # Set by the purchasing screen after the buyer has seen the cost warnings
     # and confirmed them. Never honoured on the POS cash-purchase path, which
     # blocks outright — see apps.purchasing.cost_guard.
@@ -1467,6 +1494,15 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "status",
             "notes",
             "due_date",
+            # The currency the SUPPLIER invoiced in. NULL = the shop's own,
+            # which is every order that exists today. Every stored money column
+            # on this order stays base currency regardless.
+            "currency",
+            "exchange_rate",
+            "rate_effective_at",
+            "rate_source",
+            # Derived, for reconciling the screen against the paper invoice.
+            "foreign_total",
             "acknowledge_cost_warnings",
             "lines",
             "receipts",
@@ -1501,6 +1537,9 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id",
             "order_number",
+            "rate_effective_at",
+            "rate_source",
+            "foreign_total",
             "supplier_name",
             "supplier_contact_name",
             "supplier_phone",
@@ -1673,11 +1712,89 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
                         )
                     }
                 )
+        # Convert BEFORE the cost guard runs. The guard compares a line's cost
+        # against the variant's selling price, and both must be in the shop's
+        # own currency for that comparison to mean anything — leaving the line
+        # at 12 USD against an 82.20 LYD price would flag every foreign line as
+        # a catastrophic loss.
+        self._apply_supplier_currency(attrs)
         # Pop it here: it is an instruction to the validator, not a field on the
         # order, and create/update forward **validated_data to the model.
         acknowledged = attrs.pop("acknowledge_cost_warnings", False)
         self._guard_costs(attrs.get("lines"), acknowledged=acknowledged)
         return attrs
+
+    def _apply_supplier_currency(self, attrs):
+        """Derive each line's base ``unit_cost`` from what the supplier invoiced.
+
+        The rate is taken from the payload when the client sent one (a shop that
+        negotiated its own rate types it), otherwise from the order being edited,
+        otherwise resolved once and frozen onto the order. It is never re-read
+        afterwards: a purchase order records what the shop actually paid, and
+        re-deriving its cost basis from today's rate would rewrite the margin on
+        goods already sold.
+        """
+        currency = attrs.get(
+            "currency",
+            getattr(self.instance, "currency", None) if self.instance else None,
+        )
+        code = getattr(currency, "code", None) or getattr(currency, "pk", None)
+        lines = attrs.get("lines") or []
+
+        if not purchase_currency.is_foreign(code):
+            for line in lines:
+                line["unit_cost_in_currency"] = None
+            attrs["exchange_rate"] = None
+            attrs["rate_effective_at"] = None
+            attrs["rate_source"] = ""
+            return
+
+        rate = attrs.get("exchange_rate")
+        if rate is None and self.instance is not None:
+            rate = self.instance.exchange_rate
+        if rate is None:
+            # Priced as of the SUPPLIER'S invoice date, not as of data entry.
+            # An invoice billed on Tuesday and typed in on Sunday was priced at
+            # Tuesday's rate; costing it at Sunday's misstates the cost basis by
+            # however far the dinar moved in between.
+            invoice_date = attrs.get(
+                "supplier_invoice_date",
+                getattr(self.instance, "supplier_invoice_date", None)
+                if self.instance
+                else None,
+            )
+            resolved = purchase_currency.resolve_order_rate(
+                code, invoice_date=invoice_date
+            )
+            if resolved is None:
+                raise serializers.ValidationError(
+                    {
+                        "exchange_rate": (
+                            f"لا يوجد سعر صرف لـ {code}. أدخل سعر الصرف يدويًا "
+                            "قبل حفظ أمر الشراء."
+                        )
+                    }
+                )
+            rate = resolved.rate
+            attrs["exchange_rate"] = rate
+            attrs["rate_effective_at"] = resolved.effective_at
+            attrs["rate_source"] = resolved.source
+        elif attrs.get("exchange_rate") is not None:
+            # A rate the buyer typed. Stamp it as theirs so the provenance on
+            # the document is honest about where the number came from.
+            attrs["rate_source"] = fx_currencies.SOURCE_MANUAL
+            attrs["rate_effective_at"] = timezone.now()
+
+        try:
+            purchase_currency.apply_order_currency(
+                _CurrencyCarrier(code, rate), lines, rate=rate
+            )
+        except purchase_currency.PurchaseCurrencyError as error:
+            raise serializers.ValidationError({"exchange_rate": str(error)}) from error
+
+    def get_foreign_total(self, order):
+        total = purchase_currency.foreign_order_total(order)
+        return None if total is None else f"{total:.2f}"
 
     def _guard_costs(self, lines_data, *, acknowledged):
         """Refuse a cost that reads as a typo.

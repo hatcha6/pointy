@@ -20,6 +20,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/catalog_view_model.dart';
+import '../view_models/pricing_currency_options.dart';
 import '../view_models/product_details_view_model.dart';
 import 'product_bulk_actions.dart';
 import 'product_details_screen.dart';
@@ -279,6 +280,7 @@ class ProductList extends StatelessWidget {
       capabilities: capabilities,
       analyticsEngine: analyticsEngine,
       onChanged: viewModel.loadProducts,
+      pricingOptions: viewModel.pricingOptions,
     );
   }
 }
@@ -568,6 +570,10 @@ Future<void> openProductDetails(
   required AuthorizationCapabilities capabilities,
   AnalyticsEngine? analyticsEngine,
   VoidCallback? onChanged,
+
+  /// The catalog's already-loaded currency options. Omitted, the details
+  /// screen's edit sheet simply shows no pricing-currency picker.
+  PricingCurrencyOptions? pricingOptions,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -578,6 +584,7 @@ Future<void> openProductDetails(
           saleRepository,
           product,
           analyticsEngine: analyticsEngine,
+          pricingOptions: pricingOptions,
           shouldLoadSaleHistory: capabilities.canViewRegisterSessionOrders,
           shouldLoadPurchaseHistory: capabilities.canAccessPurchasing,
         ),

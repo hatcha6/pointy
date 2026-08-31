@@ -81,6 +81,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
         saleRepository,
         product,
         analyticsEngine: analyticsEngine,
+        pricingOptions: viewModel.pricingOptions,
         shouldLoadSaleHistory: capabilities.canViewRegisterSessionOrders,
         shouldLoadPurchaseHistory: capabilities.canAccessPurchasing,
       );
@@ -215,6 +216,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           capabilities: capabilities,
           analyticsEngine: analyticsEngine,
           onChanged: viewModel.loadProducts,
+          pricingOptions: viewModel.pricingOptions,
         );
         return true;
       case CatalogBarcodeLookupStatus.notFound:
@@ -253,6 +255,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
       capabilities: capabilities,
       analyticsEngine: analyticsEngine,
       onChanged: viewModel.loadProducts,
+      pricingOptions: viewModel.pricingOptions,
     );
   }
 

@@ -492,6 +492,8 @@ class PurchaseOrderDraft {
     this.landedCostAllocationMethod = LandedCostAllocationMethod.byLineValue,
     this.discountCode = '',
     this.extraDiscountAmount = 0,
+    this.currencyCode = '',
+    this.exchangeRate,
   });
 
   final List<PurchaseOrderLineDraft> lines;
@@ -502,6 +504,13 @@ class PurchaseOrderDraft {
   final List<PurchaseLandedCostEntry> landedCostEntries;
   final LandedCostAllocationMethod landedCostAllocationMethod;
   final String discountCode;
+
+  /// The currency the SUPPLIER invoiced in; blank means the shop's own.
+  final String currencyCode;
+
+  /// A rate the buyer typed, overriding the one the server would resolve.
+  /// Null lets the server read the rate as of the supplier's invoice date.
+  final double? exchangeRate;
 
   /// One-off order discount typed by hand (mostly a fraction eliminator).
   final double extraDiscountAmount;
@@ -516,7 +525,10 @@ class PurchaseOrderDraft {
         LandedCostAllocationMethod.byLineValue,
     String discountCode = '',
     double extraDiscountAmount = 0,
+    String currencyCode = '',
+    double? exchangeRate,
   }) {
+    final isForeign = currencyCode.trim().isNotEmpty;
     return PurchaseOrderDraft(
       supplierId: supplierId,
       supplierInvoiceNumber: supplierInvoiceNumber,
@@ -525,12 +537,18 @@ class PurchaseOrderDraft {
       landedCostAllocationMethod: landedCostAllocationMethod,
       discountCode: discountCode,
       extraDiscountAmount: extraDiscountAmount,
+      currencyCode: currencyCode,
+      exchangeRate: exchangeRate,
       lines: lines
           .map(
             (line) => PurchaseOrderLineDraft(
               variantId: line.variant.id,
               quantity: line.quantity,
-              unitCost: line.unitCost,
+              // On a foreign order the typed cost IS the invoiced foreign
+              // figure; the base cost is left to the server to derive, so the
+              // client never sends two numbers that could disagree.
+              unitCost: isForeign ? 0 : line.unitCost,
+              unitCostInCurrency: isForeign ? line.unitCost : null,
               unit: line.unitCode,
               expiryDate: line.expiryDate,
             ),
@@ -579,6 +597,14 @@ class PurchaseOrderDraft {
       if (forUpdate || extraDiscountAmount > 0)
         'extra_discount_amount': extraDiscountAmount.toStringAsFixed(2),
       if (acknowledgeCostWarnings) 'acknowledge_cost_warnings': true,
+      // Sent as an explicit null when cleared so switching an order back to the
+      // shop's own currency actually clears it rather than being ignored.
+      if (forUpdate || currencyCode.isNotEmpty)
+        'currency': currencyCode.isEmpty ? null : currencyCode,
+      // Only when the buyer typed one. Omitting it lets the server read the
+      // rate as of the SUPPLIER'S INVOICE DATE, which is the number the invoice
+      // was actually priced at.
+      if (exchangeRate != null) 'exchange_rate': exchangeRate!.toString(),
       'lines': lines.map((line) => line.toJson()).toList(),
     };
   }
@@ -858,13 +884,22 @@ class PurchaseOrderLineDraft {
     required this.unitCost,
     this.unit = '',
     this.expiryDate,
+    this.unitCostInCurrency,
   });
 
   final int variantId;
   final double quantity;
+
+  /// Always the shop's own currency. On a foreign order the server DERIVES this
+  /// from [unitCostInCurrency] at the order's frozen rate, so the client never
+  /// computes a stored cost and the two numbers cannot disagree.
   final double unitCost;
   final String unit;
   final DateTime? expiryDate;
+
+  /// What the supplier's invoice says, in the order's currency. Null on a
+  /// base-currency order.
+  final double? unitCostInCurrency;
 
   Map<String, Object?> toJson() {
     final normalizedUnit = unit.trim();
@@ -874,6 +909,8 @@ class PurchaseOrderLineDraft {
       'quantity': quantity.toStringAsFixed(3),
       if (normalizedUnit.isNotEmpty) 'unit': normalizedUnit,
       'unit_cost': unitCost.toStringAsFixed(2),
+      if (unitCostInCurrency != null)
+        'unit_cost_in_currency': unitCostInCurrency!.toStringAsFixed(2),
       if (expiryDate != null) 'expiry_date': _dateOnlyString(expiryDate!),
     };
   }

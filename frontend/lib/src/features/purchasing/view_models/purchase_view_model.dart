@@ -14,9 +14,12 @@ import '../../../data/models/product_unit.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_page.dart';
 import '../../../data/models/purchase_submission.dart';
+import '../../../data/models/exchange_rate.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../data/repositories/fx_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
+import '../../../shared/formatters.dart';
 import '../../../shared/units.dart';
 import '../../../data/models/purchase_cost_warning.dart';
 
@@ -38,9 +41,12 @@ class PurchaseViewModel extends ChangeNotifier {
       'pointy.purchase.draft.v1',
     ),
     String? persistScope,
+    FxRepository? fxRepository,
   }) : _analyticsEngine = analyticsEngine,
+       _fxRepository = fxRepository,
        _draftStorage = draftStorage {
     loadCatalog();
+    unawaited(loadSupplierCurrencies());
     if (persistScope != null) {
       unawaited(restorePersistedDraft(persistScope));
     }
@@ -49,6 +55,11 @@ class PurchaseViewModel extends ChangeNotifier {
   final CatalogRepository _catalogRepository;
   final PurchaseRepository _purchaseRepository;
   final AnalyticsEngine? _analyticsEngine;
+
+  /// Optional so every existing construction site keeps working. Without it the
+  /// purchasing screen never offers a supplier currency, which is right for a
+  /// shop with no foreign suppliers.
+  final FxRepository? _fxRepository;
   final ScopedJsonStorage _draftStorage;
 
   // Local persistence of the in-progress purchase draft.
@@ -88,6 +99,17 @@ class PurchaseViewModel extends ChangeNotifier {
   // (stale, out-of-order) results over a newer one — matches the POS guard.
   int _catalogRequestVersion = 0;
   String _supplierInvoiceNumber = '';
+
+  /// The currency the SUPPLIER invoiced in; blank = the shop's own, which is
+  /// every order unless the buyer says otherwise.
+  String _currencyCode = '';
+
+  /// A rate the buyer typed. Null lets the server read the rate as of the
+  /// supplier's invoice date — the number the invoice was actually priced at.
+  double? _typedExchangeRate;
+  List<Currency> _currencies = const <Currency>[];
+  CurrentRates _rates = CurrentRates.empty;
+  bool _hasLoadedCurrencies = false;
   String _supplierInvoiceDateInput = '';
   List<PurchaseLandedCostEntry> _landedCostEntries = [];
   String _discountCode = '';
@@ -123,6 +145,83 @@ class PurchaseViewModel extends ChangeNotifier {
   bool get receiveImmediately => _receiveImmediately;
   bool get hasMoreProducts => _hasMoreProducts;
   String get supplierInvoiceNumber => _supplierInvoiceNumber;
+
+  String get currencyCode => _currencyCode;
+  double? get typedExchangeRate => _typedExchangeRate;
+  bool get isForeignCurrency => _currencyCode.isNotEmpty;
+  String get baseCurrencyCode => _rates.baseCode;
+
+  /// Currencies a supplier may invoice in — everything enabled except the
+  /// shop's own. Empty on a shop with no FX feed, which keeps the picker hidden.
+  List<Currency> get supplierCurrencies => _currencies
+      .where((c) => c.isEnabled && c.code != _rates.baseCode)
+      .toList();
+
+  /// The rate that would be used for the current currency, or null when none is
+  /// known — in which case the buyer must type one.
+  ResolvedRate? get currentRate =>
+      _currencyCode.isEmpty ? null : _rates.rateFor(_currencyCode);
+
+  /// The rate the order will actually be costed at: what the buyer typed, else
+  /// what the feed knows. Null means the order cannot be costed yet.
+  double? get effectiveRate => _typedExchangeRate ?? currentRate?.rate;
+
+  /// The draft total as the supplier invoiced it, for checking against the
+  /// paper invoice. The stored total stays in the shop's own currency.
+  double get foreignDraftTotal => _draft.fold<double>(
+    0,
+    (sum, line) => sum + line.unitCost * line.quantity,
+  );
+
+  /// Loads the currency registry once. Silent on failure: not reaching the rate
+  /// endpoint is no reason to stop somebody recording a purchase — the picker
+  /// simply does not appear and the order is in the shop's own currency.
+  Future<void> loadSupplierCurrencies() async {
+    if (_hasLoadedCurrencies || _fxRepository == null) {
+      return;
+    }
+    _hasLoadedCurrencies = true;
+    final ratesResult = await _fxRepository.loadCurrentRates();
+    if (ratesResult case Ok<CurrentRates>(value: final loaded)) {
+      _rates = loaded;
+    }
+    // Same master switch as the product form: a single-currency shop is never
+    // shown a supplier-currency picker.
+    if (!_rates.fxEnabled) {
+      notifyListeners();
+      return;
+    }
+
+    final currenciesResult = await _fxRepository.loadCurrencies();
+    if (currenciesResult case Ok<List<Currency>>(value: final loaded)) {
+      configureForeignCurrencySymbols(<String, String>{
+        for (final currency in loaded) currency.code: currency.symbol,
+      });
+      _currencies = loaded;
+    }
+    notifyListeners();
+  }
+
+  void updateCurrencyCode(String value) {
+    if (_isSubmitting) {
+      return;
+    }
+    _currencyCode = value.trim().toUpperCase();
+    // A rate typed for the old currency means nothing for the new one.
+    _typedExchangeRate = null;
+    _touchSubmissionIntent();
+    notifyListeners();
+  }
+
+  void updateTypedExchangeRate(double? value) {
+    if (_isSubmitting) {
+      return;
+    }
+    _typedExchangeRate = (value != null && value > 0) ? value : null;
+    _touchSubmissionIntent();
+    notifyListeners();
+  }
+
   String get supplierInvoiceDateInput => _supplierInvoiceDateInput;
   List<PurchaseLandedCostEntry> get landedCostEntries =>
       List.unmodifiable(_landedCostEntries);
@@ -744,6 +843,8 @@ class PurchaseViewModel extends ChangeNotifier {
       supplierId: supplier.id,
       supplierInvoiceNumber: _supplierInvoiceNumber,
       supplierInvoiceDate: supplierInvoiceDate,
+      currencyCode: _currencyCode,
+      exchangeRate: _typedExchangeRate,
       landedCostEntries: _landedCostEntries,
       landedCostAllocationMethod: _landedCostAllocationMethod,
       discountCode: _discountCode,
@@ -759,6 +860,8 @@ class PurchaseViewModel extends ChangeNotifier {
         _selectedSupplier = null;
         _supplierInvoiceNumber = '';
         _supplierInvoiceDateInput = '';
+        _currencyCode = '';
+        _typedExchangeRate = null;
         _discountCode = '';
         _resetLandedCosts();
         _clearDiscountPreview();

@@ -117,6 +117,35 @@ class PurchaseOrder(TimeStampedModel):
         choices=Status.choices,
         default=Status.DRAFT,
     )
+    # --- Supplier currency -------------------------------------------------
+    # The currency the SUPPLIER invoiced in. NULL (the default, and every
+    # existing order) means the shop's own currency.
+    #
+    # Every money column on this order and its lines stays base currency —
+    # subtotal, discounts, landed costs, totals, and the ``unit_cost`` that
+    # becomes stock valuation. What this adds is the foreign figure the buyer
+    # actually read off the invoice, plus the rate that turned it into dinars,
+    # so a cost basis can be audited instead of being a hand-typed guess.
+    currency = models.ForeignKey(
+        "fx.Currency",
+        on_delete=models.PROTECT,
+        related_name="purchase_orders",
+        null=True,
+        blank=True,
+    )
+    # Frozen on the document, exactly like a product's price rate. Seeded from
+    # the resolver when the currency is chosen and editable while the order is a
+    # draft — a shop that negotiated its own rate with a changer types that one,
+    # and it is the rate the cost basis is built from either way.
+    exchange_rate = models.DecimalField(
+        max_digits=18,
+        decimal_places=8,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    rate_effective_at = models.DateTimeField(null=True, blank=True)
+    rate_source = models.CharField(max_length=16, blank=True, default="")
     supplier_invoice_number = models.CharField(max_length=120, blank=True)
     supplier_invoice_date = models.DateField(blank=True, null=True)
     notes = models.TextField(blank=True)
@@ -584,6 +613,18 @@ class PurchaseLine(TimeStampedModel):
         decimal_places=6,
         default=Decimal("1"),
         validators=[MinValueValidator(Decimal("0.000001"))],
+    )
+    # What the supplier's invoice says for one of this unit, in the ORDER's
+    # currency. NULL for a base-currency order. ``unit_cost`` below is derived
+    # from this at the order's frozen rate and stays the single number every
+    # downstream figure is built on — net cost, landed cost, valuation, COGS,
+    # margin — so none of them had to learn about currencies.
+    unit_cost_in_currency = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
     )
     unit_cost = models.DecimalField(
         max_digits=10,

@@ -6,7 +6,7 @@ import ssl
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone as datetime_timezone
 from urllib import error, request
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -194,6 +194,25 @@ class RelayControlClient:
         local events). Authenticated with the installation access token, like
         ``get_ai_usage``. Returns the decoded ``{"holidays": [...]}`` payload."""
         return self._request("GET", "/v1/holidays", relay_token=access_token)
+
+    def get_exchange_rates(self, *, access_token, since=None):
+        """Read the installation's exchange rates from the relay control plane.
+
+        The relay holds one ``fulus.ly`` subscription for the whole fleet and
+        fans the published rates out, so a shop never needs a key of its own and
+        never spends the provider's daily quota. Gated on the installation's FX
+        entitlement (subscription + ``fx_enabled``), the same shape as AI usage
+        and image search.
+
+        ``since`` is an ISO-8601 instant; passing the newest rate we already hold
+        turns a full calendar into a delta, which matters because rates are
+        published several times a day and a shop may have been offline for a
+        week. Returns the decoded ``{"rates": [...]}`` payload.
+        """
+        path = "/v1/exchange-rates"
+        if since:
+            path = f"{path}?since={quote(str(since))}"
+        return self._request("GET", path, relay_token=access_token)
 
     def search_product_images(self, *, access_token, query, page=1, page_size=30):
         """Run a relay-hosted product image search (Serper.dev).

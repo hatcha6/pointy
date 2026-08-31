@@ -40,6 +40,14 @@ class _ShopSetupWizardState extends State<ShopSetupWizard> {
   bool _kitchenScreen = false;
   InventoryValuationMethod _valuationMethod =
       InventoryValuationMethod.movingAverage;
+  // Off is the right answer for the overwhelming majority of Libyan shops —
+  // they buy and sell in dinars. Asking a plain yes/no here, rather than
+  // presenting a currency matrix, is what keeps multi-currency invisible to
+  // everyone who does not need it.
+  bool _foreignCurrency = false;
+  // Only meaningful once the answer above is yes. Both values are
+  // parallel-market rates; the question is how the shop actually pays.
+  String _settlementInstrument = 'cash';
   bool _isSubmitting = false;
   bool _hasError = false;
 
@@ -70,6 +78,8 @@ class _ShopSetupWizardState extends State<ShopSetupWizard> {
       autoPrintReceipts: _autoPrintReceipts,
       kitchenAutoComplete: _hasKitchen(type) ? !_kitchenScreen : null,
       inventoryValuationMethod: _valuationMethod,
+      fxEnabled: _foreignCurrency,
+      fxInstrument: _foreignCurrency ? _settlementInstrument : null,
     );
     if (!mounted) {
       return;
@@ -147,6 +157,12 @@ class _ShopSetupWizardState extends State<ShopSetupWizard> {
                   valuationMethod: _valuationMethod,
                   onValuationMethodChanged: (v) =>
                       setState(() => _valuationMethod = v),
+                  foreignCurrency: _foreignCurrency,
+                  onForeignCurrencyChanged: (value) =>
+                      setState(() => _foreignCurrency = value),
+                  settlementInstrument: _settlementInstrument,
+                  onSettlementInstrumentChanged: (value) =>
+                      setState(() => _settlementInstrument = value),
                 ),
               if (_hasError) ...[
                 SizedBox(height: spacing.md),
@@ -306,6 +322,10 @@ class _SettingsStep extends StatelessWidget {
     required this.onKitchenScreenChanged,
     required this.valuationMethod,
     required this.onValuationMethodChanged,
+    required this.foreignCurrency,
+    required this.onForeignCurrencyChanged,
+    required this.settlementInstrument,
+    required this.onSettlementInstrumentChanged,
   });
 
   final TextEditingController shopNameController;
@@ -323,6 +343,13 @@ class _SettingsStep extends StatelessWidget {
   final ValueChanged<bool> onKitchenScreenChanged;
   final InventoryValuationMethod valuationMethod;
   final ValueChanged<InventoryValuationMethod> onValuationMethodChanged;
+
+  /// Whether this shop buys or prices in a currency other than its own. Off by
+  /// default; the settlement question below only appears once it is on.
+  final bool foreignCurrency;
+  final ValueChanged<bool> onForeignCurrencyChanged;
+  final String settlementInstrument;
+  final ValueChanged<String> onSettlementInstrumentChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -395,6 +422,46 @@ class _SettingsStep extends StatelessWidget {
           value: requireOpeningCash,
           onChanged: onRequireOpeningCashChanged,
         ),
+        SwitchListTile(
+          key: const ValueKey('shop_setup_foreign_currency'),
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.shopSetupForeignCurrencyTitle),
+          subtitle: Text(l10n.shopSetupForeignCurrencySubtitle),
+          value: foreignCurrency,
+          onChanged: onForeignCurrencyChanged,
+        ),
+        // Asked only of a shop that said yes — for everyone else the question
+        // is meaningless and the row would be noise, exactly like the kitchen
+        // question above.
+        if (foreignCurrency) ...[
+          const SizedBox(height: 8),
+          Text(
+            l10n.shopSetupSettlementTitle,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          Text(
+            l10n.shopSetupSettlementSubtitle,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            segments: [
+              ButtonSegment(
+                value: 'cash',
+                label: Text(l10n.settlementInstrumentCash),
+                icon: const Icon(Icons.payments_outlined),
+              ),
+              ButtonSegment(
+                value: 'bank',
+                label: Text(l10n.settlementInstrumentBank),
+                icon: const Icon(Icons.account_balance_outlined),
+              ),
+            ],
+            selected: {settlementInstrument},
+            onSelectionChanged: (values) =>
+                onSettlementInstrumentChanged(values.first),
+          ),
+        ],
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.shopSetupReceiptsTitle),
@@ -481,7 +548,6 @@ List<_ShopTypeOption> _shopTypeOptions(AppLocalizations l10n) {
     ),
   ];
 }
-
 
 String _wizardValuationMethodLabel(
   AppLocalizations l10n,

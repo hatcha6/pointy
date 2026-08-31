@@ -16,9 +16,11 @@ import '../../../data/models/product_variant_draft.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/models/sale_order_page.dart';
+import '../../../data/models/exchange_rate.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
+import 'pricing_currency_options.dart';
 
 class ProductDetailsViewModel extends ChangeNotifier {
   ProductDetailsViewModel(
@@ -29,11 +31,14 @@ class ProductDetailsViewModel extends ChangeNotifier {
     AnalyticsEngine? analyticsEngine,
     bool shouldLoadSaleHistory = true,
     bool shouldLoadPurchaseHistory = true,
-  }) : _analyticsEngine = analyticsEngine,
+    PricingCurrencyOptions? pricingOptions,
+  }) : _pricingOptions = pricingOptions ?? PricingCurrencyOptions(null),
+       _analyticsEngine = analyticsEngine,
        _product = product,
        _shouldLoadSaleHistory = shouldLoadSaleHistory,
        _shouldLoadPurchaseHistory = shouldLoadPurchaseHistory {
     loadProduct();
+    unawaited(loadPricingCurrencies());
     if (_shouldLoadSaleHistory) {
       loadSaleHistory();
     }
@@ -48,6 +53,33 @@ class ProductDetailsViewModel extends ChangeNotifier {
   final PurchaseRepository _purchaseRepository;
   final SaleRepository _saleRepository;
   final AnalyticsEngine? _analyticsEngine;
+
+  /// The pricing-currency choices for the parent-edit sheet.
+  ///
+  /// Handed in from the catalog view model rather than built here, so the create
+  /// form and the edit sheet share ONE loaded instance: they cannot answer
+  /// "which currencies?" differently, and opening a product costs no extra
+  /// round trip. Absent (a null-repository instance) it stays empty and the
+  /// picker never appears.
+  final PricingCurrencyOptions _pricingOptions;
+
+  /// Passed on when this screen opens another product, so the shared
+  /// instance keeps travelling instead of each screen reloading.
+  PricingCurrencyOptions get pricingOptions => _pricingOptions;
+
+  List<Currency> get pricingCurrencies => _pricingOptions.currencies;
+
+  String get baseCurrencyCode => _pricingOptions.baseCode;
+
+  ResolvedRate? rateFor(String currencyCode) =>
+      _pricingOptions.rateFor(currencyCode);
+
+  Future<void> loadPricingCurrencies() async {
+    if (await _pricingOptions.load()) {
+      notifyListeners();
+    }
+  }
+
   final bool _shouldLoadSaleHistory;
   final bool _shouldLoadPurchaseHistory;
   Product _product;

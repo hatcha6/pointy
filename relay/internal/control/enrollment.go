@@ -180,11 +180,12 @@ const installationInsertSQL = `INSERT INTO relay_installations (
 	connector_certificate_expires_at,
 	relay_enabled,
 	ai_enabled,
+	fx_enabled,
 	subscription_active,
 	subscription_ends_at,
 	created_at,
 	updated_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
 
 func installationInsertArgs(installation Installation) []any {
 	return []any{
@@ -198,6 +199,7 @@ func installationInsertArgs(installation Installation) []any {
 		installation.ConnectorCertificateExpiresAt,
 		installation.RelayEnabled,
 		installation.AIEnabled,
+		installation.FXEnabled,
 		installation.SubscriptionActive,
 		installation.SubscriptionEndsAt,
 		installation.CreatedAt,

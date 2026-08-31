@@ -29,7 +29,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APITestCase
 
 from apps.catalog.models import ProductCategory, ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
@@ -301,6 +301,79 @@ class ApiAuthenticationTests(TestCase):
         user.refresh_from_db()
         self.assertTrue(user.check_password("New-Strong-Pass-2026!"))
         self.assertEqual(wrong_password_response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+    def test_a_short_numeric_pin_is_accepted(self):
+        """The product decision, pinned.
+
+        Staff sign in on a shared terminal all shift and pick a 4-digit PIN.
+        Django's stock policy would reject every one of them, so only a length
+        floor is enforced and the stronger rules are served as advice.
+        """
+        user = get_user_model().objects.create_user(
+            username="pin-user", password="secret-pass"
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(
+            reverse("auth-password-change"),
+            {"current_password": "secret-pass", "new_password": "1234"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password("1234"))
+
+    def test_rejected_password_carries_machine_codes_for_the_client(self):
+        """A rejection has to say which rule broke, not just that one did.
+
+        Django's messages are English-only here, so the Arabic UI localizes from
+        these codes; without them the shop sees a generic failure and has to
+        guess what the password needs.
+        """
+        user = get_user_model().objects.create_user(
+            username="rules-user", password="secret-pass"
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(
+            reverse("auth-password-change"),
+            {"current_password": "secret-pass", "new_password": "12"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("password_too_short", response.data["codes"])
+        self.assertTrue(response.data["new_password"])
+
+    def test_password_policy_separates_the_floor_from_the_advice(self):
+        """The checklist is served, not duplicated — it cannot drift."""
+        user = get_user_model().objects.create_user(
+            username="policy-user", password="secret-pass"
+        )
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.get(reverse("auth-password-policy"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["required"], ["min_length"])
+        self.assertEqual(response.data["min_length"], 4)
+        self.assertEqual(response.data["recommended_min_length"], 8)
+        self.assertEqual(
+            sorted(response.data["advisory"]),
+            ["not_common", "not_numeric", "not_similar_to_user", "recommended_length"],
+        )
+
+    def test_password_policy_requires_authentication(self):
+        response = APIClient().get(reverse("auth-password-policy"))
+        self.assertIn(
+            response.status_code,
+            (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN),
+        )
 
 
 class PosUserManagementTests(TestCase):
@@ -2489,18 +2562,40 @@ class BootstrapAdminTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         self.assertFalse(get_user_model().objects.filter(username="owner").exists())
 
-    def test_setup_admin_endpoint_rejects_weak_password(self):
+    def test_setup_admin_endpoint_rejects_a_password_under_the_floor(self):
+        """The floor is all that is enforced — but it is enforced here too.
+
+        A common password like "password" is now accepted (the strong rules are
+        advice, not gates, since shop staff pick short PINs); anything shorter
+        than POINTY_PASSWORD_MIN_LENGTH is still refused.
+        """
         response = APIClient().post(
             reverse("setup-initial-admin"),
             {
                 "username": "owner",
-                "password": "password",
+                "password": "pw",
             },
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(get_user_model().objects.exists())
+
+    def test_setup_admin_endpoint_accepts_a_simple_password(self):
+        """First boot must not be blocked by a policy the owner cannot satisfy."""
+        response = APIClient().post(
+            reverse("setup-initial-admin"),
+            {
+                "username": "owner",
+                "password": "1234",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(
+            get_user_model().objects.filter(username="owner").exists()
+        )
 
 
 _THROTTLE_TEST_CACHE = {
@@ -2566,19 +2661,19 @@ class AuthThrottlingTests(TestCase):
 
     def test_setup_admin_endpoint_is_throttled(self):
         client = APIClient()
-        # Default rate is 5/hour for the setup throttle; weak passwords keep
-        # each attempt at 400 without completing onboarding.
+        # Default rate is 5/hour for the setup throttle; a password under the
+        # enforced floor keeps each attempt at 400 without completing onboarding.
         for _ in range(5):
             response = client.post(
                 reverse("setup-initial-admin"),
-                {"username": "owner", "password": "password"},
+                {"username": "owner", "password": "pw"},
                 format="json",
             )
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
         throttled = client.post(
             reverse("setup-initial-admin"),
-            {"username": "owner", "password": "password"},
+            {"username": "owner", "password": "pw"},
             format="json",
         )
         self.assertEqual(throttled.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
@@ -3238,3 +3333,55 @@ class AiterInThreadBackpressureTests(SimpleTestCase):
         # The parked producer must wake, observe the close, and run its
         # ``finally`` instead of leaking a blocked thread.
         self.assertTrue(await asyncio.to_thread(cleaned_up.wait, 5))
+
+
+class ShopSetupCurrencyStepTests(APITestCase):
+    """The onboarding wizard's currency question.
+
+    Off is the right answer for the overwhelming majority of Libyan shops, so
+    the default must survive a setup that never mentions currency at all — an
+    older client, or an owner who just clicks through.
+    """
+
+    def setUp(self):
+        super().setUp()
+        ensure_role_groups()
+        self.user = get_user_model().objects.create_user(
+            username="owner", password="pw-owner-1"
+        )
+        self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client.force_authenticate(self.user)
+
+    def _setup(self, **extra):
+        payload = {"shop_type": "grocery"}
+        payload.update(extra)
+        return self.client.post(reverse("shop-setup"), payload, format="json")
+
+    def test_a_setup_that_never_mentions_currency_stays_single_currency(self):
+        response = self._setup()
+        self.assertEqual(response.status_code, 200, response.data)
+        settings = ShopSettings.load()
+        self.assertFalse(settings.fx_enabled)
+        self.assertEqual(settings.currency_code, "LYD")
+
+    def test_answering_yes_turns_the_feature_on(self):
+        response = self._setup(fx_enabled=True, fx_instrument="bank")
+        self.assertEqual(response.status_code, 200, response.data)
+        settings = ShopSettings.load()
+        self.assertTrue(settings.fx_enabled)
+        self.assertEqual(settings.fx_instrument, "bank")
+
+    def test_answering_no_leaves_it_off(self):
+        self._setup(fx_enabled=False)
+        self.assertFalse(ShopSettings.load().fx_enabled)
+
+    def test_an_unknown_settlement_instrument_is_refused(self):
+        response = self._setup(fx_enabled=True, fx_instrument="official")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("fx_instrument", response.data)
+
+    def test_the_base_currency_is_never_changed_by_setup(self):
+        # The wizard asks whether the shop deals in OTHER currencies. It never
+        # changes what the shop's own money is.
+        self._setup(fx_enabled=True, fx_instrument="cash")
+        self.assertEqual(ShopSettings.load().currency_code, "LYD")

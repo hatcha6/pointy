@@ -64,6 +64,7 @@ env = environ.Env(
     POINTY_DASHBOARD_WARM_INTERVAL_MINUTES=(int, 5),
     POINTY_FRAUD_DETECTION_INTERVAL_MINUTES=(int, 15),
     POINTY_FRAUD_DETECTION_LOOKBACK_DAYS=(int, 30),
+    POINTY_PASSWORD_MIN_LENGTH=(int, 4),
     POINTY_BACKUP_RETENTION_COUNT=(int, 7),
     POINTY_BACKUP_RESTORE_MAX_BYTES=(int, 5 * 1024 * 1024 * 1024),
 )
@@ -126,6 +127,7 @@ INSTALLED_APPS = [
     "apps.ai",
     "apps.migration",
     "apps.holidays",
+    "apps.fx",
     "apps.clients",
 ]
 
@@ -248,11 +250,24 @@ if _secure_proxy_ssl_header:
     if len(_secure_proxy_ssl_header_parts) == 2:
         SECURE_PROXY_SSL_HEADER = tuple(_secure_proxy_ssl_header_parts)
 
+# Deliberately permissive. Shop staff here sign in on a shared POS terminal many
+# times a shift and overwhelmingly choose a short numeric PIN; Django's stock
+# policy (8 chars, not common, not numeric, not like your name) would reject
+# essentially every password a real cashier picks. A rule that cannot be obeyed
+# is not obeyed — it gets worked around, written on a sticky note by the till, or
+# it blocks onboarding outright.
+#
+# So only a length floor is *enforced*. The stronger rules still ship, as advice:
+# apps.core.password_policy serves them to the client, which shows them as
+# suggestions next to the field. Raise POINTY_PASSWORD_MIN_LENGTH per deployment
+# to tighten the floor.
+POINTY_PASSWORD_MIN_LENGTH = env("POINTY_PASSWORD_MIN_LENGTH")
+
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": POINTY_PASSWORD_MIN_LENGTH},
+    },
 ]
 
 LANGUAGE_CODE = "en-us"
@@ -531,6 +546,15 @@ CELERY_BEAT_SCHEDULE = {
     "sales.release-expired-quote-reservations": {
         "task": "sales.release_expired_quote_reservations",
         "schedule": crontab(minute=15, hour=0),
+    },
+    # Pull published exchange rates from the relay. Hourly rather than daily
+    # because parallel-market rates move several times a day, and a shop that
+    # prices imports off a nine-hour-old rate is carrying a real error. The
+    # relay pushes new rates over the connector tunnel as they arrive; this is
+    # the backstop that heals a shop which was offline when one was published.
+    "fx.sync-exchange-rates": {
+        "task": "fx.sync_exchange_rates",
+        "schedule": crontab(minute=7),
     },
     # Pull the relay's holiday calendar (Eids entered per year, local events,
     # central corrections) into the local table once a day.

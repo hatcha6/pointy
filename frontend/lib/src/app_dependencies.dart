@@ -37,6 +37,7 @@ import 'data/repositories/sale_repository.dart';
 import 'data/repositories/sales_channel_repository.dart';
 import 'data/repositories/shop_settings_repository.dart';
 import 'data/repositories/stock_count_repository.dart';
+import 'data/repositories/fx_repository.dart';
 import 'data/repositories/subscription_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'data/services/backend_discovery_service.dart';
@@ -133,6 +134,7 @@ class PointyAppDependencies {
     treasuryRepository = TreasuryRepository(service);
     stockCountRepository = StockCountRepository(service);
     subscriptionRepository = SubscriptionRepository(service);
+    fxRepository = FxRepository(service);
     messagingRepository = MessagingRepository(service);
     crmRepository = CrmRepository(service);
     userRepository = UserRepository(service);
@@ -205,6 +207,7 @@ class PointyAppDependencies {
   late final TreasuryRepository treasuryRepository;
   late final StockCountRepository stockCountRepository;
   late final SubscriptionRepository subscriptionRepository;
+  late final FxRepository fxRepository;
   late final MessagingRepository messagingRepository;
   late final CrmRepository crmRepository;
   late final UserRepository userRepository;
@@ -376,6 +379,7 @@ class PointyAppDependencies {
         purchaseRepository,
         analyticsEngine: analyticsEngine,
         persistScope: authViewModel.currentUser?.id.toString(),
+        fxRepository: fxRepository,
       );
 
   PurchaseOrderListViewModel get purchaseOrderListViewModel =>

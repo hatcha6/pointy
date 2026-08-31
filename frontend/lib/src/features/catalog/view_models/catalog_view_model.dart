@@ -11,7 +11,10 @@ import '../../../data/models/product_image_upload.dart';
 import '../../../data/models/product_page.dart';
 import '../../../data/models/product_query.dart';
 import '../../../data/models/product_variant.dart';
+import '../../../data/models/exchange_rate.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import '../../../data/repositories/fx_repository.dart';
+import 'pricing_currency_options.dart';
 
 enum CatalogBarcodeLookupStatus { found, notFound, error }
 
@@ -55,13 +58,25 @@ class CatalogBarcodeLookupOutcome {
 }
 
 class CatalogViewModel extends ChangeNotifier {
-  CatalogViewModel(this._catalogRepository, {AnalyticsEngine? analyticsEngine})
-    : _analyticsEngine = analyticsEngine {
+  CatalogViewModel(
+    this._catalogRepository, {
+    AnalyticsEngine? analyticsEngine,
+    FxRepository? fxRepository,
+  }) : _analyticsEngine = analyticsEngine,
+       _fxRepository = fxRepository {
     loadProducts();
   }
 
   final CatalogRepository _catalogRepository;
   final AnalyticsEngine? _analyticsEngine;
+
+  /// Optional so every existing construction site keeps working. Without it the
+  /// product form simply never offers a pricing currency, which is the correct
+  /// behaviour for a shop that has no foreign exposure.
+  late final PricingCurrencyOptions _pricingOptions = PricingCurrencyOptions(
+    _fxRepository,
+  );
+  final FxRepository? _fxRepository;
 
   CatalogRepository get catalogRepository => _catalogRepository;
 
@@ -83,6 +98,28 @@ class CatalogViewModel extends ChangeNotifier {
   final Set<int> _selectedIds = {};
   bool _selectionMode = false;
   bool _isBulkRunning = false;
+
+  /// Currencies a product's price sheet may be written in, and the rates behind
+  /// the form's conversion preview. Shared with the edit sheet's view model via
+  /// [PricingCurrencyOptions] so both ask the question the same way.
+  /// Shared with each product's details view model so both surfaces read one
+  /// loaded instance.
+  PricingCurrencyOptions get pricingOptions => _pricingOptions;
+
+  List<Currency> get pricingCurrencies => _pricingOptions.currencies;
+
+  CurrentRates get currentRates => _pricingOptions.rates;
+
+  String get baseCurrencyCode => _pricingOptions.baseCode;
+
+  ResolvedRate? rateFor(String currencyCode) =>
+      _pricingOptions.rateFor(currencyCode);
+
+  Future<void> loadPricingCurrencies() async {
+    if (await _pricingOptions.load()) {
+      notifyListeners();
+    }
+  }
 
   List<Product> get products => List.unmodifiable(_products);
   bool get isLoading => _isLoading;
