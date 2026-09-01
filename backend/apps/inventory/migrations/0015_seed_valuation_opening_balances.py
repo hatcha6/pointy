@@ -22,7 +22,6 @@ def seed_opening_balances(apps, schema_editor):
     StockLedgerEntry = apps.get_model("inventory", "StockLedgerEntry")
     StockValuationBin = apps.get_model("inventory", "StockValuationBin")
     PurchaseLine = apps.get_model("purchasing", "PurchaseLine")
-    PurchaseOrder = apps.get_model("purchasing", "PurchaseOrder")
     ShopSettings = apps.get_model("core", "ShopSettings")
 
     warehouse, _ = Warehouse.objects.get_or_create(
@@ -54,7 +53,12 @@ def seed_opening_balances(apps, schema_editor):
     costs = {}
     lines = (
         PurchaseLine.objects.filter(variant_id__in=variant_ids)
-        .exclude(purchase_order__status=PurchaseOrder.Status.CANCELLED)
+        # The literal, not ``PurchaseOrder.Status.CANCELLED``: a historical
+        # model rebuilt from migration state carries only fields, managers and
+        # Meta — never the nested TextChoices class. Reaching for it here raised
+        # AttributeError on every shop that actually had stock to open with (an
+        # empty database returns above, which is why the suite never saw it).
+        .exclude(purchase_order__status="cancelled")
         .order_by("variant_id", "-created_at", "-id")
         .values("variant_id", "unit_cost", "unit_factor")
     )
