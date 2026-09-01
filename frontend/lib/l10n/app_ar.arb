@@ -4636,9 +4636,9 @@
   "@editPurchaseOrderAction": {
     "description": "Action label to edit a draft purchase order."
   },
-  "purchaseOrderEditDescription": "فتح المسودة في شاشة الشراء لتعديل أصنافها قبل الإرسال.",
+  "purchaseOrderEditDescription": "فتح الأمر في شاشة الشراء لتعديل أصنافه وتكاليفه قبل تسجيل الدفع.",
   "@purchaseOrderEditDescription": {
-    "description": "Description for the edit action on a draft purchase order."
+    "description": "Description for the edit action on a purchase order that no payment has settled against yet."
   },
   "savePurchaseDraftButton": "حفظ التعديلات",
   "@savePurchaseDraftButton": {
@@ -4665,9 +4665,13 @@
   "@editPurchaseOrderLoadError": {
     "description": "Error shown when a draft purchase order cannot be loaded for editing."
   },
-  "editPurchaseOrderNotEditableError": "لا يمكن التعديل بعد استلام بضاعة أو تسجيل دفعة على أمر الشراء.",
+  "editPurchaseOrderNotEditableError": "لا يمكن التعديل بعد تسجيل دفعة أو رصيد على أمر الشراء.",
   "@editPurchaseOrderNotEditableError": {
-    "description": "Error shown when trying to edit a purchase order that already has a receipt or payment recorded."
+    "description": "Error shown when trying to edit a purchase order that a payment, credit or return has already settled against."
+  },
+  "purchaseEditReceivedOrderNotice": "تم استلام هذا الأمر بالفعل. عند الحفظ سيُعاد تسجيل الاستلام بالكميات والتكاليف الجديدة.",
+  "@purchaseEditReceivedOrderNotice": {
+    "description": "Notice shown while editing a purchase order whose goods are already received: saving unwinds and re-records the receipt."
   },
   "purchaseEditUnresolvedLines": "تعذّر تحميل {count} من الأصناف لأنها لم تعد متوفرة في الكتالوج.",
   "@purchaseEditUnresolvedLines": {

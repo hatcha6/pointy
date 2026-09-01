@@ -5,6 +5,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import models, transaction
 from django.utils import timezone
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
@@ -15,7 +16,7 @@ from apps.discounts.models import (
     normalize_coupon_code,
 )
 from apps.discounts.services import DiscountUsageLimitExceeded, persist_applied_discounts
-from apps.inventory.models import StockLedgerEntry, StockMovement
+from apps.inventory.models import StockBatch, StockLedgerEntry, StockMovement
 from apps.inventory.services import (
     build_stock_movement,
     consume_expiring_stock_batches,
@@ -370,29 +371,139 @@ def decrement_expected(stock_item, quantity):
     return expected_reduction
 
 
-def _submitted_order_is_editable(purchase_order) -> bool:
-    """A submitted PO stays editable until anything downstream hangs off it:
-    the first receipt flips the status, so ``submitted`` already implies
-    nothing was received — payments/credits are the remaining blockers."""
-    return (
-        purchase_order.status == PurchaseOrder.Status.SUBMITTED
-        and not purchase_order.supplier_payments.exists()
-        and not purchase_order.supplier_credits.exists()
+def _has_related_rows(purchase_order, relation) -> bool:
+    """Whether ``relation`` holds any row, reusing a prefetched list when the
+    caller has one. The editability gate is asked once per row on the orders
+    list, where three ``exists()`` queries an order would be three too many."""
+    prefetched = getattr(purchase_order, "_prefetched_objects_cache", None)
+    if prefetched is not None and relation in prefetched:
+        return bool(prefetched[relation])
+    return getattr(purchase_order, relation).exists()
+
+
+def purchase_order_is_editable(purchase_order) -> bool:
+    """Whether the order can still be corrected.
+
+    Receiving is not what closes an order to edits — money is. An owner who
+    typed the wrong cost or miscounted a delivery keeps the right to fix it,
+    and the receipt is unwound and re-recorded around the fix. The first
+    supplier payment or credit ends that: from then on the order is what the
+    money was settled against. A return, refund or exchange ends it too, since
+    its lines hang off the very receipt an edit would replace.
+    """
+    if purchase_order.status == PurchaseOrder.Status.DRAFT:
+        return True
+    if purchase_order.status == PurchaseOrder.Status.CANCELLED:
+        return False
+    return not (
+        _has_related_rows(purchase_order, "supplier_payments")
+        or _has_related_rows(purchase_order, "supplier_credits")
+        or _has_related_rows(purchase_order, "adjustments")
     )
 
 
-def _release_expected_stock(purchase_order, *, created_by):
-    """Reverse the expected-stock counters a submit added, line by line.
-    Used when a still-untouched submitted order is edited: the old lines are
-    about to be replaced, so their expectation must not linger."""
-    for line in purchase_order.lines.select_related(
-        "variant",
-        "variant__product",
-    ).order_by("variant_id"):
+def _require_receiving_permission(request):
+    """Undoing and re-recording a receipt moves stock, which is not what the
+    edit-a-draft permission grants. Service callers with no request (the
+    importer, management commands) are not user actions and pass through."""
+    user = getattr(request, "user", None)
+    if user is None or not getattr(user, "is_authenticated", False):
+        return
+    if user.has_perm("purchasing.receive_purchaseorder"):
+        return
+    raise PermissionDenied(
+        "Changing a received purchase order re-records its receipt, which "
+        "needs the receiving permission."
+    )
+
+
+# Order fields that change what a line cost, and so what the stock it put on
+# the shelf is worth. Editing one of these re-records the delivery the same way
+# editing the lines does.
+_COST_BASIS_FIELDS = frozenset(
+    {
+        "extra_discount_amount",
+        "discount_codes",
+        "landed_cost_allocation_method",
+    }
+)
+
+
+def _receipt_totals_by_line(purchase_order):
+    """Accepted/damaged/cancelled per purchase line, in one query.
+
+    The line properties answer the same question, but each is its own
+    aggregate — asking them line by line on a twenty-line order is sixty
+    queries where this is one.
+    """
+    return {
+        row["purchase_line_id"]: row
+        for row in (
+            PurchaseReceiptLine.objects.filter(
+                purchase_line__purchase_order=purchase_order
+            )
+            .values("purchase_line_id")
+            .annotate(
+                accepted=models.Sum("accepted_quantity"),
+                damaged=models.Sum("damaged_quantity"),
+                cancelled=models.Sum("cancelled_quantity"),
+            )
+        )
+    }
+
+
+def _receiving_snapshots(purchase_order, *, lines):
+    """What each line has already had received, taken before its receipts are
+    undone. The ordered quantity rides along because that is what says whether
+    the owner actually changed the line: an untouched line is put back exactly
+    as it arrived, a changed one is re-received to its new quantity.
+    """
+    totals = _receipt_totals_by_line(purchase_order)
+    fully_received = purchase_order.status == PurchaseOrder.Status.RECEIVED
+    snapshots = []
+    for line in lines:
+        row = totals.get(line.pk)
+        if row is None:
+            # An order that was received without its receipt being recorded
+            # line by line (an import, or a legacy one-shot receive) still put
+            # its goods on the shelf — the line properties say the same.
+            accepted = line.quantity if fully_received else Decimal("0")
+            damaged = cancelled = Decimal("0")
+        else:
+            accepted = row["accepted"] or Decimal("0")
+            damaged = row["damaged"] or Decimal("0")
+            cancelled = row["cancelled"] or Decimal("0")
+        snapshots.append(
+            {
+                "line": line,
+                "key": (line.variant_id, line.unit),
+                "ordered": line.quantity,
+                "accepted": accepted,
+                "damaged": damaged,
+                "cancelled": cancelled,
+                "outstanding": max(
+                    line.quantity - accepted - damaged - cancelled,
+                    Decimal("0"),
+                ),
+            }
+        )
+    return snapshots
+
+
+def _release_expected_stock(purchase_order, *, snapshots, created_by):
+    """Reverse the expected-stock counters this order still holds, line by
+    line. Used when its lines are about to be replaced, so their expectation
+    cannot linger. Only what is still outstanding is released: units a receipt
+    already turned into stock stopped being expected when it did.
+    """
+    for snapshot in sorted(snapshots, key=lambda row: row["line"].variant_id):
+        line = snapshot["line"]
+        if snapshot["outstanding"] <= 0:
+            continue
         stock_item = lock_stock_item(variant=line.variant)
         before = stock_snapshot(stock_item)
         expected_reduction = decrement_expected(
-            stock_item, line.to_base_quantity(line.quantity)
+            stock_item, line.to_base_quantity(snapshot["outstanding"])
         )
         if expected_reduction <= 0:
             continue
@@ -406,6 +517,148 @@ def _release_expected_stock(purchase_order, *, created_by):
             created_by=created_by,
             before=before,
         )
+
+
+def _reverse_received_stock(purchase_order, *, snapshots, created_by):
+    """Take the delivery back off the shelf so the edited order can put it back.
+
+    Only accepted units ever reached ``quantity_on_hand`` — damaged and
+    cancelled ones stopped at the expectation — so those are what comes off, at
+    whatever the ledger says that stock is worth, exactly as a purchase return
+    leaves. Refuses when the units are no longer there to take back: an order
+    whose goods have already been sold can only be corrected with a return.
+    """
+    received = [
+        (snapshot["line"], snapshot["accepted"])
+        for snapshot in snapshots
+        if snapshot["accepted"] > 0
+    ]
+    if received:
+        stock_items = validate_purchase_stock_available(received)
+        for line, quantity in received:
+            stock_item = stock_items[line.variant_id]
+            before = stock_snapshot(stock_item)
+            base_quantity = line.to_base_quantity(quantity)
+            stock_item.quantity_on_hand -= base_quantity
+            save_stock_item_quantities(stock_item)
+            create_stock_movement(
+                variant=line.variant,
+                stock_item=stock_item,
+                movement_type=StockMovement.Type.DECREASE,
+                quantity=base_quantity,
+                note=f"تعديل استلام {purchase_order.order_number}",
+                created_by=created_by,
+                before=before,
+                voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RETURN,
+                voucher_id=purchase_order.pk,
+            )
+    # Expiry batches are cut from receipt lines and PROTECT them, so they go
+    # first; the edited order records its own receipt, batches included.
+    StockBatch.objects.filter(
+        source_receipt_line__receipt__purchase_order=purchase_order
+    ).delete()
+    PurchaseReceiptLine.objects.filter(
+        receipt__purchase_order=purchase_order
+    ).delete()
+    purchase_order.receipts.all().delete()
+    # Back to "ordered, nothing arrived" — the caller's save writes it, and
+    # _rerecord_receiving puts the delivery back once the edit has settled.
+    purchase_order.status = PurchaseOrder.Status.SUBMITTED
+    purchase_order.received_at = None
+    purchase_order.cancelled_total = Decimal("0.00")
+
+
+def _replayed_receipt_quantities(snapshot, quantity, *, fully_received):
+    """How much of an edited line to re-receive.
+
+    An untouched line replays exactly what arrived, over-delivery included. A
+    line whose quantity the owner changed is re-received to the new quantity:
+    in full if that line had been closed (the point of such an edit is "12
+    arrived, not 10"), otherwise up to what had actually arrived, leaving the
+    rest outstanding as it was. A line that is new to a fully-received order
+    arrives with it; one added to a part-delivered order stays outstanding.
+    """
+    zero = Decimal("0")
+    if snapshot is None:
+        if not fully_received:
+            return zero, zero, zero, zero
+        accepted, damaged, cancelled = quantity, zero, zero
+    elif snapshot["ordered"] == quantity:
+        accepted = snapshot["accepted"]
+        damaged = snapshot["damaged"]
+        cancelled = snapshot["cancelled"]
+    elif snapshot["outstanding"] <= 0:
+        damaged = min(snapshot["damaged"], quantity)
+        cancelled = min(snapshot["cancelled"], quantity - damaged)
+        accepted = quantity - damaged - cancelled
+    else:
+        accepted = min(snapshot["accepted"], quantity)
+        damaged = min(snapshot["damaged"], quantity - accepted)
+        cancelled = min(snapshot["cancelled"], quantity - accepted - damaged)
+    over_received = max(accepted + damaged - quantity, zero)
+    # A delivery can overshoot the order or fall short of it, never both at
+    # once — the receipt validator refuses cancelled units alongside an
+    # over-delivery, and a replay that did would be refused by its own order.
+    if over_received > 0:
+        cancelled = zero
+    return accepted, damaged, cancelled, over_received
+
+
+# The receipt an edit re-records is the same delivery, told again against the
+# corrected order.
+EDIT_RECEIPT_NOTE = "إعادة تسجيل الاستلام بعد تعديل أمر الشراء"
+
+
+def _rerecord_receiving(purchase_order, *, snapshots, request):
+    """Put the delivery back against the edited lines.
+
+    Runs last, once the edit's discounts and landed costs have settled, so the
+    stock goes back on the shelf valued at what the corrected order says it
+    cost — which is the whole point of letting a received order be edited.
+    """
+    if not any(
+        snapshot["accepted"] or snapshot["damaged"] or snapshot["cancelled"]
+        for snapshot in snapshots
+    ):
+        return
+    fully_received = all(snapshot["outstanding"] <= 0 for snapshot in snapshots)
+    pools = {}
+    for snapshot in snapshots:
+        pools.setdefault(snapshot["key"], []).append(snapshot)
+
+    lines_data = []
+    for line in purchase_order.lines.select_related(
+        "variant",
+        "variant__product",
+    ).order_by("created_at", "id"):
+        pool = pools.get((line.variant_id, line.unit))
+        snapshot = pool.pop(0) if pool else None
+        accepted, damaged, cancelled, over_received = _replayed_receipt_quantities(
+            snapshot,
+            line.quantity,
+            fully_received=fully_received,
+        )
+        if accepted + damaged + cancelled <= 0:
+            continue
+        lines_data.append(
+            {
+                "line": line,
+                "accepted_quantity": accepted,
+                "damaged_quantity": damaged,
+                "cancelled_quantity": cancelled,
+                "allowed_over_receipt_quantity": over_received,
+                "expiry_date": line.expiry_date,
+            }
+        )
+    if not lines_data:
+        return
+    receive_purchase_order(
+        purchase_order,
+        request=request,
+        lines_data=lines_data,
+        notes=EDIT_RECEIPT_NOTE,
+    )
+    purchase_order.refresh_from_db()
 
 
 def _add_expected_stock(purchase_order, *, created_by):
@@ -442,6 +695,7 @@ def save_purchase_order_with_lines(
 ):
     is_create = purchase_order is None
     rebuild_expected = False
+    snapshots = None
     if purchase_order is None:
         # Tag the PO with the special day(s) active on its creation date (the
         # user's "when ordered" choice) — a stable forecasting signal. Defensive:
@@ -454,17 +708,42 @@ def save_purchase_order_with_lines(
             pk=purchase_order.pk
         )
         if purchase_order.status != PurchaseOrder.Status.DRAFT:
-            # A submitted-but-untouched order (nothing received, nothing paid)
-            # can still be corrected; its expected-stock counters are rebuilt
-            # around the line replacement below.
-            if not _submitted_order_is_editable(purchase_order):
+            # Anything money has not settled against can still be corrected, a
+            # received order included: its expected stock, its delivery and its
+            # receipt are all unwound here and rebuilt around the line
+            # replacement below.
+            if not purchase_order_is_editable(purchase_order):
                 raise serializers.ValidationError(
-                    {"detail": "Only draft purchase orders can be changed."}
+                    {
+                        "code": "purchase_order_settled",
+                        "detail": (
+                            "A purchase order cannot be changed once a payment "
+                            "or credit is recorded against it."
+                        ),
+                    }
                 )
-            rebuild_expected = lines_data is not None
+            # Anything that moves a line's cost basis has to be re-recorded
+            # against the stock it valued, not just the lines themselves: a
+            # landed cost or an order-level discount changes what the delivery
+            # was worth every bit as much as a corrected unit cost does.
+            rebuild_expected = (
+                lines_data is not None
+                or landed_cost_entries_data is not None
+                or bool(_COST_BASIS_FIELDS.intersection(order_fields))
+            )
         if rebuild_expected:
+            if purchase_order.status != PurchaseOrder.Status.SUBMITTED:
+                _require_receiving_permission(request)
+            created_by = purchase_created_by(request)
+            snapshots = _receiving_snapshots(
+                purchase_order,
+                lines=lock_purchase_lines_for_update(purchase_order),
+            )
             _release_expected_stock(
-                purchase_order, created_by=purchase_created_by(request)
+                purchase_order, snapshots=snapshots, created_by=created_by
+            )
+            _reverse_received_stock(
+                purchase_order, snapshots=snapshots, created_by=created_by
             )
         for field, value in order_fields.items():
             setattr(purchase_order, field, value)
@@ -515,6 +794,8 @@ def save_purchase_order_with_lines(
         ),
         request=request,
     )
+    if snapshots:
+        _rerecord_receiving(purchase_order, snapshots=snapshots, request=request)
     return purchase_order
 
 

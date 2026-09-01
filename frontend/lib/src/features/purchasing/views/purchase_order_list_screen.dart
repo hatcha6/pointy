@@ -180,8 +180,13 @@ class _PurchaseOrderListBody extends StatelessWidget {
                     : null,
               ),
               itemBuilder: (context, order) {
+                // Same pair the details screen and the backend ask for: a
+                // delivered order is edited by re-recording its receipt.
                 final canEdit =
-                    capabilities.canEditDraftPurchaseOrder && order.isEditable;
+                    capabilities.canEditDraftPurchaseOrder &&
+                    order.isEditable &&
+                    (!order.hasReceivedStock ||
+                        capabilities.canReceivePurchaseOrder);
                 return PurchaseOrderTile(
                   order: order,
                   onTap: () => onOpenPurchaseOrder(order),

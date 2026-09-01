@@ -41,10 +41,11 @@ class PurchaseOrder {
     this.balanceDue = 0,
     this.paymentStatus = '',
     this.isOverdue = false,
+    bool? isEditable,
     this.createdAt,
     this.submittedAt,
     this.receivedAt,
-  });
+  }) : _isEditable = isEditable;
 
   final int id;
   final String orderNumber;
@@ -115,12 +116,28 @@ class PurchaseOrder {
   bool get hasOpenReceiving =>
       lines.any((line) => line.openQuantity > 0 || line.receivableQuantity > 0);
 
-  /// An order can be reopened and edited while nothing downstream hangs off
-  /// it: drafts always, and submitted orders until the first receipt (which
-  /// flips the status) or payment. Mirrors the backend rule in
-  /// purchasing.services.save_purchase_order_with_lines.
+  /// What the server said about editability, when it said anything. Older
+  /// backends omit the field; [isEditable] falls back to the same rule they
+  /// enforce.
+  final bool? _isEditable;
+
+  /// An order can be reopened and edited until money settles against it —
+  /// receiving does not close it, a payment or credit does, and so does a
+  /// return (whose lines hang off the receipt an edit would replace). Decided
+  /// server-side by purchasing.services.purchase_order_is_editable; the
+  /// fallback is the older rule, for an app talking to a backend that predates
+  /// the field.
   bool get isEditable =>
-      status == 'draft' || (status == 'submitted' && paymentStatus == 'unpaid');
+      _isEditable ??
+      (status == 'draft' ||
+          (status == 'submitted' && paymentStatus == 'unpaid'));
+
+  /// Whether editing this order will re-record a delivery that is already on
+  /// the shelf — what the editor warns about before it opens.
+  bool get hasReceivedStock =>
+      status == 'received' ||
+      status == 'partially_received' ||
+      status == 'partial';
 
   factory PurchaseOrder.fromJson(Map<String, Object?> json) {
     final rawLines = json['lines'] is List<Object?>
@@ -222,6 +239,9 @@ class PurchaseOrder {
       balanceDue: _moneyFromJson(json['balance_due']),
       paymentStatus: json['payment_status']?.toString() ?? '',
       isOverdue: _boolFromJson(json['is_overdue']),
+      isEditable: json['is_editable'] == null
+          ? null
+          : _boolFromJson(json['is_editable']),
       createdAt: _dateTimeFromJson(json['created_at']),
       submittedAt: _dateTimeFromJson(json['submitted_at']),
       receivedAt: _dateTimeFromJson(json['received_at']),

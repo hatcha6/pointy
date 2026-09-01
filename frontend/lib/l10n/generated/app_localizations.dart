@@ -13676,10 +13676,10 @@ abstract class AppLocalizations {
   /// **'تعديل'**
   String get editPurchaseOrderAction;
 
-  /// Description for the edit action on a draft purchase order.
+  /// Description for the edit action on a purchase order that no payment has settled against yet.
   ///
   /// In ar, this message translates to:
-  /// **'فتح المسودة في شاشة الشراء لتعديل أصنافها قبل الإرسال.'**
+  /// **'فتح الأمر في شاشة الشراء لتعديل أصنافه وتكاليفه قبل تسجيل الدفع.'**
   String get purchaseOrderEditDescription;
 
   /// Primary button label that saves edits to a draft purchase order without submitting it.
@@ -13712,11 +13712,17 @@ abstract class AppLocalizations {
   /// **'تعذر فتح أمر الشراء للتعديل.'**
   String get editPurchaseOrderLoadError;
 
-  /// Error shown when trying to edit a purchase order that already has a receipt or payment recorded.
+  /// Error shown when trying to edit a purchase order that a payment, credit or return has already settled against.
   ///
   /// In ar, this message translates to:
-  /// **'لا يمكن التعديل بعد استلام بضاعة أو تسجيل دفعة على أمر الشراء.'**
+  /// **'لا يمكن التعديل بعد تسجيل دفعة أو رصيد على أمر الشراء.'**
   String get editPurchaseOrderNotEditableError;
+
+  /// Notice shown while editing a purchase order whose goods are already received: saving unwinds and re-records the receipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم استلام هذا الأمر بالفعل. عند الحفظ سيُعاد تسجيل الاستلام بالكميات والتكاليف الجديدة.'**
+  String get purchaseEditReceivedOrderNotice;
 
   /// Warning shown when some lines of an edited draft could not be resolved from the catalog.
   ///

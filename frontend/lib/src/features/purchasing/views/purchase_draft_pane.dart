@@ -120,6 +120,13 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                 compact: true,
               ),
             ],
+            if (viewModel.isEditingReceivedOrder) ...[
+              SizedBox(height: spacing.sm),
+              PointyInlineMessage(
+                message: l10n.purchaseEditReceivedOrderNotice,
+                compact: true,
+              ),
+            ],
             if (isEditing && viewModel.unresolvedEditLineNames.isNotEmpty) ...[
               SizedBox(height: spacing.sm),
               PointyInlineMessage.warning(
@@ -131,7 +138,10 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
             ],
             // Expiry dates only become mandatory at submit time, so the reminder
             // belongs to the build/submit flow — saving a draft never needs it.
-            if (!isEditing && viewModel.hasMissingExpiryDates) ...[
+            // Editing an already-submitted order is submit time all over again:
+            // the save rebuilds its expected stock, so the dates are due now.
+            if ((!isEditing || viewModel.isEditingCommittedOrder) &&
+                viewModel.hasMissingExpiryDates) ...[
               SizedBox(height: spacing.sm),
               PointyInlineMessage.warning(
                 message: l10n.purchaseExpiryDatesRequired,

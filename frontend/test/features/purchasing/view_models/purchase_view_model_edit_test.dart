@@ -16,11 +16,12 @@ void main() {
   PurchaseOrder draftOrder({
     required List<PurchaseOrderLine> lines,
     List<String> discountCodes = const [],
+    String status = 'draft',
   }) {
     return PurchaseOrder(
       id: 42,
       orderNumber: 'P-42',
-      status: 'draft',
+      status: status,
       lineCount: lines.length,
       total: 24,
       subtotal: 24,
@@ -121,6 +122,25 @@ void main() {
 
     expect(vm.draft, isEmpty);
     expect(vm.unresolvedEditLineNames, hasLength(1));
+  });
+
+  test('editing an order past draft carries the submit-time rules', () async {
+    final catalog = _FakeCatalogRepository({5: boxProduct()});
+    final vm = PurchaseViewModel(catalog, _FakePurchaseRepository());
+    final lines = [orderLine(productId: 5, variantId: 9, unit: 'box')];
+
+    await vm.loadOrderForEditing(draftOrder(lines: lines));
+    expect(vm.isEditingCommittedOrder, isFalse);
+    expect(vm.isEditingReceivedOrder, isFalse);
+
+    await vm.loadOrderForEditing(draftOrder(lines: lines, status: 'submitted'));
+    // Expected stock is rebuilt on save, so expiry dates are due now.
+    expect(vm.isEditingCommittedOrder, isTrue);
+    expect(vm.isEditingReceivedOrder, isFalse);
+
+    await vm.loadOrderForEditing(draftOrder(lines: lines, status: 'received'));
+    // Saving also puts the delivery back — the editor says so up front.
+    expect(vm.isEditingReceivedOrder, isTrue);
   });
 
   test('saveDraft updates the edited order via the repository', () async {

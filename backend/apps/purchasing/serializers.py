@@ -50,6 +50,7 @@ from .services import (
     latest_purchase_line_for_variant,
     previous_purchase_lines_for,
     purchase_adjustment_line_amount,
+    purchase_order_is_editable,
     save_purchase_order_with_lines,
     validate_purchase_order_adjustment_allowed,
 )
@@ -1362,6 +1363,13 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
     )
     payment_status = serializers.CharField(read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
+    # Answered here rather than re-derived from status on the client: an order
+    # stays correctable until money settles against it, and one rule decides
+    # that for the list, the details screen and the save itself.
+    is_editable = serializers.SerializerMethodField()
+
+    def get_is_editable(self, purchase_order):
+        return purchase_order_is_editable(purchase_order)
 
     class Meta:
         model = PurchaseOrder
@@ -1374,6 +1382,7 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
             "supplier_invoice_date",
             "supplier_reference",
             "status",
+            "is_editable",
             "due_date",
             "line_count",
             "subtotal",
@@ -1456,6 +1465,8 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
     can_return = serializers.SerializerMethodField()
     can_refund = serializers.SerializerMethodField()
     can_exchange = serializers.SerializerMethodField()
+    # See PurchaseOrderListSerializer: one rule, answered server-side.
+    is_editable = serializers.SerializerMethodField()
     paid_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     credit_applied_total = serializers.DecimalField(
         max_digits=10,
@@ -1529,6 +1540,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "can_return",
             "can_refund",
             "can_exchange",
+            "is_editable",
             "submitted_at",
             "received_at",
             "created_at",
@@ -1566,6 +1578,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
             "can_return",
             "can_refund",
             "can_exchange",
+            "is_editable",
             "submitted_at",
             "received_at",
             "created_at",
@@ -1664,6 +1677,9 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 
     def get_can_exchange(self, purchase_order):
         return self._can_adjust(purchase_order)
+
+    def get_is_editable(self, purchase_order):
+        return purchase_order_is_editable(purchase_order)
 
     def _can_adjust(self, purchase_order):
         try:

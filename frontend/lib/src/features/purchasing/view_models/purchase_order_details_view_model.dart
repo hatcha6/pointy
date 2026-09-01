@@ -75,8 +75,13 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
   bool get canSubmit =>
       _capabilities.canEditDraftPurchaseOrder && _order.status == 'draft';
 
+  /// Editing a delivered order un-receives and re-receives it, so it takes the
+  /// receiving permission on top of the editing one — the same pair the
+  /// backend asks for.
   bool get canEdit =>
-      _capabilities.canEditDraftPurchaseOrder && _order.isEditable;
+      _capabilities.canEditDraftPurchaseOrder &&
+      _order.isEditable &&
+      (!_order.hasReceivedStock || _capabilities.canReceivePurchaseOrder);
   bool get canReceive =>
       _capabilities.canReceivePurchaseOrder &&
       (_order.status == 'submitted' ||

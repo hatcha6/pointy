@@ -7798,7 +7798,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchaseOrderEditDescription =>
-      'فتح المسودة في شاشة الشراء لتعديل أصنافها قبل الإرسال.';
+      'فتح الأمر في شاشة الشراء لتعديل أصنافه وتكاليفه قبل تسجيل الدفع.';
 
   @override
   String get savePurchaseDraftButton => 'حفظ التعديلات';
@@ -7820,7 +7820,11 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get editPurchaseOrderNotEditableError =>
-      'لا يمكن التعديل بعد استلام بضاعة أو تسجيل دفعة على أمر الشراء.';
+      'لا يمكن التعديل بعد تسجيل دفعة أو رصيد على أمر الشراء.';
+
+  @override
+  String get purchaseEditReceivedOrderNotice =>
+      'تم استلام هذا الأمر بالفعل. عند الحفظ سيُعاد تسجيل الاستلام بالكميات والتكاليف الجديدة.';
 
   @override
   String purchaseEditUnresolvedLines(int count) {

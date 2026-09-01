@@ -371,7 +371,12 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             )
             queryset = (
                 queryset.prefetch_related(None)
-                .prefetch_related("supplier_payments", "supplier_credits")
+                # The three relations the editability gate reads (an order is
+                # correctable until money settles against it) — prefetched so
+                # the Edit affordance costs three queries a page, not three a row.
+                .prefetch_related(
+                    "supplier_payments", "supplier_credits", "adjustments"
+                )
                 .annotate(
                     line_count=Coalesce(
                         Subquery(line_count, output_field=IntegerField()),

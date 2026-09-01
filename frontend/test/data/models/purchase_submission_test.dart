@@ -253,8 +253,12 @@ void main() {
     expect(preview.lines.single.effectiveLineTotal, 6.6);
   });
 
-  test('isEditable allows drafts and untouched submitted orders only', () {
-    PurchaseOrder order({required String status, String paymentStatus = ''}) {
+  test('isEditable follows the server, and falls back to the older rule', () {
+    PurchaseOrder order({
+      required String status,
+      String paymentStatus = '',
+      bool? isEditable,
+    }) {
       return PurchaseOrder(
         id: 1,
         orderNumber: 'P-1',
@@ -269,35 +273,63 @@ void main() {
         canRefund: false,
         canExchange: false,
         paymentStatus: paymentStatus,
+        isEditable: isEditable,
       );
     }
 
     // The rule behind every Edit entry point (list tile, details footer, and
-    // the edit screen's own fresh-fetch guard) — mirrors the backend's
-    // save_purchase_order_with_lines: drafts always; submitted orders until
-    // the first receipt (which flips the status) or payment.
+    // the edit screen's own fresh-fetch guard) is the server's: an order stays
+    // correctable until money settles against it, receipt or no receipt.
+    expect(
+      order(
+        status: 'received',
+        paymentStatus: 'unpaid',
+        isEditable: true,
+      ).isEditable,
+      isTrue,
+    );
+    expect(
+      order(
+        status: 'submitted',
+        paymentStatus: 'paid',
+        isEditable: false,
+      ).isEditable,
+      isFalse,
+    );
+
+    // A backend that predates the field: fall back to the rule it enforces.
     expect(order(status: 'draft').isEditable, isTrue);
     expect(
       order(status: 'submitted', paymentStatus: 'unpaid').isEditable,
       isTrue,
     );
     expect(
-      order(status: 'submitted', paymentStatus: 'partial').isEditable,
-      isFalse,
-    );
-    expect(
       order(status: 'submitted', paymentStatus: 'paid').isEditable,
       isFalse,
     );
     expect(
-      order(status: 'partially_received', paymentStatus: 'unpaid').isEditable,
-      isFalse,
-    );
-    expect(
-      order(status: 'received', paymentStatus: 'paid').isEditable,
+      order(status: 'received', paymentStatus: 'unpaid').isEditable,
       isFalse,
     );
     expect(order(status: 'cancelled').isEditable, isFalse);
+  });
+
+  test('is_editable is read from the payload when the server sends it', () {
+    PurchaseOrder parsed(Map<String, Object?> extra) {
+      return PurchaseOrder.fromJson({
+        'id': 1,
+        'order_number': 'P-1',
+        'status': 'received',
+        'payment_status': 'unpaid',
+        'lines': const [],
+        ...extra,
+      });
+    }
+
+    expect(parsed(const {'is_editable': true}).isEditable, isTrue);
+    expect(parsed(const {'is_editable': false}).isEditable, isFalse);
+    // Absent: the older client-side rule decides, which closes on receipt.
+    expect(parsed(const {}).isEditable, isFalse);
   });
 
   test('cost history entry exposes per-base cost for pack rows', () {

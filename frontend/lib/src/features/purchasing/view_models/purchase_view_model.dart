@@ -84,6 +84,11 @@ class PurchaseViewModel extends ChangeNotifier {
   /// semantics and the screen's labels.
   int? _editingOrderId;
 
+  /// The status the edited order carried when it was opened. Editing anything
+  /// past `draft` re-applies its expected stock — and, once it has been
+  /// delivered, its receipt — so the save is held to the submit-time rules.
+  String _editingOrderStatus = '';
+
   /// Lines from the edited order whose product/variant could no longer be
   /// resolved from the catalog (archived or deleted). Surfaced as a warning so
   /// the user knows the reopened draft is missing items.
@@ -136,6 +141,23 @@ class PurchaseViewModel extends ChangeNotifier {
   /// Whether this workspace is editing a saved draft purchase order.
   bool get isEditing => _editingOrderId != null;
   int? get editingOrderId => _editingOrderId;
+
+  /// Editing an order that has already been submitted: expected stock is
+  /// rebuilt on save, so expiry dates are due now rather than at submit.
+  bool get isEditingCommittedOrder =>
+      isEditing &&
+      _editingOrderStatus.isNotEmpty &&
+      _editingOrderStatus != 'draft';
+
+  /// Editing an order whose goods are already on the shelf. Saving unwinds the
+  /// delivery and records it again against the corrected lines.
+  bool get isEditingReceivedOrder =>
+      isEditing &&
+      const {
+        'received',
+        'partially_received',
+        'partial',
+      }.contains(_editingOrderStatus);
   List<String> get unresolvedEditLineNames =>
       List.unmodifiable(_unresolvedEditLineNames);
   SupplierContact? get selectedSupplier => _selectedSupplier;
@@ -885,6 +907,7 @@ class PurchaseViewModel extends ChangeNotifier {
   /// are dropped and recorded in [unresolvedEditLineNames] so the UI can warn.
   Future<void> loadOrderForEditing(PurchaseOrder order) async {
     _editingOrderId = order.id;
+    _editingOrderStatus = order.status;
     _unresolvedEditLineNames.clear();
     final supplierId = order.supplierId;
     _selectedSupplier = supplierId == null

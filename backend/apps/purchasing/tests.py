@@ -16,7 +16,12 @@ from apps.catalog.models import ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountRule
-from apps.inventory.models import StockBatch, StockItem, StockMovement
+from apps.inventory.models import (
+    StockBatch,
+    StockItem,
+    StockMovement,
+    StockValuationBin,
+)
 from apps.inventory.services import consume_expiring_stock_batches
 from .models import (
     PurchaseLine,
@@ -1311,18 +1316,248 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("detail", response.data)
 
-    def test_update_is_blocked_once_receiving_started(self):
-        order = self._submitted_order()
-        receive_purchase_order(order)
+    def _received_order(self, quantity=3):
+        """A PO taken through create + submit + a full receipt."""
+        return receive_purchase_order(self._submitted_order(quantity=quantity))
+
+    def _valuation_rate(self, variant):
+        return StockValuationBin.objects.get(variant=variant).valuation_rate
+
+    def test_received_order_can_be_edited_and_the_delivery_is_re_recorded(self):
+        # The goods are on the shelf and nothing has been paid: the owner is
+        # still correcting the invoice, and the stock has to follow the
+        # correction — 5 arrived, not 3, and they cost 2.00 each.
+        order = self._received_order(quantity=3)
+        stock_item = StockItem.objects.get(variant=self.variant)
+        self.assertEqual(stock_item.quantity_on_hand, 3)
+        self.assertEqual(self._valuation_rate(self.variant), Decimal("2.500000"))
 
         response = self.client.patch(
             reverse("purchaseorder-detail", args=[order.pk]),
-            {"notes": "Too late"},
+            {
+                "lines": [
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": 5,
+                        "unit_cost": "2.00",
+                    }
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        order.refresh_from_db()
+        self.assertEqual(order.status, PurchaseOrder.Status.RECEIVED)
+        self.assertEqual(order.total, Decimal("10.00"))
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.quantity_on_hand, 5)
+        self.assertEqual(stock_item.quantity_expected, 0)
+        self.assertEqual(self._valuation_rate(self.variant), Decimal("2.000000"))
+        # One receipt, describing the delivery as the corrected order tells it.
+        receipt_line = PurchaseReceiptLine.objects.get(
+            receipt__purchase_order=order
+        )
+        self.assertEqual(receipt_line.accepted_quantity, 5)
+
+    def test_cost_only_edit_revalues_the_stock_without_moving_the_count(self):
+        order = self._received_order(quantity=3)
+        stock_item = StockItem.objects.get(variant=self.variant)
+
+        response = self.client.patch(
+            reverse("purchaseorder-detail", args=[order.pk]),
+            {
+                "lines": [
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": 3,
+                        "unit_cost": "2.00",
+                    }
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.quantity_on_hand, 3)
+        self.assertEqual(self._valuation_rate(self.variant), Decimal("2.000000"))
+
+    def test_editing_a_part_delivered_order_keeps_what_is_outstanding(self):
+        order = self._submitted_order(quantity=5)
+        line = order.lines.get()
+        receive_purchase_order(
+            order,
+            lines_data=[{"line": line, "accepted_quantity": Decimal("2")}],
+        )
+        order.refresh_from_db()
+        self.assertEqual(order.status, PurchaseOrder.Status.PARTIALLY_RECEIVED)
+
+        response = self.client.patch(
+            reverse("purchaseorder-detail", args=[order.pk]),
+            {
+                "lines": [
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": 6,
+                        "unit_cost": "2.50",
+                    }
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        order.refresh_from_db()
+        # What arrived stays arrived; the rest is still on its way.
+        self.assertEqual(order.status, PurchaseOrder.Status.PARTIALLY_RECEIVED)
+        stock_item = StockItem.objects.get(variant=self.variant)
+        self.assertEqual(stock_item.quantity_on_hand, 2)
+        self.assertEqual(stock_item.quantity_expected, 4)
+
+    def test_editing_a_received_order_is_refused_when_the_goods_are_gone(self):
+        order = self._received_order(quantity=3)
+        stock_item = StockItem.objects.get(variant=self.variant)
+        # Two of the three have been sold since.
+        stock_item.quantity_on_hand = Decimal("1")
+        stock_item.save(update_fields=["quantity_on_hand"])
+
+        response = self.client.patch(
+            reverse("purchaseorder-detail", args=[order.pk]),
+            {
+                "lines": [
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": 5,
+                        "unit_cost": "2.00",
+                    }
+                ]
+            },
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("detail", response.data)
+        self.assertEqual(response.data["code"], "purchase_stock_already_sold")
+        order.refresh_from_db()
+        self.assertEqual(order.status, PurchaseOrder.Status.RECEIVED)
+        self.assertEqual(order.lines.get().quantity, 3)
+        self.assertEqual(PurchaseReceipt.objects.filter(purchase_order=order).count(), 1)
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.quantity_on_hand, 1)
+
+    def test_editing_a_received_order_is_blocked_once_a_payment_exists(self):
+        order = self._received_order()
+        SupplierPayment.objects.create(
+            supplier=self.supplier,
+            purchase_order=order,
+            amount=Decimal("1.00"),
+            method=SupplierPayment.Method.CASH,
+        )
+
+        response = self.client.patch(
+            reverse("purchaseorder-detail", args=[order.pk]),
+            {
+                "lines": [
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": 5,
+                        "unit_cost": "2.00",
+                    }
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "purchase_order_settled")
+        order.refresh_from_db()
+        self.assertEqual(order.lines.get().quantity, 3)
+
+    def test_editing_a_received_order_is_blocked_once_a_return_exists(self):
+        order = self._received_order()
+        adjust_purchase_order_items(
+            purchase_order=order,
+            adjustment_type=PurchaseOrderAdjustment.AdjustmentType.RETURN,
+            lines=[(order.lines.get(), Decimal("1"))],
+            reason="Damaged in transit",
+        )
+
+        response = self.client.patch(
+            reverse("purchaseorder-detail", args=[order.pk]),
+            {
+                "lines": [
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": 5,
+                        "unit_cost": "2.00",
+                    }
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "purchase_order_settled")
+
+    def test_received_order_notes_can_be_corrected_without_touching_stock(self):
+        order = self._received_order()
+
+        response = self.client.patch(
+            reverse("purchaseorder-detail", args=[order.pk]),
+            {"notes": "Invoice filed"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        order.refresh_from_db()
+        self.assertEqual(order.notes, "Invoice filed")
+        self.assertEqual(order.status, PurchaseOrder.Status.RECEIVED)
+        stock_item = StockItem.objects.get(variant=self.variant)
+        self.assertEqual(stock_item.quantity_on_hand, 3)
+        self.assertEqual(PurchaseReceipt.objects.filter(purchase_order=order).count(), 1)
+
+    def test_editing_a_received_order_needs_the_receiving_permission(self):
+        order = self._received_order()
+        self.authenticate_with_permissions(
+            "edit-without-receiving",
+            "purchasing.view_purchaseorder",
+            "purchasing.edit_draft_purchaseorder",
+        )
+
+        response = self.client.patch(
+            reverse("purchaseorder-detail", args=[order.pk]),
+            {
+                "lines": [
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": 5,
+                        "unit_cost": "2.00",
+                    }
+                ]
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        order.refresh_from_db()
+        self.assertEqual(order.lines.get().quantity, 3)
+
+    def test_purchase_order_detail_reports_editability(self):
+        order = self._received_order()
+
+        received = self.client.get(
+            reverse("purchaseorder-detail", args=[order.pk])
+        )
+        SupplierPayment.objects.create(
+            supplier=self.supplier,
+            purchase_order=order,
+            amount=Decimal("1.00"),
+            method=SupplierPayment.Method.CASH,
+        )
+        settled = self.client.get(reverse("purchaseorder-detail", args=[order.pk]))
+
+        self.assertTrue(received.data["is_editable"])
+        self.assertFalse(settled.data["is_editable"])
 
     def test_purchase_order_workflow_actions_require_specific_permissions(self):
         draft_order = PurchaseOrder.objects.create(supplier=self.supplier)
