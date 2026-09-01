@@ -193,7 +193,7 @@ class _PayrollRunDetailsScreenState extends State<PayrollRunDetailsScreen> {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _isApplyingAttendance = true);
-    final updated = await widget.attendanceViewModel.applyToPayrollRun(
+    final outcome = await widget.attendanceViewModel.applyToPayrollRun(
       _activeRun.id,
     );
     if (!mounted) {
@@ -201,17 +201,33 @@ class _PayrollRunDetailsScreenState extends State<PayrollRunDetailsScreen> {
     }
     setState(() {
       _isApplyingAttendance = false;
-      if (updated != null) {
-        _run = updated;
+      if (outcome != null) {
+        _run = outcome.run;
       }
     });
+    if (outcome == null) {
+      // Prefer the backend's own sentence: a refusal names the attendance
+      // window it does hold, which is the whole point of refusing.
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.attendanceViewModel.lastApplyFailure ??
+                l10n.attendanceApplyFailed,
+          ),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+      return;
+    }
+    final missing = outcome.employeesWithoutAttendance;
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          updated != null
+          missing.isEmpty
               ? l10n.attendanceApplySuccess
-              : l10n.attendanceApplyFailed,
+              : l10n.attendanceApplyMissingWarning(missing.length),
         ),
+        duration: Duration(seconds: missing.isEmpty ? 4 : 10),
       ),
     );
   }

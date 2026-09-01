@@ -11919,6 +11919,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get attendanceNeverSynced => 'لم تتم المزامنة بعد';
 
   @override
+  String attendanceCoverageLabel(String from, String to) {
+    return 'البيانات المستوردة تغطي من $from إلى $to';
+  }
+
+  @override
+  String get attendanceCoverageEmpty => 'لم يتم استيراد أي بصمات بعد';
+
+  @override
   String attendanceLastSyncErrorLabel(String error) {
     return 'خطأ آخر مزامنة: $error';
   }
@@ -12002,6 +12010,28 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get attendanceNoDaysMessage => 'لا توجد سجلات حضور في هذه الفترة.';
+
+  @override
+  String attendanceMonthOutsideDataMessage(String from, String to) {
+    return 'هذا الشهر خارج نطاق البيانات المستوردة ($from — $to).';
+  }
+
+  @override
+  String get attendanceJumpToLatestDataButton => 'انتقل إلى آخر شهر به بيانات';
+
+  @override
+  String attendanceSyncRunningProgress(int count) {
+    return 'جارٍ الاستيراد… $count بصمة حتى الآن';
+  }
+
+  @override
+  String get attendanceSyncRunningStarting =>
+      'جارٍ الاستيراد… قد يستغرق عدة دقائق';
+
+  @override
+  String attendanceApplyMissingWarning(int count) {
+    return 'تحذير: $count موظف بلا أي بصمات في هذه الفترة، وتم احتسابهم غائبين بالكامل. تحقق من ربطهم بجهاز البصمة قبل الاعتماد.';
+  }
 
   @override
   String get attendanceLoadError => 'تعذر تحميل سجلات الحضور.';

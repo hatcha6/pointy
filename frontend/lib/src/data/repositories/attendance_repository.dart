@@ -1,6 +1,5 @@
 import '../../core/result.dart';
 import '../models/attendance.dart';
-import '../models/employee.dart';
 import '../services/pos_api_service.dart';
 
 class AttendanceRepository {
@@ -20,7 +19,7 @@ class AttendanceRepository {
     return Result.guard(() => _service.testAttendanceConnection());
   }
 
-  Future<Result<AttendanceSyncResult>> sync() {
+  Future<Result<AttendanceSyncStart>> sync() {
     return Result.guard(() => _service.syncAttendance());
   }
 
@@ -76,7 +75,9 @@ class AttendanceRepository {
     );
   }
 
-  Future<Result<PayrollRun>> applyAttendanceToPayrollRun(int payrollRunId) {
+  Future<Result<AttendanceApplyOutcome>> applyAttendanceToPayrollRun(
+    int payrollRunId,
+  ) {
     return Result.guard(
       () => _service.applyAttendanceToPayrollRun(payrollRunId),
     );

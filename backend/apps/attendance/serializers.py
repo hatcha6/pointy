@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import (
@@ -14,6 +15,13 @@ class BioTimeConnectionSerializer(serializers.ModelSerializer):
         write_only=True, required=False, allow_blank=True, trim_whitespace=False
     )
     has_password = serializers.SerializerMethodField()
+    # The window attendance has actually been imported for, so the settings
+    # screen can show it instead of implying "synced" means "complete".
+    synced_from = serializers.SerializerMethodField()
+    synced_through = serializers.SerializerMethodField()
+    # Live progress of a sync running on a worker, so the settings screen can
+    # show a multi-minute backfill advancing instead of an idle spinner.
+    is_syncing = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = BioTimeConnection
@@ -27,11 +35,31 @@ class BioTimeConnectionSerializer(serializers.ModelSerializer):
             "shift_start",
             "shift_end",
             "grace_minutes",
+            "sync_start_date",
             "last_synced_at",
             "last_sync_status",
             "last_sync_error",
+            "synced_from",
+            "synced_through",
+            "is_syncing",
+            "sync_started_at",
+            "sync_progress_punches",
         ]
-        read_only_fields = ["last_synced_at", "last_sync_status", "last_sync_error"]
+        read_only_fields = [
+            "last_synced_at",
+            "last_sync_status",
+            "last_sync_error",
+            "sync_started_at",
+            "sync_progress_punches",
+        ]
+
+    def get_synced_from(self, connection):
+        value = connection.first_punch_cursor
+        return timezone.localtime(value).date() if value else None
+
+    def get_synced_through(self, connection):
+        value = connection.last_punch_cursor
+        return timezone.localtime(value).date() if value else None
 
     def get_has_password(self, connection):
         return bool(connection.password)

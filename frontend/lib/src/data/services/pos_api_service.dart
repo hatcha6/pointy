@@ -484,7 +484,7 @@ class PosApiService {
     return _attendance.testConnection();
   }
 
-  Future<AttendanceSyncResult> syncAttendance() {
+  Future<AttendanceSyncStart> syncAttendance() {
     return _attendance.sync();
   }
 
@@ -534,7 +534,7 @@ class PosApiService {
     );
   }
 
-  Future<PayrollRun> applyAttendanceToPayrollRun(int payrollRunId) {
+  Future<AttendanceApplyOutcome> applyAttendanceToPayrollRun(int payrollRunId) {
     return _attendance.applyAttendanceToPayrollRun(payrollRunId);
   }
 

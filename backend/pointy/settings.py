@@ -522,6 +522,16 @@ CELERY_BEAT_SCHEDULE = {
         "task": "fraud.sync_suspected_fraud_findings",
         "schedule": timedelta(minutes=POINTY_FRAUD_DETECTION_INTERVAL_MINUTES),
     },
+    # Pull the fingerprint terminals' punches off the BioTime server. The task
+    # existed but was never scheduled, so attendance only ever moved when a
+    # manager opened the settings screen and pressed Sync -- and the monthly
+    # payroll draft below therefore costed absences off whatever had last been
+    # imported by hand. Hourly: punches upload from the devices through the day,
+    # and each run only reads forward from its cursor.
+    "attendance.sync-biotime": {
+        "task": "attendance.sync_biotime",
+        "schedule": crontab(minute=25),
+    },
     "employees.draft-monthly-payroll": {
         "task": "employees.draft_monthly_payroll",
         "schedule": crontab(minute=10, hour=0, day_of_month="1"),

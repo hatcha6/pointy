@@ -39,12 +39,70 @@ class AttendanceReviewTab extends StatefulWidget {
 class _AttendanceReviewTabState extends State<AttendanceReviewTab> {
   int? _employeeId;
   late DateTime _month;
+  var _seededMonth = false;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     _month = DateTime(now.year, now.month);
+    widget.viewModel.addListener(_seedMonthFromCoverage);
+    // The payroll workspace never loads the connection config, so without this
+    // the coverage window is unknown here and the month below cannot be seeded
+    // from it. Cheap and best-effort: it only fetches the connection row, and
+    // a role that cannot read it simply leaves the config null.
+    unawaited(widget.viewModel.ensureConfigLoaded());
+    _seedMonthFromCoverage();
+  }
+
+  @override
+  void dispose() {
+    widget.viewModel.removeListener(_seedMonthFromCoverage);
+    super.dispose();
+  }
+
+  /// Open on the last month that actually has data, not on today.
+  ///
+  /// A shop whose BioTime history stops months ago (an old server, a terminal
+  /// that stopped uploading) would otherwise land on an empty current month
+  /// with nothing to say why, and the only way back to the data is clicking the
+  /// arrow once per month.
+  void _seedMonthFromCoverage() {
+    if (_seededMonth) {
+      return;
+    }
+    final through = widget.viewModel.config?.syncedThrough;
+    if (through == null) {
+      return;
+    }
+    _seededMonth = true;
+    final latest = DateTime(through.year, through.month);
+    if (latest.isBefore(_month)) {
+      setState(() => _month = latest);
+      _load();
+    }
+  }
+
+  /// The month lies entirely outside the window we hold data for, so an empty
+  /// list means "not imported", not "nobody came in".
+  bool get _isOutsideImportedData {
+    final config = widget.viewModel.config;
+    final from = config?.syncedFrom;
+    final through = config?.syncedThrough;
+    if (from == null || through == null) {
+      return false;
+    }
+    return _monthEnd.isBefore(DateTime(from.year, from.month, from.day)) ||
+        _monthStart.isAfter(DateTime(through.year, through.month, through.day));
+  }
+
+  void _jumpToLatestData() {
+    final through = widget.viewModel.config?.syncedThrough;
+    if (through == null) {
+      return;
+    }
+    setState(() => _month = DateTime(through.year, through.month));
+    _load();
   }
 
   DateTime get _monthStart => _month;
@@ -110,10 +168,24 @@ class _AttendanceReviewTabState extends State<AttendanceReviewTab> {
                 SizedBox(height: spacing.sm),
               ],
               if (viewModel.days.isEmpty)
-                PointyEmptyState(
-                  title: l10n.attendanceNoDaysMessage,
-                  icon: Icons.event_busy_outlined,
-                )
+                if (_isOutsideImportedData)
+                  PointyEmptyState(
+                    title: l10n.attendanceMonthOutsideDataMessage(
+                      formatDate(viewModel.config!.syncedFrom!),
+                      formatDate(viewModel.config!.syncedThrough!),
+                    ),
+                    icon: Icons.cloud_off_outlined,
+                    action: FilledButton.tonalIcon(
+                      onPressed: _jumpToLatestData,
+                      icon: const Icon(Icons.history),
+                      label: Text(l10n.attendanceJumpToLatestDataButton),
+                    ),
+                  )
+                else
+                  PointyEmptyState(
+                    title: l10n.attendanceNoDaysMessage,
+                    icon: Icons.event_busy_outlined,
+                  )
               else
                 for (final day in viewModel.days) _DayTile(day: day),
             ],
@@ -268,8 +340,8 @@ class _DayTile extends StatelessWidget {
       subtitle: [
         if (day.firstIn != null)
           l10n.attendanceDayTimes(
-            formatTime(day.firstIn!.toLocal()),
-            day.lastOut == null ? '—' : formatTime(day.lastOut!.toLocal()),
+            formatClockTime(day.firstIn!),
+            day.lastOut == null ? '—' : formatClockTime(day.lastOut!),
           ),
         l10n.attendanceDayMetrics(worked, day.lateMinutes, day.overtimeMinutes),
       ].join(' • '),

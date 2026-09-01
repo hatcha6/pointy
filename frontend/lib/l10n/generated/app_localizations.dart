@@ -20627,6 +20627,18 @@ abstract class AppLocalizations {
   /// **'لم تتم المزامنة بعد'**
   String get attendanceNeverSynced;
 
+  /// The date range attendance punches have actually been imported for.
+  ///
+  /// In ar, this message translates to:
+  /// **'البيانات المستوردة تغطي من {from} إلى {to}'**
+  String attendanceCoverageLabel(String from, String to);
+
+  /// No description provided for @attendanceCoverageEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم استيراد أي بصمات بعد'**
+  String get attendanceCoverageEmpty;
+
   /// Shows the last BioTime sync error message.
   ///
   /// In ar, this message translates to:
@@ -20782,6 +20794,36 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا توجد سجلات حضور في هذه الفترة.'**
   String get attendanceNoDaysMessage;
+
+  /// Shown when the reviewed month falls outside the imported attendance window.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الشهر خارج نطاق البيانات المستوردة ({from} — {to}).'**
+  String attendanceMonthOutsideDataMessage(String from, String to);
+
+  /// No description provided for @attendanceJumpToLatestDataButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتقل إلى آخر شهر به بيانات'**
+  String get attendanceJumpToLatestDataButton;
+
+  /// Live progress of a BioTime sync running on a worker.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ الاستيراد… {count} بصمة حتى الآن'**
+  String attendanceSyncRunningProgress(int count);
+
+  /// No description provided for @attendanceSyncRunningStarting.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ الاستيراد… قد يستغرق عدة دقائق'**
+  String get attendanceSyncRunningStarting;
+
+  /// Warns that some employees had no punches at all and were costed as fully absent.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحذير: {count} موظف بلا أي بصمات في هذه الفترة، وتم احتسابهم غائبين بالكامل. تحقق من ربطهم بجهاز البصمة قبل الاعتماد.'**
+  String attendanceApplyMissingWarning(int count);
 
   /// No description provided for @attendanceLoadError.
   ///

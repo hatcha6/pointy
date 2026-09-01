@@ -2,9 +2,9 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
+import '../../../core/error_messages.dart';
 import '../../../core/result.dart';
 import '../../../data/models/attendance.dart';
-import '../../../data/models/employee.dart';
 import '../../../data/repositories/attendance_repository.dart';
 
 /// Drives both the BioTime settings page and the attendance review tab.
@@ -21,6 +21,16 @@ class AttendanceViewModel extends ChangeNotifier {
   AttendanceSummary? _summary;
   AttendanceSyncResult? _lastSyncResult;
   int? _testedEmployeeCount;
+  String? _lastApplyFailure;
+  String? _syncStartFailure;
+
+  /// How often, and for how long, a running sync is polled. A backfill against
+  /// a real server was measured at ~150s for 20k punches, and a device with
+  /// more history takes proportionally longer, so the ceiling is generous.
+  @visibleForTesting
+  static Duration syncPollInterval = const Duration(seconds: 2);
+  @visibleForTesting
+  static Duration syncPollTimeout = const Duration(minutes: 30);
 
   bool _isLoading = false;
   bool _isMutating = false;
@@ -34,6 +44,13 @@ class AttendanceViewModel extends ChangeNotifier {
   AttendanceSummary? get summary => _summary;
   AttendanceSyncResult? get lastSyncResult => _lastSyncResult;
   int? get testedEmployeeCount => _testedEmployeeCount;
+
+  /// The backend's own sentence for the last failed payroll apply, when it gave
+  /// one (e.g. the period lies outside the imported attendance window).
+  String? get lastApplyFailure => _lastApplyFailure;
+
+  /// Why the server refused to start a sync (e.g. one is already running).
+  String? get syncStartFailure => _syncStartFailure;
   bool get isLoading => _isLoading;
   bool get isMutating => _isMutating;
   bool get isSyncing => _isSyncing;
@@ -133,44 +150,85 @@ class AttendanceViewModel extends ChangeNotifier {
     });
   }
 
+  /// Starts a sync and follows it to completion.
+  ///
+  /// The pull runs on a worker and can take minutes on a device with years of
+  /// history, so this returns only once the server stops reporting a run in
+  /// progress. Progress is published through [config] as it polls, which is
+  /// what lets the settings screen show a backfill advancing instead of an
+  /// idle spinner.
   Future<AttendanceSyncResult?> sync() async {
     if (_isSyncing) {
       return null;
     }
     _isSyncing = true;
     _hasMutationError = false;
+    _syncStartFailure = null;
     notifyListeners();
 
-    final result = await _repository.sync();
     AttendanceSyncResult? syncResult;
+    final result = await _repository.sync();
     switch (result) {
-      case Ok<AttendanceSyncResult>():
-        syncResult = result.value;
-        _lastSyncResult = syncResult;
-        trackAuditEvent(
-          _analyticsEngine,
-          name: 'attendance.sync.requested',
-          entityType: 'biotime_connection',
-          entityId: 1,
-          metrics: {
-            'punches_imported': syncResult.punchesImported,
-            'matched_employees': syncResult.matchedEmployees,
-          },
-        );
-      case Error<AttendanceSyncResult>():
+      case Ok<AttendanceSyncStart>():
+        final start = result.value;
+        if (start.isFinished) {
+          // No worker took it; the server ran the pull inline and it is done.
+          syncResult = start.result;
+        } else {
+          await _awaitRunningSync();
+        }
+      case Error<AttendanceSyncStart>():
         _hasMutationError = true;
+        _syncStartFailure = backendDetailFor(result.exception);
+    }
+    if (syncResult != null) {
+      _lastSyncResult = syncResult;
+      trackAuditEvent(
+        _analyticsEngine,
+        name: 'attendance.sync.requested',
+        entityType: 'biotime_connection',
+        entityId: 1,
+        metrics: {
+          'punches_imported': syncResult.punchesImported,
+          'matched_employees': syncResult.matchedEmployees,
+        },
+      );
     }
 
     // Refresh config (sync status fields) and mapping snapshots.
     final configResult = await _repository.loadConfig();
     if (configResult case Ok<AttendanceConfig>()) {
       _config = configResult.value;
+      if (_config!.lastSyncStatus == 'error' &&
+          _config!.lastSyncError.isNotEmpty) {
+        _hasMutationError = true;
+      }
     }
     await _loadAllProfiles();
 
     _isSyncing = false;
     notifyListeners();
     return syncResult;
+  }
+
+  /// Polls the connection until the server stops reporting a sync in progress.
+  ///
+  /// Bounded: a worker that dies without clearing the flag would otherwise poll
+  /// forever. The server's own heartbeat staleness check frees the lock for the
+  /// next attempt, so giving up here only ends the watching, not the sync.
+  Future<void> _awaitRunningSync() async {
+    final deadline = DateTime.now().add(syncPollTimeout);
+    while (DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(syncPollInterval);
+      final result = await _repository.loadConfig();
+      if (result case Ok<AttendanceConfig>()) {
+        _config = result.value;
+        notifyListeners();
+        if (!result.value.isSyncing) {
+          return;
+        }
+      }
+    }
   }
 
   Future<bool> updateProfile(
@@ -248,13 +306,14 @@ class AttendanceViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<PayrollRun?> applyToPayrollRun(int payrollRunId) async {
+  Future<AttendanceApplyOutcome?> applyToPayrollRun(int payrollRunId) async {
     return _mutate(() async {
+      _lastApplyFailure = null;
       final result = await _repository.applyAttendanceToPayrollRun(
         payrollRunId,
       );
       switch (result) {
-        case Ok<PayrollRun>():
+        case Ok<AttendanceApplyOutcome>():
           trackAuditEvent(
             _analyticsEngine,
             name: 'attendance.payroll_run.apply_requested',
@@ -262,8 +321,11 @@ class AttendanceViewModel extends ChangeNotifier {
             entityId: payrollRunId,
           );
           return result.value;
-        case Error<PayrollRun>():
+        case Error<AttendanceApplyOutcome>():
           _hasMutationError = true;
+          // The backend refuses periods it holds no attendance for and says
+          // which window it does have; keep that sentence for the caller.
+          _lastApplyFailure = backendDetailFor(result.exception);
           return null;
       }
     });

@@ -28,6 +28,7 @@ class BioTimeConnection(TimeStampedModel):
         NEVER = "never", "Never synced"
         OK = "ok", "Last sync succeeded"
         ERROR = "error", "Last sync failed"
+        RUNNING = "running", "Sync in progress"
 
     base_url = models.URLField(blank=True)
     username = models.CharField(max_length=150, blank=True)
@@ -41,6 +42,12 @@ class BioTimeConnection(TimeStampedModel):
         default=15, validators=[MaxValueValidator(240)]
     )
 
+    # Where a first sync starts reading. Blank means "ask BioTime for its own
+    # oldest punch and start there", which is the only safe default: a fixed
+    # lookback window silently imports nothing from a server whose history is
+    # older than the window.
+    sync_start_date = models.DateField(blank=True, null=True)
+
     last_synced_at = models.DateTimeField(blank=True, null=True)
     last_sync_status = models.CharField(
         max_length=16,
@@ -49,6 +56,21 @@ class BioTimeConnection(TimeStampedModel):
     )
     last_sync_error = models.TextField(blank=True)
     last_punch_cursor = models.DateTimeField(blank=True, null=True)
+    # The oldest punch time this connection has actually pulled. Together with
+    # last_punch_cursor it is the window attendance data can be trusted over.
+    first_punch_cursor = models.DateTimeField(blank=True, null=True)
+
+    # A sync runs on a worker and can take minutes, so its progress lives here
+    # rather than in the request that started it. ``sync_heartbeat_at`` is
+    # bumped at every checkpoint: a worker killed mid-run leaves the row saying
+    # RUNNING forever otherwise, and no later sync could ever claim the lock.
+    sync_started_at = models.DateTimeField(blank=True, null=True)
+    sync_heartbeat_at = models.DateTimeField(blank=True, null=True)
+    sync_progress_punches = models.PositiveIntegerField(default=0)
+
+    @property
+    def is_syncing(self):
+        return self.last_sync_status == self.SyncStatus.RUNNING
 
     class Meta:
         verbose_name = "BioTime connection"

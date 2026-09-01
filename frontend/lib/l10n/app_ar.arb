@@ -7314,6 +7314,19 @@
     }
   },
   "attendanceNeverSynced": "لم تتم المزامنة بعد",
+  "attendanceCoverageLabel": "البيانات المستوردة تغطي من {from} إلى {to}",
+  "@attendanceCoverageLabel": {
+    "description": "The date range attendance punches have actually been imported for.",
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "attendanceCoverageEmpty": "لم يتم استيراد أي بصمات بعد",
   "attendanceLastSyncErrorLabel": "خطأ آخر مزامنة: {error}",
   "@attendanceLastSyncErrorLabel": {
     "description": "Shows the last BioTime sync error message.",
@@ -7359,6 +7372,38 @@
   "attendanceStatusPartial": "بصمة ناقصة",
   "attendanceStatusDayOff": "يوم راحة",
   "attendanceNoDaysMessage": "لا توجد سجلات حضور في هذه الفترة.",
+  "attendanceMonthOutsideDataMessage": "هذا الشهر خارج نطاق البيانات المستوردة ({from} — {to}).",
+  "@attendanceMonthOutsideDataMessage": {
+    "description": "Shown when the reviewed month falls outside the imported attendance window.",
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "attendanceJumpToLatestDataButton": "انتقل إلى آخر شهر به بيانات",
+  "attendanceSyncRunningProgress": "جارٍ الاستيراد… {count} بصمة حتى الآن",
+  "@attendanceSyncRunningProgress": {
+    "description": "Live progress of a BioTime sync running on a worker.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "attendanceSyncRunningStarting": "جارٍ الاستيراد… قد يستغرق عدة دقائق",
+  "attendanceApplyMissingWarning": "تحذير: {count} موظف بلا أي بصمات في هذه الفترة، وتم احتسابهم غائبين بالكامل. تحقق من ربطهم بجهاز البصمة قبل الاعتماد.",
+  "@attendanceApplyMissingWarning": {
+    "description": "Warns that some employees had no punches at all and were costed as fully absent.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "attendanceLoadError": "تعذر تحميل سجلات الحضور.",
   "attendanceDayMetrics": "عمل {worked} • تأخير {late} د • إضافي {overtime} د",
   "@attendanceDayMetrics": {

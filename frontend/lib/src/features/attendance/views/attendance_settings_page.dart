@@ -402,9 +402,36 @@ class _AttendanceSettingsPageState extends State<AttendanceSettingsPage> {
                 ? l10n.attendanceLastSyncErrorLabel(config.lastSyncError)
                 : null,
           ),
+          // A backfill runs on a worker for minutes, so show it advancing
+          // rather than leaving the button spinning against nothing visible.
+          if (config?.isSyncing ?? false)
+            PointyDataRow(
+              leading: const PointySpinner(strokeWidth: 2),
+              title: config!.syncProgressPunches > 0
+                  ? l10n.attendanceSyncRunningProgress(
+                      config.syncProgressPunches,
+                    )
+                  : l10n.attendanceSyncRunningStarting,
+            ),
+          // "Last synced" says when, never WHAT: a sync that reached the server
+          // and imported nothing still reports success. Show the window the
+          // data actually covers, because that is what payroll can cost
+          // absences from.
+          PointyDataRow(
+            leading: const Icon(Icons.date_range_outlined),
+            title: (config?.syncedFrom == null || config?.syncedThrough == null)
+                ? l10n.attendanceCoverageEmpty
+                : l10n.attendanceCoverageLabel(
+                    formatDate(config!.syncedFrom!),
+                    formatDate(config.syncedThrough!),
+                  ),
+          ),
           SizedBox(height: spacing.sm),
           FilledButton.tonalIcon(
-            onPressed: viewModel.isSyncing || !viewModel.isEnabled
+            onPressed:
+                viewModel.isSyncing ||
+                    (config?.isSyncing ?? false) ||
+                    !viewModel.isEnabled
                 ? null
                 : () => _syncNow(context),
             icon: viewModel.isSyncing

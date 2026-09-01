@@ -1,5 +1,4 @@
 import '../models/attendance.dart';
-import '../models/employee.dart';
 import 'api_session.dart';
 
 class AttendanceApiClient {
@@ -48,15 +47,23 @@ class AttendanceApiClient {
     return 0;
   }
 
-  Future<AttendanceSyncResult> sync() async {
-    // Pulls every employee and punch off the fingerprint device inside the
-    // request; on a large device that legitimately runs for minutes.
+  Future<AttendanceSyncStart> sync() async {
+    // The backend normally hands the pull to a worker and answers 202 at once;
+    // a shop with no worker runs it inline instead and answers 200 with the
+    // finished summary, which on a large device legitimately takes minutes.
     final response = await _session.post(
       'attendance/sync/',
       timeout: PosApiSession.longRunningRequestTimeout,
     );
-    _session.ensureSuccess(response, 'Attendance sync failed with status');
-    return AttendanceSyncResult.fromJson(
+    // 409 means a sync is already running -- that is a state to report, not a
+    // transport failure, so it is decoded rather than thrown.
+    if (response.statusCode != 409) {
+      _session.throwApiException(
+        response,
+        'Attendance sync failed with status',
+      );
+    }
+    return AttendanceSyncStart.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }
@@ -143,17 +150,21 @@ class AttendanceApiClient {
     );
   }
 
-  Future<PayrollRun> applyAttendanceToPayrollRun(int payrollRunId) async {
+  Future<AttendanceApplyOutcome> applyAttendanceToPayrollRun(
+    int payrollRunId,
+  ) async {
     final response = await _session.post(
       'payroll-runs/$payrollRunId/apply-attendance/',
     );
-    _session.ensureSuccess(
+    // throwApiException (not ensureSuccess) so the refusal body survives: the
+    // backend refuses periods it has no attendance for, and that sentence names
+    // the window it does have. Swallowing it leaves the user with "failed".
+    _session.throwApiException(
       response,
       'Payroll attendance apply failed with status',
     );
-    return PayrollRun.fromJson(
-      _session.decodedBody(response) as Map<String, Object?>,
-    );
+    final body = _session.decodedBody(response) as Map<String, Object?>;
+    return AttendanceApplyOutcome.fromJson(body);
   }
 
   String _dateParam(DateTime value) {

@@ -3,10 +3,13 @@ from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework import status
+from rest_framework.serializers import ValidationError as RestValidationError
 from rest_framework.test import APIClient
 
 from apps.core.roles import (
@@ -22,6 +25,7 @@ from apps.employees.models import (
     PayrollRun,
 )
 
+from .biotime import BioTimeError
 from .models import (
     AttendanceDay,
     AttendanceProfile,
@@ -30,22 +34,56 @@ from .models import (
 )
 from .services import (
     apply_attendance_to_run,
+    claim_sync_slot,
     attendance_summary,
     rebuild_attendance_day,
     sync_biotime,
+    synced_coverage,
+    uncovered_period,
 )
 
 
 class FakeBioTimeClient:
+    """Stands in for the real client, INCLUDING its time filtering.
+
+    The original fake ignored start_time and always yielded every transaction,
+    so the sync's choice of window was never exercised: a first sync that asked
+    the real server for the last 30 days imported nothing from a server whose
+    newest punch was older than that, and no test could see it.
+    """
+
     def __init__(self, employees=None, transactions=None):
         self.employees = employees or []
         self.transactions = transactions or []
+        self.requested_start_times = []
 
     def iter_employees(self):
         yield from self.employees
 
+    def _punch_time(self, row):
+        from apps.attendance.services import _parse_punch_time
+
+        return _parse_punch_time(row.get("punch_time"))
+
     def iter_transactions(self, *, start_time=None, end_time=None):
-        yield from self.transactions
+        self.requested_start_times.append(start_time)
+        for row in self.transactions:
+            punch_time = self._punch_time(row)
+            if punch_time is None:
+                continue
+            # services passes aware datetimes; compare on the same footing.
+            if start_time is not None and punch_time < start_time:
+                continue
+            if end_time is not None and punch_time > end_time:
+                continue
+            yield row
+
+    def earliest_transaction_time(self):
+        times = [self._punch_time(row) for row in self.transactions]
+        times = [value for value in times if value is not None]
+        if not times:
+            return None
+        return min(times).strftime("%Y-%m-%d %H:%M:%S")
 
     def count_employees(self):
         return len(self.employees)
@@ -94,6 +132,9 @@ class AttendanceTestBase(TestCase):
         client = APIClient()
         client.force_authenticate(user=user)
         return client
+
+    def fake_client(self, employees=None, transactions=None):
+        return FakeBioTimeClient(employees=employees, transactions=transactions)
 
     def add_punch(self, when, *, biotime_id=None, employee=None, emp_code=None):
         return AttendancePunch.objects.create(
@@ -193,9 +234,6 @@ class AttendanceDayRollupTests(AttendanceTestBase):
 
 
 class BioTimeSyncTests(AttendanceTestBase):
-    def fake_client(self, employees=None, transactions=None):
-        return FakeBioTimeClient(employees=employees, transactions=transactions)
-
     def test_sync_matches_employees_and_imports_punches(self):
         other = Employee.objects.create(
             employee_number="1002",
@@ -530,21 +568,40 @@ class AttendanceApiTests(AttendanceTestBase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_sync_endpoint_reports_biotime_errors(self):
-        from .biotime import BioTimeError
+        """A queued sync reports its failure through the connection status.
+
+        The pull runs on a worker now, so the POST that starts it cannot carry
+        the device error; the settings screen polls for it instead. (The inline
+        fallback, used when no worker takes the job, still answers 400 -- see
+        AsyncSyncDispatchTests.)
+        """
+        from .tasks import sync_biotime_task
 
         client = self.client_for(self.manager)
+        # Pin the dispatch outcome: whether a broker happens to be reachable in
+        # the test environment must not decide which path this exercises.
+        with mock.patch(
+            "apps.attendance.views.enqueue_best_effort", return_value=True
+        ):
+            response = client.post("/api/attendance/sync/")
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+
         with mock.patch(
             "apps.attendance.services.build_client",
             return_value=mock.Mock(
                 iter_employees=mock.Mock(side_effect=BioTimeError("boom")),
             ),
         ):
-            response = client.post("/api/attendance/sync/")
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            with self.assertRaises(RestValidationError):
+                sync_biotime_task(claimed=True)
+
         self.connection.refresh_from_db()
         self.assertEqual(
             self.connection.last_sync_status, BioTimeConnection.SyncStatus.ERROR
         )
+        self.assertIn("boom", self.connection.last_sync_error)
+        # And the run lock is free for the retry.
+        self.assertFalse(self.connection.is_syncing)
 
     def test_apply_attendance_endpoint_updates_run(self):
         CompensationPlan.objects.create(
@@ -577,3 +634,556 @@ class AttendanceApiTests(AttendanceTestBase):
         self.assertEqual(payload["attendance"]["applied_lines"][0]["absent_days"], 1)
         line.refresh_from_db()
         self.assertEqual(line.absence_days, Decimal("1.00"))
+
+
+class OldHistorySyncTests(AttendanceTestBase):
+    """A BioTime server whose newest punch is far older than any lookback.
+
+    Modelled on a real installation: 20,203 punches running 2023-02-28 to
+    2025-03-27, first synced ~17 months after the last one was recorded.
+    """
+
+    def old_history_client(self):
+        # Two workdays in the distant past, and nothing recent at all.
+        return self.fake_client(
+            employees=[{"emp_code": "1001", "first_name": "Test"}],
+            transactions=[
+                {"id": 101, "emp_code": "1001", "punch_time": "2023-03-02 09:00:00"},
+                {"id": 102, "emp_code": "1001", "punch_time": "2023-03-02 17:00:00"},
+                {"id": 103, "emp_code": "1001", "punch_time": "2023-03-06 09:00:00"},
+                {"id": 104, "emp_code": "1001", "punch_time": "2023-03-06 18:00:00"},
+            ],
+        )
+
+    def test_first_sync_reaches_back_to_the_oldest_punch_on_the_server(self):
+        client = self.old_history_client()
+        with mock.patch("apps.attendance.services.build_client", return_value=client):
+            summary = sync_biotime(connection=self.connection)
+
+        # The window asked for must reach the server's own oldest row, not a
+        # fixed number of days back from today.
+        self.assertEqual(summary["punches_imported"], 4)
+        self.assertEqual(AttendancePunch.objects.count(), 4)
+        requested = client.requested_start_times[0]
+        self.assertLessEqual(requested.date(), date(2023, 3, 2))
+
+    def test_explicit_start_date_bounds_the_first_sync(self):
+        self.connection.sync_start_date = date(2023, 3, 5)
+        self.connection.save()
+        client = self.old_history_client()
+        with mock.patch("apps.attendance.services.build_client", return_value=client):
+            summary = sync_biotime(connection=self.connection)
+
+        # Only the 2023-03-06 pair falls inside the configured window.
+        self.assertEqual(summary["punches_imported"], 2)
+        self.assertFalse(AttendancePunch.objects.filter(biotime_id=101).exists())
+
+    def test_sync_records_the_window_it_covered(self):
+        client = self.old_history_client()
+        with mock.patch("apps.attendance.services.build_client", return_value=client):
+            sync_biotime(connection=self.connection)
+        self.connection.refresh_from_db()
+        start, end = synced_coverage(self.connection)
+        self.assertEqual(start, date(2023, 3, 2))
+        self.assertEqual(end, date(2023, 3, 6))
+
+    def test_days_are_rolled_up_for_the_old_history(self):
+        client = self.old_history_client()
+        with mock.patch("apps.attendance.services.build_client", return_value=client):
+            sync_biotime(connection=self.connection)
+        # 2023-03-02 is a Thursday, 2023-03-06 a Monday; both are workdays here.
+        first = AttendanceDay.objects.get(employee=self.employee, date=date(2023, 3, 2))
+        self.assertEqual(first.status, AttendanceDay.Status.PRESENT)
+        self.assertEqual(first.overtime_minutes, 0)
+        second = AttendanceDay.objects.get(employee=self.employee, date=date(2023, 3, 6))
+        self.assertEqual(second.overtime_minutes, 60)
+
+
+class AttendanceCoverageGuardTests(AttendanceTestBase):
+    """Payroll must never read "no data" as "everybody was absent"."""
+
+    def setUp(self):
+        super().setUp()
+        CompensationPlan.objects.create(
+            employee=self.employee,
+            pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+            amount=Decimal("3000.00"),
+            effective_from=date(2024, 1, 1),
+        )
+        self.run = PayrollRun.objects.create(
+            period_start=self.monday,
+            period_end=self.monday + timedelta(days=6),
+        )
+        self.line = PayrollLine.objects.create(
+            payroll_run=self.run,
+            employee=self.employee,
+            compensation_plan=self.employee.active_compensation_plan,
+        )
+        self.line.recalculate(save=True)
+
+    def test_apply_refuses_when_nothing_has_been_imported(self):
+        from rest_framework.serializers import ValidationError
+
+        with self.assertRaises(ValidationError):
+            apply_attendance_to_run(self.run)
+        self.line.refresh_from_db()
+        # The salary is untouched: no phantom absence deduction.
+        self.assertEqual(self.line.absence_days, Decimal("0.00"))
+        self.assertEqual(self.line.net_amount, Decimal("3000.00"))
+
+    def test_apply_refuses_a_period_outside_the_synced_window(self):
+        from rest_framework.serializers import ValidationError
+
+        # A sync that only ever read a period two years earlier.
+        client = self.fake_client(
+            employees=[{"emp_code": "1001", "first_name": "Test"}],
+            transactions=[
+                {"id": 201, "emp_code": "1001", "punch_time": "2024-05-06 09:00:00"},
+                {"id": 202, "emp_code": "1001", "punch_time": "2024-05-06 17:00:00"},
+            ],
+        )
+        with mock.patch("apps.attendance.services.build_client", return_value=client):
+            sync_biotime(connection=self.connection)
+
+        with self.assertRaises(ValidationError):
+            apply_attendance_to_run(self.run)
+        self.line.refresh_from_db()
+        self.assertEqual(self.line.absence_days, Decimal("0.00"))
+        self.assertEqual(self.line.net_amount, Decimal("3000.00"))
+
+    def test_a_covered_period_still_costs_real_absences(self):
+        # Sync reads the whole week; the employee only shows up on Monday.
+        client = self.fake_client(
+            employees=[{"emp_code": "1001", "first_name": "Test"}],
+            transactions=[
+                {"id": 301, "emp_code": "1001", "punch_time": f"{self.monday} 09:00:00"},
+                {"id": 302, "emp_code": "1001", "punch_time": f"{self.monday} 17:00:00"},
+            ],
+        )
+        with mock.patch("apps.attendance.services.build_client", return_value=client):
+            sync_biotime(connection=self.connection)
+        # The sync read forward to the end of the period even though the last
+        # punch it found was Monday's.
+        self.connection.refresh_from_db()
+        self.connection.last_punch_cursor = aware(self.monday + timedelta(days=6), 23)
+        self.connection.save()
+
+        apply_attendance_to_run(self.run)
+        self.line.refresh_from_db()
+        # Mon-Fri are workdays here: present Monday, absent the other four.
+        self.assertEqual(self.line.absence_days, Decimal("4.00"))
+        self.assertLess(self.line.net_amount, Decimal("3000.00"))
+
+    def test_uncovered_period_names_the_window_it_does_have(self):
+        client = self.fake_client(
+            employees=[{"emp_code": "1001", "first_name": "Test"}],
+            transactions=[
+                {"id": 401, "emp_code": "1001", "punch_time": "2024-05-06 09:00:00"},
+            ],
+        )
+        with mock.patch("apps.attendance.services.build_client", return_value=client):
+            sync_biotime(connection=self.connection)
+        message = uncovered_period(self.monday, self.monday + timedelta(days=6))
+        self.assertIn("2024-05-06", message)
+
+
+class AttendanceSyncEfficiencyTests(AttendanceTestBase):
+    """Guards on the query counts a multi-year backfill multiplies."""
+
+    def test_backfill_does_not_scale_queries_with_the_punch_count(self):
+        transactions = []
+        biotime_id = 1000
+        # 40 working days, two punches each, for one employee.
+        for offset in range(56):
+            day = self.monday - timedelta(days=200 - offset)
+            for hour in (9, 17):
+                biotime_id += 1
+                transactions.append(
+                    {
+                        "id": biotime_id,
+                        "emp_code": "1001",
+                        "punch_time": f"{day} {hour:02d}:00:00",
+                    }
+                )
+        client = self.fake_client(
+            employees=[{"emp_code": "1001", "first_name": "Test"}],
+            transactions=transactions,
+        )
+        with mock.patch("apps.attendance.services.build_client", return_value=client):
+            with CaptureQueriesContext(connection) as captured:
+                summary = sync_biotime(connection=self.connection)
+        # The per-row path cost one INSERT per punch plus three queries per day:
+        # ~280 statements for this data, and minutes for a real 20k backfill.
+        # The bound is deliberately loose because the exact count differs by
+        # engine (Postgres folds ON CONFLICT into one statement); what matters
+        # is that it does not grow with the punch or day count.
+        self.assertLess(len(captured), 25, [q["sql"] for q in captured])
+        self.assertEqual(summary["punches_imported"], 112)
+        # Every punch is written, and every day rolled up, in a bounded number
+        # of statements rather than three per day plus one per punch.
+        self.assertEqual(AttendancePunch.objects.count(), 112)
+        self.assertEqual(AttendanceDay.objects.count(), 56)
+
+    def test_applying_attendance_does_not_scale_queries_with_the_line_count(self):
+        employees = [self.employee]
+        for index in range(6):
+            employee = Employee.objects.create(
+                employee_number=f"200{index}",
+                full_name=f"موظف {index}",
+                hire_date=date(2024, 1, 1),
+            )
+            AttendanceProfile.objects.create(
+                employee=employee, biotime_emp_code=f"200{index}"
+            )
+            employees.append(employee)
+
+        run = PayrollRun.objects.create(
+            period_start=self.monday, period_end=self.monday + timedelta(days=6)
+        )
+        for employee in employees:
+            CompensationPlan.objects.create(
+                employee=employee,
+                pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+                amount=Decimal("3000.00"),
+                effective_from=date(2024, 1, 1),
+            )
+            line = PayrollLine.objects.create(
+                payroll_run=run,
+                employee=employee,
+                compensation_plan=employee.active_compensation_plan,
+            )
+            line.recalculate(save=True)
+            for offset in range(5):
+                day = self.monday + timedelta(days=offset)
+                AttendancePunch.objects.create(
+                    employee=employee, emp_code=employee.employee_number,
+                    punch_time=aware(day, 9),
+                )
+                AttendancePunch.objects.create(
+                    employee=employee, emp_code=employee.employee_number,
+                    punch_time=aware(day, 17),
+                )
+                rebuild_attendance_day(employee, day)
+        self.connection.last_punch_cursor = aware(self.monday + timedelta(days=6), 23)
+        self.connection.save()
+
+        # 7 lines. A per-line AttendanceDay read or attendance_profile lookup
+        # would show up here as a multiple of the line count; the shipped path
+        # reads the run's rollups once and writes one UPDATE per line.
+        with CaptureQueriesContext(connection) as captured:
+            apply_attendance_to_run(run)
+        self.assertLess(len(captured), 25, [q["sql"] for q in captured])
+
+
+class MissingAttendanceReportingTests(AttendanceTestBase):
+    """An employee with no punches at all is reported, not silently zeroed."""
+
+    def setUp(self):
+        super().setUp()
+        self.ghost = Employee.objects.create(
+            employee_number="3001",
+            full_name="موظف بلا بصمات",
+            hire_date=date(2024, 1, 1),
+        )
+        AttendanceProfile.objects.create(
+            employee=self.ghost, biotime_emp_code="3001"
+        )
+        self.run = PayrollRun.objects.create(
+            period_start=self.monday, period_end=self.monday + timedelta(days=6)
+        )
+        for employee in (self.employee, self.ghost):
+            CompensationPlan.objects.create(
+                employee=employee,
+                pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
+                amount=Decimal("3000.00"),
+                effective_from=date(2024, 1, 1),
+            )
+            line = PayrollLine.objects.create(
+                payroll_run=self.run,
+                employee=employee,
+                compensation_plan=employee.active_compensation_plan,
+            )
+            line.recalculate(save=True)
+        # Only the first employee ever clocks in.
+        for offset in range(5):
+            day = self.monday + timedelta(days=offset)
+            self.add_punch(aware(day, 9))
+            self.add_punch(aware(day, 17))
+            rebuild_attendance_day(self.employee, day)
+        self.connection.last_punch_cursor = aware(
+            self.monday + timedelta(days=6), 23
+        )
+        self.connection.save()
+
+    def test_employee_with_no_punches_is_flagged(self):
+        result = apply_attendance_to_run(self.run)
+        flagged = result["lines_without_attendance"]
+        self.assertEqual(len(flagged), 1)
+        self.assertEqual(flagged[0]["employee"], self.ghost.pk)
+        self.assertEqual(flagged[0]["biotime_emp_code"], "3001")
+        self.assertEqual(flagged[0]["expected_days"], 5)
+
+    def test_employee_who_attended_is_not_flagged(self):
+        result = apply_attendance_to_run(self.run)
+        flagged = {row["employee"] for row in result["lines_without_attendance"]}
+        self.assertNotIn(self.employee.pk, flagged)
+
+
+class InterruptedSyncResumeTests(AttendanceTestBase):
+    """A backfill killed part-way must resume, not restart from the beginning.
+
+    A first backfill against a real server runs for minutes. Before progress was
+    checkpointed, a request that died left every punch committed but the cursor
+    unmoved, so the next attempt re-read the entire history -- and over a
+    transport whose timeout is shorter than the backfill, it never converged.
+    """
+
+    def long_history(self, days=30):
+        transactions = []
+        biotime_id = 5000
+        for offset in range(days):
+            day = self.monday - timedelta(days=400 - offset)
+            for hour in (9, 17):
+                biotime_id += 1
+                transactions.append(
+                    {
+                        "id": biotime_id,
+                        "emp_code": "1001",
+                        "punch_time": f"{day} {hour:02d}:00:00",
+                    }
+                )
+        return transactions
+
+    def test_progress_survives_a_sync_that_dies_part_way(self):
+        transactions = self.long_history()
+        # Die after the first checkpoint's worth of rows.
+        cut = len(transactions) // 2
+
+        class DyingClient(FakeBioTimeClient):
+            def iter_transactions(self, *, start_time=None, end_time=None):
+                emitted = 0
+                for row in super().iter_transactions(
+                    start_time=start_time, end_time=end_time
+                ):
+                    if emitted >= cut:
+                        raise BioTimeError("connection reset")
+                    emitted += 1
+                    yield row
+
+        client = DyingClient(
+            employees=[{"emp_code": "1001", "first_name": "Test"}],
+            transactions=transactions,
+        )
+        with mock.patch("apps.attendance.services.PUNCH_BATCH_SIZE", 10), mock.patch(
+            "apps.attendance.services.CHECKPOINT_EVERY_PUNCHES", 10
+        ), mock.patch("apps.attendance.services.build_client", return_value=client):
+            with self.assertRaises(RestValidationError):
+                sync_biotime(connection=self.connection)
+
+        self.connection.refresh_from_db()
+        # The sync failed, but what it had already imported is recorded.
+        self.assertEqual(
+            self.connection.last_sync_status, BioTimeConnection.SyncStatus.ERROR
+        )
+        self.assertIsNotNone(self.connection.last_punch_cursor)
+        imported = AttendancePunch.objects.count()
+        self.assertGreater(imported, 0)
+        # Every punch that landed is covered by a rollup -- the cursor never
+        # moves past days that were not built.
+        covered = AttendanceDay.objects.count()
+        self.assertGreater(covered, 0)
+        for punch_time in AttendancePunch.objects.filter(
+            punch_time__lt=self.connection.last_punch_cursor
+        ).values_list("punch_time", flat=True):
+            self.assertTrue(
+                AttendanceDay.objects.filter(
+                    employee=self.employee,
+                    date=timezone.localtime(punch_time).date(),
+                ).exists(),
+                f"no rollup for a punch behind the cursor: {punch_time}",
+            )
+
+    def test_the_retry_resumes_instead_of_re_reading_everything(self):
+        transactions = self.long_history()
+        cut = len(transactions) // 2
+
+        class DyingClient(FakeBioTimeClient):
+            def iter_transactions(self, *, start_time=None, end_time=None):
+                emitted = 0
+                for row in super().iter_transactions(
+                    start_time=start_time, end_time=end_time
+                ):
+                    if emitted >= cut:
+                        raise BioTimeError("connection reset")
+                    emitted += 1
+                    yield row
+
+        dying = DyingClient(
+            employees=[{"emp_code": "1001", "first_name": "Test"}],
+            transactions=transactions,
+        )
+        with mock.patch("apps.attendance.services.PUNCH_BATCH_SIZE", 10), mock.patch(
+            "apps.attendance.services.CHECKPOINT_EVERY_PUNCHES", 10
+        ), mock.patch("apps.attendance.services.build_client", return_value=dying):
+            with self.assertRaises(RestValidationError):
+                sync_biotime(connection=self.connection)
+        first_pass = AttendancePunch.objects.count()
+
+        healthy = self.fake_client(
+            employees=[{"emp_code": "1001", "first_name": "Test"}],
+            transactions=transactions,
+        )
+        with mock.patch(
+            "apps.attendance.services.build_client", return_value=healthy
+        ):
+            summary = sync_biotime(connection=self.connection)
+
+        # The retry asked BioTime to start from the checkpoint (minus the
+        # re-read overlap), not from the beginning of history.
+        requested = healthy.requested_start_times[0]
+        self.assertGreater(requested, _aware_dt(transactions[0]["punch_time"]))
+        # And the end state is complete either way.
+        self.assertEqual(AttendancePunch.objects.count(), len(transactions))
+        self.assertLess(summary["punches_imported"], len(transactions))
+        self.assertGreater(first_pass, 0)
+
+
+def _aware_dt(value):
+    from apps.attendance.services import _parse_punch_time
+
+    return _parse_punch_time(value)
+
+
+class AsyncSyncDispatchTests(AttendanceTestBase):
+    """The Sync button must not hold the request open for a whole backfill.
+
+    A first backfill against a real server runs for minutes -- longer than the
+    relay's request timeout -- so a remote shop could never finish one while the
+    pull happened inside the HTTP request.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.url = "/api/attendance/sync/"
+
+    def test_sync_endpoint_queues_the_pull_and_returns_at_once(self):
+        client = self.client_for(self.manager)
+        with mock.patch(
+            "apps.attendance.views.enqueue_best_effort", return_value=True
+        ) as enqueue, mock.patch(
+            "apps.attendance.views.sync_biotime"
+        ) as inline:
+            response = client.post(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertTrue(response.json()["queued"])
+        # The task OBJECT, not its name: a name would need Celery's registry to
+        # already hold it, and a miss would silently fall back to inline.
+        from .tasks import sync_biotime_task
+
+        enqueue.assert_called_once_with(sync_biotime_task, claimed=True)
+        # The pull itself must NOT have run in the request.
+        inline.assert_not_called()
+        self.connection.refresh_from_db()
+        self.assertTrue(self.connection.is_syncing)
+
+    def test_a_second_press_while_running_is_refused(self):
+        client = self.client_for(self.manager)
+        with mock.patch(
+            "apps.attendance.views.enqueue_best_effort", return_value=True
+        ):
+            first = client.post(self.url)
+            second = client.post(self.url)
+
+        self.assertEqual(first.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(second.status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(second.json()["already_running"])
+        self.assertFalse(second.json()["queued"])
+
+    def test_it_falls_back_to_running_inline_when_no_worker_takes_it(self):
+        # An on-prem shop with no Celery worker must still be able to sync.
+        client = self.client_for(self.manager)
+        fake = self.fake_client(
+            employees=[{"emp_code": "1001", "first_name": "Test"}],
+            transactions=[
+                {"id": 900, "emp_code": "1001", "punch_time": f"{self.monday} 09:00:00"},
+                {"id": 901, "emp_code": "1001", "punch_time": f"{self.monday} 17:00:00"},
+            ],
+        )
+        with mock.patch(
+            "apps.attendance.views.enqueue_best_effort", return_value=False
+        ), mock.patch("apps.attendance.services.build_client", return_value=fake):
+            response = client.post(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.json()["queued"])
+        self.assertEqual(response.json()["punches_imported"], 2)
+        self.connection.refresh_from_db()
+        self.assertFalse(self.connection.is_syncing)
+
+    def test_a_failed_inline_fallback_releases_the_lock(self):
+        client = self.client_for(self.manager)
+        failing = self.fake_client(
+            employees=[{"emp_code": "1001", "first_name": "Test"}]
+        )
+        failing.iter_employees = mock.Mock(
+            side_effect=BioTimeError("device unreachable")
+        )
+        with mock.patch(
+            "apps.attendance.views.enqueue_best_effort", return_value=False
+        ), mock.patch("apps.attendance.services.build_client", return_value=failing):
+            response = client.post(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.connection.refresh_from_db()
+        # Crucially not left claiming RUNNING, which would lock out every retry.
+        self.assertFalse(self.connection.is_syncing)
+        self.assertEqual(
+            self.connection.last_sync_status, BioTimeConnection.SyncStatus.ERROR
+        )
+
+    def test_a_dead_worker_does_not_lock_out_every_later_sync(self):
+        # A worker killed mid-run leaves the row claiming RUNNING with a
+        # heartbeat that stops advancing.
+        self.connection.last_sync_status = BioTimeConnection.SyncStatus.RUNNING
+        self.connection.sync_started_at = timezone.now() - timedelta(hours=3)
+        self.connection.sync_heartbeat_at = timezone.now() - timedelta(hours=3)
+        self.connection.save()
+
+        self.assertTrue(claim_sync_slot(self.connection))
+        self.connection.refresh_from_db()
+        self.assertTrue(self.connection.is_syncing)
+        self.assertGreater(
+            self.connection.sync_heartbeat_at, timezone.now() - timedelta(minutes=1)
+        )
+
+    def test_a_live_sync_keeps_its_slot(self):
+        self.connection.last_sync_status = BioTimeConnection.SyncStatus.RUNNING
+        self.connection.sync_started_at = timezone.now() - timedelta(hours=3)
+        # Still heartbeating: a long backfill, not a dead worker.
+        self.connection.sync_heartbeat_at = timezone.now()
+        self.connection.save()
+        self.assertFalse(claim_sync_slot(self.connection))
+
+    def test_the_beat_task_skips_a_sync_that_is_already_running(self):
+        from .tasks import sync_biotime_task
+
+        self.connection.last_sync_status = BioTimeConnection.SyncStatus.RUNNING
+        self.connection.sync_heartbeat_at = timezone.now()
+        self.connection.save()
+        result = sync_biotime_task()
+        self.assertEqual(result, {"skipped": True, "reason": "already_running"})
+
+    def test_progress_is_visible_while_a_sync_runs(self):
+        client = self.client_for(self.manager)
+        with mock.patch(
+            "apps.attendance.views.enqueue_best_effort", return_value=True
+        ):
+            client.post(self.url)
+        # The settings screen polls this endpoint for progress.
+        response = client.get("/api/attendance/connection/")
+        body = response.json()
+        self.assertTrue(body["is_syncing"])
+        self.assertEqual(body["last_sync_status"], "running")
+        self.assertIn("sync_progress_punches", body)
+        self.assertIsNotNone(body["sync_started_at"])

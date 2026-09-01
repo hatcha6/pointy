@@ -1,5 +1,7 @@
 // ZKTeco BioTime attendance integration models.
 
+import 'employee.dart';
+
 int _intFrom(Object? value) {
   if (value is num) {
     return value.toInt();
@@ -27,6 +29,11 @@ class AttendanceConfig {
     this.lastSyncedAt,
     this.lastSyncStatus = 'never',
     this.lastSyncError = '',
+    this.syncedFrom,
+    this.syncedThrough,
+    this.isSyncing = false,
+    this.syncProgressPunches = 0,
+    this.syncStartedAt,
   });
 
   final String baseUrl;
@@ -45,6 +52,18 @@ class AttendanceConfig {
   final String lastSyncStatus;
   final String lastSyncError;
 
+  /// The date range attendance has actually been imported for. A successful
+  /// sync says nothing about WHICH dates it covered, and payroll can only cost
+  /// absences inside this window.
+  final DateTime? syncedFrom;
+  final DateTime? syncedThrough;
+
+  /// Live state of a sync running on a worker. The pull is not held open by the
+  /// request that started it, so this is how the UI follows it.
+  final bool isSyncing;
+  final int syncProgressPunches;
+  final DateTime? syncStartedAt;
+
   factory AttendanceConfig.fromJson(Map<String, Object?> json) {
     return AttendanceConfig(
       baseUrl: json['base_url']?.toString() ?? '',
@@ -58,6 +77,11 @@ class AttendanceConfig {
       lastSyncedAt: _dateTimeFrom(json['last_synced_at']),
       lastSyncStatus: json['last_sync_status']?.toString() ?? 'never',
       lastSyncError: json['last_sync_error']?.toString() ?? '',
+      syncedFrom: _dateTimeFrom(json['synced_from']),
+      syncedThrough: _dateTimeFrom(json['synced_through']),
+      isSyncing: json['is_syncing'] == true,
+      syncProgressPunches: _intFrom(json['sync_progress_punches']),
+      syncStartedAt: _dateTimeFrom(json['sync_started_at']),
     );
   }
 
@@ -275,6 +299,73 @@ class UnmatchedBioTimePerson {
     return UnmatchedBioTimePerson(
       empCode: json['emp_code']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
+    );
+  }
+}
+
+/// The result of costing a payroll run off attendance.
+///
+/// Carries the updated run plus the employees the period expected at work but
+/// held no punches for at all. Arithmetically that is a full-period absence,
+/// but it is just as often someone never enrolled on the terminal — so it is
+/// shown as a warning rather than quietly deducting a month's pay.
+class AttendanceApplyOutcome {
+  const AttendanceApplyOutcome({
+    required this.run,
+    required this.employeesWithoutAttendance,
+  });
+
+  final PayrollRun run;
+  final List<String> employeesWithoutAttendance;
+
+  factory AttendanceApplyOutcome.fromJson(Map<String, Object?> json) {
+    final attendance = json['attendance'];
+    final missing = attendance is Map<String, Object?>
+        ? attendance['lines_without_attendance']
+        : null;
+    return AttendanceApplyOutcome(
+      run: PayrollRun.fromJson(json),
+      employeesWithoutAttendance: missing is List<Object?>
+          ? missing
+                .whereType<Map<String, Object?>>()
+                .map((row) => row['employee_name']?.toString() ?? '')
+                .where((name) => name.isNotEmpty)
+                .toList(growable: false)
+          : const [],
+    );
+  }
+}
+
+/// What the server did with a sync request.
+///
+/// The pull runs on a worker, so starting one normally returns immediately and
+/// the caller polls the connection for progress. Two exceptions: a shop with no
+/// worker runs it inline and the finished [result] comes back with this
+/// response, and a press landing on top of a sync already in flight is refused.
+class AttendanceSyncStart {
+  const AttendanceSyncStart({
+    required this.queued,
+    required this.alreadyRunning,
+    this.result,
+  });
+
+  final bool queued;
+  final bool alreadyRunning;
+
+  /// Only present when the server ran the pull inline (no worker available).
+  final AttendanceSyncResult? result;
+
+  bool get isFinished => result != null;
+
+  factory AttendanceSyncStart.fromJson(Map<String, Object?> json) {
+    final queued = json['queued'] == true;
+    final alreadyRunning = json['already_running'] == true;
+    return AttendanceSyncStart(
+      queued: queued,
+      alreadyRunning: alreadyRunning,
+      result: (queued || alreadyRunning)
+          ? null
+          : AttendanceSyncResult.fromJson(json),
     );
   }
 }
