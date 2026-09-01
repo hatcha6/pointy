@@ -225,49 +225,21 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   Future<void> _confirmCancel(OperationsJob job) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
-    final reasonController = TextEditingController();
-    final confirmed = await showDialog<bool>(
+    final reason = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        icon: Icon(
-          Icons.warning_amber_outlined,
-          color: dialogContext.pointyColors.danger,
-        ),
-        title: Text(l10n.jobCancelConfirmTitle),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(l10n.jobCancelConfirmMessage),
-            const SizedBox(height: 12),
-            TextField(
-              controller: reasonController,
-              decoration: InputDecoration(labelText: l10n.jobCancelReasonLabel),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(l10n.cancelButton),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: dialogContext.pointyColors.danger,
-            ),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(l10n.jobCancelAction),
-          ),
-        ],
+      builder: (_) => PointyTextEntryDialog(
+        icon: Icons.warning_amber_outlined,
+        isDestructive: true,
+        title: l10n.jobCancelConfirmTitle,
+        message: l10n.jobCancelConfirmMessage,
+        fieldLabel: l10n.jobCancelReasonLabel,
+        confirmLabel: l10n.jobCancelAction,
       ),
     );
-    if (confirmed != true || !mounted) {
-      reasonController.dispose();
+    if (reason == null || !mounted) {
       return;
     }
-    final cancelled = await widget.viewModel.cancel(
-      reason: reasonController.text.trim(),
-    );
-    reasonController.dispose();
+    final cancelled = await widget.viewModel.cancel(reason: reason.trim());
     if (!cancelled && mounted) {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.operationsActionError)),
@@ -1296,36 +1268,20 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
     if (variant == null || !mounted) {
       return;
     }
-    final quantityController = TextEditingController(text: '1');
     final quantity = await showDialog<double>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(variant.displayLabel),
-        content: TextField(
-          controller: quantityController,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            labelText: l10n.materialQuantityLabel,
-            suffixText: unitLabel(l10n, variant.unit),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(l10n.cancelButton),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(
-              dialogContext,
-            ).pop(double.tryParse(quantityController.text.trim()) ?? 1),
-            child: Text(l10n.addMaterialButton),
-          ),
-        ],
+      builder: (_) => PointyNumberEntryDialog(
+        title: variant.displayLabel,
+        fieldLabel: l10n.materialQuantityLabel,
+        suffixText: unitLabel(l10n, variant.unit),
+        initialValue: '1',
+        // Nothing is added by adding none of it, so the dialog refuses to
+        // return a quantity the caller would only drop.
+        isValid: (value) => value > 0,
+        confirmLabel: l10n.addMaterialButton,
       ),
     );
-    quantityController.dispose();
-    if (quantity == null || quantity <= 0 || !mounted) {
+    if (quantity == null || !mounted) {
       return;
     }
     final added = await widget.viewModel.addMaterial(
@@ -1436,177 +1392,10 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
   }
 
   Future<void> _openInvoiceDialog(OperationsJob job) async {
-    final l10n = AppLocalizations.of(context)!;
-    // Parts and services are already priced on the job; the labour box is for
-    // the one-off amount that has no catalog line behind it.
-    final lineTotal = job.billableTotal;
-    final laborController = TextEditingController(
-      text: job.approvedPrice == null
-          ? ''
-          : (job.approvedPrice! - lineTotal)
-                .clamp(0, double.infinity)
-                .toStringAsFixed(2),
-    );
-    final paidNowController = TextEditingController();
-    var method = PaymentMethod.cash;
-    var onCredit = false;
-    // Seeded once the cashier switches to آجل, so the common "pay it all now
-    // anyway" case does not need retyping the total.
-    var paidNowTouched = false;
-
     final draft = await showDialog<JobInvoiceDraft>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) {
-          final labor = double.tryParse(laborController.text.trim()) ?? 0;
-          final total = lineTotal + labor;
-          final paidNow = onCredit
-              ? (double.tryParse(paidNowController.text.trim()) ?? 0)
-              : total;
-          final balance = (total - paidNow).clamp(0.0, double.infinity);
-          final needsCustomer = onCredit && job.customer == null;
-          final overpaid = paidNow > total;
-
-          return AlertDialog(
-            icon: const Icon(Icons.receipt_long_outlined),
-            title: Text(l10n.jobInvoiceTitle),
-            content: SizedBox(
-              width: 420,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      l10n.jobInvoiceExplainer,
-                      style: Theme.of(dialogContext).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      l10n.jobMaterialsTotalLabel(
-                        formatMoney(job.materialsTotal),
-                      ),
-                    ),
-                    if (job.servicesTotal > 0)
-                      Text(
-                        '${l10n.jobInvoiceServicesLabel}: '
-                        '${formatMoney(job.servicesTotal)}',
-                      ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: laborController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      inputFormatters: [DecimalTextInputFormatter()],
-                      decoration: InputDecoration(
-                        labelText: l10n.jobLaborTotalLabel,
-                      ),
-                      onChanged: (_) => setDialogState(() {}),
-                    ),
-                    const SizedBox(height: 12),
-                    SegmentedButton<PaymentMethod>(
-                      segments: [
-                        ButtonSegment(
-                          value: PaymentMethod.cash,
-                          label: Text(l10n.paymentMethodCash),
-                        ),
-                        ButtonSegment(
-                          value: PaymentMethod.card,
-                          label: Text(l10n.paymentMethodCard),
-                        ),
-                        ButtonSegment(
-                          value: PaymentMethod.transfer,
-                          label: Text(l10n.paymentMethodTransfer),
-                        ),
-                      ],
-                      selected: {method},
-                      onSelectionChanged: (selection) {
-                        setDialogState(() => method = selection.first);
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: onCredit,
-                      title: Text(l10n.jobInvoiceOnCreditLabel),
-                      subtitle: Text(l10n.jobInvoiceOnCreditExplainer),
-                      onChanged: (value) => setDialogState(() {
-                        onCredit = value;
-                        if (value && !paidNowTouched) {
-                          paidNowController.text = total.toStringAsFixed(2);
-                        }
-                      }),
-                    ),
-                    if (onCredit) ...[
-                      TextField(
-                        controller: paidNowController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        inputFormatters: [DecimalTextInputFormatter()],
-                        decoration: InputDecoration(
-                          labelText: l10n.jobInvoiceAmountNowLabel,
-                        ),
-                        onChanged: (_) => setDialogState(() {
-                          paidNowTouched = true;
-                        }),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(l10n.jobBalanceDueLabel(formatMoney(balance))),
-                      if (needsCustomer)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: PointyInlineMessage.warning(
-                            message: l10n.jobInvoiceNeedsCustomerForCredit,
-                            icon: Icons.person_off_outlined,
-                          ),
-                        ),
-                    ],
-                    const SizedBox(height: 12),
-                    Text(
-                      l10n.jobInvoiceTotalLabel(formatMoney(total)),
-                      style: Theme.of(dialogContext).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      l10n.jobInvoiceNeedsRegister,
-                      style: Theme.of(dialogContext).textTheme.labelSmall,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: Text(l10n.cancelButton),
-              ),
-              FilledButton(
-                onPressed: total <= 0 || needsCustomer || overpaid
-                    ? null
-                    : () => Navigator.of(dialogContext).pop(
-                        JobInvoiceDraft(
-                          laborTotal: labor,
-                          onCredit: onCredit,
-                          payments: [
-                            if (paidNow > 0)
-                              JobInvoicePayment(
-                                method: method,
-                                amount: paidNow,
-                              ),
-                          ],
-                        ),
-                      ),
-                child: Text(l10n.jobInvoiceButton),
-              ),
-            ],
-          );
-        },
-      ),
+      builder: (dialogContext) => _JobInvoiceDialog(job: job),
     );
-    laborController.dispose();
-    paidNowController.dispose();
     if (draft == null || !mounted) {
       return;
     }
@@ -2039,6 +1828,196 @@ class _PromptDialogState extends State<_PromptDialog> {
         FilledButton(
           onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
           child: Text(widget.confirmLabel),
+        ),
+      ],
+    );
+  }
+}
+
+/// The invoice dialog: labour, payment method, and — for آجل — how much of the
+/// total is landing in the drawer right now.
+///
+/// A widget rather than a `StatefulBuilder` in the calling method because the
+/// two [TextEditingController]s have to outlive `showDialog`'s await.
+/// `showDialog` completes when the route is *popped*, while the exit animation
+/// is still running and both fields are still mounted; disposing the
+/// controllers there means the next frame rebuilds a `TextField` against a dead
+/// one, throwing "A TextEditingController was used after being disposed" and
+/// then taking the screen down with a framework assertion. The State's
+/// `dispose()` runs when the route is actually gone, which is the point.
+///
+/// The dialog's own answer-in-progress — the method, the credit switch, whether
+/// the cashier has touched the amount-now box — moved in here with them.
+class _JobInvoiceDialog extends StatefulWidget {
+  const _JobInvoiceDialog({required this.job});
+
+  final OperationsJob job;
+
+  @override
+  State<_JobInvoiceDialog> createState() => _JobInvoiceDialogState();
+}
+
+class _JobInvoiceDialogState extends State<_JobInvoiceDialog> {
+  // Parts and services are already priced on the job; the labour box is for
+  // the one-off amount that has no catalog line behind it.
+  late final double _lineTotal = widget.job.billableTotal;
+  late final TextEditingController _laborController = TextEditingController(
+    text: widget.job.approvedPrice == null
+        ? ''
+        : (widget.job.approvedPrice! - _lineTotal)
+              .clamp(0, double.infinity)
+              .toStringAsFixed(2),
+  );
+  final TextEditingController _paidNowController = TextEditingController();
+  var _method = PaymentMethod.cash;
+  var _onCredit = false;
+  // Seeded once the cashier switches to آجل, so the common "pay it all now
+  // anyway" case does not need retyping the total.
+  var _paidNowTouched = false;
+
+  @override
+  void dispose() {
+    _laborController.dispose();
+    _paidNowController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final job = widget.job;
+    final labor = double.tryParse(_laborController.text.trim()) ?? 0;
+    final total = _lineTotal + labor;
+    final paidNow = _onCredit
+        ? (double.tryParse(_paidNowController.text.trim()) ?? 0)
+        : total;
+    final balance = (total - paidNow).clamp(0.0, double.infinity);
+    final needsCustomer = _onCredit && job.customer == null;
+    final overpaid = paidNow > total;
+
+    return AlertDialog(
+      icon: const Icon(Icons.receipt_long_outlined),
+      title: Text(l10n.jobInvoiceTitle),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l10n.jobInvoiceExplainer,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              Text(l10n.jobMaterialsTotalLabel(formatMoney(job.materialsTotal))),
+              if (job.servicesTotal > 0)
+                Text(
+                  '${l10n.jobInvoiceServicesLabel}: '
+                  '${formatMoney(job.servicesTotal)}',
+                ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _laborController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [DecimalTextInputFormatter()],
+                decoration: InputDecoration(labelText: l10n.jobLaborTotalLabel),
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 12),
+              SegmentedButton<PaymentMethod>(
+                segments: [
+                  ButtonSegment(
+                    value: PaymentMethod.cash,
+                    label: Text(l10n.paymentMethodCash),
+                  ),
+                  ButtonSegment(
+                    value: PaymentMethod.card,
+                    label: Text(l10n.paymentMethodCard),
+                  ),
+                  ButtonSegment(
+                    value: PaymentMethod.transfer,
+                    label: Text(l10n.paymentMethodTransfer),
+                  ),
+                ],
+                selected: {_method},
+                onSelectionChanged: (selection) {
+                  setState(() => _method = selection.first);
+                },
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _onCredit,
+                title: Text(l10n.jobInvoiceOnCreditLabel),
+                subtitle: Text(l10n.jobInvoiceOnCreditExplainer),
+                onChanged: (value) => setState(() {
+                  _onCredit = value;
+                  if (value && !_paidNowTouched) {
+                    _paidNowController.text = total.toStringAsFixed(2);
+                  }
+                }),
+              ),
+              if (_onCredit) ...[
+                TextField(
+                  controller: _paidNowController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [DecimalTextInputFormatter()],
+                  decoration: InputDecoration(
+                    labelText: l10n.jobInvoiceAmountNowLabel,
+                  ),
+                  onChanged: (_) => setState(() {
+                    _paidNowTouched = true;
+                  }),
+                ),
+                const SizedBox(height: 8),
+                Text(l10n.jobBalanceDueLabel(formatMoney(balance))),
+                if (needsCustomer)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: PointyInlineMessage.warning(
+                      message: l10n.jobInvoiceNeedsCustomerForCredit,
+                      icon: Icons.person_off_outlined,
+                    ),
+                  ),
+              ],
+              const SizedBox(height: 12),
+              Text(
+                l10n.jobInvoiceTotalLabel(formatMoney(total)),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                l10n.jobInvoiceNeedsRegister,
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.cancelButton),
+        ),
+        FilledButton(
+          onPressed: total <= 0 || needsCustomer || overpaid
+              ? null
+              : () => Navigator.of(context).pop(
+                  JobInvoiceDraft(
+                    laborTotal: labor,
+                    onCredit: _onCredit,
+                    payments: [
+                      if (paidNow > 0)
+                        JobInvoicePayment(method: _method, amount: paidNow),
+                    ],
+                  ),
+                ),
+          child: Text(l10n.jobInvoiceButton),
         ),
       ],
     );

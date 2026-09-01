@@ -210,4 +210,121 @@ void main() {
       },
     );
   });
+
+  /// The void dialog asks *why* before it cancels an invoice, so it carries a
+  /// text controller. That controller used to be created in the calling method
+  /// and never disposed at all — the mirror image of disposing it too early,
+  /// and one edit away from the crash: `showDialog` completes when the route is
+  /// popped, while the exit animation still has the field mounted, so any
+  /// caller that "fixed" the leak with a `dispose()` after the await would
+  /// rebuild a `TextField` against a dead controller and take the screen down.
+  /// The dialog owns it now; these open and close it the way a cashier does.
+  group('SaleOrderDetailsContent void dialog', () {
+    testWidgets('cancelling it leaves the screen standing', (tester) async {
+      String? voidedWith;
+      await tester.pumpWidget(
+        _wrap(
+          SaleOrderDetailsContent(
+            order: _standardInvoice(status: 'paid', returnedQuantity: 0),
+            onVoid: (_, reason) async {
+              voidedWith = reason;
+              return true;
+            },
+            popOnSuccessfulAdjustment: false,
+          ),
+        ),
+      );
+
+      await _openVoidDialog(tester);
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      await tester.tap(find.text('إلغاء'));
+      await tester.pumpAndSettle();
+
+      // Backing out voids nothing, and the field leaves with the route.
+      expect(voidedWith, isNull);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('cancelling after typing a reason is clean', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          SaleOrderDetailsContent(
+            order: _standardInvoice(status: 'paid', returnedQuantity: 0),
+            onVoid: (_, _) async => true,
+            popOnSuccessfulAdjustment: false,
+          ),
+        ),
+      );
+
+      await _openVoidDialog(tester);
+      await tester.enterText(_voidReasonField, 'الزبون تراجع');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('إلغاء'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('confirming carries the trimmed reason through', (
+      tester,
+    ) async {
+      String? voidedWith;
+      await tester.pumpWidget(
+        _wrap(
+          SaleOrderDetailsContent(
+            order: _standardInvoice(status: 'paid', returnedQuantity: 0),
+            onVoid: (_, reason) async {
+              voidedWith = reason;
+              return true;
+            },
+            popOnSuccessfulAdjustment: false,
+          ),
+        ),
+      );
+
+      await _openVoidDialog(tester);
+      await tester.enterText(_voidReasonField, '  الزبون تراجع  ');
+      await tester.tap(find.text('تأكيد'));
+      await tester.pumpAndSettle();
+
+      expect(voidedWith, 'الزبون تراجع');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('opening and cancelling it twice is clean', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          SaleOrderDetailsContent(
+            order: _standardInvoice(status: 'paid', returnedQuantity: 0),
+            onVoid: (_, _) async => true,
+            popOnSuccessfulAdjustment: false,
+          ),
+        ),
+      );
+
+      for (var i = 0; i < 2; i += 1) {
+        await _openVoidDialog(tester);
+        await tester.tap(find.text('إلغاء'));
+        await tester.pumpAndSettle();
+      }
+
+      expect(tester.takeException(), isNull);
+    });
+  });
+}
+
+/// The reason box inside the void dialog.
+final Finder _voidReasonField = find.descendant(
+  of: find.byType(AlertDialog),
+  matching: find.byType(TextField),
+);
+
+Future<void> _openVoidDialog(WidgetTester tester) async {
+  final trigger = find.text('إلغاء الفاتورة');
+  await tester.ensureVisible(trigger);
+  await tester.pumpAndSettle();
+  await tester.tap(trigger);
+  await tester.pumpAndSettle();
 }

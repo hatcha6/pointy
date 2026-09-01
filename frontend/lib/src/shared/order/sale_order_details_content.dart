@@ -325,41 +325,9 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
 
   Future<void> _showVoidDialog() async {
     final l10n = AppLocalizations.of(context)!;
-    final reasonController = TextEditingController();
     final reason = await showDialog<String>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          icon: const Icon(Icons.block_outlined),
-          title: Text(l10n.saleVoidTitle),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(l10n.saleVoidMessage),
-              const SizedBox(height: 12),
-              TextField(
-                controller: reasonController,
-                decoration: InputDecoration(
-                  labelText: l10n.saleAdjustmentReasonLabel,
-                  hintText: l10n.saleAdjustmentReasonHint,
-                ),
-                maxLines: 2,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(l10n.cancelButton),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(reasonController.text.trim()),
-              child: Text(l10n.confirmButton),
-            ),
-          ],
-        );
-      },
+      builder: (dialogContext) => const _VoidReasonDialog(),
     );
     if (reason == null || widget.onVoid == null) {
       return;
@@ -1287,4 +1255,65 @@ String _receiptNumber(AppLocalizations l10n, SaleOrder order) {
     return l10n.saleReceiptFallback;
   }
   return receiptNumber;
+}
+
+/// Asks why a sale is being voided. Pops the trimmed reason, or null if the
+/// cashier backed out.
+///
+/// It owns its [TextEditingController] because a caller cannot: `showDialog`
+/// completes when the route is *popped*, while the exit animation is still
+/// running and the field is still mounted, so disposing after the await leaves
+/// the next frame rebuilding a `TextField` against a dead controller — "A
+/// TextEditingController was used after being disposed", followed by a
+/// framework assertion that takes the screen with it. The controller here used
+/// to be leaked instead, which is the same bug seen from the other side.
+class _VoidReasonDialog extends StatefulWidget {
+  const _VoidReasonDialog();
+
+  @override
+  State<_VoidReasonDialog> createState() => _VoidReasonDialogState();
+}
+
+class _VoidReasonDialogState extends State<_VoidReasonDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return AlertDialog(
+      icon: const Icon(Icons.block_outlined),
+      title: Text(l10n.saleVoidTitle),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(l10n.saleVoidMessage),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            decoration: InputDecoration(
+              labelText: l10n.saleAdjustmentReasonLabel,
+              hintText: l10n.saleAdjustmentReasonHint,
+            ),
+            maxLines: 2,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.cancelButton),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: Text(l10n.confirmButton),
+        ),
+      ],
+    );
+  }
 }

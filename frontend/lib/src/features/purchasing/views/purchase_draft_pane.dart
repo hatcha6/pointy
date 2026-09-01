@@ -64,16 +64,6 @@ class PurchaseDraftPane extends StatefulWidget {
 }
 
 class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
-  late final TextEditingController _supplierInvoiceNumberController =
-      TextEditingController(text: widget.viewModel.supplierInvoiceNumber);
-  late final TextEditingController _supplierInvoiceDateController =
-      TextEditingController(text: widget.viewModel.supplierInvoiceDateInput);
-  late final TextEditingController _discountCodeController =
-      TextEditingController(text: widget.viewModel.discountCode);
-  final FocusNode _supplierInvoiceNumberFocusNode = FocusNode();
-  final FocusNode _supplierInvoiceDateFocusNode = FocusNode();
-  final FocusNode _discountCodeFocusNode = FocusNode();
-
   PurchaseViewModel get viewModel => widget.viewModel;
 
   @override
@@ -94,21 +84,9 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       _clearActions(oldWidget.submitController);
       _publishActions();
     }
-    _syncController(
-      controller: _supplierInvoiceNumberController,
-      focusNode: _supplierInvoiceNumberFocusNode,
-      value: widget.viewModel.supplierInvoiceNumber,
-    );
-    _syncController(
-      controller: _supplierInvoiceDateController,
-      focusNode: _supplierInvoiceDateFocusNode,
-      value: widget.viewModel.supplierInvoiceDateInput,
-    );
-    _syncController(
-      controller: _discountCodeController,
-      focusNode: _discountCodeFocusNode,
-      value: widget.viewModel.discountCode,
-    );
+    // The invoice/discount fields no longer need syncing here: the settings
+    // dialog owns them now and seeds them from the view model each time it
+    // opens, so there is no pane-held copy left to drift.
   }
 
   /// Republished on every build, because what the primary action DOES changes
@@ -148,12 +126,6 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
   @override
   void dispose() {
     _clearActions(widget.submitController);
-    _supplierInvoiceNumberController.dispose();
-    _supplierInvoiceDateController.dispose();
-    _discountCodeController.dispose();
-    _supplierInvoiceNumberFocusNode.dispose();
-    _supplierInvoiceDateFocusNode.dispose();
-    _discountCodeFocusNode.dispose();
     super.dispose();
   }
 
@@ -254,12 +226,6 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
       builder: (context) => _PurchaseDraftSettingsDialog(
         viewModel: viewModel,
         contactRepository: widget.contactRepository,
-        numberController: _supplierInvoiceNumberController,
-        dateController: _supplierInvoiceDateController,
-        discountController: _discountCodeController,
-        numberFocusNode: _supplierInvoiceNumberFocusNode,
-        dateFocusNode: _supplierInvoiceDateFocusNode,
-        discountFocusNode: _discountCodeFocusNode,
       ),
     );
   }
@@ -472,19 +438,6 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
 
     if (result is Ok<PurchaseOrder>) {
       widget.onSubmitSuccess?.call();
-    }
-  }
-
-  void _syncController({
-    required TextEditingController controller,
-    required FocusNode focusNode,
-    required String value,
-    bool syncEmptyWhileFocused = true,
-  }) {
-    final canSync =
-        !focusNode.hasFocus || (syncEmptyWhileFocused && value.isEmpty);
-    if (canSync && controller.text != value) {
-      controller.text = value;
     }
   }
 }
@@ -967,9 +920,7 @@ class _LinePricingSummary extends StatelessWidget {
         : null;
 
     final costDeltaPercent =
-        (previousBaseCost != null &&
-            previousBaseCost! > 0 &&
-            baseUnitCost > 0)
+        (previousBaseCost != null && previousBaseCost! > 0 && baseUnitCost > 0)
         ? (baseUnitCost - previousBaseCost!) / previousBaseCost! * 100
         : null;
 
@@ -998,11 +949,7 @@ class _LinePricingSummary extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (severity != _SellingPriceSeverity.normal) ...[
-                      Icon(
-                        Icons.warning_amber_rounded,
-                        size: 14,
-                        color: color,
-                      ),
+                      Icon(Icons.warning_amber_rounded, size: 14, color: color),
                       const SizedBox(width: 4),
                     ],
                     Flexible(
@@ -1012,8 +959,7 @@ class _LinePricingSummary extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: color,
-                          fontWeight:
-                              severity == _SellingPriceSeverity.normal
+                          fontWeight: severity == _SellingPriceSeverity.normal
                               ? null
                               : FontWeight.w700,
                         ),
@@ -1069,8 +1015,7 @@ class _LinePricingSummary extends StatelessWidget {
                             : null,
                       ),
                     ),
-                  if (costDeltaPercent != null &&
-                      costDeltaPercent.abs() >= 0.5)
+                  if (costDeltaPercent != null && costDeltaPercent.abs() >= 0.5)
                     _CostDeltaChip(percent: costDeltaPercent),
                 ],
               ),
@@ -1245,26 +1190,24 @@ class _ReceiveImmediatelyToggle extends StatelessWidget {
   }
 }
 
+/// The draft's supplier / invoice / landed-cost settings.
+///
+/// It owns its text controllers and focus nodes. It used to borrow them from
+/// the pane, which was a latent crash: the pane disposes on teardown while this
+/// dialog — a separate route — is still mounted and still rendering fields
+/// against them, and the next frame trips
+/// `A TextEditingController was used after being disposed`. Owning them ties
+/// their life to this route's, and costs nothing, because the pane never
+/// rendered these three fields itself; the view model is the real home of the
+/// values and is seeded from and written back to below.
 class _PurchaseDraftSettingsDialog extends StatefulWidget {
   const _PurchaseDraftSettingsDialog({
     required this.viewModel,
     required this.contactRepository,
-    required this.numberController,
-    required this.dateController,
-    required this.discountController,
-    required this.numberFocusNode,
-    required this.dateFocusNode,
-    required this.discountFocusNode,
   });
 
   final PurchaseViewModel viewModel;
   final ContactRepository contactRepository;
-  final TextEditingController numberController;
-  final TextEditingController dateController;
-  final TextEditingController discountController;
-  final FocusNode numberFocusNode;
-  final FocusNode dateFocusNode;
-  final FocusNode discountFocusNode;
 
   @override
   State<_PurchaseDraftSettingsDialog> createState() =>
@@ -1288,9 +1231,22 @@ class _PurchaseDraftSettingsDialogState
             ? ''
             : formatQuantity(widget.viewModel.extraDiscount),
       );
-  late final String _initialNumber = widget.numberController.text;
-  late final String _initialDate = widget.dateController.text;
-  late final String _initialDiscountCode = widget.discountController.text;
+  // Seeded from the view model, which is where these values actually live.
+  late final String _initialNumber = widget.viewModel.supplierInvoiceNumber;
+  late final String _initialDate = widget.viewModel.supplierInvoiceDateInput;
+  late final String _initialDiscountCode = widget.viewModel.discountCode;
+  late final TextEditingController _numberController = TextEditingController(
+    text: _initialNumber,
+  );
+  late final TextEditingController _dateController = TextEditingController(
+    text: _initialDate,
+  );
+  late final TextEditingController _discountController = TextEditingController(
+    text: _initialDiscountCode,
+  );
+  final FocusNode _numberFocusNode = FocusNode();
+  final FocusNode _dateFocusNode = FocusNode();
+  final FocusNode _discountFocusNode = FocusNode();
 
   @override
   void dispose() {
@@ -1298,16 +1254,22 @@ class _PurchaseDraftSettingsDialogState
       controllers.dispose();
     }
     _extraDiscountController.dispose();
+    _numberController.dispose();
+    _dateController.dispose();
+    _discountController.dispose();
+    _numberFocusNode.dispose();
+    _dateFocusNode.dispose();
+    _discountFocusNode.dispose();
     super.dispose();
   }
 
-  String get _currentDiscountCode => widget.discountController.text.trim();
+  String get _currentDiscountCode => _discountController.text.trim();
 
   bool get _matchesSavedDiscountCode =>
       _currentDiscountCode == widget.viewModel.discountCode.trim();
 
   bool get _hasInvalidDate {
-    final text = widget.dateController.text.trim();
+    final text = _dateController.text.trim();
     return text.isNotEmpty && _parseDateInputValue(text) == null;
   }
 
@@ -1391,8 +1353,8 @@ class _PurchaseDraftSettingsDialogState
               ScanWedgeTarget(
                 child: TextField(
                   key: const ValueKey('supplier_invoice_number_field'),
-                  controller: widget.numberController,
-                  focusNode: widget.numberFocusNode,
+                  controller: _numberController,
+                  focusNode: _numberFocusNode,
                   enabled: !widget.viewModel.isSubmitting,
                   decoration: InputDecoration(
                     labelText: l10n.supplierInvoiceNumberLabel,
@@ -1407,8 +1369,8 @@ class _PurchaseDraftSettingsDialogState
               const SizedBox(height: 12),
               TextField(
                 key: const ValueKey('supplier_invoice_date_field'),
-                controller: widget.dateController,
-                focusNode: widget.dateFocusNode,
+                controller: _dateController,
+                focusNode: _dateFocusNode,
                 enabled: !widget.viewModel.isSubmitting,
                 keyboardType: TextInputType.datetime,
                 inputFormatters: const [_DateDashInputFormatter()],
@@ -1510,7 +1472,7 @@ class _PurchaseDraftSettingsDialogState
                   rate: widget.viewModel.currentRate,
                   typedRate: widget.viewModel.typedExchangeRate,
                   onTypedRateChanged: widget.viewModel.updateTypedExchangeRate,
-                  invoiceDateText: widget.dateController.text,
+                  invoiceDateText: _dateController.text,
                   foreignTotal: widget.viewModel.foreignDraftTotal,
                   enabled: !widget.viewModel.isSubmitting,
                 ),
@@ -1537,8 +1499,8 @@ class _PurchaseDraftSettingsDialogState
               const SizedBox(height: 12),
               TextField(
                 key: const ValueKey('purchase_discount_code_field'),
-                controller: widget.discountController,
-                focusNode: widget.discountFocusNode,
+                controller: _discountController,
+                focusNode: _discountFocusNode,
                 enabled: !widget.viewModel.isSubmitting,
                 textCapitalization: TextCapitalization.characters,
                 decoration: InputDecoration(
@@ -1594,7 +1556,7 @@ class _PurchaseDraftSettingsDialogState
 
   Future<void> _pickDate() async {
     final current =
-        _parseDateInputValue(widget.dateController.text) ??
+        _parseDateInputValue(_dateController.text) ??
         widget.viewModel.supplierInvoiceDate ??
         DateTime.now();
     final selected = await showDatePicker(
@@ -1607,7 +1569,7 @@ class _PurchaseDraftSettingsDialogState
       return;
     }
     setState(() {
-      widget.dateController.text = _formatDateInputValue(selected);
+      _dateController.text = _formatDateInputValue(selected);
     });
   }
 
@@ -1649,7 +1611,7 @@ class _PurchaseDraftSettingsDialogState
       setState(() {});
       return;
     }
-    widget.discountController.clear();
+    _discountController.clear();
     final l10n = AppLocalizations.of(context)!;
     _saveSettings(l10n);
     Navigator.of(context).pop();
@@ -1682,11 +1644,11 @@ class _PurchaseDraftSettingsDialogState
     if (_selectedSupplier?.id != widget.viewModel.selectedSupplier?.id) {
       widget.viewModel.selectSupplier(_selectedSupplier);
     }
-    final invoiceNumber = widget.numberController.text.trim();
+    final invoiceNumber = _numberController.text.trim();
     if (invoiceNumber != widget.viewModel.supplierInvoiceNumber.trim()) {
       widget.viewModel.updateSupplierInvoiceNumber(invoiceNumber);
     }
-    final invoiceDate = widget.dateController.text.trim();
+    final invoiceDate = _dateController.text.trim();
     if (invoiceDate != widget.viewModel.supplierInvoiceDateInput.trim()) {
       widget.viewModel.updateSupplierInvoiceDateInput(invoiceDate);
     }
@@ -1708,12 +1670,10 @@ class _PurchaseDraftSettingsDialogState
     }
   }
 
-  void _cancel() {
-    widget.numberController.text = _initialNumber;
-    widget.dateController.text = _initialDate;
-    widget.discountController.text = _initialDiscountCode;
-    Navigator.of(context).pop();
-  }
+  /// Nothing to restore: the edits only ever lived in this route's own
+  /// controllers, and they die with it. (When the pane owned them, cancel had
+  /// to hand back the text it had overwritten.)
+  void _cancel() => Navigator.of(context).pop();
 }
 
 String _formatDateInputValue(DateTime date) {
@@ -2311,44 +2271,18 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
   Future<void> _promptQuantity(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     final line = widget.line;
-    final controller = TextEditingController(
-      text: formatQuantity(line.quantity),
-    );
     final submitted = await showDialog<double>(
       context: context,
-      builder: (dialogContext) {
-        void submit() {
-          final parsed = double.tryParse(controller.text.trim());
-          if (parsed == null || parsed <= 0) {
-            return;
-          }
-          Navigator.of(dialogContext).pop(parsed);
-        }
-
-        return AlertDialog(
-          title: Text(
-            line.unitLabel.isEmpty
-                ? l10n.purchaseLineQuantityLabel
-                : '${l10n.purchaseLineQuantityLabel} (${line.unitLabel})',
-          ),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [DecimalTextInputFormatter()],
-            onSubmitted: (_) => submit(),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(l10n.cancelButton),
-            ),
-            FilledButton(onPressed: submit, child: Text(l10n.confirmButton)),
-          ],
-        );
-      },
+      builder: (_) => PointyNumberEntryDialog(
+        title: line.unitLabel.isEmpty
+            ? l10n.purchaseLineQuantityLabel
+            : '${l10n.purchaseLineQuantityLabel} (${line.unitLabel})',
+        initialValue: formatQuantity(line.quantity),
+        // A quantity of zero is a deletion, not a quantity — the stepper and
+        // F4 own that; this field only ever sets a positive one.
+        isValid: (value) => value > 0,
+      ),
     );
-    controller.dispose();
     if (submitted != null) {
       widget.onQuantityChanged?.call(submitted);
     }
@@ -2360,62 +2294,23 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
   Future<void> _promptLineTotal() async {
     final l10n = AppLocalizations.of(context)!;
     final line = widget.line;
-    final controller = TextEditingController(
-      text: line.total > 0 ? line.total.toStringAsFixed(2) : '',
-    );
     final submitted = await showDialog<double>(
       context: context,
-      builder: (dialogContext) {
-        void submit() {
-          final parsed = parseDecimal(controller.text);
-          if (parsed == null || parsed < 0) {
-            return;
-          }
-          Navigator.of(dialogContext).pop(parsed);
-        }
-
-        return AlertDialog(
-          icon: const Icon(Icons.functions),
-          title: Text(l10n.purchaseLineTotalEntryTitle),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                l10n.purchaseLineTotalEntryMessage(
-                  formatQuantity(line.quantity),
-                  line.unitLabel.isEmpty
-                      ? unitLabel(l10n, line.variant.unit)
-                      : line.unitLabel,
-                ),
-                style: Theme.of(dialogContext).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                inputFormatters: [DecimalTextInputFormatter()],
-                decoration: InputDecoration(
-                  labelText: l10n.purchaseLineTotalEntryFieldLabel,
-                ),
-                onSubmitted: (_) => submit(),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(l10n.cancelButton),
-            ),
-            FilledButton(onPressed: submit, child: Text(l10n.confirmButton)),
-          ],
-        );
-      },
+      builder: (_) => PointyNumberEntryDialog(
+        icon: Icons.functions,
+        title: l10n.purchaseLineTotalEntryTitle,
+        message: l10n.purchaseLineTotalEntryMessage(
+          formatQuantity(line.quantity),
+          line.unitLabel.isEmpty
+              ? unitLabel(l10n, line.variant.unit)
+              : line.unitLabel,
+        ),
+        fieldLabel: l10n.purchaseLineTotalEntryFieldLabel,
+        initialValue: line.total > 0 ? line.total.toStringAsFixed(2) : '',
+        // A total of zero is legitimate — free stock, a supplier's write-off.
+        isValid: (value) => value >= 0,
+      ),
     );
-    controller.dispose();
     if (submitted != null) {
       widget.onLineTotalEntry?.call(submitted);
     }

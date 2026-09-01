@@ -601,34 +601,19 @@ class _AttendanceSettingsPageState extends State<AttendanceSettingsPage> {
     AttendanceProfileLink profile,
   ) async {
     final l10n = AppLocalizations.of(context)!;
-    final controller = TextEditingController(text: profile.bioTimeEmpCode);
     final newCode = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(profile.employeeName),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textDirection: TextDirection.ltr,
-          decoration: InputDecoration(
-            labelText: l10n.attendanceMappingCodeLabel,
-            prefixIcon: const Icon(Icons.fingerprint),
-          ),
-          onSubmitted: (value) => Navigator.of(dialogContext).pop(value),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(l10n.cancelButton),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
-            child: Text(l10n.confirmButton),
-          ),
-        ],
+      builder: (_) => PointyTextEntryDialog(
+        title: profile.employeeName,
+        fieldLabel: l10n.attendanceMappingCodeLabel,
+        fieldPrefixIcon: Icons.fingerprint,
+        // The code comes from BioTime, which writes it in Latin digits however
+        // the screen around it reads.
+        fieldTextDirection: TextDirection.ltr,
+        initialValue: profile.bioTimeEmpCode,
+        confirmLabel: l10n.confirmButton,
       ),
     );
-    controller.dispose();
     if (newCode == null) {
       return;
     }

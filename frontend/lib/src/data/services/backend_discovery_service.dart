@@ -1,11 +1,45 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
 import 'backend_discovery_udp_stub.dart'
     if (dart.library.io) 'backend_discovery_udp_io.dart';
 import 'subnet_sweep_stub.dart' if (dart.library.io) 'subnet_sweep_io.dart';
+
+/// The loopback fallbacks, ordered so a **web** build never adopts a backend on
+/// a different host than the page it was served from.
+///
+/// `127.0.0.1` and `localhost` are the same machine, but to a browser they are
+/// different *sites*. A page on one that adopts an API on the other is handed a
+/// `SameSite=Lax` session cookie it will never send back: the login POST
+/// succeeds and every request after it comes back 401, which reads exactly like
+/// a wrong password. Both used to be raced, so which one won — and therefore
+/// whether the web build worked at all — was down to whichever probe answered
+/// first.
+///
+/// So on web the candidate is derived from the page's own host, which keeps the
+/// session same-site whatever the app is served from (127.0.0.1, localhost, or
+/// a LAN address in front of a separate backend port). Native builds have no
+/// such constraint and keep both.
+List<String> loopbackApiBaseUrls({required bool isWeb, required String pageHost}) {
+  const both = ['http://127.0.0.1:8000/api', 'http://localhost:8000/api'];
+  if (!isWeb) {
+    return both;
+  }
+  if (pageHost.isEmpty) {
+    return const [];
+  }
+  return ['http://$pageHost:8000/api'];
+}
+
+/// Takes [isWeb] and [pageHost] as arguments rather than reading `kIsWeb` and
+/// `Uri.base` inside, so the web rule above can actually be tested — `kIsWeb` is
+/// a compile-time false on the VM the tests run on, which would otherwise make
+/// the branch that matters unreachable.
+List<String> _loopbackCandidates() =>
+    loopbackApiBaseUrls(isWeb: kIsWeb, pageHost: Uri.base.host);
 
 /// UDP broadcast discovery, injectable so tests stay hermetic (no real sockets).
 typedef UdpDiscovery = Future<List<Uri>> Function({Duration timeout});
@@ -89,8 +123,7 @@ class BackendDiscoveryService {
     final candidates = _dedupe([
       ...preferredApiBaseUrls,
       _defaultApiBaseUrl,
-      'http://127.0.0.1:8000/api',
-      'http://localhost:8000/api',
+      ..._loopbackCandidates(),
     ]);
 
     final fast = await _race([

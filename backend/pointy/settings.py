@@ -637,11 +637,24 @@ CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS")
 CORS_ALLOW_CREDENTIALS = True
 # The POS sends custom request headers the browser lists in its CORS preflight;
 # they must be allowed or the browser silently blocks the real request (the
-# checkout POST never leaves the browser). Idempotency-Key guards every money
-# mutation (checkout, returns, voids); X-Pointy-Relay-Token rides relay setups.
+# checkout POST never leaves the browser). Every non-safelisted header
+# ``ApiSession`` attaches has to appear here — a header added on the client and
+# forgotten here breaks the web build ENTIRELY, because the client sends the
+# device trio on every request, login included. ``test_cors_preflight`` drives a
+# real preflight with the whole set so the next one cannot be forgotten.
+#
+# Idempotency-Key guards every money mutation (checkout, returns, voids);
+# X-Pointy-Relay-Token rides relay setups; the X-Pointy-Device-Id/Platform/
+# App-Version trio identifies the device for throttling and telemetry; and
+# If-None-Match carries the catalog ETag (not CORS-safelisted, so it preflights
+# like the rest).
 CORS_ALLOW_HEADERS = (
     *default_headers,
     "idempotency-key",
+    "if-none-match",
+    "x-pointy-app-version",
+    "x-pointy-device-id",
+    "x-pointy-platform",
     "x-pointy-relay-token",
 )
 # Let the browser read the idempotency replay marker on the response.

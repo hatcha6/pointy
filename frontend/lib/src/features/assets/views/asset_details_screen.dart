@@ -335,47 +335,17 @@ class _AssetDetailsScreenState extends State<AssetDetailsScreen> {
     if (customer == null || !mounted) {
       return;
     }
-    final noteController = TextEditingController();
-    final confirmed = await showDialog<bool>(
+    final note = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.assetTransferDialogTitle),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(l10n.assetTransferExplainer),
-            const SizedBox(height: 12),
-            Text(
-              customer.fullName,
-              style: Theme.of(
-                dialogContext,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: noteController,
-              decoration: InputDecoration(
-                labelText: l10n.assetTransferNoteLabel,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(l10n.cancelButton),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(l10n.assetTransferConfirm),
-          ),
-        ],
+      builder: (_) => PointyTextEntryDialog(
+        title: l10n.assetTransferDialogTitle,
+        message: l10n.assetTransferExplainer,
+        subject: customer.fullName,
+        fieldLabel: l10n.assetTransferNoteLabel,
+        confirmLabel: l10n.assetTransferConfirm,
       ),
     );
-    final note = noteController.text;
-    noteController.dispose();
-    if (confirmed != true || !mounted) {
+    if (note == null || !mounted) {
       return;
     }
     final ok = await widget.viewModel.transfer(
