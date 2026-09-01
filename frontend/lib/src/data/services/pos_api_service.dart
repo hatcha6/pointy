@@ -55,6 +55,7 @@ import '../models/register_session_summary.dart';
 import '../../features/payments/models/payment_record.dart';
 import '../models/relay_installation_status.dart';
 import '../models/relay_pairing.dart';
+import '../models/report_catalog.dart';
 import '../models/report_run.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
@@ -979,6 +980,49 @@ class PosApiService {
 
   Future<ReportRun> createReportRun(ReportRunDraft draft) {
     return _reports.createReportRun(draft);
+  }
+
+  Future<ReportCatalog> fetchReportCatalog() {
+    return _reports.fetchCatalog();
+  }
+
+  Future<List<ReportRunSummary>> fetchReportHistory({
+    ReportRunType? type,
+    int limit = 25,
+  }) {
+    return _reports.fetchHistory(type: type, limit: limit);
+  }
+
+  Future<ReportRun> fetchReportRun(int id) {
+    return _reports.fetchRun(id);
+  }
+
+  Future<ReportVerification> verifyReportRun(int id) {
+    return _reports.verifyRun(id);
+  }
+
+  Future<AnalyticsExportFile> downloadReportCsv(ReportRunDraft draft) {
+    return _reports.downloadCsv(draft);
+  }
+
+  Future<PeriodLockState> fetchPeriodLock() {
+    return _reports.fetchPeriodLock();
+  }
+
+  Future<PeriodLockState> setPeriodLock({
+    DateTime? lockedThrough,
+    bool includeLockedThrough = true,
+    int? fiscalYearStartMonth,
+    String note = '',
+    bool acknowledged = false,
+  }) {
+    return _reports.setPeriodLock(
+      lockedThrough: lockedThrough,
+      includeLockedThrough: includeLockedThrough,
+      fiscalYearStartMonth: fiscalYearStartMonth,
+      note: note,
+      acknowledged: acknowledged,
+    );
   }
 
   Future<DashboardSnapshot> fetchDashboard({required int days}) {

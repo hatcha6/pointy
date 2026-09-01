@@ -25,6 +25,7 @@ breakdown and can correct reality with a transfer instead of arguing with a
 total they cannot see inside.
 """
 
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db.models import DecimalField, Q, Sum, Value
@@ -209,27 +210,29 @@ def _payroll_outflow(start, end):
     )
 
 
-def _transfer_totals(*, end):
+def _transfer_totals(*, end, start=None):
     """Transfers in and out for *every* account, in two grouped queries.
 
     Asking per account cost three queries a piece (two sides plus its last
     count), so a shop with a cash box, a safe and three banks paid fifteen
     queries for rows that fit in two GROUP BYs. Derived flows were already
     batched by kind; this is the other half.
+
+    ``start`` narrows to a window rather than everything up to ``end``, which is
+    what a statement needs: a balance is cumulative, a movement is not.
     """
+    window = {"moved_at__lte": end}
+    if start is not None:
+        window["moved_at__gte"] = start
     incoming = {
         row["to_account"]: row["total"] or ZERO
-        for row in MoneyTransfer.objects.filter(
-            to_account__isnull=False, moved_at__lte=end
-        )
+        for row in MoneyTransfer.objects.filter(to_account__isnull=False, **window)
         .values("to_account")
         .annotate(total=Sum("amount"))
     }
     outgoing = {
         row["from_account"]: row["total"] or ZERO
-        for row in MoneyTransfer.objects.filter(
-            from_account__isnull=False, moved_at__lte=end
-        )
+        for row in MoneyTransfer.objects.filter(from_account__isnull=False, **window)
         .values("from_account")
         .annotate(total=Sum("amount"))
     }
@@ -354,6 +357,86 @@ def treasury_position(*, as_of=None):
     return {"accounts": positions, "totals": _totals(positions), "as_of": as_of}
 
 
+def treasury_statement(*, start, end):
+    """Opening balance, what moved, and closing balance — per account.
+
+    A balance answers "what should be in the box"; a close needs the third
+    question too: "and how did it get from last month's figure to this one".
+    Stated as opening + movements = closing, so the statement foots and the
+    closing figure is the same number ``treasury_position`` would give for the
+    same day rather than a second derivation of it.
+
+    Costs one position pass for the opening balances plus one grouped pass per
+    account *kind* for the movements — flat in the number of accounts, like the
+    position it is built from.
+    """
+    accounts = list(MoneyAccount.objects.filter(is_active=True))
+    if not accounts:
+        return {"accounts": [], "totals": _statement_totals([]), "start": start, "end": end}
+
+    opening_positions = {
+        position["account"].pk: position
+        for position in treasury_position(as_of=start - timedelta(days=1))["accounts"]
+    }
+    defaults = _default_account_ids(accounts)
+    movements = {}
+    for kind, account in defaults.items():
+        builder = (
+            _cash_components if kind == MoneyAccount.Kind.CASH else _bank_components
+        )
+        movements[account.pk] = builder(start=start, end=end)
+
+    incoming, outgoing = _transfer_totals(start=start, end=end)
+    last_counts = _last_counts(accounts)
+
+    rows = []
+    for account in accounts:
+        opening = opening_positions.get(account.pk)
+        opening_balance = opening["expected_balance"] if opening else ZERO
+        components = list(movements.get(account.pk) or [])
+        components.extend(
+            _transfer_components(account, incoming=incoming, outgoing=outgoing)
+        )
+        moved = sum((part["amount"] for part in components), ZERO)
+        last_count = last_counts.get(account.pk)
+        rows.append(
+            {
+                "account": account,
+                "opening_balance": opening_balance.quantize(MONEY_PLACES),
+                "components": [part for part in components if part["amount"] != ZERO],
+                "movement_total": moved.quantize(MONEY_PLACES),
+                "closing_balance": (opening_balance + moved).quantize(MONEY_PLACES),
+                "last_count": last_count,
+                "counted_variance": (
+                    last_count.variance if last_count is not None else None
+                ),
+            }
+        )
+    return {
+        "accounts": rows,
+        "totals": _statement_totals(rows),
+        "start": start,
+        "end": end,
+    }
+
+
+def _statement_totals(rows):
+    def total(key):
+        return sum((row[key] for row in rows), ZERO).quantize(MONEY_PLACES)
+
+    counted = [row for row in rows if row["last_count"] is not None]
+    return {
+        "opening_total": total("opening_balance"),
+        "movement_total": total("movement_total"),
+        "closing_total": total("closing_balance"),
+        "counted_variance_total": sum(
+            (row["last_count"].variance for row in counted), ZERO
+        ).quantize(MONEY_PLACES),
+        "accounts_counted": len(counted),
+        "accounts_total": len(rows),
+    }
+
+
 def _totals(positions):
     def total_for(kind):
         return sum(
@@ -427,6 +510,7 @@ __all__ = [
     "expected_balance_for",
     "record_count",
     "treasury_position",
+    "treasury_statement",
     "COMPONENT_OPENING",
     "COMPONENT_SALES",
     "COMPONENT_DRAWER_IN",

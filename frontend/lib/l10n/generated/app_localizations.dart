@@ -2306,6 +2306,30 @@ abstract class AppLocalizations {
   /// **'المشتريات'**
   String get reportCategoryPurchasing;
 
+  /// No description provided for @reportCategoryReceivables.
+  ///
+  /// In ar, this message translates to:
+  /// **'الذمم المدينة'**
+  String get reportCategoryReceivables;
+
+  /// No description provided for @reportCategoryPayables.
+  ///
+  /// In ar, this message translates to:
+  /// **'الذمم الدائنة'**
+  String get reportCategoryPayables;
+
+  /// No description provided for @reportCategoryExpenses.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصاريف'**
+  String get reportCategoryExpenses;
+
+  /// No description provided for @reportCategoryClose.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإقفال'**
+  String get reportCategoryClose;
+
   /// No description provided for @reportCategoryContacts.
   ///
   /// In ar, this message translates to:
@@ -2455,6 +2479,420 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الخصومات النشطة والاستخدامات خلال الفترة.'**
   String get reportDiscountsSubtitle;
+
+  /// No description provided for @reportReceivablesAgingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أعمار الذمم المدينة'**
+  String get reportReceivablesAgingTitle;
+
+  /// No description provided for @reportReceivablesAgingSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'من يدين للمتجر، ومنذ متى، مع تقادم الديون.'**
+  String get reportReceivablesAgingSubtitle;
+
+  /// No description provided for @reportPayablesAgingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أعمار الذمم الدائنة'**
+  String get reportPayablesAgingTitle;
+
+  /// No description provided for @reportPayablesAgingSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما على المتجر للموردين، وما استحق منه.'**
+  String get reportPayablesAgingSubtitle;
+
+  /// No description provided for @reportCustomerStatementTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كشف حساب عميل'**
+  String get reportCustomerStatementTitle;
+
+  /// No description provided for @reportCustomerStatementSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد أول المدة والحركات ورصيد آخر المدة لعميل واحد.'**
+  String get reportCustomerStatementSubtitle;
+
+  /// No description provided for @reportSupplierStatementTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كشف حساب مورد'**
+  String get reportSupplierStatementTitle;
+
+  /// No description provided for @reportSupplierStatementSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فواتير المورد ومدفوعاته والرصيد المتبقي.'**
+  String get reportSupplierStatementSubtitle;
+
+  /// No description provided for @reportCashPositionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'النقدية والمصارف'**
+  String get reportCashPositionTitle;
+
+  /// No description provided for @reportCashPositionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد أول المدة والحركة والرصيد المتوقع لكل حساب.'**
+  String get reportCashPositionSubtitle;
+
+  /// No description provided for @reportExpenseBreakdownTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصاريف حسب البند'**
+  String get reportExpenseBreakdownTitle;
+
+  /// No description provided for @reportExpenseBreakdownSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أين ذهب المال، مرتبًا من الأكبر.'**
+  String get reportExpenseBreakdownSubtitle;
+
+  /// No description provided for @reportProductMarginTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'هوامش المنتجات'**
+  String get reportProductMarginTitle;
+
+  /// No description provided for @reportProductMarginSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما يربح فعلًا وما يُباع بخسارة.'**
+  String get reportProductMarginSubtitle;
+
+  /// No description provided for @reportDiscountAuditTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصومات والإلغاءات'**
+  String get reportDiscountAuditTitle;
+
+  /// No description provided for @reportDiscountAuditSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما مُنح من خصومات وما أُلغي أو رُدّ، ومن قام به.'**
+  String get reportDiscountAuditSubtitle;
+
+  /// No description provided for @reportSalesByStaffTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات حسب الموظف والساعة'**
+  String get reportSalesByStaffTitle;
+
+  /// No description provided for @reportSalesByStaffSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'من باع ماذا، ومتى يكون المتجر مزدحمًا.'**
+  String get reportSalesByStaffSubtitle;
+
+  /// No description provided for @reportMonthEndPackTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حزمة إقفال الشهر'**
+  String get reportMonthEndPackTitle;
+
+  /// No description provided for @reportMonthEndPackSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل قوائم الإقفال في مستند واحد.'**
+  String get reportMonthEndPackSubtitle;
+
+  /// No description provided for @reportPeriodLastMonth.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشهر الماضي'**
+  String get reportPeriodLastMonth;
+
+  /// No description provided for @reportPeriodQuarter.
+  ///
+  /// In ar, this message translates to:
+  /// **'الربع الحالي'**
+  String get reportPeriodQuarter;
+
+  /// No description provided for @reportPeriodLastQuarter.
+  ///
+  /// In ar, this message translates to:
+  /// **'الربع الماضي'**
+  String get reportPeriodLastQuarter;
+
+  /// No description provided for @reportPeriodYear.
+  ///
+  /// In ar, this message translates to:
+  /// **'السنة المالية'**
+  String get reportPeriodYear;
+
+  /// No description provided for @reportPeriodLastYear.
+  ///
+  /// In ar, this message translates to:
+  /// **'السنة الماضية'**
+  String get reportPeriodLastYear;
+
+  /// No description provided for @reportPeriodYesterday.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمس'**
+  String get reportPeriodYesterday;
+
+  /// No description provided for @reportComparisonTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المقارنة'**
+  String get reportComparisonTitle;
+
+  /// No description provided for @reportComparisonNone.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون'**
+  String get reportComparisonNone;
+
+  /// No description provided for @reportComparisonPreviousPeriod.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفترة السابقة'**
+  String get reportComparisonPreviousPeriod;
+
+  /// No description provided for @reportComparisonPreviousYear.
+  ///
+  /// In ar, this message translates to:
+  /// **'العام السابق'**
+  String get reportComparisonPreviousYear;
+
+  /// No description provided for @reportResultsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'النتيجة'**
+  String get reportResultsTitle;
+
+  /// No description provided for @reportResultsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'شغّل التقرير لعرض النتيجة.'**
+  String get reportResultsEmpty;
+
+  /// No description provided for @reportRunAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض التقرير'**
+  String get reportRunAction;
+
+  /// No description provided for @reportExportCsvAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصدير Excel/CSV'**
+  String get reportExportCsvAction;
+
+  /// No description provided for @reportCsvSavedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ الملف: {location}'**
+  String reportCsvSavedMessage(String location);
+
+  /// No description provided for @reportCsvCanceledMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغي الحفظ.'**
+  String get reportCsvCanceledMessage;
+
+  /// No description provided for @reportHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التقارير السابقة'**
+  String get reportHistoryTitle;
+
+  /// No description provided for @reportHistoryEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تقارير محفوظة بعد.'**
+  String get reportHistoryEmpty;
+
+  /// No description provided for @reportHistoryVerifyAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحقّق من الأرقام'**
+  String get reportHistoryVerifyAction;
+
+  /// No description provided for @reportVerifyMatchMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأرقام لم تتغير منذ إصدار التقرير.'**
+  String get reportVerifyMatchMessage;
+
+  /// No description provided for @reportVerifyChangedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيّرت {count} من الأرقام منذ إصدار التقرير.'**
+  String reportVerifyChangedMessage(String count);
+
+  /// No description provided for @reportTruncatedNotice.
+  ///
+  /// In ar, this message translates to:
+  /// **'معروض {shown} من {total} صفًا.'**
+  String reportTruncatedNotice(String shown, String total);
+
+  /// No description provided for @reportTotalsShownLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي المعروض'**
+  String get reportTotalsShownLabel;
+
+  /// No description provided for @reportTotalsFullLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي كل الصفوف'**
+  String get reportTotalsFullLabel;
+
+  /// No description provided for @reportNotesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعريفات وملاحظات'**
+  String get reportNotesTitle;
+
+  /// No description provided for @reportPeriodLockTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إقفال الفترة'**
+  String get reportPeriodLockTitle;
+
+  /// No description provided for @reportPeriodLockOpen.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفاتر مفتوحة — لم تُقفل أي فترة بعد.'**
+  String get reportPeriodLockOpen;
+
+  /// No description provided for @reportPeriodLockClosedThrough.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفاتر مقفلة حتى {date}.'**
+  String reportPeriodLockClosedThrough(String date);
+
+  /// No description provided for @reportPeriodLockCloseAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقفل حتى تاريخ…'**
+  String get reportPeriodLockCloseAction;
+
+  /// No description provided for @reportPeriodLockReopenAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة فتح…'**
+  String get reportPeriodLockReopenAction;
+
+  /// No description provided for @reportPeriodLockReopenWarning.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة الفتح تسمح بتغيير أرقام سبق إصدارها. هل تريد المتابعة؟'**
+  String get reportPeriodLockReopenWarning;
+
+  /// No description provided for @reportPeriodLockSavedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تحديث إقفال الفترة.'**
+  String get reportPeriodLockSavedMessage;
+
+  /// No description provided for @reportSelectCustomerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر العميل'**
+  String get reportSelectCustomerLabel;
+
+  /// No description provided for @reportSelectSupplierLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر المورد'**
+  String get reportSelectSupplierLabel;
+
+  /// No description provided for @reportPartyRequiredMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الجهة أولًا لعرض الكشف.'**
+  String get reportPartyRequiredMessage;
+
+  /// No description provided for @reportResultStaleMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإعدادات تغيّرت منذ إنشاء هذه النتيجة — أعد التشغيل قبل الطباعة.'**
+  String get reportResultStaleMessage;
+
+  /// No description provided for @reportSectionEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد بيانات في هذا القسم.'**
+  String get reportSectionEmpty;
+
+  /// No description provided for @reportPeriodOpenChip.
+  ///
+  /// In ar, this message translates to:
+  /// **'فترة مفتوحة'**
+  String get reportPeriodOpenChip;
+
+  /// No description provided for @reportPeriodClosedChip.
+  ///
+  /// In ar, this message translates to:
+  /// **'فترة مقفلة'**
+  String get reportPeriodClosedChip;
+
+  /// No description provided for @reportTruncatedChip.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} صفًا غير معروض'**
+  String reportTruncatedChip(String count);
+
+  /// No description provided for @reportAsOfChip.
+  ///
+  /// In ar, this message translates to:
+  /// **'بتاريخ محدد'**
+  String get reportAsOfChip;
+
+  /// No description provided for @reportAccountingCalendarTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التقويم المحاسبي'**
+  String get reportAccountingCalendarTitle;
+
+  /// No description provided for @reportFiscalYearStartLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'بداية السنة المالية'**
+  String get reportFiscalYearStartLabel;
+
+  /// No description provided for @reportFiscalYearStartAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير بداية السنة'**
+  String get reportFiscalYearStartAction;
+
+  /// No description provided for @reportFiscalYearSavedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تحديث بداية السنة المالية.'**
+  String get reportFiscalYearSavedMessage;
+
+  /// No description provided for @reportOpenDocumentPrompt.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح المستند رقم {reference} واعرض تفاصيله.'**
+  String reportOpenDocumentPrompt(String reference);
+
+  /// No description provided for @reportMonthEndSnapshotLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لقطة إقفال الشهر'**
+  String get reportMonthEndSnapshotLabel;
+
+  /// No description provided for @reportMonthEndSnapshotOff.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقفة'**
+  String get reportMonthEndSnapshotOff;
+
+  /// No description provided for @reportMonthEndSnapshotOnDay.
+  ///
+  /// In ar, this message translates to:
+  /// **'يوم {day} من كل شهر'**
+  String reportMonthEndSnapshotOnDay(String day);
 
   /// No description provided for @reportA4Chip.
   ///

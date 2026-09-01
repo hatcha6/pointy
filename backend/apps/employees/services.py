@@ -2,6 +2,8 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
+
+from apps.core.period_lock import assert_period_open
 from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import serializers
@@ -512,8 +514,18 @@ def mark_payroll_run_paid(payroll_run, *, payment_date=None, request=None):
         raise serializers.ValidationError(
             {"detail": "Only approved payroll runs can be marked paid."}
         )
+    payment_date = payment_date or timezone.localdate()
+    # ``payment_date`` is caller-supplied, so a wage run can be dated into a
+    # month that has already been closed and reported.
+    assert_period_open(
+        payment_date,
+        user=getattr(request, "user", None),
+        entity_type="payroll_run",
+        entity_id=payroll_run.pk,
+        action="payroll.mark_paid",
+    )
     payroll_run.status = PayrollRun.Status.PAID
-    payroll_run.payment_date = payment_date or timezone.localdate()
+    payroll_run.payment_date = payment_date
     payroll_run.paid_at = timezone.now()
     payroll_run.paid_by = employee_created_by(request)
     payroll_run.save(

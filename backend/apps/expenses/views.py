@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.idempotency import run_idempotent_request
+from apps.core.period_lock import assert_period_open
 from apps.core.permissions import HasPointyPermission
 
 from .models import Expense, ExpenseCategory
@@ -59,6 +60,18 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             request,
             lambda: super(ExpenseViewSet, self).create(request, *args, **kwargs),
         )
+
+    def perform_destroy(self, instance):
+        # Deleting an expense out of a closed month rewrites that month's
+        # reported total, so it is guarded exactly like an edit.
+        assert_period_open(
+            instance.spent_at,
+            user=self.request.user,
+            entity_type="expense",
+            entity_id=instance.pk,
+            action="expense.delete",
+        )
+        super().perform_destroy(instance)
 
 
 class ExpenseLedgerView(APIView):

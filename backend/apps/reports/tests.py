@@ -128,9 +128,12 @@ class ReportRunApiTests(TestCase):
         payload = response.data["payload"]
         self.assertEqual(payload["summary"]["reorder_item_count"], 1)
         section = self._section(payload, "reorder_items")
-        self.assertEqual(section["rows"][0]["quantity_on_hand"], 1)
+        # Quantities are strings like every other figure in a report payload:
+        # the column is JSON, and a Decimal serialised as a float is not a
+        # number an audit document may carry.
+        self.assertEqual(section["rows"][0]["quantity_on_hand"], "1")
         # Restock to 2x reorder level: 5*2 - 1 on hand - 0 expected = 9.
-        self.assertEqual(section["rows"][0]["suggested_quantity"], 9)
+        self.assertEqual(section["rows"][0]["suggested_quantity"], "9")
 
     def test_manager_can_run_payroll_summary_report(self):
         from apps.employees.models import Employee, PayrollLine, PayrollRun
@@ -194,13 +197,18 @@ class ReportRunApiTests(TestCase):
         # 2 units * (4.00 - 1.50) = 5.00 gross profit from setUp's order.
         self.assertEqual(payload["summary"]["gross_profit"], "5.00")
         self.assertEqual(payload["summary"]["net_operating_profit"], "5.00")
-        section = self._section(payload, "cost_breakdown")
-        self.assertEqual(len(section["rows"]), 5)
-        cost_items = {row["cost_item"] for row in section["rows"]}
-        self.assertIn("ad_hoc_expense_total", cost_items)
+        section = self._section(payload, "profit_statement")
+        lines = {row["line"]: row for row in section["rows"]}
+        self.assertIn("ad_hoc_expense_total", lines)
         # Goods lost to counts and adjustments are a cost like any other; a
         # shop that lost nothing this period reports zero rather than silence.
-        self.assertIn("shrinkage_total", cost_items)
+        self.assertIn("shrinkage_total", lines)
+        # Buying stock is not an expense, so it sits below the total and is
+        # marked as such — a reader adding up the column must land on the
+        # stated operating expense, not on a number that appears nowhere.
+        self.assertTrue(lines["purchase_spend_total"]["below_total"])
+        self.assertFalse(lines["purchase_spend_total"]["is_total"])
+        self.assertTrue(lines["net_operating_profit"]["is_total"])
         self.assertEqual(payload["summary"]["ad_hoc_expense_total"], "0.00")
         self.assertEqual(payload["summary"]["shrinkage_total"], "0.00")
 

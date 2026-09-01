@@ -12,9 +12,11 @@ import 'data/models/pos_user.dart';
 import 'data/models/purchase_submission.dart';
 import 'data/models/analytics_event.dart';
 import 'data/models/business_alert.dart';
+import 'data/models/analytics_export.dart';
 import 'data/models/report_run.dart';
 import 'data/models/sale_order.dart';
 import 'data/models/shop_settings.dart';
+import 'data/services/analytics_export_downloader.dart';
 import 'data/services/barcode_label_print_preferences.dart';
 import 'features/activity_log/views/activity_log_event_presenter.dart';
 import 'features/activity_log/views/activity_log_screen.dart';
@@ -784,9 +786,12 @@ class _AuthenticatedRoutes implements AppNavigation {
       ReportsScreen(
         capabilities: capabilities,
         navigation: this,
-        onPreviewPdf: (request) => previewReport(routeContext, request),
-        onPrintReport: (request) => printReport(routeContext, request),
-        onExportArchive: (request) => shareReport(routeContext, request),
+        viewModel: dependencies.reportsViewModel,
+        contactRepository: dependencies.contactRepository,
+        onPreviewPdf: (run) => previewReport(routeContext, run),
+        onPrintReport: (run) => printReport(routeContext, run),
+        onExportArchive: (run) => shareReport(routeContext, run),
+        onSaveCsv: () => saveReportCsv(routeContext),
       ),
     );
   }
@@ -1152,25 +1157,22 @@ class _AuthenticatedRoutes implements AppNavigation {
     );
   }
 
-  Future<void> previewReport(
-    BuildContext context,
-    ReportRequest request,
-  ) async {
-    final document = await buildReportDocument(context, request);
+  Future<void> previewReport(BuildContext context, ReportRun run) async {
+    final document = await buildReportDocument(context, run);
     if (document == null || !context.mounted) {
       return;
     }
     unawaited(
       dependencies.analyticsEngine.trackUsage(
         AnalyticsEventName.reportPreviewed,
-        attributes: _reportAttributes(request),
+        attributes: _reportAttributes(run),
       ),
     );
     unawaited(push(context, (_) => ReportPdfPreviewScreen(document: document)));
   }
 
-  Future<void> printReport(BuildContext context, ReportRequest request) async {
-    final document = await buildReportDocument(context, request);
+  Future<void> printReport(BuildContext context, ReportRun run) async {
+    final document = await buildReportDocument(context, run);
     if (document == null || !context.mounted) {
       return;
     }
@@ -1179,7 +1181,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       unawaited(
         dependencies.analyticsEngine.trackUsage(
           AnalyticsEventName.reportPrinted,
-          attributes: _reportAttributes(request),
+          attributes: _reportAttributes(run),
         ),
       );
       _showReportMessage(
@@ -1189,8 +1191,8 @@ class _AuthenticatedRoutes implements AppNavigation {
     }
   }
 
-  Future<void> shareReport(BuildContext context, ReportRequest request) async {
-    final document = await buildReportDocument(context, request);
+  Future<void> shareReport(BuildContext context, ReportRun run) async {
+    final document = await buildReportDocument(context, run);
     if (document == null || !context.mounted) {
       return;
     }
@@ -1199,7 +1201,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       unawaited(
         dependencies.analyticsEngine.trackUsage(
           AnalyticsEventName.reportShared,
-          attributes: _reportAttributes(request),
+          attributes: _reportAttributes(run),
         ),
       );
       _showReportMessage(
@@ -1209,102 +1211,78 @@ class _AuthenticatedRoutes implements AppNavigation {
     }
   }
 
-  Future<BusinessReportPdfDocument?> buildReportDocument(
-    BuildContext context,
-    ReportRequest request,
-  ) async {
-    final stopwatch = Stopwatch()..start();
-    final result = await dependencies.reportRepository.createReportRun(
-      ReportRunDraft(
-        reportType: _reportRunTypeForRequest(request.type),
-        outputFormat: ReportOutputFormat.pdf,
-        params: {
-          "start_date": _apiDate(request.dateRange.start),
-          "end_date": _apiDate(request.dateRange.end),
-          "granularity": request.granularity.name,
+  /// Exports the selected report as CSV and hands it to the platform's save
+  /// dialog. Returns the message to show, or null when the user dismissed it.
+  ///
+  /// The export is streamed and stored nowhere: it runs at row caps far above
+  /// what belongs in a saved run, and writing that into the run table on every
+  /// click would grow the database by the size of the shop's history.
+  Future<String?> saveReportCsv(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final viewModel = dependencies.reportsViewModel;
+    final file = await viewModel.exportCsv();
+    if (file == null || !context.mounted) {
+      return null;
+    }
+    unawaited(
+      dependencies.analyticsEngine.trackUsage(
+        AnalyticsEventName.reportShared,
+        attributes: {
+          'report_type': reportRunTypeToJson(viewModel.selectedType),
+          'format': 'csv',
+          'source': 'reports_screen',
         },
       ),
     );
+    final saved = await downloadAnalyticsExportFile(
+      file,
+      dialogTitle: l10n.reportExportCsvAction,
+    );
+    return switch (saved.status) {
+      AnalyticsExportSaveStatus.saved => l10n.reportCsvSavedMessage(
+        saved.location ?? file.filename,
+      ),
+      AnalyticsExportSaveStatus.canceled => l10n.reportCsvCanceledMessage,
+      AnalyticsExportSaveStatus.failed => l10n.reportGenerationError,
+    };
+  }
+
+  /// Builds the printable document from a run that has already been produced.
+  ///
+  /// The run is passed in rather than rebuilt: preview, print and share used to
+  /// each create their own server-side run, so three clicks on one report cost
+  /// three aggregations and left three rows in the table.
+  Future<BusinessReportPdfDocument?> buildReportDocument(
+    BuildContext context,
+    ReportRun run,
+  ) async {
+    final stopwatch = Stopwatch()..start();
+    unawaited(
+      dependencies.analyticsEngine.trackPerformance(
+        name: analyticsEventNameToJson(AnalyticsEventName.frontendOperation),
+        duration: stopwatch.elapsed,
+        attributes: {
+          ..._reportAttributes(run),
+          'operation': 'report.build_pdf',
+          'report_run_id': run.id,
+        },
+        metrics: {'row_count': run.rowCount},
+      ),
+    );
+    final shopSettings = await _loadShopSettingsForReport();
+    final shopLogoBytes = await _loadShopLogoBytes(shopSettings);
     if (!context.mounted) {
       return null;
     }
-
-    switch (result) {
-      case Ok<ReportRun>(value: final run):
-        if (run.status == ReportRunStatus.failed) {
-          unawaited(
-            dependencies.analyticsEngine.trackUsage(
-              AnalyticsEventName.reportGenerationFailed,
-              severity: AnalyticsEventSeverity.warning,
-              attributes: {
-                ..._reportAttributes(request),
-                'error_message': run.errorMessage,
-              },
-              flushImmediately: true,
-            ),
-          );
-          _showReportMessage(
-            context,
-            run.errorMessage.isEmpty
-                ? AppLocalizations.of(context)!.reportGenerationError
-                : run.errorMessage,
-          );
-          return null;
-        }
-        unawaited(
-          dependencies.analyticsEngine.trackPerformance(
-            name: analyticsEventNameToJson(
-              AnalyticsEventName.frontendOperation,
-            ),
-            duration: stopwatch.elapsed,
-            attributes: {
-              ..._reportAttributes(request),
-              'operation': 'report.generate_pdf',
-              'report_run_id': run.id,
-            },
-            metrics: {'row_count': run.rowCount},
-          ),
-        );
-        unawaited(
-          dependencies.analyticsEngine.trackUsage(
-            AnalyticsEventName.reportGenerated,
-            attributes: {
-              ..._reportAttributes(request),
-              'report_run_id': run.id,
-              'status': run.status.name,
-            },
-            metrics: {'row_count': run.rowCount},
-          ),
-        );
-        final shopSettings = await _loadShopSettingsForReport();
-        final shopLogoBytes = await _loadShopLogoBytes(shopSettings);
-        if (!context.mounted) {
-          return null;
-        }
-        return buildBusinessReportPdfDocument(
-          run: run,
-          l10n: AppLocalizations.of(context)!,
-          currentUser: currentUser,
-          includeAuditTrail: request.includeAuditTrail,
-          includePreparedBy: request.includePreparedBy,
-          shopSettings: shopSettings,
-          shopLogoBytes: shopLogoBytes,
-        );
-      case Error<ReportRun>():
-        unawaited(
-          dependencies.analyticsEngine.trackUsage(
-            AnalyticsEventName.reportGenerationFailed,
-            severity: AnalyticsEventSeverity.error,
-            attributes: _reportAttributes(request),
-            flushImmediately: true,
-          ),
-        );
-        _showReportMessage(
-          context,
-          AppLocalizations.of(context)!.reportGenerationError,
-        );
-        return null;
-    }
+    return buildBusinessReportPdfDocument(
+      run: run,
+      l10n: AppLocalizations.of(context)!,
+      currentUser: currentUser,
+      includeAuditTrail: true,
+      includePreparedBy: true,
+      shopSettings: shopSettings,
+      shopLogoBytes: shopLogoBytes,
+    );
   }
 
   Future<ShopSettings?> _loadShopSettingsForReport() async {
@@ -1360,36 +1338,17 @@ class _AuthenticatedRoutes implements AppNavigation {
     return directoryBase.resolveUri(uri);
   }
 
-  Map<String, Object?> _reportAttributes(ReportRequest request) {
+  Map<String, Object?> _reportAttributes(ReportRun run) {
+    final period = run.payload['period'];
+    final window = period is Map ? period.cast<String, Object?>() : const {};
     return {
-      'report_type': request.type.name,
-      'granularity': request.granularity.name,
-      'start_date': _apiDate(request.dateRange.start),
-      'end_date': _apiDate(request.dateRange.end),
-      'include_audit_trail': request.includeAuditTrail,
-      'include_prepared_by': request.includePreparedBy,
+      'report_type': reportRunTypeToJson(run.reportType),
+      'granularity': '${window['granularity'] ?? ''}',
+      'preset': '${window['preset'] ?? ''}',
+      'start_date': '${window['start_date'] ?? ''}',
+      'end_date': '${window['end_date'] ?? ''}',
       'source': 'reports_screen',
     };
-  }
-
-  ReportRunType _reportRunTypeForRequest(ReportType type) {
-    return switch (type) {
-      ReportType.salesSummary => ReportRunType.salesSummary,
-      ReportType.registerSessions => ReportRunType.registerClosure,
-      ReportType.payments => ReportRunType.paymentMethods,
-      ReportType.inventoryValue => ReportRunType.inventoryStatus,
-      ReportType.stockMovement => ReportRunType.stockMovements,
-      ReportType.purchases => ReportRunType.purchasingSummary,
-      ReportType.reorderItems => ReportRunType.reorderItems,
-      ReportType.payrollSummary => ReportRunType.payrollSummary,
-      ReportType.profitCosts => ReportRunType.profitCosts,
-    };
-  }
-
-  String _apiDate(DateTime date) {
-    return '${date.year.toString().padLeft(4, '0')}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
   }
 
   void _showReportMessage(BuildContext context, String message) {

@@ -7,6 +7,7 @@ from rest_framework import serializers
 from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
 from apps.catalog.models import ProductVariant
+from apps.core.period_lock import assert_period_open
 from apps.catalog.services import preload_line_variants
 from apps.catalog.units import (
     UnitConversionError,
@@ -2281,6 +2282,19 @@ class SupplierPaymentSerializer(serializers.ModelSerializer):
         if payment.purchase_order_id is None:
             return None
         return payment.purchase_order.order_number
+
+    def validate(self, attrs):
+        # ``paid_at`` is caller-supplied, so a supplier payment can be dated
+        # into a month that has already been closed and reported.
+        request = self.context.get("request")
+        assert_period_open(
+            attrs.get("paid_at", getattr(self.instance, "paid_at", None)),
+            user=getattr(request, "user", None),
+            entity_type="supplier_payment",
+            entity_id=getattr(self.instance, "pk", None),
+            action="purchasing.supplier_payment",
+        )
+        return super().validate(attrs)
 
     def create(self, validated_data):
         request = self.context.get("request")

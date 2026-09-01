@@ -138,15 +138,51 @@ class MoneyDateRegistryTests(TestCase):
         """The report that mixes sales, wages and expenses must not date them
         three different ways — the bug was a period that included a wage and
         excluded the sale that paid it."""
-        source = (APPS_ROOT / "reports" / "services.py").read_text()
-        body = source[source.index("def _profit_costs_report(") :]
+        source = (APPS_ROOT / "reports" / "builders" / "profit.py").read_text()
+        body = source[source.index("def profit_costs(") :]
         body = body[: body.index("\ndef ", 1)]
 
         for banned in ("created_at__gte", "spent_at__gte", "payment_date__gte"):
             self.assertNotIn(
                 banned,
                 body,
-                f"_profit_costs_report hand-rolls a {banned} boundary; slice it "
-                "with money_period() so every source shares one period.",
+                f"profit_costs hand-rolls a {banned} boundary; slice it with "
+                "in_period()/money_period() so every source shares one period.",
             )
-        self.assertIn("money_period(", body)
+        self.assertIn("in_period(", body)
+
+    def test_every_report_builder_slices_money_through_the_registry(self):
+        """The rule the profit report proved, applied to all nineteen.
+
+        A builder that writes its own ``__gte`` boundary against a money column
+        is a builder that will eventually disagree with the one next to it about
+        where the month ended. ``in_period`` (money models) and ``in_window``
+        (stock events, which are not money and must not be registered as such)
+        are the two supported ways to cut a period.
+        """
+        builders = sorted((APPS_ROOT / "reports" / "builders").glob("*.py"))
+        self.assertTrue(builders, "no report builders found")
+        offenders = {}
+        for path in builders:
+            hits = [
+                f"{path.name}:{number}"
+                for number, line in enumerate(path.read_text().splitlines(), start=1)
+                if re.search(
+                    r"(created_at|spent_at|payment_date|paid_at|moved_at)__(gte|lte|lt|gt)",
+                    line,
+                )
+                # A statement rebuilds a running balance from an opening date,
+                # which is a different question from "slice this period" and is
+                # written against the period's own resolved bounds.
+                and "period.start" not in line
+                and "period.end" not in line
+                and "cutoff" not in line
+            ]
+            if hits:
+                offenders[path.name] = hits
+        self.assertEqual(
+            offenders,
+            {},
+            "A report builder hand-rolled a period boundary; use in_period() "
+            f"or in_window(). Offenders: {offenders}",
+        )

@@ -369,6 +369,25 @@ class PosApiSession {
     return client.send(request);
   }
 
+  /// Opens a POST whose body the caller consumes as a stream.
+  ///
+  /// The streaming counterpart of [post], for a response the server writes row
+  /// by row (the report CSV export). Same headers as [post]; like [getStreamed]
+  /// it skips the in-flight coalescing and perf recording that assume a
+  /// fully-materialized [http.Response].
+  Future<http.StreamedResponse> postStreamed(
+    String path, {
+    Object? body,
+    Map<String, String>? query,
+  }) {
+    final request = http.Request('POST', uri(path, queryParameters: query));
+    request.headers.addAll(headers(includeCsrf: true));
+    if (body != null) {
+      request.body = jsonEncode(body);
+    }
+    return client.send(request);
+  }
+
   /// Opens a Server-Sent Events stream (POST) and yields parsed [SseEvent]s as
   /// they arrive. Used by the AI assistant for token-by-token replies. Carries
   /// the same session cookie / CSRF / relay-token headers as other requests, so

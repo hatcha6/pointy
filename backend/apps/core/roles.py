@@ -205,9 +205,24 @@ ACCOUNTANT_PERMISSION_CODES = (
     "purchasing.view_supplier",
     "purchasing.view_supplierpayment",
     "reports.view_reportrun",
+    # Closing a period is bookkeeping, not shop configuration: the accountant
+    # is the person who decides that September is finished, and they
+    # deliberately do not hold ``core.change_shopsettings``.
+    "reports.manage_period_lock",
     "sales.view_order",
     "sales.view_registersession",
     "sales.view_registercashmovement",
+    # Closing stock is a mandatory input to the accounts, and the role
+    # responsible for the accounts could not obtain it: the stock value,
+    # movement and reorder reports were all hidden from the accountant because
+    # this list carried no inventory permission at all. Read-only — an
+    # accountant reports on stock, they do not adjust it.
+    "inventory.view_stockitem",
+    "inventory.view_stockmovement",
+    "inventory.view_stockcount",
+    "catalog.view_product",
+    "catalog.view_productcategory",
+    "catalog.view_unitofmeasure",
     "expenses.add_expense",
     "expenses.change_expense",
     "expenses.delete_expense",

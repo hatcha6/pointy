@@ -49,6 +49,7 @@ import 'data/services/pos_api_service.dart';
 import 'data/services/pos_http_client.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'features/activity_log/view_models/activity_log_view_model.dart';
+import 'features/reports/view_models/reports_view_model.dart';
 import 'features/contacts/view_models/contact_management_view_model.dart';
 import 'features/crm/view_models/campaigns_view_model.dart';
 import 'features/crm/view_models/conversations_view_model.dart';
@@ -224,6 +225,7 @@ class PointyAppDependencies {
   MigrationViewModel? _migrationViewModel;
   NotificationCenterViewModel? _notificationCenterViewModel;
   ActivityLogViewModel? _activityLogViewModel;
+  ReportsViewModel? _reportsViewModel;
   DashboardViewModel? _dashboardViewModel;
   ConversationsViewModel? _conversationsViewModel;
   CampaignsViewModel? _campaignsViewModel;
@@ -361,6 +363,9 @@ class PointyAppDependencies {
   ActivityLogViewModel get activityLogViewModel => _activityLogViewModel ??=
       ActivityLogViewModel(analyticsRepository, userRepository);
 
+  ReportsViewModel get reportsViewModel =>
+      _reportsViewModel ??= ReportsViewModel(reportRepository);
+
   NotificationCenterViewModel get notificationCenterViewModel =>
       _notificationCenterViewModel ??= NotificationCenterViewModel(
         businessAlertRepository,
@@ -452,6 +457,9 @@ class PointyAppDependencies {
       () => _employeePayrollViewModel?.loadLoans(),
       () => _activityLogViewModel?.loadEvents(),
       () => _activityLogViewModel?.loadUsers(),
+      // The catalogue carries the period-lock state, so a refresh keeps the
+      // reports screen honest about whether the books are closed.
+      () => _reportsViewModel?.load(),
     ];
     for (final step in steps) {
       try {

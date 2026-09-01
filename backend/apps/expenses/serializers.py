@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from apps.core.period_lock import assert_period_open
+
 from .models import Expense, ExpenseCategory
 from .services import create_expense, drawer_fields_locked, update_expense
 
@@ -86,6 +88,21 @@ class ExpenseSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
+        # An expense carries a backdatable ``spent_at``, so it is one of the
+        # few ways a closed month can be made to move after it was reported.
+        # Both dates are checked on an edit: moving an expense *out of* a closed
+        # period changes that period's total just as surely as moving one in.
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        for when in filter(None, (attrs.get("spent_at"), _spent_at(self.instance))):
+            assert_period_open(
+                when,
+                user=user,
+                entity_type="expense",
+                entity_id=getattr(self.instance, "pk", None),
+                action="expense.save",
+            )
+
         # Once the register session behind a drawer-paid expense is closed, the
         # till has been counted against its pay-out. Editing the amount or the
         # payment method then would leave the drawer disagreeing with the
@@ -107,3 +124,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
         # ``update_expense``.
         validated_data.pop("pay_from_register", None)
         return update_expense(instance, validated_data)
+
+
+def _spent_at(expense):
+    return expense.spent_at if expense is not None else None

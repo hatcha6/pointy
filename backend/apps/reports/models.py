@@ -16,6 +16,16 @@ class ReportRun(TimeStampedModel):
         REORDER_ITEMS = "reorder_items", "Reorder items"
         PAYROLL_SUMMARY = "payroll_summary", "Payroll summary"
         PROFIT_COSTS = "profit_costs", "Profit and costs"
+        RECEIVABLES_AGING = "receivables_aging", "Receivables aging"
+        PAYABLES_AGING = "payables_aging", "Payables aging"
+        CUSTOMER_STATEMENT = "customer_statement", "Customer statement"
+        SUPPLIER_STATEMENT = "supplier_statement", "Supplier statement"
+        CASH_POSITION = "cash_position", "Cash and bank position"
+        EXPENSE_BREAKDOWN = "expense_breakdown", "Expenses by category"
+        PRODUCT_MARGIN = "product_margin", "Gross margin by product"
+        DISCOUNT_AUDIT = "discount_audit", "Discounts, voids and returns"
+        SALES_BY_STAFF = "sales_by_staff", "Sales by staff and hour"
+        MONTH_END_PACK = "month_end_pack", "Month-end pack"
 
     class OutputFormat(models.TextChoices):
         JSON = "json", "JSON"
@@ -48,7 +58,14 @@ class ReportRun(TimeStampedModel):
     )
     payload = models.JSONField(default=dict, blank=True)
     row_count = models.PositiveIntegerField(default=0)
+    #: Hash of the whole payload, timestamp included — identifies this run.
     checksum = models.CharField(max_length=64, blank=True)
+    #: Hash of the figures alone, with the generation timestamp excluded. This
+    #: is the one that answers the question a checksum is for: "are September's
+    #: numbers still what I reported?" ``checksum`` never could, because
+    #: ``generated_at`` was inside the bytes it hashed, so two runs of the same
+    #: closed period were guaranteed to differ.
+    figures_checksum = models.CharField(max_length=64, blank=True, db_index=True)
     completed_at = models.DateTimeField(blank=True, null=True)
     error_message = models.TextField(blank=True)
 
@@ -58,15 +75,32 @@ class ReportRun(TimeStampedModel):
             models.Index(fields=["report_type", "created_at"]),
             models.Index(fields=["requested_by", "created_at"]),
             models.Index(fields=["status", "created_at"]),
+            # The run history lists one report type's runs newest-first and
+            # compares them by the figures they carry; this is that query.
+            models.Index(
+                fields=["report_type", "figures_checksum"],
+                name="reports_type_figures_idx",
+            ),
+        ]
+        permissions = [
+            (
+                "manage_period_lock",
+                "Can close and re-open an accounting period",
+            ),
+            (
+                "override_period_lock",
+                "Can post into a closed accounting period",
+            ),
         ]
 
-    def mark_success(self, *, payload, row_count, checksum):
+    def mark_success(self, *, payload, row_count, checksum, figures_checksum=""):
         self.status = self.Status.SUCCESS
         # Stock quantities are Decimals since weighted-product support; the
         # payload column is JSON, so coerce them at the boundary.
         self.payload = _json_safe_payload(payload)
         self.row_count = row_count
         self.checksum = checksum
+        self.figures_checksum = figures_checksum
         self.completed_at = timezone.now()
         self.error_message = ""
         self.save(
@@ -75,6 +109,7 @@ class ReportRun(TimeStampedModel):
                 "payload",
                 "row_count",
                 "checksum",
+                "figures_checksum",
                 "completed_at",
                 "error_message",
                 "updated_at",

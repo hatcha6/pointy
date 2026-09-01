@@ -532,6 +532,13 @@ CELERY_BEAT_SCHEDULE = {
         "task": "attendance.sync_biotime",
         "schedule": crontab(minute=25),
     },
+    # Snapshot the closed month early on the shop's chosen day. The task checks
+    # the day itself (it is configurable per shop), so the schedule only has to
+    # give it one chance a day.
+    "reports.snapshot-month-end": {
+        "task": "reports.snapshot_month_end",
+        "schedule": crontab(minute=5, hour=1),
+    },
     "employees.draft-monthly-payroll": {
         "task": "employees.draft_monthly_payroll",
         "schedule": crontab(minute=10, hour=0, day_of_month="1"),

@@ -18,6 +18,7 @@ from rest_framework.test import APIClient
 from apps.catalog.testing import create_product_with_default_variant
 from apps.notifications.models import BusinessNotification
 from apps.notifications.services import sync_business_notifications
+from apps.core.models import ShopSettings
 from apps.core.roles import ACCOUNTANT_GROUP, CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.sales.models import Order, OrderLine, RegisterSession
 
@@ -1339,6 +1340,11 @@ class PayrollRunQueryCountTests(TestCase):
         )
 
     def test_mark_paid_and_void_do_not_scale_with_line_count(self):
+        # Marking a run paid checks the accounting period lock, which reads the
+        # shop-settings singleton. That row is created on first access, so
+        # warming it here keeps the creation out of the first measured request
+        # — it is a once-per-shop cost, not a per-line one.
+        ShopSettings.load()
         counts = {}
         for line_count in (3, 12):
             payroll_run = self.create_run(line_count)

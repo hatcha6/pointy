@@ -1205,6 +1205,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get reportCategoryPurchasing => 'المشتريات';
 
   @override
+  String get reportCategoryReceivables => 'الذمم المدينة';
+
+  @override
+  String get reportCategoryPayables => 'الذمم الدائنة';
+
+  @override
+  String get reportCategoryExpenses => 'المصاريف';
+
+  @override
+  String get reportCategoryClose => 'الإقفال';
+
+  @override
   String get reportCategoryContacts => 'الجهات';
 
   @override
@@ -1288,6 +1300,237 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get reportDiscountsSubtitle =>
       'الخصومات النشطة والاستخدامات خلال الفترة.';
+
+  @override
+  String get reportReceivablesAgingTitle => 'أعمار الذمم المدينة';
+
+  @override
+  String get reportReceivablesAgingSubtitle =>
+      'من يدين للمتجر، ومنذ متى، مع تقادم الديون.';
+
+  @override
+  String get reportPayablesAgingTitle => 'أعمار الذمم الدائنة';
+
+  @override
+  String get reportPayablesAgingSubtitle =>
+      'ما على المتجر للموردين، وما استحق منه.';
+
+  @override
+  String get reportCustomerStatementTitle => 'كشف حساب عميل';
+
+  @override
+  String get reportCustomerStatementSubtitle =>
+      'رصيد أول المدة والحركات ورصيد آخر المدة لعميل واحد.';
+
+  @override
+  String get reportSupplierStatementTitle => 'كشف حساب مورد';
+
+  @override
+  String get reportSupplierStatementSubtitle =>
+      'فواتير المورد ومدفوعاته والرصيد المتبقي.';
+
+  @override
+  String get reportCashPositionTitle => 'النقدية والمصارف';
+
+  @override
+  String get reportCashPositionSubtitle =>
+      'رصيد أول المدة والحركة والرصيد المتوقع لكل حساب.';
+
+  @override
+  String get reportExpenseBreakdownTitle => 'المصاريف حسب البند';
+
+  @override
+  String get reportExpenseBreakdownSubtitle =>
+      'أين ذهب المال، مرتبًا من الأكبر.';
+
+  @override
+  String get reportProductMarginTitle => 'هوامش المنتجات';
+
+  @override
+  String get reportProductMarginSubtitle => 'ما يربح فعلًا وما يُباع بخسارة.';
+
+  @override
+  String get reportDiscountAuditTitle => 'الخصومات والإلغاءات';
+
+  @override
+  String get reportDiscountAuditSubtitle =>
+      'ما مُنح من خصومات وما أُلغي أو رُدّ، ومن قام به.';
+
+  @override
+  String get reportSalesByStaffTitle => 'المبيعات حسب الموظف والساعة';
+
+  @override
+  String get reportSalesByStaffSubtitle =>
+      'من باع ماذا، ومتى يكون المتجر مزدحمًا.';
+
+  @override
+  String get reportMonthEndPackTitle => 'حزمة إقفال الشهر';
+
+  @override
+  String get reportMonthEndPackSubtitle => 'كل قوائم الإقفال في مستند واحد.';
+
+  @override
+  String get reportPeriodLastMonth => 'الشهر الماضي';
+
+  @override
+  String get reportPeriodQuarter => 'الربع الحالي';
+
+  @override
+  String get reportPeriodLastQuarter => 'الربع الماضي';
+
+  @override
+  String get reportPeriodYear => 'السنة المالية';
+
+  @override
+  String get reportPeriodLastYear => 'السنة الماضية';
+
+  @override
+  String get reportPeriodYesterday => 'أمس';
+
+  @override
+  String get reportComparisonTitle => 'المقارنة';
+
+  @override
+  String get reportComparisonNone => 'بدون';
+
+  @override
+  String get reportComparisonPreviousPeriod => 'الفترة السابقة';
+
+  @override
+  String get reportComparisonPreviousYear => 'العام السابق';
+
+  @override
+  String get reportResultsTitle => 'النتيجة';
+
+  @override
+  String get reportResultsEmpty => 'شغّل التقرير لعرض النتيجة.';
+
+  @override
+  String get reportRunAction => 'عرض التقرير';
+
+  @override
+  String get reportExportCsvAction => 'تصدير Excel/CSV';
+
+  @override
+  String reportCsvSavedMessage(String location) {
+    return 'تم حفظ الملف: $location';
+  }
+
+  @override
+  String get reportCsvCanceledMessage => 'أُلغي الحفظ.';
+
+  @override
+  String get reportHistoryTitle => 'التقارير السابقة';
+
+  @override
+  String get reportHistoryEmpty => 'لا توجد تقارير محفوظة بعد.';
+
+  @override
+  String get reportHistoryVerifyAction => 'تحقّق من الأرقام';
+
+  @override
+  String get reportVerifyMatchMessage => 'الأرقام لم تتغير منذ إصدار التقرير.';
+
+  @override
+  String reportVerifyChangedMessage(String count) {
+    return 'تغيّرت $count من الأرقام منذ إصدار التقرير.';
+  }
+
+  @override
+  String reportTruncatedNotice(String shown, String total) {
+    return 'معروض $shown من $total صفًا.';
+  }
+
+  @override
+  String get reportTotalsShownLabel => 'إجمالي المعروض';
+
+  @override
+  String get reportTotalsFullLabel => 'إجمالي كل الصفوف';
+
+  @override
+  String get reportNotesTitle => 'تعريفات وملاحظات';
+
+  @override
+  String get reportPeriodLockTitle => 'إقفال الفترة';
+
+  @override
+  String get reportPeriodLockOpen => 'الدفاتر مفتوحة — لم تُقفل أي فترة بعد.';
+
+  @override
+  String reportPeriodLockClosedThrough(String date) {
+    return 'الدفاتر مقفلة حتى $date.';
+  }
+
+  @override
+  String get reportPeriodLockCloseAction => 'أقفل حتى تاريخ…';
+
+  @override
+  String get reportPeriodLockReopenAction => 'إعادة فتح…';
+
+  @override
+  String get reportPeriodLockReopenWarning =>
+      'إعادة الفتح تسمح بتغيير أرقام سبق إصدارها. هل تريد المتابعة؟';
+
+  @override
+  String get reportPeriodLockSavedMessage => 'تم تحديث إقفال الفترة.';
+
+  @override
+  String get reportSelectCustomerLabel => 'اختر العميل';
+
+  @override
+  String get reportSelectSupplierLabel => 'اختر المورد';
+
+  @override
+  String get reportPartyRequiredMessage => 'اختر الجهة أولًا لعرض الكشف.';
+
+  @override
+  String get reportResultStaleMessage =>
+      'الإعدادات تغيّرت منذ إنشاء هذه النتيجة — أعد التشغيل قبل الطباعة.';
+
+  @override
+  String get reportSectionEmpty => 'لا توجد بيانات في هذا القسم.';
+
+  @override
+  String get reportPeriodOpenChip => 'فترة مفتوحة';
+
+  @override
+  String get reportPeriodClosedChip => 'فترة مقفلة';
+
+  @override
+  String reportTruncatedChip(String count) {
+    return '$count صفًا غير معروض';
+  }
+
+  @override
+  String get reportAsOfChip => 'بتاريخ محدد';
+
+  @override
+  String get reportAccountingCalendarTitle => 'التقويم المحاسبي';
+
+  @override
+  String get reportFiscalYearStartLabel => 'بداية السنة المالية';
+
+  @override
+  String get reportFiscalYearStartAction => 'تغيير بداية السنة';
+
+  @override
+  String get reportFiscalYearSavedMessage => 'تم تحديث بداية السنة المالية.';
+
+  @override
+  String reportOpenDocumentPrompt(String reference) {
+    return 'افتح المستند رقم $reference واعرض تفاصيله.';
+  }
+
+  @override
+  String get reportMonthEndSnapshotLabel => 'لقطة إقفال الشهر';
+
+  @override
+  String get reportMonthEndSnapshotOff => 'متوقفة';
+
+  @override
+  String reportMonthEndSnapshotOnDay(String day) {
+    return 'يوم $day من كل شهر';
+  }
 
   @override
   String get reportA4Chip => 'A4';

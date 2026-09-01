@@ -23,7 +23,9 @@ from django.utils import timezone
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 from apps.inventory.models import StockItem, StockMovement
+from apps.customers.models import Customer
 from apps.purchasing.models import PurchaseOrder, Supplier, SupplierPayment
+from apps.sales.models import Order, RegisterSession
 
 from .models import ReportRun
 from .services import generate_report_payload
@@ -35,6 +37,16 @@ SCALING_REPORTS = (
     ReportRun.ReportType.STOCK_MOVEMENTS,
     ReportRun.ReportType.REORDER_ITEMS,
     ReportRun.ReportType.PURCHASING_SUMMARY,
+    ReportRun.ReportType.RECEIVABLES_AGING,
+    ReportRun.ReportType.PAYABLES_AGING,
+    ReportRun.ReportType.PRODUCT_MARGIN,
+    ReportRun.ReportType.DISCOUNT_AUDIT,
+    ReportRun.ReportType.SALES_BY_STAFF,
+    ReportRun.ReportType.EXPENSE_BREAKDOWN,
+    ReportRun.ReportType.CASH_POSITION,
+    # The profit report reads receivables twice (opening and closing) for its
+    # cash bridge; both must stay one query each however many debts there are.
+    ReportRun.ReportType.PROFIT_COSTS,
 )
 
 
@@ -48,6 +60,11 @@ class ReportSectionQueryScalingTests(TestCase):
         )
         self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
         self.supplier = Supplier.objects.create(name="مورد التقارير")
+        self.session = RegisterSession.objects.create(
+            owner=self.manager,
+            owner_key=f"user:{self.manager.pk}",
+            opening_cash=Decimal("0.00"),
+        )
         self.seeded = 0
 
     def _seed(self, count):
@@ -92,6 +109,17 @@ class ReportSectionQueryScalingTests(TestCase):
                 method=SupplierPayment.Method.CASH,
                 amount=Decimal("4.00"),
             )
+            # An unpaid credit invoice per row, so the receivables aging and the
+            # profit report's cash bridge are measured with real debts rather
+            # than against an empty table.
+            Order.objects.create(
+                register_session=self.session,
+                customer=Customer.objects.create(full_name=f"زبون {index}"),
+                sale_type=Order.SaleType.CREDIT,
+                status=Order.Status.OPEN,
+                subtotal=Decimal("7.00"),
+                total=Decimal("7.00"),
+            )
         self.seeded += count
 
     def _payload(self, report_type):
@@ -112,6 +140,13 @@ class ReportSectionQueryScalingTests(TestCase):
 
     def test_detail_sections_do_not_scale_with_row_count(self):
         self._seed(BASE_ROWS)
+        # One discarded pass first. The very first report of a test run pays
+        # for singletons that are created on demand (the shop settings row) and
+        # for caches that live on the user object (its group membership) — a
+        # cost paid once, not per row, and measuring it as the baseline makes
+        # every later flat report look like an improvement.
+        for report in SCALING_REPORTS:
+            self._query_count(report)
         baseline = {
             report: self._query_count(report) for report in SCALING_REPORTS
         }

@@ -9,6 +9,7 @@ import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/features/reports/views/reports_screen.dart';
 
 import '../../../shared/fake_app_navigation.dart';
+import '../fake_report_repository.dart';
 
 void main() {
   testWidgets('keeps report workspace usable on compact and wide widths', (
@@ -24,7 +25,7 @@ void main() {
         ..physicalSize = size
         ..devicePixelRatio = 1;
 
-      await tester.pumpWidget(const _ReportsTestApp());
+      await tester.pumpWidget(_ReportsTestApp());
       await tester.pumpAndSettle();
 
       expect(find.text('التقارير'), findsWidgets);
@@ -48,6 +49,44 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
     }
+  });
+
+  testWidgets('groups the catalogue by the category the server sent', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1366, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(_ReportsTestApp());
+    await tester.pumpAndSettle();
+
+    // A report the client knew nothing about before this change, reachable
+    // because the catalogue — not a hard-coded list — decides what is offered.
+    expect(find.text('الذمم المدينة'), findsOneWidget);
+    expect(find.text('أعمار الذمم المدينة'), findsOneWidget);
+  });
+
+  testWidgets('offers the periods a close is built on', (tester) async {
+    tester.view
+      ..physicalSize = const Size(1366, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(_ReportsTestApp());
+    await tester.pumpAndSettle();
+
+    // The two windows every month-end and year-end is built on, neither of
+    // which the screen used to offer.
+    expect(find.text('الشهر الماضي'), findsOneWidget);
+    expect(find.text('السنة المالية'), findsOneWidget);
   });
 
   testWidgets('shows report action progress and ignores duplicate taps', (
@@ -95,6 +134,87 @@ void main() {
     expect(find.text('جارٍ تنفيذ معاينة PDF...'), findsNothing);
   });
 
+  testWidgets('builds the report once for preview and print', (tester) async {
+    tester.view
+      ..physicalSize = const Size(1366, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final repository = FakeReportRepository();
+    await tester.pumpWidget(
+      _ReportsTestApp(
+        repository: repository,
+        onPreviewPdf: (_) async {},
+        onPrintReport: (_) async {},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('معاينة PDF', skipOffstage: false));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('طباعة', skipOffstage: false));
+    await tester.pumpAndSettle();
+
+    // Preview, then print, on one unchanged selection: one server-side build,
+    // not two. Each used to be its own aggregation and its own stored run.
+    expect(repository.createCalls, 1);
+  });
+
+  testWidgets('shows the results on screen without building a PDF', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1366, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(_ReportsTestApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('شغّل التقرير لعرض النتيجة.'), findsOneWidget);
+
+    await tester.tap(find.text('عرض التقرير', skipOffstage: false));
+    await tester.pumpAndSettle();
+
+    expect(find.text('صافي المبيعات'), findsWidgets);
+    expect(find.text('أفضل المنتجات'), findsOneWidget);
+  });
+
+  testWidgets('surfaces the server reason instead of a generic failure', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1366, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      _ReportsTestApp(
+        repository: FakeReportRepository(
+          createFailure: 'Report period cannot be longer than 366 days.',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('عرض التقرير', skipOffstage: false));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Report period cannot be longer than 366 days.'),
+      findsWidgets,
+    );
+  });
+
   testWidgets('shows a localized report action error', (tester) async {
     tester.view
       ..physicalSize = const Size(1366, 900)
@@ -122,13 +242,39 @@ void main() {
 
     expect(find.text('تعذر تنفيذ طباعة. حاول مرة أخرى.'), findsOneWidget);
   });
+
+  testWidgets('says when the books are closed', (tester) async {
+    tester.view
+      ..physicalSize = const Size(1366, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      _ReportsTestApp(
+        repository: FakeReportRepository(
+          lockedThrough: DateTime(2026, 8, 31),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('الدفاتر مقفلة حتى'), findsOneWidget);
+  });
 }
 
 class _ReportsTestApp extends StatelessWidget {
-  const _ReportsTestApp({this.onPreviewPdf, this.onPrintReport});
+  _ReportsTestApp({
+    this.onPreviewPdf,
+    this.onPrintReport,
+    FakeReportRepository? repository,
+  }) : repository = repository ?? FakeReportRepository();
 
-  final ReportActionCallback? onPreviewPdf;
-  final ReportActionCallback? onPrintReport;
+  final ReportRunAction? onPreviewPdf;
+  final ReportRunAction? onPrintReport;
+  final FakeReportRepository repository;
 
   @override
   Widget build(BuildContext context) {
@@ -151,6 +297,7 @@ class _ReportsTestApp extends StatelessWidget {
       home: ReportsScreen(
         capabilities: AuthorizationCapabilities.forUser(user),
         navigation: FakeAppNavigation(currentUser: user),
+        viewModel: repository.viewModel(),
         onPreviewPdf: onPreviewPdf,
         onPrintReport: onPrintReport,
         onExportArchive: (_) async {},

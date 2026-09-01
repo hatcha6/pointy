@@ -138,10 +138,10 @@ class ReturnNettedRankingTests(TestCase):
         every netting assertion here."""
         self._sell(self.big, 5, Decimal("4.00"))
         row = self._row(self._report_top_products(), "Big seller")
-        self.assertEqual(row["quantity"], Decimal("5"))
+        self.assertEqual(row["quantity"], "5")
         self.assertEqual(row["revenue"], "50.00")
         self.assertEqual(row["profit"], "30.00")
-        self.assertEqual(self._report()["summary"]["items_sold"], Decimal("5"))
+        self.assertEqual(self._report()["summary"]["items_sold"], "5")
 
     # -- a voided sale ------------------------------------------------------
 
@@ -149,7 +149,7 @@ class ReturnNettedRankingTests(TestCase):
         order_id, _ = self._sell(self.big, 5, Decimal("4.00"))
         self._void(order_id)
         row = self._row(self._report_top_products(), "Big seller")
-        self.assertEqual(row["quantity"], Decimal("0"))
+        self.assertEqual(row["quantity"], "0")
         self.assertEqual(row["revenue"], "0.00")
         self.assertEqual(row["profit"], "0.00")
 
@@ -159,7 +159,7 @@ class ReturnNettedRankingTests(TestCase):
         summary = self._report()["summary"]
         # The figure this sat next to all along.
         self.assertEqual(summary["net_sales"], "0.00")
-        self.assertEqual(summary["items_sold"], Decimal("0"))
+        self.assertEqual(summary["items_sold"], "0")
 
     def test_dashboard_product_ranking_drops_a_voided_sale(self):
         order_id, _ = self._sell(self.big, 5, Decimal("4.00"))
@@ -193,10 +193,10 @@ class ReturnNettedRankingTests(TestCase):
         order_id, line_id = self._sell(self.big, 5, Decimal("4.00"))
         self._return(order_id, line_id, 2)
         row = self._row(self._report_top_products(), "Big seller")
-        self.assertEqual(row["quantity"], Decimal("3"))
+        self.assertEqual(row["quantity"], "3")
         self.assertEqual(row["revenue"], "30.00")
         self.assertEqual(row["profit"], "18.00")
-        self.assertEqual(self._report()["summary"]["items_sold"], Decimal("3"))
+        self.assertEqual(self._report()["summary"]["items_sold"], "3")
 
     # -- the ranking itself -------------------------------------------------
 
@@ -240,4 +240,4 @@ class ReturnNettedRankingTests(TestCase):
         row = self._row(self._report_top_products(), "Weighed goods")
         self.assertEqual(row["revenue"], "0.00")
         self.assertEqual(row["profit"], "0.00")
-        self.assertEqual(row["quantity"], Decimal("0"))
+        self.assertEqual(row["quantity"], "0")

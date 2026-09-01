@@ -518,6 +518,13 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "low_stock_threshold",
             "warn_low_stock_before_sale",
             "inventory_valuation_method",
+            # Accounting calendar. The fiscal year anchors the "this year" /
+            # "last year" report presets; the lock date closes a period that has
+            # already been reported.
+            "fiscal_year_start_month",
+            "books_locked_through",
+            "month_end_snapshot_day",
+            "month_end_report_phone",
             "stock_count_variance_min_units",
             "stock_count_variance_percent",
             "cashier_return_window_hours",
@@ -542,7 +549,28 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "updated_at",
             "valuation_method_change_acknowledged",
         ]
-        read_only_fields = ["shop_type", "logo_attachment", "updated_at"]
+        # ``books_locked_through`` is read-only here on purpose: closing a
+        # period is a bookkeeping act with its own permission and its own audit
+        # trail, not a checkbox on the settings screen. It is written through
+        # ``/api/reports/period-lock/`` (see apps.reports.views).
+        # The accounting calendar — the fiscal year the reports anchor to and
+        # the date the books are closed through — is read-only here on purpose.
+        # Both are bookkeeping acts with their own permission and their own
+        # audit trail, not checkboxes next to the receipt footer, and the people
+        # who should be setting them (accountants, auditors) deliberately do not
+        # hold ``core.change_shopsettings``. They are written through
+        # ``/api/reports/period-lock/`` (see apps.reports.views).
+        read_only_fields = [
+            "shop_type",
+            "fiscal_year_start_month",
+            "books_locked_through",
+            "month_end_snapshot_day",
+            "month_end_report_phone",
+            "month_end_snapshot_day",
+            "month_end_report_phone",
+            "logo_attachment",
+            "updated_at",
+        ]
 
 
 

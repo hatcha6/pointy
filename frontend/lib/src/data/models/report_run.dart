@@ -8,6 +8,16 @@ enum ReportRunType {
   reorderItems,
   payrollSummary,
   profitCosts,
+  receivablesAging,
+  payablesAging,
+  customerStatement,
+  supplierStatement,
+  cashPosition,
+  expenseBreakdown,
+  productMargin,
+  discountAudit,
+  salesByStaff,
+  monthEndPack,
 }
 
 enum ReportOutputFormat { json, pdf, csv }
@@ -25,6 +35,7 @@ class ReportRun {
     required this.rowCount,
     required this.checksum,
     required this.createdAt,
+    this.figuresChecksum = '',
     this.requestedBy,
     this.requestedByUsername,
     this.completedAt,
@@ -39,6 +50,10 @@ class ReportRun {
   final Map<String, Object?> payload;
   final int rowCount;
   final String checksum;
+
+  /// Hash of the figures alone, with the generation timestamp excluded — the
+  /// one that can be compared between two runs of the same closed period.
+  final String figuresChecksum;
   final int? requestedBy;
   final String? requestedByUsername;
   final DateTime createdAt;
@@ -57,6 +72,7 @@ class ReportRun {
       payload: _mapFromJson(json['payload']),
       rowCount: json['row_count'] as int? ?? 0,
       checksum: json['checksum'] as String? ?? '',
+      figuresChecksum: json['figures_checksum'] as String? ?? '',
       requestedBy: json['requested_by'] as int?,
       requestedByUsername: json['requested_by_username'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -97,6 +113,16 @@ String reportRunTypeToJson(ReportRunType type) {
     ReportRunType.reorderItems => 'reorder_items',
     ReportRunType.payrollSummary => 'payroll_summary',
     ReportRunType.profitCosts => 'profit_costs',
+    ReportRunType.receivablesAging => 'receivables_aging',
+    ReportRunType.payablesAging => 'payables_aging',
+    ReportRunType.customerStatement => 'customer_statement',
+    ReportRunType.supplierStatement => 'supplier_statement',
+    ReportRunType.cashPosition => 'cash_position',
+    ReportRunType.expenseBreakdown => 'expense_breakdown',
+    ReportRunType.productMargin => 'product_margin',
+    ReportRunType.discountAudit => 'discount_audit',
+    ReportRunType.salesByStaff => 'sales_by_staff',
+    ReportRunType.monthEndPack => 'month_end_pack',
   };
 }
 
@@ -111,6 +137,16 @@ ReportRunType reportRunTypeFromJson(String? value) {
     'reorder_items' => ReportRunType.reorderItems,
     'payroll_summary' => ReportRunType.payrollSummary,
     'profit_costs' => ReportRunType.profitCosts,
+    'receivables_aging' => ReportRunType.receivablesAging,
+    'payables_aging' => ReportRunType.payablesAging,
+    'customer_statement' => ReportRunType.customerStatement,
+    'supplier_statement' => ReportRunType.supplierStatement,
+    'cash_position' => ReportRunType.cashPosition,
+    'expense_breakdown' => ReportRunType.expenseBreakdown,
+    'product_margin' => ReportRunType.productMargin,
+    'discount_audit' => ReportRunType.discountAudit,
+    'sales_by_staff' => ReportRunType.salesByStaff,
+    'month_end_pack' => ReportRunType.monthEndPack,
     _ => ReportRunType.salesSummary,
   };
 }

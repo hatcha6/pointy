@@ -8,6 +8,8 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from apps.core.period_lock import assert_period_open
+
 from .models import MoneyAccount, MoneyCount, MoneyTransfer
 from .position import account_is_routed, expected_balance_for
 
@@ -147,6 +149,16 @@ class MoneyTransferSerializer(serializers.ModelSerializer):
         read_only_fields = ("created_by", "created_at")
 
     def validate(self, attrs):
+        # ``moved_at`` is backdatable, so a transfer is one of the few ways a
+        # month that has already been reported can be made to move.
+        request = self.context.get("request")
+        assert_period_open(
+            attrs.get("moved_at", getattr(self.instance, "moved_at", None)),
+            user=getattr(request, "user", None),
+            entity_type="money_transfer",
+            entity_id=getattr(self.instance, "pk", None),
+            action="treasury.transfer",
+        )
         source = attrs.get("from_account", getattr(self.instance, "from_account", None))
         target = attrs.get("to_account", getattr(self.instance, "to_account", None))
         if source is None and target is None:

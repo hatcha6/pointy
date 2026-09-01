@@ -143,7 +143,7 @@ from apps.purchasing.views import (
     SupplierPaymentViewSet,
     SupplierViewSet,
 )
-from apps.reports.views import ReportRunViewSet
+from apps.reports.views import PeriodLockView, ReportRunViewSet
 from apps.sales.views import OrderViewSet, PublicInvoiceView, RegisterSessionViewSet
 
 router = DefaultRouter()
@@ -285,6 +285,11 @@ urlpatterns = [
         "api/auth/password/policy/",
         password_policy_view,
         name="auth-password-policy",
+    ),
+    path(
+        "api/reports/period-lock/",
+        PeriodLockView.as_view(),
+        name="report-period-lock",
     ),
     path("api/dashboard/", DashboardView.as_view(), name="dashboard"),
     path(

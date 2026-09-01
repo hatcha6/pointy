@@ -127,6 +127,32 @@ class ShopSettings(TimeStampedModel):
         choices=ValuationMethod.choices,
         default=ValuationMethod.MOVING_AVERAGE,
     )
+    # The month the shop's financial year opens on. January is the calendar
+    # year and the default; a shop whose year ends in June sets 7 and gets its
+    # own year from the "this year" / "last year" report presets instead of
+    # having to pick 1 July and 30 June by hand every time. Reporting only —
+    # nothing in the trading path reads it.
+    fiscal_year_start_month = models.PositiveSmallIntegerField(
+        default=1,
+        validators=[MinValueValidator(1), MaxValueValidator(12)],
+    )
+    # Money events dated on or before this day are closed: the period has been
+    # reported and must not move underneath the report. Blank until an owner
+    # closes their first period. Enforced by ``apps.core.period_lock``; holders
+    # of ``reports.override_period_lock`` can still post, and every override is
+    # recorded as an audit event.
+    books_locked_through = models.DateField(blank=True, null=True)
+    # The day of the month the closed month is snapshotted on. 0 turns it off.
+    # The snapshot matters more than the notification: it stores last month's
+    # figures the moment the month ends, so "are September's numbers still what
+    # I reported?" has a baseline nobody had to remember to create.
+    month_end_snapshot_day = models.PositiveSmallIntegerField(
+        default=1,
+        validators=[MaxValueValidator(28)],
+    )
+    # Where the month-end headline is sent. Blank means snapshot only — the
+    # figures are stored and nothing is messaged.
+    month_end_report_phone = models.CharField(max_length=32, blank=True)
     # The POS pops a confirmation dialog when a cart line's quantity exceeds the
     # available stock. Shops that routinely sell into negative stock (with
     # ``allow_overselling`` on) can switch this off so checkout completes without

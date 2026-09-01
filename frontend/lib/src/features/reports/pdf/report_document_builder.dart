@@ -1,3 +1,27 @@
+/// Turns a report payload into the printable document.
+///
+/// Four things the printed version used to leave out, all of them defects an
+/// accountant found before a developer did:
+///
+/// * **Truncation.** Sections carry a row cap and the payload has always said
+///   how many rows were left out; the builder read the columns and the rows and
+///   threw the metadata away. A month of stock movements printed 120 lines out
+///   of thousands, under a header badged "archive" and a checksum reference.
+///
+/// * **Totals.** A schedule that supports a stated figure has to foot to it.
+///   Sections now carry their own totals and the table prints them, including
+///   the distinction between "what the printed rows add up to" and "what every
+///   row adds up to" when rows were omitted.
+///
+/// * **Which figures lead.** The header grid took the first eight entries of
+///   the summary map, so a report with ten lost two at random. The report now
+///   names its own headline figures and they go first.
+///
+/// * **Definitions.** Nothing on the page said what "gross sales" included,
+///   which basis the profit was on, or whether the period could still change.
+///   The payload's notes become a closing block.
+library;
+
 import 'dart:typed_data';
 
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
@@ -5,8 +29,13 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/models/report_run.dart';
 import '../../../data/models/shop_settings.dart';
-import '../../../shared/formatters.dart';
+import '../report_labels.dart';
+import '../report_titles.dart';
 import 'report_pdf.dart';
+
+/// How many summary figures the header grid shows. The report's own headline
+/// list always comes first and is never trimmed away.
+const _metricGridLimit = 8;
 
 BusinessReportPdfDocument buildBusinessReportPdfDocument({
   required ReportRun run,
@@ -19,12 +48,17 @@ BusinessReportPdfDocument buildBusinessReportPdfDocument({
 }) {
   final payload = run.payload;
   final period = _periodFromPayload(payload);
-  final sections = _sectionsFromPayload(payload);
   final summary = _mapFromPayload(payload['summary']);
+  final headline = _stringList(payload['headline']);
+
+  final sections = <ReportPdfSection>[
+    ..._sectionsFromPayload(payload),
+    ...?_notesSection(payload, l10n),
+  ];
 
   return BusinessReportPdfDocument(
     type: _businessReportType(run.reportType),
-    title: _reportTitle(l10n, run.reportType),
+    title: reportTitle(l10n, run.reportType),
     businessName: shopSettings?.shopName.trim().isNotEmpty == true
         ? shopSettings!.shopName.trim()
         : l10n.appTitle,
@@ -33,15 +67,10 @@ BusinessReportPdfDocument buildBusinessReportPdfDocument({
     businessHeader: _trimmedOrNull(shopSettings?.receiptHeader),
     businessFooter: _trimmedOrNull(shopSettings?.receiptFooter),
     generatedBy: includePreparedBy ? currentUser.label : null,
-    reference: run.checksum.isEmpty
-        ? 'تقرير-${run.id}'
-        : run.checksum.substring(0, 12),
+    reference: _referenceFor(run),
     period: period,
-    shopSettingFields: _shopSettingFieldsForReport(
-      run.reportType,
-      shopSettings,
-    ),
-    metrics: _metricsFromSummary(summary),
+    shopSettingFields: _shopSettingFieldsForReport(run.reportType, shopSettings),
+    metrics: _metricsFromSummary(summary, headline, payload),
     sections: sections,
     auditTrail: includeAuditTrail
         ? [
@@ -56,31 +85,42 @@ BusinessReportPdfDocument buildBusinessReportPdfDocument({
   );
 }
 
+/// The figures reference. Prefers the *figures* checksum, because that is the
+/// one two runs of an unchanged period share — quoting the run checksum on a
+/// printed page invites a reader to compare two references that were designed
+/// to differ.
+String _referenceFor(ReportRun run) {
+  final figures = run.figuresChecksum;
+  if (figures.isNotEmpty) {
+    return figures.substring(0, figures.length < 12 ? figures.length : 12);
+  }
+  if (run.checksum.isNotEmpty) {
+    return run.checksum.substring(0, 12);
+  }
+  return 'تقرير-${run.id}';
+}
+
 BusinessReportType _businessReportType(ReportRunType type) {
   return switch (type) {
-    ReportRunType.salesSummary => BusinessReportType.salesSummary,
-    ReportRunType.paymentMethods => BusinessReportType.paymentSummary,
+    ReportRunType.salesSummary ||
+    ReportRunType.productMargin ||
+    ReportRunType.salesByStaff => BusinessReportType.salesSummary,
+    ReportRunType.paymentMethods ||
+    ReportRunType.cashPosition => BusinessReportType.paymentSummary,
     ReportRunType.registerClosure => BusinessReportType.registerSessionArchive,
     ReportRunType.inventoryStatus => BusinessReportType.inventorySnapshot,
     ReportRunType.stockMovements => BusinessReportType.stockMovementArchive,
-    ReportRunType.purchasingSummary => BusinessReportType.purchasingSummary,
+    ReportRunType.purchasingSummary ||
+    ReportRunType.payablesAging => BusinessReportType.purchasingSummary,
     ReportRunType.reorderItems => BusinessReportType.reorderPlan,
     ReportRunType.payrollSummary => BusinessReportType.payrollSummary,
-    ReportRunType.profitCosts => BusinessReportType.profitAndCosts,
-  };
-}
-
-String _reportTitle(AppLocalizations l10n, ReportRunType type) {
-  return switch (type) {
-    ReportRunType.salesSummary => l10n.reportSalesSummaryTitle,
-    ReportRunType.paymentMethods => l10n.reportPaymentsTitle,
-    ReportRunType.registerClosure => l10n.reportRegisterSessionsTitle,
-    ReportRunType.inventoryStatus => l10n.reportInventoryValueTitle,
-    ReportRunType.stockMovements => l10n.reportStockMovementTitle,
-    ReportRunType.purchasingSummary => l10n.reportPurchasesTitle,
-    ReportRunType.reorderItems => l10n.reportReorderItemsTitle,
-    ReportRunType.payrollSummary => l10n.reportPayrollSummaryTitle,
-    ReportRunType.profitCosts => l10n.reportProfitCostsTitle,
+    ReportRunType.profitCosts ||
+    ReportRunType.expenseBreakdown ||
+    ReportRunType.monthEndPack => BusinessReportType.profitAndCosts,
+    ReportRunType.receivablesAging ||
+    ReportRunType.customerStatement => BusinessReportType.customerStatement,
+    ReportRunType.supplierStatement => BusinessReportType.supplierStatement,
+    ReportRunType.discountAudit => BusinessReportType.discountAudit,
   };
 }
 
@@ -94,14 +134,35 @@ ReportPdfPeriod? _periodFromPayload(Map<String, Object?> payload) {
   return ReportPdfPeriod(start: start, end: end);
 }
 
-List<ReportPdfMetric> _metricsFromSummary(Map<String, Object?> summary) {
+/// The header grid: the report's own headline figures first, then whatever
+/// else fits — never "the first eight keys that happened to come out of a map".
+List<ReportPdfMetric> _metricsFromSummary(
+  Map<String, Object?> summary,
+  List<String> headline,
+  Map<String, Object?> payload,
+) {
+  final previous = _mapFromPayload(payload['previous_summary']);
+  final ordered = <String>[
+    ...headline.where(summary.containsKey),
+    ...summary.keys.where((key) => !headline.contains(key)),
+  ];
   return [
-    for (final entry in summary.entries.take(8))
+    for (final key in ordered.take(_metricGridLimit))
       ReportPdfMetric(
-        label: _labelFor(entry.key),
-        value: _displayValueForKey(entry.key, entry.value),
+        label: reportLabel(key),
+        value: reportValue(key, summary[key]),
+        note: previous.isEmpty
+            ? null
+            : _comparisonNote(key, previous[key]),
       ),
   ];
+}
+
+String? _comparisonNote(String key, Object? previousValue) {
+  if (previousValue == null) {
+    return null;
+  }
+  return 'السابق: ${reportValue(key, previousValue)}';
 }
 
 List<ReportPdfSection> _sectionsFromPayload(Map<String, Object?> payload) {
@@ -111,29 +172,128 @@ List<ReportPdfSection> _sectionsFromPayload(Map<String, Object?> payload) {
   }
   return [
     for (final section in sections)
-      if (section is Map)
-        ReportPdfSection(
-          heading: _labelFor(section['key']?.toString() ?? ''),
-          tables: [_tableFromSection(section.cast<String, Object?>())],
-        ),
+      if (section is Map) _sectionFrom(section.cast<String, Object?>()),
   ];
 }
 
-ReportPdfTable _tableFromSection(Map<String, Object?> section) {
-  final columns = (section['columns'] as List? ?? const [])
-      .map((column) => _labelFor(column.toString()))
-      .toList(growable: false);
-  final rows = (section['rows'] as List? ?? const [])
-      .whereType<Map>()
-      .map(
-        (row) => [
-          for (final column in (section['columns'] as List? ?? const []))
-            _displayValueForKey(column.toString(), row[column.toString()]),
-        ],
-      )
-      .toList(growable: false);
+ReportPdfSection _sectionFrom(Map<String, Object?> section) {
+  final metadata = _mapFromPayload(section['metadata']);
+  return ReportPdfSection(
+    heading: reportLabel(section['key']?.toString() ?? ''),
+    // A schedule that omitted rows says so on the page, in words, next to the
+    // rows it did print.
+    paragraphs: [
+      if (metadata['truncated'] == true)
+        'معروض ${metadata['returned_count']} من '
+            '${metadata['total_count']} صفًا — التقرير مختصر.',
+    ],
+    tables: [_tableFromSection(section)],
+  );
+}
 
-  return ReportPdfTable(columns: columns, rows: rows);
+ReportPdfTable _tableFromSection(Map<String, Object?> section) {
+  final columns = _stringList(section['columns']);
+  final types = _mapFromPayload(section['column_types']);
+  final rows = <List<String>>[
+    for (final row in (section['rows'] as List? ?? const []))
+      if (row is Map)
+        [
+          for (final column in columns)
+            reportValue(
+              column,
+              row.cast<String, Object?>()[column],
+              columnType: types[column]?.toString(),
+            ),
+        ],
+  ];
+  rows.addAll(_totalRows(section, columns, types));
+
+  return ReportPdfTable(
+    columns: [for (final column in columns) reportLabel(column)],
+    rows: rows,
+  );
+}
+
+/// The totals under the column, and — when rows were left out — the total of
+/// every row as well. Both, or the reader cannot tell the difference between a
+/// complete schedule and a short one.
+List<List<String>> _totalRows(
+  Map<String, Object?> section,
+  List<String> columns,
+  Map<String, Object?> types,
+) {
+  final totals = _mapFromPayload(section['totals']);
+  if (totals.isEmpty || columns.isEmpty) {
+    return const [];
+  }
+  final shown = _mapFromPayload(totals['shown']);
+  final full = _mapFromPayload(totals['full']);
+  if (shown.isEmpty) {
+    return const [];
+  }
+
+  List<String> buildRow(String label, Map<String, Object?> values) {
+    return [
+      label,
+      for (final column in columns.skip(1))
+        values.containsKey(column)
+            ? reportValue(
+                column,
+                values[column],
+                columnType: types[column]?.toString(),
+              )
+            : '',
+    ];
+  }
+
+  final rows = <List<String>>[buildRow('الإجمالي', shown)];
+  final truncated =
+      _mapFromPayload(section['metadata'])['truncated'] == true &&
+      !_sameTotals(shown, full);
+  if (truncated) {
+    rows.add(buildRow('إجمالي كل الصفوف', full));
+  }
+  return rows;
+}
+
+bool _sameTotals(Map<String, Object?> shown, Map<String, Object?> full) {
+  if (full.isEmpty) {
+    return true;
+  }
+  for (final entry in shown.entries) {
+    if ('${full[entry.key]}' != '${entry.value}') {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// The closing block: what each figure includes, which basis, which date rule.
+List<ReportPdfSection>? _notesSection(
+  Map<String, Object?> payload,
+  AppLocalizations l10n,
+) {
+  final notes = payload['notes'];
+  if (notes is! List || notes.isEmpty) {
+    return null;
+  }
+  final sentences = <String>[
+    for (final note in notes)
+      if (note is Map)
+        ?reportNote(
+          note['code']?.toString() ?? '',
+          args: _mapFromPayload(note['args']),
+        ),
+  ];
+  if (sentences.isEmpty) {
+    return null;
+  }
+  return [
+    ReportPdfSection(
+      heading: l10n.reportNotesTitle,
+      paragraphs: sentences,
+    ),
+  ];
 }
 
 Map<String, Object?> _mapFromPayload(Object? value) {
@@ -144,6 +304,16 @@ Map<String, Object?> _mapFromPayload(Object? value) {
     return value.cast<String, Object?>();
   }
   return const {};
+}
+
+List<String> _stringList(Object? value) {
+  if (value is! List) {
+    return const [];
+  }
+  return [
+    for (final item in value)
+      if (item != null) item.toString(),
+  ];
 }
 
 DateTime? _dateOrNull(Object? value) {
@@ -162,7 +332,10 @@ List<ReportPdfField> _shopSettingFieldsForReport(
   }
 
   return switch (type) {
-    ReportRunType.salesSummary => [
+    ReportRunType.salesSummary ||
+    ReportRunType.productMargin ||
+    ReportRunType.discountAudit ||
+    ReportRunType.salesByStaff => [
       ReportPdfField(
         label: 'منع البيع بخسارة',
         value: _boolLabel(settings.preventSellingAtLoss),
@@ -176,7 +349,7 @@ List<ReportPdfField> _shopSettingFieldsForReport(
         value: _boolLabel(settings.allowOverselling),
       ),
     ],
-    ReportRunType.paymentMethods => [
+    ReportRunType.paymentMethods || ReportRunType.cashPosition => [
       ReportPdfField(
         label: 'طرق الدفع المفعلة',
         value: _enabledPaymentMethods(settings),
@@ -188,12 +361,12 @@ List<ReportPdfField> _shopSettingFieldsForReport(
       if (settings.enableCardPayments)
         ReportPdfField(
           label: 'عمولة البطاقة',
-          value: _formatPercent(settings.cardCommissionPercent),
+          value: _percentField(settings.cardCommissionPercent),
         ),
       if (settings.enableTransferPayments)
         ReportPdfField(
           label: 'عمولة التحويل',
-          value: _formatPercent(settings.transferCommissionPercent),
+          value: _percentField(settings.transferCommissionPercent),
         ),
       if (settings.trustedCardTerminalIds.isNotEmpty)
         ReportPdfField(
@@ -215,7 +388,6 @@ List<ReportPdfField> _shopSettingFieldsForReport(
         value: '${settings.cashierReturnWindowHours} ساعة',
       ),
     ],
-    ReportRunType.payrollSummary || ReportRunType.profitCosts => const [],
     ReportRunType.inventoryStatus ||
     ReportRunType.stockMovements ||
     ReportRunType.reorderItems => [
@@ -224,15 +396,15 @@ List<ReportPdfField> _shopSettingFieldsForReport(
         value: '${settings.lowStockThreshold}',
       ),
       ReportPdfField(
+        label: 'طريقة تقييم المخزون',
+        value: _valuationMethodLabel(settings.inventoryValuationMethod),
+      ),
+      ReportPdfField(
         label: 'السماح بالبيع دون مخزون',
         value: _boolLabel(settings.allowOverselling),
       ),
-      ReportPdfField(
-        label: 'منع البيع بخسارة',
-        value: _boolLabel(settings.preventSellingAtLoss),
-      ),
     ],
-    ReportRunType.purchasingSummary => [
+    ReportRunType.purchasingSummary || ReportRunType.payablesAging => [
       ReportPdfField(
         label: 'حد تنبيه المخزون المنخفض',
         value: '${settings.lowStockThreshold}',
@@ -240,9 +412,22 @@ List<ReportPdfField> _shopSettingFieldsForReport(
       if (settings.enableTransferPayments)
         ReportPdfField(
           label: 'عمولة التحويل',
-          value: _formatPercent(settings.transferCommissionPercent),
+          value: _percentField(settings.transferCommissionPercent),
         ),
     ],
+    // Money reports carry the valuation method, because it decides the cost of
+    // sales the profit figure is built on.
+    ReportRunType.profitCosts || ReportRunType.monthEndPack => [
+      ReportPdfField(
+        label: 'طريقة تقييم المخزون',
+        value: _valuationMethodLabel(settings.inventoryValuationMethod),
+      ),
+    ],
+    ReportRunType.payrollSummary ||
+    ReportRunType.expenseBreakdown ||
+    ReportRunType.receivablesAging ||
+    ReportRunType.customerStatement ||
+    ReportRunType.supplierStatement => const [],
   };
 }
 
@@ -260,362 +445,16 @@ String _enabledPaymentMethods(ShopSettings settings) {
   return methods.isEmpty ? 'لا توجد طرق دفع مفعلة' : methods.join('، ');
 }
 
-String _displayValueForKey(String key, Object? value) {
-  if (value == null || value == '') {
-    return '-';
-  }
-
-  final raw = value.toString();
-  // Some sections carry metric/cost identifiers as row VALUES (e.g. the
-  // summary table's first column holds "gross_sales") — translate those the
-  // same way column headers are translated so no English key leaks through.
-  if (key == 'metric' || key == 'cost_item') {
-    return _labelFor(raw);
-  }
-  final translatedValue = _valueLabel(raw);
-  if (translatedValue != null) {
-    return translatedValue;
-  }
-  if (value is bool) {
-    return _boolLabel(value);
-  }
-  if (_moneyKeys.contains(key)) {
-    return _formatMoney(raw);
-  }
-  if (_percentKeys.contains(key)) {
-    return _formatPercent(raw);
-  }
-  return _stringValue(value);
+String _valuationMethodLabel(InventoryValuationMethod method) {
+  return switch (method) {
+    InventoryValuationMethod.fifo => 'الوارد أولًا صادر أولًا (FIFO)',
+    InventoryValuationMethod.lifo => 'الوارد أخيرًا صادر أولًا (LIFO)',
+    InventoryValuationMethod.movingAverage => 'المتوسط المرجح',
+  };
 }
 
 String _boolLabel(bool value) => value ? 'نعم' : 'لا';
 
-String? _valueLabel(String value) {
-  final normalized = value.trim();
-  if (normalized.isEmpty) {
-    return null;
-  }
-  return _arabicValueLabels[normalized];
+String _percentField(Object? value) {
+  return reportValue('share_percent', value, columnType: 'percent');
 }
-
-String _formatMoney(Object? value) {
-  final normalized = value?.toString().trim() ?? '';
-  if (normalized.isEmpty) {
-    return '-';
-  }
-  if (normalized.contains(currencySymbol)) {
-    return normalized;
-  }
-  final amount = num.tryParse(normalized);
-  if (amount == null) {
-    return _compactCellValue(normalized);
-  }
-  return '${amount.toStringAsFixed(2)} $currencySymbol';
-}
-
-String _formatPercent(Object? value) {
-  final normalized = value?.toString().trim() ?? '';
-  if (normalized.isEmpty) {
-    return '-';
-  }
-  if (normalized.endsWith('%')) {
-    return normalized;
-  }
-  final percent = num.tryParse(normalized);
-  if (percent == null) {
-    return _compactCellValue(normalized);
-  }
-  return '${percent.toStringAsFixed(2)}%';
-}
-
-String _stringValue(Object? value) {
-  if (value == null || value == '') {
-    return '-';
-  }
-  if (value is String && value.contains('T')) {
-    final dateTime = DateTime.tryParse(value);
-    if (dateTime != null) {
-      final local = dateTime.toLocal();
-      final date = '${local.year}/${_two(local.month)}/${_two(local.day)}';
-      final time = '${_two(local.hour)}:${_two(local.minute)}';
-      return '$date $time';
-    }
-  }
-  return _compactCellValue(value.toString());
-}
-
-String _two(int value) => value.toString().padLeft(2, '0');
-
-String _compactCellValue(String value) {
-  const maxCellCharacters = 140;
-  final normalized = value.replaceAll(RegExp(r'\s+'), ' ').trim();
-  if (normalized.isEmpty) {
-    return '-';
-  }
-  if (normalized.length <= maxCellCharacters) {
-    return normalized;
-  }
-  return '${normalized.substring(0, maxCellCharacters - 3)}...';
-}
-
-String _labelFor(String key) {
-  final label = _arabicLabels[key];
-  if (label != null) {
-    return label;
-  }
-  final fallback = key
-      .split('_')
-      .map((part) => _arabicLabelTokens[part])
-      .whereType<String>()
-      .join(' ');
-  return fallback.isEmpty ? 'بيان' : fallback;
-}
-
-const _moneyKeys = {
-  'gross_sales',
-  'discount_total',
-  'refund_total',
-  'net_sales',
-  'gross_profit',
-  'revenue',
-  'profit',
-  'total',
-  'payment_total',
-  'commission_total',
-  'commission',
-  'opening_cash',
-  'closing_cash',
-  'expected_cash',
-  'cash_variance',
-  'variance_total',
-  'retail_stock_value',
-  'retail_value',
-  'purchase_total',
-  'balance_due',
-  'payable_balance',
-  'credit_balance',
-  'net_balance',
-  'amount',
-  'cash_sales_total',
-  'cash_refund_total',
-  'salary_expense',
-  'paid_total',
-  'pending_total',
-  'gross_total',
-  'additions_total',
-  'deductions_total',
-  'net_total',
-  'payroll_paid_total',
-  'payment_commission_total',
-  'ad_hoc_expense_total',
-  'purchase_spend_total',
-  'operating_expense_total',
-  'net_operating_profit',
-};
-
-const _percentKeys = {'profit_margin_percent'};
-
-const _arabicValueLabels = {
-  'open': 'مفتوحة',
-  'closed': 'مغلقة',
-  'paid': 'مدفوعة',
-  'void': 'ملغاة',
-  'voided': 'ملغاة',
-  'draft': 'مسودة',
-  'submitted': 'مرسلة',
-  'partial': 'مستلمة جزئيًا',
-  'partially_received': 'مستلمة جزئيًا',
-  'received': 'مستلمة',
-  'cancelled': 'ملغاة',
-  'canceled': 'ملغاة',
-  'cash': 'نقدًا',
-  'card': 'بطاقة',
-  'transfer': 'تحويل',
-  'pay_in': 'إيداع نقدي',
-  'pay_out': 'سحب نقدي',
-  'increase': 'زيادة مخزون',
-  'decrease': 'نقص مخزون',
-  'damaged': 'مخزون تالف',
-  'expected': 'مخزون متوقع',
-  'receive_expected': 'استلام مخزون متوقع',
-  'receive_damaged': 'استلام تالف',
-  'cancel_expected': 'إلغاء مخزون متوقع',
-};
-
-const _arabicLabels = {
-  'summary': 'الملخص',
-  'top_products': 'أفضل المنتجات',
-  'recent_orders': 'آخر الطلبات',
-  'payment_methods': 'طرق الدفع',
-  'register_sessions': 'جلسات الدرج',
-  'inventory_items': 'المخزون',
-  'movement_mix': 'ملخص الحركات',
-  'stock_movements': 'حركات المخزون',
-  'purchase_orders': 'أوامر الشراء',
-  'supplier_balances': 'أرصدة الموردين',
-  'metric': 'المؤشر',
-  'value': 'القيمة',
-  'gross_sales': 'إجمالي المبيعات',
-  'discount_total': 'الخصومات',
-  'refund_total': 'المرتجعات',
-  'net_sales': 'صافي المبيعات',
-  'gross_profit': 'الربح الإجمالي',
-  'profit_margin_percent': 'هامش الربح',
-  'paid_order_count': 'الطلبات المدفوعة',
-  'voided_order_count': 'الطلبات الملغاة',
-  'return_count': 'المرتجعات',
-  'items_sold': 'القطع المباعة',
-  'product_name': 'المنتج',
-  'quantity': 'الكمية',
-  'revenue': 'الإيراد',
-  'profit': 'الربح',
-  'receipt_number': 'رقم الإيصال',
-  'status': 'الحالة',
-  'total': 'الإجمالي',
-  'created_at': 'تاريخ الإنشاء',
-  'payment_total': 'إجمالي المدفوعات',
-  'commission_total': 'إجمالي العمولات',
-  'payment_count': 'عدد المدفوعات',
-  'method': 'الطريقة',
-  'commission': 'العمولة',
-  'count': 'العدد',
-  'session_count': 'عدد الجلسات',
-  'open_count': 'المفتوحة',
-  'closed_count': 'المغلقة',
-  'variance_total': 'إجمالي الفرق',
-  'session_number': 'رقم الجلسة',
-  'opened_at': 'فتحت في',
-  'closed_at': 'أغلقت في',
-  'opening_cash': 'نقدية البداية',
-  'closing_cash': 'نقدية الإغلاق',
-  'expected_cash': 'النقدية المتوقعة',
-  'cash_variance': 'فرق النقدية',
-  'product_count': 'عدد المنتجات',
-  'stock_item_count': 'بنود المخزون',
-  'low_stock_count': 'مخزون منخفض',
-  'out_of_stock_count': 'نافد',
-  'retail_stock_value': 'قيمة البيع',
-  'sku': 'رمز المنتج',
-  'quantity_on_hand': 'المتوفر',
-  'quantity_committed': 'المحجوز',
-  'quantity_expected': 'المتوقع',
-  'reorder_level': 'حد الطلب',
-  'retail_value': 'قيمة البيع',
-  'pay_in_total': 'إجمالي الإيداعات',
-  'pay_out_total': 'إجمالي السحوبات',
-  'movement_count': 'عدد الحركات',
-  'quantity_moved': 'الكمية المتحركة',
-  'movement_type': 'نوع الحركة',
-  'on_hand_before': 'قبل',
-  'on_hand_after': 'بعد',
-  'created_by': 'أنشأه',
-  'note': 'ملاحظة',
-  'purchase_total': 'إجمالي المشتريات',
-  'purchase_order_count': 'عدد أوامر الشراء',
-  'open_order_count': 'أوامر مفتوحة',
-  'supplier_count': 'عدد الموردين',
-  'order_number': 'رقم الأمر',
-  'supplier_name': 'المورد',
-  'balance_due': 'المستحق',
-  'due_date': 'تاريخ الاستحقاق',
-  'payable_balance': 'رصيد مستحق',
-  'credit_balance': 'رصيد دائن',
-  'net_balance': 'الصافي',
-  'returned_count': 'المعروض',
-  'total_count': 'إجمالي الصفوف',
-  'omitted_count': 'غير معروض',
-  'truncated': 'مختصر',
-  'cash_sales_total': 'المبيعات النقدية',
-  'cash_refund_total': 'المرتجعات النقدية',
-  'amount': 'المبلغ',
-  'reorder_items': 'أصناف تحتاج إعادة طلب',
-  'reorder_item_count': 'أصناف عند حد الطلب',
-  'suggested_quantity': 'الكمية المقترحة',
-  'suggested_units': 'إجمالي الكميات المقترحة',
-  'payroll_runs': 'مسيرات الرواتب',
-  'employee_totals': 'إجماليات الموظفين',
-  'employee_name': 'الموظف',
-  'run_number': 'رقم المسير',
-  'period_start': 'بداية الفترة',
-  'period_end': 'نهاية الفترة',
-  'gross_total': 'الإجمالي الأساسي',
-  'additions_total': 'الإضافات',
-  'deductions_total': 'الخصومات',
-  'net_total': 'الصافي',
-  'salary_expense': 'مصروف الرواتب',
-  'paid_total': 'الرواتب المدفوعة',
-  'pending_total': 'رواتب معتمدة غير مدفوعة',
-  'payroll_run_count': 'عدد المسيرات',
-  'active_employee_count': 'موظفون نشطون',
-  'cost_breakdown': 'تفصيل التكاليف',
-  'cost_item': 'بند التكلفة',
-  'payroll_paid_total': 'رواتب مدفوعة',
-  'payment_commission_total': 'عمولات الدفع',
-  'ad_hoc_expense_total': 'مصاريف عامة',
-  'purchase_spend_total': 'إنفاق المشتريات',
-  'operating_expense_total': 'إجمالي المصاريف التشغيلية',
-  'net_operating_profit': 'صافي الربح التشغيلي',
-};
-
-const _arabicLabelTokens = {
-  'id': 'المعرف',
-  'number': 'الرقم',
-  'name': 'الاسم',
-  'date': 'التاريخ',
-  'time': 'الوقت',
-  'status': 'الحالة',
-  'created': 'الإنشاء',
-  'updated': 'التحديث',
-  'closed': 'الإغلاق',
-  'opened': 'الافتتاح',
-  'submitted': 'الإرسال',
-  'received': 'الاستلام',
-  'due': 'الاستحقاق',
-  'product': 'المنتج',
-  'variant': 'الصنف',
-  'supplier': 'المورد',
-  'customer': 'العميل',
-  'order': 'الطلب',
-  'receipt': 'الإيصال',
-  'session': 'الجلسة',
-  'register': 'الدرج',
-  'payment': 'الدفع',
-  'method': 'الطريقة',
-  'movement': 'الحركة',
-  'type': 'النوع',
-  'quantity': 'الكمية',
-  'count': 'العدد',
-  'total': 'الإجمالي',
-  'subtotal': 'المجموع',
-  'discount': 'الخصم',
-  'refund': 'المرتجع',
-  'balance': 'الرصيد',
-  'cash': 'النقدية',
-  'profit': 'الربح',
-  'margin': 'الهامش',
-  'percent': 'النسبة',
-  'value': 'القيمة',
-  'retail': 'البيع',
-  'stock': 'المخزون',
-  'inventory': 'المخزون',
-  'sku': 'رمز المنتج',
-  'note': 'الملاحظة',
-  'by': 'بواسطة',
-  'before': 'قبل',
-  'after': 'بعد',
-  'on': 'على',
-  'hand': 'المتوفر',
-  'expected': 'المتوقع',
-  'committed': 'المحجوز',
-  'reorder': 'إعادة الطلب',
-  'level': 'الحد',
-  'commission': 'العمولة',
-  'gross': 'الإجمالي',
-  'net': 'الصافي',
-  'sales': 'المبيعات',
-  'purchase': 'الشراء',
-  'purchasing': 'المشتريات',
-  'payable': 'المستحق',
-  'credit': 'الدائن',
-  'open': 'المفتوح',
-};
