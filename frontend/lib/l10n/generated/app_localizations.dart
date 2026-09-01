@@ -11530,36 +11530,6 @@ abstract class AppLocalizations {
   /// **'تعذر تحديث الأسعار. حاول مرة أخرى.'**
   String get changePricesError;
 
-  /// No description provided for @repriceSiblingsTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'تغيير أسعار البيع'**
-  String get repriceSiblingsTitle;
-
-  /// No description provided for @repriceSiblingsTooltip.
-  ///
-  /// In ar, this message translates to:
-  /// **'تغيير أسعار بيع متغيّرات المنتج'**
-  String get repriceSiblingsTooltip;
-
-  /// Reprice-siblings dialog subtitle; shows the line's new cost.
-  ///
-  /// In ar, this message translates to:
-  /// **'بسعر تكلفة {cost} — عدّل سعر بيع كل متغيّرات هذا المنتج.'**
-  String repriceSiblingsSubtitle(String cost);
-
-  /// Hint that a suggested price is offered using the shop's typical markup.
-  ///
-  /// In ar, this message translates to:
-  /// **'مقترح بهامش ربح {percent}٪'**
-  String repriceSiblingsMarkupHint(String percent);
-
-  /// Tappable action that fills a variant's price field with the suggested price.
-  ///
-  /// In ar, this message translates to:
-  /// **'المقترح: {price}'**
-  String repriceSiblingsUseSuggested(String price);
-
   /// No description provided for @changePricesLoadError.
   ///
   /// In ar, this message translates to:
@@ -25900,6 +25870,336 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'كلا السعرين من السوق الموازي؛ الفرق هو طريقة الدفع.'**
   String get shopSetupSettlementSubtitle;
+
+  /// No description provided for @pricingSheetTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسعير المنتج'**
+  String get pricingSheetTitle;
+
+  /// No description provided for @pricingSheetTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسعير هذا المنتج بعد تغيّر التكلفة'**
+  String get pricingSheetTooltip;
+
+  /// No description provided for @pricingSheetVariantsSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أسعار الخيارات'**
+  String get pricingSheetVariantsSectionTitle;
+
+  /// No description provided for @pricingSheetBasePriceSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر البيع'**
+  String get pricingSheetBasePriceSectionTitle;
+
+  /// Subtitle of the pricing sheet's variant section: prices are per base unit.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر لكل {unit}'**
+  String pricingSheetVariantsSectionSubtitle(String unit);
+
+  /// No description provided for @pricingSheetPackSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أسعار العبوات'**
+  String get pricingSheetPackSectionTitle;
+
+  /// No description provided for @pricingSheetPackSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر بيع الكرتونة أو العلبة — يمكن أن يقل عن سعر القطعة مضروبًا في عددها.'**
+  String get pricingSheetPackSectionSubtitle;
+
+  /// No description provided for @pricingSheetNewCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة الجديدة'**
+  String get pricingSheetNewCostLabel;
+
+  /// Shows the line's cost in its own purchase unit, next to the per-base cost.
+  ///
+  /// In ar, this message translates to:
+  /// **'{cost} لكل {unit}'**
+  String pricingSheetCostPerPackSubtitle(String cost, String unit);
+
+  /// No description provided for @pricingSheetPreviousCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة السابقة'**
+  String get pricingSheetPreviousCostLabel;
+
+  /// Cost rose against the previous purchase, by this percent.
+  ///
+  /// In ar, this message translates to:
+  /// **'ارتفعت {percent}٪'**
+  String pricingSheetCostUp(String percent);
+
+  /// Cost fell against the previous purchase, by this percent.
+  ///
+  /// In ar, this message translates to:
+  /// **'انخفضت {percent}٪'**
+  String pricingSheetCostDown(String percent);
+
+  /// No description provided for @pricingSheetLowestCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل تكلفة'**
+  String get pricingSheetLowestCostLabel;
+
+  /// No description provided for @pricingSheetHighestCostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أعلى تكلفة'**
+  String get pricingSheetHighestCostLabel;
+
+  /// No description provided for @pricingSheetMarkupTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسعير بنسبة ربح'**
+  String get pricingSheetMarkupTitle;
+
+  /// No description provided for @pricingSheetMarkupSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'طبّق نسبة ربح على التكلفة الجديدة لكل الأسعار دفعة واحدة.'**
+  String get pricingSheetMarkupSubtitle;
+
+  /// Chip applying the shop's own median markup.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعتاد {percent}٪'**
+  String pricingSheetSuggestedMarkupChip(String percent);
+
+  /// Chip applying a preset markup percentage.
+  ///
+  /// In ar, this message translates to:
+  /// **'{percent}٪'**
+  String pricingSheetMarkupChip(String percent);
+
+  /// No description provided for @pricingSheetCustomMarkupLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة أخرى ٪'**
+  String get pricingSheetCustomMarkupLabel;
+
+  /// No description provided for @pricingSheetApplyMarkupTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق النسبة'**
+  String get pricingSheetApplyMarkupTooltip;
+
+  /// No description provided for @pricingSheetDerivedBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'محسوب'**
+  String get pricingSheetDerivedBadge;
+
+  /// How many base units one pack holds.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتوي {count}'**
+  String pricingSheetPackFactor(String count);
+
+  /// The cost of one of this row's units.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة {cost}'**
+  String pricingSheetRowCost(String cost);
+
+  /// No description provided for @pricingSheetUnpriced.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون سعر'**
+  String get pricingSheetUnpriced;
+
+  /// No description provided for @pricingSheetBelowCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل من التكلفة'**
+  String get pricingSheetBelowCost;
+
+  /// Profit per unit and the markup percent it represents over cost.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربح {profit} ({percent}٪ على التكلفة)'**
+  String pricingSheetMargin(String profit, String percent);
+
+  /// The price this row carried before the edit.
+  ///
+  /// In ar, this message translates to:
+  /// **'كان {price}'**
+  String pricingSheetWasPrice(String price);
+
+  /// No description provided for @pricingSheetSetOwnPriceButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر خاص'**
+  String get pricingSheetSetOwnPriceButton;
+
+  /// No description provided for @pricingSheetUseDerivedButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'احسبه تلقائيًا'**
+  String get pricingSheetUseDerivedButton;
+
+  /// No description provided for @pricingSheetNoChanges.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تغييرات'**
+  String get pricingSheetNoChanges;
+
+  /// How many prices in the sheet have been changed.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{تغيير واحد} =2{تغييران} other{{count} تغييرات}}'**
+  String pricingSheetChangeCount(int count);
+
+  /// No description provided for @pricingSheetResetButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تراجع'**
+  String get pricingSheetResetButton;
+
+  /// Profit per base unit on a draft line, and the markup it represents over cost.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربح {profit} ({percent}٪)'**
+  String purchaseLineMargin(String profit, String percent);
+
+  /// The selling price of one pack (carton/box) of this product.
+  ///
+  /// In ar, this message translates to:
+  /// **'{unit} {price}'**
+  String purchaseLinePackSellingPrice(String unit, String price);
+
+  /// Cost field label on a pack line, naming the unit the cost is per.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة / {unit}'**
+  String purchaseLineCostPerUnitLabel(String unit);
+
+  /// The per-base-unit equivalent of a pack line's cost.
+  ///
+  /// In ar, this message translates to:
+  /// **'= {cost} لكل {unit}'**
+  String purchaseLineCostPerBaseHelper(String cost, String unit);
+
+  /// No description provided for @purchaseLineTotalEntryTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدخال الإجمالي بدل سعر الوحدة'**
+  String get purchaseLineTotalEntryTooltip;
+
+  /// No description provided for @purchaseLineTotalEntryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي السطر'**
+  String get purchaseLineTotalEntryTitle;
+
+  /// No description provided for @purchaseLineTotalEntryFieldLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجمالي'**
+  String get purchaseLineTotalEntryFieldLabel;
+
+  /// Explains that the typed line total is divided by the quantity to get the unit cost.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُقسم الإجمالي على {quantity} {unit} لحساب تكلفة الوحدة.'**
+  String purchaseLineTotalEntryMessage(String quantity, String unit);
+
+  /// No description provided for @purchasingShortcutsTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختصارات لوحة المفاتيح'**
+  String get purchasingShortcutsTooltip;
+
+  /// No description provided for @purchasingShortcutsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختصارات الشراء'**
+  String get purchasingShortcutsTitle;
+
+  /// No description provided for @purchasingShortcutsSectionLines.
+  ///
+  /// In ar, this message translates to:
+  /// **'السطور'**
+  String get purchasingShortcutsSectionLines;
+
+  /// No description provided for @purchasingShortcutsSectionQuantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية'**
+  String get purchasingShortcutsSectionQuantity;
+
+  /// No description provided for @purchasingShortcutsSectionOrder.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمر الشراء'**
+  String get purchasingShortcutsSectionOrder;
+
+  /// No description provided for @purchasingShortcutCycleUnit.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبديل وحدة السطر المحدد'**
+  String get purchasingShortcutCycleUnit;
+
+  /// No description provided for @purchasingShortcutCycleUnitArrows.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبديل الوحدة للأمام والخلف'**
+  String get purchasingShortcutCycleUnitArrows;
+
+  /// No description provided for @purchasingShortcutOpenPricing.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسعير المنتج في السطر المحدد'**
+  String get purchasingShortcutOpenPricing;
+
+  /// No description provided for @purchasingShortcutDeleteLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف السطر المحدد (مع التراجع)'**
+  String get purchasingShortcutDeleteLine;
+
+  /// No description provided for @purchasingShortcutTypeQuantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب الكمية ثم Enter لتطبيقها'**
+  String get purchasingShortcutTypeQuantity;
+
+  /// No description provided for @purchasingShortcutStepQuantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة أو إنقاص واحد'**
+  String get purchasingShortcutStepQuantity;
+
+  /// No description provided for @purchasingShortcutClearEntry.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح ما كُتب ثم إلغاء التحديد'**
+  String get purchasingShortcutClearEntry;
+
+  /// No description provided for @purchasingShortcutOpenSettings.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات المورد والفاتورة والتكاليف'**
+  String get purchasingShortcutOpenSettings;
+
+  /// No description provided for @purchasingShortcutSubmit.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ أو تسجيل أمر الشراء'**
+  String get purchasingShortcutSubmit;
+
+  /// No description provided for @purchaseDraftLineRemovedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حذف السطر.'**
+  String get purchaseDraftLineRemovedMessage;
 }
 
 class _AppLocalizationsDelegate

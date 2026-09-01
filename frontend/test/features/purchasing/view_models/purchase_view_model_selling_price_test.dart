@@ -55,7 +55,7 @@ void main() {
 
       var notifications = 0;
       viewModel.addListener(() => notifications += 1);
-      final ok = await viewModel.repriceProductVariants(5, {11: 14});
+      final ok = await viewModel.repriceProduct(5, pricesByVariant: {11: 14});
 
       expect(ok, isTrue);
       expect(priceOf(viewModel, 11), 14);
@@ -68,7 +68,7 @@ void main() {
     final viewModel = PurchaseViewModel(catalog, _FakePurchaseRepository());
     await viewModel.addVariant(coffee);
 
-    final ok = await viewModel.repriceProductVariants(5, {11: 14});
+    final ok = await viewModel.repriceProduct(5, pricesByVariant: {11: 14});
 
     expect(ok, isFalse);
     expect(priceOf(viewModel, 11), 10);
@@ -216,6 +216,7 @@ class _FakeCatalogRepository extends CatalogRepository {
   Future<Result<Product>> setVariantPrices({
     required int productId,
     required Map<int, double> pricesByVariant,
+    Map<String, double?> pricesByUnitCode = const {},
   }) async {
     if (repriceFails) {
       return Error(Exception('reprice failed'));

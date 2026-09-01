@@ -15,7 +15,9 @@ from apps.inventory.models import StockItem
 from .models import (
     Product,
     ProductCategory,
+    ProductUnit,
     ProductVariant,
+    UnitOfMeasure,
     VariantOption,
     VariantOptionValue,
 )
@@ -1384,6 +1386,90 @@ class ProductBulkActionTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         other_variant.refresh_from_db()
         self.assertEqual(other_variant.unit_price, Decimal("10.00"))
+
+    def test_set_variant_prices_writes_pack_prices_alongside_variant_prices(self):
+        """The carton price is a first-class price, not a multiple of the piece.
+
+        A shop that sells a carton for less than 12 x the piece has to be able
+        to say so from the same dialog that sets the piece price — otherwise
+        repricing after a cost change silently leaves the wholesale price behind
+        on the old cost.
+        """
+        product = self._product("juice", "SVP-U1", "10.00")
+        carton = UnitOfMeasure.objects.create(code="svp-carton", name="كرتونة")
+        product_unit = ProductUnit.objects.create(
+            product=product,
+            unit=carton,
+            factor_to_base=Decimal("12"),
+            price=Decimal("110.00"),
+        )
+
+        response = self.client.post(
+            reverse("product-set-variant-prices", args=[product.id]),
+            {
+                "prices": [
+                    {"variant": product.default_variant.id, "unit_price": "11.00"}
+                ],
+                "unit_prices": [{"unit": carton.code, "price": "120.00"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        product.default_variant.refresh_from_db()
+        product_unit.refresh_from_db()
+        self.assertEqual(product.default_variant.unit_price, Decimal("11.00"))
+        self.assertEqual(product_unit.price, Decimal("120.00"))
+        # The response has to carry the NEW pack price: the purchase draft
+        # re-embeds this product on its lines so the carton price beside the
+        # piece price is the one just written, not the one it replaced.
+        returned_units = {
+            unit["unit"]: unit["price"] for unit in response.data["units"]
+        }
+        self.assertEqual(returned_units[carton.code], "120.00")
+
+    def test_set_variant_prices_can_clear_a_pack_price_back_to_derived(self):
+        product = self._product("juice", "SVP-U2", "10.00")
+        carton = UnitOfMeasure.objects.create(code="svp-carton-2", name="كرتونة")
+        product_unit = ProductUnit.objects.create(
+            product=product,
+            unit=carton,
+            factor_to_base=Decimal("12"),
+            price=Decimal("110.00"),
+        )
+
+        response = self.client.post(
+            reverse("product-set-variant-prices", args=[product.id]),
+            {"unit_prices": [{"unit": carton.code, "price": None}]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        product_unit.refresh_from_db()
+        self.assertIsNone(product_unit.price)
+
+    def test_set_variant_prices_rejects_a_unit_not_on_this_product(self):
+        product = self._product("juice", "SVP-U3", "10.00")
+        stranger = UnitOfMeasure.objects.create(code="svp-stranger", name="صندوق")
+
+        response = self.client.post(
+            reverse("product-set-variant-prices", args=[product.id]),
+            {"unit_prices": [{"unit": stranger.code, "price": "50.00"}]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_set_variant_prices_rejects_an_empty_request(self):
+        product = self._product("juice", "SVP-U4", "10.00")
+
+        response = self.client.post(
+            reverse("product-set-variant-prices", args=[product.id]),
+            {"prices": [], "unit_prices": []},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_set_variant_prices_requires_change_permission(self):
         product = self._product("a", "SVP-4", "10.00")

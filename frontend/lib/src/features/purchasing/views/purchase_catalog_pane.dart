@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
-import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/barcode/scan_feedback_sounds.dart';
 import '../../../shared/catalog/catalog.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/design/design.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
@@ -36,22 +36,10 @@ class PurchaseCatalogPane extends StatelessWidget {
       notice: viewModel.errorMessage != null
           ? PointyInlineMessage.warning(message: l10n.sampleCatalogNotice)
           : null,
-      search: ProductQueryControls(
-        query: viewModel.query,
-        catalogRepository: viewModel.catalogRepository,
-        allowAvailabilityFilter: false,
-        searchHint: l10n.purchaseProductLookupHint,
-        searchFieldKey: const ValueKey('purchase_product_lookup_field'),
-        autofocus:
-            AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
-        onSearchChanged: viewModel.updateSearch,
-        onOpenCameraScanner: viewModel.isSubmitting
-            ? null
-            : () => _openCameraScanner(context),
-        onSearchSubmitted: viewModel.isSubmitting
-            ? null
-            : (barcode) => _addBarcode(context, barcode),
-        onQueryChanged: viewModel.applyQuery,
+      search: _PurchaseProductLookupControls(
+        viewModel: viewModel,
+        onOpenCameraScanner: () => _openCameraScanner(context),
+        onSearchSubmitted: (barcode) => _addBarcode(context, barcode),
       ),
       categoryStrip: QuickAccessCategoryStrip(
         catalogRepository: viewModel.catalogRepository,
@@ -64,6 +52,9 @@ class PurchaseCatalogPane extends StatelessWidget {
           viewModel.query.copyWith(categories: [category]),
         ),
       ),
+      statusLine: viewModel.scanStatus != PurchaseScanStatus.idle
+          ? _PurchaseScanStatusLine(viewModel: viewModel)
+          : null,
       grid: LayoutBuilder(
         builder: (context, constraints) {
           final spacing = AdaptiveSpacing.of(context);
@@ -97,14 +88,18 @@ class PurchaseCatalogPane extends StatelessWidget {
                 onTap: viewModel.isSubmitting
                     ? null
                     : () {
-                        // Release the search field's focus so typing right
-                        // after the tap sets the quantity (scan-then-type).
-                        FocusManager.instance.primaryFocus?.unfocus();
                         unawaited(
-                          viewModel.addVariant(
-                            variant,
-                            source: 'purchase_catalog_tile',
-                          ),
+                          viewModel
+                              .addVariant(
+                                variant,
+                                source: 'purchase_catalog_tile',
+                              )
+                              // Focus goes back to the search field once the
+                              // line lands, so the next product can be looked
+                              // up or scanned without a tap. (It used to be
+                              // dropped outright, which left the buyer with no
+                              // focused field at all.)
+                              .then((_) => viewModel.requestSearchFocus()),
                         );
                       },
               );
@@ -126,33 +121,12 @@ class PurchaseCatalogPane extends StatelessWidget {
   }
 
   Future<bool> _addBarcode(BuildContext context, String barcode) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    BarcodeResolution? resolution;
-    try {
-      resolution = await resolveOrCreatePurchaseBarcode(
-        context,
-        viewModel: viewModel,
-        barcode: barcode,
-      );
-    } on Exception {
-      if (!context.mounted) {
-        return false;
-      }
-      messenger
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(l10n.barcodeScanError)));
-      return false;
-    }
-    if (resolution == null) {
-      return false;
-    }
-    await viewModel.addVariant(
-      resolution.variant,
-      unit: resolution.unit,
-      source: 'purchase_barcode_lookup',
+    await addScannedPurchaseBarcode(
+      context,
+      viewModel: viewModel,
+      barcode: barcode,
     );
-    return true;
+    return viewModel.scanStatus == PurchaseScanStatus.found;
   }
 
   Future<void> _openCameraScanner(BuildContext context) async {
@@ -195,5 +169,173 @@ class PurchaseCatalogPane extends StatelessWidget {
       variant == null ? ScanFeedback.notFound : ScanFeedback.success,
     );
     return variant;
+  }
+}
+
+
+/// The purchasing catalog's search field, owning its own focus node so the view
+/// model can pull focus back between the buyer's actions — the same
+/// resting-focus behaviour the POS has had since the search-autofocus work.
+/// Receiving a delivery is the same shape of job as ringing up a queue: scan,
+/// glance, scan again, and every tap needed in between is one the buyer's hands
+/// have to leave the scanner for.
+class _PurchaseProductLookupControls extends StatefulWidget {
+  const _PurchaseProductLookupControls({
+    required this.viewModel,
+    required this.onOpenCameraScanner,
+    required this.onSearchSubmitted,
+  });
+
+  final PurchaseViewModel viewModel;
+  final VoidCallback onOpenCameraScanner;
+  final Future<bool> Function(String barcode) onSearchSubmitted;
+
+  @override
+  State<_PurchaseProductLookupControls> createState() =>
+      _PurchaseProductLookupControlsState();
+}
+
+class _PurchaseProductLookupControlsState
+    extends State<_PurchaseProductLookupControls> {
+  final FocusNode _searchFocusNode = FocusNode(
+    debugLabel: 'purchase_product_search',
+  );
+
+  PurchaseViewModel get _viewModel => widget.viewModel;
+
+  @override
+  void initState() {
+    super.initState();
+    _viewModel.searchFocusController.addListener(_handleFocusRequest);
+  }
+
+  @override
+  void didUpdateWidget(covariant _PurchaseProductLookupControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.viewModel, widget.viewModel)) {
+      oldWidget.viewModel.searchFocusController.removeListener(
+        _handleFocusRequest,
+      );
+      widget.viewModel.searchFocusController.addListener(_handleFocusRequest);
+    }
+  }
+
+  @override
+  void dispose() {
+    _viewModel.searchFocusController.removeListener(_handleFocusRequest);
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  /// Takes focus at the view model's request, deferred to after the frame (the
+  /// request usually fires mid-rebuild) and suppressed while a sheet or dialog
+  /// is up, or on a phone layout — so it never steals the caret from the
+  /// pricing sheet or pops a soft keyboard unbidden.
+  void _handleFocusRequest() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final route = ModalRoute.of(context);
+      if (route != null && !route.isCurrent) {
+        return;
+      }
+      if (AppBreakpoints.of(context).index < AppBreakpoint.tablet.index) {
+        return;
+      }
+      _searchFocusNode.requestFocus();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final viewModel = widget.viewModel;
+
+    return ProductQueryControls(
+      query: viewModel.query,
+      catalogRepository: viewModel.catalogRepository,
+      allowAvailabilityFilter: false,
+      searchHint: l10n.purchaseProductLookupHint,
+      searchFieldKey: const ValueKey('purchase_product_lookup_field'),
+      searchFocusNode: _searchFocusNode,
+      searchResetSignal: viewModel.searchResetController,
+      autofocus: AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
+      onSearchChanged: viewModel.updateSearch,
+      onOpenCameraScanner: viewModel.isSubmitting
+          ? null
+          : widget.onOpenCameraScanner,
+      onSearchSubmitted: viewModel.isSubmitting
+          ? null
+          : (barcode) => widget.onSearchSubmitted(barcode),
+      onQueryChanged: viewModel.applyQuery,
+    );
+  }
+}
+
+/// Where the last scan got to, above the grid. A buyer working through a pallet
+/// watches the scanner, not the draft — this is the line that tells them the
+/// gun was heard, and names the product it landed on.
+class _PurchaseScanStatusLine extends StatelessWidget {
+  const _PurchaseScanStatusLine({required this.viewModel});
+
+  final PurchaseViewModel viewModel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+    final status = viewModel.scanStatus;
+    final message = switch (status) {
+      PurchaseScanStatus.resolving => l10n.barcodeScanResolving,
+      PurchaseScanStatus.found => l10n.barcodeScanAdded(
+        viewModel.lastScannedProductName ?? '',
+      ),
+      PurchaseScanStatus.notFound => l10n.barcodeScanNotFound(
+        viewModel.lastScannedBarcode ?? '',
+      ),
+      PurchaseScanStatus.error => l10n.barcodeScanError,
+      PurchaseScanStatus.idle => '',
+    };
+    final color = switch (status) {
+      PurchaseScanStatus.found => colors.primaryStrong,
+      PurchaseScanStatus.notFound || PurchaseScanStatus.error => colors.danger,
+      PurchaseScanStatus.resolving || PurchaseScanStatus.idle => colors.mutedInk,
+    };
+
+    return Row(
+      children: [
+        if (status == PurchaseScanStatus.resolving)
+          const SizedBox.square(
+            dimension: 16,
+            child: PointySpinner(strokeWidth: 2),
+          )
+        else
+          Icon(
+            status == PurchaseScanStatus.found
+                ? Icons.check_circle_outline
+                : Icons.error_outline,
+            size: 18,
+            color: color,
+          ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            message,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: color),
+          ),
+        ),
+        IconButton(
+          tooltip: l10n.clearBarcodeStatusTooltip,
+          onPressed: viewModel.clearScanStatus,
+          icon: const Icon(Icons.close),
+          visualDensity: VisualDensity.compact,
+        ),
+      ],
+    );
   }
 }

@@ -17,6 +17,7 @@ from apps.catalog.models import Product, ProductUnit, ProductVariant, UnitOfMeas
 from apps.catalog.pricing import (
     apply_reprice,
     reprice_preview,
+    set_base_price,
     set_foreign_price,
 )
 from apps.fx import currencies as ref
@@ -126,6 +127,107 @@ class SetForeignPriceTests(ForeignPricingTestCase):
         unit.refresh_from_db()
         self.assertEqual(unit.price, Decimal("890.50"))
         self.assertEqual(unit.price_amount, Decimal("130.00"))
+
+
+class SetBasePriceTests(ForeignPricingTestCase):
+    """Typing a price by hand — the purchase draft's pricing sheet, the
+    product-details Change-prices dialog — writes the shop's own currency.
+
+    The trap this class exists to keep shut: writing that number straight onto
+    ``unit_price`` leaves a foreign-priced product's frozen price sheet pointing
+    at the OLD price, so the next repricing quietly reverts the number the owner
+    just set. It has to be restated, not left behind.
+    """
+
+    def test_base_priced_product_just_stores_the_number(self):
+        product, variant = self.make_product()
+        self.assertTrue(set_base_price(variant, Decimal("15.00")))
+        variant.refresh_from_db()
+        self.assertEqual(variant.unit_price, Decimal("15.00"))
+        self.assertIsNone(variant.price_amount)
+        self.assertIsNone(variant.price_rate)
+
+    def test_a_foreign_priced_row_restates_its_price_sheet_at_the_frozen_rate(self):
+        self.add_rate("6.85")
+        product, variant = self.make_product(currency="USD")
+        set_foreign_price(variant, "12.00")
+        variant.refresh_from_db()
+        self.assertEqual(variant.unit_price, Decimal("82.20"))
+
+        # The owner reprices to 90 dinars by hand.
+        self.assertTrue(set_base_price(variant, Decimal("90.00")))
+        variant.refresh_from_db()
+        self.assertEqual(variant.unit_price, Decimal("90.00"))
+        # 90 / 6.85 -> 13.14 dollars, at the same frozen rate.
+        self.assertEqual(variant.price_amount, Decimal("13.14"))
+        self.assertEqual(variant.price_rate, Decimal("6.85"))
+
+    def test_a_price_the_rate_can_express_leaves_nothing_to_reprice(self):
+        """The whole point: after a manual reprice, nothing has drifted."""
+        self.add_rate("6.85")
+        product, variant = self.make_product(currency="USD")
+        set_foreign_price(variant, "12.00")
+
+        # 68.50 dinars is exactly $10.00 at this rate, so the restated price
+        # sheet round-trips and the reprice screen has nothing to say.
+        set_base_price(variant, Decimal("68.50"))
+
+        proposals = [
+            p for p in reprice_preview() if p.target_id == variant.pk and p.changed
+        ]
+        self.assertEqual(proposals, [])
+
+    def test_a_price_the_rate_cannot_express_drifts_a_cent_never_a_revert(self):
+        """90.00 dinars sits between $13.13 and $13.14 at 6.85 — no dollar
+        amount lands on it. The residue must stay a rounding cent; the failure
+        this guards against is the screen proposing the OLD price back."""
+        self.add_rate("6.85")
+        product, variant = self.make_product(currency="USD")
+        set_foreign_price(variant, "12.00")
+        self.assertEqual(ProductVariant.objects.get(pk=variant.pk).unit_price,
+                         Decimal("82.20"))
+
+        set_base_price(variant, Decimal("90.00"))
+
+        proposals = [
+            p for p in reprice_preview() if p.target_id == variant.pk and p.changed
+        ]
+        for proposal in proposals:
+            self.assertLessEqual(abs(proposal.delta), Decimal("0.01"))
+
+    def test_a_never_foreign_priced_row_picks_up_todays_rate(self):
+        self.add_rate("7.00")
+        product, variant = self.make_product(currency="USD", price="0.00")
+
+        self.assertTrue(set_base_price(variant, Decimal("70.00")))
+        variant.refresh_from_db()
+        self.assertEqual(variant.unit_price, Decimal("70.00"))
+        self.assertEqual(variant.price_amount, Decimal("10.00"))
+        self.assertEqual(variant.price_rate, Decimal("7.00"))
+
+    def test_no_rate_still_writes_the_price_it_just_cannot_restate_the_sheet(self):
+        product, variant = self.make_product(currency="USD")
+
+        self.assertFalse(set_base_price(variant, Decimal("50.00")))
+        variant.refresh_from_db()
+        self.assertEqual(variant.unit_price, Decimal("50.00"))
+        self.assertIsNone(variant.price_amount)
+
+    def test_a_product_unit_is_repriced_the_same_way(self):
+        self.add_rate("6.85")
+        product, variant = self.make_product(currency="USD")
+        unit = UnitOfMeasure.objects.create(code="sbp-carton", name="كرتونة")
+        product_unit = ProductUnit.objects.create(
+            product=product,
+            unit=unit,
+            factor_to_base=Decimal("12"),
+        )
+        set_foreign_price(product_unit, "100.00")
+
+        self.assertTrue(set_base_price(product_unit, Decimal("700.00")))
+        product_unit.refresh_from_db()
+        self.assertEqual(product_unit.price, Decimal("700.00"))
+        self.assertEqual(product_unit.price_amount, Decimal("102.19"))
 
 
 class RepricePreviewTests(ForeignPricingTestCase):

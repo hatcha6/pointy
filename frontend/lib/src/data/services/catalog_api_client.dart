@@ -148,9 +148,13 @@ class CatalogApiClient {
     return _updatedCount(_session.decodedBody(response));
   }
 
+  /// Writes explicit selling prices for a product: per variant (the base-unit
+  /// price) and per pack unit. A [pricesByUnitCode] value of null clears that
+  /// pack's own price, handing it back to the derived `variant price x factor`.
   Future<Product> setVariantPrices({
     required int productId,
     required Map<int, double> pricesByVariant,
+    Map<String, double?> pricesByUnitCode = const {},
   }) async {
     final response = await _session.post(
       'products/$productId/set-variant-prices/',
@@ -162,6 +166,14 @@ class CatalogApiClient {
               'unit_price': entry.value.toStringAsFixed(2),
             },
         ],
+        if (pricesByUnitCode.isNotEmpty)
+          'unit_prices': [
+            for (final entry in pricesByUnitCode.entries)
+              {
+                'unit': entry.key,
+                'price': entry.value?.toStringAsFixed(2),
+              },
+          ],
       },
     );
     _session.ensureSuccess(response, 'Set variant prices failed with status');

@@ -10,6 +10,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/parsing.dart';
 import '../../../core/result.dart';
 import '../../../data/models/product.dart';
+import '../../../data/models/product_unit.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/catalog/catalog.dart';
@@ -24,19 +25,38 @@ import '../../../shared/unit_options.dart';
 import '../../../shared/units.dart';
 import 'supplier_currency_field.dart';
 import '../view_models/purchase_view_model.dart';
-import 'reprice_siblings_dialog.dart';
+import 'purchase_pricing_sheet.dart';
 import 'purchase_cost_warning_dialog.dart';
+
+/// Lets the draft pane publish its footer actions to the workspace above it, so
+/// the global keyboard handler can run the very same flows — Ctrl/Cmd+Enter to
+/// submit, F1 to open the order's settings. The alternative (re-implementing
+/// submit next to the key handler) is how two paths that must agree start to
+/// disagree; the POS solves the identical problem the identical way with its
+/// checkout controller.
+class PurchaseSubmitController {
+  /// Runs the footer's primary action: submit a new draft, or save a reopened
+  /// one. Null while no pane is mounted, or while it cannot be run.
+  VoidCallback? onSubmit;
+
+  /// Opens the supplier / invoice / landed-cost dialog.
+  VoidCallback? onOpenSettings;
+}
 
 class PurchaseDraftPane extends StatefulWidget {
   const PurchaseDraftPane({
     super.key,
     required this.viewModel,
     required this.contactRepository,
+    this.submitController,
     this.onSubmitSuccess,
   });
 
   final PurchaseViewModel viewModel;
   final ContactRepository contactRepository;
+
+  /// Publishes this pane's footer actions for the global keyboard handler.
+  final PurchaseSubmitController? submitController;
   final VoidCallback? onSubmitSuccess;
 
   @override
@@ -57,8 +77,23 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
   PurchaseViewModel get viewModel => widget.viewModel;
 
   @override
+  void initState() {
+    super.initState();
+    _publishActions();
+    // Every line needs to know what the shop paid LAST time before it can say
+    // whether this cost has moved. A line added with an explicit cost (a
+    // reopened order, a restored draft, a scanned pack barcode) never triggers
+    // that read on its own, so ask once for whatever is still missing.
+    unawaited(viewModel.loadPreviousCostsForDraft());
+  }
+
+  @override
   void didUpdateWidget(covariant PurchaseDraftPane oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.submitController, widget.submitController)) {
+      _clearActions(oldWidget.submitController);
+      _publishActions();
+    }
     _syncController(
       controller: _supplierInvoiceNumberController,
       focusNode: _supplierInvoiceNumberFocusNode,
@@ -76,8 +111,43 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     );
   }
 
+  /// Republished on every build, because what the primary action DOES changes
+  /// with the view model's state (submit vs save) and whether it can run at all.
+  void _publishActions() {
+    final controller = widget.submitController;
+    if (controller == null) {
+      return;
+    }
+    controller.onOpenSettings = () {
+      if (!mounted || viewModel.isSubmitting) {
+        return;
+      }
+      unawaited(_showPurchaseDraftSettingsDialog(context));
+    };
+    controller.onSubmit = () {
+      if (!mounted) {
+        return;
+      }
+      if (viewModel.isEditing) {
+        if (viewModel.canSaveDraft) {
+          unawaited(_saveDraft(context));
+        }
+        return;
+      }
+      if (viewModel.canSubmitDraft) {
+        unawaited(_submitDraft(context));
+      }
+    };
+  }
+
+  void _clearActions(PurchaseSubmitController? controller) {
+    controller?.onSubmit = null;
+    controller?.onOpenSettings = null;
+  }
+
   @override
   void dispose() {
+    _clearActions(widget.submitController);
     _supplierInvoiceNumberController.dispose();
     _supplierInvoiceDateController.dispose();
     _discountCodeController.dispose();
@@ -559,6 +629,11 @@ class _PurchaseDraftScrollContentState
       _focusedVariantId = line.variant.id;
       _pendingQuantity = '';
     });
+    // The function keys fire through the global scan listener, outside this
+    // focus tree, so they read the selection off the view model. Publishing it
+    // here is what keeps "the line I tapped" and "the line F4 deletes" the same
+    // line.
+    _viewModel.selectLine(line.variant.id);
     _focusNode.requestFocus();
   }
 
@@ -675,6 +750,7 @@ class _PurchaseDraftScrollContentState
         setState(() => _pendingQuantity = '');
       } else {
         setState(() => _focusedVariantId = null);
+        _viewModel.selectLine(null);
         _focusNode.unfocus();
       }
       return KeyEventResult.handled;
@@ -787,13 +863,22 @@ class _PurchaseDraftScrollContentState
                           source: 'purchase_quantity_edit',
                         );
                       },
+                      previousBaseCost: viewModel.previousBaseCostFor(
+                        visibleDraft[index].variant.id,
+                      ),
                       onChangePrices: () => unawaited(
-                        showRepriceSiblingsDialog(
+                        showPurchasePricingSheet(
                           context,
                           viewModel: viewModel,
                           line: visibleDraft[index],
                         ),
                       ),
+                      onLineTotalEntry: (total) {
+                        viewModel.setLineCostFromTotal(
+                          visibleDraft[index].variant,
+                          total,
+                        );
+                      },
                     ),
                   ],
               ],
@@ -812,55 +897,260 @@ class _PurchaseDraftScrollContentState
 
 enum _SellingPriceSeverity { normal, unpriced, belowCost }
 
-/// A cart line's current selling price, under its SKU: what the product sells
-/// for today, so a buyer typing a new cost can see, without leaving the cart,
-/// whether the shelf price still works. A price that no longer clears the cost
-/// (or a product that was never priced) is called out — the reprice button sits
-/// on the same line.
-class _SellingPriceLabel extends StatelessWidget {
-  const _SellingPriceLabel({
-    required this.text,
-    required this.severity,
-    this.tooltip,
+/// What this line is going to sell for, and what that leaves.
+///
+/// A purchase line used to show the bare selling price with a warning colour,
+/// which answers "is this broken?" but not the question a buyer actually has —
+/// *how much am I making, and did the cost move?* Both figures already existed
+/// on the server and neither reached this screen. So the line now carries:
+///
+///  * the selling price (per base unit, because that is how it is stored),
+///  * the profit it leaves at this line's cost and the markup that represents,
+///  * how the cost moved against the previous purchase, when that is known,
+///  * and, for a product sold by the pack, the pack price beside it — the price
+///    the old reprice dialog could not reach at all.
+///
+/// Tapping any of it opens the pricing sheet, so the answer and the fix are the
+/// same gesture.
+class _LinePricingSummary extends StatelessWidget {
+  const _LinePricingSummary({
+    required this.line,
+    required this.baseUnitCost,
+    required this.previousBaseCost,
+    this.onTap,
   });
 
-  final String text;
-  final _SellingPriceSeverity severity;
-  final String? tooltip;
+  final PurchaseDraftLine line;
+
+  /// The line's cost per BASE unit — landed cost included when the preview has
+  /// allocated any. The only denomination a selling price can be judged in.
+  final double baseUnitCost;
+
+  /// What the shop last paid per base unit, when known.
+  final double? previousBaseCost;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colors = context.pointyColors;
+
+    final sellingPrice = line.variant.unitPrice;
+    final hasSellingPrice = sellingPrice > 0;
+    final belowCost =
+        hasSellingPrice && baseUnitCost > 0 && sellingPrice <= baseUnitCost;
+    final severity = switch ((hasSellingPrice, belowCost)) {
+      (false, _) => _SellingPriceSeverity.unpriced,
+      (true, true) => _SellingPriceSeverity.belowCost,
+      (true, false) => _SellingPriceSeverity.normal,
+    };
     final color = switch (severity) {
       _SellingPriceSeverity.normal => colors.mutedInk,
       _SellingPriceSeverity.unpriced => colors.warning,
       _SellingPriceSeverity.belowCost => colors.danger,
     };
-    final label = Row(
+
+    final priceText = switch ((hasSellingPrice, line.isBaseUnit)) {
+      (false, _) => l10n.purchaseLineNoSellingPrice,
+      (true, true) => l10n.purchaseLineSellingPrice(formatMoney(sellingPrice)),
+      (true, false) => l10n.purchaseLineSellingPricePerUnit(
+        formatMoney(sellingPrice),
+        unitLabel(l10n, line.variant.unit),
+      ),
+    };
+
+    // Profit is stated as markup on cost — the same definition the pricing
+    // sheet and the server's suggestion engine use. One definition per figure.
+    final markupPercent = (hasSellingPrice && baseUnitCost > 0)
+        ? (sellingPrice - baseUnitCost) / baseUnitCost * 100
+        : null;
+
+    final costDeltaPercent =
+        (previousBaseCost != null &&
+            previousBaseCost! > 0 &&
+            baseUnitCost > 0)
+        ? (baseUnitCost - previousBaseCost!) / previousBaseCost! * 100
+        : null;
+
+    // The pack price the line's product actually sells at, when it has one —
+    // the number that silently goes stale every time a cost rises.
+    final packPrice = _packSellingPrice(sellingPrice);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: const BorderRadius.all(Radius.circular(6)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                // The Row lives inside a Wrap inside an Expanded, so its text
+                // has to be Flexible — an unconstrained Text here overflows the
+                // moment a long product name squeezes the column.
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (severity != _SellingPriceSeverity.normal) ...[
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 14,
+                        color: color,
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    Flexible(
+                      child: Text(
+                        priceText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: color,
+                          fontWeight:
+                              severity == _SellingPriceSeverity.normal
+                              ? null
+                              : FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (severity == _SellingPriceSeverity.belowCost)
+                  Text(
+                    l10n.purchaseLineSellingPriceBelowCostTooltip,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colors.danger,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  )
+                else if (markupPercent != null)
+                  Text(
+                    l10n.purchaseLineMargin(
+                      formatMoney(sellingPrice - baseUnitCost),
+                      markupPercent.toStringAsFixed(0),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colors.success,
+                    ),
+                  ),
+              ],
+            ),
+            if (packPrice != null || costDeltaPercent != null) ...[
+              const SizedBox(height: 2),
+              Wrap(
+                spacing: 8,
+                runSpacing: 2,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (packPrice != null)
+                    Text(
+                      l10n.purchaseLinePackSellingPrice(
+                        packPrice.label,
+                        formatMoney(packPrice.price),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: packPrice.belowCost
+                            ? colors.danger
+                            : colors.mutedInk,
+                        fontWeight: packPrice.belowCost
+                            ? FontWeight.w700
+                            : null,
+                      ),
+                    ),
+                  if (costDeltaPercent != null &&
+                      costDeltaPercent.abs() >= 0.5)
+                    _CostDeltaChip(percent: costDeltaPercent),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The product's default pack (the line's own purchase unit when it is one,
+  /// otherwise the first sellable pack) with the price it really sells at, and
+  /// whether that price has fallen under what the pack now costs.
+  ({String label, double price, bool belowCost})? _packSellingPrice(
+    double baseSellingPrice,
+  ) {
+    final units = line.variant.productDetail?.units ?? const <ProductUnit>[];
+    ProductUnit? chosen;
+    for (final unit in units) {
+      if (!unit.isSellable) {
+        continue;
+      }
+      if (unit.code == line.unitCode) {
+        chosen = unit;
+        break;
+      }
+      chosen ??= unit;
+    }
+    if (chosen == null) {
+      return null;
+    }
+    final price = chosen.resolvedPrice(baseSellingPrice);
+    if (price <= 0) {
+      return null;
+    }
+    final packCost = baseUnitCost * chosen.factorToBase;
+    return (
+      label: chosen.label,
+      price: price,
+      belowCost: packCost > 0 && price <= packCost,
+    );
+  }
+}
+
+/// "The cost went up 12%" — the single fact that most often means a price needs
+/// looking at, and the one the screen never said out loud.
+class _CostDeltaChip extends StatelessWidget {
+  const _CostDeltaChip({required this.percent});
+
+  final double percent;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+    final rose = percent > 0;
+    final color = rose ? colors.danger : colors.success;
+
+    return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (severity != _SellingPriceSeverity.normal) ...[
-          Icon(Icons.warning_amber_rounded, size: 14, color: color),
-          const SizedBox(width: 4),
-        ],
+        Icon(
+          rose ? Icons.trending_up : Icons.trending_down,
+          size: 14,
+          color: color,
+        ),
+        const SizedBox(width: 3),
         Flexible(
           child: Text(
-            text,
+            rose
+                ? l10n.pricingSheetCostUp(percent.toStringAsFixed(0))
+                : l10n.pricingSheetCostDown(percent.abs().toStringAsFixed(0)),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: color,
-              fontWeight: severity == _SellingPriceSeverity.normal
-                  ? null
-                  : FontWeight.w700,
-            ),
+            style: theme.textTheme.bodySmall?.copyWith(color: color),
           ),
         ),
       ],
     );
-    final message = tooltip;
-    return message == null ? label : Tooltip(message: message, child: label);
   }
 }
 
@@ -1574,6 +1864,7 @@ class PurchaseDraftLineTile extends StatefulWidget {
     required this.line,
     this.previewLine,
     required this.enabled,
+    this.previousBaseCost,
     required this.onAdd,
     required this.onRemove,
     required this.onCostChanged,
@@ -1583,11 +1874,17 @@ class PurchaseDraftLineTile extends StatefulWidget {
     this.selected = false,
     this.onSelect,
     this.onChangePrices,
+    this.onLineTotalEntry,
   });
 
   final PurchaseDraftLine line;
   final PurchaseDiscountPreviewLine? previewLine;
   final bool enabled;
+
+  /// What the shop last paid for this variant, per base unit — the anchor for
+  /// the line's "cost moved" reading. Null when the product has never been
+  /// bought, in which case there is nothing to compare against.
+  final double? previousBaseCost;
 
   /// Keyboard-entry selection (tap-to-focus, like the POS cart): the selected
   /// line renders highlighted and receives typed quantities.
@@ -1609,9 +1906,15 @@ class PurchaseDraftLineTile extends StatefulWidget {
   onUnitChanged;
   final ValueChanged<double>? onQuantityChanged;
 
-  /// Opens the reprice-siblings dialog — change the selling price of all the
-  /// product's variants when its purchase cost changes. Null hides the button.
+  /// Opens the pricing sheet — every price this product sells at (each
+  /// variant's base price and each pack's own price), against the new cost.
+  /// Null hides the button.
   final VoidCallback? onChangePrices;
+
+  /// Sets the line's unit cost from a typed LINE TOTAL. Paper invoices are
+  /// written that way ("12 cartons — 1,200"), and making the buyer divide by
+  /// hand is where a per-pack cost turns into a per-piece one. Null hides it.
+  final ValueChanged<double>? onLineTotalEntry;
 
   @override
   State<PurchaseDraftLineTile> createState() => _PurchaseDraftLineTileState();
@@ -1679,13 +1982,6 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
     // allocated any, is the honest number to compare a price against.
     final unitFactor = line.unitFactor > 0 ? line.unitFactor : 1;
     final baseUnitCost = (effectiveUnitCost ?? line.unitCost) / unitFactor;
-    final sellingPrice = line.variant.unitPrice;
-    final hasSellingPrice = sellingPrice > 0;
-    // The reason this price is on the cart line at all: a cost that has caught
-    // up with (or passed) the shelf price is a product that needs repricing —
-    // the reprice button sits on this same line.
-    final sellingPriceBelowCost =
-        hasSellingPrice && baseUnitCost > 0 && sellingPrice <= baseUnitCost;
     final imageUrl =
         line.variant.primaryImage?.contentUrl ??
         line.variant.productDetail?.primaryImage?.contentUrl;
@@ -1713,25 +2009,11 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
           ),
         ],
         const SizedBox(height: 3),
-        _SellingPriceLabel(
-          text: switch ((hasSellingPrice, line.isBaseUnit)) {
-            (false, _) => l10n.purchaseLineNoSellingPrice,
-            (true, true) => l10n.purchaseLineSellingPrice(
-              formatMoney(sellingPrice),
-            ),
-            (true, false) => l10n.purchaseLineSellingPricePerUnit(
-              formatMoney(sellingPrice),
-              unitLabel(l10n, line.variant.unit),
-            ),
-          },
-          tooltip: sellingPriceBelowCost
-              ? l10n.purchaseLineSellingPriceBelowCostTooltip
-              : null,
-          severity: switch ((hasSellingPrice, sellingPriceBelowCost)) {
-            (false, _) => _SellingPriceSeverity.unpriced,
-            (true, true) => _SellingPriceSeverity.belowCost,
-            (true, false) => _SellingPriceSeverity.normal,
-          },
+        _LinePricingSummary(
+          line: line,
+          baseUnitCost: baseUnitCost,
+          previousBaseCost: widget.previousBaseCost,
+          onTap: widget.enabled ? widget.onChangePrices : null,
         ),
         if (costDetails.isNotEmpty) ...[
           const SizedBox(height: 3),
@@ -1747,6 +2029,11 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
       ],
     );
 
+    // On a pack line the entered cost is per pack; the price beside it is per
+    // piece. Saying which is which in the label, and showing the per-piece
+    // equivalent underneath, is the difference between "162" meaning a carton
+    // of eggs and meaning an egg — the exact confusion the purchase cost guard
+    // exists to catch after the fact.
     final costField = TextField(
       controller: _costController,
       focusNode: _costFocusNode,
@@ -1754,9 +2041,24 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [DecimalTextInputFormatter()],
       decoration: InputDecoration(
-        labelText: l10n.purchaseLineCostLabel,
+        labelText: line.isBaseUnit
+            ? l10n.purchaseLineCostLabel
+            : l10n.purchaseLineCostPerUnitLabel(line.unitLabel),
         isDense: true,
-        prefixIcon: const Icon(Icons.sell_outlined),
+        prefixIcon: const Icon(Icons.payments_outlined),
+        helperText: line.isBaseUnit || baseUnitCost <= 0
+            ? null
+            : l10n.purchaseLineCostPerBaseHelper(
+                formatMoney(baseUnitCost),
+                unitLabel(l10n, line.variant.unit),
+              ),
+        suffixIcon: widget.onLineTotalEntry == null
+            ? null
+            : IconButton(
+                tooltip: l10n.purchaseLineTotalEntryTooltip,
+                icon: const Icon(Icons.functions, size: 18),
+                onPressed: widget.enabled ? _promptLineTotal : null,
+              ),
       ),
       onChanged: (value) {
         final parsed = parseDecimal(value);
@@ -1909,7 +2211,7 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                     const SizedBox(width: 4),
                     IconButton(
                       visualDensity: VisualDensity.compact,
-                      tooltip: l10n.repriceSiblingsTooltip,
+                      tooltip: l10n.pricingSheetTooltip,
                       icon: const Icon(Icons.sell_outlined, size: 20),
                       onPressed: widget.enabled ? widget.onChangePrices : null,
                     ),
@@ -1917,28 +2219,56 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                 ],
               ),
               const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 190),
-                        child: costField,
+              // Cost, unit and quantity on one row only while the pane is wide
+              // enough for all three. In a 330px draft pane they are not: the
+              // cost field — the single most-used control on the line — gets
+              // squeezed by Expanded down to its icon, which is how a buyer ends
+              // up unable to type the number they opened this screen to enter.
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
+                  final needsSecondRow = unitField != null && width < 430;
+                  if (!needsSecondRow) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 190),
+                              child: costField,
+                            ),
+                          ),
+                        ),
+                        if (unitField != null) ...[
+                          const SizedBox(width: 12),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 150),
+                            child: unitField,
+                          ),
+                        ],
+                        const SizedBox(width: 12),
+                        stepper,
+                      ],
+                    );
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: costField),
+                          const SizedBox(width: 12),
+                          stepper,
+                        ],
                       ),
-                    ),
-                  ),
-                  if (unitField != null) ...[
-                    const SizedBox(width: 12),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 150),
-                      child: unitField,
-                    ),
-                  ],
-                  const SizedBox(width: 12),
-                  stepper,
-                ],
+                      const SizedBox(height: 12),
+                      unitField,
+                    ],
+                  );
+                },
               ),
               if (baseEquivalent != null) ...[
                 const SizedBox(height: 6),
@@ -2021,6 +2351,73 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
     controller.dispose();
     if (submitted != null) {
       widget.onQuantityChanged?.call(submitted);
+    }
+  }
+
+  /// Enters the line's cost by its TOTAL — "twelve cartons, 1,200 dinars" —
+  /// and divides by the quantity. The same number the invoice is written in,
+  /// so nothing has to be worked out on paper first.
+  Future<void> _promptLineTotal() async {
+    final l10n = AppLocalizations.of(context)!;
+    final line = widget.line;
+    final controller = TextEditingController(
+      text: line.total > 0 ? line.total.toStringAsFixed(2) : '',
+    );
+    final submitted = await showDialog<double>(
+      context: context,
+      builder: (dialogContext) {
+        void submit() {
+          final parsed = parseDecimal(controller.text);
+          if (parsed == null || parsed < 0) {
+            return;
+          }
+          Navigator.of(dialogContext).pop(parsed);
+        }
+
+        return AlertDialog(
+          icon: const Icon(Icons.functions),
+          title: Text(l10n.purchaseLineTotalEntryTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                l10n.purchaseLineTotalEntryMessage(
+                  formatQuantity(line.quantity),
+                  line.unitLabel.isEmpty
+                      ? unitLabel(l10n, line.variant.unit)
+                      : line.unitLabel,
+                ),
+                style: Theme.of(dialogContext).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [DecimalTextInputFormatter()],
+                decoration: InputDecoration(
+                  labelText: l10n.purchaseLineTotalEntryFieldLabel,
+                ),
+                onSubmitted: (_) => submit(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(l10n.cancelButton),
+            ),
+            FilledButton(onPressed: submit, child: Text(l10n.confirmButton)),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    if (submitted != null) {
+      widget.onLineTotalEntry?.call(submitted);
     }
   }
 

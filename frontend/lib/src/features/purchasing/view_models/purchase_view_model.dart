@@ -32,6 +32,41 @@ const _activeLineAddSources = {
   'purchase_catalog',
 };
 
+/// Lets the purchase view model ask the catalog search field to reclaim
+/// keyboard focus at the buyer's natural resting points — a product added from
+/// the grid, a scan resolved, a line deleted — so the next code can be scanned
+/// or typed without a tap. The POS has had this since the search-autofocus work;
+/// purchasing is the same job (a buyer scanning a delivery in, one box after
+/// another) and was simply left behind.
+///
+/// A pure signal: the search field decides whether taking focus is appropriate
+/// right now (never while a sheet or dialog is up, never on a phone layout).
+class PurchaseSearchFocusController extends ChangeNotifier {
+  void requestFocus() => notifyListeners();
+}
+
+/// Tells the catalog search field to hard-reset: clear its text AND cancel any
+/// in-flight debounce. Fired after every scan — the wedge burst lands in the
+/// focused field and starts a debounced search which, without this, fires
+/// ~350ms later and pushes the barcode back into the box.
+class PurchaseSearchResetController extends ChangeNotifier {
+  void requestReset() => notifyListeners();
+}
+
+/// Where a scan got to, mirrored on the catalog pane's status line so a buyer
+/// working a stack of boxes can see the scanner is being heard without watching
+/// the draft scroll.
+enum PurchaseScanStatus { idle, resolving, found, notFound, error }
+
+/// A line lifted out of the draft, with where it sat — enough to put it back
+/// exactly, so deleting a line is always one tap from undone.
+class RemovedPurchaseDraftLine {
+  const RemovedPurchaseDraftLine(this.line, this.index);
+
+  final PurchaseDraftLine line;
+  final int index;
+}
+
 class PurchaseViewModel extends ChangeNotifier {
   PurchaseViewModel(
     this._catalogRepository,
@@ -73,6 +108,22 @@ class PurchaseViewModel extends ChangeNotifier {
   List<ProductVariant> _variants = [];
   final List<PurchaseDraftLine> _draft = [];
   final Map<int, double> _lastCostByVariantId = {};
+
+  /// What the shop last PAID per base unit, as the server reported it. Distinct
+  /// from [_lastCostByVariantId], which the cost field overwrites as the buyer
+  /// types (so the next line of the same product prefills from what they just
+  /// entered). This one is only ever written from a server read, so the line's
+  /// "cost moved" comparison stays anchored to the previous purchase instead of
+  /// chasing the number being typed.
+  final Map<int, double> _previousBaseCostByVariantId = {};
+
+  final PurchaseSearchFocusController _searchFocusController =
+      PurchaseSearchFocusController();
+  final PurchaseSearchResetController _searchResetController =
+      PurchaseSearchResetController();
+  PurchaseScanStatus _scanStatus = PurchaseScanStatus.idle;
+  String? _lastScannedBarcode;
+  String? _lastScannedProductName;
 
   // The draft line the arrow-key unit cycle acts on: the last line a scan or
   // catalog tap landed on. A hardware scan never touches a line's quantity — it
@@ -488,13 +539,125 @@ class PurchaseViewModel extends ChangeNotifier {
   }
 
   /// The draft line the last scan or catalog tap landed on, if it is still in
-  /// the draft — the target of the arrow-key unit cycle.
+  /// the draft — the target of the arrow-key unit cycle and the function keys.
   PurchaseDraftLine? get lastScannedDraftLine {
     final variantId = _lastScannedVariantId;
     if (variantId == null) {
       return null;
     }
     return _draft.where((line) => line.variant.id == variantId).firstOrNull;
+  }
+
+  /// The line the keyboard acts on: the one the buyer tapped to select, else
+  /// the last scanned/added line. Mirrors the POS's `activeCartLine`.
+  PurchaseDraftLine? get activeDraftLine {
+    final selected = _selectedVariantId;
+    if (selected != null) {
+      final line = _draft.where((l) => l.variant.id == selected).firstOrNull;
+      if (line != null) {
+        return line;
+      }
+    }
+    return lastScannedDraftLine;
+  }
+
+  int? _selectedVariantId;
+
+  /// Which line the draft pane has highlighted. Kept here rather than in the
+  /// pane's state so the function keys (which fire through the global scan
+  /// listener, outside the focus tree) and the pane agree on one target.
+  int? get selectedVariantId => _selectedVariantId;
+
+  void selectLine(int? variantId) {
+    if (_selectedVariantId == variantId) {
+      return;
+    }
+    _selectedVariantId = variantId;
+    notifyListeners();
+  }
+
+  PurchaseSearchFocusController get searchFocusController =>
+      _searchFocusController;
+  PurchaseSearchResetController get searchResetController =>
+      _searchResetController;
+
+  /// Asks the catalog search field to take focus back. Called at resting points
+  /// only — never mid quantity-edit, which would yank the caret out of the
+  /// number the buyer is typing.
+  void requestSearchFocus() => _searchFocusController.requestFocus();
+
+  void requestSearchReset() => _searchResetController.requestReset();
+
+  PurchaseScanStatus get scanStatus => _scanStatus;
+  String? get lastScannedBarcode => _lastScannedBarcode;
+  String? get lastScannedProductName => _lastScannedProductName;
+
+  /// Publishes where a scan got to, for the catalog pane's status line.
+  void reportScanStatus(
+    PurchaseScanStatus status, {
+    String? barcode,
+    String? productName,
+  }) {
+    _scanStatus = status;
+    if (barcode != null) {
+      _lastScannedBarcode = barcode;
+    }
+    if (productName != null) {
+      _lastScannedProductName = productName;
+    }
+    notifyListeners();
+  }
+
+  void clearScanStatus() {
+    if (_scanStatus == PurchaseScanStatus.idle) {
+      return;
+    }
+    _scanStatus = PurchaseScanStatus.idle;
+    notifyListeners();
+  }
+
+  /// Lifts a line out of the draft, returning it and where it sat so the caller
+  /// can offer an Undo. Returns null when the line is gone or a submit is in
+  /// flight. The deliberate counterpart to [decrementVariant], which only ever
+  /// removes a line by stepping its quantity to zero.
+  RemovedPurchaseDraftLine? removeLine(
+    int variantId, {
+    String source = 'purchase_draft_delete_line',
+  }) {
+    if (_isSubmitting) {
+      return null;
+    }
+    final index = _draft.indexWhere((line) => line.variant.id == variantId);
+    if (index == -1) {
+      return null;
+    }
+    final line = _draft.removeAt(index);
+    if (_selectedVariantId == variantId) {
+      _selectedVariantId = null;
+    }
+    if (_lastScannedVariantId == variantId) {
+      _lastScannedVariantId = null;
+    }
+    _trackDraftLineDeleted(line, reason: 'delete_line', source: source);
+    _touchSubmissionIntent();
+    notifyListeners();
+    unawaited(refreshDiscountPreview());
+    return RemovedPurchaseDraftLine(line, index);
+  }
+
+  /// Puts a removed line back where it was (the Undo action on the snackbar).
+  void restoreLine(RemovedPurchaseDraftLine removed) {
+    if (_isSubmitting) {
+      return;
+    }
+    if (_draft.any((line) => line.variant.id == removed.line.variant.id)) {
+      return;
+    }
+    final index = removed.index.clamp(0, _draft.length);
+    _draft.insert(index, removed.line);
+    _touchSubmissionIntent();
+    notifyListeners();
+    unawaited(refreshDiscountPreview());
   }
 
   /// Sets a draft line's quantity outright (the scan-then-type flow and the
@@ -598,6 +761,26 @@ class PurchaseViewModel extends ChangeNotifier {
     _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
+  }
+
+  /// Sets a line's unit cost from a typed LINE TOTAL, dividing by the quantity.
+  /// Suppliers write invoices as totals ("12 cartons — 1,200"), so this lets the
+  /// buyer key the number that is actually on the paper instead of doing the
+  /// division — the step where a per-carton cost most often becomes a per-piece
+  /// one and poisons the product's cost history.
+  void setLineCostFromTotal(ProductVariant variant, double total) {
+    if (_isSubmitting || total < 0) {
+      return;
+    }
+    final index = _draft.indexWhere((line) => line.variant.id == variant.id);
+    if (index == -1) {
+      return;
+    }
+    final quantity = _draft[index].quantity;
+    if (quantity <= 0) {
+      return;
+    }
+    updateLineCost(variant, total / quantity);
   }
 
   /// Switches the unit a draft line is purchased in. Cost is per unit, so the
@@ -944,6 +1127,10 @@ class PurchaseViewModel extends ChangeNotifier {
       ..addAll(lines);
     notifyListeners();
     unawaited(refreshDiscountPreview());
+    // A reopened order's lines carry the costs it was saved with, not what the
+    // shop paid the time before — fetch that so each line can still say whether
+    // its cost has moved.
+    unawaited(loadPreviousCostsForDraft());
   }
 
   /// Persists edits to the reopened draft order without committing it — the
@@ -1105,7 +1292,66 @@ class PurchaseViewModel extends ChangeNotifier {
       Error<double?>() => 0.0,
     };
     _lastCostByVariantId[variantId] = cost;
+    if (cost > 0) {
+      _previousBaseCostByVariantId[variantId] = cost;
+    }
     return cost;
+  }
+
+  /// What the shop last paid for this variant, per base unit, if it is already
+  /// known — never a fetch, so a line tile can ask on every rebuild. Null when
+  /// the product has never been bought (or the read has not landed yet).
+  double? previousBaseCostFor(int variantId) =>
+      _previousBaseCostByVariantId[variantId];
+
+  /// Warms [previousBaseCostFor] for every line in the draft. Called once when
+  /// the pricing UI needs it — a draft restored from storage, or an order
+  /// reopened for editing, carries lines whose costs were never fetched.
+  Future<void> loadPreviousCostsForDraft() async {
+    final pending = [
+      for (final line in _draft)
+        if (!_previousBaseCostByVariantId.containsKey(line.variant.id))
+          line.variant,
+    ];
+    if (pending.isEmpty) {
+      return;
+    }
+    for (final variant in pending) {
+      final result = await _purchaseRepository.loadLastProductCost(
+        variant.productId,
+        variantId: variant.id,
+      );
+      if (_disposed) {
+        return;
+      }
+      final cost = switch (result) {
+        Ok<double?>(:final value) => value ?? 0,
+        Error<double?>() => 0.0,
+      };
+      if (cost > 0) {
+        _previousBaseCostByVariantId[variant.id] = cost;
+      }
+    }
+    if (!_disposed) {
+      notifyListeners();
+    }
+  }
+
+  /// Per-variant purchase-cost history (lowest / highest / average / last, all
+  /// per base unit) for the pricing sheet — the context that turns "type a new
+  /// price" into "decide a price", and the same figures the product-details
+  /// screen shows. Empty on failure: cost history is background for a decision,
+  /// never a reason to refuse to make it.
+  Future<List<VariantCostSummary>> loadProductCostSummary(int productId) async {
+    // Opening the pricing sheet is the one moment the previous cost is worth a
+    // round trip on its own: it is a headline figure there, and the line may
+    // have been added with a cost that skipped the usual lookup.
+    unawaited(loadPreviousCostsForDraft());
+    final result = await _purchaseRepository.loadProductCostSummary(productId);
+    return switch (result) {
+      Ok<List<VariantCostSummary>>(:final value) => value,
+      Error<List<VariantCostSummary>>() => const <VariantCostSummary>[],
+    };
   }
 
   /// The sibling variants of a purchase line's product — the reprice dialog
@@ -1138,27 +1384,61 @@ class PurchaseViewModel extends ChangeNotifier {
     };
   }
 
-  /// Writes new selling prices for a product's variants (the reprice dialog).
-  /// Only the entries in [pricesByVariant] are changed. Returns success.
-  Future<bool> repriceProductVariants(
-    int productId,
-    Map<int, double> pricesByVariant,
-  ) async {
-    if (pricesByVariant.isEmpty) {
+  /// Writes new selling prices for a product — per variant (the base-unit
+  /// price) and per pack unit — from the pricing sheet. Only the entries passed
+  /// are changed; a [pricesByUnitCode] entry with a null value hands that pack
+  /// back to its derived `variant price x factor`. Returns success.
+  Future<bool> repriceProduct(
+    int productId, {
+    Map<int, double> pricesByVariant = const {},
+    Map<String, double?> pricesByUnitCode = const {},
+  }) async {
+    if (pricesByVariant.isEmpty && pricesByUnitCode.isEmpty) {
       return true;
     }
     final result = await _catalogRepository.setVariantPrices(
       productId: productId,
       pricesByVariant: pricesByVariant,
+      pricesByUnitCode: pricesByUnitCode,
     );
     if (result is! Ok<Product>) {
       return false;
     }
-    // The cart shows each line's current selling price; the prices we just
-    // wrote are that price now, so the draft adopts them instead of waiting
-    // for a catalog reload to notice.
-    _applySellingPrices(pricesByVariant);
+    // The draft shows each line's current selling price and the pack prices
+    // beside it; what was just written IS that price now, so the draft adopts
+    // the whole updated product rather than waiting for a catalog reload. Both
+    // adoptions notify ONCE, together — a reprice is one change to the screen,
+    // and two notifications would repaint the cart twice for it.
+    _applySellingPrices(pricesByVariant, notify: false);
+    _adoptProductDetail(result.value, notify: false);
+    if (!_disposed) {
+      notifyListeners();
+    }
     return true;
+  }
+
+  /// Re-embeds a freshly saved product onto every draft line that belongs to
+  /// it, so the pack prices the pricing sheet just wrote are the ones the line
+  /// reads back. Without this the sheet would reopen showing the old pack
+  /// prices until the catalog happened to reload.
+  void _adoptProductDetail(Product product, {bool notify = true}) {
+    if (_disposed) {
+      return;
+    }
+    var changed = false;
+    for (var index = 0; index < _draft.length; index += 1) {
+      final line = _draft[index];
+      if (line.variant.productId != product.id) {
+        continue;
+      }
+      _draft[index] = line.copyWith(
+        variant: line.variant.copyWith(productDetail: product),
+      );
+      changed = true;
+    }
+    if (changed && notify) {
+      notifyListeners();
+    }
   }
 
   /// Refreshes the selling price shown on every draft line, in as few requests
@@ -1347,6 +1627,10 @@ class PurchaseViewModel extends ChangeNotifier {
       // The restored lines carry the selling price each product had when it
       // was added, which may be days old — refresh the whole cart in one go.
       unawaited(refreshDraftSellingPrices());
+      // A restored line's cost was never fetched in this session, so nothing
+      // knows what the shop paid last time — without this the "cost moved"
+      // reading is simply absent on every line of a resumed draft.
+      unawaited(loadPreviousCostsForDraft());
       if (_selectedSupplier != null) {
         unawaited(refreshDiscountPreview());
       }

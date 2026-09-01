@@ -6508,27 +6508,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get changePricesError => 'تعذر تحديث الأسعار. حاول مرة أخرى.';
 
   @override
-  String get repriceSiblingsTitle => 'تغيير أسعار البيع';
-
-  @override
-  String get repriceSiblingsTooltip => 'تغيير أسعار بيع متغيّرات المنتج';
-
-  @override
-  String repriceSiblingsSubtitle(String cost) {
-    return 'بسعر تكلفة $cost — عدّل سعر بيع كل متغيّرات هذا المنتج.';
-  }
-
-  @override
-  String repriceSiblingsMarkupHint(String percent) {
-    return 'مقترح بهامش ربح $percent٪';
-  }
-
-  @override
-  String repriceSiblingsUseSuggested(String price) {
-    return 'المقترح: $price';
-  }
-
-  @override
   String get changePricesLoadError => 'تعذر تحميل بيانات التكلفة.';
 
   @override
@@ -14913,4 +14892,211 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get shopSetupSettlementSubtitle =>
       'كلا السعرين من السوق الموازي؛ الفرق هو طريقة الدفع.';
+
+  @override
+  String get pricingSheetTitle => 'تسعير المنتج';
+
+  @override
+  String get pricingSheetTooltip => 'تسعير هذا المنتج بعد تغيّر التكلفة';
+
+  @override
+  String get pricingSheetVariantsSectionTitle => 'أسعار الخيارات';
+
+  @override
+  String get pricingSheetBasePriceSectionTitle => 'سعر البيع';
+
+  @override
+  String pricingSheetVariantsSectionSubtitle(String unit) {
+    return 'السعر لكل $unit';
+  }
+
+  @override
+  String get pricingSheetPackSectionTitle => 'أسعار العبوات';
+
+  @override
+  String get pricingSheetPackSectionSubtitle =>
+      'سعر بيع الكرتونة أو العلبة — يمكن أن يقل عن سعر القطعة مضروبًا في عددها.';
+
+  @override
+  String get pricingSheetNewCostLabel => 'التكلفة الجديدة';
+
+  @override
+  String pricingSheetCostPerPackSubtitle(String cost, String unit) {
+    return '$cost لكل $unit';
+  }
+
+  @override
+  String get pricingSheetPreviousCostLabel => 'التكلفة السابقة';
+
+  @override
+  String pricingSheetCostUp(String percent) {
+    return 'ارتفعت $percent٪';
+  }
+
+  @override
+  String pricingSheetCostDown(String percent) {
+    return 'انخفضت $percent٪';
+  }
+
+  @override
+  String get pricingSheetLowestCostLabel => 'أقل تكلفة';
+
+  @override
+  String get pricingSheetHighestCostLabel => 'أعلى تكلفة';
+
+  @override
+  String get pricingSheetMarkupTitle => 'تسعير بنسبة ربح';
+
+  @override
+  String get pricingSheetMarkupSubtitle =>
+      'طبّق نسبة ربح على التكلفة الجديدة لكل الأسعار دفعة واحدة.';
+
+  @override
+  String pricingSheetSuggestedMarkupChip(String percent) {
+    return 'المعتاد $percent٪';
+  }
+
+  @override
+  String pricingSheetMarkupChip(String percent) {
+    return '$percent٪';
+  }
+
+  @override
+  String get pricingSheetCustomMarkupLabel => 'نسبة أخرى ٪';
+
+  @override
+  String get pricingSheetApplyMarkupTooltip => 'تطبيق النسبة';
+
+  @override
+  String get pricingSheetDerivedBadge => 'محسوب';
+
+  @override
+  String pricingSheetPackFactor(String count) {
+    return 'تحتوي $count';
+  }
+
+  @override
+  String pricingSheetRowCost(String cost) {
+    return 'التكلفة $cost';
+  }
+
+  @override
+  String get pricingSheetUnpriced => 'بدون سعر';
+
+  @override
+  String get pricingSheetBelowCost => 'أقل من التكلفة';
+
+  @override
+  String pricingSheetMargin(String profit, String percent) {
+    return 'ربح $profit ($percent٪ على التكلفة)';
+  }
+
+  @override
+  String pricingSheetWasPrice(String price) {
+    return 'كان $price';
+  }
+
+  @override
+  String get pricingSheetSetOwnPriceButton => 'سعر خاص';
+
+  @override
+  String get pricingSheetUseDerivedButton => 'احسبه تلقائيًا';
+
+  @override
+  String get pricingSheetNoChanges => 'لا تغييرات';
+
+  @override
+  String pricingSheetChangeCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count تغييرات',
+      two: 'تغييران',
+      one: 'تغيير واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pricingSheetResetButton => 'تراجع';
+
+  @override
+  String purchaseLineMargin(String profit, String percent) {
+    return 'ربح $profit ($percent٪)';
+  }
+
+  @override
+  String purchaseLinePackSellingPrice(String unit, String price) {
+    return '$unit $price';
+  }
+
+  @override
+  String purchaseLineCostPerUnitLabel(String unit) {
+    return 'التكلفة / $unit';
+  }
+
+  @override
+  String purchaseLineCostPerBaseHelper(String cost, String unit) {
+    return '= $cost لكل $unit';
+  }
+
+  @override
+  String get purchaseLineTotalEntryTooltip => 'إدخال الإجمالي بدل سعر الوحدة';
+
+  @override
+  String get purchaseLineTotalEntryTitle => 'إجمالي السطر';
+
+  @override
+  String get purchaseLineTotalEntryFieldLabel => 'الإجمالي';
+
+  @override
+  String purchaseLineTotalEntryMessage(String quantity, String unit) {
+    return 'سيُقسم الإجمالي على $quantity $unit لحساب تكلفة الوحدة.';
+  }
+
+  @override
+  String get purchasingShortcutsTooltip => 'اختصارات لوحة المفاتيح';
+
+  @override
+  String get purchasingShortcutsTitle => 'اختصارات الشراء';
+
+  @override
+  String get purchasingShortcutsSectionLines => 'السطور';
+
+  @override
+  String get purchasingShortcutsSectionQuantity => 'الكمية';
+
+  @override
+  String get purchasingShortcutsSectionOrder => 'أمر الشراء';
+
+  @override
+  String get purchasingShortcutCycleUnit => 'تبديل وحدة السطر المحدد';
+
+  @override
+  String get purchasingShortcutCycleUnitArrows => 'تبديل الوحدة للأمام والخلف';
+
+  @override
+  String get purchasingShortcutOpenPricing => 'تسعير المنتج في السطر المحدد';
+
+  @override
+  String get purchasingShortcutDeleteLine => 'حذف السطر المحدد (مع التراجع)';
+
+  @override
+  String get purchasingShortcutTypeQuantity => 'اكتب الكمية ثم Enter لتطبيقها';
+
+  @override
+  String get purchasingShortcutStepQuantity => 'زيادة أو إنقاص واحد';
+
+  @override
+  String get purchasingShortcutClearEntry => 'مسح ما كُتب ثم إلغاء التحديد';
+
+  @override
+  String get purchasingShortcutOpenSettings =>
+      'بيانات المورد والفاتورة والتكاليف';
+
+  @override
+  String get purchasingShortcutSubmit => 'حفظ أو تسجيل أمر الشراء';
+
+  @override
+  String get purchaseDraftLineRemovedMessage => 'تم حذف السطر.';
 }

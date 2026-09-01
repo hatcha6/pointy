@@ -26,6 +26,7 @@ import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/models/product_unit.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/product_variant_page.dart';
+import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/unit_of_measure.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
@@ -47,6 +48,7 @@ import 'package:pointy_frontend/src/shared/unit_options.dart';
 import 'package:pointy_frontend/src/features/purchasing/view_models/purchase_view_model.dart';
 import 'package:pointy_frontend/src/features/purchasing/views/purchase_catalog_pane.dart';
 import 'package:pointy_frontend/src/features/purchasing/views/purchase_draft_pane.dart';
+import 'package:pointy_frontend/src/features/purchasing/views/purchasing_shortcuts_sheet.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/product_filter_sheet.dart';
 import 'package:pointy_frontend/src/shared/formatters.dart';
@@ -305,6 +307,16 @@ class _PurchaseSurfaceState extends State<_PurchaseSurface> {
     if (!widget.empty) {
       _viewModel
         ..addVariant(_variantFor(_items[1]), quantity: 6, source: 'seed')
+        // A pack line for the multi-unit product, so the draft shows the
+        // per-carton cost, its per-piece equivalent, and the carton's own
+        // selling price beside the piece price.
+        ..addVariant(
+          _variantFor(_items[4]),
+          quantity: 4,
+          unitCost: 20,
+          unit: _waterUnits[1],
+          source: 'seed',
+        )
         ..addVariant(_variantFor(_items[10]), quantity: 3, source: 'seed');
     }
   }
@@ -325,8 +337,13 @@ class _PurchaseSurfaceState extends State<_PurchaseSurface> {
           appBar: PointyAppBar(
             leading: const Icon(Icons.inventory_2_outlined),
             title: Text(l10n.newPurchaseOrderTitle),
-            actions: const [
-              Padding(
+            actions: [
+              IconButton(
+                tooltip: l10n.purchasingShortcutsTooltip,
+                onPressed: () => showPurchasingShortcutsSheet(context),
+                icon: const Icon(Icons.keyboard_outlined),
+              ),
+              const Padding(
                 padding: EdgeInsetsDirectional.only(end: 8),
                 child: Icon(Icons.sync),
               ),
@@ -752,6 +769,32 @@ class _FakeCatalogRepository extends CatalogRepository {
   }
 
   @override
+  Future<Result<ProductVariantPage>> loadVariantsForProduct(
+    int productId, {
+    int page = 1,
+  }) async {
+    final variants = [
+      for (final item in _items)
+        if (item.id == productId) _variantFor(item),
+    ];
+    return Ok(ProductVariantPage(variants: variants, hasMore: false));
+  }
+
+  @override
+  Future<Result<Product>> setVariantPrices({
+    required int productId,
+    required Map<int, double> pricesByVariant,
+    Map<String, double?> pricesByUnitCode = const {},
+  }) async {
+    for (final item in _items) {
+      if (item.id == productId) {
+        return Ok(_productFor(item));
+      }
+    }
+    return Error(Exception('product $productId not found'));
+  }
+
+  @override
   Future<Result<List<ProductCategory>>> loadQuickAccessCategories() async {
     if (empty) {
       return const Ok([]);
@@ -861,6 +904,32 @@ class _FakePurchaseRepository extends PurchaseRepository {
     int? variantId,
   }) async {
     return Ok(_costForProduct(productId));
+  }
+
+  @override
+  Future<Result<({double? suggestedPrice, double? markupPercent})>>
+  loadPricingSuggestion(double unitCost, {int? productId}) async {
+    return Ok((suggestedPrice: unitCost * 1.35, markupPercent: 35));
+  }
+
+  @override
+  Future<Result<List<VariantCostSummary>>> loadProductCostSummary(
+    int productId,
+  ) async {
+    final cost = _costForProduct(productId);
+    return Ok([
+      VariantCostSummary(
+        productId: productId,
+        variantId: productId * 10,
+        variantName: '',
+        unitPrice: 0,
+        purchasesCount: 7,
+        lowestCost: cost * 0.85,
+        highestCost: cost * 1.2,
+        averageCost: cost,
+        lastCost: cost,
+      ),
+    ]);
   }
 }
 

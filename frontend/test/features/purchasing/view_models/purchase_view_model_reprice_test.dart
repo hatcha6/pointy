@@ -40,25 +40,53 @@ void main() {
     },
   );
 
-  test(
-    'repriceProductVariants forwards the changed prices and succeeds',
-    () async {
-      final catalog = _FakeCatalogRepository(siblings: siblings);
-      final viewModel = PurchaseViewModel(catalog, _FakePurchaseRepository());
-
-      final ok = await viewModel.repriceProductVariants(5, {1: 2.5, 2: 3.5});
-
-      expect(ok, isTrue);
-      expect(catalog.repricedProductId, 5);
-      expect(catalog.repricedPrices, {1: 2.5, 2: 3.5});
-    },
-  );
-
-  test('repriceProductVariants with no changes is a no-op success', () async {
+  test('repriceProduct forwards the changed variant prices', () async {
     final catalog = _FakeCatalogRepository(siblings: siblings);
     final viewModel = PurchaseViewModel(catalog, _FakePurchaseRepository());
 
-    final ok = await viewModel.repriceProductVariants(5, const {});
+    final ok = await viewModel.repriceProduct(
+      5,
+      pricesByVariant: {1: 2.5, 2: 3.5},
+    );
+
+    expect(ok, isTrue);
+    expect(catalog.repricedProductId, 5);
+    expect(catalog.repricedPrices, {1: 2.5, 2: 3.5});
+  });
+
+  test('repriceProduct forwards pack prices alongside variant ones', () async {
+    final catalog = _FakeCatalogRepository(siblings: siblings);
+    final viewModel = PurchaseViewModel(catalog, _FakePurchaseRepository());
+
+    final ok = await viewModel.repriceProduct(
+      5,
+      pricesByVariant: {1: 2.5},
+      pricesByUnitCode: {'carton': 26.0},
+    );
+
+    expect(ok, isTrue);
+    expect(catalog.repricedPrices, {1: 2.5});
+    expect(catalog.repricedUnitPrices, {'carton': 26.0});
+  });
+
+  test('a pack handed back to derived sends an explicit null', () async {
+    final catalog = _FakeCatalogRepository(siblings: siblings);
+    final viewModel = PurchaseViewModel(catalog, _FakePurchaseRepository());
+
+    final ok = await viewModel.repriceProduct(
+      5,
+      pricesByUnitCode: {'carton': null},
+    );
+
+    expect(ok, isTrue);
+    expect(catalog.repricedUnitPrices, containsPair('carton', isNull));
+  });
+
+  test('repriceProduct with no changes is a no-op success', () async {
+    final catalog = _FakeCatalogRepository(siblings: siblings);
+    final viewModel = PurchaseViewModel(catalog, _FakePurchaseRepository());
+
+    final ok = await viewModel.repriceProduct(5);
 
     expect(ok, isTrue);
     expect(
@@ -76,6 +104,7 @@ class _FakeCatalogRepository extends CatalogRepository {
   int? loadedProductId;
   int? repricedProductId;
   Map<int, double>? repricedPrices;
+  Map<String, double?>? repricedUnitPrices;
 
   // The view model's constructor kicks off loadCatalog(); keep it inert.
   @override
@@ -101,9 +130,11 @@ class _FakeCatalogRepository extends CatalogRepository {
   Future<Result<Product>> setVariantPrices({
     required int productId,
     required Map<int, double> pricesByVariant,
+    Map<String, double?> pricesByUnitCode = const {},
   }) async {
     repricedProductId = productId;
     repricedPrices = pricesByVariant;
+    repricedUnitPrices = pricesByUnitCode;
     return Ok(Product(id: productId, name: 'p', quantityOnHand: 0));
   }
 }

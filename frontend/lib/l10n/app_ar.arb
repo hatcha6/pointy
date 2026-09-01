@@ -3704,35 +3704,6 @@
   "changePricesSaveButton": "حفظ الأسعار",
   "changePricesSuccess": "تم تحديث الأسعار.",
   "changePricesError": "تعذر تحديث الأسعار. حاول مرة أخرى.",
-  "repriceSiblingsTitle": "تغيير أسعار البيع",
-  "repriceSiblingsTooltip": "تغيير أسعار بيع متغيّرات المنتج",
-  "repriceSiblingsSubtitle": "بسعر تكلفة {cost} — عدّل سعر بيع كل متغيّرات هذا المنتج.",
-  "@repriceSiblingsSubtitle": {
-    "description": "Reprice-siblings dialog subtitle; shows the line's new cost.",
-    "placeholders": {
-      "cost": {
-        "type": "String"
-      }
-    }
-  },
-  "repriceSiblingsMarkupHint": "مقترح بهامش ربح {percent}٪",
-  "@repriceSiblingsMarkupHint": {
-    "description": "Hint that a suggested price is offered using the shop's typical markup.",
-    "placeholders": {
-      "percent": {
-        "type": "String"
-      }
-    }
-  },
-  "repriceSiblingsUseSuggested": "المقترح: {price}",
-  "@repriceSiblingsUseSuggested": {
-    "description": "Tappable action that fills a variant's price field with the suggested price.",
-    "placeholders": {
-      "price": {
-        "type": "String"
-      }
-    }
-  },
   "changePricesLoadError": "تعذر تحميل بيانات التكلفة.",
   "changePricesNoVariants": "لا توجد خيارات لتسعيرها.",
   "productIdentifierTitle": "بيانات التعريف",
@@ -9366,5 +9337,206 @@
   "shopSetupSettlementSubtitle": "كلا السعرين من السوق الموازي؛ الفرق هو طريقة الدفع.",
   "@shopSetupSettlementSubtitle": {
       "description": "Clarifies that both settlement instruments are parallel-market rates."
-  }
+  },
+  "pricingSheetTitle": "تسعير المنتج",
+  "pricingSheetTooltip": "تسعير هذا المنتج بعد تغيّر التكلفة",
+  "pricingSheetVariantsSectionTitle": "أسعار الخيارات",
+  "pricingSheetBasePriceSectionTitle": "سعر البيع",
+  "pricingSheetVariantsSectionSubtitle": "السعر لكل {unit}",
+  "@pricingSheetVariantsSectionSubtitle": {
+    "description": "Subtitle of the pricing sheet's variant section: prices are per base unit.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "pricingSheetPackSectionTitle": "أسعار العبوات",
+  "pricingSheetPackSectionSubtitle": "سعر بيع الكرتونة أو العلبة — يمكن أن يقل عن سعر القطعة مضروبًا في عددها.",
+  "pricingSheetNewCostLabel": "التكلفة الجديدة",
+  "pricingSheetCostPerPackSubtitle": "{cost} لكل {unit}",
+  "@pricingSheetCostPerPackSubtitle": {
+    "description": "Shows the line's cost in its own purchase unit, next to the per-base cost.",
+    "placeholders": {
+      "cost": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "pricingSheetPreviousCostLabel": "التكلفة السابقة",
+  "pricingSheetCostUp": "ارتفعت {percent}٪",
+  "@pricingSheetCostUp": {
+    "description": "Cost rose against the previous purchase, by this percent.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "pricingSheetCostDown": "انخفضت {percent}٪",
+  "@pricingSheetCostDown": {
+    "description": "Cost fell against the previous purchase, by this percent.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "pricingSheetLowestCostLabel": "أقل تكلفة",
+  "pricingSheetHighestCostLabel": "أعلى تكلفة",
+  "pricingSheetMarkupTitle": "تسعير بنسبة ربح",
+  "pricingSheetMarkupSubtitle": "طبّق نسبة ربح على التكلفة الجديدة لكل الأسعار دفعة واحدة.",
+  "pricingSheetSuggestedMarkupChip": "المعتاد {percent}٪",
+  "@pricingSheetSuggestedMarkupChip": {
+    "description": "Chip applying the shop's own median markup.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "pricingSheetMarkupChip": "{percent}٪",
+  "@pricingSheetMarkupChip": {
+    "description": "Chip applying a preset markup percentage.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "pricingSheetCustomMarkupLabel": "نسبة أخرى ٪",
+  "pricingSheetApplyMarkupTooltip": "تطبيق النسبة",
+  "pricingSheetDerivedBadge": "محسوب",
+  "pricingSheetPackFactor": "تحتوي {count}",
+  "@pricingSheetPackFactor": {
+    "description": "How many base units one pack holds.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "pricingSheetRowCost": "التكلفة {cost}",
+  "@pricingSheetRowCost": {
+    "description": "The cost of one of this row's units.",
+    "placeholders": {
+      "cost": {
+        "type": "String"
+      }
+    }
+  },
+  "pricingSheetUnpriced": "بدون سعر",
+  "pricingSheetBelowCost": "أقل من التكلفة",
+  "pricingSheetMargin": "ربح {profit} ({percent}٪ على التكلفة)",
+  "@pricingSheetMargin": {
+    "description": "Profit per unit and the markup percent it represents over cost.",
+    "placeholders": {
+      "profit": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "pricingSheetWasPrice": "كان {price}",
+  "@pricingSheetWasPrice": {
+    "description": "The price this row carried before the edit.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "pricingSheetSetOwnPriceButton": "سعر خاص",
+  "pricingSheetUseDerivedButton": "احسبه تلقائيًا",
+  "pricingSheetNoChanges": "لا تغييرات",
+  "pricingSheetChangeCount": "{count, plural, =1{تغيير واحد} =2{تغييران} other{{count} تغييرات}}",
+  "@pricingSheetChangeCount": {
+    "description": "How many prices in the sheet have been changed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pricingSheetResetButton": "تراجع",
+  "purchaseLineMargin": "ربح {profit} ({percent}٪)",
+  "@purchaseLineMargin": {
+    "description": "Profit per base unit on a draft line, and the markup it represents over cost.",
+    "placeholders": {
+      "profit": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseLinePackSellingPrice": "{unit} {price}",
+  "@purchaseLinePackSellingPrice": {
+    "description": "The selling price of one pack (carton/box) of this product.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      },
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseLineCostPerUnitLabel": "التكلفة / {unit}",
+  "@purchaseLineCostPerUnitLabel": {
+    "description": "Cost field label on a pack line, naming the unit the cost is per.",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseLineCostPerBaseHelper": "= {cost} لكل {unit}",
+  "@purchaseLineCostPerBaseHelper": {
+    "description": "The per-base-unit equivalent of a pack line's cost.",
+    "placeholders": {
+      "cost": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseLineTotalEntryTooltip": "إدخال الإجمالي بدل سعر الوحدة",
+  "purchaseLineTotalEntryTitle": "إجمالي السطر",
+  "purchaseLineTotalEntryFieldLabel": "الإجمالي",
+  "purchaseLineTotalEntryMessage": "سيُقسم الإجمالي على {quantity} {unit} لحساب تكلفة الوحدة.",
+  "@purchaseLineTotalEntryMessage": {
+    "description": "Explains that the typed line total is divided by the quantity to get the unit cost.",
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "purchasingShortcutsTooltip": "اختصارات لوحة المفاتيح",
+  "purchasingShortcutsTitle": "اختصارات الشراء",
+  "purchasingShortcutsSectionLines": "السطور",
+  "purchasingShortcutsSectionQuantity": "الكمية",
+  "purchasingShortcutsSectionOrder": "أمر الشراء",
+  "purchasingShortcutCycleUnit": "تبديل وحدة السطر المحدد",
+  "purchasingShortcutCycleUnitArrows": "تبديل الوحدة للأمام والخلف",
+  "purchasingShortcutOpenPricing": "تسعير المنتج في السطر المحدد",
+  "purchasingShortcutDeleteLine": "حذف السطر المحدد (مع التراجع)",
+  "purchasingShortcutTypeQuantity": "اكتب الكمية ثم Enter لتطبيقها",
+  "purchasingShortcutStepQuantity": "زيادة أو إنقاص واحد",
+  "purchasingShortcutClearEntry": "مسح ما كُتب ثم إلغاء التحديد",
+  "purchasingShortcutOpenSettings": "بيانات المورد والفاتورة والتكاليف",
+  "purchasingShortcutSubmit": "حفظ أو تسجيل أمر الشراء",
+  "purchaseDraftLineRemovedMessage": "تم حذف السطر."
 }

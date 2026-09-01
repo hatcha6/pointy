@@ -142,11 +142,13 @@ class CatalogRepository {
   Future<Result<Product>> setVariantPrices({
     required int productId,
     required Map<int, double> pricesByVariant,
+    Map<String, double?> pricesByUnitCode = const {},
   }) async {
     return Result.guard(
       () => _service.setVariantPrices(
         productId: productId,
         pricesByVariant: pricesByVariant,
+        pricesByUnitCode: pricesByUnitCode,
       ),
     );
   }

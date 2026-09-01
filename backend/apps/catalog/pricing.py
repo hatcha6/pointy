@@ -283,3 +283,91 @@ def _save(target):
     fields = ["price_amount", "price_rate", "price_rate_at", "updated_at"]
     fields.append("price" if isinstance(target, ProductUnit) else "unit_price")
     target.save(update_fields=fields)
+
+
+def set_base_price(target, amount, *, save=True):
+    """Write a hand-typed **base-currency** price on a variant or unit.
+
+    The counterpart to :func:`set_foreign_price`: here somebody typed the number
+    the shop actually sells at, not the one on a foreign price sheet.
+
+    For a base-priced product that is the whole job. For a *foreign*-priced one
+    the frozen trio has to move with it, otherwise the price just set is
+    silently temporary: :func:`reprice_preview` compares the stale
+    ``price_amount`` against the new base price, reports a drift nobody caused,
+    and the next repricing puts the old shelf price back. So the foreign amount
+    is restated from the new base price at the rate already frozen on the row
+    (the rate that price sheet was agreed at), falling back to today's rate for
+    a row that has never carried a foreign price.
+
+    Returns ``True`` when the foreign amount was kept in step, ``False`` when
+    the product is foreign-priced but no rate could be resolved — the base price
+    is written either way, because refusing to price a product is never the
+    safer failure.
+    """
+    product = target.product
+    currency = product.pricing_currency_id
+    base = base_currency_code()
+    amount = quantize_amount(amount, decimals_for(base))
+
+    if not currency or currency == base:
+        _write_base_price(target, amount)
+        target.price_amount = None
+        target.price_rate = None
+        target.price_rate_at = None
+        if save:
+            _save(target)
+        return True
+
+    _write_base_price(target, amount)
+    rate = target.price_rate
+    effective_at = target.price_rate_at
+    if not rate:
+        resolved = rate_on(currency, base, at=None)
+        if resolved is None:
+            logger.warning(
+                "no %s->%s rate; base price written without restating the "
+                "foreign price for %s %s",
+                currency,
+                base,
+                target.__class__.__name__,
+                target.pk,
+            )
+            if save:
+                _save(target)
+            return False
+        rate = resolved.rate
+        effective_at = resolved.effective_at
+
+    target.price_amount = _foreign_amount_for(amount, rate, currency, base)
+    target.price_rate = rate
+    target.price_rate_at = effective_at
+    if save:
+        _save(target)
+    return True
+
+
+def _foreign_amount_for(base_amount, rate, currency, base):
+    """The foreign amount that restates ``base_amount`` at ``rate``.
+
+    Its round trip is exact whenever the rate can express the base price at the
+    foreign currency's precision, and off by at most one minor unit when it
+    cannot (90.00 dinars at 6.85 sits between $13.13 -> 89.94 and
+    $13.14 -> 90.01; no dollar amount lands on it). That residue is a rounding
+    artifact of a two-decimal price sheet, not a lost reprice: the base price —
+    the number the shop actually sells at — is exactly what was typed, so the
+    reprice screen can at worst offer the cent back, never the old price.
+    """
+    nearest = quantize_amount(
+        Decimal(base_amount) / Decimal(rate), decimals_for(currency)
+    )
+    if quantize_amount(nearest * Decimal(rate), decimals_for(base)) != base_amount:
+        logger.debug(
+            "%s cannot express %s %s at rate %s; price sheet restated to %s",
+            currency,
+            base_amount,
+            base,
+            rate,
+            nearest,
+        )
+    return nearest

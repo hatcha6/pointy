@@ -1493,10 +1493,18 @@ class ProductBulkFlagsSerializer(ProductBulkActionSerializer):
 
 
 class ProductSetVariantPricesSerializer(serializers.Serializer):
-    """Input for the product-details "Change prices" dialog.
+    """Input for the "Change prices" dialogs (product details, and the purchase
+    draft's pricing sheet).
 
-    Writes an explicit new selling price per variant in one atomic request so
-    the shop owner can reprice every variant of a product from the cost table.
+    Writes explicit new selling prices in one atomic request: per variant (the
+    base-unit price) and per **product unit** — the carton/box/sack price, which
+    a shop may set below a straight multiple of the piece price. A unit entry
+    with a null ``price`` hands that pack back to the derived
+    ``variant price x factor``, which is how a pack stops having a price of its
+    own without deleting the unit.
+
+    At least one of the two lists must carry an entry; a request that changes
+    nothing is a client bug, not a no-op worth writing a transaction for.
     """
 
     class _PriceEntrySerializer(serializers.Serializer):
@@ -1507,7 +1515,61 @@ class ProductSetVariantPricesSerializer(serializers.Serializer):
             min_value=Decimal("0"),
         )
 
-    prices = serializers.ListField(child=_PriceEntrySerializer(), allow_empty=False)
+    class _UnitPriceEntrySerializer(serializers.Serializer):
+        # By unit CODE, matching every other unit-facing payload — the client
+        # never juggles ProductUnit ids.
+        unit = serializers.CharField(max_length=32)
+        price = serializers.DecimalField(
+            max_digits=10,
+            decimal_places=2,
+            min_value=Decimal("0"),
+            allow_null=True,
+        )
+
+    prices = serializers.ListField(
+        child=_PriceEntrySerializer(),
+        required=False,
+        allow_empty=True,
+        default=list,
+    )
+    unit_prices = serializers.ListField(
+        child=_UnitPriceEntrySerializer(),
+        required=False,
+        allow_empty=True,
+        default=list,
+    )
+
+    def validate(self, attrs):
+        if not attrs.get("prices") and not attrs.get("unit_prices"):
+            raise serializers.ValidationError(
+                {"prices": "Send at least one variant price or unit price."}
+            )
+        duplicates = _duplicated(
+            entry["variant"] for entry in attrs.get("prices") or []
+        )
+        if duplicates:
+            raise serializers.ValidationError(
+                {"prices": f"Variant listed more than once: {duplicates}."}
+            )
+        duplicates = _duplicated(
+            entry["unit"].strip() for entry in attrs.get("unit_prices") or []
+        )
+        if duplicates:
+            raise serializers.ValidationError(
+                {"unit_prices": f"Unit listed more than once: {duplicates}."}
+            )
+        return attrs
+
+
+def _duplicated(values):
+    """The values appearing more than once, as a sorted comma-joined string."""
+    seen = set()
+    repeated = set()
+    for value in values:
+        if value in seen:
+            repeated.add(str(value))
+        seen.add(value)
+    return ", ".join(sorted(repeated))
 
 
 class BoughtTogetherProductSerializer(serializers.Serializer):

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/result.dart';
 import '../../../data/models/barcode_resolution.dart';
@@ -19,15 +20,22 @@ Future<BarcodeResolution?> resolveOrCreatePurchaseBarcode(
   BuildContext context, {
   required PurchaseViewModel viewModel,
   required String barcode,
+  ValueChanged<bool>? onLookupSettled,
 }) async {
   final result = await viewModel.resolveBarcode(barcode);
   switch (result) {
     case Ok<BarcodeResolution?>(:final value):
       if (value != null) {
         ScanFeedbackSounds.instance.play(ScanFeedback.success);
+        onLookupSettled?.call(true);
         return value;
       }
       ScanFeedbackSounds.instance.play(ScanFeedback.notFound);
+      // Reported BEFORE the creation wizard opens: the lookup is genuinely
+      // over, and leaving the caller's status on "searching" for however long
+      // somebody spends filling in a new product would be a lie (and a spinner
+      // running behind a modal).
+      onLookupSettled?.call(false);
     case Error<BarcodeResolution?>():
       ScanFeedbackSounds.instance.play(ScanFeedback.error);
       throw Exception('barcode lookup failed');
@@ -41,6 +49,61 @@ Future<BarcodeResolution?> resolveOrCreatePurchaseBarcode(
     viewModel: viewModel,
   );
   return created == null ? null : BarcodeResolution(variant: created);
+}
+
+/// Resolves a scanned code and adds it to the draft, reporting each step on the
+/// view model's scan status so the catalog pane's status line can narrate it,
+/// clearing the search box, and returning focus there for the next scan.
+///
+/// Shared by the two places a code arrives — the hardware wedge (the screen)
+/// and the search field's submit (the catalog pane) — because a scan must
+/// behave identically whichever door it comes through.
+Future<void> addScannedPurchaseBarcode(
+  BuildContext context, {
+  required PurchaseViewModel viewModel,
+  required String barcode,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final l10n = AppLocalizations.of(context)!;
+  viewModel.reportScanStatus(PurchaseScanStatus.resolving, barcode: barcode);
+  BarcodeResolution? resolution;
+  try {
+    resolution = await resolveOrCreatePurchaseBarcode(
+      context,
+      viewModel: viewModel,
+      barcode: barcode,
+      onLookupSettled: (found) => viewModel.reportScanStatus(
+        found ? PurchaseScanStatus.found : PurchaseScanStatus.notFound,
+        barcode: barcode,
+      ),
+    );
+  } on Exception {
+    viewModel.reportScanStatus(PurchaseScanStatus.error, barcode: barcode);
+    if (!context.mounted) {
+      return;
+    }
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(l10n.barcodeScanError)));
+    return;
+  }
+  if (resolution != null) {
+    await viewModel.addVariant(
+      resolution.variant,
+      unit: resolution.unit,
+      source: 'purchase_barcode_lookup',
+    );
+    viewModel.reportScanStatus(
+      PurchaseScanStatus.found,
+      barcode: barcode,
+      productName: resolution.variant.displayLabel,
+    );
+  }
+  // The wedge burst landed in the (focused) search field and started a
+  // debounced search; clearing it stops the barcode reappearing ~350ms later,
+  // and pulling focus back leaves the buyer ready for the next box.
+  viewModel.requestSearchReset();
+  viewModel.requestSearchFocus();
 }
 
 /// Presents the full product-creation workflow — the same robust wizard used in

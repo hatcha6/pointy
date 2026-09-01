@@ -133,6 +133,7 @@ class _FakeCatalogRepository extends CatalogRepository {
   Future<Result<Product>> setVariantPrices({
     required int productId,
     required Map<int, double> pricesByVariant,
+    Map<String, double?> pricesByUnitCode = const {},
   }) async {
     lastPrices = pricesByVariant;
     return Ok(_product);

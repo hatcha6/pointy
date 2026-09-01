@@ -720,10 +720,12 @@ class PosApiService {
   Future<Product> setVariantPrices({
     required int productId,
     required Map<int, double> pricesByVariant,
+    Map<String, double?> pricesByUnitCode = const {},
   }) {
     return _catalog.setVariantPrices(
       productId: productId,
       pricesByVariant: pricesByVariant,
+      pricesByUnitCode: pricesByUnitCode,
     );
   }
 

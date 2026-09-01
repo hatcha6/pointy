@@ -55,6 +55,7 @@ from .models import (
     ModifierGroup,
     Product,
     ProductCategory,
+    ProductUnit,
     ProductVariant,
     UnitOfMeasure,
     VariantOption,
@@ -75,6 +76,7 @@ from .serializers import (
     VariantOptionSerializer,
     VariantOptionValueSerializer,
 )
+from .pricing import set_base_price
 from .search_filters import CatalogRelevanceFilter, VariantRelevanceFilter
 from .services import (
     category_detail_prefetch,
@@ -834,16 +836,27 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="set-variant-prices")
     def set_variant_prices(self, request, pk=None):
-        """Set explicit selling prices for this product's variants in one go.
+        """Set explicit selling prices for this product in one go.
 
-        Backs the product-details "Change prices" dialog: validates every
-        variant belongs to this product, then writes all prices atomically so a
-        partial failure can't leave the product half-repriced.
+        Backs the product-details "Change prices" dialog and the purchase
+        draft's pricing sheet. Two kinds of price are written together, because
+        they are one decision: each variant's **base-unit** price, and each
+        product unit's **pack** price (the carton, which a shop routinely sells
+        for less than twelve times the piece). A unit entry with a null price
+        clears the custom price and hands the pack back to the derived
+        ``variant price x factor``.
+
+        Everything is validated against this product and written in one
+        transaction, so a partial failure can't leave it half-repriced. Prices
+        go through ``catalog.pricing.set_base_price`` rather than a raw column
+        write, so a foreign-priced product's frozen price sheet moves with the
+        number the owner just typed instead of drifting away from it.
         """
         product = self.get_object()
         serializer = ProductSetVariantPricesSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         entries = serializer.validated_data["prices"]
+        unit_entries = serializer.validated_data["unit_prices"]
 
         valid_ids = set(
             product.variants.values_list("id", flat=True)
@@ -857,8 +870,11 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
                 )
             prices_by_variant[variant_id] = entry["unit_price"]
 
-        now = timezone.now()
-        changed = []
+        prices_by_unit_code = {}
+        for entry in unit_entries:
+            code = entry["unit"].strip()
+            prices_by_unit_code[code] = entry["price"]
+
         with transaction.atomic():
             variants = ProductVariant.objects.select_for_update().filter(
                 product=product,
@@ -867,11 +883,47 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             for variant in variants:
                 new_price = prices_by_variant[variant.id]
                 if new_price != variant.unit_price:
-                    variant.unit_price = new_price
-                    variant.updated_at = now
-                    changed.append(variant)
-            if changed:
-                ProductVariant.objects.bulk_update(changed, ["unit_price", "updated_at"])
+                    set_base_price(variant, new_price)
+
+            if prices_by_unit_code:
+                units = list(
+                    ProductUnit.objects.select_for_update()
+                    .filter(product=product, unit__code__in=prices_by_unit_code.keys())
+                    .select_related("product", "unit")
+                )
+                found = {unit.unit.code for unit in units}
+                missing = sorted(set(prices_by_unit_code) - found)
+                if missing:
+                    raise ValidationError(
+                        {
+                            "unit_prices": (
+                                "Unit(s) not configured on this product: "
+                                f"{', '.join(missing)}."
+                            )
+                        }
+                    )
+                for unit in units:
+                    new_price = prices_by_unit_code[unit.unit.code]
+                    if new_price is None:
+                        # Back to derived: the pack has no price of its own.
+                        if unit.price is None:
+                            continue
+                        unit.price = None
+                        unit.price_amount = None
+                        unit.price_rate = None
+                        unit.price_rate_at = None
+                        unit.save(
+                            update_fields=[
+                                "price",
+                                "price_amount",
+                                "price_rate",
+                                "price_rate_at",
+                                "updated_at",
+                            ]
+                        )
+                        continue
+                    if new_price != unit.price:
+                        set_base_price(unit, new_price)
         self._clear_catalog_cache()
         product.refresh_from_db()
         serializer = self.get_serializer(product)
