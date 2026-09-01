@@ -82,13 +82,20 @@ class _PointyScaffoldState extends State<PointyScaffold> {
         navigationDrawer is AppNavigationDrawer &&
         AppBreakpoints.of(context).index >= AppBreakpoint.desktop.index;
 
-    Widget resolvedBody = widget.body;
+    // The rail, the app bar and the body each own a layer. Ink ripples and
+    // hover highlights paint on the nearest Material and dirty the nearest
+    // repaint boundary above it; without these, a tap on a rail tile or a
+    // toolbar button re-recorded the whole window for the ~400ms the ripple
+    // lasts — measured at 25 full-window frames per tap.
+    Widget resolvedBody = RepaintBoundary(child: widget.body);
     if (usesNavigationRail) {
       resolvedBody = Row(
         children: [
-          navigationDrawer.buildRail(
-            context,
-            extended: navigationRailController.isExpanded,
+          RepaintBoundary(
+            child: navigationDrawer.buildRail(
+              context,
+              extended: navigationRailController.isExpanded,
+            ),
           ),
           const VerticalDivider(width: 1),
           Expanded(child: resolvedBody),

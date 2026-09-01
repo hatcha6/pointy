@@ -134,15 +134,19 @@ class _LoginLayout extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              // Each half owns a layer: a keystroke (or the cursor blink) in
+              // the form used to re-record the brand panel with it.
               SizedBox(
                 width: AppPaneWidths.standard,
-                child: _LoginBrandPanel(
-                  key: const ValueKey('login_brand_panel'),
-                  minHeight: 420,
+                child: RepaintBoundary(
+                  child: _LoginBrandPanel(
+                    key: const ValueKey('login_brand_panel'),
+                    minHeight: 420,
+                  ),
                 ),
               ),
               SizedBox(width: spacing.paneGap),
-              Flexible(child: form),
+              Flexible(child: RepaintBoundary(child: form)),
             ],
           ),
         ),
@@ -155,7 +159,7 @@ class _LoginLayout extends StatelessWidget {
       children: [
         const _CompactLoginHeader(key: ValueKey('login_compact_header')),
         SizedBox(height: spacing.md),
-        form,
+        RepaintBoundary(child: form),
       ],
     );
   }

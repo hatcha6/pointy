@@ -173,23 +173,27 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       );
     }
 
-    return ListView.separated(
-      padding: spacing.pagePadding,
-      itemCount: entries.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final entry = entries[index];
-        return AdaptiveMaxWidth(
-          width: AppContentWidth.list,
-          child: _LedgerEntryTile(
-            entry: entry,
-            canManage: widget.capabilities.canManageExpenses,
-            isBusy: viewModel.isMutating,
-            onEdit: () => _editEntry(context, entry),
-            onDelete: () => _confirmDelete(context, entry),
-          ),
-        );
-      },
+    // The ledger scrolls inside its own layer, so the period header and the
+    // source chips above it are not re-recorded on every scroll frame.
+    return RepaintBoundary(
+      child: ListView.separated(
+        padding: spacing.pagePadding,
+        itemCount: entries.length,
+        separatorBuilder: (_, _) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          final entry = entries[index];
+          return AdaptiveMaxWidth(
+            width: AppContentWidth.list,
+            child: _LedgerEntryTile(
+              entry: entry,
+              canManage: widget.capabilities.canManageExpenses,
+              isBusy: viewModel.isMutating,
+              onEdit: () => _editEntry(context, entry),
+              onDelete: () => _confirmDelete(context, entry),
+            ),
+          );
+        },
+      ),
     );
   }
 

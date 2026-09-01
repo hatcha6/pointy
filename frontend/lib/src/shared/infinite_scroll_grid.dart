@@ -136,22 +136,28 @@ class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
       childCount: widget.items.length,
     );
 
-    return CustomScrollView(
-      controller: _controller,
-      slivers: [
-        if (widget.header != null) SliverToBoxAdapter(child: widget.header),
-        SliverPadding(
-          padding: widget.padding,
-          sliver: widget.sliverBuilder(context, delegate),
-        ),
-        if (widget.isLoadingMore)
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: PointySpinner()),
-            ),
+    // The scrollable owns a layer. A viewport re-emits its paint on every
+    // scroll frame, and without a boundary here that re-recorded the whole
+    // route's picture — page chrome, filter bars and headers included — 60
+    // times a second while a cashier flicked through a list.
+    return RepaintBoundary(
+      child: CustomScrollView(
+        controller: _controller,
+        slivers: [
+          if (widget.header != null) SliverToBoxAdapter(child: widget.header),
+          SliverPadding(
+            padding: widget.padding,
+            sliver: widget.sliverBuilder(context, delegate),
           ),
-      ],
+          if (widget.isLoadingMore)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: PointySpinner()),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

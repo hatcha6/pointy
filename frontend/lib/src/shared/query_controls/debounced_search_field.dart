@@ -105,60 +105,68 @@ class _DebouncedSearchFieldState extends State<DebouncedSearchField> {
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
 
-    return Material(
-      color: colors.surface,
-      borderRadius: BorderRadius.circular(8),
-      clipBehavior: Clip.antiAlias,
-      child: TextField(
-        key: widget.fieldKey,
-        controller: _controller,
-        focusNode: widget.focusNode,
-        enabled: widget.enabled,
-        autofocus: widget.autofocus,
-        textInputAction: TextInputAction.search,
-        decoration: InputDecoration(
-          hintText: widget.hintText,
-          filled: true,
-          fillColor: Colors.transparent,
-          prefixIcon: Icon(Icons.search, color: colors.primaryStrong),
-          prefixIconConstraints: const BoxConstraints.tightFor(
-            width: 48,
-            height: 48,
-          ),
-          suffixIcon: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: _controller,
-            builder: (context, value, child) {
-              if (value.text.isEmpty) {
-                return const SizedBox.shrink();
-              }
+    // No clipBehavior: a clipped Material becomes a PhysicalShape, which is a
+    // saveLayer on every list screen's resting tree. Nothing inside the field
+    // reaches the rounded corners, so the shape only needs painting.
+    //
+    // Its own layer: the cursor blinks twice a second for as long as the
+    // field has focus (the POS search rests focused), and every keystroke
+    // repaints it; neither should re-record the page around it.
+    return RepaintBoundary(
+      child: Material(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(8),
+        child: TextField(
+          key: widget.fieldKey,
+          controller: _controller,
+          focusNode: widget.focusNode,
+          enabled: widget.enabled,
+          autofocus: widget.autofocus,
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            hintText: widget.hintText,
+            filled: true,
+            fillColor: Colors.transparent,
+            prefixIcon: Icon(Icons.search, color: colors.primaryStrong),
+            prefixIconConstraints: const BoxConstraints.tightFor(
+              width: 48,
+              height: 48,
+            ),
+            suffixIcon: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _controller,
+              builder: (context, value, child) {
+                if (value.text.isEmpty) {
+                  return const SizedBox.shrink();
+                }
 
-              return IconButton(
-                tooltip: widget.clearTooltip,
-                onPressed: widget.enabled
-                    ? () {
-                        _setControllerText('');
-                        _emitNow('');
-                      }
-                    : null,
-                icon: child!,
-              );
-            },
-            child: const Icon(Icons.close),
+                return IconButton(
+                  tooltip: widget.clearTooltip,
+                  onPressed: widget.enabled
+                      ? () {
+                          _setControllerText('');
+                          _emitNow('');
+                        }
+                      : null,
+                  icon: child!,
+                );
+              },
+              child: const Icon(Icons.close),
+            ),
+            suffixIconConstraints: const BoxConstraints.tightFor(
+              width: 48,
+              height: 48,
+            ),
+            border: _fieldBorder(colors.line),
+            enabledBorder: _fieldBorder(colors.line),
+            focusedBorder: _fieldBorder(colors.primaryStrong, width: 1.4),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 4,
+              vertical: 15,
+            ),
           ),
-          suffixIconConstraints: const BoxConstraints.tightFor(
-            width: 48,
-            height: 48,
-          ),
-          border: _fieldBorder(colors.line),
-          enabledBorder: _fieldBorder(colors.line),
-          focusedBorder: _fieldBorder(colors.primaryStrong, width: 1.4),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 4,
-            vertical: 15,
-          ),
+          onChanged: _emitDebounced,
+          onSubmitted: _emitSubmitted,
         ),
-        onChanged: _emitDebounced,
-        onSubmitted: _emitSubmitted,
       ),
     );
   }

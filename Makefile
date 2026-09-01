@@ -601,3 +601,12 @@ dev-remote: postgres redis postgres-ready backend-dev-migrate frontend-install #
 clean: ## Remove generated local caches and build output.
 	find "$(BACKEND_DIR)" -type d -name __pycache__ -prune -exec rm -rf {} +
 	rm -rf "$(VENV)/.installed" "$(FRONTEND_DIR)/build" "$(FRONTEND_DIR)/.dart_tool" "$(GO_CACHE)" "$(GO_MOD_CACHE)"
+
+frontend-perf-sweep: frontend-install ## Hermetic frontend performance sweep (structural frame costs, replayed fixtures). PERF_SURFACES=a,b narrows it.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) test test/perf/perf_sweep_test.dart
+
+frontend-perf-record: ## Record perf-sweep fixtures against the running backend: make frontend-perf-record AREA=<name> [SURFACES=a,b]
+	cd "$(FRONTEND_DIR)" && tool/perf_record.sh "$(AREA)" "$(SURFACES)"
+
+frontend-perf-profile: frontend-install ## Profile-build frontend sweep on macOS: real build/raster ms per screen (replays fixtures, no backend).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d macos --profile -t lib/dev/perf_sweep.dart --dart-define=PERF_FIXTURE_DIR="$$PWD/test/perf/fixtures" --dart-define=PERF_OUT="$$PWD/build/perf_profile" --dart-define=PERF_SURFACES="$(SURFACES)"
