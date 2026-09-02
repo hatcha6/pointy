@@ -39,7 +39,7 @@ from decimal import Decimal
 
 from django.conf import settings
 
-from .services import latest_purchase_line_for_variant
+from .services import latest_purchase_lines_for_variants
 
 ABOVE_SALE_PRICE = "above_sale_price"
 COST_SPIKE = "cost_spike"
@@ -132,12 +132,18 @@ def _base_unit_cost(unit_cost, unit_factor):
     return (Decimal(unit_cost) / factor).quantize(Decimal("0.01"))
 
 
-def _previous_base_unit_cost(variant_id):
-    previous = latest_purchase_line_for_variant(variant_id)
-    if previous is None:
-        return None
-    cost = previous.effective_base_unit_cost
-    return cost if cost > 0 else None
+def _previous_base_unit_costs(lines_data):
+    """``{variant_id: previous effective cost per base unit}`` for every line
+    in one query — the guard used to look each line's history up on its own."""
+    previous_lines = latest_purchase_lines_for_variants(
+        getattr(line.get("variant"), "pk", None) for line in lines_data
+    )
+    costs = {}
+    for variant_id, previous in previous_lines.items():
+        cost = previous.effective_base_unit_cost
+        if cost > 0:
+            costs[variant_id] = cost
+    return costs
 
 
 def find_cost_anomalies(lines_data, *, thresholds):
@@ -148,6 +154,7 @@ def find_cost_anomalies(lines_data, *, thresholds):
     same numbers the line will be saved with.
     """
     anomalies = []
+    previous_costs = _previous_base_unit_costs(lines_data)
     for index, line in enumerate(lines_data):
         variant = line.get("variant")
         if variant is None:
@@ -179,7 +186,7 @@ def find_cost_anomalies(lines_data, *, thresholds):
         # Otherwise: has this item's cost jumped implausibly? Catches the typo
         # even when the selling price is stale or unset — the case above misses
         # nothing here, so only one finding per line is reported.
-        previous = _previous_base_unit_cost(getattr(variant, "pk", None))
+        previous = previous_costs.get(getattr(variant, "pk", None))
         if previous is not None and cost > previous * thresholds[COST_SPIKE]:
             anomalies.append(
                 CostAnomaly(

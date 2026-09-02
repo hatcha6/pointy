@@ -21,16 +21,18 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.catalog.models import ProductCategory
+from apps.catalog.services import MIN_LINES_TO_PRELOAD
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import DiscountRule
 
 from .models import Supplier
 
-# DRF resolves each line's ``variant`` PrimaryKeyRelatedField with its own
-# .get(pk=...), so one query per line is structural. Anything above that is a
-# per-line read that belongs in the bulk preload.
-MAX_QUERIES_PER_LINE = 2
+# The line ``variant`` field reads from a map the parent serializer primes in
+# one query (it used to be DRF's own .get(pk=...) per line — 21 of the 28
+# queries on a 20-line preview in the field). Nothing per line is left; the
+# bound is zero so a single per-line read fails loudly.
+MAX_QUERIES_PER_LINE = 0
 
 
 @override_settings(
@@ -78,9 +80,13 @@ class PurchaseDiscountPreviewQueryScalingTests(TestCase):
         return len(ctx.captured_queries)
 
     def _assert_slope_is_bounded(self):
-        small = self._measure(1)
+        # Below MIN_LINES_TO_PRELOAD the preload deliberately stays cold (a
+        # lone line is cheaper unbatched), so measure from where the batch
+        # shape applies — the slope is what is bounded, not that constant.
+        small_count = max(2, MIN_LINES_TO_PRELOAD)
+        small = self._measure(small_count)
         large = self._measure(11)
-        slope = (large - small) / 10
+        slope = (large - small) / (11 - small_count)
         self.assertLessEqual(
             slope,
             MAX_QUERIES_PER_LINE,

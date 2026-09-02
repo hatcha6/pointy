@@ -8,11 +8,11 @@ class AnalyticsApiClient {
 
   Future<AnalyticsEventPage> fetchEvents({
     required AnalyticsEventQuery query,
-    int page = 1,
+    String? cursor,
   }) async {
     final response = await _session.get(
       'analytics-events/',
-      query: query.toQueryParameters(page: page),
+      query: query.toCursorQueryParameters(cursor: cursor),
     );
     _session.throwApiException(
       response,

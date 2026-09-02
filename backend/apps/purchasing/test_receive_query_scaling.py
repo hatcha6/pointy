@@ -19,7 +19,7 @@ is there, so the paths compose rather than both charging.
 
 Measured on a 20-line order (sqlite, warm caches):
 
-    receive endpoint   920 -> 467 -> 449 -> 447 queries  (43.0 -> 21.0 -> 20.1 -> 20.0/line)
+    receive endpoint   920 -> 467 -> 449 -> 447 -> 83 queries  (43.0 -> 21.0 -> 20.1 -> 20.0 -> 3.2/line)
     retrieve           123 ->  43 ->  25 ->  23 queries  ( 5.0 ->  1.0 -> 0.05 ->  0.0/line)
 
 The remaining receive slope is the write path itself (stock movement + receipt
@@ -46,10 +46,11 @@ from apps.inventory.models import StockItem
 
 from .models import Supplier
 
-# The receive write path is inherently per-line (a stock movement, a receipt
-# line, and the receipt-quantity re-reads that must stay live because each write
-# changes them). Measured 20.0; the response serialization no longer contributes.
-MAX_RECEIVE_QUERIES_PER_LINE = 22
+# The receive write path keeps one statement per line: the receipt line INSERT.
+# The receipt-quantity reads answer from the rows the lock already fetched
+# (refreshed once after the receipt is written), and the stock rows are locked
+# and written back as one batch. Measured 20.0 -> 3.2 per line.
+MAX_RECEIVE_QUERIES_PER_LINE = 5
 # Nothing per-line is left on a detail read, and with the previous-cost columns
 # annotated onto the prefetch the primer's second query is gone too. Measured
 # exactly 0.0 — a bound of zero is the point: at 1 the N+1 this file exists to

@@ -122,7 +122,8 @@ class FakeRelayControlClient:
             "access_token": "ptr1.installation-1.access-secret",
         }
 
-    def get_installation(self, installation_id):
+    def get_installation(self, installation_id, *, timeout=None):
+        self.last_get_installation_timeout = timeout
         return {
             "id": installation_id,
             "shop_name": self.shop_name,
@@ -147,7 +148,8 @@ class FakeRelayControlClient:
             "subscription_ends_at": None,
         }
 
-    def issue_ticket(self, *, access_token, device_id="", device_name=""):
+    def issue_ticket(self, *, access_token, device_id="", device_name="", timeout=None):
+        self.last_issue_ticket_timeout = timeout
         self.issued_ticket_request = {
             "access_token": access_token,
             "device_id": device_id,
@@ -1066,6 +1068,156 @@ class RelayBackendApiTests(TestCase):
         self.assertTrue(event.attributes["subscription_active"])
         self.assertTrue(event.attributes["device_id_present"])
         self.assertTrue(event.attributes["device_name_present"])
+
+    def _installation_for_pairing(self):
+        return RelayInstallation.objects.create(
+            installation_id="installation-1",
+            shop_name="متجر آمن",
+            relay_public_api_url="https://relay.example",
+            relay_connector_address="relay.example:443",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+
+    def test_pairing_shares_one_budget_across_its_relay_calls(self):
+        """The status read and the ticket issue split ONE wall-clock budget, and
+        the shop-name push is left to the periodic sync — a slow uplink can no
+        longer hold a worker for three full timeouts per sign-in."""
+        self._installation_for_pairing()
+        # Local name differs from the relay mirror: the periodic sync would
+        # push it, pairing must not.
+        fake_relay = FakeRelayControlClient(
+            relay_enabled=True, subscription_active=True, shop_name="اسم قديم"
+        )
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        with self.settings(
+            POINTY_RELAY_PAIRING_BUDGET_SECONDS=3,
+            POINTY_RELAY_REQUEST_TIMEOUT_SECONDS=5,
+        ):
+            with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+                response = client.post(reverse("relay-pairing"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["remote_access_supported"])
+        # Each call was capped by the budget (3 s), not the per-request 5 s.
+        self.assertLessEqual(fake_relay.last_get_installation_timeout, 3)
+        self.assertLessEqual(fake_relay.last_issue_ticket_timeout, 3)
+        self.assertIsNone(fake_relay.metadata_update)
+
+    def test_pairing_answers_unavailable_when_the_budget_is_already_spent(self):
+        installation = self._installation_for_pairing()
+        fake_relay = FakeRelayControlClient(relay_enabled=True, subscription_active=True)
+        clock = [100.0]
+
+        def slow_get_installation(installation_id, *, timeout=None):
+            # The status read consumed the whole budget.
+            clock[0] += 10
+            return FakeRelayControlClient.get_installation(
+                fake_relay, installation_id, timeout=timeout
+            )
+
+        fake_relay.get_installation = slow_get_installation
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+
+        with self.settings(POINTY_RELAY_PAIRING_BUDGET_SECONDS=8):
+            with mock.patch("apps.core.relay.time.monotonic", side_effect=lambda: clock[0]):
+                with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+                    response = client.post(reverse("relay-pairing"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["remote_access_supported"])
+        self.assertEqual(response.data["reason"], "relay_unavailable")
+        self.assertIsNone(fake_relay.issued_ticket_request)
+        installation.refresh_from_db()
+        self.assertIsNone(installation.last_pairing_issued_at)
+
+    def test_pairing_is_answered_from_memory_during_the_transport_cooldown(self):
+        """After a relay transport failure the next sign-ins get an immediate
+        'relay unavailable' instead of each paying the timeout again."""
+        from apps.core import relay as relay_module
+
+        self._installation_for_pairing()
+        fake_relay = FakeRelayControlClient(relay_enabled=True, subscription_active=True)
+        client = APIClient()
+        client.force_authenticate(user=self.cashier)
+        self.addCleanup(relay_module.clear_relay_transport_cooldown)
+
+        with self.settings(POINTY_RELAY_UNAVAILABLE_COOLDOWN_SECONDS=300):
+            relay_module.note_relay_transport_failure()
+            self.assertTrue(relay_module.relay_transport_cooldown_active())
+            with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+                response = client.post(reverse("relay-pairing"), {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["reason"], "relay_unavailable")
+        # The relay was never touched.
+        self.assertFalse(hasattr(fake_relay, "last_get_installation_timeout"))
+
+        # A cooldown of 0 disables the memory entirely.
+        relay_module.clear_relay_transport_cooldown()
+        with self.settings(POINTY_RELAY_UNAVAILABLE_COOLDOWN_SECONDS=0):
+            relay_module.note_relay_transport_failure()
+            self.assertFalse(relay_module.relay_transport_cooldown_active())
+
+    def test_relay_read_timeout_becomes_a_relay_error_and_opens_the_cooldown(self):
+        """A socket timeout during ``response.read()`` escaped ``urlopen``'s
+        URLError wrapping and surfaced as a 500 ``TimeoutError`` from the
+        pairing view (5 of 58 pairings in the field). It is a transport failure
+        like any other."""
+        from apps.core import relay as relay_module
+
+        self.addCleanup(relay_module.clear_relay_transport_cooldown)
+        relay_client = relay_module.RelayControlClient(
+            config=relay_module.RelayControlConfig(
+                control_url="https://relay-control.example",
+                public_api_url="https://relay.example",
+                connector_address="relay.example:443",
+                admin_token="",
+                access_token="ptr1.installation-1.access-secret",
+                installation_id="installation-1",
+                connector_token="",
+                enrollment_token="",
+                timeout_seconds=5,
+                ai_timeout_seconds=120,
+                image_search_timeout_seconds=15,
+                allow_insecure_control=False,
+                ca_file="",
+                client_cert_file="",
+                client_key_file="",
+            )
+        )
+
+        class _TimingOutResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def read(self):
+                raise TimeoutError("The read operation timed out")
+
+        class _OkResponse(_TimingOutResponse):
+            def read(self):
+                return b"{}"
+
+        with self.settings(POINTY_RELAY_UNAVAILABLE_COOLDOWN_SECONDS=300):
+            with mock.patch(
+                "apps.core.relay.request.urlopen", return_value=_TimingOutResponse()
+            ):
+                with self.assertRaises(relay_module.RelayControlError):
+                    relay_client.get_installation("installation-1", timeout=2)
+            self.assertTrue(relay_module.relay_transport_cooldown_active())
+
+            # A successful call clears it.
+            with mock.patch("apps.core.relay.request.urlopen", return_value=_OkResponse()):
+                relay_client.get_installation("installation-1")
+            self.assertFalse(relay_module.relay_transport_cooldown_active())
 
     def test_pairing_does_not_issue_ticket_when_subscription_is_inactive(self):
         RelayInstallation.objects.create(

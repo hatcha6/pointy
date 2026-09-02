@@ -229,12 +229,24 @@ class PurchaseOrder(TimeStampedModel):
             ),
         ]
 
+    # Every per-line figure ``recalculate`` derives; written back in ONE
+    # ``bulk_update`` at the end instead of two saves per line.
+    _RECALCULATED_LINE_FIELDS = (
+        "discount_amount",
+        "net_line_total",
+        "net_unit_cost",
+        "allocated_landed_cost",
+        "landed_unit_cost",
+        "effective_unit_cost",
+        "updated_at",
+    )
+
     def recalculate(self):
         lines = list(
-            self.lines.select_related("variant", "variant__product").order_by(
-                "created_at",
-                "id",
-            )
+            self.lines.select_related("variant", "variant__product")
+            # The discount engine reads each line's product categories.
+            .prefetch_related("variant__product__categories")
+            .order_by("created_at", "id")
         )
         discount_result = self.apply_discounts(lines)
         # One-off manual discount for THIS order (typed under the landed
@@ -262,8 +274,20 @@ class PurchaseOrder(TimeStampedModel):
             self.subtotal - self.discount_total + landed_cost_total
         ).quantize(self.MONEY_PLACES)
         self.allocate_landed_costs(lines, landed_cost_total)
+        self._flush_line_figures(lines)
         self._discount_result = discount_result
         return discount_result
+
+    def _flush_line_figures(self, lines):
+        """Persist what ``apply_discounts`` / ``allocate_landed_costs`` set on
+        the lines in memory. ``bulk_update`` skips ``auto_now``, so
+        ``updated_at`` is stamped here the way a save would."""
+        if not lines:
+            return
+        now = timezone.now()
+        for line in lines:
+            line.updated_at = now
+        PurchaseLine.objects.bulk_update(lines, self._RECALCULATED_LINE_FIELDS)
 
     def apply_discounts(self, lines):
         from apps.discounts.models import DiscountRule
@@ -284,8 +308,11 @@ class PurchaseOrder(TimeStampedModel):
                     variant_id=line.variant_id,
                     quantity=line.quantity,
                     unit_amount=line.unit_cost,
+                    # ``.all()`` (not ``values_list``) so the prefetch in
+                    # ``recalculate`` answers this instead of a query per line.
                     category_ids=tuple(
-                        line.variant.product.categories.values_list("id", flat=True)
+                        category.id
+                        for category in line.variant.product.categories.all()
                     ),
                 )
                 for line in lines
@@ -306,7 +333,8 @@ class PurchaseOrder(TimeStampedModel):
         return result
 
     def _write_line_net(self, line, discount_amount):
-        """Persist a line's discount and the net figures derived from it."""
+        """Set a line's discount and the net figures derived from it (in
+        memory — ``recalculate`` flushes every line at once)."""
         net_line_total = (line.line_total - discount_amount).quantize(
             self.MONEY_PLACES
         )
@@ -319,14 +347,6 @@ class PurchaseOrder(TimeStampedModel):
         line.discount_amount = discount_amount
         line.net_line_total = net_line_total
         line.net_unit_cost = net_unit_cost
-        line.save(
-            update_fields=[
-                "discount_amount",
-                "net_line_total",
-                "net_unit_cost",
-                "updated_at",
-            ],
-        )
 
     def _apply_extra_discount(self, lines, extra):
         """Spread the manual order-level discount over the lines in proportion
@@ -388,14 +408,6 @@ class PurchaseOrder(TimeStampedModel):
             line.effective_unit_cost = (
                 line.net_unit_cost + landed_unit_cost
             ).quantize(self.MONEY_PLACES)
-            line.save(
-                update_fields=[
-                    "allocated_landed_cost",
-                    "landed_unit_cost",
-                    "effective_unit_cost",
-                    "updated_at",
-                ],
-            )
 
     def _landed_cost_allocations(self, lines, landed_cost_total):
         if landed_cost_total == Decimal("0.00"):

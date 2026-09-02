@@ -49,9 +49,11 @@ def products_bought_together(
     """Products most often bought in the same order as ``product``.
 
     ``orders`` is the base queryset to consider (typically the shop's paid
-    orders). Returns ``(product_id, orders_together)`` tuples, ranked by how many
-    of those orders contain both products, capped at ``limit``. Archived
-    products and ``product`` itself are excluded.
+    orders, already bounded to a recent window by the caller). Only the newest
+    ``max_orders`` baskets containing ``product`` are ranked. Returns
+    ``(product_id, orders_together)`` tuples, ranked by how many of those
+    orders contain both products, capped at ``limit``. Archived products and
+    ``product`` itself are excluded.
 
     For a single product the pairwise pass isn't needed — the pair count is just
     "how many of this product's orders also contain X" — so it runs as a
@@ -59,11 +61,16 @@ def products_bought_together(
     """
     from .models import OrderLine
 
+    # The NEWEST baskets containing the product, up to ``max_orders`` — a cap
+    # has to pick a side, and what sells with an item today is the recent
+    # answer, not an arbitrary one.
     order_ids = list(
-        orders.filter(lines__variant__product=product)
-        .values_list("id", flat=True)
-        .distinct()[:max_orders]
-    )
+        dict.fromkeys(
+            orders.filter(lines__variant__product=product)
+            .order_by("-created_at", "-id")
+            .values_list("id", flat=True)[: max_orders * 2]
+        )
+    )[:max_orders]
     if not order_ids:
         return []
 

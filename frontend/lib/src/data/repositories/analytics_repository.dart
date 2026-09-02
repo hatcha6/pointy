@@ -15,10 +15,10 @@ class AnalyticsRepository implements AnalyticsEventSink {
 
   Future<Result<AnalyticsEventPage>> loadEvents({
     required AnalyticsEventQuery query,
-    int page = 1,
+    String? cursor,
   }) {
     return Result.guard(
-      () => _service.fetchAnalyticsEvents(query: query, page: page),
+      () => _service.fetchAnalyticsEvents(query: query, cursor: cursor),
     );
   }
 

@@ -111,6 +111,50 @@ void main() {
     expect(line.variant.productDetail, isNotNull);
   });
 
+  test(
+    'loadOrderForEditing resolves every line with one catalog request',
+    () async {
+      final catalog = _FakeCatalogRepository({5: boxProduct()});
+      final vm = PurchaseViewModel(catalog, _FakePurchaseRepository());
+
+      await vm.loadOrderForEditing(
+        draftOrder(
+          lines: [
+            orderLine(productId: 5, variantId: 9, unit: 'box'),
+            orderLine(productId: 5, variantId: 9),
+            orderLine(productId: 77, variantId: 78),
+          ],
+        ),
+      );
+
+      // One bulk request carrying each product id once — never a
+      // product-detail fetch per line.
+      expect(catalog.bulkRequests, [
+        [5, 77],
+      ]);
+      expect(catalog.singleLoads, 0);
+      expect(vm.draft, hasLength(2));
+      expect(vm.unresolvedEditLineNames, hasLength(1));
+    },
+  );
+
+  test('loadOrderForEditing falls back to per-product loads when the bulk '
+      'request fails', () async {
+    final catalog = _FakeCatalogRepository({
+      5: boxProduct(),
+    }, bulkLoadFails: true);
+    final vm = PurchaseViewModel(catalog, _FakePurchaseRepository());
+
+    await vm.loadOrderForEditing(
+      draftOrder(lines: [orderLine(productId: 5, variantId: 9, unit: 'box')]),
+    );
+
+    expect(catalog.bulkRequests, hasLength(1));
+    expect(catalog.singleLoads, 1);
+    expect(vm.draft.single.variant.id, 9);
+    expect(vm.unresolvedEditLineNames, isEmpty);
+  });
+
   test('loadOrderForEditing records lines whose product can no longer be '
       'resolved', () async {
     final catalog = _FakeCatalogRepository(const {}); // no products available
@@ -174,9 +218,22 @@ void main() {
 }
 
 class _FakeCatalogRepository extends CatalogRepository {
-  _FakeCatalogRepository(this._products) : super(PosApiService());
+  _FakeCatalogRepository(this._products, {this.bulkLoadFails = false})
+    : super(PosApiService());
 
   final Map<int, Product> _products;
+  final bool bulkLoadFails;
+  final List<List<int>> bulkRequests = [];
+  int singleLoads = 0;
+
+  @override
+  Future<Result<List<Product>>> loadProductsByIds(List<int> ids) async {
+    bulkRequests.add(List.of(ids));
+    if (bulkLoadFails) {
+      return Error(Exception('bulk load unavailable'));
+    }
+    return Ok([for (final id in ids) ?_products[id]]);
+  }
 
   @override
   Future<Result<ProductVariantPage>> loadProductVariants({
@@ -186,6 +243,7 @@ class _FakeCatalogRepository extends CatalogRepository {
 
   @override
   Future<Result<Product>> loadProduct(int id) async {
+    singleLoads += 1;
     final product = _products[id];
     return product == null
         ? Error(Exception('product $id not found'))

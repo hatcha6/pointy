@@ -2,7 +2,9 @@ from decimal import Decimal
 
 from django.db.models import Count, Q, Sum
 
+from apps.analytics.export import estimate_export_rows
 from apps.analytics.models import AnalyticsEvent
+from apps.analytics.scope import technical_events_q
 from apps.purchasing.models import (
     PurchaseOrder,
     PurchaseOrderAdjustment,
@@ -45,7 +47,13 @@ def build_user_activity(user):
     purchase_receipts = PurchaseReceipt.objects.filter(created_by=user)
     purchase_adjustments = PurchaseOrderAdjustment.objects.filter(created_by=user)
     supplier_payments = SupplierPayment.objects.filter(created_by=user)
-    activity_events = AnalyticsEvent.objects.filter(received_by=user)
+    # The person's own actions — sales, receipts, edits — not the telemetry
+    # their till emits about the software (a busy till writes millions of
+    # request-timing rows a month under its cashier's name; counting those
+    # took the users screen 57 s in the field).
+    activity_events = AnalyticsEvent.objects.filter(received_by=user).exclude(
+        technical_events_q()
+    )
 
     return {
         "summary": {
@@ -252,10 +260,23 @@ def _supplier_payment_summary(payments):
     }
 
 
+# Below this many rows (by the planner's estimate) the count is exact; above
+# it the estimate is served as the count. An exact COUNT over a person's whole
+# history is a scan that grows with every day they work; the number is a
+# summary tile, not a ledger.
+ACTIVITY_COUNT_EXACT_LIMIT = 5000
+
+
 def _activity_summary(events):
     latest_event = events.order_by("-occurred_at", "-id").first()
+    estimate = estimate_export_rows(events)
+    if estimate is not None and estimate > ACTIVITY_COUNT_EXACT_LIMIT:
+        event_count, is_estimate = int(estimate), True
+    else:
+        event_count, is_estimate = events.count(), False
     return {
-        "event_count": events.count(),
+        "event_count": event_count,
+        "event_count_is_estimate": is_estimate,
         "last_event_at": _iso(latest_event.occurred_at if latest_event else None),
     }
 

@@ -34,7 +34,7 @@ class ActivityLogViewModel extends ChangeNotifier {
   bool _hasLoadError = false;
   bool _hasUserLoadError = false;
   bool _hasMoreEvents = true;
-  int _nextPage = 1;
+  String? _nextCursor;
   int _totalCount = 0;
   int _loadSerial = 0;
   String _investigationReason = '';
@@ -63,13 +63,10 @@ class ActivityLogViewModel extends ChangeNotifier {
     _isLoading = true;
     _hasLoadError = false;
     _hasMoreEvents = true;
-    _nextPage = 1;
+    _nextCursor = null;
     notifyListeners();
 
-    final result = await _analyticsRepository.loadEvents(
-      query: query,
-      page: _nextPage,
-    );
+    final result = await _analyticsRepository.loadEvents(query: query);
     if (loadSerial != _loadSerial) {
       return;
     }
@@ -78,7 +75,7 @@ class ActivityLogViewModel extends ChangeNotifier {
         _events = result.value.events;
         _totalCount = result.value.totalCount;
         _hasMoreEvents = result.value.hasMore;
-        _nextPage = 2;
+        _nextCursor = result.value.nextCursor;
         _syncSelectedEvent();
       case Error<AnalyticsEventPage>():
         _events = [];
@@ -104,7 +101,7 @@ class ActivityLogViewModel extends ChangeNotifier {
 
     final result = await _analyticsRepository.loadEvents(
       query: query,
-      page: _nextPage,
+      cursor: _nextCursor,
     );
     if (loadSerial != _loadSerial) {
       _isLoadingMore = false;
@@ -116,7 +113,7 @@ class ActivityLogViewModel extends ChangeNotifier {
         _events = [..._events, ...result.value.events];
         _totalCount = result.value.totalCount;
         _hasMoreEvents = result.value.hasMore;
-        _nextPage += 1;
+        _nextCursor = result.value.nextCursor;
         _syncSelectedEvent();
       case Error<AnalyticsEventPage>():
         _hasLoadError = true;

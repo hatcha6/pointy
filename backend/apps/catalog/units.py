@@ -88,6 +88,18 @@ def prime_base_units(products) -> None:
         setattr(product, _BASE_UOM_ATTR, by_code.get(_base_code(product)))
 
 
+def prime_base_unit_from_cache(product: Product, cache: dict) -> None:
+    """``prime_base_units`` for one product at a time, sharing ``cache`` (base
+    code → row) across calls — for validators that meet a document's lines one
+    by one and cannot batch them up front."""
+    if getattr(product, _BASE_UOM_ATTR, _UNPRIMED) is not _UNPRIMED:
+        return
+    code = _base_code(product)
+    if code not in cache:
+        cache[code] = UnitOfMeasure.objects.filter(code=code).first()
+    setattr(product, _BASE_UOM_ATTR, cache[code])
+
+
 def _base_uom(product: Product) -> UnitOfMeasure | None:
     primed = getattr(product, _BASE_UOM_ATTR, _UNPRIMED)
     if primed is not _UNPRIMED:

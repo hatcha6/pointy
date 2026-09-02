@@ -74,6 +74,7 @@ class PurchaseViewModel extends ChangeNotifier {
     this._catalogRepository,
     this._purchaseRepository, {
     AnalyticsEngine? analyticsEngine,
+    this.discountPreviewDebounce = const Duration(milliseconds: 250),
     ScopedJsonStorage draftStorage = const SharedPreferencesScopedJsonStorage(
       'pointy.purchase.draft.v1',
     ),
@@ -190,6 +191,16 @@ class PurchaseViewModel extends ChangeNotifier {
       LandedCostAllocationMethod.byLineValue;
   String? _errorMessage;
   int _discountPreviewRequestVersion = 0;
+
+  /// How long the draft must sit still before a discount preview is asked
+  /// for. Every line edit re-previews; while a buyer types a quantity or
+  /// holds a +/− key the draft changes many times a second, and the field
+  /// measured a third of all purchasing previews arriving within half a
+  /// second of the previous one — each a full engine pass on the server.
+  /// One request per pause instead of one per keystroke.
+  final Duration discountPreviewDebounce;
+  Timer? _discountPreviewDebounceTimer;
+  Completer<void>? _discountPreviewSettled;
   // Guards the one-shot selling-price refresh a restored draft kicks off, so a
   // second restore (or a rebuild) can never double-fetch.
   bool _isRefreshingSellingPrices = false;
@@ -1189,7 +1200,31 @@ class PurchaseViewModel extends ChangeNotifier {
     unawaited(refreshDiscountPreview());
   }
 
-  Future<void> refreshDiscountPreview() async {
+  /// Re-previews the draft once it has been idle for [discountPreviewDebounce].
+  ///
+  /// Calls that arrive while a preview is pending fold into it; the returned
+  /// future completes when the preview that finally runs has settled, so a
+  /// caller can still await the result. An empty draft answers at once.
+  Future<void> refreshDiscountPreview() {
+    if (_draft.isEmpty || _selectedSupplier == null || _disposed) {
+      _discountPreviewDebounceTimer?.cancel();
+      _discountPreviewDebounceTimer = null;
+      final settled = _discountPreviewSettled;
+      _discountPreviewSettled = null;
+      settled?.complete();
+      return _refreshDiscountPreviewNow();
+    }
+    final settled = _discountPreviewSettled ??= Completer<void>();
+    _discountPreviewDebounceTimer?.cancel();
+    _discountPreviewDebounceTimer = Timer(discountPreviewDebounce, () {
+      _discountPreviewDebounceTimer = null;
+      _discountPreviewSettled = null;
+      _refreshDiscountPreviewNow().whenComplete(settled.complete);
+    });
+    return settled.future;
+  }
+
+  Future<void> _refreshDiscountPreviewNow() async {
     final requestVersion = ++_discountPreviewRequestVersion;
     final supplier = _selectedSupplier;
     if (_draft.isEmpty || supplier == null) {
@@ -1399,15 +1434,7 @@ class PurchaseViewModel extends ChangeNotifier {
     final productIds = <int>{
       for (final line in order.lines) line.productId,
     }.toList(growable: false);
-    final products = <int, Product>{};
-    final results = await Future.wait(
-      productIds.map(_catalogRepository.loadProduct),
-    );
-    for (var i = 0; i < productIds.length; i += 1) {
-      if (results[i] case Ok<Product>(:final value)) {
-        products[productIds[i]] = value;
-      }
-    }
+    final products = await _productsForOrderLines(productIds);
 
     final lines = <PurchaseDraftLine>[];
     for (final line in order.lines) {
@@ -1423,6 +1450,38 @@ class PurchaseViewModel extends ChangeNotifier {
       }
     }
     return lines;
+  }
+
+  /// The products an order's lines refer to, keyed by id.
+  ///
+  /// One catalog request for the whole order: opening a long order used to
+  /// fire a product-detail fetch per line in parallel, and the field showed
+  /// bursts of up to 59 such fetches queuing behind each other at ~3 s each.
+  /// If the bulk request itself fails, the per-product path is kept as a
+  /// fallback so a transient error still resolves as many lines as it can
+  /// instead of reporting every line as unresolved.
+  Future<Map<int, Product>> _productsForOrderLines(List<int> productIds) async {
+    final products = <int, Product>{};
+    if (productIds.isEmpty) {
+      return products;
+    }
+    switch (await _catalogRepository.loadProductsByIds(productIds)) {
+      case Ok<List<Product>>(:final value):
+        for (final product in value) {
+          products[product.id] = product;
+        }
+        return products;
+      case Error<List<Product>>():
+        final results = await Future.wait(
+          productIds.map(_catalogRepository.loadProduct),
+        );
+        for (var i = 0; i < productIds.length; i += 1) {
+          if (results[i] case Ok<Product>(:final value)) {
+            products[productIds[i]] = value;
+          }
+        }
+        return products;
+    }
   }
 
   PurchaseDraftLine? _draftLineForOrderLine(
@@ -1770,6 +1829,9 @@ class PurchaseViewModel extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _persistDebounce?.cancel();
+    _discountPreviewDebounceTimer?.cancel();
+    _discountPreviewSettled?.complete();
+    _discountPreviewSettled = null;
     suggestions.removeListener(notifyListeners);
     suggestions.dispose();
     super.dispose();

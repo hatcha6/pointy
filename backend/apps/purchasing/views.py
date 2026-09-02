@@ -306,6 +306,22 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
             ),
         )
 
+    def perform_create(self, serializer):
+        serializer.save()
+        self._reload_for_response(serializer)
+
+    def perform_update(self, serializer):
+        serializer.save()
+        self._reload_for_response(serializer)
+
+    def _reload_for_response(self, serializer):
+        """Hand the response serializer the order read through the detail
+        queryset. The service returns the row it locked, bare: serializing that
+        re-aggregates every line's receipt and adjustment totals and re-reads
+        its variant, product and option values one query at a time — measured
+        at ~20 queries per line on create and PATCH, the bulk of both."""
+        serializer.instance = self.get_queryset().get(pk=serializer.instance.pk)
+
     @action(detail=False, methods=["get"], url_path="last-cost")
     def last_cost(self, request):
         return self._last_cost_response(request)

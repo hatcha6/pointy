@@ -284,9 +284,9 @@ class PosApiService {
 
   Future<AnalyticsEventPage> fetchAnalyticsEvents({
     required AnalyticsEventQuery query,
-    int page = 1,
+    String? cursor,
   }) {
-    return _analytics.fetchEvents(query: query, page: page);
+    return _analytics.fetchEvents(query: query, cursor: cursor);
   }
 
   Future<BusinessAlertDigest> fetchBusinessNotifications({
@@ -687,6 +687,10 @@ class PosApiService {
 
   Future<Product> fetchProduct(int id) {
     return _catalog.fetchProduct(id);
+  }
+
+  Future<List<Product>> fetchProductsByIds(List<int> ids) {
+    return _catalog.fetchProductsByIds(ids);
   }
 
   Future<List<BoughtTogetherProduct>> fetchBoughtTogether(

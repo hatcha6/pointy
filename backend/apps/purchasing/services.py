@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import models, transaction
+from django.db.models import Prefetch, prefetch_related_objects
 from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
@@ -24,7 +25,9 @@ from apps.inventory.services import (
     create_stock_movement,
     create_stock_movements,
     lock_stock_item,
+    lock_stock_items,
     save_stock_item_quantities,
+    save_stock_item_quantities_bulk,
     stock_snapshot,
 )
 from .models import (
@@ -492,32 +495,48 @@ def _receiving_snapshots(purchase_order, *, lines):
 
 
 def _release_expected_stock(purchase_order, *, snapshots, created_by):
-    """Reverse the expected-stock counters this order still holds, line by
-    line. Used when its lines are about to be replaced, so their expectation
-    cannot linger. Only what is still outstanding is released: units a receipt
-    already turned into stock stopped being expected when it did.
+    """Reverse the expected-stock counters this order still holds. Used when
+    its lines are about to be replaced, so their expectation cannot linger.
+    Only what is still outstanding is released: units a receipt already
+    turned into stock stopped being expected when it did.
+
+    The whole order's stock rows are locked, written and journalled as one
+    batch (the same shape ``receive_purchase_order`` uses): a twenty-line edit
+    used to pay a lock, an update, an insert and a savepoint per line here,
+    and again in ``_add_expected_stock``.
     """
-    for snapshot in sorted(snapshots, key=lambda row: row["line"].variant_id):
+    pending = sorted(
+        (snapshot for snapshot in snapshots if snapshot["outstanding"] > 0),
+        key=lambda row: row["line"].variant_id,
+    )
+    if not pending:
+        return
+    stock_items = lock_stock_items([snapshot["line"].variant for snapshot in pending])
+    movements = []
+    touched = {}
+    for snapshot in pending:
         line = snapshot["line"]
-        if snapshot["outstanding"] <= 0:
-            continue
-        stock_item = lock_stock_item(variant=line.variant)
+        stock_item = stock_items[line.variant_id]
         before = stock_snapshot(stock_item)
         expected_reduction = decrement_expected(
             stock_item, line.to_base_quantity(snapshot["outstanding"])
         )
         if expected_reduction <= 0:
             continue
-        save_stock_item_quantities(stock_item)
-        create_stock_movement(
-            stock_item=stock_item,
-            variant=line.variant,
-            movement_type=StockMovement.Type.CANCEL_EXPECTED,
-            quantity=expected_reduction,
-            note=f"تعديل أمر شراء {purchase_order.order_number}",
-            created_by=created_by,
-            before=before,
+        touched[stock_item.pk] = stock_item
+        movements.append(
+            build_stock_movement(
+                stock_item=stock_item,
+                variant=line.variant,
+                movement_type=StockMovement.Type.CANCEL_EXPECTED,
+                quantity=expected_reduction,
+                note=f"تعديل أمر شراء {purchase_order.order_number}",
+                created_by=created_by,
+                before=before,
+            )
         )
+    save_stock_item_quantities_bulk(touched.values())
+    create_stock_movements(movements)
 
 
 def _reverse_received_stock(purchase_order, *, snapshots, created_by):
@@ -536,23 +555,33 @@ def _reverse_received_stock(purchase_order, *, snapshots, created_by):
     ]
     if received:
         stock_items = validate_purchase_stock_available(received)
+        movements = []
+        touched = {}
         for line, quantity in received:
             stock_item = stock_items[line.variant_id]
             before = stock_snapshot(stock_item)
             base_quantity = line.to_base_quantity(quantity)
             stock_item.quantity_on_hand -= base_quantity
-            save_stock_item_quantities(stock_item)
-            create_stock_movement(
-                variant=line.variant,
-                stock_item=stock_item,
-                movement_type=StockMovement.Type.DECREASE,
-                quantity=base_quantity,
-                note=f"تعديل استلام {purchase_order.order_number}",
-                created_by=created_by,
-                before=before,
-                voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RETURN,
-                voucher_id=purchase_order.pk,
+            touched[stock_item.pk] = stock_item
+            movements.append(
+                build_stock_movement(
+                    variant=line.variant,
+                    stock_item=stock_item,
+                    movement_type=StockMovement.Type.DECREASE,
+                    quantity=base_quantity,
+                    note=f"تعديل استلام {purchase_order.order_number}",
+                    created_by=created_by,
+                    before=before,
+                )
             )
+        # One write and one valuation pass for the whole take-back, valued
+        # in line order exactly as the per-line version was.
+        save_stock_item_quantities_bulk(touched.values())
+        create_stock_movements(
+            movements,
+            voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RETURN,
+            voucher_id=purchase_order.pk,
+        )
     # Expiry batches are cut from receipt lines and PROTECT them, so they go
     # first; the edited order records its own receipt, batches included.
     StockBatch.objects.filter(
@@ -664,25 +693,45 @@ def _rerecord_receiving(purchase_order, *, snapshots, request):
 
 def _add_expected_stock(purchase_order, *, created_by):
     """Register the expected-stock counters for the order's current lines —
-    the second half of an edit-while-submitted (mirrors submit)."""
-    for line in purchase_order.lines.select_related(
-        "variant",
-        "variant__product",
-    ).order_by("variant_id"):
-        stock_item = lock_stock_item(variant=line.variant)
+    the second half of an edit-while-submitted (mirrors submit). Batched like
+    ``_release_expected_stock``."""
+    lines = list(
+        purchase_order.lines.select_related("variant", "variant__product").order_by(
+            "variant_id"
+        )
+    )
+    if not lines:
+        return
+    stock_items = lock_stock_items([line.variant for line in lines])
+    movements = []
+    touched = {}
+    for line in lines:
+        stock_item = stock_items[line.variant_id]
         before = stock_snapshot(stock_item)
         expected_base = line.to_base_quantity(line.quantity)
         stock_item.quantity_expected += expected_base
-        save_stock_item_quantities(stock_item)
-        create_stock_movement(
-            stock_item=stock_item,
-            variant=line.variant,
-            movement_type=StockMovement.Type.EXPECTED,
-            quantity=expected_base,
-            note=f"شراء متوقع {purchase_order.order_number}",
-            created_by=created_by,
-            before=before,
+        touched[stock_item.pk] = stock_item
+        movements.append(
+            build_stock_movement(
+                stock_item=stock_item,
+                variant=line.variant,
+                movement_type=StockMovement.Type.EXPECTED,
+                quantity=expected_base,
+                note=f"شراء متوقع {purchase_order.order_number}",
+                created_by=created_by,
+                before=before,
+            )
         )
+    save_stock_item_quantities_bulk(touched.values())
+    create_stock_movements(movements)
+
+
+def _seeded_purchase_line(purchase_order, line_data):
+    line = PurchaseLine(purchase_order=purchase_order, **line_data)
+    line.net_line_total = line.line_total
+    line.net_unit_cost = line.unit_cost
+    line.effective_unit_cost = line.unit_cost
+    return line
 
 
 @transaction.atomic
@@ -753,8 +802,16 @@ def save_purchase_order_with_lines(
             purchase_order.lines.all().delete()
 
     if lines_data is not None:
-        for line_data in lines_data:
-            PurchaseLine.objects.create(purchase_order=purchase_order, **line_data)
+        # One INSERT for the order's lines. ``PurchaseLine.save`` seeds the net
+        # and effective figures from the raw ones; ``recalculate`` below
+        # rewrites every one of them for the whole order in one statement, so
+        # the seed only has to be the same starting point save() would give.
+        PurchaseLine.objects.bulk_create(
+            [
+                _seeded_purchase_line(purchase_order, line_data)
+                for line_data in lines_data
+            ]
+        )
 
     if rebuild_expected:
         # The order is already submitted, so the new lines take effect as
@@ -957,7 +1014,18 @@ def submit_purchase_order(purchase_order, *, request=None):
     return locked_order
 
 
-def lock_purchase_lines_for_update(purchase_order, *, line_ids=None):
+def lock_purchase_lines_for_update(purchase_order, *, line_ids=None, prime_totals=False):
+    """Lock an order's lines (and their receipt/adjustment rows) for a write.
+
+    With ``prime_totals`` the locked receipt and adjustment rows are also
+    handed to the lines as prefetched relations, so ``accepted_quantity``,
+    ``outstanding_quantity`` & co. answer from memory instead of running three
+    aggregates per line per read — receiving a twenty-line order asked those
+    questions three hundred times. The rows are the same ones the lock reads;
+    only where they are kept changes. A caller that then writes receipt or
+    adjustment rows must call ``refresh_purchase_line_totals`` before reading
+    the properties again, which is why this is opt-in.
+    """
     queryset = (
         PurchaseLine.objects.select_for_update()
         .filter(purchase_order=purchase_order)
@@ -967,19 +1035,64 @@ def lock_purchase_lines_for_update(purchase_order, *, line_ids=None):
     if line_ids is not None:
         queryset = queryset.filter(pk__in=line_ids)
     lines = list(queryset)
+    for line in lines:
+        # ``accepted_quantity`` reads the order's status when nothing has been
+        # received; the caller holds the order, so no query per line for it.
+        line.purchase_order = purchase_order
     if lines:
         line_ids = [line.pk for line in lines]
-        list(
+        receipt_rows = (
             PurchaseReceiptLine.objects.select_for_update()
             .filter(purchase_line_id__in=line_ids)
             .order_by("pk")
         )
-        list(
+        adjustment_rows = (
             PurchaseOrderAdjustmentLine.objects.select_for_update()
             .filter(purchase_line_id__in=line_ids)
             .order_by("pk")
         )
+        if prime_totals:
+            prefetch_related_objects(
+                lines,
+                Prefetch("receipt_lines", queryset=receipt_rows),
+                Prefetch("adjustment_lines", queryset=adjustment_rows),
+            )
+        else:
+            list(receipt_rows)
+            list(adjustment_rows)
     return lines
+
+
+def refresh_purchase_line_totals(lines):
+    """Re-read the receipt/adjustment rows behind the lines' quantity
+    properties after a write changed them (two queries for the whole order)."""
+    lines = list(lines)
+    for line in lines:
+        cache = getattr(line, "_prefetched_objects_cache", None)
+        if cache:
+            cache.pop("receipt_lines", None)
+            cache.pop("adjustment_lines", None)
+    if lines:
+        prefetch_related_objects(lines, "receipt_lines", "adjustment_lines")
+
+
+def latest_purchase_lines_for_variants(variant_ids):
+    """Batched ``latest_purchase_line_for_variant``: ``{variant_id: line}`` for
+    the newest non-cancelled purchase of each variant, in one query. Variants
+    never bought are absent."""
+    ids = {variant_id for variant_id in variant_ids if variant_id is not None}
+    if not ids:
+        return {}
+    latest = {}
+    lines = (
+        PurchaseLine.objects.filter(variant_id__in=ids)
+        .exclude(purchase_order__status=PurchaseOrder.Status.CANCELLED)
+        .order_by("variant_id", "-created_at", "-id")
+    )
+    for line in lines.iterator():
+        if line.variant_id not in latest:
+            latest[line.variant_id] = line
+    return latest
 
 
 def default_receipt_lines(locked_order, lines=None):
@@ -1126,6 +1239,7 @@ def apply_receipt_stock_changes(
     cancelled_quantity,
     expected_quantities,
     created_by,
+    stock_items=None,
 ):
     """Adjust one received line's stock and return its unsaved movements.
 
@@ -1136,7 +1250,17 @@ def apply_receipt_stock_changes(
     snapshot taken before its own adjustment.
     """
     movements = []
-    stock_item = lock_stock_item(variant=line.variant)
+    if stock_items is None:
+        stock_item = lock_stock_item(variant=line.variant)
+        save = save_stock_item_quantities
+    else:
+        # The caller locked the whole delivery's rows in one statement and
+        # writes them back in one UPDATE once every line has been applied; the
+        # in-memory row is the one source of truth in between.
+        stock_item = stock_items[line.variant_id]
+
+        def save(_stock_item):
+            return None
 
     # Receipt quantities are in the line's purchase unit (whole packs); stock is
     # kept in base units, so convert each at the boundary via the line's factor.
@@ -1147,7 +1271,7 @@ def apply_receipt_stock_changes(
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand += accepted_expected_base
         decrement_expected(stock_item, accepted_expected_base)
-        save_stock_item_quantities(stock_item)
+        save(stock_item)
         movements.append(
             build_stock_movement(
                 stock_item=stock_item,
@@ -1167,7 +1291,7 @@ def apply_receipt_stock_changes(
         accepted_overage_base = line.to_base_quantity(accepted_overage)
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand += accepted_overage_base
-        save_stock_item_quantities(stock_item)
+        save(stock_item)
         movements.append(
             build_stock_movement(
                 stock_item=stock_item,
@@ -1185,7 +1309,7 @@ def apply_receipt_stock_changes(
     if damaged_expected > 0:
         before = stock_snapshot(stock_item)
         decrement_expected(stock_item, line.to_base_quantity(damaged_expected))
-        save_stock_item_quantities(stock_item)
+        save(stock_item)
         movements.append(
             build_stock_movement(
                 stock_item=stock_item,
@@ -1202,7 +1326,7 @@ def apply_receipt_stock_changes(
     if cancelled_expected > 0:
         before = stock_snapshot(stock_item)
         decrement_expected(stock_item, line.to_base_quantity(cancelled_expected))
-        save_stock_item_quantities(stock_item)
+        save(stock_item)
         movements.append(
             build_stock_movement(
                 stock_item=stock_item,
@@ -1270,7 +1394,7 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
         )
 
     created_by = purchase_created_by(request)
-    locked_lines = lock_purchase_lines_for_update(locked_order)
+    locked_lines = lock_purchase_lines_for_update(locked_order, prime_totals=True)
     if lines_data is None:
         lines_data = default_receipt_lines(locked_order, locked_lines)
     else:
@@ -1291,8 +1415,10 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
     )
 
     # Collected across every line so the whole delivery is written and valued in
-    # one batch rather than once per line.
+    # one batch rather than once per line — and its stock rows locked and
+    # written back the same way.
     stock_movements = []
+    stock_items = lock_stock_items([line_data["line"].variant for line_data in lines_data])
 
     for line_data in lines_data:
         line = line_data["line"]
@@ -1326,6 +1452,7 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
                 cancelled_quantity=cancelled_quantity,
                 expected_quantities=expected_quantities,
                 created_by=created_by,
+                stock_items=stock_items,
             )
         )
         receipt_line = PurchaseReceiptLine.objects.create(
@@ -1351,11 +1478,14 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
         )
 
     # One insert and one valuation pass for the whole delivery.
+    save_stock_item_quantities_bulk(stock_items.values())
     create_stock_movements(
         stock_movements,
         voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RECEIPT,
         voucher_id=locked_order.pk,
     )
+    # The receipt lines just written change every line's outstanding figure.
+    refresh_purchase_line_totals(locked_lines)
 
     has_outstanding = any(
         line.outstanding_quantity > 0 for line in locked_lines
@@ -1496,13 +1626,12 @@ def validate_purchase_stock_available(lines):
             requested_display_by_variant.get(line.variant_id, 0) + quantity
         )
 
-    stock_items = {}
+    stock_items = lock_stock_items(variants_by_id.values())
     shortages = []
     for variant_id in sorted(requested_base_by_variant):
         variant = variants_by_id[variant_id]
         base_needed = requested_base_by_variant[variant_id]
-        stock_item = lock_stock_item(variant=variant)
-        stock_items[variant_id] = stock_item
+        stock_item = stock_items[variant_id]
         if stock_item.quantity_on_hand < base_needed:
             shortages.append(
                 {

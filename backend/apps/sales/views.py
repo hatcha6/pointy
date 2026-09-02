@@ -19,7 +19,7 @@ from apps.core.pagination import CreatedAtCursorPagination
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_has_full_visibility
 from apps.fraud.services import schedule_targeted_sweep
-from .models import Order, RegisterCashMovement, RegisterSession
+from .models import Order, OrderLine, RegisterCashMovement, RegisterSession
 from .register_summary import cached_register_session_summary
 from .serializers import (
     CheckoutSerializer,
@@ -142,12 +142,25 @@ class OrderViewSet(
             queryset = self._list_summary_queryset(queryset)
         product_id = self.request.query_params.get("product")
         variant_id = self.request.query_params.get("variant")
+        # Semi-joins, not a JOIN + DISTINCT: the product page's "recent sales"
+        # asks for every order containing the product, and joining every one
+        # of its lines then de-duplicating the whole result (and COUNTing it
+        # the same way for the page header) is a sort over the product's entire
+        # sales history — the field measured 3 to 17 s on a popular item. An
+        # ``id IN (lines of this product)`` lets the planner walk the line
+        # index and stop at the page.
         if product_id:
-            queryset = queryset.filter(lines__variant__product_id=product_id)
+            queryset = queryset.filter(
+                id__in=OrderLine.objects.filter(
+                    variant__product_id=product_id
+                ).values("order_id")
+            )
         if variant_id:
-            queryset = queryset.filter(lines__variant_id=variant_id)
-        if product_id or variant_id:
-            queryset = queryset.distinct()
+            queryset = queryset.filter(
+                id__in=OrderLine.objects.filter(variant_id=variant_id).values(
+                    "order_id"
+                )
+            )
         if user_has_full_visibility(self.request.user):
             return queryset
         # A returns-desk operator may reach ONE invoice at a time (fetch it by id

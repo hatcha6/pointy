@@ -2,7 +2,6 @@ import django_filters
 from django import forms
 from django.core.handlers.asgi import ASGIRequest
 from django.http import StreamingHttpResponse
-from django.db.models import Q
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -17,6 +16,8 @@ from apps.core.streaming import aiter_in_thread
 
 from .export import estimate_export_rows
 from .models import AnalyticsEvent
+from apps.core.pagination import OccurredAtCursorPagination
+from .scope import TECHNICAL_EVENT_NAMES, technical_events_q  # noqa: F401 — re-exported
 from .serializers import (
     AnalyticsEventBatchSerializer,
     AnalyticsEventExportQuerySerializer,
@@ -171,16 +172,6 @@ ANALYTICS_EVENT_ACTIONS = {
     "purchase_order_deleted": "purchasing.purchase_order.deleted",
 }
 
-TECHNICAL_EVENT_NAMES = {
-    "app.lifecycle_changed",
-    "app.started",
-    "backend.request",
-    "frontend.frame_timing",
-    "frontend.http_request",
-    "frontend.interaction",
-    "frontend.operation",
-    "frontend.screen_viewed",
-}
 
 
 class NumberInFilter(django_filters.BaseInFilter, django_filters.NumberFilter):
@@ -322,9 +313,7 @@ class AnalyticsEventFilter(django_filters.FilterSet):
         return queryset.filter(name__in=event_names)
 
     def filter_activity_scope(self, queryset, name, value):
-        technical_query = Q(event_type=AnalyticsEvent.EventType.PERFORMANCE) | Q(
-            name__in=TECHNICAL_EVENT_NAMES
-        )
+        technical_query = technical_events_q()
         if value == "reviewable":
             return queryset.exclude(technical_query)
         if value == "technical":
@@ -441,6 +430,12 @@ class AnalyticsEventViewSet(
         "export": ("analytics.view_analyticsevent",),
     }
     queryset = AnalyticsEvent.objects.select_related("received_by")
+    # Keyset paging: a page number is an OFFSET into a table that grows at the
+    # head every second, and the page-number paginator also ran an exact
+    # COUNT(*) over the filtered set on every page — 10 to 16 s a page on a
+    # shop with a month of telemetry (the activity-log screen's whole cost).
+    # A cursor needs no count and anchors each page to the last row seen.
+    pagination_class = OccurredAtCursorPagination
     filterset_class = AnalyticsEventFilter
     search_fields = ("name", "trace_id", "entity_type", "entity_id")
     ordering_fields = ("occurred_at", "created_at", "severity", "risk_score")

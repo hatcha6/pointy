@@ -3,6 +3,8 @@ from django.conf import settings
 from django.core.cache import cache
 from decimal import Decimal, ROUND_HALF_UP
 
+from datetime import timedelta
+
 from django.db import transaction
 from django.db.models import (
     BooleanField,
@@ -10,6 +12,7 @@ from django.db.models import (
     Exists,
     F,
     OuterRef,
+    Prefetch,
     ProtectedError,
     Q,
     Sum,
@@ -55,6 +58,7 @@ from .models import (
     ModifierGroup,
     Product,
     ProductCategory,
+    ProductModifierGroup,
     ProductUnit,
     ProductVariant,
     UnitOfMeasure,
@@ -124,6 +128,19 @@ def requested_category_ids(query_params):
 
 class VariantIdInFilter(django_filters.BaseInFilter, django_filters.NumberFilter):
     """Comma-separated ``?ids=`` list filter."""
+
+
+class ProductFilter(django_filters.FilterSet):
+    # Fetch a known set of products in one request. The purchase-order editor
+    # rebuilds a draft from an order's lines and needs each line's full product
+    # (variants, units) — one request for the whole order beats one
+    # product-detail round trip per line (field data: up to 59 parallel
+    # fetches at ~3 s each to open a single order).
+    ids = VariantIdInFilter(field_name="id", lookup_expr="in")
+
+    class Meta:
+        model = Product
+        fields = ("is_active",)
 
 
 class ProductVariantFilter(django_filters.FilterSet):
@@ -240,6 +257,12 @@ class ProductCategoryViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             )
 
 
+# The "bought together" panel looks at the newest baskets containing the
+# product, within this window and at most this many of them.
+BOUGHT_TOGETHER_WINDOW_DAYS = 180
+BOUGHT_TOGETHER_MAX_ORDERS = 2000
+
+
 class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     active_cache_key = "catalog:active_product_ids"
     serializer_class = ProductCatalogSerializer
@@ -267,13 +290,18 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         category_detail_prefetch("categories"),
         unit_detail_prefetch("units__unit"),
         "units__barcodes",
-        "variants",
+        # Each variant serializes its on-hand quantity (variant.stock is a 1:1),
+        # joined into the variant rows rather than fetched as its own prefetch
+        # query. A single product's retrieve is a dozen round trips of a few
+        # rows each, and on the shop server each round trip costs more than
+        # the rows do — so the 1:1 and FK hops below ride on their parent
+        # prefetch instead of being queries of their own.
+        Prefetch("variants", queryset=ProductVariant.objects.select_related("stock")),
         image_attachment_prefetch("variants__attachments"),
-        "variants__option_values",
-        "variants__option_values__option",
-        # Each variant serializes its on-hand quantity (variant.stock is a 1:1);
-        # prefetch it so quantity_on_hand doesn't query once per variant.
-        "variants__stock",
+        Prefetch(
+            "variants__option_values",
+            queryset=VariantOptionValue.objects.select_related("option"),
+        ),
         "variant_options",
         "variant_options__values",
         # Modifier groups are serialized for every product in the catalog list
@@ -281,9 +309,13 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         # (link -> group -> options). Prefetch both chains so neither fires a
         # query per product (product_modifier_group_details reuses the links).
         "modifier_groups",
+        Prefetch(
+            "modifier_group_links",
+            queryset=ProductModifierGroup.objects.select_related("group"),
+        ),
         "modifier_group_links__group__options",
     )
-    filterset_fields = ("is_active",)
+    filterset_class = ProductFilter
     # CatalogRelevanceFilter owns search + ordering for this viewset (it replaces
     # the stock SearchFilter/OrderingFilter): it ranks matches by relevance, keeps
     # numeric queries on codes, and emits a stable ORDER BY. DjangoFilterBackend
@@ -338,6 +370,32 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         if getattr(self, "action", None) in self.identity_only_actions:
             return queryset.prefetch_related(None)
         return queryset
+
+    def filter_queryset(self, queryset):
+        # The filter backends answer list questions — search relevance, the
+        # client's sort, ``?is_active=`` — yet DRF runs them inside
+        # ``get_object()`` too, so every detail route built the FilterSet and a
+        # relevance ORDER BY for a lookup by primary key.
+        if self.detail:
+            return queryset
+        return super().filter_queryset(queryset)
+
+    def retrieve(self, request, *args, **kwargs):
+        # Same conditional GET as the list: the product-details screen re-opens
+        # the same products all day, and an unchanged catalog answers those
+        # before the prefetch tree or the serializer run.
+        version = catalog_version()
+        etag = catalog_etag(request, version)
+        if etag is not None and request.headers.get("If-None-Match") == etag:
+            response = Response(
+                status=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag}
+            )
+            return attach_catalog_version(response, version)
+        response = super().retrieve(request, *args, **kwargs)
+        if etag is not None and response.status_code == status.HTTP_200_OK:
+            response["ETag"] = etag
+            attach_catalog_version(response, version)
+        return response
 
     def _catalog_queryset(self):
         queryset = self._with_variant_rollups(super().get_queryset())
@@ -489,7 +547,8 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
 
     def _has_selective_list_filter(self):
         return bool(
-            self.request.query_params.get("barcode")
+            self.request.query_params.get("ids")
+            or self.request.query_params.get("barcode")
             or self.request.query_params.get("search")
             or self.request.query_params.get("category")
             or self.request.query_params.get("categories")
@@ -630,10 +689,16 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             limit = 8
         limit = max(1, min(limit, 20))
 
+        # Recent baskets only, and a bounded number of them: the panel answers
+        # "what sells with this today", and ranking every paid order in the
+        # shop's history for a staple item was a 50,000-order scan per open
+        # (field p95 9.9 s, max 18 s on the product page).
+        since = timezone.now() - timedelta(days=BOUGHT_TOGETHER_WINDOW_DAYS)
         ranked = products_bought_together(
-            orders=Order.objects.filter(status=Order.Status.PAID),
+            orders=Order.objects.filter(status=Order.Status.PAID, created_at__gte=since),
             product=product,
             limit=limit,
+            max_orders=BOUGHT_TOGETHER_MAX_ORDERS,
         )
         products_by_id = {
             product.id: product

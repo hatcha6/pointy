@@ -29,11 +29,14 @@ from .models import RelayInstallation, ShopSettings
 from .permissions import HasPointyPermission
 from .relay import (
     RelayControlError,
+    RelayDeadline,
     connector_setup_token_accepted,
     consume_connector_setup_token,
     ensure_relay_installation,
     issue_pairing_ticket,
+    relay_config,
     relay_status_payload,
+    relay_transport_cooldown_active,
     scoped_relay_client,
     sync_relay_installation,
 )
@@ -152,18 +155,40 @@ class RelayPairingView(views.APIView):
         installation = RelayInstallation.load()
         if installation is None:
             return Response(self._inactive_payload(reason="relay_not_configured"))
+        # Pairing runs at every sign-in and is opportunistic: LAN operation
+        # must not wait on the uplink. A recent transport failure is answered
+        # from memory, and the two relay round trips below share ONE wall-clock
+        # budget so a slow link cannot hold a worker for a multiple of the
+        # per-request timeout (field data: a median of 16 s per pairing on a
+        # shop with a poor uplink, 58 times in a week).
+        if relay_transport_cooldown_active():
+            return Response(self._inactive_payload(installation, reason="relay_unavailable"))
+        deadline = RelayDeadline(self._pairing_budget_seconds())
+        per_call = relay_config().timeout_seconds
         try:
-            installation = sync_relay_installation(installation)
+            installation = sync_relay_installation(
+                installation,
+                timeout=deadline.timeout(per_call),
+                # Best-effort and retried by the periodic sync; not worth a
+                # third round trip on the sign-in path.
+                push_shop_name=False,
+            )
         except (ImproperlyConfigured, RelayControlError):
             return Response(self._inactive_payload(reason="relay_unavailable"))
         if not installation.remote_access_supported:
             return Response(self._inactive_payload(installation, reason="relay_not_active"))
 
+        ticket_timeout = deadline.timeout(per_call)
+        if ticket_timeout is None:
+            return Response(
+                self._inactive_payload(installation, reason="relay_unavailable")
+            )
         try:
             issued = issue_pairing_ticket(
                 installation,
                 device_id=serializer.validated_data.get("device_id", ""),
                 device_name=serializer.validated_data.get("device_name", ""),
+                timeout=ticket_timeout,
             )
         except (ImproperlyConfigured, RelayControlError):
             return Response(
@@ -203,6 +228,10 @@ class RelayPairingView(views.APIView):
         }
         response = RelayPairingResponseSerializer(payload)
         return Response(response.data)
+
+    @staticmethod
+    def _pairing_budget_seconds():
+        return max(int(getattr(settings, "POINTY_RELAY_PAIRING_BUDGET_SECONDS", 8)), 1)
 
     def _inactive_payload(self, installation=None, *, reason):
         return RelayPairingResponseSerializer(

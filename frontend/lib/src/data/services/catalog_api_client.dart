@@ -25,6 +25,10 @@ import 'api_session.dart';
 /// page size. A longer set is split into several requests.
 const int catalogVariantIdBatchSize = 50;
 
+/// How many product ids one `products/?ids=` request may carry: the server's
+/// catalog page size. A longer set is split into several requests.
+const int catalogProductIdBatchSize = 50;
+
 class CatalogApiClient {
   const CatalogApiClient(this._session);
 
@@ -48,8 +52,39 @@ class CatalogApiClient {
     );
   }
 
+  /// Fetches an exact set of products by id in one request — the purchase
+  /// order editor rebuilds a draft from an order's lines and needs each line's
+  /// full product (variants, units), so one request for the whole order
+  /// replaces a product-detail round trip per line.
+  ///
+  /// Archived products are included: an order may still reference a product
+  /// that was archived after it was written, and the editor decides what to
+  /// do with such a line rather than silently losing it here.
+  ///
+  /// [ids] must not exceed the server's page size (see
+  /// [catalogProductIdBatchSize]); callers with more send several batches.
+  Future<List<Product>> fetchProductsByIds(List<int> ids) async {
+    if (ids.isEmpty) {
+      return const [];
+    }
+    final response = await _session.get(
+      'products/',
+      query: {'ids': ids.join(','), 'archived': 'all'},
+      conditionalCache: true,
+    );
+    _session.ensureSuccess(response, 'Product request failed with status');
+    return ProductPage.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    ).products;
+  }
+
   Future<Product> fetchProduct(int id) async {
-    final response = await _session.get('products/$id/');
+    // The server answers an unchanged product with a 304 (same catalog
+    // version ETag as the list), so re-opening a product costs no payload.
+    final response = await _session.get(
+      'products/$id/',
+      conditionalCache: true,
+    );
     _session.ensureSuccess(
       response,
       'Product detail request failed with status',

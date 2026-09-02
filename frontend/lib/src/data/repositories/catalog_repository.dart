@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../../core/result.dart';
 import '../../core/token_lru_cache.dart';
 import '../../shared/barcode/scale_barcode.dart';
@@ -29,7 +31,8 @@ import '../models/variant_option_value.dart';
 import '../models/variant_option_value_draft.dart';
 import '../models/variant_option_value_page.dart';
 import '../models/variant_option_value_query.dart';
-import '../services/catalog_api_client.dart' show catalogVariantIdBatchSize;
+import '../services/catalog_api_client.dart'
+    show catalogProductIdBatchSize, catalogVariantIdBatchSize;
 import '../services/pos_api_service.dart';
 
 class CatalogRepository {
@@ -97,6 +100,30 @@ class CatalogRepository {
 
   Future<Result<Product>> loadProduct(int id) async {
     return Result.guard(() => _service.fetchProduct(id));
+  }
+
+  /// Loads a known set of products in as few requests as the server's page
+  /// size allows (see [catalogProductIdBatchSize]). Ids the server does not
+  /// know are simply absent from the result.
+  Future<Result<List<Product>>> loadProductsByIds(List<int> ids) async {
+    final distinct = ids.toSet().toList(growable: false);
+    return Result.guard(() async {
+      final products = <Product>[];
+      for (
+        var start = 0;
+        start < distinct.length;
+        start += catalogProductIdBatchSize
+      ) {
+        final end = math.min(
+          start + catalogProductIdBatchSize,
+          distinct.length,
+        );
+        products.addAll(
+          await _service.fetchProductsByIds(distinct.sublist(start, end)),
+        );
+      }
+      return products;
+    });
   }
 
   Future<Result<List<BoughtTogetherProduct>>> loadBoughtTogether(

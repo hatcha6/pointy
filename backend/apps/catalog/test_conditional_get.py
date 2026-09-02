@@ -191,3 +191,54 @@ class CatalogVersionHeaderTests(TestCase):
         )
         after = self.client_api.get("/api/orders/")["X-Pointy-Discounts-Version"]
         self.assertNotEqual(after, before)
+
+
+@CACHED
+class ProductRetrieveConditionalGetTests(TestCase):
+    """The product-details screen re-opens the same products all day; the
+    field measured ``product-detail`` at ~330 ms alone on the shop server,
+    almost all of it a dozen round trips of a few rows each. The retrieve now
+    revalidates like the list and reads in fewer round trips."""
+
+    # Measured 9 after folding the 1:1 / FK hops into their parent prefetches
+    # (was 12); the list's per-request shape is guarded separately.
+    MAX_RETRIEVE_QUERIES = 10
+
+    def setUp(self):
+        cache.clear()
+        user = get_user_model().objects.create_user(username="manager2", password="x")
+        user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client_api = APIClient()
+        self.client_api.force_authenticate(user=user)
+        self.product = create_product_with_default_variant(
+            name="Gadget", sku="G-1", unit_price="10.00", barcode="654321"
+        )
+        self.url = f"/api/products/{self.product.pk}/"
+
+    def test_retrieve_carries_an_etag_and_revalidates_to_304(self):
+        response = self.client_api.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        etag = response["ETag"]
+        self.assertTrue(etag)
+
+        revalidated = self.client_api.get(self.url, HTTP_IF_NONE_MATCH=etag)
+        self.assertEqual(revalidated.status_code, status.HTTP_304_NOT_MODIFIED)
+        self.assertFalse(revalidated.content)
+
+        self.product.name = "Gadget v2"
+        self.product.save()
+        changed = self.client_api.get(self.url, HTTP_IF_NONE_MATCH=etag)
+        self.assertEqual(changed.status_code, status.HTTP_200_OK)
+        self.assertEqual(changed.data["name"], "Gadget v2")
+
+    def test_retrieve_reads_in_a_bounded_number_of_round_trips(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        self.client_api.get(self.url)  # warm permission/content-type caches
+        with CaptureQueriesContext(connection) as context:
+            response = self.client_api.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # The analytics middleware's own row is not a catalog read.
+        reads = [q for q in context.captured_queries if not q["sql"].startswith("INSERT")]
+        self.assertLessEqual(len(reads), self.MAX_RETRIEVE_QUERIES, [q["sql"][:90] for q in reads])

@@ -165,9 +165,9 @@ class _FakeActivityLogApiService extends PosApiService {
   @override
   Future<AnalyticsEventPage> fetchAnalyticsEvents({
     required AnalyticsEventQuery query,
-    int page = 1,
+    String? cursor,
   }) async {
-    lastQuery = query.toQueryParameters(page: page);
+    lastQuery = query.toCursorQueryParameters(cursor: cursor);
     return AnalyticsEventPage(
       events: [
         AnalyticsEventRecord(

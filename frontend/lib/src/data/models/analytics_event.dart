@@ -583,6 +583,21 @@ class AnalyticsEventQuery extends ModelQuery {
 
   @override
   Map<String, String> toQueryParameters({required int page}) {
+    return {..._filterParameters(), 'page': '$page'};
+  }
+
+  /// The same filters keyed by the server's opaque cursor: the event log is
+  /// appended to every second, so a page number is an offset into a moving
+  /// list (see [nextPageCursor]).
+  @override
+  Map<String, String> toCursorQueryParameters({String? cursor}) {
+    return {
+      ..._filterParameters(),
+      if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+    };
+  }
+
+  Map<String, String> _filterParameters() {
     final userIds = selectedUserIds;
     return {
       if (search.trim().isNotEmpty) 'search': search.trim(),
@@ -598,7 +613,6 @@ class AnalyticsEventQuery extends ModelQuery {
       if (entityId.trim().isNotEmpty) 'entity_id': entityId.trim(),
       if (minRiskScore != null) 'risk_score_min': '$minRiskScore',
       'ordering': ordering.apiValue,
-      'page': '$page',
     };
   }
 
@@ -746,22 +760,31 @@ class AnalyticsEventPage {
   const AnalyticsEventPage({
     required this.events,
     required this.hasMore,
-    required this.totalCount,
+    this.totalCount = 0,
+    this.nextCursor,
   });
 
   final List<AnalyticsEventRecord> events;
   final bool hasMore;
+
+  /// Always 0 since the log moved to cursor paging: a keyset window has no
+  /// total, and the exact count was the screen's whole cost.
   final int totalCount;
+
+  /// Cursor for the page after this one; null on the last page.
+  final String? nextCursor;
 
   factory AnalyticsEventPage.fromJson(Map<String, Object?> json) {
     final results = (json['results'] as List<Object?>? ?? const [])
         .whereType<Map<String, Object?>>()
         .map(AnalyticsEventRecord.fromJson)
         .toList(growable: false);
+    final cursor = nextPageCursor(json['next']);
     return AnalyticsEventPage(
       events: results,
-      hasMore: json['next'] != null,
+      hasMore: cursor != null,
       totalCount: _intFromJson(json['count']),
+      nextCursor: cursor,
     );
   }
 }

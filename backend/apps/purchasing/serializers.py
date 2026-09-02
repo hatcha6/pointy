@@ -11,6 +11,7 @@ from apps.core.period_lock import assert_period_open
 from apps.catalog.services import preload_line_variants
 from apps.catalog.units import (
     UnitConversionError,
+    prime_base_unit_from_cache,
     resolve_unit,
     unit_label_for,
     validate_quantity as validate_unit_quantity,
@@ -178,10 +179,53 @@ class PurchaseLineListSerializer(serializers.ListSerializer):
         return super().to_representation(rows)
 
 
+def prime_line_variants_into_context(context, lines):
+    """Load every line's variant (with its product) in one query and park the
+    map in the serializer ``context`` for ``_PurchaseLineVariantField``.
+
+    Ids that do not resolve are left out, so the field's own lookup produces
+    the ordinary "does not exist" error for them. A no-op when the map is
+    already there (a caller may prime it itself)."""
+    if not isinstance(lines, list) or "_purchase_variants_by_id" in context:
+        return
+    ids = set()
+    for line in lines:
+        raw = line.get("variant") if isinstance(line, dict) else None
+        try:
+            ids.add(int(raw))
+        except (TypeError, ValueError):
+            continue
+    if ids:
+        context["_purchase_variants_by_id"] = ProductVariant.objects.select_related(
+            "product"
+        ).in_bulk(ids)
+
+
+class _PurchaseLineVariantField(serializers.PrimaryKeyRelatedField):
+    """``variant`` resolved from a per-request map when the order serializer
+    has pre-loaded every line's variant (see
+    ``PurchaseOrderSerializer.to_internal_value``); one query for the document
+    instead of one per line. Falls back to the ordinary lookup for a lone
+    line or a caller that did not prime the map."""
+
+    def to_internal_value(self, data):
+        primed = self.context.get("_purchase_variants_by_id")
+        if primed is not None:
+            try:
+                key = int(data)
+            except (TypeError, ValueError):
+                key = None
+            if key in primed:
+                return primed[key]
+        return super().to_internal_value(data)
+
+
 class PurchaseLineSerializer(serializers.ModelSerializer):
     product = serializers.IntegerField(source="variant.product_id", read_only=True)
-    variant = serializers.PrimaryKeyRelatedField(
-        queryset=ProductVariant.objects.all(),
+    variant = _PurchaseLineVariantField(
+        # Validation reads variant.product for every line (expiry rule, unit
+        # resolution); one JOIN here beats one product query per line.
+        queryset=ProductVariant.objects.select_related("product"),
     )
     product_name = serializers.CharField(source="variant.product.name", read_only=True)
     variant_sku = serializers.CharField(source="variant.sku", read_only=True)
@@ -499,6 +543,11 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         if requested_unit is None:
             requested_unit = getattr(self.instance, "unit", "") or ""
         quantity = attrs.get("quantity", getattr(self.instance, "quantity", None))
+        # The base unit-of-measure row is looked up per line otherwise; the
+        # order's lines share one code→row map through the serializer context.
+        prime_base_unit_from_cache(
+            variant.product, self.context.setdefault("_base_uoms", {})
+        )
         try:
             resolved = resolve_unit(
                 variant.product, requested_unit, field="unit", for_purchase=True
@@ -913,8 +962,12 @@ class PurchaseOrderAdjustmentSerializer(serializers.ModelSerializer):
 
 
 class PurchaseDiscountPreviewLineSerializer(serializers.Serializer):
-    variant = serializers.PrimaryKeyRelatedField(
-        queryset=ProductVariant.objects.all(),
+    # Resolved from the map the parent primes (one query for the whole
+    # preview); the field's own per-line lookup was the preview's only cost
+    # that grew with the order (21 of 28 queries on a 20-line preview) — and
+    # the editor re-previews on every edit.
+    variant = _PurchaseLineVariantField(
+        queryset=ProductVariant.objects.select_related("product"),
     )
     quantity = _quantity_input_field(min_value=Decimal('0.001'))
     unit_cost = serializers.DecimalField(
@@ -979,6 +1032,7 @@ class PurchaseDiscountPreviewSerializer(serializers.Serializer):
     def to_internal_value(self, data):
         if isinstance(data, dict):
             reject_legacy_landed_cost_fields(data)
+            prime_line_variants_into_context(self.context, data.get("lines"))
         return super().to_internal_value(data)
 
     def validate(self, attrs):
@@ -1591,6 +1645,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         if isinstance(data, dict):
             data = data.copy()
             reject_legacy_landed_cost_fields(data)
+            prime_line_variants_into_context(self.context, data.get("lines"))
             legacy_number = data.get("supplier_reference")
             invoice_number = data.get("supplier_invoice_number")
             if (

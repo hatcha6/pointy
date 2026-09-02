@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 import ssl
+import time
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone as datetime_timezone
 from urllib import error, request
@@ -14,6 +15,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
+from . import caching
 from .credentials import constant_time_secret_equal
 from .models import RelayConnectorSetupToken, RelayInstallation, ShopSettings
 
@@ -25,6 +27,66 @@ class RelayControlError(RuntimeError):
         super().__init__(message)
         self.status_code = status_code
         self.body = body
+
+
+# --- relay transport cooldown -------------------------------------------------
+# A shop on a slow or flapping uplink can spend the full request timeout on
+# EVERY relay call, and the opportunistic callers (device pairing at each
+# sign-in) chain several. Once a call fails at the transport level (timeout,
+# unreachable host) the failure is remembered for a cooldown window so those
+# opportunistic paths answer "relay unavailable" at once instead of holding a
+# worker for the whole budget again. Deliberate user actions (AI chat, image
+# search) do NOT consult it — a merchant who presses the button gets a real
+# attempt. Any successful relay call clears it.
+_TRANSPORT_COOLDOWN_KEY = "pointy:relay:transport-unavailable"
+
+
+def _transport_cooldown_seconds():
+    return max(int(getattr(settings, "POINTY_RELAY_UNAVAILABLE_COOLDOWN_SECONDS", 300)), 0)
+
+
+def relay_transport_cooldown_active():
+    """Whether a recent relay transport failure is still being remembered."""
+    return bool(caching._safe_get(_TRANSPORT_COOLDOWN_KEY, False))
+
+
+def note_relay_transport_failure():
+    ttl = _transport_cooldown_seconds()
+    if ttl <= 0:
+        return
+    caching._safe_set(_TRANSPORT_COOLDOWN_KEY, True, ttl)
+
+
+def clear_relay_transport_cooldown():
+    caching._safe_delete(_TRANSPORT_COOLDOWN_KEY)
+
+
+class RelayDeadline:
+    """A wall-clock budget shared by a chain of relay calls.
+
+    Each call in the chain gets ``min(per_call_timeout, time left)`` so the
+    chain as a whole can never exceed the budget, however slow the link is.
+    """
+
+    def __init__(self, budget_seconds, *, clock=None):
+        # Resolved at call time (not as a default argument) so tests can patch
+        # ``time.monotonic``.
+        self._clock = clock or time.monotonic
+        self._ends_at = self._clock() + max(float(budget_seconds), 0.0)
+
+    def remaining(self):
+        return max(self._ends_at - self._clock(), 0.0)
+
+    @property
+    def expired(self):
+        return self.remaining() <= 0
+
+    def timeout(self, per_call_timeout):
+        """Timeout for the next call, or ``None`` when the budget is spent."""
+        remaining = self.remaining()
+        if remaining <= 0:
+            return None
+        return min(float(per_call_timeout), remaining)
 
 
 @dataclass(frozen=True)
@@ -148,10 +210,11 @@ class RelayControlClient:
             return {"relay_token": self.config.access_token}
         return {"admin": True}
 
-    def get_installation(self, installation_id):
+    def get_installation(self, installation_id, *, timeout=None):
         return self._request(
             "GET",
             f"/v1/installations/{installation_id}",
+            timeout=timeout,
             **self._installation_auth(),
         )
 
@@ -169,12 +232,13 @@ class RelayControlClient:
             **self._installation_auth(),
         )
 
-    def issue_ticket(self, *, access_token, device_id="", device_name=""):
+    def issue_ticket(self, *, access_token, device_id="", device_name="", timeout=None):
         return self._request(
             "POST",
             "/v1/relay-tickets",
             body={"device_id": device_id, "device_name": device_name},
             relay_token=access_token,
+            timeout=timeout,
         )
 
     def issue_connector_certificate(self, *, installation_id, csr_pem):
@@ -350,10 +414,25 @@ class RelayControlClient:
             ) as response:
                 content = response.read()
         except error.HTTPError as exc:
+            # The relay answered — the transport is fine, only the request was
+            # refused. A 5xx from the relay still counts as reachable.
             detail = exc.read().decode("utf-8", errors="replace")
-            raise RelayControlError(f"relay control returned {exc.code}: {detail}") from exc
+            raise RelayControlError(
+                f"relay control returned {exc.code}: {detail}",
+                status_code=exc.code,
+                body=detail,
+            ) from exc
         except error.URLError as exc:
+            note_relay_transport_failure()
             raise RelayControlError(f"relay control request failed: {exc.reason}") from exc
+        except (TimeoutError, OSError) as exc:
+            # ``urlopen`` only wraps failures it sees while opening; a socket
+            # timeout during ``response.read()`` (or a TLS/socket OSError)
+            # surfaces raw and used to escape the view as a 500. Slow uplinks
+            # hit exactly that path.
+            note_relay_transport_failure()
+            raise RelayControlError(f"relay control request failed: {exc}") from exc
+        clear_relay_transport_cooldown()
 
         if not content:
             return {}
@@ -574,11 +653,20 @@ def push_shop_name_to_relay(installation=None, *, client=None):
     return True
 
 
-def sync_relay_installation(installation, *, client=None):
+def sync_relay_installation(installation, *, client=None, timeout=None, push_shop_name=True):
+    """Mirror the relay's entitlement state for ``installation`` down.
+
+    ``timeout`` bounds the status read (defaults to the configured relay
+    timeout). ``push_shop_name=False`` skips the best-effort shop-name push —
+    opportunistic callers on a budget (device pairing) leave it to the periodic
+    sync rather than spend a second round trip on a slow link.
+    """
     if installation is None:
         return None
     relay_client = client or scoped_relay_client(installation)
-    relay_installation = relay_client.get_installation(installation.installation_id)
+    relay_installation = relay_client.get_installation(
+        installation.installation_id, timeout=timeout
+    )
     # Entitlements are relay-owned, so mirror them down.
     installation.shop_name = relay_installation.get("shop_name") or installation.shop_name
     installation.relay_enabled = bool(relay_installation.get("relay_enabled", False))
@@ -603,16 +691,20 @@ def sync_relay_installation(installation, *, client=None):
     # copy. If the merchant renamed the shop while offline, our local name now
     # differs from that copy — push it up while we have the connection. Best-effort
     # and reusing the same authenticated client.
-    push_shop_name_to_relay(installation, client=relay_client)
+    if push_shop_name:
+        push_shop_name_to_relay(installation, client=relay_client)
     return installation
 
 
-def issue_pairing_ticket(installation, *, device_id="", device_name="", client=None):
+def issue_pairing_ticket(
+    installation, *, device_id="", device_name="", client=None, timeout=None
+):
     relay_client = client or RelayControlClient()
     issued = relay_client.issue_ticket(
         access_token=installation.access_token,
         device_id=device_id,
         device_name=device_name,
+        timeout=timeout,
     )
     installation.last_pairing_issued_at = timezone.now()
     installation.save(update_fields=["last_pairing_issued_at", "updated_at"])

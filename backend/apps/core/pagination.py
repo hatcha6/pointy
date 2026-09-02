@@ -27,3 +27,20 @@ class CreatedAtCursorPagination(CursorPagination):
     page_size = 50
     page_size_query_param = "page_size"
     max_page_size = 200
+
+
+class OccurredAtCursorPagination(CursorPagination):
+    """Keyset paging for the event log, newest first.
+
+    Same reasoning as ``CreatedAtCursorPagination`` — the log is appended to
+    every second — plus one more: page-number paging ran an exact ``COUNT(*)``
+    over the filtered set for every page, a full scan of a table that holds a
+    month of telemetry. No count is served; clients page until ``next`` is
+    null. ``id`` breaks ties within a second so a burst of same-instant rows
+    can neither repeat nor go missing across a page boundary.
+    """
+
+    ordering = ("-occurred_at", "-id")
+    page_size = 50
+    page_size_query_param = "page_size"
+    max_page_size = 200
