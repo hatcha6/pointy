@@ -84,6 +84,11 @@ dependencies:
   path_provider: ^2.1.4
   wakelock_plus: ^1.3.3
   flutter_tts: ^4.2.5
+  # Generative UI engine for the AI assistant. Pinned: the package is alpha
+  # and its API changes between minors. Only lib/src/features/ai/ui touches it.
+  a2ui_core: ^0.1.1
+  genui: ^0.10.2
+  json_schema_builder: ^0.1.7
 
 dev_dependencies:
   flutter_test:

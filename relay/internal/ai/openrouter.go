@@ -74,6 +74,11 @@ type ChatRequest struct {
 	// Tools is an optional OpenAI tool/function-calling array, passed through
 	// verbatim. When set the model may answer with tool calls.
 	Tools []map[string]any
+	// ResponseFormat constrains the reply's shape, passed through verbatim.
+	// Used for structured extraction (a supplier invoice read into a fixed JSON
+	// schema), where a free-form answer would have to be re-parsed and guessed
+	// at. Only json_schema forms are accepted upstream of here.
+	ResponseFormat map[string]any
 }
 
 // Usage reports token accounting for a completion when the provider returns it.
@@ -157,14 +162,15 @@ type streamOptions struct {
 }
 
 type wireRequest struct {
-	Model         string           `json:"model"`
-	Messages      []wireMessage    `json:"messages"`
-	MaxTokens     int              `json:"max_tokens,omitempty"`
-	Temperature   *float64         `json:"temperature,omitempty"`
-	Stream        bool             `json:"stream"`
-	StreamOptions *streamOptions   `json:"stream_options,omitempty"`
-	Plugins       []map[string]any `json:"plugins,omitempty"`
-	Tools         []map[string]any `json:"tools,omitempty"`
+	Model          string           `json:"model"`
+	Messages       []wireMessage    `json:"messages"`
+	MaxTokens      int              `json:"max_tokens,omitempty"`
+	Temperature    *float64         `json:"temperature,omitempty"`
+	Stream         bool             `json:"stream"`
+	StreamOptions  *streamOptions   `json:"stream_options,omitempty"`
+	Plugins        []map[string]any `json:"plugins,omitempty"`
+	Tools          []map[string]any `json:"tools,omitempty"`
+	ResponseFormat map[string]any   `json:"response_format,omitempty"`
 }
 
 // wireContent renders a message as either a plain string (text-only) or an
@@ -261,14 +267,15 @@ func (c Client) StreamChat(ctx context.Context, req ChatRequest, emit func(Event
 	}
 
 	body, err := json.Marshal(wireRequest{
-		Model:         req.Model,
-		Messages:      toWireMessages(req.Messages),
-		MaxTokens:     req.MaxTokens,
-		Temperature:   req.Temperature,
-		Stream:        true,
-		StreamOptions: &streamOptions{IncludeUsage: true},
-		Plugins:       req.Plugins,
-		Tools:         req.Tools,
+		Model:          req.Model,
+		Messages:       toWireMessages(req.Messages),
+		MaxTokens:      req.MaxTokens,
+		Temperature:    req.Temperature,
+		Stream:         true,
+		StreamOptions:  &streamOptions{IncludeUsage: true},
+		Plugins:        req.Plugins,
+		Tools:          req.Tools,
+		ResponseFormat: req.ResponseFormat,
 	})
 	if err != nil {
 		return err
@@ -371,13 +378,14 @@ func (c Client) Complete(ctx context.Context, req ChatRequest) (string, error) {
 	}
 
 	body, err := json.Marshal(wireRequest{
-		Model:       req.Model,
-		Messages:    toWireMessages(req.Messages),
-		MaxTokens:   req.MaxTokens,
-		Temperature: req.Temperature,
-		Stream:      false,
-		Plugins:     req.Plugins,
-		Tools:       req.Tools,
+		Model:          req.Model,
+		Messages:       toWireMessages(req.Messages),
+		MaxTokens:      req.MaxTokens,
+		Temperature:    req.Temperature,
+		Stream:         false,
+		Plugins:        req.Plugins,
+		Tools:          req.Tools,
+		ResponseFormat: req.ResponseFormat,
 	})
 	if err != nil {
 		return "", err

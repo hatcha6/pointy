@@ -992,3 +992,123 @@ func TestHandleAIChatContinuationSkipsRouterCall(t *testing.T) {
 		t.Fatalf("expected 2 stream calls, got %d", got)
 	}
 }
+
+// A structured-extraction call must reach the provider with its schema intact
+// and must not spend a router call: reading a document into a fixed shape is
+// not a conversation to classify.
+func TestHandleAIChatExtractionUsesExtractModelAndForwardsResponseFormat(t *testing.T) {
+	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
+	store, provisioned := provisionAIInstallation(t, now)
+
+	var forwardedFormat map[string]any
+	var streamCalls, routerCalls int
+	openrouter := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/chat/completions") {
+			http.NotFound(w, r)
+			return
+		}
+		var body struct {
+			Model          string         `json:"model"`
+			Stream         bool           `json:"stream"`
+			ResponseFormat map[string]any `json:"response_format"`
+		}
+		raw, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(raw, &body)
+		if !body.Stream {
+			routerCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"choices": []map[string]any{
+					{"message": map[string]any{"role": "assistant", "content": "smart"}},
+				},
+			})
+			return
+		}
+		streamCalls++
+		forwardedFormat = body.ResponseFormat
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		for _, chunk := range []string{
+			fmt.Sprintf(`data: {"model":%q,"choices":[{"delta":{"content":"{}"},"finish_reason":"stop"}]}`, body.Model),
+			"data: [DONE]",
+		} {
+			fmt.Fprintf(w, "%s\n\n", chunk)
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+	}))
+	defer openrouter.Close()
+
+	server := newAITestServer(t, store, openrouter.URL)
+	server.AIVisionModel = "test/vision"
+	server.AIExtractModel = "test/extract"
+
+	body := strings.NewReader(`{"purpose":"extract","messages":[{"role":"user","content":"read this invoice"}],` +
+		`"attachments":[{"kind":"image","data_uri":"data:image/png;base64,AAAA","name":"inv.png"}],` +
+		`"response_format":{"type":"json_schema","json_schema":{"name":"invoice","schema":{"type":"object"}}}}`)
+	request := httptest.NewRequest(http.MethodPost, "http://relay.test/v1/ai/chat", body)
+	request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+	recorder := httptest.NewRecorder()
+	server.ServeHTTP(recorder, request)
+	response := recorder.Result()
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.StatusCode)
+	}
+	payload := recorder.Body.String()
+	if !strings.Contains(payload, `"model":"test/extract"`) {
+		t.Fatalf("expected the extraction model, got %q", payload)
+	}
+	if routerCalls != 0 {
+		t.Fatalf("extraction must not spend a router call, got %d", routerCalls)
+	}
+	if streamCalls != 1 {
+		t.Fatalf("expected exactly one provider call, got %d", streamCalls)
+	}
+	if forwardedFormat == nil {
+		t.Fatal("expected response_format to reach the provider")
+	}
+	if kind, _ := forwardedFormat["type"].(string); kind != "json_schema" {
+		t.Fatalf("expected a json_schema response_format, got %v", forwardedFormat)
+	}
+}
+
+// Anything that is not a json_schema request is dropped rather than forwarded,
+// so a backend cannot steer the provider call into an unexpected mode.
+func TestSanitizedResponseFormatDropsUnsupportedShapes(t *testing.T) {
+	cases := []struct {
+		name  string
+		input map[string]any
+		want  bool
+	}{
+		{"nil", nil, false},
+		{"empty", map[string]any{}, false},
+		{"text mode", map[string]any{"type": "text"}, false},
+		{"json_object", map[string]any{"type": "json_object"}, false},
+		{"schema missing", map[string]any{"type": "json_schema"}, false},
+		{"valid", map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "x"}}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := sanitizedResponseFormat(tc.input) != nil
+			if got != tc.want {
+				t.Fatalf("sanitizedResponseFormat(%v) kept=%v, want %v", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+// An extraction request without a configured extraction model falls back to the
+// vision model, which is what read documents before this existed.
+func TestAIExtractModelFallsBackToVision(t *testing.T) {
+	server := HTTPServer{AIVisionModel: "test/vision"}
+	if got := server.aiExtractModel(); got != "test/vision" {
+		t.Fatalf("expected the vision model, got %q", got)
+	}
+	server.AIExtractModel = "test/extract"
+	if got := server.aiExtractModel(); got != "test/extract" {
+		t.Fatalf("expected the extraction model, got %q", got)
+	}
+}

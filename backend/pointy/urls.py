@@ -421,6 +421,9 @@ urlpatterns = [
         SendInvoiceSmsView.as_view(),
         name="crm-send-invoice-sms",
     ),
+    # Its own router (see apps.invoice_intake.urls) — mounted at
+    # api/invoice-intakes/ alongside the project router below.
+    path("api/", include("apps.invoice_intake.urls")),
     path("api/", include(router.urls)),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),

@@ -75,6 +75,11 @@ class AiChatRepository {
     });
   }
 
+  /// Applies a reviewed invoice intake and returns the created purchase order.
+  Future<Result<Map<String, Object?>>> applyInvoiceIntake(int intakeId) {
+    return Result.guard(() => _service.applyInvoiceIntake(intakeId));
+  }
+
   Future<Result<bool>> truncateConversation(int conversationId, int messageId) {
     return Result.guard(() async {
       await _service.truncateAiConversation(conversationId, messageId);

@@ -409,6 +409,11 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_AI_AUDIO_MODEL", ""),
 		"OpenRouter model used when a prompt carries a recorded voice clip; empty falls back to the vision model",
 	)
+	aiExtractModel := flags.String(
+		"ai-extract-model",
+		envString("POINTY_RELAY_AI_EXTRACT_MODEL", ""),
+		"OpenRouter model used to read a document into a fixed JSON schema; empty falls back to the vision model",
+	)
 	aiWebSearchEnabled := flags.Bool(
 		"ai-web-search-enabled",
 		envBool("POINTY_RELAY_AI_WEB_SEARCH_ENABLED", true),
@@ -848,6 +853,7 @@ func runServer(args []string) error {
 		AIRouterModel:             strings.TrimSpace(*aiRouterModel),
 		AIVisionModel:             strings.TrimSpace(*aiVisionModel),
 		AIAudioModel:              strings.TrimSpace(*aiAudioModel),
+		AIExtractModel:            strings.TrimSpace(*aiExtractModel),
 		AIWebSearchEnabled:        *aiWebSearchEnabled,
 		AIWebSearchMaxResults:     *aiWebSearchMaxResults,
 		AILimit5H:                 ratelimit.Policy{Limit: *aiLimit5H, Window: *aiLimit5HWindow},

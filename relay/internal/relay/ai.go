@@ -69,6 +69,31 @@ type aiChatRequest struct {
 	// rounds that combine web info with the model's tools. Only honoured on a
 	// continuation; a user turn is classified fresh.
 	WebSearch bool `json:"web_search"`
+	// ResponseFormat constrains the reply to a JSON schema, passed through to
+	// OpenRouter verbatim. Only the json_schema form is accepted; anything else
+	// is dropped rather than forwarded, so a client cannot steer the provider
+	// call into an unexpected mode.
+	ResponseFormat map[string]any `json:"response_format"`
+	// Purpose is an optional hint about what this call is for. "extract" picks
+	// the extraction model and skips the difficulty router: reading a document
+	// into a fixed schema is not a conversation and does not need classifying.
+	Purpose string `json:"purpose"`
+}
+
+// sanitizedResponseFormat returns the caller's response_format when it is a
+// json_schema request, and nil otherwise. Restricting the shape here keeps the
+// relay's provider call predictable no matter what a backend sends.
+func sanitizedResponseFormat(format map[string]any) map[string]any {
+	if len(format) == 0 {
+		return nil
+	}
+	if kind, _ := format["type"].(string); kind != "json_schema" {
+		return nil
+	}
+	if _, ok := format["json_schema"]; !ok {
+		return nil
+	}
+	return format
 }
 
 // handleAIChat serves relay-hosted AI chat. Unlike the default route it does NOT
@@ -238,8 +263,17 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 		go func() { webSearchCh <- s.needsWebSearch(r.Context(), request.Messages) }()
 	}
 
+	isExtraction := strings.EqualFold(strings.TrimSpace(request.Purpose), "extract")
+
 	var tier, model, routeTier string
 	switch {
+	case isExtraction:
+		// Reading a document into a fixed schema is not a conversation: there is
+		// nothing to classify, and the extraction model is chosen for vision +
+		// structured output rather than for reasoning difficulty.
+		tier = "extract"
+		routeTier = "smart"
+		model = s.aiExtractModel()
 	case isContinuation:
 		// Reuse the difficulty tier picked for this logical turn (carried by
 		// Django). No router call — the task hasn't changed.
@@ -350,12 +384,13 @@ func (s HTTPServer) handleAIChat(w http.ResponseWriter, r *http.Request) {
 	var replyBuf strings.Builder
 
 	streamErr := client.StreamChat(ctx, ai.ChatRequest{
-		Model:       model,
-		Messages:    messages,
-		MaxTokens:   request.MaxTokens,
-		Temperature: request.Temperature,
-		Plugins:     plugins,
-		Tools:       request.Tools,
+		Model:          model,
+		Messages:       messages,
+		MaxTokens:      request.MaxTokens,
+		Temperature:    request.Temperature,
+		Plugins:        plugins,
+		Tools:          request.Tools,
+		ResponseFormat: sanitizedResponseFormat(request.ResponseFormat),
 	}, func(event ai.Event) error {
 		switch event.Type {
 		case ai.EventDelta:
@@ -500,6 +535,15 @@ func (s HTTPServer) resolveAIModel(tier string) string {
 // Audio input needs an audio-capable model; this defaults to the vision model
 // (the common Gemini-class multimodal models already accept audio) unless a
 // dedicated POINTY_RELAY_AI_AUDIO_MODEL is configured.
+// aiExtractModel is the model used for structured document extraction. Falls
+// back to the vision model, which is what read the document before this existed.
+func (s HTTPServer) aiExtractModel() string {
+	if model := strings.TrimSpace(s.AIExtractModel); model != "" {
+		return model
+	}
+	return strings.TrimSpace(s.AIVisionModel)
+}
+
 func (s HTTPServer) aiAudioModel() string {
 	if model := strings.TrimSpace(s.AIAudioModel); model != "" {
 		return model

@@ -63,6 +63,8 @@ class AiMessageSerializer(serializers.ModelSerializer):
             "status",
             "sources",
             "web_searched",
+            # Generative-UI cards drawn on this turn, replayed on reload.
+            "ui_surfaces",
             "model",
             "tier",
             "prompt_tokens",
@@ -130,6 +132,9 @@ class AiChatRequestSerializer(serializers.Serializer):
     # then is the model told it can link the user to pages, so an older app never
     # shows an inert link it can't route.
     supports_navigation = serializers.BooleanField(required=False, default=False)
+    # Whether this client can render generated UI surfaces. An older client never
+    # gets a `ui` event it would have to ignore.
+    supports_ui = serializers.BooleanField(required=False, default=False)
 
 
 class AiAnswerSerializer(serializers.Serializer):
@@ -163,3 +168,4 @@ class AiChatResumeRequestSerializer(serializers.Serializer):
     # the action capability on so the resumed loop keeps its create/edit tools.
     supports_actions = serializers.BooleanField(required=False, default=True)
     supports_navigation = serializers.BooleanField(required=False, default=True)
+    supports_ui = serializers.BooleanField(required=False, default=False)

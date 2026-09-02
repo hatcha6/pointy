@@ -4,6 +4,8 @@ import 'package:pointy_frontend/src/data/models/ai_chat.dart';
 import 'package:pointy_frontend/src/data/repositories/ai_chat_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/ai/ai_attachment_picker.dart';
+import 'package:pointy_frontend/src/features/ai/ui/ai_surface_action.dart';
+import 'package:pointy_frontend/src/features/ai/ui/ai_surface_host.dart';
 import 'package:pointy_frontend/src/features/ai/view_models/ai_chat_view_model.dart';
 
 class _FakeAiChatRepository extends AiChatRepository {
@@ -49,6 +51,16 @@ class _FakeAiChatRepository extends AiChatRepository {
     for (final event in resumeEvents) {
       yield event;
     }
+  }
+
+  Map<String, Object?> applyResult = const {'order_number': 'PO-001'};
+  bool applySucceeds = true;
+  final List<int> appliedIntakeIds = [];
+
+  @override
+  Future<Result<Map<String, Object?>>> applyInvoiceIntake(int intakeId) async {
+    appliedIntakeIds.add(intakeId);
+    return applySucceeds ? Ok(applyResult) : Error(Exception('fail'));
   }
 
   @override
@@ -388,6 +400,149 @@ void main() {
     expect(text, isNull);
     expect(viewModel.messages.length, 2); // unchanged
     expect(viewModel.errorKind, AiChatErrorKind.network);
+  });
+
+  group('generated UI', () {
+    AiUiSurface surface({String id = 'card1'}) => AiUiSurface(
+      surfaceId: id,
+      title: 'ملخص',
+      components: const [
+        {'id': 'root', 'component': 'Text', 'text': 'مرحبا'},
+      ],
+    );
+
+    test('a ui event attaches the surface to the assistant turn', () async {
+      final repository = _FakeAiChatRepository([
+        AiChatUi(surface()),
+        const AiChatDelta('تم'),
+        const AiChatDone(conversationId: 5),
+      ]);
+      final viewModel = AiChatViewModel(repository);
+      addTearDown(viewModel.dispose);
+      final host = AiSurfaceHost();
+      addTearDown(host.dispose);
+      viewModel.attachSurfaceHost(host);
+
+      await viewModel.sendMessage('كيف المبيعات؟');
+
+      final assistant = viewModel.messages.last;
+      expect(assistant.uiSurfaces, hasLength(1));
+      expect(assistant.uiSurfaces.single.surfaceId, 'card1');
+      // The renderer has it too, so the bubble can draw it.
+      expect(host.isLive('card1'), isTrue);
+    });
+
+    test('a surface does not notify the view model per token', () async {
+      // Surfaces arrive once per tool result, so they must not reintroduce the
+      // per-token view-model churn the streaming path was fixed to avoid.
+      final repository = _FakeAiChatRepository([
+        const AiChatDelta('a'),
+        AiChatUi(surface()),
+        const AiChatDelta('b'),
+        const AiChatDone(conversationId: 5),
+      ]);
+      final viewModel = AiChatViewModel(repository);
+      addTearDown(viewModel.dispose);
+      final host = AiSurfaceHost();
+      addTearDown(host.dispose);
+      viewModel.attachSurfaceHost(host);
+
+      var notifications = 0;
+      viewModel.addListener(() => notifications += 1);
+      await viewModel.sendMessage('س');
+
+      // Exactly the structural notifications: send, and done.
+      expect(notifications, 2);
+    });
+
+    test('starting a new conversation clears the rendered cards', () async {
+      final repository = _FakeAiChatRepository([
+        AiChatUi(surface()),
+        const AiChatDone(conversationId: 5),
+      ]);
+      final viewModel = AiChatViewModel(repository);
+      addTearDown(viewModel.dispose);
+      final host = AiSurfaceHost();
+      addTearDown(host.dispose);
+      viewModel.attachSurfaceHost(host);
+
+      await viewModel.sendMessage('س');
+      expect(host.isLive('card1'), isTrue);
+
+      viewModel.startNewConversation();
+      expect(host.isLive('card1'), isFalse);
+    });
+
+    test('applying an invoice calls the API, not the model', () async {
+      // The user already reviewed the plan on the card; routing the decision
+      // back through a language model only adds a chance of it being misread.
+      final repository = _FakeAiChatRepository([
+        const AiChatDone(conversationId: 5),
+      ]);
+      final viewModel = AiChatViewModel(repository);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.applyInvoiceIntake(
+        const AiSurfaceAction(
+          kind: AiSurfaceActionKind.submit,
+          name: AiChatViewModel.applyInvoiceIntakeAction,
+          surfaceId: 'intake-7',
+          context: {'intake_id': 7},
+        ),
+      );
+
+      expect(repository.appliedIntakeIds, [7]);
+      // And the assistant is told what now exists.
+      expect(viewModel.messages.first.content, contains('7'));
+    });
+
+    test('a failed apply surfaces an error and sends no turn', () async {
+      final repository = _FakeAiChatRepository([
+        const AiChatDone(conversationId: 5),
+      ])..applySucceeds = false;
+      final viewModel = AiChatViewModel(repository);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.applyInvoiceIntake(
+        const AiSurfaceAction(
+          kind: AiSurfaceActionKind.submit,
+          name: AiChatViewModel.applyInvoiceIntakeAction,
+          surfaceId: 'intake-7',
+          context: {'intake_id': 7},
+        ),
+      );
+
+      expect(viewModel.errorKind, isNotNull);
+      expect(viewModel.messages, isEmpty);
+    });
+
+    test(
+      'a submitted card becomes an ordinary turn carrying its data',
+      () async {
+        final repository = _FakeAiChatRepository([
+          const AiChatDone(conversationId: 5),
+        ]);
+        final viewModel = AiChatViewModel(repository);
+        addTearDown(viewModel.dispose);
+        final host = AiSurfaceHost();
+        addTearDown(host.dispose);
+        viewModel.attachSurfaceHost(host);
+
+        await viewModel.sendUiInteraction(
+          const AiSurfaceAction(
+            kind: AiSurfaceActionKind.submit,
+            name: 'submit:reorder',
+            surfaceId: 'card1',
+            data: {'quantity': 12},
+          ),
+        );
+
+        final sent = viewModel.messages.first;
+        expect(sent.isUser, isTrue);
+        expect(sent.content, contains('submit:reorder'));
+        expect(sent.content, contains('"quantity": 12'));
+      },
+    );
   });
 
   AiChatAskUser askUser({

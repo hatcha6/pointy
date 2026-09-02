@@ -31,6 +31,7 @@ class AiApiClient {
       // This client renders the AI's in-app deep links (pointy://...), so the
       // backend may tell the model it can link the user to pages.
       'supports_navigation': true,
+      'supports_ui': true,
       if (attachments.isNotEmpty)
         'attachments': attachments.map((a) => a.toJson()).toList(),
     };
@@ -63,6 +64,7 @@ class AiApiClient {
       'supports_ask_user': true,
       'supports_actions': true,
       'supports_navigation': true,
+      'supports_ui': true,
       if (!declined) 'answers': answers.map((a) => a.toJson()).toList(),
     };
     await for (final event in _session.openEventStream(
@@ -113,6 +115,11 @@ class AiApiClient {
           arguments: data['arguments'],
           output: data['output'] as String?,
         );
+      case 'ui':
+        // A surface the backend already validated against the Pointy catalog.
+        // An unparseable payload is dropped rather than rendered half-built.
+        final surface = AiUiSurface.tryFrom(data);
+        return surface == null ? null : AiChatUi(surface);
       case 'done':
         final limits = data['usage_limits'];
         return AiChatDone(
@@ -206,6 +213,25 @@ class AiApiClient {
       response,
       'AI conversation delete failed with status',
     );
+  }
+
+  /// Applies a reviewed invoice intake: creates the supplier, any new products
+  /// and the draft purchase order, in one server-side transaction.
+  ///
+  /// Called straight from the review card rather than routed through the model:
+  /// the user has already reviewed the plan, and asking the model to relay the
+  /// decision would put an extra chance of misreading between the tap and the
+  /// purchase order.
+  Future<Map<String, Object?>> applyInvoiceIntake(int intakeId) async {
+    final response = await _session.post(
+      'invoice-intakes/$intakeId/apply/',
+      body: const <String, Object?>{},
+    );
+    _session.ensureSuccess(response, 'Invoice intake apply failed with status');
+    final decoded = jsonDecode(response.body);
+    return decoded is Map<String, Object?>
+        ? decoded
+        : const <String, Object?>{};
   }
 
   /// Deletes [messageId] and every message after it — the server-side half of an

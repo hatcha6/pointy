@@ -37,6 +37,8 @@ import 'package:pointy_frontend/src/shared/async_selection/async_multi_select_pi
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
+import 'ai_ui_preview_surfaces.dart';
+
 void main() => runApp(const _PreviewApp());
 
 class _PreviewApp extends StatelessWidget {
@@ -95,6 +97,7 @@ class _PreviewHostState extends State<_PreviewHost> {
       pickerMode: widget.screen == 'po',
       linksMode: widget.screen == 'links',
       webMode: widget.screen == 'web',
+      uiMode: widget.screen == 'ui',
     ),
     picker: _FakeAttachmentPicker(),
   );
@@ -142,6 +145,9 @@ class _PreviewHostState extends State<_PreviewHost> {
       case 'web':
         // A web-searched reply with source favicons next to the copy action.
         await _viewModel.sendMessage('كم سعر الذهب اليوم؟');
+      case 'ui':
+        // Prose plus one generated card, interleaved as they stream.
+        await _viewModel.sendMessage('كيف كانت مبيعات الشهر؟');
       default:
         await _viewModel.sendMessage('كيف أضيف منتجًا جديدًا إلى المتجر؟');
     }
@@ -209,6 +215,7 @@ class _FakeAiChatRepository extends AiChatRepository {
     this.pickerMode = false,
     this.linksMode = false,
     this.webMode = false,
+    this.uiMode = false,
   }) : super(PosApiService());
 
   /// When set, the scripted reply asks an interactive question (all 5 types)
@@ -230,6 +237,11 @@ class _FakeAiChatRepository extends AiChatRepository {
   /// favicon indicator + sources sheet can be screenshotted.
   final bool webMode;
 
+  /// When set, the scripted reply is short prose plus one generated card — the
+  /// balance the assistant is meant to strike, rather than a card for
+  /// everything.
+  final bool uiMode;
+
   @override
   Stream<AiChatEvent> streamChat({
     int? conversationId,
@@ -246,6 +258,24 @@ class _FakeAiChatRepository extends AiChatRepository {
     }
     if (pickerMode) {
       yield* _pickerScript();
+      return;
+    }
+    if (uiMode) {
+      const intro =
+          'ارتفعت مبيعاتك ١٢٪ هذا الشهر، والسبب الأساسي صنفان فقط. '
+          'التفاصيل في البطاقة:';
+      for (final word in intro.split(' ')) {
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        yield AiChatDelta('$word ');
+      }
+      yield AiChatUi(analyticsAnswerSurface());
+      const outro =
+          '\n\nلو رفعت سعر السكر ٥٪ فقط، يتحسّن الهامش دون أثر يُذكر على الطلب.';
+      for (final word in outro.split(' ')) {
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        yield AiChatDelta('$word ');
+      }
+      yield const AiChatDone(conversationId: 1, messageId: 2, model: 'preview');
       return;
     }
     if (webMode) {

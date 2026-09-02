@@ -2167,6 +2167,12 @@ class PosApiService {
   Future<void> truncateAiConversation(int conversationId, int messageId) {
     return _ai.truncateConversation(conversationId, messageId);
   }
+
+  /// Applies a reviewed supplier-invoice intake, creating the draft purchase
+  /// order (and any new supplier/products) in one server-side transaction.
+  Future<Map<String, Object?>> applyInvoiceIntake(int intakeId) {
+    return _ai.applyInvoiceIntake(intakeId);
+  }
 }
 
 const _shopLogoPdfContentTypes = {'image/jpeg', 'image/jpg', 'image/png'};

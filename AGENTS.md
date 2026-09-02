@@ -95,6 +95,28 @@ It supports two complementary modes via a `?screen=` query param:
   on the whole tree to format it (that reflows unrelated files); format just the
   paths you touched.
 
+## AI Generated UI
+
+The assistant can render real Pointy widgets inside a reply. The vocabulary is a
+closed catalog in `frontend/lib/src/features/ai/ui/items/`, and the rule that
+keeps generated screens on-brand is that **no catalog item exposes a styling
+property** — no colour, size, font, padding, width, radius. The model states
+meaning (`tone`, `variant`, `kind`); the widget owns appearance. A backend test
+fails if a forbidden property name ever appears.
+
+- After adding or changing a catalog item, run `make frontend-export-ai-catalog`.
+  The backend validates and describes the catalog from that exported JSON, and
+  its test fails when the file is stale.
+- Build every item out of an existing shared component. If nothing fits, add the
+  shared component first.
+- Preview visually with `make frontend-ai-ui-preview`
+  (`?screen=board|answer|invoice|form|dark`), and inside the real chat with the
+  AI preview's `?screen=ui`.
+- Only `lib/src/features/ai/ui/ai_surface_host.dart` may import `genui`. The
+  package is alpha; keeping it behind that one file is what makes it swappable.
+- Prose is the default in replies. A card is for comparisons, trends, records to
+  scan, or structured input — never for a one-line answer.
+
 ## Backend
 
 - Keep Django apps grouped by domain: catalog, inventory, sales, payments, and core.

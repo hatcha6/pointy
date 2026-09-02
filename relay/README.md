@@ -582,6 +582,11 @@ on the relay `server` command:
   window (`120`; uses the shared `POINTY_RELAY_RATE_LIMIT_WINDOW`). This is the
   short anti-burst guard; the subscription caps below are separate.
 - `POINTY_RELAY_AI_VISION_MODEL` — model for prompts with attachments.
+- `POINTY_RELAY_AI_EXTRACT_MODEL` — model for structured document extraction
+  (`purpose: "extract"`); empty falls back to the vision model. An extraction
+  request skips the difficulty router and may carry a `response_format` of
+  `{"type":"json_schema", ...}`, which the relay forwards verbatim; any other
+  `response_format` shape is dropped rather than passed through.
 - `POINTY_RELAY_AI_WEB_SEARCH_ENABLED` / `_MAX_RESULTS` — when `true` (default),
   a cheap classifier decides per user turn whether the question needs current or
   external information; if so the relay attaches OpenRouter's web-search plugin so

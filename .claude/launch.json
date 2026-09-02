@@ -224,6 +224,23 @@
         "redis"
       ],
       "port": 6379
+    },
+    {
+      "name": "ai-ui-preview",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": [
+        "run",
+        "-d",
+        "web-server",
+        "--web-hostname",
+        "127.0.0.1",
+        "--web-port",
+        "8091",
+        "-t",
+        "lib/dev/ai_ui_preview.dart"
+      ],
+      "cwd": "frontend",
+      "port": 8091
     }
   ]
 }

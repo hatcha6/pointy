@@ -169,10 +169,7 @@ class CatalogApiClient {
         if (pricesByUnitCode.isNotEmpty)
           'unit_prices': [
             for (final entry in pricesByUnitCode.entries)
-              {
-                'unit': entry.key,
-                'price': entry.value?.toStringAsFixed(2),
-              },
+              {'unit': entry.key, 'price': entry.value?.toStringAsFixed(2)},
           ],
       },
     );

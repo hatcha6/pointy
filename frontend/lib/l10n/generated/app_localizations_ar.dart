@@ -15342,4 +15342,13 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchaseDraftLineRemovedMessage => 'تم حذف السطر.';
+
+  @override
+  String get aiUiTableTotalRow => 'الإجمالي';
+
+  @override
+  String get aiUiSurfaceFailed => 'تعذّر عرض هذه البطاقة.';
+
+  @override
+  String get aiUiSurfaceFailedDetail => 'وصلت بيانات عرض غير صالحة من المساعد.';
 }

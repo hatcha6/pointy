@@ -111,6 +111,7 @@ INSTALLED_APPS = [
     "apps.fraud",
     "apps.customers",
     "apps.purchasing",
+    "apps.invoice_intake",
     "apps.discounts",
     "apps.payments",
     "apps.printing",

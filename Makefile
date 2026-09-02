@@ -321,6 +321,12 @@ frontend-price-checker-kiosk-preview: frontend-install ## Run the customer-facin
 frontend-ai-preview: frontend-install ## Run the AI assistant UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/ai_chat_preview.dart
 
+frontend-ai-ui-preview: frontend-install ## Run the AI generated-UI (catalog) preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/ai_ui_preview.dart
+
+frontend-export-ai-catalog: frontend-install ## Re-export the AI UI catalog contract the backend validates against.
+	cd "$(FRONTEND_DIR)" && POINTY_WRITE_AI_CATALOG=1 $(FLUTTER) test test/features/ai/ui/ai_catalog_export_test.dart
+
 frontend-theme-preview: frontend-install ## Run the light/dark theme gallery preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/theme_preview.dart
 

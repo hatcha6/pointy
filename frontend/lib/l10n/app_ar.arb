@@ -823,22 +823,67 @@
   "reportPeriodOpenChip": "فترة مفتوحة",
   "reportPeriodClosedChip": "فترة مقفلة",
   "reportTruncatedChip": "{count} صفًا غير معروض",
-  "@reportTruncatedChip": { "placeholders": { "count": { "type": "String" } } },
-  "@reportTruncatedNotice": { "placeholders": { "shown": { "type": "String" }, "total": { "type": "String" } } },
-  "@reportCsvSavedMessage": { "placeholders": { "location": { "type": "String" } } },
-  "@reportVerifyChangedMessage": { "placeholders": { "count": { "type": "String" } } },
-  "@reportPeriodLockClosedThrough": { "placeholders": { "date": { "type": "String" } } },
+  "@reportTruncatedChip": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "@reportTruncatedNotice": {
+    "placeholders": {
+      "shown": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "@reportCsvSavedMessage": {
+    "placeholders": {
+      "location": {
+        "type": "String"
+      }
+    }
+  },
+  "@reportVerifyChangedMessage": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "@reportPeriodLockClosedThrough": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "reportAsOfChip": "بتاريخ محدد",
   "reportAccountingCalendarTitle": "التقويم المحاسبي",
   "reportFiscalYearStartLabel": "بداية السنة المالية",
   "reportFiscalYearStartAction": "تغيير بداية السنة",
   "reportFiscalYearSavedMessage": "تم تحديث بداية السنة المالية.",
   "reportOpenDocumentPrompt": "افتح المستند رقم {reference} واعرض تفاصيله.",
-  "@reportOpenDocumentPrompt": { "placeholders": { "reference": { "type": "String" } } },
+  "@reportOpenDocumentPrompt": {
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
   "reportMonthEndSnapshotLabel": "لقطة إقفال الشهر",
   "reportMonthEndSnapshotOff": "متوقفة",
   "reportMonthEndSnapshotOnDay": "يوم {day} من كل شهر",
-  "@reportMonthEndSnapshotOnDay": { "placeholders": { "day": { "type": "String" } } },
+  "@reportMonthEndSnapshotOnDay": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
   "reportA4Chip": "A4",
   "reportArchiveChip": "أرشفة",
   "reportAuditableChip": "قابل للتدقيق",
@@ -9133,290 +9178,290 @@
   },
   "exchangeRatesTitle": "أسعار الصرف",
   "@exchangeRatesTitle": {
-      "description": "Title of the exchange rates settings page."
+    "description": "Title of the exchange rates settings page."
   },
   "exchangeRatesDrawerLabel": "أسعار الصرف",
   "@exchangeRatesDrawerLabel": {
-      "description": "Navigation label for the exchange rates page."
+    "description": "Navigation label for the exchange rates page."
   },
   "exchangeRatesLoadError": "تعذر تحميل أسعار الصرف.",
   "@exchangeRatesLoadError": {
-      "description": "Shown when the rates fail to load."
+    "description": "Shown when the rates fail to load."
   },
   "exchangeRatesEmpty": "لا توجد أسعار صرف بعد.",
   "@exchangeRatesEmpty": {
-      "description": "Empty state when no rates are available."
+    "description": "Empty state when no rates are available."
   },
   "exchangeRatesEmptyHint": "سيتم جلب الأسعار تلقائيًا، أو أدخل سعرًا يدويًا.",
   "@exchangeRatesEmptyHint": {
-      "description": "Hint under the empty state."
+    "description": "Hint under the empty state."
   },
   "exchangeRatesSyncNow": "تحديث الآن",
   "@exchangeRatesSyncNow": {
-      "description": "Button pulling rates from the relay immediately."
+    "description": "Button pulling rates from the relay immediately."
   },
   "exchangeRatesSyncedMessage": "تم تحديث أسعار الصرف.",
   "@exchangeRatesSyncedMessage": {
-      "description": "Confirmation after a manual sync."
+    "description": "Confirmation after a manual sync."
   },
   "exchangeRatesSyncError": "تعذر تحديث أسعار الصرف. سيتم استخدام آخر سعر معروف.",
   "@exchangeRatesSyncError": {
-      "description": "Soft failure message after a failed sync."
+    "description": "Soft failure message after a failed sync."
   },
   "exchangeRateSourceRelay": "من المزوّد",
   "@exchangeRateSourceRelay": {
-      "description": "Chip marking a rate that came from the feed."
+    "description": "Chip marking a rate that came from the feed."
   },
   "exchangeRateSourceManual": "مُدخل يدويًا",
   "@exchangeRateSourceManual": {
-      "description": "Chip marking a rate the shop typed."
+    "description": "Chip marking a rate the shop typed."
   },
   "exchangeRateStaleBadge": "سعر قديم",
   "@exchangeRateStaleBadge": {
-      "description": "Badge on a rate older than the staleness threshold."
+    "description": "Badge on a rate older than the staleness threshold."
   },
   "exchangeRateAgeHours": "منذ {hours} ساعة",
   "@exchangeRateAgeHours": {
-      "description": "Age of a rate in hours.",
-      "placeholders": {
-          "hours": {
-              "type": "int"
-          }
+    "description": "Age of a rate in hours.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
       }
+    }
   },
   "exchangeRateAgeDays": "منذ {days} يوم",
   "@exchangeRateAgeDays": {
-      "description": "Age of a rate in days.",
-      "placeholders": {
-          "days": {
-              "type": "int"
-          }
+    "description": "Age of a rate in days.",
+    "placeholders": {
+      "days": {
+        "type": "int"
       }
+    }
   },
   "exchangeRateSubstitutedWarning": "لا يوجد سعر لطريقة الدفع المختارة؛ تم استخدام سعر {instrument}.",
   "@exchangeRateSubstitutedWarning": {
-      "description": "Warning when a different settlement series was used.",
-      "placeholders": {
-          "instrument": {
-              "type": "String"
-          }
+    "description": "Warning when a different settlement series was used.",
+    "placeholders": {
+      "instrument": {
+        "type": "String"
       }
+    }
   },
   "settlementInstrumentCash": "نقدًا",
   "@settlementInstrumentCash": {
-      "description": "Cash settlement instrument."
+    "description": "Cash settlement instrument."
   },
   "settlementInstrumentBank": "تحويل مصرفي",
   "@settlementInstrumentBank": {
-      "description": "Bank transfer settlement instrument."
+    "description": "Bank transfer settlement instrument."
   },
   "settlementInstrumentLabel": "طريقة دفع المشتريات",
   "@settlementInstrumentLabel": {
-      "description": "Label for the settlement instrument setting."
+    "description": "Label for the settlement instrument setting."
   },
   "settlementInstrumentHelp": "كلا السعرين من السوق الموازي. اختر كيف تدفع فعليًا لمورديك.",
   "@settlementInstrumentHelp": {
-      "description": "Explains that both series are parallel-market rates."
+    "description": "Explains that both series are parallel-market rates."
   },
   "settlementBankLabel": "المصرف",
   "@settlementBankLabel": {
-      "description": "Label for the bank whose series to price off."
+    "description": "Label for the bank whose series to price off."
   },
   "manualRateTitle": "إدخال سعر صرف",
   "@manualRateTitle": {
-      "description": "Title of the manual rate entry sheet."
+    "description": "Title of the manual rate entry sheet."
   },
   "manualRateCurrencyLabel": "العملة",
   "@manualRateCurrencyLabel": {
-      "description": "Currency field on the manual rate sheet."
+    "description": "Currency field on the manual rate sheet."
   },
   "manualRateValueLabel": "سعر الصرف مقابل {base}",
   "@manualRateValueLabel": {
-      "description": "Rate value field label.",
-      "placeholders": {
-          "base": {
-              "type": "String"
-          }
+    "description": "Rate value field label.",
+    "placeholders": {
+      "base": {
+        "type": "String"
       }
+    }
   },
   "manualRateNoteLabel": "ملاحظة (اختياري)",
   "@manualRateNoteLabel": {
-      "description": "Note field on the manual rate sheet."
+    "description": "Note field on the manual rate sheet."
   },
   "manualRateSave": "حفظ السعر",
   "@manualRateSave": {
-      "description": "Save button on the manual rate sheet."
+    "description": "Save button on the manual rate sheet."
   },
   "manualRateSavedMessage": "تم حفظ سعر الصرف.",
   "@manualRateSavedMessage": {
-      "description": "Confirmation after saving a manual rate."
+    "description": "Confirmation after saving a manual rate."
   },
   "manualRateInvalid": "أدخل سعر صرف أكبر من صفر.",
   "@manualRateInvalid": {
-      "description": "Validation message for a non-positive rate."
+    "description": "Validation message for a non-positive rate."
   },
   "manualRateWinsHint": "السعر الذي تُدخله يعلو على سعر المزوّد.",
   "@manualRateWinsHint": {
-      "description": "Explains that a typed rate outranks the feed."
+    "description": "Explains that a typed rate outranks the feed."
   },
   "repricingTitle": "تحديث الأسعار",
   "@repricingTitle": {
-      "description": "Title of the repricing screen."
+    "description": "Title of the repricing screen."
   },
   "repricingNothingToDo": "جميع الأسعار محدّثة.",
   "@repricingNothingToDo": {
-      "description": "Empty state when no product has drifted."
+    "description": "Empty state when no product has drifted."
   },
   "repricingDriftCount": "{count} منتج تغيّر سعره بسبب تغيّر سعر الصرف",
   "@repricingDriftCount": {
-      "description": "Count of drifted products.",
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "description": "Count of drifted products.",
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "repricingApply": "تطبيق على المحدد",
   "@repricingApply": {
-      "description": "Apply button on the repricing screen."
+    "description": "Apply button on the repricing screen."
   },
   "repricingAppliedMessage": "تم تحديث {count} سعر.",
   "@repricingAppliedMessage": {
-      "description": "Confirmation after applying a reprice.",
-      "placeholders": {
-          "count": {
-              "type": "int"
-          }
+    "description": "Confirmation after applying a reprice.",
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
+    }
   },
   "repricingUnpriceable": "لا يوجد سعر صرف لهذه العملة",
   "@repricingUnpriceable": {
-      "description": "Marker on a product whose currency has no rate."
+    "description": "Marker on a product whose currency has no rate."
   },
   "repricingOldNewRate": "من {oldRate} إلى {newRate}",
   "@repricingOldNewRate": {
-      "description": "Shows the rate move behind a proposal.",
-      "placeholders": {
-          "oldRate": {
-              "type": "String"
-          },
-          "newRate": {
-              "type": "String"
-          }
+    "description": "Shows the rate move behind a proposal.",
+    "placeholders": {
+      "oldRate": {
+        "type": "String"
+      },
+      "newRate": {
+        "type": "String"
       }
+    }
   },
   "productPricingCurrencyLabel": "عملة التسعير",
   "@productPricingCurrencyLabel": {
-      "description": "Label for a product's pricing currency."
+    "description": "Label for a product's pricing currency."
   },
   "productPricingCurrencyBase": "عملة المتجر",
   "@productPricingCurrencyBase": {
-      "description": "Option meaning the product is priced in the shop's own currency."
+    "description": "Option meaning the product is priced in the shop's own currency."
   },
   "productPricingCurrencyHelp": "سعر المنتج مُسجَّل بهذه العملة ويُحوَّل إلى عملة المتجر عند البيع.",
   "@productPricingCurrencyHelp": {
-      "description": "Explains what a product pricing currency does."
+    "description": "Explains what a product pricing currency does."
   },
   "productForeignPriceLabel": "السعر بالعملة الأجنبية",
   "@productForeignPriceLabel": {
-      "description": "Field for the foreign price amount."
+    "description": "Field for the foreign price amount."
   },
   "productPriceFrozenRateHint": "محسوب بسعر صرف {rate}",
   "@productPriceFrozenRateHint": {
-      "description": "Shows the frozen rate a base price was derived at.",
-      "placeholders": {
-          "rate": {
-              "type": "String"
-          }
+    "description": "Shows the frozen rate a base price was derived at.",
+    "placeholders": {
+      "rate": {
+        "type": "String"
       }
+    }
   },
   "productPricingNoRate": "لا يوجد سعر صرف لـ {currency} بعد؛ سيُحدَّث السعر تلقائيًا عند وصوله.",
   "@productPricingNoRate": {
-      "description": "Shown when a product's pricing currency has no exchange rate yet.",
-      "placeholders": {
-          "currency": {
-              "type": "String"
-          }
+    "description": "Shown when a product's pricing currency has no exchange rate yet.",
+    "placeholders": {
+      "currency": {
+        "type": "String"
       }
+    }
   },
   "productPricingCurrencyChanged": "سيتم إعادة حساب السعر بالعملة الجديدة.",
   "@productPricingCurrencyChanged": {
-      "description": "Shown after switching a product's pricing currency."
+    "description": "Shown after switching a product's pricing currency."
   },
   "supplierCurrencyLabel": "عملة المورّد",
   "@supplierCurrencyLabel": {
-      "description": "Label for the purchase order's supplier currency."
+    "description": "Label for the purchase order's supplier currency."
   },
   "supplierExchangeRateLabel": "سعر الصرف مقابل {currency}",
   "@supplierExchangeRateLabel": {
-      "description": "Label for the typed exchange rate on a purchase order.",
-      "placeholders": {
-          "currency": {
-              "type": "String"
-          }
+    "description": "Label for the typed exchange rate on a purchase order.",
+    "placeholders": {
+      "currency": {
+        "type": "String"
       }
+    }
   },
   "supplierExchangeRateHelp": "اتركه فارغًا لاستخدام سعر الصرف بتاريخ فاتورة المورّد.",
   "@supplierExchangeRateHelp": {
-      "description": "Explains that leaving the rate blank uses the invoice-date rate."
+    "description": "Explains that leaving the rate blank uses the invoice-date rate."
   },
   "supplierExchangeRateMissing": "لا يوجد سعر صرف لـ {currency}. أدخل سعر الصرف يدويًا.",
   "@supplierExchangeRateMissing": {
-      "description": "Shown when no rate is available and none was typed.",
-      "placeholders": {
-          "currency": {
-              "type": "String"
-          }
+    "description": "Shown when no rate is available and none was typed.",
+    "placeholders": {
+      "currency": {
+        "type": "String"
       }
+    }
   },
   "supplierExchangeRateTyped": "سعر صرف مُدخل يدويًا",
   "@supplierExchangeRateTyped": {
-      "description": "Marks a rate the buyer typed."
+    "description": "Marks a rate the buyer typed."
   },
   "supplierExchangeRateFromFeed": "سعر الصرف من المزوّد",
   "@supplierExchangeRateFromFeed": {
-      "description": "Marks a rate that came from the feed."
+    "description": "Marks a rate that came from the feed."
   },
   "supplierRateAsOfToday": "يُحسب بسعر اليوم",
   "@supplierRateAsOfToday": {
-      "description": "Shown when the order has no supplier invoice date."
+    "description": "Shown when the order has no supplier invoice date."
   },
   "supplierRateAsOfInvoiceDate": "يُحسب بسعر تاريخ الفاتورة ({date})",
   "@supplierRateAsOfInvoiceDate": {
-      "description": "Shown with the supplier invoice date the rate is read as of.",
-      "placeholders": {
-          "date": {
-              "type": "String"
-          }
+    "description": "Shown with the supplier invoice date the rate is read as of.",
+    "placeholders": {
+      "date": {
+        "type": "String"
       }
+    }
   },
   "supplierInvoiceTotalPreview": "إجمالي الفاتورة {foreign} ≈ {base}",
   "@supplierInvoiceTotalPreview": {
-      "description": "Preview of the invoice total in both currencies.",
-      "placeholders": {
-          "foreign": {
-              "type": "String"
-          },
-          "base": {
-              "type": "String"
-          }
+    "description": "Preview of the invoice total in both currencies.",
+    "placeholders": {
+      "foreign": {
+        "type": "String"
+      },
+      "base": {
+        "type": "String"
       }
+    }
   },
   "shopSetupForeignCurrencyTitle": "أشتري ببضاعة بعملة أجنبية",
   "@shopSetupForeignCurrencyTitle": {
-      "description": "Onboarding toggle: does this shop buy or price in a foreign currency."
+    "description": "Onboarding toggle: does this shop buy or price in a foreign currency."
   },
   "shopSetupForeignCurrencySubtitle": "فعّل هذا إن كانت فواتير مورّديك أو قوائم أسعارك بالدولار أو عملة أخرى. الأسعار والتقارير تبقى بالدينار في كل الأحوال.",
   "@shopSetupForeignCurrencySubtitle": {
-      "description": "Explains what enabling foreign currency does and does not change."
+    "description": "Explains what enabling foreign currency does and does not change."
   },
   "shopSetupSettlementTitle": "كيف تدفع لمورّديك؟",
   "@shopSetupSettlementTitle": {
-      "description": "Onboarding question: cash or bank settlement."
+    "description": "Onboarding question: cash or bank settlement."
   },
   "shopSetupSettlementSubtitle": "كلا السعرين من السوق الموازي؛ الفرق هو طريقة الدفع.",
   "@shopSetupSettlementSubtitle": {
-      "description": "Clarifies that both settlement instruments are parallel-market rates."
+    "description": "Clarifies that both settlement instruments are parallel-market rates."
   },
   "pricingSheetTitle": "تسعير المنتج",
   "pricingSheetTooltip": "تسعير هذا المنتج بعد تغيّر التكلفة",
@@ -9618,5 +9663,8 @@
   "purchasingShortcutClearEntry": "مسح ما كُتب ثم إلغاء التحديد",
   "purchasingShortcutOpenSettings": "بيانات المورد والفاتورة والتكاليف",
   "purchasingShortcutSubmit": "حفظ أو تسجيل أمر الشراء",
-  "purchaseDraftLineRemovedMessage": "تم حذف السطر."
+  "purchaseDraftLineRemovedMessage": "تم حذف السطر.",
+  "aiUiTableTotalRow": "الإجمالي",
+  "aiUiSurfaceFailed": "تعذّر عرض هذه البطاقة.",
+  "aiUiSurfaceFailedDetail": "وصلت بيانات عرض غير صالحة من المساعد."
 }

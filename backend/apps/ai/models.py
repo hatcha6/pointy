@@ -87,6 +87,12 @@ class AiMessage(models.Model):
     # True when this reply used a live web search — drives the "searched the web"
     # indicator even when no per-site citations came back.
     web_searched = models.BooleanField(default=False)
+
+    # Validated generative-UI surfaces drawn on this turn, as A2UI component
+    # payloads. Persisted (rather than re-derived) so a reloaded conversation
+    # shows the same cards, and so the record of what the user was shown is
+    # exactly what they saw.
+    ui_surfaces = models.JSONField(default=list, blank=True)
     # The concrete OpenRouter model id and the abstract tier the relay used.
     model = models.CharField(max_length=120, blank=True)
     tier = models.CharField(max_length=20, blank=True)

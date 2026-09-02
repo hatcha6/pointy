@@ -244,6 +244,8 @@ class RelayControlClient:
         route_tier="",
         want_title=False,
         web_search=False,
+        response_format=None,
+        purpose="",
     ):
         """Open the relay AI chat endpoint and return the raw streaming response.
 
@@ -276,6 +278,13 @@ class RelayControlClient:
         # agentic web+tools flow keeps searching on the round that combines them.
         if web_search:
             body["web_search"] = True
+        # Structured extraction: constrain the reply to a JSON schema and tell
+        # the relay this is a document read, not a conversation (it then picks
+        # the extraction model and skips the difficulty router).
+        if response_format:
+            body["response_format"] = response_format
+        if purpose:
+            body["purpose"] = purpose
         if max_tokens:
             body["max_tokens"] = max_tokens
         if temperature is not None:

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -6,6 +7,8 @@ import '../../../core/result.dart';
 import '../../../data/models/ai_chat.dart';
 import '../../../data/repositories/ai_chat_repository.dart';
 import '../ai_attachment_picker.dart';
+import '../ui/ai_surface_action.dart';
+import '../ui/ai_surface_host.dart';
 
 /// How the last turn failed. The screen maps each kind to localized copy so no
 /// user-facing text lives in the view model.
@@ -85,6 +88,28 @@ class AiChatViewModel extends ChangeNotifier {
   /// a notice, then calls [acknowledgeImageLimit].
   bool get imageLimitReached => _imageLimitReached;
 
+  /// Renders generated UI cards. The view owns its lifetime and hands it here
+  /// so the view model can feed surfaces in and clear them on a conversation
+  /// change, without the view model itself depending on the rendering engine.
+  AiSurfaceHost? _surfaceHost;
+
+  void attachSurfaceHost(AiSurfaceHost host) {
+    _surfaceHost = host;
+    // Replay whatever is already on screen (a conversation opened before the
+    // view attached, e.g. on a hot reload).
+    _applyAllSurfaces();
+  }
+
+  void _applyAllSurfaces() {
+    final host = _surfaceHost;
+    if (host == null) return;
+    for (final message in _messages) {
+      for (final surface in message.uiSurfaces) {
+        host.apply(surface);
+      }
+    }
+  }
+
   void startNewConversation() {
     if (_isStreaming) {
       return;
@@ -94,6 +119,7 @@ class AiChatViewModel extends ChangeNotifier {
     _conversationId = null;
     _errorKind = null;
     _pendingMessage = null;
+    _surfaceHost?.reset();
     notifyListeners();
   }
 
@@ -129,6 +155,9 @@ class AiChatViewModel extends ChangeNotifier {
         _pendingAttachments.clear();
         _conversationId = conversation.id;
         _errorKind = null;
+        // Cards from the previous conversation must not survive the switch.
+        _surfaceHost?.reset();
+        _applyAllSurfaces();
         // Re-open an unanswered question from history so it can be answered after
         // a reload — the last awaiting turn, if any.
         _pendingMessage = null;
@@ -273,6 +302,57 @@ class AiChatViewModel extends ChangeNotifier {
     );
   }
 
+  /// The action name a review card uses to commit an invoice intake.
+  static const String applyInvoiceIntakeAction = 'submit:apply_invoice_intake';
+
+  /// Commit a reviewed invoice intake, then tell the assistant what happened.
+  ///
+  /// This goes straight to the API rather than through the model: the user has
+  /// already reviewed the plan on the card, and routing the decision back
+  /// through a language model only adds a chance of it being misread. The
+  /// assistant is told the outcome afterwards so the conversation stays honest
+  /// about what now exists.
+  Future<void> applyInvoiceIntake(AiSurfaceAction action) async {
+    final rawId = action.context['intake_id'];
+    final intakeId = rawId is int ? rawId : int.tryParse('$rawId');
+    if (intakeId == null || _isStreaming) {
+      return;
+    }
+    final result = await _repository.applyInvoiceIntake(intakeId);
+    switch (result) {
+      case Ok<Map<String, Object?>>(value: final payload):
+        final orderNumber =
+            payload['order_number'] ?? payload['purchase_order'] ?? '';
+        await sendMessage(
+          'تم إنشاء أمر الشراء من الفاتورة رقم $intakeId'
+          '${orderNumber.toString().isEmpty ? '' : ' ($orderNumber)'}. '
+          'لخّص لي ما أُنشئ.',
+        );
+      case Error<Map<String, Object?>>():
+        _errorKind = AiChatErrorKind.network;
+        notifyListeners();
+    }
+  }
+
+  /// Send the values a user entered on a generated card back to the assistant.
+  ///
+  /// The interaction becomes an ordinary user turn carrying a JSON block, so it
+  /// replays correctly from history and needs no separate endpoint. The visible
+  /// text stays short; the machine-readable part rides underneath it.
+  Future<void> sendUiInteraction(AiSurfaceAction action) async {
+    if (_isStreaming) {
+      return;
+    }
+    final payload = <String, Object?>{
+      'action': action.name,
+      'surface_id': action.surfaceId,
+      if (action.context.isNotEmpty) 'context': action.context,
+      if (action.data.isNotEmpty) 'data': action.data,
+    };
+    final encoded = const JsonEncoder.withIndent('  ').convert(payload);
+    await sendMessage('```pointy-ui-interaction\n$encoded\n```');
+  }
+
   /// Queue a freshly-recorded voice clip and send it right away, bundled with
   /// any images/files already attached, as a turn with no typed text.
   Future<void> sendRecordedAudio(AiAttachment audio) async {
@@ -371,6 +451,11 @@ class AiChatViewModel extends ChangeNotifier {
           if (webSearched || sources.isNotEmpty) {
             assistant.attachSources(sources, webSearched: webSearched);
           }
+        // A surface arrives once per accepted render_ui call. It goes to the
+        // renderer and onto the message, which notifies only that bubble.
+        case AiChatUi(:final surface):
+          _surfaceHost?.apply(surface);
+          assistant.attachUiSurface(surface);
         case AiChatAskUser(
           :final conversationId,
           :final messageId,

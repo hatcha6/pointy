@@ -423,6 +423,91 @@ class AiSource {
       : const [];
 }
 
+/// One generated UI surface attached to an assistant turn.
+///
+/// Mirrors the A2UI envelopes the backend validated: a flat component list plus
+/// the data those components bind to. Kept as plain JSON so persistence,
+/// rehydration and the rendering engine all read the same thing.
+class AiUiSurface {
+  const AiUiSurface({
+    required this.surfaceId,
+    required this.components,
+    this.title = '',
+    this.data = const <String, Object?>{},
+    this.contentOffset = -1,
+  });
+
+  final String surfaceId;
+  final String title;
+  final List<Map<String, dynamic>> components;
+  final Map<String, Object?> data;
+
+  /// Where this card belongs in the turn's prose, as a character offset into
+  /// the answer at the moment it arrived. A card the model drew mid-explanation
+  /// renders there rather than being pushed to the end. -1 means "at the end".
+  final int contentOffset;
+
+  AiUiSurface withContentOffset(int offset) => AiUiSurface(
+    surfaceId: surfaceId,
+    components: components,
+    title: title,
+    data: data,
+    contentOffset: offset,
+  );
+
+  static AiUiSurface? tryFrom(Object? raw) {
+    if (raw is! Map) return null;
+    final json = raw.cast<String, Object?>();
+    final surfaceId = json['surface_id'];
+    final components = json['components'];
+    if (surfaceId is! String || surfaceId.isEmpty || components is! List) {
+      return null;
+    }
+    final parsed = <Map<String, dynamic>>[
+      for (final entry in components)
+        if (entry is Map) entry.cast<String, dynamic>(),
+    ];
+    if (parsed.isEmpty) return null;
+    final data = json['data'];
+    return AiUiSurface(
+      surfaceId: surfaceId,
+      title: (json['title'] as String?) ?? '',
+      components: parsed,
+      data: data is Map
+          ? data.cast<String, Object?>()
+          : const <String, Object?>{},
+      contentOffset: (json['content_offset'] as num?)?.toInt() ?? -1,
+    );
+  }
+
+  static List<AiUiSurface> listFrom(Object? raw) {
+    if (raw is! List) return const <AiUiSurface>[];
+    return <AiUiSurface>[
+      for (final entry in raw)
+        if (tryFrom(entry) case final AiUiSurface surface) surface,
+    ];
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'surface_id': surfaceId,
+    if (title.isNotEmpty) 'title': title,
+    'components': components,
+    if (data.isNotEmpty) 'data': data,
+    if (contentOffset >= 0) 'content_offset': contentOffset,
+  };
+}
+
+/// One piece of an assistant turn: either prose or a generated card.
+class AiTurnSegment {
+  const AiTurnSegment.text(this.text) : surface = null;
+  const AiTurnSegment.surface(this.surface) : text = '';
+
+  final String text;
+  final AiUiSurface? surface;
+
+  bool get isText => surface == null;
+}
+
 class AiMessage extends ChangeNotifier {
   AiMessage({
     required this.role,
@@ -436,9 +521,11 @@ class AiMessage extends ChangeNotifier {
     this.submittedAnswers,
     List<AiToolRun>? toolRuns,
     List<AiSource>? sources,
+    List<AiUiSurface>? uiSurfaces,
     this.webSearched = false,
   }) : toolRuns = toolRuns ?? <AiToolRun>[],
-       sources = sources ?? <AiSource>[];
+       sources = sources ?? <AiSource>[],
+       uiSurfaces = uiSurfaces ?? <AiUiSurface>[];
 
   /// Mutable: assigned from the `done` event for a freshly-sent turn so the
   /// view model can later target it for edit/retry rewinds.
@@ -460,6 +547,9 @@ class AiMessage extends ChangeNotifier {
 
   /// Tools the assistant ran while producing this turn (transient status chips).
   final List<AiToolRun> toolRuns;
+
+  /// Generated UI surfaces rendered inside this turn's bubble, in arrival order.
+  final List<AiUiSurface> uiSurfaces;
 
   /// Web-search sources the assistant consulted (favicon avatars). Mutable so the
   /// `done` event can attach them after the reply streamed.
@@ -526,6 +616,50 @@ class AiMessage extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  /// Attach a generated UI surface and notify this message's listeners only.
+  ///
+  /// Surfaces arrive once per `render_ui` result, never per token, so this
+  /// keeps the per-token invariant intact.
+  void attachUiSurface(AiUiSurface surface) {
+    uiSurfaces.removeWhere((s) => s.surfaceId == surface.surfaceId);
+    // Pin the card to where the prose had reached, so a card drawn mid-answer
+    // stays mid-answer instead of sliding under the closing sentence.
+    uiSurfaces.add(
+      surface.contentOffset >= 0
+          ? surface
+          : surface.withContentOffset(content.length),
+    );
+    notifyListeners();
+  }
+
+  /// The turn's body as an ordered run of prose and cards.
+  ///
+  /// Splitting on the recorded offsets is what makes "explain, show, then
+  /// conclude" render in that order.
+  List<AiTurnSegment> get segments {
+    if (uiSurfaces.isEmpty) {
+      return content.isEmpty
+          ? const <AiTurnSegment>[]
+          : <AiTurnSegment>[AiTurnSegment.text(content)];
+    }
+    final ordered = <AiUiSurface>[...uiSurfaces]
+      ..sort((a, b) => a.contentOffset.compareTo(b.contentOffset));
+    final result = <AiTurnSegment>[];
+    var cursor = 0;
+    for (final surface in ordered) {
+      final offset = surface.contentOffset < 0
+          ? content.length
+          : surface.contentOffset.clamp(cursor, content.length);
+      final chunk = content.substring(cursor, offset);
+      if (chunk.trim().isNotEmpty) result.add(AiTurnSegment.text(chunk));
+      result.add(AiTurnSegment.surface(surface));
+      cursor = offset;
+    }
+    final tail = content.substring(cursor);
+    if (tail.trim().isNotEmpty) result.add(AiTurnSegment.text(tail));
+    return result;
   }
 
   /// Flip off the streaming flag and notify (the typing indicator → final text).
@@ -630,6 +764,7 @@ class AiMessage extends ChangeNotifier {
       submittedAnswers: submitted,
       toolRuns: toolRuns,
       sources: AiSource.listFrom(json['sources']),
+      uiSurfaces: AiUiSurface.listFrom(json['ui_surfaces']),
       webSearched: json['web_searched'] == true,
     );
   }
@@ -750,6 +885,13 @@ class AiChatAskUser extends AiChatEvent {
   final int? messageId;
   final String toolCallId;
   final List<AiQuestion> questions;
+}
+
+/// The assistant produced a UI surface for the current turn.
+class AiChatUi extends AiChatEvent {
+  const AiChatUi(this.surface);
+
+  final AiUiSurface surface;
 }
 
 class AiChatDone extends AiChatEvent {

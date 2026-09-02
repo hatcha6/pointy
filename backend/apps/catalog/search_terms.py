@@ -15,15 +15,29 @@ _AR_FOLD = str.maketrans(
 )
 
 
+# Harakat (fatha…sukun), the superscript alef, and the tatweel: marks that are
+# invisible-ish to a reader and never typed consistently.
+_ARABIC_DIACRITICS = re.compile(r"[\u064B-\u0652\u0670\u0640]")
+
+
 def search_normalize(text):
-    """Light normalization for a DB ``search`` query: drop harakat (combining
-    marks) and the tatweel only — NOT the letter folding. ``icontains`` compares
-    against the RAW stored name, so folding ة→ه here would break the substring
-    match; stripping the invisible diacritics only broadens it."""
+    """Light normalization for a DB ``search`` query: drop harakat and the
+    tatweel only — NOT the letter folding. ``icontains`` compares against the RAW
+    stored name, so folding ة→ه here would break the substring match; stripping
+    the invisible diacritics only broadens it.
+
+    Composes to NFC rather than decomposing. NFKD would split أ into alef plus a
+    combining hamza and the mark-stripping below would then eat the hamza,
+    turning "أخضر" into "اخضر" — which matches nothing, because the stored name
+    still reads "أخضر". Hamza-carrying words are ordinary in product names
+    (أخضر, أحمر, أبيض), so that silently broke matching for a large slice of the
+    catalogue. Folding those letters is still correct, but it belongs in
+    :func:`normalize_term`, which compares in Python instead of in SQL.
+    """
     if not text:
         return ""
-    s = unicodedata.normalize("NFKD", str(text))
-    s = "".join(c for c in s if not unicodedata.combining(c)).replace("ـ", "")
+    s = unicodedata.normalize("NFC", str(text))
+    s = _ARABIC_DIACRITICS.sub("", s)
     return re.sub(r"\s+", " ", s).strip()
 
 

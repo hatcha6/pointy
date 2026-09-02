@@ -26638,6 +26638,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تم حذف السطر.'**
   String get purchaseDraftLineRemovedMessage;
+
+  /// No description provided for @aiUiTableTotalRow.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجمالي'**
+  String get aiUiTableTotalRow;
+
+  /// No description provided for @aiUiSurfaceFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر عرض هذه البطاقة.'**
+  String get aiUiSurfaceFailed;
+
+  /// No description provided for @aiUiSurfaceFailedDetail.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصلت بيانات عرض غير صالحة من المساعد.'**
+  String get aiUiSurfaceFailedDetail;
 }
 
 class _AppLocalizationsDelegate

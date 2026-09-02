@@ -34,6 +34,7 @@ from .serializers import (
     AiConversationDetailSerializer,
     AiConversationSerializer,
 )
+from .ui_catalog import MAX_SURFACES_PER_TURN
 from .tools import (
     ASK_USER_TOOL_NAME,
     execute_tool,
@@ -202,6 +203,7 @@ class AiChatView(APIView):
             user_text,
             supports_actions=payload.get("supports_actions", False),
             supports_navigation=payload.get("supports_navigation", False),
+            supports_ui=payload.get("supports_ui", False),
         )
 
         user_message = AiMessage.objects.create(
@@ -235,6 +237,7 @@ class AiChatView(APIView):
         tools = tools_definitions(
             supports_ask_user=payload.get("supports_ask_user", False),
             supports_actions=payload.get("supports_actions", False),
+            supports_ui=payload.get("supports_ui", False),
         )
 
         client = RelayControlClient()
@@ -270,6 +273,7 @@ class AiChatView(APIView):
                 user=request.user,
                 apply_title=wants_title,
                 favicon_base=request.build_absolute_uri(reverse("ai-favicon")),
+                turn_attachments=attachments,
             ),
         )
 
@@ -303,6 +307,7 @@ class AiChatView(APIView):
         append_user=True,
         supports_actions=False,
         supports_navigation=False,
+        supports_ui=False,
     ):
         """Rebuild the model context from the DB.
 
@@ -338,6 +343,7 @@ class AiChatView(APIView):
                 "content": build_system_prompt(
                     supports_actions=supports_actions,
                     supports_navigation=supports_navigation,
+                    supports_ui=supports_ui,
                 ),
             }
         ]
@@ -400,14 +406,22 @@ class AiChatView(APIView):
         open_stream,
         apply_title=False,
         favicon_base="",
+        turn_attachments=None,
     ):
         """Drive the bounded tool loop: consume a relay turn; if the model asked
         for tools, run them as ``user``, feed the results back, and loop; on a
         normal text turn, stream it live and finish. Only the user-initiated turn
         charges usage — continuations pass count_usage=False."""
+        # This turn's attachments, kept for the tools that need the bytes rather
+        # than a description of them (reading a photographed invoice). The model
+        # is never given ids for these.
+        turn_attachments = list(turn_attachments or [])
         answer = []
         reasoning = []
         tool_events = []
+        # Validated UI surfaces produced this turn, in the order the model drew
+        # them. Persisted on the assistant row so they re-render on reload.
+        ui_surfaces = []
         usage_limits = None
         done_data = {}
         # The difficulty tier the relay classified for this turn's first request.
@@ -597,12 +611,52 @@ class AiChatView(APIView):
                                 "توقّف وأخبر المستخدم بما أُنجز."
                             ),
                         }
+                    elif name == "start_invoice_intake":
+                        # Handled here rather than in the tool registry: it needs
+                        # this turn's attachments (which the model never sees ids
+                        # for) and it produces a card as well as a result.
+                        from .invoice_intake_tool import start_invoice_intake
+
+                        result, intake_surface = start_invoice_intake(
+                            user=user,
+                            installation=installation,
+                            attachments=turn_attachments,
+                        )
+                        if intake_surface and len(ui_surfaces) < MAX_SURFACES_PER_TURN:
+                            intake_surface["content_offset"] = len("".join(answer))
+                            ui_surfaces.append(intake_surface)
+                            yield sse_event("ui", intake_surface)
                     else:
                         idem = _ai_idempotency_key(turn_id, name, args) if mutates else None
                         result = execute_tool(name, args, user=user, idempotency_key=idem)
                     ok = bool(result.get("ok"))
                     if mutates and ok:
                         mutating_writes += 1
+                    # A validated UI surface goes to the client as its own event
+                    # and is persisted on the turn, so it survives a reload the
+                    # way an ask_user card does. The surface is stripped from the
+                    # tool result the model sees: it already knows what it drew,
+                    # and echoing the whole payload back wastes its context.
+                    if name == "render_ui" and ok:
+                        surface = result.pop("surface", None)
+                        if isinstance(surface, dict):
+                            if len(ui_surfaces) < MAX_SURFACES_PER_TURN:
+                                # Where the prose had reached when the card was
+                                # drawn, so a reloaded turn re-renders the card
+                                # in the same place in the answer.
+                                surface["content_offset"] = len("".join(answer))
+                                ui_surfaces.append(surface)
+                                yield sse_event("ui", surface)
+                            else:
+                                result = {
+                                    "ok": False,
+                                    "error": "too_many_surfaces",
+                                    "message": (
+                                        "بلغت الحد الأقصى لعدد البطاقات في هذا الرد. "
+                                        "أكمل بالنص."
+                                    ),
+                                }
+                                ok = False
                     # A truncated preview of the result so the user can tap the chip
                     # to inspect what the tool returned (debugging) — streamed live
                     # and persisted, bounded so a big result can't bloat the row.
@@ -670,6 +724,7 @@ class AiChatView(APIView):
                 tool_events,
                 sources=collected_sources,
                 web_searched=web_searched,
+                ui_surfaces=ui_surfaces,
             )
             saved = True
             yield sse_event(
@@ -718,7 +773,9 @@ class AiChatView(APIView):
                 detail=failure_detail,
                 elapsed_ms=int((time.monotonic() - started_at) * 1000),
             )
-            if not saved and not paused and ("".join(answer) or "".join(reasoning) or tool_events):
+            if not saved and not paused and (
+                "".join(answer) or "".join(reasoning) or tool_events
+            ):
                 self._save_assistant(
                     conversation,
                     "".join(answer),
@@ -727,6 +784,7 @@ class AiChatView(APIView):
                     tool_events,
                     sources=collected_sources,
                     web_searched=web_searched,
+                    ui_surfaces=ui_surfaces,
                 )
             try:
                 response.close()
@@ -788,7 +846,15 @@ class AiChatView(APIView):
         AiConversation.objects.filter(pk=conversation.pk).update(title=title)
 
     def _save_assistant(
-        self, conversation, content, reasoning, data, tool_events=None, sources=None, web_searched=False
+        self,
+        conversation,
+        content,
+        reasoning,
+        data,
+        tool_events=None,
+        sources=None,
+        web_searched=False,
+        ui_surfaces=None,
     ):
         usage = data.get("usage") or {}
         message = AiMessage.objects.create(
@@ -802,6 +868,7 @@ class AiChatView(APIView):
             completion_tokens=int(usage.get("completion_tokens") or 0),
             tool_events=tool_events or [],
             sources=sources or [],
+            ui_surfaces=ui_surfaces or [],
             web_searched=bool(web_searched),
         )
         AiConversation.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
@@ -952,10 +1019,12 @@ class AiChatResumeView(AiChatView):
             append_user=False,
             supports_actions=supports_actions,
             supports_navigation=payload.get("supports_navigation", True),
+            supports_ui=payload.get("supports_ui", False),
         )
         tools = tools_definitions(
             supports_ask_user=payload.get("supports_ask_user", True),
             supports_actions=supports_actions,
+            supports_ui=payload.get("supports_ui", False),
         )
 
         client = RelayControlClient()

@@ -23,7 +23,10 @@ import 'subnet_sweep_stub.dart' if (dart.library.io) 'subnet_sweep_io.dart';
 /// session same-site whatever the app is served from (127.0.0.1, localhost, or
 /// a LAN address in front of a separate backend port). Native builds have no
 /// such constraint and keep both.
-List<String> loopbackApiBaseUrls({required bool isWeb, required String pageHost}) {
+List<String> loopbackApiBaseUrls({
+  required bool isWeb,
+  required String pageHost,
+}) {
   const both = ['http://127.0.0.1:8000/api', 'http://localhost:8000/api'];
   if (!isWeb) {
     return both;

@@ -18,6 +18,9 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../ui/ai_surface_action.dart';
+import '../ui/ai_surface_host.dart';
+import '../ui/ai_surface_view.dart';
 import '../view_models/ai_chat_view_model.dart';
 import '../voice_recording.dart';
 import 'voice_recorder_bar.dart';
@@ -109,9 +112,17 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   /// text input.
   bool _isRecording = false;
 
+  /// Owns the generated-UI surfaces for this conversation. One host per screen:
+  /// surfaces are keyed by id within it, and it is reset when the conversation
+  /// changes so cards never leak between conversations.
+  final AiSurfaceHost _surfaceHost = AiSurfaceHost();
+  StreamSubscription<AiSurfaceAction>? _surfaceActions;
+
   @override
   void initState() {
     super.initState();
+    widget.viewModel.attachSurfaceHost(_surfaceHost);
+    _surfaceActions = _surfaceHost.actions.listen(_handleSurfaceAction);
     widget.viewModel.addListener(_handleModelChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -138,8 +149,38 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     _inputFocus.requestFocus();
   }
 
+  /// Routes a tap on a generated card. The action name's prefix decides where
+  /// it goes: a deep link is handled in-app, a follow-up question and a form
+  /// submission each become a new turn.
+  void _handleSurfaceAction(AiSurfaceAction action) {
+    switch (action.kind) {
+      case AiSurfaceActionKind.navigate:
+        // Reuse the same routing a tapped link in the prose goes through, so a
+        // card button and a markdown link behave identically.
+        final link = action.link;
+        if (link != null) _handleAssistantLink(link);
+      case AiSurfaceActionKind.ask:
+        final prompt = action.prompt;
+        if (prompt != null && prompt.trim().isNotEmpty) {
+          unawaited(widget.viewModel.sendMessage(prompt.trim()));
+        }
+      case AiSurfaceActionKind.submit:
+        // Committing an invoice goes straight to the API; everything else is a
+        // form whose values the assistant needs to read.
+        if (action.name == AiChatViewModel.applyInvoiceIntakeAction) {
+          unawaited(widget.viewModel.applyInvoiceIntake(action));
+        } else {
+          unawaited(widget.viewModel.sendUiInteraction(action));
+        }
+      case AiSurfaceActionKind.unknown:
+        break;
+    }
+  }
+
   @override
   void dispose() {
+    unawaited(_surfaceActions?.cancel());
+    _surfaceHost.dispose();
     _followedMessage?.removeListener(_handleStreamTick);
     widget.viewModel.removeListener(_handleModelChanged);
     _controller.dispose();
@@ -465,6 +506,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                             onSkip: _skipQuestion,
                             productSearch: widget.productSearch,
                             onLinkTap: _handleAssistantLink,
+                            surfaceHost: _surfaceHost,
                           )
                         : _EmptyState(onSuggestion: _sendSuggestion),
                   ),
@@ -527,6 +569,7 @@ class _MessageList extends StatelessWidget {
     required this.onSkip,
     required this.productSearch,
     required this.onLinkTap,
+    required this.surfaceHost,
   });
 
   final ScrollController controller;
@@ -539,6 +582,7 @@ class _MessageList extends StatelessWidget {
   final VoidCallback onSkip;
   final AiProductSearch? productSearch;
   final ValueChanged<String> onLinkTap;
+  final AiSurfaceHost? surfaceHost;
 
   @override
   Widget build(BuildContext context) {
@@ -572,6 +616,7 @@ class _MessageList extends StatelessWidget {
             onSkip: onSkip,
             productSearch: productSearch,
             onLinkTap: onLinkTap,
+            surfaceHost: surfaceHost,
           );
         }
         // A stable per-message key preserves each bubble's element (and so its
@@ -672,6 +717,7 @@ class _AssistantMessage extends StatelessWidget {
     required this.onSkip,
     required this.productSearch,
     required this.onLinkTap,
+    required this.surfaceHost,
   });
 
   final AiMessage message;
@@ -681,6 +727,10 @@ class _AssistantMessage extends StatelessWidget {
   final VoidCallback onSkip;
   final AiProductSearch? productSearch;
   final ValueChanged<String> onLinkTap;
+
+  /// Renders any generated UI cards this turn produced. Null when the app has
+  /// no catalog available, in which case replies stay text-only.
+  final AiSurfaceHost? surfaceHost;
 
   @override
   Widget build(BuildContext context) {
@@ -711,8 +761,25 @@ class _AssistantMessage extends StatelessWidget {
                 padding: EdgeInsets.symmetric(vertical: 4),
                 child: _TypingIndicator(),
               )
-            else if (message.content.isNotEmpty)
-              _AssistantText(message: message, onLinkTap: onLinkTap),
+            else if (message.uiSurfaces.isEmpty || surfaceHost == null)
+              _AssistantText(message: message, onLinkTap: onLinkTap)
+            else
+              // Prose and generated cards in the order the model produced them,
+              // so a card drawn mid-answer stays mid-answer. Cards arrive once
+              // per tool result, never per token, so this stays off the
+              // streaming rebuild path.
+              for (final segment in message.segments)
+                if (segment.isText)
+                  _AssistantTextSegment(
+                    text: segment.text,
+                    onLinkTap: onLinkTap,
+                  )
+                else
+                  AiSurfaceView(
+                    key: ValueKey<String>(segment.surface!.surfaceId),
+                    host: surfaceHost!,
+                    surface: segment.surface!,
+                  ),
             if (message.pendingQuestion != null) ...[
               if (message.content.isNotEmpty) SizedBox(height: spacing.sm),
               _QuestionCard(
@@ -817,6 +884,54 @@ class _AssistantText extends StatefulWidget {
 
   @override
   State<_AssistantText> createState() => _AssistantTextState();
+}
+
+/// One prose run of a turn that also contains generated cards.
+///
+/// Separate from [_AssistantText] because it renders a slice of the answer
+/// rather than the whole message, but it memoizes on exactly the same terms —
+/// a settled slice never re-parses when a sibling slice grows.
+class _AssistantTextSegment extends StatefulWidget {
+  const _AssistantTextSegment({required this.text, required this.onLinkTap});
+
+  final String text;
+  final ValueChanged<String> onLinkTap;
+
+  @override
+  State<_AssistantTextSegment> createState() => _AssistantTextSegmentState();
+}
+
+class _AssistantTextSegmentState extends State<_AssistantTextSegment> {
+  Widget? _cached;
+  String? _content;
+  TextStyle? _style;
+  TextDirection? _direction;
+
+  void _handleLinkTap(String url, String title) => widget.onLinkTap(url);
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final base = Theme.of(context).textTheme.bodyMedium ?? const TextStyle();
+    final style = base.copyWith(color: colors.ink, height: 1.55);
+    final direction = Directionality.of(context);
+    final content = widget.text.trim();
+    if (_cached == null ||
+        content != _content ||
+        style != _style ||
+        direction != _direction) {
+      _content = content;
+      _style = style;
+      _direction = direction;
+      _cached = GptMarkdown(
+        content,
+        style: style,
+        textDirection: direction,
+        onLinkTap: _handleLinkTap,
+      );
+    }
+    return SelectionArea(child: _cached!);
+  }
 }
 
 class _AssistantTextState extends State<_AssistantText> {

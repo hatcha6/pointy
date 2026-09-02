@@ -4,12 +4,13 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.catalog.search_terms import normalize_term, search_normalize
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from apps.inventory.models import StockItem
 from .models import (
@@ -1760,3 +1761,29 @@ class ProductVariantIdsFilterTests(TestCase):
             [row["id"] for row in response.data["results"]],
             [self.second.pk],
         )
+
+
+class SearchNormalizeHamzaTests(SimpleTestCase):
+    """A DB `search` query must keep the letters the stored name actually has.
+
+    `search_normalize` feeds an `icontains` against the raw product name, so any
+    transformation it makes has to be one the stored text shares. Decomposing to
+    NFKD used to split أ into alef + a combining hamza and then strip the hamza,
+    so "شاي أخضر" searched as "شاي اخضر" and matched nothing — quietly breaking
+    invoice matching and product search for every hamza-carrying name.
+    """
+
+    def test_hamza_carrying_letters_survive_a_search_query(self):
+        for word in ("أخضر", "إسود", "آيس", "مؤن", "بئر"):
+            self.assertEqual(search_normalize(word), word)
+
+    def test_harakat_and_tatweel_are_still_stripped(self):
+        self.assertEqual(search_normalize("مُعَجَّل"), "معجل")
+        self.assertEqual(search_normalize("طماطـم"), "طماطم")
+
+    def test_the_comparison_key_still_folds_those_letters(self):
+        # Folding belongs in normalize_term, which compares in Python. Its output
+        # is unchanged by the search fix, so stored aliases keep matching.
+        self.assertEqual(normalize_term("أخضر"), "اخضر")
+        self.assertEqual(normalize_term("شاي أخضر"), "شاي اخضر")
+        self.assertEqual(normalize_term("مؤن"), "مون")

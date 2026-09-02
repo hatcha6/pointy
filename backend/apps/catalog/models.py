@@ -308,6 +308,11 @@ class ProductAlias(TimeStampedModel):
     class Source(models.TextChoices):
         INVOICE = "invoice", "Invoice match"
         MANUAL = "manual", "Manual"
+        # A match no human confirmed line-by-line: the invoice-intake pipeline's
+        # supplier-history prior, and the LLM adjudication that follows it.
+        # Recorded distinctly so machine-made aliases can be weighted lower —
+        # or revoked in bulk — without touching what users confirmed themselves.
+        AI_ADJUDICATED = "ai_adjudicated", "AI adjudicated"
 
     product = models.ForeignKey(
         Product,

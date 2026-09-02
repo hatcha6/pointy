@@ -1771,3 +1771,137 @@ class AiStreamOutcomeTelemetryTests(TestCase):
         event = self._finished().get()
         self.assertEqual(event.attributes["outcome"], "failed_mid_stream")
         self.assertIn("ConnectionResetError", event.attributes["detail"])
+
+
+class AiChatGeneratedUiTests(TestCase):
+    """Generated UI end to end through the agentic loop: the capability gate, the
+    `ui` event, persistence, and what happens when the model gets it wrong."""
+
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username="ui-user", password="pw-12345!")
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        RelayInstallation.objects.create(
+            installation_id="inst-ui",
+            access_token="ptr1.inst-ui.secret",
+            relay_enabled=False,
+            subscription_active=True,
+            ai_enabled=True,
+        )
+
+    _GOOD_SURFACE = {
+        "surface_id": "answer1",
+        "title": "ملخص",
+        "components": [
+            {"id": "root", "component": "Column", "children": ["t"]},
+            {"id": "t", "component": "Text", "text": "مرحبا"},
+        ],
+    }
+
+    def _run_turn(self, payload, tool_arguments, follow_up="تم"):
+        """Drive one turn where the model calls render_ui, then answers."""
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.side_effect = [
+                FakeRelayResponse(
+                    fake_tool_call_sse(name="render_ui", arguments=json.dumps(tool_arguments))
+                ),
+                FakeRelayResponse(fake_sse_lines([follow_up])),
+            ]
+            response = self.client.post(reverse("ai-chat"), payload, format="json")
+            body = b"".join(response.streaming_content).decode("utf-8")
+        return body
+
+    def test_render_ui_streams_a_ui_event_and_persists_the_surface(self):
+        body = self._run_turn(
+            {"message": "كيف المبيعات؟", "supports_ui": True},
+            self._GOOD_SURFACE,
+        )
+        self.assertIn("event: ui", body)
+        self.assertIn("answer1", body)
+
+        assistant = AiMessage.objects.filter(role=AiMessage.ROLE_ASSISTANT).latest("pk")
+        self.assertEqual(len(assistant.ui_surfaces), 1)
+        surface = assistant.ui_surfaces[0]
+        self.assertEqual(surface["surface_id"], "answer1")
+        # The card records where the prose had reached, so a reload puts it back
+        # in the same place in the answer.
+        self.assertIn("content_offset", surface)
+
+    def test_the_surface_is_not_echoed_back_into_the_model_context(self):
+        # The model already knows what it drew; sending the whole payload back
+        # would burn its context for nothing.
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.side_effect = [
+                FakeRelayResponse(
+                    fake_tool_call_sse(
+                        name="render_ui", arguments=json.dumps(self._GOOD_SURFACE)
+                    )
+                ),
+                FakeRelayResponse(fake_sse_lines(["تم"])),
+            ]
+            response = self.client.post(
+                reverse("ai-chat"),
+                {"message": "x", "supports_ui": True},
+                format="json",
+            )
+            b"".join(response.streaming_content)
+            second_call = mock_client.return_value.open_ai_stream.call_args_list[1]
+            tool_reply = [
+                m for m in second_call.kwargs["messages"] if m.get("role") == "tool"
+            ][-1]
+        reply = json.loads(tool_reply["content"])
+        self.assertEqual(reply["surface_id"], "answer1")
+        self.assertEqual(reply["component_count"], 2)
+        # The rendered payload itself is gone: only the acknowledgement remains.
+        self.assertNotIn("surface", reply)
+        self.assertNotIn("مرحبا", tool_reply["content"])
+
+    def test_an_invalid_surface_is_refused_with_fixable_problems(self):
+        body = self._run_turn(
+            {"message": "x", "supports_ui": True},
+            {
+                "surface_id": "bad1",
+                "components": [
+                    {"id": "root", "component": "Text", "text": "hi", "color": "red"}
+                ],
+            },
+        )
+        # No card reaches the client…
+        self.assertNotIn("event: ui", body)
+        # …and nothing is persisted.
+        assistant = AiMessage.objects.filter(role=AiMessage.ROLE_ASSISTANT).latest("pk")
+        self.assertEqual(assistant.ui_surfaces, [])
+
+    def test_ui_is_gated_by_the_client_capability(self):
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["ok"])
+            )
+            for payload, expected in (
+                ({"message": "x", "supports_ui": True}, True),
+                ({"message": "x"}, False),
+            ):
+                response = self.client.post(reverse("ai-chat"), payload, format="json")
+                b"".join(response.streaming_content)
+                _, kwargs = mock_client.return_value.open_ai_stream.call_args
+                names = {t["function"]["name"] for t in kwargs["tools"]}
+                self.assertEqual("render_ui" in names, expected)
+                prompt = kwargs["messages"][0]["content"]
+                self.assertEqual("render_ui" in prompt, expected)
+
+    def test_the_prompt_tells_the_model_to_prefer_prose(self):
+        # The restraint rule is the point: a drawing tool without it turns every
+        # one-line answer into a chart.
+        with patch("apps.ai.views.RelayControlClient") as mock_client:
+            mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
+                fake_sse_lines(["ok"])
+            )
+            response = self.client.post(
+                reverse("ai-chat"), {"message": "x", "supports_ui": True}, format="json"
+            )
+            b"".join(response.streaming_content)
+            _, kwargs = mock_client.return_value.open_ai_stream.call_args
+            prompt = kwargs["messages"][0]["content"]
+        self.assertIn("الأصل أن تجيب نصًا", prompt)
+        self.assertIn("بلا أي بطاقة", prompt)

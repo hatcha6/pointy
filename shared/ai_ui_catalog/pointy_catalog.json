@@ -1,0 +1,732 @@
+{
+  "catalogId": "https://pointy.app/ai-ui/v1",
+  "$id": "https://pointy.app/ai-ui/v1",
+  "version": 1,
+  "components": {
+    "Column": {
+      "description": "Stacks its children vertically. The usual page container.",
+      "properties": {
+        "children": {
+          "description": "Child component ids, or a template bound to a list in the data model.",
+          "bindable": true,
+          "items": {
+            "description": "Component ID",
+            "type": "string"
+          }
+        },
+        "align": {
+          "description": "Cross-axis alignment.",
+          "type": "string",
+          "enum": [
+            "start",
+            "center",
+            "end",
+            "stretch"
+          ]
+        }
+      },
+      "required": [
+        "children"
+      ]
+    },
+    "Row": {
+      "description": "Places its children side by side. Use for two or three short items; prefer Column on a phone.",
+      "properties": {
+        "children": {
+          "description": "Child component ids, or a bound template.",
+          "bindable": true,
+          "items": {
+            "description": "Component ID",
+            "type": "string"
+          }
+        },
+        "justify": {
+          "description": "Main-axis distribution.",
+          "type": "string",
+          "enum": [
+            "start",
+            "center",
+            "end",
+            "spaceBetween"
+          ]
+        },
+        "align": {
+          "description": "Cross-axis alignment.",
+          "type": "string",
+          "enum": [
+            "start",
+            "center",
+            "end",
+            "stretch"
+          ]
+        }
+      },
+      "required": [
+        "children"
+      ]
+    },
+    "Card": {
+      "description": "A titled panel that groups related content. Use one card per idea.",
+      "properties": {
+        "child": {
+          "description": "The id of the component inside the card.",
+          "type": "string"
+        },
+        "title": {
+          "description": "Optional heading.",
+          "bindable": true
+        },
+        "subtitle": {
+          "description": "Optional line under the heading, e.g. the period.",
+          "bindable": true
+        }
+      },
+      "required": [
+        "child"
+      ]
+    },
+    "Section": {
+      "description": "A labelled block inside a longer answer.",
+      "properties": {
+        "title": {
+          "description": "Section heading.",
+          "bindable": true
+        },
+        "child": {
+          "description": "Section body id.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "child"
+      ]
+    },
+    "Divider": {
+      "description": "A thin rule separating two blocks.",
+      "properties": {},
+      "required": []
+    },
+    "Text": {
+      "description": "A line or short paragraph of plain text.",
+      "properties": {
+        "text": {
+          "description": "The text to show.",
+          "bindable": true
+        },
+        "variant": {
+          "description": "The role of this text. Use \"numeric\" for figures so digits align.",
+          "type": "string",
+          "enum": [
+            "title",
+            "subtitle",
+            "body",
+            "caption",
+            "numeric"
+          ]
+        },
+        "emphasis": {
+          "description": "Whether the text is emphasised.",
+          "type": "string",
+          "enum": [
+            "normal",
+            "strong"
+          ]
+        },
+        "tone": {
+          "description": "Optional meaning, which tints the text.",
+          "type": "string",
+          "enum": [
+            "neutral",
+            "info",
+            "success",
+            "warning",
+            "danger"
+          ]
+        }
+      },
+      "required": [
+        "text"
+      ]
+    },
+    "Markdown": {
+      "description": "Formatted prose with lists, bold and links. Use for explanation, not for figures — figures belong in MetricGrid, Table or a chart.",
+      "properties": {
+        "text": {
+          "description": "Markdown source.",
+          "bindable": true
+        }
+      },
+      "required": [
+        "text"
+      ]
+    },
+    "Callout": {
+      "description": "A single highlighted finding, warning or recommendation. Use at most one or two per answer, for the thing that matters most.",
+      "properties": {
+        "title": {
+          "description": "The headline.",
+          "bindable": true
+        },
+        "body": {
+          "description": "Optional detail line.",
+          "bindable": true
+        },
+        "tone": {
+          "description": "What the item means, which decides its colour. Never a colour name.",
+          "type": "string",
+          "enum": [
+            "neutral",
+            "info",
+            "success",
+            "warning",
+            "danger"
+          ]
+        }
+      },
+      "required": [
+        "title"
+      ]
+    },
+    "StatusPill": {
+      "description": "A compact status label, e.g. an order state.",
+      "properties": {
+        "label": {
+          "description": "Pill text.",
+          "bindable": true
+        },
+        "tone": {
+          "description": "What the item means, which decides its colour. Never a colour name.",
+          "type": "string",
+          "enum": [
+            "neutral",
+            "info",
+            "success",
+            "warning",
+            "danger"
+          ]
+        }
+      },
+      "required": [
+        "label"
+      ]
+    },
+    "MetricGrid": {
+      "description": "Headline figures, two to six of them. The first thing to reach for when an answer contains several numbers.",
+      "properties": {
+        "metrics": {
+          "description": "The figures, in order of importance.",
+          "bindable": true,
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "description": "What the figure measures.",
+                "type": "string"
+              },
+              "value": {
+                "description": "The figure itself."
+              },
+              "kind": {
+                "description": "How to format the value. Use \"money\" for any amount in shop currency.",
+                "type": "string",
+                "enum": [
+                  "text",
+                  "number",
+                  "money",
+                  "percent",
+                  "date"
+                ]
+              },
+              "delta": {
+                "description": "Optional change versus the comparison period, as a percentage. Positive means up. The client draws the arrow and colour.",
+                "type": "number"
+              },
+              "subtitle": {
+                "description": "Optional context line, e.g. the period.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "value"
+            ]
+          }
+        }
+      },
+      "required": [
+        "metrics"
+      ]
+    },
+    "SummaryList": {
+      "description": "Label-and-value rows, like an invoice breakdown. Use when the values add up to something, and mark the last row as the total.",
+      "properties": {
+        "rows": {
+          "bindable": true,
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {},
+              "kind": {
+                "description": "How to format the value. Use \"money\" for any amount in shop currency.",
+                "type": "string",
+                "enum": [
+                  "text",
+                  "number",
+                  "money",
+                  "percent",
+                  "date"
+                ]
+              },
+              "total": {
+                "description": "Marks this row as the emphasised total row.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "label",
+              "value"
+            ]
+          }
+        }
+      },
+      "required": [
+        "rows"
+      ]
+    },
+    "Table": {
+      "description": "Rows of records with named columns. Use when the user needs to scan or compare more than about five records.",
+      "properties": {
+        "columns": {
+          "description": "Column definitions, in display order.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "description": "The field name in each row object.",
+                "type": "string"
+              },
+              "label": {
+                "description": "The column heading.",
+                "type": "string"
+              },
+              "kind": {
+                "description": "How to format the value. Use \"money\" for any amount in shop currency.",
+                "type": "string",
+                "enum": [
+                  "text",
+                  "number",
+                  "money",
+                  "percent",
+                  "date"
+                ]
+              },
+              "total": {
+                "description": "Sum this column in a totals row. Only set it where a sum is meaningful: a line total or a quantity, never a unit price, a percentage or an average.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "key",
+              "label"
+            ]
+          }
+        },
+        "rows": {
+          "description": "The records. Include a \"link\" field on a row to make it tappable, e.g. \"pointy://product/12\".",
+          "bindable": true,
+          "items": {
+            "description": "One record, keyed by column key.",
+            "type": "object"
+          }
+        }
+      },
+      "required": [
+        "columns",
+        "rows"
+      ]
+    },
+    "LineChart": {
+      "description": "A trend over time. Use when the question is about direction or a series of days, weeks or months.",
+      "properties": {
+        "series": {
+          "bindable": true,
+          "items": {
+            "description": "One named run of values.",
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Series name, shown in the legend.",
+                "type": "string"
+              },
+              "points": {
+                "description": "The values, in order along the category axis.",
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            },
+            "required": [
+              "name",
+              "points"
+            ]
+          }
+        },
+        "kind": {
+          "description": "How the plotted values should be formatted.",
+          "type": "string",
+          "enum": [
+            "text",
+            "number",
+            "money",
+            "percent",
+            "date"
+          ]
+        }
+      },
+      "required": [
+        "series"
+      ]
+    },
+    "BarChart": {
+      "description": "A comparison across categories, e.g. products, branches or hours.",
+      "properties": {
+        "series": {
+          "bindable": true,
+          "items": {
+            "description": "One named run of values.",
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "Series name, shown in the legend.",
+                "type": "string"
+              },
+              "points": {
+                "description": "The values, in order along the category axis.",
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              }
+            },
+            "required": [
+              "name",
+              "points"
+            ]
+          }
+        },
+        "kind": {
+          "description": "How to format the value. Use \"money\" for any amount in shop currency.",
+          "type": "string",
+          "enum": [
+            "text",
+            "number",
+            "money",
+            "percent",
+            "date"
+          ]
+        }
+      },
+      "required": [
+        "series"
+      ]
+    },
+    "DonutChart": {
+      "description": "A share of a whole, e.g. payment mix. Use only when the parts really do sum to the total, and keep it under six slices.",
+      "properties": {
+        "slices": {
+          "bindable": true,
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "label",
+              "value"
+            ]
+          }
+        },
+        "kind": {
+          "description": "How to format the value. Use \"money\" for any amount in shop currency.",
+          "type": "string",
+          "enum": [
+            "text",
+            "number",
+            "money",
+            "percent",
+            "date"
+          ]
+        }
+      },
+      "required": [
+        "slices"
+      ]
+    },
+    "Sparkline": {
+      "description": "A tiny trend line with no axes, for placing beside a single figure.",
+      "properties": {
+        "points": {
+          "bindable": true,
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          }
+        }
+      },
+      "required": [
+        "points"
+      ]
+    },
+    "Button": {
+      "description": "A tap target. Use it to open a screen, ask a follow-up, or submit the inputs on this surface.",
+      "properties": {
+        "label": {
+          "description": "Button text.",
+          "bindable": true
+        },
+        "variant": {
+          "description": "How prominent the button is.",
+          "type": "string",
+          "enum": [
+            "primary",
+            "secondary",
+            "destructive"
+          ]
+        },
+        "icon": {
+          "description": "Optional meaning-based icon.",
+          "type": "string",
+          "enum": [
+            "open",
+            "add",
+            "refresh",
+            "check",
+            "chart",
+            "search"
+          ]
+        },
+        "action": {
+          "description": "What happens on tap. The event name must start with \"navigate:\" to open a screen, \"ask:\" to ask the assistant a follow-up, or \"submit:\" to send this surface's inputs back.",
+          "type": "object",
+          "properties": {
+            "event": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Prefixed action name, e.g. \"navigate:open\", \"ask:breakdown\", \"submit:confirm\".",
+                  "type": "string"
+                },
+                "context": {
+                  "description": "Extra values sent with the action. For \"navigate:\" put the deep link in \"link\" (e.g. \"pointy://product/12\"). For \"ask:\" put the follow-up question in \"prompt\".",
+                  "type": "object"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "event"
+          ]
+        }
+      },
+      "required": [
+        "label",
+        "action"
+      ]
+    },
+    "EntityChip": {
+      "description": "A reference to a record in the shop — a product, customer, supplier, sale or purchase order. Tapping it opens that record.",
+      "properties": {
+        "label": {
+          "description": "The record name.",
+          "bindable": true
+        },
+        "entity": {
+          "description": "Which kind of record this is.",
+          "type": "string",
+          "enum": [
+            "product",
+            "customer",
+            "supplier",
+            "order",
+            "purchase-order",
+            "job"
+          ]
+        },
+        "entityId": {
+          "description": "The record id in the database.",
+          "bindable": true
+        }
+      },
+      "required": [
+        "label",
+        "entity",
+        "entityId"
+      ]
+    },
+    "TextField": {
+      "description": "A single-line text input bound to a path in the data model.",
+      "properties": {
+        "label": {
+          "description": "Field label.",
+          "type": "string"
+        },
+        "value": {
+          "description": "A {\"path\": \"/...\"} binding holding the entered text.",
+          "bindable": true
+        },
+        "placeholder": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ]
+    },
+    "NumberField": {
+      "description": "A numeric input, e.g. a quantity or a cost.",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "description": "A {\"path\": \"/...\"} binding holding the number.",
+          "bindable": true
+        },
+        "unit": {
+          "description": "Optional unit shown after the field.",
+          "type": "string"
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "decimals": {
+          "description": "Allowed decimal places, 0 to 3.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ]
+    },
+    "Checkbox": {
+      "description": "A single on/off choice.",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "description": "A {\"path\": \"/...\"} binding holding the boolean.",
+          "bindable": true
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ]
+    },
+    "ChoiceChips": {
+      "description": "A small set of choices, shown as chips. Prefer this over a dropdown when there are six options or fewer.",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value",
+              "label"
+            ]
+          }
+        },
+        "value": {
+          "description": "A {\"path\": \"/...\"} binding holding the chosen value.",
+          "bindable": true
+        }
+      },
+      "required": [
+        "options",
+        "value"
+      ]
+    },
+    "Form": {
+      "description": "Groups inputs with a submit button. On submit the whole surface data model is sent back to you, so read the values from the paths you bound.",
+      "properties": {
+        "child": {
+          "description": "The component holding the inputs.",
+          "type": "string"
+        },
+        "submitLabel": {
+          "description": "Submit button text.",
+          "type": "string"
+        },
+        "action": {
+          "description": "Must use a \"submit:\" event name.",
+          "type": "object",
+          "properties": {
+            "event": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "context": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "event"
+          ]
+        }
+      },
+      "required": [
+        "child",
+        "submitLabel",
+        "action"
+      ]
+    }
+  }
+}

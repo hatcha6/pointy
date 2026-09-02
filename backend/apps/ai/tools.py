@@ -30,6 +30,12 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from apps.sales.cooccurrence import BASKET_MAX_ROWS, count_cooccurring_pairs
 
 from .tool_registry import WRITE_DENY_RESOURCES, get_registry, resource_for_model
+from .ui_catalog import (
+    UiValidationError,
+    catalog_available,
+    component_names,
+    validate_surface,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -2639,6 +2645,12 @@ def tool_label(name, resource=None):
 
 
 _TOOLS = {
+    "render_ui": lambda user, args: render_ui(
+        surface_id=args.get("surface_id"),
+        components=args.get("components"),
+        title=args.get("title"),
+        data=args.get("data"),
+    ),
     "list_resources": lambda user, args: list_resources(user=user, resource=args.get("resource")),
     "query_resource": lambda user, args: query_resource(
         user=user,
@@ -3159,7 +3171,94 @@ def action_tool_definitions():
     ]
 
 
-def tools_definitions(*, supports_ask_user=False, supports_actions=False):
+def render_ui(*, surface_id, components, title=None, data=None):
+    """Validate one generated UI surface against the app's component catalog.
+
+    Read-only: it commits nothing and touches no shop data. Its whole job is to
+    be a gate — a payload naming a component or property the app does not have
+    comes back as a structured error the model can fix, so a malformed screen is
+    never shown to a user.
+    """
+    payload = {
+        "surface_id": surface_id,
+        "components": components,
+        "title": title,
+        "data": data,
+    }
+    try:
+        surface = validate_surface(payload)
+    except UiValidationError as exc:
+        return {
+            "ok": False,
+            "error": "invalid_ui",
+            "problems": exc.problems,
+            "hint": (
+                "أصلح المشاكل أعلاه وأعد الاستدعاء، أو أجب نصًا بدون واجهة إن لم "
+                "تكن الواجهة ضرورية."
+            ),
+        }
+    return {
+        "ok": True,
+        "surface_id": surface["surface_id"],
+        "component_count": len(surface["components"]),
+        # The view reads this to emit the `ui` SSE event; the model only needs
+        # to know the surface was accepted.
+        "surface": surface,
+    }
+
+
+def render_ui_tool_definition():
+    """The ``render_ui`` schema.
+
+    The component array is deliberately loosely typed: some providers reject
+    deeply nested ``oneOf`` unions inside a function schema, and the real
+    contract is enforced server-side by ``validate_surface`` anyway.
+    """
+    return {
+        "type": "function",
+        "function": {
+            "name": "render_ui",
+            "description": (
+                "اعرض بطاقة واجهة داخل ردّك (رسم بياني، جدول، مؤشرات، تنبيه، نموذج). "
+                "استخدمها فقط عندما تجعل الإجابة أوضح فعلًا — النص هو الأصل. "
+                "المكوّنات المتاحة: " + ", ".join(component_names()) + "."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "surface_id": {
+                        "type": "string",
+                        "description": "معرّف قصير فريد للبطاقة داخل هذه المحادثة.",
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "اختياري: عنوان قصير للبطاقة.",
+                    },
+                    "components": {
+                        "type": "array",
+                        "description": (
+                            "قائمة مسطّحة من المكوّنات؛ لكل مكوّن id و component "
+                            "وخصائصه. يجب أن يوجد مكوّن واحد id=root يشير إلى "
+                            "البقية عبر child أو children."
+                        ),
+                        "items": {"type": "object"},
+                    },
+                    "data": {
+                        "type": "object",
+                        "description": (
+                            "اختياري: بيانات الربط، للحقول التفاعلية التي تربطها "
+                            "بمسار مثل /order/quantity."
+                        ),
+                    },
+                },
+                "required": ["surface_id", "components"],
+                "additionalProperties": False,
+            },
+        },
+    }
+
+
+def tools_definitions(*, supports_ask_user=False, supports_actions=False, supports_ui=False):
     """The OpenAI tool/function-calling array advertised to the model.
 
     ``ask_user`` and the create/edit action tools are each appended only when the
@@ -3516,4 +3615,12 @@ def tools_definitions(*, supports_ask_user=False, supports_actions=False):
         definitions.extend(action_tool_definitions())
     if supports_ask_user:
         definitions.append(ask_user_tool_definition())
+    if supports_ui and catalog_available():
+        definitions.append(render_ui_tool_definition())
+    if supports_actions and supports_ui:
+        # Reading an invoice both writes data and needs the review card, so it is
+        # offered only to a client that can do both.
+        from .invoice_intake_tool import start_invoice_intake_tool_definition
+
+        definitions.append(start_invoice_intake_tool_definition())
     return definitions

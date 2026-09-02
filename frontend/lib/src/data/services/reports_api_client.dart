@@ -49,7 +49,9 @@ class ReportsApiClient {
     );
     _session.ensureSuccess(response, 'Report history failed with status');
     final body = _session.decodedBody(response);
-    final rows = body is Map ? body['results'] as List? ?? const [] : body as List;
+    final rows = body is Map
+        ? body['results'] as List? ?? const []
+        : body as List;
     return [
       for (final row in rows)
         if (row is Map) ReportRunSummary.fromJson(row.cast<String, Object?>()),

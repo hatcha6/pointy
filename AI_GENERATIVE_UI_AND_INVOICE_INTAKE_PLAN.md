@@ -10,6 +10,17 @@ Both build on what already ships: the Django-owned agentic loop (`_agentic_strea
 
 ---
 
+## Spike verdict (2026-09-02): GO
+
+`genui` 0.10.2 was adopted as the rendering engine. All four kill criteria passed:
+
+1. **Resolves cleanly** on Flutter 3.38.6 / Dart ^3.10.7. Seventeen packages added, nothing downgraded, nothing removed. The transitive `video_player`/`video_player_win` weight was accepted; only `lib/src/features/ai/ui` imports the package.
+2. **Renders the Pointy catalog** in an RTL chat bubble in light and dark, driven by `SurfaceController` fed with server-built A2UI messages. The `Conversation` facade and `A2uiTransportAdapter` are not used: Django keeps owning the agentic loop.
+3. **No rebuild storm.** Surfaces arrive once per accepted tool result, never per token; a view-model test asserts a turn containing a card still produces exactly two structural notifications.
+4. **Catalog prompt is 12 KB of JSON**, rendered to a compact listing well inside the budget.
+
+The engine sits behind `ai_surface_host.dart`; the fallback native renderer was not needed and is not built.
+
 ## 0. Where we are (grounding)
 
 | Area | Today | Gap the plan closes |

@@ -311,6 +311,11 @@ type HTTPServer struct {
 	// to the vision model (which for Gemini-class multimodal models already
 	// accepts audio).
 	AIAudioModel string
+	// AIExtractModel reads a document (a photographed supplier invoice) into a
+	// fixed JSON schema. Empty falls back to the vision model. Kept separate
+	// because extraction wants accuracy and structured-output support, which is
+	// a different trade-off from conversational vision.
+	AIExtractModel string
 	// AIWebSearchEnabled turns on OpenRouter's web-search plugin for user turns
 	// whose query needs current/external info (decided by a cheap classifier, so it
 	// fires only when necessary — never on the shop's own-data questions).
