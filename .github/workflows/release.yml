@@ -92,6 +92,9 @@ jobs:
     name: Build Android APK
     needs: version
     runs-on: ubuntu-latest
+    # The APK takes ~15 min. A runner that gets OOM-killed mid-Gradle goes
+    # silent rather than failing, so cap it well short of the 6h default.
+    timeout-minutes: 40
     env:
       # Empty unless the repo has the signing secrets configured. When present we
       # sign with the real upload key; otherwise the build falls back to debug
