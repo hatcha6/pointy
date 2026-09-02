@@ -1,5 +1,9 @@
 # Daftar promo films
 
+> The identity these are built on — name, promise, voice, mark, palette, type —
+> is in [`../BRAND.md`](../BRAND.md). This file covers only how a film or a
+> poster is made. If the two ever disagree, BRAND.md wins.
+
 Four 30-second vertical films for دفتر (Daftar), rendered from code with
 [Remotion](https://remotion.dev). Every frame is deterministic, so a re-render
 always produces the same video — and a copy tweak is a one-line change, not a
@@ -16,7 +20,7 @@ All four are **1080 × 1920 @ 60fps, 1800 frames (30.0s)**, H.264.
 
 ## Posters
 
-Ten still posters at **1080 × 1350 (4:5)**, rendered from the same tokens,
+Fifteen still posters at **1080 × 1350 (4:5)**, rendered from the same tokens,
 typeface and logo as the films — so a feed of stills and a film read as one
 brand.
 
@@ -32,9 +36,14 @@ brand.
 | `PosterPriceChecker` | `out/posters/08-price-checker.png` | The shelf display that answers "بكم؟" |
 | `PosterCompare`  | `out/posters/09-compare.png`  | A crowded legacy till, and the دفتر desktop in front of it |
 | `PosterMinutes`  | `out/posters/10-minutes.png`  | The whole cashier's job, in three steps      |
+| `PosterAttendance` | `out/posters/11-attendance.png` | Fingerprint punches landing in the salary sheet |
+| `PosterFx`       | `out/posters/12-fx.png`       | The same dollar at the cash rate and the صك rate |
+| `PosterAiInvoice` | `out/posters/13-ai-invoice.png` | A supplier invoice, photographed, becoming a draft PO |
+| `PosterAiCapabilities` | `out/posters/14-ai-capabilities.png` | Everything the assistant does, in six lines |
+| `PosterKiosk`    | `out/posters/15-kiosk.png`    | Kiosk mode: an old tablet, waiting for a shopper |
 
 ```bash
-npm run posters                 # all six
+npm run posters                 # all fifteen
 npx remotion still PosterAi out/posters/03-ai.png
 ```
 
@@ -68,6 +77,25 @@ Rules, in addition to the film rules above:
 - **Numbers reconcile,** exactly as the films do. 20.00 − 3.00 = 17.00 on the
   POS poster; 4,285.50 ÷ 187 = 22.92 on the reports poster.
 - **The logo sits quietly in a corner** and never lands on top of the handset.
+- **The supplier invoice in `PosterAiInvoice` is a prop, not a scan.** It is
+  drawn — pre-printed blue form, aged paper, a crease, a crooked stamp, the
+  three decimals a dinar is written in — from a fictional wholesaler, because
+  photographing a real shop's invoice would publish a real business's prices and
+  phone number. It is set in `'Geeza Pro', Tahoma, Arial` (the same system stack
+  `legacy_ui` uses), never in IBM Plex: the moment someone else's paper is set
+  in our typeface it reads as our artwork instead of their document. The line
+  names on it deliberately differ from the catalogue names on the order card —
+  زيت ذرة الجود 1 لتر against زيت ذرة 1 لتر — because the matching is the
+  feature, and an invoice that already used our wording would be showing
+  nothing.
+- **Third-party marks name a product, they don't imply a partner.**
+  `public/zkteco-logo.png` is ZKTeco's own reversed logo, taken from their site,
+  and it appears in exactly one place: the "works with" chip on
+  `PosterAttendance`. It sits on a dark chip because that is the ground the
+  reversed mark was drawn for — never recoloured, never on our teal, never
+  larger than our own lockup. It is there because we integrate with BioTime and
+  a shop owner needs to recognise the box on their wall. If the claim ever stops
+  being true, the chip goes.
 - **The legacy till in `PosterCompare` is an archetype, never a product.**
   `src/posters/legacy_ui.tsx` draws the era every Libyan shop recognises —
   Windows chrome, an F-key command row, a wall of category buttons with most of

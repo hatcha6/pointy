@@ -14,7 +14,7 @@ const NOW = WAS * (1 - OFF / 100); // 4.40
  * photo, struck price, save badge, and a price big enough to read from the
  * next aisle.
  */
-const Shelf: React.FC<{children: React.ReactNode}> = ({children}) => (
+export const Shelf: React.FC<{children: React.ReactNode}> = ({children}) => (
   <div style={{position: 'relative', width: 824}}>
     <div
       style={{

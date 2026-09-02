@@ -370,11 +370,15 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     return missing.isEmpty;
   }
 
-  Future<void> _createVariantOptionValue(VariantOption option) async {
+  Future<void> _createVariantOptionValue(
+    VariantOption option,
+    String initialName,
+  ) async {
     final created = await showCreateVariantOptionValueDialog(
       context: context,
       catalogRepository: widget.viewModel.catalogRepository,
       option: option,
+      initialName: initialName,
     );
     if (!mounted || created == null) {
       return;

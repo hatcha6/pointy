@@ -26,6 +26,7 @@ import 'package:pointy_frontend/src/data/models/product_variant_draft.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/unit_of_measure.dart';
 import 'package:pointy_frontend/src/data/models/variant_option.dart';
+import 'package:pointy_frontend/src/data/models/variant_option_value.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/sale_repository.dart';
@@ -257,8 +258,10 @@ class _FakeCatalogRepository extends CatalogRepository {
   }) async => const Ok([]);
 
   @override
-  Future<Result<List<VariantOption>>> loadAllActiveVariantOptions() async =>
-      const Ok([]);
+  Future<Result<List<VariantOption>>> loadAllActiveVariantOptions() async {
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    return Ok(_previewVariantOptions);
+  }
 
   @override
   Future<Result<List<ModifierGroup>>> loadAllModifierGroups() async =>
@@ -268,6 +271,89 @@ class _FakeCatalogRepository extends CatalogRepository {
   Future<Result<List<UnitOfMeasure>>> loadAllUnits({
     bool activeOnly = true,
   }) async => const Ok([]);
+}
+
+/// A shop that has been running long enough to accumulate options — the case
+/// the old wall of "reuse" chips fell apart on.
+final _previewVariantOptions = [
+  _option(1, 'color', 'اللون', [
+    'أحمر',
+    'أزرق',
+    'أخضر',
+    'أسود',
+    'أبيض',
+    'أصفر',
+    'برتقالي',
+    'بنفسجي',
+    'وردي',
+    'رمادي',
+    'بني',
+    'ذهبي',
+    'فضي',
+    'كحلي',
+    'بيج',
+    'تركواز',
+  ]),
+  _option(2, 'size', 'المقاس', [
+    'XS',
+    'S',
+    'M',
+    'L',
+    'XL',
+    'XXL',
+    '3XL',
+    '38',
+    '40',
+    '42',
+    '44',
+    '46',
+  ]),
+  _option(3, 'material', 'الخامة', [
+    'قطن',
+    'كتان',
+    'صوف',
+    'جلد',
+    'بوليستر',
+    'حرير',
+    'دنيم',
+  ]),
+  _option(4, 'flavor', 'النكهة', [
+    'فراولة',
+    'شوكولاتة',
+    'فانيليا',
+    'مانجو',
+    'ليمون',
+    'نعناع',
+  ]),
+  _option(5, 'weight', 'الوزن', ['250 غ', '500 غ', '1 كغ', '2 كغ', '5 كغ']),
+  _option(6, 'pack', 'التعبئة', ['فردي', 'علبة', 'كرتونة']),
+  _option(7, 'origin', 'بلد المنشأ', [
+    'ليبيا',
+    'تركيا',
+    'مصر',
+    'الصين',
+    'إيطاليا',
+  ]),
+  _option(8, 'grade', 'الدرجة', ['ممتاز', 'أولى', 'ثانية']),
+];
+
+VariantOption _option(int id, String code, String name, List<String> values) {
+  return VariantOption(
+    id: id,
+    code: code,
+    name: name,
+    displayOrder: id,
+    values: [
+      for (final (index, value) in values.indexed)
+        VariantOptionValue(
+          id: id * 100 + index,
+          optionId: id,
+          code: '$code-$index',
+          name: value,
+          displayOrder: index,
+        ),
+    ],
+  );
 }
 
 class _FakePurchaseRepository extends PurchaseRepository {

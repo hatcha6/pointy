@@ -5917,10 +5917,27 @@ class AppLocalizationsAr extends AppLocalizations {
   String get variantOptionsLoadError => 'تعذر تحميل الخيارات.';
 
   @override
-  String get addVariantOptionButton => 'إضافة خيار';
+  String get variantOptionSearchHint => 'ابحث في الخيارات المحفوظة';
 
   @override
-  String get reuseVariantOptionLabel => 'أو أعد استخدام خيار سابق';
+  String get variantOptionSearchOrCreateHint =>
+      'ابحث في الخيارات المحفوظة أو اكتب اسمًا جديدًا';
+
+  @override
+  String get variantOptionSearchNoMatch => 'لا يوجد خيار مطابق.';
+
+  @override
+  String get variantOptionSearchEmpty => 'اكتب اسم الخيار لإنشائه.';
+
+  @override
+  String createVariantOptionInline(String name) {
+    return 'إنشاء خيار «$name»';
+  }
+
+  @override
+  String removeVariantOptionTooltip(String name) {
+    return 'إزالة $name';
+  }
 
   @override
   String get newVariantOptionTitle => 'خيار جديد';
@@ -5954,7 +5971,40 @@ class AppLocalizationsAr extends AppLocalizations {
   String get variantOptionValueRequired => 'اختر قيمة واحدة على الأقل.';
 
   @override
-  String get addVariantOptionValueButton => 'إضافة قيمة';
+  String get variantOptionNoValuesSelected => 'لم تُحدد أي قيمة بعد.';
+
+  @override
+  String get variantOptionValueSearchHint => 'ابحث في القيم المحفوظة';
+
+  @override
+  String get variantOptionValueSearchOrCreateHint =>
+      'ابحث في القيم المحفوظة أو اكتب قيمة جديدة';
+
+  @override
+  String get variantOptionValueSearchNoMatch => 'لا توجد قيمة مطابقة.';
+
+  @override
+  String get variantOptionValueSearchEmpty => 'اكتب اسم القيمة لإنشائها.';
+
+  @override
+  String createVariantOptionValueInline(String name) {
+    return 'إنشاء قيمة «$name»';
+  }
+
+  @override
+  String removeVariantOptionValueTooltip(String name) {
+    return 'إزالة $name';
+  }
+
+  @override
+  String selectAllVariantOptionValues(int count) {
+    return 'إضافة الكل ($count)';
+  }
+
+  @override
+  String variantOptionSelectedValuesCount(int count) {
+    return '$count محددة';
+  }
 
   @override
   String get newVariantOptionValueTitle => 'قيمة خيار جديدة';

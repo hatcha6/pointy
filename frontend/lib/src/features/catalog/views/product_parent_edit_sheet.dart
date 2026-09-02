@@ -548,11 +548,12 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
     });
   }
 
-  Future<void> _createVariantOption() async {
+  Future<void> _createVariantOption(String initialName) async {
     final created = await showCreateVariantOptionDialog(
       context: context,
       catalogRepository: widget.viewModel.catalogRepository,
       existingOptions: _availableVariantOptions,
+      initialName: initialName,
     );
     if (!mounted || created == null) {
       return;

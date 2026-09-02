@@ -3357,8 +3357,27 @@
   "variantOptionsHelper": "أضِف خيارًا يميّز المنتج مثل اللون أو المقاس، ثم أدخل قيمه. ستُستخدم القيم لتوليد خيارات المنتج تلقائيًا.",
   "variantOptionsEmpty": "لم تُضِف أي خيار بعد.",
   "variantOptionsLoadError": "تعذر تحميل الخيارات.",
-  "addVariantOptionButton": "إضافة خيار",
-  "reuseVariantOptionLabel": "أو أعد استخدام خيار سابق",
+  "variantOptionSearchHint": "ابحث في الخيارات المحفوظة",
+  "variantOptionSearchOrCreateHint": "ابحث في الخيارات المحفوظة أو اكتب اسمًا جديدًا",
+  "variantOptionSearchNoMatch": "لا يوجد خيار مطابق.",
+  "variantOptionSearchEmpty": "اكتب اسم الخيار لإنشائه.",
+  "createVariantOptionInline": "إنشاء خيار «{name}»",
+  "@createVariantOptionInline": {
+    "description": "Menu row that creates a brand new variant option from the typed search text.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "removeVariantOptionTooltip": "إزالة {name}",
+  "@removeVariantOptionTooltip": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "newVariantOptionTitle": "خيار جديد",
   "variantOptionNameLabel": "اسم الخيار",
   "variantOptionNameHint": "مثال: اللون",
@@ -3369,7 +3388,45 @@
   "variantValuesNoOptions": "أضِف خيارًا واحدًا على الأقل لتحديد قيمه.",
   "variantOptionNoValues": "لا توجد قيم لهذا الخيار بعد.",
   "variantOptionValueRequired": "اختر قيمة واحدة على الأقل.",
-  "addVariantOptionValueButton": "إضافة قيمة",
+  "variantOptionNoValuesSelected": "لم تُحدد أي قيمة بعد.",
+  "variantOptionValueSearchHint": "ابحث في القيم المحفوظة",
+  "variantOptionValueSearchOrCreateHint": "ابحث في القيم المحفوظة أو اكتب قيمة جديدة",
+  "variantOptionValueSearchNoMatch": "لا توجد قيمة مطابقة.",
+  "variantOptionValueSearchEmpty": "اكتب اسم القيمة لإنشائها.",
+  "createVariantOptionValueInline": "إنشاء قيمة «{name}»",
+  "@createVariantOptionValueInline": {
+    "description": "Menu row that creates a brand new variant option value from the typed search text.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "removeVariantOptionValueTooltip": "إزالة {name}",
+  "@removeVariantOptionValueTooltip": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "selectAllVariantOptionValues": "إضافة الكل ({count})",
+  "@selectAllVariantOptionValues": {
+    "description": "Adds every remaining value of a variant option in one tap; count is how many are left.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "variantOptionSelectedValuesCount": "{count} محددة",
+  "@variantOptionSelectedValuesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "newVariantOptionValueTitle": "قيمة خيار جديدة",
   "variantOptionValueNameLabel": "اسم القيمة",
   "variantOptionValueNameHint": "مثال: أحمر",

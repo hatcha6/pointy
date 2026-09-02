@@ -126,11 +126,18 @@ class _ProductVariantGenerationSheetState
     _selectedOptionIds = {
       for (final option in product.variantOptions) option.id,
     };
+    // An option carries every value the shop ever saved under it, not the
+    // ones this product uses — so the values already on its variants are what
+    // the sheet opens with, rather than the whole catalogue of them.
+    final valueIdsInUse = {
+      for (final variant in widget.viewModel.variants)
+        ...variant.optionValueIds,
+    };
     _selectedValueIdsByOption = {
       for (final option in product.variantOptions)
         option.id: {
           for (final value in option.values)
-            if (value.isActive) value.id,
+            if (value.isActive && valueIdsInUse.contains(value.id)) value.id,
         },
     };
     _loadVariantOptions();
@@ -206,6 +213,7 @@ class _ProductVariantGenerationSheetState
                     errorOptionIds: _valueErrorOptionIds,
                     onToggleValue: _toggleOptionValue,
                     onCreateValue: _createVariantOptionValue,
+                    onSelectAllValues: _selectAllOptionValues,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -314,13 +322,7 @@ class _ProductVariantGenerationSheetState
           _isLoadingOptions = false;
           _optionsLoadFailed = false;
           for (final option in _selectedOptions) {
-            _selectedValueIdsByOption.putIfAbsent(
-              option.id,
-              () => {
-                for (final value in option.values)
-                  if (value.isActive) value.id,
-              },
-            );
+            _selectedValueIdsByOption.putIfAbsent(option.id, () => const {});
           }
           _syncControllers();
         });
@@ -339,10 +341,8 @@ class _ProductVariantGenerationSheetState
         _valueErrorOptionIds = {..._valueErrorOptionIds}..remove(option.id);
       } else {
         _selectedOptionIds.add(option.id);
-        _selectedValueIdsByOption[option.id] = {
-          for (final value in option.values)
-            if (value.isActive) value.id,
-        };
+        // Values are picked deliberately — see the create form's toggle.
+        _selectedValueIdsByOption[option.id] = const {};
       }
       _generationErrorKey = null;
       _syncControllers();
@@ -673,11 +673,12 @@ class _ProductVariantGenerationSheetState
     });
   }
 
-  Future<void> _createVariantOption() async {
+  Future<void> _createVariantOption(String initialName) async {
     final created = await showCreateVariantOptionDialog(
       context: context,
       catalogRepository: widget.viewModel.catalogRepository,
       existingOptions: _availableOptions,
+      initialName: initialName,
     );
     if (!mounted || created == null) {
       return;
@@ -695,11 +696,27 @@ class _ProductVariantGenerationSheetState
     });
   }
 
-  Future<void> _createVariantOptionValue(VariantOption option) async {
+  void _selectAllOptionValues(VariantOption option) {
+    setState(() {
+      _selectedValueIdsByOption[option.id] = {
+        for (final value in option.values)
+          if (value.isActive) value.id,
+      };
+      _valueErrorOptionIds = {..._valueErrorOptionIds}..remove(option.id);
+      _generationErrorKey = null;
+      _syncControllers();
+    });
+  }
+
+  Future<void> _createVariantOptionValue(
+    VariantOption option,
+    String initialName,
+  ) async {
     final created = await showCreateVariantOptionValueDialog(
       context: context,
       catalogRepository: widget.viewModel.catalogRepository,
       option: option,
+      initialName: initialName,
     );
     if (!mounted || created == null) {
       return;

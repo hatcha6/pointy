@@ -442,6 +442,8 @@ class _ProductFormState extends State<ProductForm> {
                                             onToggleValue: _toggleOptionValue,
                                             onCreateValue:
                                                 _createVariantOptionValue,
+                                            onSelectAllValues:
+                                                _selectAllVariantOptionValues,
                                             onDefaultChanged: (signature) =>
                                                 setState(
                                                   () =>
@@ -870,10 +872,10 @@ class _ProductFormState extends State<ProductForm> {
         _valueErrorOptionIds = {..._valueErrorOptionIds}..remove(option.id);
       } else {
         _selectedVariantOptionIds.add(option.id);
-        _selectedValueIdsByOption[option.id] = {
-          for (final value in option.values)
-            if (value.isActive) value.id,
-        };
+        // No values are chosen for the user: adding "colour" used to select
+        // all sixteen of them, and a second option turned one tap into a
+        // couple of hundred generated variants nobody asked for.
+        _selectedValueIdsByOption[option.id] = const {};
       }
       _generationErrorKey = null;
       _syncGeneratedVariantControllers();
@@ -1144,11 +1146,12 @@ class _ProductFormState extends State<ProductForm> {
     };
   }
 
-  Future<void> _createVariantOption() async {
+  Future<void> _createVariantOption(String initialName) async {
     final created = await showCreateVariantOptionDialog(
       context: context,
       catalogRepository: widget.viewModel.catalogRepository,
       existingOptions: _availableVariantOptions,
+      initialName: initialName,
     );
     if (!mounted || created == null) {
       return;
@@ -1167,11 +1170,27 @@ class _ProductFormState extends State<ProductForm> {
     });
   }
 
-  Future<void> _createVariantOptionValue(VariantOption option) async {
+  void _selectAllVariantOptionValues(VariantOption option) {
+    setState(() {
+      _selectedValueIdsByOption[option.id] = {
+        for (final value in option.values)
+          if (value.isActive) value.id,
+      };
+      _valueErrorOptionIds = {..._valueErrorOptionIds}..remove(option.id);
+      _generationErrorKey = null;
+      _syncGeneratedVariantControllers();
+    });
+  }
+
+  Future<void> _createVariantOptionValue(
+    VariantOption option,
+    String initialName,
+  ) async {
     final created = await showCreateVariantOptionValueDialog(
       context: context,
       catalogRepository: widget.viewModel.catalogRepository,
       option: option,
+      initialName: initialName,
     );
     if (!mounted || created == null) {
       return;
@@ -1236,6 +1255,7 @@ class _GeneratedVariantFormStep extends StatelessWidget {
     required this.defaultSignature,
     required this.onToggleValue,
     required this.onCreateValue,
+    required this.onSelectAllValues,
     required this.onDefaultChanged,
     required this.onVariantActiveChanged,
     required this.requiredValidator,
@@ -1257,7 +1277,8 @@ class _GeneratedVariantFormStep extends StatelessWidget {
   final Map<String, bool> activeBySignature;
   final String? defaultSignature;
   final void Function(VariantOption option, int valueId) onToggleValue;
-  final void Function(VariantOption option) onCreateValue;
+  final void Function(VariantOption option, String initialName) onCreateValue;
+  final void Function(VariantOption option) onSelectAllValues;
   final ValueChanged<String> onDefaultChanged;
   final void Function(String signature, bool value) onVariantActiveChanged;
   final FormFieldValidator<String> requiredValidator;
@@ -1303,6 +1324,7 @@ class _GeneratedVariantFormStep extends StatelessWidget {
           errorOptionIds: errorOptionIds,
           onToggleValue: onToggleValue,
           onCreateValue: onCreateValue,
+          onSelectAllValues: onSelectAllValues,
         ),
         if (generationErrorText != null) ...[
           const SizedBox(height: 8),

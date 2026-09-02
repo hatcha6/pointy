@@ -10492,17 +10492,41 @@ abstract class AppLocalizations {
   /// **'تعذر تحميل الخيارات.'**
   String get variantOptionsLoadError;
 
-  /// No description provided for @addVariantOptionButton.
+  /// No description provided for @variantOptionSearchHint.
   ///
   /// In ar, this message translates to:
-  /// **'إضافة خيار'**
-  String get addVariantOptionButton;
+  /// **'ابحث في الخيارات المحفوظة'**
+  String get variantOptionSearchHint;
 
-  /// No description provided for @reuseVariantOptionLabel.
+  /// No description provided for @variantOptionSearchOrCreateHint.
   ///
   /// In ar, this message translates to:
-  /// **'أو أعد استخدام خيار سابق'**
-  String get reuseVariantOptionLabel;
+  /// **'ابحث في الخيارات المحفوظة أو اكتب اسمًا جديدًا'**
+  String get variantOptionSearchOrCreateHint;
+
+  /// No description provided for @variantOptionSearchNoMatch.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد خيار مطابق.'**
+  String get variantOptionSearchNoMatch;
+
+  /// No description provided for @variantOptionSearchEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب اسم الخيار لإنشائه.'**
+  String get variantOptionSearchEmpty;
+
+  /// Menu row that creates a brand new variant option from the typed search text.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء خيار «{name}»'**
+  String createVariantOptionInline(String name);
+
+  /// No description provided for @removeVariantOptionTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة {name}'**
+  String removeVariantOptionTooltip(String name);
 
   /// No description provided for @newVariantOptionTitle.
   ///
@@ -10564,11 +10588,59 @@ abstract class AppLocalizations {
   /// **'اختر قيمة واحدة على الأقل.'**
   String get variantOptionValueRequired;
 
-  /// No description provided for @addVariantOptionValueButton.
+  /// No description provided for @variantOptionNoValuesSelected.
   ///
   /// In ar, this message translates to:
-  /// **'إضافة قيمة'**
-  String get addVariantOptionValueButton;
+  /// **'لم تُحدد أي قيمة بعد.'**
+  String get variantOptionNoValuesSelected;
+
+  /// No description provided for @variantOptionValueSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث في القيم المحفوظة'**
+  String get variantOptionValueSearchHint;
+
+  /// No description provided for @variantOptionValueSearchOrCreateHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث في القيم المحفوظة أو اكتب قيمة جديدة'**
+  String get variantOptionValueSearchOrCreateHint;
+
+  /// No description provided for @variantOptionValueSearchNoMatch.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد قيمة مطابقة.'**
+  String get variantOptionValueSearchNoMatch;
+
+  /// No description provided for @variantOptionValueSearchEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب اسم القيمة لإنشائها.'**
+  String get variantOptionValueSearchEmpty;
+
+  /// Menu row that creates a brand new variant option value from the typed search text.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء قيمة «{name}»'**
+  String createVariantOptionValueInline(String name);
+
+  /// No description provided for @removeVariantOptionValueTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة {name}'**
+  String removeVariantOptionValueTooltip(String name);
+
+  /// Adds every remaining value of a variant option in one tap; count is how many are left.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة الكل ({count})'**
+  String selectAllVariantOptionValues(int count);
+
+  /// No description provided for @variantOptionSelectedValuesCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} محددة'**
+  String variantOptionSelectedValuesCount(int count);
 
   /// No description provided for @newVariantOptionValueTitle.
   ///

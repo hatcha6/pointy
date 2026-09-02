@@ -14,12 +14,14 @@ Future<VariantOption?> showCreateVariantOptionDialog({
   required BuildContext context,
   required CatalogRepository catalogRepository,
   required List<VariantOption> existingOptions,
+  String initialName = '',
 }) {
   return showDialog<VariantOption>(
     context: context,
     builder: (_) => _CreateVariantOptionDialog(
       catalogRepository: catalogRepository,
       displayOrder: _nextDisplayOrder(existingOptions),
+      initialName: initialName,
     ),
   );
 }
@@ -28,6 +30,7 @@ Future<VariantOptionValue?> showCreateVariantOptionValueDialog({
   required BuildContext context,
   required CatalogRepository catalogRepository,
   required VariantOption option,
+  String initialName = '',
 }) {
   return showDialog<VariantOptionValue>(
     context: context,
@@ -35,6 +38,7 @@ Future<VariantOptionValue?> showCreateVariantOptionValueDialog({
       catalogRepository: catalogRepository,
       option: option,
       displayOrder: _nextDisplayOrder(option.values),
+      initialName: initialName,
     ),
   );
 }
@@ -43,10 +47,15 @@ class _CreateVariantOptionDialog extends StatefulWidget {
   const _CreateVariantOptionDialog({
     required this.catalogRepository,
     required this.displayOrder,
+    required this.initialName,
   });
 
   final CatalogRepository catalogRepository;
   final int displayOrder;
+
+  /// What the user typed into the option search field before the menu offered
+  /// to create it — carried over so the name is not typed twice.
+  final String initialName;
 
   @override
   State<_CreateVariantOptionDialog> createState() =>
@@ -56,7 +65,7 @@ class _CreateVariantOptionDialog extends StatefulWidget {
 class _CreateVariantOptionDialogState
     extends State<_CreateVariantOptionDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  late final _nameController = TextEditingController(text: widget.initialName);
   final _codeController = TextEditingController();
   var _isSaving = false;
   var _hasError = false;
@@ -167,11 +176,15 @@ class _CreateVariantOptionValueDialog extends StatefulWidget {
     required this.catalogRepository,
     required this.option,
     required this.displayOrder,
+    required this.initialName,
   });
 
   final CatalogRepository catalogRepository;
   final VariantOption option;
   final int displayOrder;
+
+  /// What the user typed into that option's value search field.
+  final String initialName;
 
   @override
   State<_CreateVariantOptionValueDialog> createState() =>
@@ -181,7 +194,7 @@ class _CreateVariantOptionValueDialog extends StatefulWidget {
 class _CreateVariantOptionValueDialogState
     extends State<_CreateVariantOptionValueDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  late final _nameController = TextEditingController(text: widget.initialName);
   final _codeController = TextEditingController();
   var _isSaving = false;
   var _hasError = false;

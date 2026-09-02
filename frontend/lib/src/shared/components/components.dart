@@ -22,6 +22,7 @@ export 'pointy_password_field.dart';
 export 'pointy_permission_denied_view.dart';
 export 'pointy_progress.dart';
 export 'pointy_qr_image.dart';
+export 'pointy_searchable_picker.dart';
 export 'pointy_section_header.dart';
 export 'pointy_skeleton.dart';
 export 'pointy_settings_section.dart';

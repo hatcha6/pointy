@@ -8,12 +8,15 @@ import '../../../shared/design/design.dart';
 import '../view_models/variant_generation.dart';
 import 'variant_identity_watcher.dart';
 import '../../../shared/components/pointy_progress.dart';
+import '../../../shared/components/pointy_searchable_picker.dart';
 
-/// Lets the user define a product's options (e.g. Color, Size) by **creating a
-/// new option inline** as the primary action. Previously created options can
-/// still be reused from a secondary "reuse existing" chip list — options stay
-/// globally shareable under the hood — but the flow no longer reads as picking
-/// from a template catalogue.
+/// Lets the user define a product's options (e.g. Color, Size): options already
+/// on the product show as removable chips, and everything the shop has saved
+/// before is reached through a searchable field that also creates a brand new
+/// option from whatever was typed.
+///
+/// It replaces a wall of "reuse" chips that listed every saved option at once —
+/// unreadable once a shop had accumulated more than a handful.
 class VariantOptionField extends StatelessWidget {
   const VariantOptionField({
     super.key,
@@ -32,101 +35,139 @@ class VariantOptionField extends StatelessWidget {
   final bool hasError;
   final VoidCallback onReload;
   final ValueChanged<VariantOption> onToggleOption;
-  final VoidCallback? onCreateOption;
+
+  /// Opens the create-option dialog seeded with the name typed into the search
+  /// field, so a miss turns straight into the option the user was looking for.
+  final ValueChanged<String>? onCreateOption;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
     final colors = context.pointyColors;
     final selectedIds = {for (final option in selectedOptions) option.id};
-    // Only options not already added to this product are offered for reuse, so
-    // the list stays short and never floods the form.
+    final byId = {for (final option in availableOptions) option.id: option};
+    // Only options not already on this product are offered.
     final reusableOptions = [
       for (final option in availableOptions)
         if (!selectedIds.contains(option.id)) option,
     ];
 
-    return FormField<List<VariantOption>>(
-      initialValue: selectedOptions,
-      builder: (field) {
-        return InputDecorator(
-          decoration: InputDecoration(
-            labelText: l10n.variantOptionsLabel,
-            helperText: l10n.variantOptionsHelper,
-            prefixIcon: const Icon(Icons.tune_outlined),
-            errorText: hasError ? l10n.variantOptionsLoadError : null,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.tune_outlined, size: 18, color: colors.mutedInk),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                l10n.variantOptionsLabel,
+                style: theme.textTheme.labelLarge,
+              ),
+            ),
+            if (isLoading)
+              const SizedBox.square(
+                dimension: 16,
+                child: PointySpinner(strokeWidth: 2),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          l10n.variantOptionsHelper,
+          style: theme.textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+        ),
+        const SizedBox(height: 10),
+        if (hasError)
+          Row(
             children: [
-              if (isLoading) const PointyProgressBar(),
-              if (hasError)
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: TextButton.icon(
-                    onPressed: onReload,
-                    icon: const Icon(Icons.refresh),
-                    label: Text(l10n.reloadButton),
-                  ),
-                )
-              else ...[
-                // Options already chosen for this product.
-                if (selectedOptions.isNotEmpty)
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final option in selectedOptions)
-                        FilterChip(
-                          label: Text(option.displayLabel),
-                          selected: true,
-                          onSelected: (_) => onToggleOption(option),
-                        ),
-                    ],
-                  )
-                else
-                  Text(l10n.variantOptionsEmpty),
-                // Primary action: create a fresh option + its values inline.
-                if (onCreateOption != null) ...[
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: FilledButton.tonalIcon(
-                      onPressed: onCreateOption,
-                      icon: const Icon(Icons.add),
-                      label: Text(l10n.addVariantOptionButton),
+              Expanded(
+                child: Text(
+                  l10n.variantOptionsLoadError,
+                  style: TextStyle(color: colors.danger),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onReload,
+                icon: const Icon(Icons.refresh),
+                label: Text(l10n.reloadButton),
+              ),
+            ],
+          )
+        else ...[
+          if (selectedOptions.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final option in selectedOptions)
+                  InputChip(
+                    label: Text(option.displayLabel),
+                    onDeleted: () => onToggleOption(option),
+                    deleteIcon: const Icon(Icons.close, size: 16),
+                    deleteButtonTooltipMessage: l10n.removeVariantOptionTooltip(
+                      option.displayLabel,
                     ),
                   ),
-                ],
-                // Secondary: reuse a previously created option.
-                if (reusableOptions.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    l10n.reuseVariantOptionLabel,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelSmall?.copyWith(color: colors.mutedInk),
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final option in reusableOptions)
-                        ActionChip(
-                          avatar: const Icon(Icons.add, size: 16),
-                          label: Text(option.displayLabel),
-                          onPressed: () => onToggleOption(option),
-                        ),
-                    ],
-                  ),
-                ],
               ],
+            )
+          else
+            Text(
+              l10n.variantOptionsEmpty,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.mutedInk,
+              ),
+            ),
+          const SizedBox(height: 10),
+          PointySearchablePicker<int>(
+            fieldKey: const ValueKey('variant_option_search_field'),
+            entries: [
+              for (final option in reusableOptions)
+                PointyPickerEntry<int>(
+                  value: option.id,
+                  label: option.displayLabel,
+                  subtitle: _valuesPreview(option),
+                  keywords: option.code,
+                ),
             ],
+            hintText: onCreateOption == null
+                ? l10n.variantOptionSearchHint
+                : l10n.variantOptionSearchOrCreateHint,
+            clearTooltip: l10n.clearSearchTooltip,
+            noMatchText: l10n.variantOptionSearchNoMatch,
+            emptyText: onCreateOption == null
+                ? l10n.variantOptionSearchNoMatch
+                : l10n.variantOptionSearchEmpty,
+            onSelected: (id) {
+              final option = byId[id];
+              if (option != null) {
+                onToggleOption(option);
+              }
+            },
+            onCreate: onCreateOption,
+            createLabel: l10n.createVariantOptionInline,
           ),
-        );
-      },
+        ],
+      ],
     );
+  }
+
+  /// A one-line taste of what the option holds, so picking "المقاس" from the
+  /// menu does not require remembering which sizes it carries.
+  String _valuesPreview(VariantOption option) {
+    final names = [
+      for (final value in option.values)
+        if (value.isActive) value.name,
+    ];
+    if (names.isEmpty) {
+      return '';
+    }
+    const shown = 4;
+    if (names.length <= shown) {
+      return names.join('، ');
+    }
+    return '${names.take(shown).join('، ')} +${names.length - shown}';
   }
 }
 
@@ -138,6 +179,7 @@ class VariantOptionValuesField extends StatelessWidget {
     required this.onToggleValue,
     this.errorOptionIds = const {},
     this.onCreateValue,
+    this.onSelectAllValues,
     this.showInactiveSelectedValues = false,
   });
 
@@ -145,7 +187,15 @@ class VariantOptionValuesField extends StatelessWidget {
   final Map<int, Set<int>> selectedValueIdsByOption;
   final void Function(VariantOption option, int valueId) onToggleValue;
   final Set<int> errorOptionIds;
-  final void Function(VariantOption option)? onCreateValue;
+
+  /// Opens the create-value dialog for [VariantOption], seeded with the name
+  /// typed into that option's search field.
+  final void Function(VariantOption option, String initialName)? onCreateValue;
+
+  /// Adds every remaining value of an option at once. Left null where only one
+  /// value per option can be chosen (editing a single variant), which is also
+  /// what hides the button.
+  final void Function(VariantOption option)? onSelectAllValues;
   final bool showInactiveSelectedValues;
 
   @override
@@ -166,7 +216,10 @@ class VariantOptionValuesField extends StatelessWidget {
             onToggleValue: (valueId) => onToggleValue(option, valueId),
             onCreateValue: onCreateValue == null
                 ? null
-                : () => onCreateValue!(option),
+                : (name) => onCreateValue!(option, name),
+            onSelectAll: onSelectAllValues == null
+                ? null
+                : () => onSelectAllValues!(option),
             showInactiveSelectedValues: showInactiveSelectedValues,
           ),
           if (option != options.last) const SizedBox(height: 12),
@@ -249,6 +302,9 @@ class GeneratedVariantsPreview extends StatelessWidget {
   }
 }
 
+/// One option's values: the ones chosen for this product as removable chips,
+/// with the rest reachable through a searchable field rather than a chip per
+/// saved value.
 class _OptionValueGroup extends StatelessWidget {
   const _OptionValueGroup({
     required this.option,
@@ -256,6 +312,7 @@ class _OptionValueGroup extends StatelessWidget {
     required this.hasError,
     required this.onToggleValue,
     required this.onCreateValue,
+    required this.onSelectAll,
     required this.showInactiveSelectedValues,
   });
 
@@ -263,61 +320,123 @@ class _OptionValueGroup extends StatelessWidget {
   final Set<int> selectedValueIds;
   final bool hasError;
   final ValueChanged<int> onToggleValue;
-  final VoidCallback? onCreateValue;
+  final ValueChanged<String>? onCreateValue;
+  final VoidCallback? onSelectAll;
   final bool showInactiveSelectedValues;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
     final colors = context.pointyColors;
-    final visibleValues = [
+    // An inactive value that is already on the variant still has to be shown
+    // when the caller asks, or editing would silently drop it.
+    final selectedValues = [
       for (final value in option.values)
-        if (value.isActive ||
-            (showInactiveSelectedValues && selectedValueIds.contains(value.id)))
+        if (selectedValueIds.contains(value.id) &&
+            (value.isActive || showInactiveSelectedValues))
           value,
+    ];
+    final pickableValues = [
+      for (final value in option.values)
+        if (value.isActive && !selectedValueIds.contains(value.id)) value,
     ];
 
     return DecoratedBox(
       decoration: BoxDecoration(
         border: Border.all(color: hasError ? colors.danger : colors.line),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(PointyRadii.card),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              option.displayLabel,
-              style: Theme.of(context).textTheme.titleSmall,
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    option.displayLabel,
+                    style: theme.textTheme.titleSmall,
+                  ),
+                ),
+                if (selectedValues.isNotEmpty)
+                  Text(
+                    l10n.variantOptionSelectedValuesCount(
+                      selectedValues.length,
+                    ),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colors.mutedInk,
+                    ),
+                  ),
+                // Picking values one by one is the right default, but "every
+                // size we carry" is a real answer and should stay one tap.
+                if (onSelectAll != null && pickableValues.isNotEmpty)
+                  TextButton(
+                    onPressed: onSelectAll,
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsetsDirectional.only(
+                        start: 8,
+                        end: 4,
+                      ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      l10n.selectAllVariantOptionValues(pickableValues.length),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 8),
-            if (visibleValues.isEmpty)
-              Text(l10n.variantOptionNoValues)
+            if (selectedValues.isEmpty)
+              Text(
+                option.values.isEmpty
+                    ? l10n.variantOptionNoValues
+                    : l10n.variantOptionNoValuesSelected,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.mutedInk,
+                ),
+              )
             else
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final value in visibleValues)
-                    FilterChip(
+                  for (final value in selectedValues)
+                    InputChip(
                       label: Text(value.name),
-                      selected: selectedValueIds.contains(value.id),
-                      onSelected: (_) => onToggleValue(value.id),
+                      onDeleted: () => onToggleValue(value.id),
+                      deleteIcon: const Icon(Icons.close, size: 16),
+                      deleteButtonTooltipMessage: l10n
+                          .removeVariantOptionValueTooltip(value.name),
                     ),
                 ],
               ),
-            if (onCreateValue != null) ...[
-              const SizedBox(height: 8),
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: OutlinedButton.icon(
-                  onPressed: onCreateValue,
-                  icon: const Icon(Icons.add),
-                  label: Text(l10n.addVariantOptionValueButton),
-                ),
-              ),
-            ],
+            const SizedBox(height: 10),
+            PointySearchablePicker<int>(
+              fieldKey: ValueKey('variant_option_value_search_${option.id}'),
+              entries: [
+                for (final value in pickableValues)
+                  PointyPickerEntry<int>(
+                    value: value.id,
+                    label: value.name,
+                    keywords: value.code,
+                  ),
+              ],
+              hintText: onCreateValue == null
+                  ? l10n.variantOptionValueSearchHint
+                  : l10n.variantOptionValueSearchOrCreateHint,
+              clearTooltip: l10n.clearSearchTooltip,
+              noMatchText: l10n.variantOptionValueSearchNoMatch,
+              emptyText: onCreateValue == null
+                  ? l10n.variantOptionValueSearchNoMatch
+                  : l10n.variantOptionValueSearchEmpty,
+              onSelected: onToggleValue,
+              onCreate: onCreateValue,
+              createLabel: l10n.createVariantOptionValueInline,
+            ),
             if (hasError) ...[
               const SizedBox(height: 6),
               Text(
