@@ -29,6 +29,41 @@ set -uo pipefail
 # Everything below is relative to the deploy directory, including a few rm -rf.
 cd "$(dirname "$0")" || exit 1
 
+# A deployment whose last update was applied by the pre-0.4.0 updater has THIS
+# script but not its library. That updater adopted a hard-coded list of files
+# which — of course — could not name a file that did not exist yet, while still
+# copying the bundle's newer update.sh over itself. The deploy directory is left
+# holding an updater that sources a library it does not have, and every update
+# from then on dies on the line below. Recover it from the bundle we were just
+# handed: it is the very same update-lib.sh that pu_adopt_bundle would install a
+# few steps later, so nothing here is taken on trust that is not already about
+# to be installed.
+pu_recover_lib() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in -*) continue ;; esac
+    if [ -f "${arg}/update-lib.sh" ]; then
+      cp -f "${arg}/update-lib.sh" ./update-lib.sh && return 0
+    elif [ -f "$arg" ] && command -v unzip >/dev/null 2>&1; then
+      unzip -q -o -j "$arg" '*/update-lib.sh' -d . 2>/dev/null && return 0
+    fi
+    return 1
+  done
+  return 1
+}
+
+if [ ! -f ./update-lib.sh ]; then
+  pu_recover_lib "$@" || true
+fi
+if [ ! -f ./update-lib.sh ]; then
+  echo "ERROR: update-lib.sh is missing from this deploy directory, and could not be" >&2
+  echo "       recovered from the bundle you passed." >&2
+  echo "       This happens on a deployment whose last update was applied by a" >&2
+  echo "       pre-0.4.0 updater. Copy the library out of the bundle and re-run:" >&2
+  echo "         cp /path/to/pointy-onprem-<version>/update-lib.sh ." >&2
+  exit 1
+fi
+
 # shellcheck source=update-lib.sh
 . ./update-lib.sh
 

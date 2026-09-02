@@ -227,4 +227,83 @@ test_a_zip_is_left_untouched_but_its_extracted_copy_is_cleaned_up() {
   assert_eq '' "$leftovers"
 }
 
+# ---------------------------------------------------------------------------
+# Recovering a deploy directory that lost update-lib.sh
+#
+# A shop last updated by the pre-0.4.0 updater has update.sh but not the library
+# it sources: that updater adopted a hard-coded file list which could not name a
+# file that did not exist yet, while still replacing update.sh with the bundle's
+# newer copy. Sufian's shop hit exactly this going 0.4.2 -> 0.4.7 and could not
+# be updated at all until the library was hand-copied. Every update after such a
+# deployment depends on this recovery, so it is tested from a deploy directory
+# that genuinely lacks the file.
+# ---------------------------------------------------------------------------
+
+# The wedged deploy directory: the new update.sh, no update-lib.sh beside it.
+_install_updater_without_lib() {
+  installed_deploy "${1:-1.0.0}"
+  cp "${PU_ONPREM_DIR}/update.sh" ./update.sh
+  chmod +x ./update.sh
+  rm -f ./update-lib.sh
+}
+
+test_a_deploy_directory_missing_the_library_recovers_it_from_a_bundle_dir() {
+  _install_updater_without_lib
+  local dir="${PU_TEST_DIR}/src/pointy-onprem-1.1.0"
+  make_bundle "$dir" 1.1.0
+  # The real library, so the run gets past sourcing and into the engine.
+  cp "${PU_ONPREM_DIR}/update-lib.sh" "${dir}/update-lib.sh"
+
+  local out; out="$(_run "$dir" 2>&1)"
+
+  assert_file ./update-lib.sh
+  assert_not_contains "$out" 'No such file or directory'
+  assert_not_contains "$out" 'update-lib.sh is missing'
+}
+
+test_a_deploy_directory_missing_the_library_recovers_it_from_a_zip() {
+  command -v unzip >/dev/null 2>&1 || return 0
+  _install_updater_without_lib
+  local dir="${PU_TEST_DIR}/src/pointy-onprem-1.1.0"
+  make_bundle "$dir" 1.1.0
+  cp "${PU_ONPREM_DIR}/update-lib.sh" "${dir}/update-lib.sh"
+  local zip="${PU_TEST_DIR}/bundle-1.1.0.zip"
+  if command -v zip >/dev/null 2>&1; then
+    ( cd "${PU_TEST_DIR}/src" && zip -qr "$zip" . )
+  else
+    python3 "${PU_TESTS_DIR}/zipdir.py" "$zip" "${PU_TEST_DIR}/src"
+  fi
+
+  local out; out="$(_run "$zip" 2>&1)"
+
+  assert_file ./update-lib.sh
+  assert_not_contains "$out" 'No such file or directory'
+}
+
+test_recovery_is_not_attempted_when_the_library_is_already_there() {
+  _install_updater
+  local dir="${PU_TEST_DIR}/src/pointy-onprem-1.1.0"
+  make_bundle "$dir" 1.1.0
+  printf 'BUNDLED LIBRARY — must not overwrite the local one\n' >"${dir}/update-lib.sh"
+
+  _run "$dir" >/dev/null 2>&1
+
+  # pu_adopt_bundle installs the bundle's library in its own good time; the
+  # recovery must not pre-empt it and swap the engine mid-run.
+  assert_not_contains "$(cat ./update-lib.sh)" 'must not overwrite'
+}
+
+test_an_unrecoverable_library_explains_the_hand_fix_instead_of_dying_on_a_source_error() {
+  _install_updater_without_lib
+  local dir="${PU_TEST_DIR}/src/pointy-onprem-1.1.0"
+  make_bundle "$dir" 1.1.0
+  rm -f "${dir}/update-lib.sh"
+
+  local out; out="$(_run "$dir" 2>&1)"; local rc=$?
+
+  assert_eq '1' "$rc"
+  assert_contains "$out" 'update-lib.sh is missing'
+  assert_contains "$out" 'cp /path/to/pointy-onprem-'
+}
+
 pu_run_tests "$@"
