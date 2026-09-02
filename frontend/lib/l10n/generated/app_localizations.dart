@@ -26728,6 +26728,96 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'وصلت بيانات عرض غير صالحة من المساعد.'**
   String get aiUiSurfaceFailedDetail;
+
+  /// No description provided for @purchaseSuggestionsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اقتراحات'**
+  String get purchaseSuggestionsTitle;
+
+  /// No description provided for @purchaseSuggestionsHideTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إخفاء الاقتراحات لهذا الأمر'**
+  String get purchaseSuggestionsHideTooltip;
+
+  /// No description provided for @purchaseSuggestionsMuteAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تقترح هذا المنتج'**
+  String get purchaseSuggestionsMuteAction;
+
+  /// Snackbar after the buyer mutes one suggested product for this supplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن يُقترح {product} مرة أخرى.'**
+  String purchaseSuggestionMutedMessage(String product);
+
+  /// Why a product is suggested: it shares purchase orders with a line already on the draft.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُشترى عادة مع {product}'**
+  String purchaseSuggestionReasonOftenWith(String product);
+
+  /// Why a product is suggested: it is bought on a regular cadence and that interval has now elapsed. The number is days since the last purchase — the fact we actually hold — not the interval itself.
+  ///
+  /// In ar, this message translates to:
+  /// **'{days, plural, =0{اشتُري اليوم — وحان موعده} =1{اشتُري أمس — وحان موعده} =2{اشتُري قبل يومين — وحان موعده} other{اشتُري قبل {days} يوم — وحان موعده}}'**
+  String purchaseSuggestionReasonDueAgain(num days);
+
+  /// No description provided for @purchaseSuggestionReasonUsual.
+  ///
+  /// In ar, this message translates to:
+  /// **'من مشترياتك المعتادة من هذا المورد'**
+  String get purchaseSuggestionReasonUsual;
+
+  /// How many past orders support a suggestion.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{مرة واحدة} =2{مرتان} other{{count} مرات}} خلال آخر فترة'**
+  String purchaseSuggestionEvidence(num count);
+
+  /// Chip that fills the draft with the supplier's recurring order; count is the number of lines it would add.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطلب المعتاد · {count}'**
+  String purchaseUsualBasketChip(num count);
+
+  /// Snackbar after one-tap filling the usual order, with an Undo action.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{تمت إضافة صنف واحد} =2{تمت إضافة صنفين} other{تمت إضافة {count} أصناف}} من الطلب المعتاد.'**
+  String purchaseUsualBasketFilledMessage(num count);
+
+  /// Chip on a draft line offering the quantity this shop usually buys. The unit travels with the number — 12 pieces and 12 cartons are not the same offer.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعتاد {quantity} {unit}'**
+  String purchaseSuggestionQuantityHint(String quantity, String unit);
+
+  /// Tooltip explaining the quantity hint chip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضبط الكمية على {quantity} {unit} — الكمية المعتادة من هذا المورد'**
+  String purchaseSuggestionQuantityHintTooltip(String quantity, String unit);
+
+  /// No description provided for @purchasingShortcutAcceptQuantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'قبول الكمية المعتادة للسطر المحدد'**
+  String get purchasingShortcutAcceptQuantity;
+
+  /// No description provided for @enablePurchaseSuggestionsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اقتراحات الشراء'**
+  String get enablePurchaseSuggestionsLabel;
+
+  /// No description provided for @enablePurchaseSuggestionsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اقترح على شاشة المشتريات الأصناف والكميات التي يشتريها المحل عادة من المورد المختار.'**
+  String get enablePurchaseSuggestionsSubtitle;
 }
 
 class _AppLocalizationsDelegate

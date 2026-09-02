@@ -47,6 +47,7 @@ from .serializers import (
     PurchaseOrderReturnSerializer,
     PurchaseOrderListSerializer,
     PurchaseOrderSerializer,
+    PurchaseSuggestionResponseSerializer,
     SupplierPaymentSerializer,
     SupplierSerializer,
 )
@@ -201,6 +202,9 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "last_cost": ("purchasing.view_purchaseorder",),
         "variant_last_cost": ("purchasing.view_purchaseorder",),
         "discount_preview": ("purchasing.add_purchaseorder",),
+        # Same code as the discount preview: suggestions are a drafting aid, so
+        # the permission that lets you draft is the one that lets you see them.
+        "suggestions": ("purchasing.add_purchaseorder",),
         "product_cost_history": ("purchasing.view_purchaseorder",),
         "variant_cost_history": ("purchasing.view_purchaseorder",),
         "product_margin_impact": ("purchasing.view_purchaseorder",),
@@ -428,6 +432,83 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                 "unit": "" if line is None else line.unit,
                 "unit_factor": None if line is None else line.unit_factor,
             }
+        )
+
+    @action(detail=False, methods=["get"], url_path="suggestions")
+    def suggestions(self, request):
+        """What this buyer is most likely to add to the draft next.
+
+        ``?supplier=`` is required (habits are per supplier — the same shop buys
+        different things from the bakery and the phone wholesaler) and
+        ``?variants=`` carries the draft's current lines as the anchors to
+        predict from. The whole ranking is served from precomputed tables, so
+        this stays a handful of indexed reads however large the history is.
+
+        Returns an empty, ``enabled: false`` payload when the shop has the
+        feature switched off, so the client can stop asking without special-casing
+        an error.
+        """
+        from apps.core.models import ShopSettings
+
+        from .suggestions import DEFAULT_LIMIT, cached_suggestions_for_draft
+        from .suggestions import suggestions_version as _suggestions_version
+
+        supplier_id = request.query_params.get("supplier")
+        if not supplier_id:
+            raise serializers.ValidationError({"supplier": "Supplier is required."})
+        try:
+            supplier_id = int(supplier_id)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError({"supplier": "Supplier is invalid."})
+
+        if not ShopSettings.load().enable_purchase_suggestions:
+            return Response(
+                {
+                    "supplier": supplier_id,
+                    "enabled": False,
+                    "version": 0,
+                    "items": [],
+                    "usual_basket": {
+                        "available": False,
+                        "line_count": 0,
+                        "items": [],
+                    },
+                }
+            )
+
+        anchors = []
+        for raw in (request.query_params.get("variants") or "").split(","):
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                anchors.append(int(raw))
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(
+                    {"variants": "Variants must be a comma-separated list of ids."}
+                )
+
+        try:
+            limit = int(request.query_params.get("limit") or DEFAULT_LIMIT)
+        except (TypeError, ValueError):
+            limit = DEFAULT_LIMIT
+        limit = max(1, min(limit, 20))
+
+        items, basket = cached_suggestions_for_draft(
+            supplier_id=supplier_id,
+            anchor_variant_ids=anchors,
+            limit=limit,
+        )
+        return Response(
+            PurchaseSuggestionResponseSerializer(
+                {
+                    "supplier": supplier_id,
+                    "enabled": True,
+                    "version": _suggestions_version(supplier_id),
+                    "items": items,
+                    "usual_basket": basket,
+                }
+            ).data
         )
 
     @action(detail=False, methods=["post"], url_path="discount-preview")

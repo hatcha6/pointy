@@ -538,6 +538,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "require_customer_for_credit",
             "allow_cashier_customer_access",
             "pos_cash_purchase_limit",
+            "enable_purchase_suggestions",
             # Multi-currency. Off by default: a shop with no foreign exposure
             # never sees a currency picker anywhere in the app.
             "fx_enabled",

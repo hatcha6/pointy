@@ -59,6 +59,7 @@ class ShopSettings {
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
     this.posCashPurchaseLimit,
+    this.enablePurchaseSuggestions = true,
     this.inventoryValuationMethod = InventoryValuationMethod.movingAverage,
     this.currencyCode = 'LYD',
     this.currencySymbol = 'د.ل',
@@ -105,6 +106,11 @@ class ShopSettings {
   /// Per-purchase ceiling for POS cash purchases (drawer-paid POs from the
   /// sell screen). Null or 0 = no cap.
   final double? posCashPurchaseLimit;
+
+  /// Whether the purchasing screen offers the products and quantities this shop
+  /// habitually buys from the chosen supplier. Off hides all three surfaces and
+  /// stops the client asking for them at all.
+  final bool enablePurchaseSuggestions;
 
   /// How stock is costed. See [InventoryValuationMethod].
   final InventoryValuationMethod inventoryValuationMethod;
@@ -192,6 +198,10 @@ class ShopSettings {
       posCashPurchaseLimit: json['pos_cash_purchase_limit'] == null
           ? null
           : _moneyFromJson(json['pos_cash_purchase_limit'], 0),
+      enablePurchaseSuggestions: _boolFromJson(
+        json['enable_purchase_suggestions'],
+        true,
+      ),
       inventoryValuationMethod: InventoryValuationMethod.fromWire(
         json['inventory_valuation_method'],
       ),
@@ -244,6 +254,7 @@ class ShopSettingsDraft {
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
     this.posCashPurchaseLimit,
+    this.enablePurchaseSuggestions = true,
     this.inventoryValuationMethod = InventoryValuationMethod.movingAverage,
     this.valuationMethodChangeAcknowledged = false,
   });
@@ -274,6 +285,7 @@ class ShopSettingsDraft {
   final bool enableKitchenOperations;
   final bool enableJobTracking;
   final double? posCashPurchaseLimit;
+  final bool enablePurchaseSuggestions;
   final InventoryValuationMethod inventoryValuationMethod;
 
   /// One-shot confirmation that the user has read the warning about changing
@@ -316,6 +328,7 @@ class ShopSettingsDraft {
       enableKitchenOperations: enableKitchenOperations,
       enableJobTracking: enableJobTracking,
       posCashPurchaseLimit: posCashPurchaseLimit,
+      enablePurchaseSuggestions: enablePurchaseSuggestions,
       inventoryValuationMethod:
           inventoryValuationMethod ?? this.inventoryValuationMethod,
       valuationMethodChangeAcknowledged:
@@ -354,6 +367,7 @@ class ShopSettingsDraft {
       'enable_kitchen_operations': enableKitchenOperations,
       'enable_job_tracking': enableJobTracking,
       'pos_cash_purchase_limit': posCashPurchaseLimit?.toStringAsFixed(2),
+      'enable_purchase_suggestions': enablePurchaseSuggestions,
       'inventory_valuation_method': inventoryValuationMethod.wireValue,
       // Only sent when the user has actually confirmed, so an ordinary save
       // can never carry a stale acknowledgement.

@@ -1,5 +1,6 @@
 import '../models/contact.dart';
 import '../models/purchase_submission.dart';
+import '../models/purchase_suggestion.dart';
 import 'api_session.dart';
 
 class PurchasingApiClient {
@@ -310,6 +311,39 @@ class PurchasingApiClient {
     return SupplierPayment.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
+  }
+
+  /// What this buyer is likely to add to the draft next, given the supplier and
+  /// the lines already on it.
+  ///
+  /// Decoration, not a dependency: a shop on an older backend gets a 404 here
+  /// and the caller falls back to an empty set, leaving the purchasing screen
+  /// exactly as it was before this feature existed.
+  Future<PurchaseSuggestionSet> fetchPurchaseSuggestions({
+    required int supplierId,
+    List<int> variantIds = const [],
+    int limit = 8,
+  }) async {
+    final response = await _session.get(
+      'purchase-orders/suggestions/',
+      query: {
+        'supplier': '$supplierId',
+        if (variantIds.isNotEmpty) 'variants': variantIds.join(','),
+        'limit': '$limit',
+      },
+    );
+    if (response.statusCode == 404) {
+      return PurchaseSuggestionSet.disabled;
+    }
+    _session.throwApiException(
+      response,
+      'Purchase suggestions failed with status',
+    );
+    final decoded = _session.decodedBody(response);
+    if (decoded is! Map<String, Object?>) {
+      return PurchaseSuggestionSet.empty;
+    }
+    return PurchaseSuggestionSet.fromJson(decoded);
   }
 
   Future<double?> fetchLastProductCost(int productId, {int? variantId}) async {

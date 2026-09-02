@@ -41,6 +41,7 @@ from .models import (
     SupplierCredit,
     SupplierPayment,
 )
+from .tasks import schedule_supplier_refresh
 
 
 _DATE_MIN = date.min
@@ -796,6 +797,10 @@ def save_purchase_order_with_lines(
     )
     if snapshots:
         _rerecord_receiving(purchase_order, snapshots=snapshots, request=request)
+    # Editing a committed order rewrites what the shop actually bought, so the
+    # suggestion tables have to be rebuilt from the corrected history too.
+    if purchase_order.status != PurchaseOrder.Status.DRAFT:
+        schedule_supplier_refresh(purchase_order.supplier_id)
     return purchase_order
 
 
@@ -945,6 +950,10 @@ def submit_purchase_order(purchase_order, *, request=None):
         PurchaseOrderAuditEvent.Action.SUBMITTED,
         created_by=created_by,
     )
+    # A committed order is evidence: tomorrow's suggestions for this supplier
+    # should already know about today's. Best-effort and post-commit — never a
+    # reason a submit can fail.
+    schedule_supplier_refresh(locked_order.supplier_id)
     return locked_order
 
 
@@ -1378,6 +1387,7 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
         created_by=created_by,
         details={"receipt": receipt.pk, "status": locked_order.status},
     )
+    schedule_supplier_refresh(locked_order.supplier_id)
     return locked_order
 
 

@@ -611,6 +611,15 @@ CELERY_BEAT_SCHEDULE = {
         "task": "catalog.recompute_product_popularity",
         "schedule": crontab(minute=50, hour=2),
     },
+    # Rebuild the purchase-suggestion tables (what each supplier's orders
+    # habitually contain, and in what quantities) after the day's purchasing has
+    # settled. Per-supplier refreshes already fire on every submit/receipt; this
+    # nightly pass is what applies recency decay across the board and prunes
+    # suppliers that fell out of the evidence window.
+    "purchasing.rebuild-purchase-suggestions": {
+        "task": "purchasing.rebuild_purchase_suggestions",
+        "schedule": crontab(minute=55, hour=2),
+    },
     # Pace the outbound message queue: drain due messages up to each gateway's
     # per-minute throttle / daily cap, holding marketing during quiet hours.
     "messaging.dispatch-outbound": {

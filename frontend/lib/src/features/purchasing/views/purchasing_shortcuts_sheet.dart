@@ -60,6 +60,7 @@ class _PurchasingShortcutsSheet extends StatelessWidget {
       _ShortcutGroup(l10n.purchasingShortcutsSectionQuantity, [
         _Shortcut(const ['0-9', '↵'], l10n.purchasingShortcutTypeQuantity),
         _Shortcut(const ['+', '−'], l10n.purchasingShortcutStepQuantity),
+        _Shortcut(const ['F6'], l10n.purchasingShortcutAcceptQuantity),
         _Shortcut(const ['Esc'], l10n.purchasingShortcutClearEntry),
       ]),
       _ShortcutGroup(l10n.purchasingShortcutsSectionOrder, [

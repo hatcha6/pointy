@@ -9,6 +9,7 @@
 //   flutter run -d web-server --web-port 8080 -t lib/dev/pos_preview.dart
 //
 // Screens: pos | purchase | pos-empty | purchase-empty | board
+// Add `&theme=dark` to check either surface against the dark palette.
 //
 // See AGENTS.md ("UI preview harness") for the pattern. Not part of the
 // shipping app. Safe to delete.
@@ -18,6 +19,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/barcode_resolution.dart';
+import 'package:pointy_frontend/src/data/models/contact.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_category.dart';
@@ -27,6 +29,7 @@ import 'package:pointy_frontend/src/data/models/product_unit.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/product_variant_page.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
+import 'package:pointy_frontend/src/data/models/purchase_suggestion.dart';
 import 'package:pointy_frontend/src/data/models/unit_of_measure.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
@@ -73,7 +76,7 @@ class _PreviewApp extends StatelessWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      theme: PointyTheme.light(),
+      theme: _isDark() ? PointyTheme.dark() : PointyTheme.light(),
       builder: (context, child) => PointyNavigationRailScope(
         isActive: false,
         controller: PointyNavigationRailController(),
@@ -83,6 +86,8 @@ class _PreviewApp extends StatelessWidget {
     );
   }
 }
+
+bool _isDark() => Uri.base.queryParameters['theme'] == 'dark';
 
 String _screen() {
   final uri = Uri.base;
@@ -304,6 +309,9 @@ class _PurchaseSurfaceState extends State<_PurchaseSurface> {
       _FakeCatalogRepository(empty: widget.empty),
       _FakePurchaseRepository(),
     );
+    // A supplier is what makes the suggestion strip meaningful — habits are per
+    // supplier — so the preview picks one, exactly as the draft pane would.
+    _viewModel.selectSupplier(_previewSupplier);
     if (!widget.empty) {
       _viewModel
         ..addVariant(_variantFor(_items[1]), quantity: 6, source: 'seed')
@@ -895,8 +903,141 @@ class _FakeContactRepository extends ContactRepository {
   _FakeContactRepository() : super(PosApiService());
 }
 
+/// The supplier the purchasing preview is buying from.
+const SupplierContact _previewSupplier = SupplierContact(
+  id: 1,
+  name: 'شركة الوفاء للتوزيع',
+  contactName: 'أحمد',
+  phone: '0910000000',
+  email: '',
+  address: '',
+  notes: '',
+  isActive: true,
+);
+
 class _FakePurchaseRepository extends PurchaseRepository {
   _FakePurchaseRepository() : super(PosApiService());
+
+  /// Stands in for the precomputed habit/affinity tables: a few products this
+  /// shop repeatedly buys from this supplier, some with a habitual quantity and
+  /// some without — which is what the real endpoint returns whenever the
+  /// quantities have not repeated enough to state one.
+  @override
+  Future<Result<PurchaseSuggestionSet>> loadPurchaseSuggestions({
+    required int supplierId,
+    List<int> variantIds = const [],
+    int limit = 8,
+  }) async {
+    PurchaseSuggestion suggest(
+      int itemIndex, {
+      double? quantity,
+      String unit = '',
+      double factor = 1,
+      required PurchaseSuggestionReason reason,
+      int? anchor,
+      int? daysSinceLast,
+      double score = 0.7,
+      int orders = 6,
+    }) {
+      final item = _items[itemIndex];
+      final cost = _costForProduct(item.id);
+      return PurchaseSuggestion(
+        variantId: item.id * 10,
+        productId: item.id,
+        productName: item.name,
+        variantName: '',
+        sku: item.sku,
+        reason: reason,
+        suggestedQuantity: quantity,
+        unitCode: unit,
+        unitFactor: factor,
+        unitCost: cost * factor,
+        baseUnitCost: cost,
+        anchorVariantId: anchor,
+        score: score,
+        orderCount: orders,
+        daysSinceLast: daysSinceLast,
+      );
+    }
+
+    final onDraft = variantIds.toSet();
+    final anchor = onDraft.isEmpty ? null : variantIds.last;
+    return Ok(
+      PurchaseSuggestionSet(
+        items: [
+          suggest(
+            4,
+            quantity: 8,
+            unit: 'carton',
+            factor: 24,
+            reason: PurchaseSuggestionReason.oftenWith,
+            anchor: anchor,
+            score: 0.86,
+            orders: 9,
+          ),
+          suggest(
+            0,
+            quantity: 12,
+            reason: PurchaseSuggestionReason.oftenWith,
+            anchor: anchor,
+            score: 0.74,
+          ),
+          suggest(
+            2,
+            reason: PurchaseSuggestionReason.dueAgain,
+            daysSinceLast: 21,
+            score: 0.63,
+            orders: 5,
+          ),
+          suggest(
+            6,
+            quantity: 5,
+            reason: PurchaseSuggestionReason.usualForSupplier,
+            score: 0.42,
+            orders: 4,
+          ),
+          suggest(
+            8,
+            reason: PurchaseSuggestionReason.usualForSupplier,
+            score: 0.36,
+            orders: 4,
+          ),
+        ].where((item) => !onDraft.contains(item.variantId)).toList(),
+        usualBasket: PurchaseUsualBasket(
+          available: true,
+          items: [
+            suggest(
+              1,
+              quantity: 6,
+              reason: PurchaseSuggestionReason.usualForSupplier,
+            ),
+            suggest(
+              4,
+              quantity: 8,
+              unit: 'carton',
+              factor: 24,
+              reason: PurchaseSuggestionReason.usualForSupplier,
+            ),
+            suggest(
+              0,
+              quantity: 12,
+              reason: PurchaseSuggestionReason.usualForSupplier,
+            ),
+            suggest(
+              6,
+              quantity: 5,
+              reason: PurchaseSuggestionReason.usualForSupplier,
+            ),
+            suggest(
+              10,
+              quantity: 3,
+              reason: PurchaseSuggestionReason.usualForSupplier,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Future<Result<double?>> loadLastProductCost(

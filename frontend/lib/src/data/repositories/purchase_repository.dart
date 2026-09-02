@@ -1,5 +1,6 @@
 import '../../core/result.dart';
 import '../models/purchase_submission.dart';
+import '../models/purchase_suggestion.dart';
 import '../services/pos_api_service.dart';
 
 class PurchaseRepository {
@@ -113,6 +114,20 @@ class PurchaseRepository {
         productId: productId,
         variantId: variantId,
         page: page,
+      ),
+    );
+  }
+
+  Future<Result<PurchaseSuggestionSet>> loadPurchaseSuggestions({
+    required int supplierId,
+    List<int> variantIds = const [],
+    int limit = 8,
+  }) async {
+    return Result.guard(
+      () => _service.fetchPurchaseSuggestions(
+        supplierId: supplierId,
+        variantIds: variantIds,
+        limit: limit,
       ),
     );
   }

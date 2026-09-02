@@ -15401,4 +15401,90 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get aiUiSurfaceFailedDetail => 'وصلت بيانات عرض غير صالحة من المساعد.';
+
+  @override
+  String get purchaseSuggestionsTitle => 'اقتراحات';
+
+  @override
+  String get purchaseSuggestionsHideTooltip => 'إخفاء الاقتراحات لهذا الأمر';
+
+  @override
+  String get purchaseSuggestionsMuteAction => 'لا تقترح هذا المنتج';
+
+  @override
+  String purchaseSuggestionMutedMessage(String product) {
+    return 'لن يُقترح $product مرة أخرى.';
+  }
+
+  @override
+  String purchaseSuggestionReasonOftenWith(String product) {
+    return 'يُشترى عادة مع $product';
+  }
+
+  @override
+  String purchaseSuggestionReasonDueAgain(num days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'اشتُري قبل $days يوم — وحان موعده',
+      two: 'اشتُري قبل يومين — وحان موعده',
+      one: 'اشتُري أمس — وحان موعده',
+      zero: 'اشتُري اليوم — وحان موعده',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get purchaseSuggestionReasonUsual =>
+      'من مشترياتك المعتادة من هذا المورد';
+
+  @override
+  String purchaseSuggestionEvidence(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count مرات',
+      two: 'مرتان',
+      one: 'مرة واحدة',
+    );
+    return '$_temp0 خلال آخر فترة';
+  }
+
+  @override
+  String purchaseUsualBasketChip(num count) {
+    return 'الطلب المعتاد · $count';
+  }
+
+  @override
+  String purchaseUsualBasketFilledMessage(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تمت إضافة $count أصناف',
+      two: 'تمت إضافة صنفين',
+      one: 'تمت إضافة صنف واحد',
+    );
+    return '$_temp0 من الطلب المعتاد.';
+  }
+
+  @override
+  String purchaseSuggestionQuantityHint(String quantity, String unit) {
+    return 'المعتاد $quantity $unit';
+  }
+
+  @override
+  String purchaseSuggestionQuantityHintTooltip(String quantity, String unit) {
+    return 'اضبط الكمية على $quantity $unit — الكمية المعتادة من هذا المورد';
+  }
+
+  @override
+  String get purchasingShortcutAcceptQuantity =>
+      'قبول الكمية المعتادة للسطر المحدد';
+
+  @override
+  String get enablePurchaseSuggestionsLabel => 'اقتراحات الشراء';
+
+  @override
+  String get enablePurchaseSuggestionsSubtitle =>
+      'اقترح على شاشة المشتريات الأصناف والكميات التي يشتريها المحل عادة من المورد المختار.';
 }

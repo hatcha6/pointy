@@ -27,6 +27,7 @@ import 'supplier_currency_field.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_pricing_sheet.dart';
 import 'purchase_cost_warning_dialog.dart';
+import 'purchase_suggestion_strip.dart';
 
 /// Lets the draft pane publish its footer actions to the workspace above it, so
 /// the global keyboard handler can run the very same flows — Ctrl/Cmd+Enter to
@@ -825,6 +826,10 @@ class _PurchaseDraftScrollContentState
                           viewModel: viewModel,
                           line: visibleDraft[index],
                         ),
+                      ),
+                      quantityHint: PurchaseQuantityHintChip.maybeBuild(
+                        viewModel: viewModel,
+                        line: visibleDraft[index],
                       ),
                       onLineTotalEntry: (total) {
                         viewModel.setLineCostFromTotal(
@@ -1835,6 +1840,7 @@ class PurchaseDraftLineTile extends StatefulWidget {
     this.onSelect,
     this.onChangePrices,
     this.onLineTotalEntry,
+    this.quantityHint,
   });
 
   final PurchaseDraftLine line;
@@ -1875,6 +1881,11 @@ class PurchaseDraftLineTile extends StatefulWidget {
   /// written that way ("12 cartons — 1,200"), and making the buyer divide by
   /// hand is where a per-pack cost turns into a per-piece one. Null hides it.
   final ValueChanged<double>? onLineTotalEntry;
+
+  /// Optional one-tap "usual quantity" chip beside the stepper. Null — and it
+  /// occupies no space at all — whenever this shop's history does not support a
+  /// quantity for this product, which is most of the time.
+  final Widget? quantityHint;
 
   @override
   State<PurchaseDraftLineTile> createState() => _PurchaseDraftLineTileState();
@@ -2028,7 +2039,7 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
       },
     );
 
-    final stepper = PointyQuantityStepper(
+    final quantityStepper = PointyQuantityStepper(
       quantity: line.quantity,
       incrementTooltip: l10n.addOneTooltip,
       decrementTooltip: l10n.removeOneTooltip,
@@ -2038,6 +2049,7 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
           ? () => _promptQuantity(context)
           : null,
     );
+    final stepper = quantityStepper;
 
     final unitOptions = purchasableUnitOptions(
       l10n,
@@ -2230,11 +2242,27 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                   );
                 },
               ),
-              if (baseEquivalent != null) ...[
-                const SizedBox(height: 6),
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: baseEquivalent,
+              // The line's secondary row: what the pack resolves to in base
+              // units on one side, the habitual-quantity offer on the other.
+              // Deliberately one row — they are both quiet asides about this
+              // line, and giving the hint its own row made it read as clutter
+              // sitting level with the conversion text.
+              if (baseEquivalent != null || widget.quantityHint != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (baseEquivalent != null)
+                      Expanded(
+                        child: Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: baseEquivalent,
+                        ),
+                      )
+                    else
+                      const Spacer(),
+                    if (widget.quantityHint != null) widget.quantityHint!,
+                  ],
                 ),
               ],
               if (expiryField != null) ...[

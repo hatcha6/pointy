@@ -14,6 +14,7 @@ import '../../../data/models/product_unit.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_page.dart';
 import '../../../data/models/purchase_submission.dart';
+import '../../../data/models/purchase_suggestion.dart';
 import '../../../data/models/exchange_rate.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/fx_repository.dart';
@@ -22,6 +23,7 @@ import '../../../data/services/local_scoped_json_storage.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/units.dart';
 import '../../../data/models/purchase_cost_warning.dart';
+import 'purchase_suggestion_controller.dart';
 
 /// Add sources that mark the new line as the active line for the arrow-key
 /// unit cycle, exactly like a hardware scan does — so picking a product from
@@ -77,9 +79,14 @@ class PurchaseViewModel extends ChangeNotifier {
     ),
     String? persistScope,
     FxRepository? fxRepository,
+    PurchaseSuggestionController? suggestionController,
   }) : _analyticsEngine = analyticsEngine,
        _fxRepository = fxRepository,
-       _draftStorage = draftStorage {
+       _draftStorage = draftStorage,
+       suggestions =
+           suggestionController ??
+           PurchaseSuggestionController(repository: _purchaseRepository) {
+    suggestions.addListener(notifyListeners);
     loadCatalog();
     unawaited(loadSupplierCurrencies());
     if (persistScope != null) {
@@ -89,6 +96,11 @@ class PurchaseViewModel extends ChangeNotifier {
 
   final CatalogRepository _catalogRepository;
   final PurchaseRepository _purchaseRepository;
+
+  /// The suggestion strip's own state. Owned here so the whole purchasing
+  /// screen sees one answer, but deliberately a separate object: nothing it
+  /// does may block, slow or fail a draft edit.
+  final PurchaseSuggestionController suggestions;
   final AnalyticsEngine? _analyticsEngine;
 
   /// Optional so every existing construction site keeps working. Without it the
@@ -533,6 +545,7 @@ class PurchaseViewModel extends ChangeNotifier {
       // unit cycle — scanning and picking from the catalog behave the same.
       _lastScannedVariantId = variant.id;
     }
+    _syncSuggestions();
     _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
@@ -639,6 +652,7 @@ class PurchaseViewModel extends ChangeNotifier {
       _lastScannedVariantId = null;
     }
     _trackDraftLineDeleted(line, reason: 'delete_line', source: source);
+    _syncSuggestions();
     _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
@@ -655,6 +669,7 @@ class PurchaseViewModel extends ChangeNotifier {
     }
     final index = removed.index.clamp(0, _draft.length);
     _draft.insert(index, removed.line);
+    _syncSuggestions();
     _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
@@ -823,6 +838,206 @@ class PurchaseViewModel extends ChangeNotifier {
     unawaited(refreshDiscountPreview());
   }
 
+  // --- Suggestions ---------------------------------------------------------
+  //
+  // Everything below is additive: it adds lines the buyer could have added by
+  // hand, in the quantity they usually use, and it never touches a line they
+  // have already edited. A suggestion the buyer ignores costs them nothing.
+
+  /// Tell the suggestion strip what the draft looks like now. Called at every
+  /// point the answer could change; the controller debounces and caches, so
+  /// calling it freely is the cheap option.
+  void _syncSuggestions() {
+    suggestions.update(
+      supplierId: _selectedSupplier?.id,
+      variantIds: [for (final line in _draft) line.variant.id],
+    );
+  }
+
+  /// Add a suggested product to the draft, in its habitual unit and quantity.
+  ///
+  /// Behaves exactly like tapping the product in the catalog, plus the quantity
+  /// and the unit the shop usually buys it in. Returns false when the product
+  /// could not be resolved, which leaves the draft untouched.
+  Future<bool> acceptSuggestion(
+    PurchaseSuggestion suggestion, {
+    String source = 'purchase_suggestion_chip',
+  }) async {
+    if (_isSubmitting) {
+      return false;
+    }
+    final variant = await _resolveVariant(suggestion.variantId);
+    if (variant == null || _isSubmitting) {
+      return false;
+    }
+    await _addSuggestedVariant(variant, suggestion, source: source);
+    _trackSuggestionAccepted(suggestion, source: source);
+    return true;
+  }
+
+  /// Fill the draft with this supplier's recurring order in one action.
+  ///
+  /// Returns the variant ids actually added so the caller can offer a single
+  /// Undo — a bulk add the buyer cannot take back in one gesture would be an
+  /// imposition, which is the one thing this feature must never be.
+  Future<List<int>> fillUsualBasket({
+    String source = 'purchase_suggestion_usual_basket',
+  }) async {
+    if (_isSubmitting) {
+      return const [];
+    }
+    final items = suggestions.usualBasket.items;
+    if (items.isEmpty) {
+      return const [];
+    }
+    final onDraft = {for (final line in _draft) line.variant.id};
+    final wanted = [
+      for (final item in items)
+        if (!onDraft.contains(item.variantId)) item,
+    ];
+    if (wanted.isEmpty) {
+      return const [];
+    }
+    // One batched read for the whole basket rather than a request per line.
+    final resolved = await _resolveVariants(
+      wanted.map((item) => item.variantId),
+    );
+    final added = <int>[];
+    for (final item in wanted) {
+      final variant = resolved[item.variantId];
+      if (variant == null || _isSubmitting) {
+        continue;
+      }
+      await _addSuggestedVariant(variant, item, source: source);
+      added.add(item.variantId);
+    }
+    if (added.isNotEmpty) {
+      _trackUsualBasketFilled(added.length, source: source);
+    }
+    return added;
+  }
+
+  /// Set a draft line to the quantity this shop usually buys — the line tile's
+  /// "usual 12" chip and the F6 key.
+  void applySuggestedQuantity(
+    PurchaseDraftLine line,
+    PurchaseSuggestion suggestion, {
+    String source = 'purchase_suggestion_quantity_hint',
+  }) {
+    final quantity = suggestion.suggestedQuantity;
+    if (quantity == null || quantity <= 0 || _isSubmitting) {
+      return;
+    }
+    final unit = _purchaseUnitByCode(line.variant, suggestion.unitCode);
+    if ((unit?.code ?? '') != line.unitCode) {
+      // The habitual quantity counts cartons, not pieces: switch the line's
+      // unit first or the number would mean something else entirely.
+      updateLineUnit(
+        line.variant,
+        unitCode: unit?.code ?? '',
+        unitLabel: unit?.label ?? '',
+        unitFactor: unit?.factorToBase ?? 1,
+        allowsFractional: _unitAllowsFractional(line.variant, unit),
+      );
+    }
+    setLineQuantity(line.variant, quantity, source: source);
+    _trackSuggestionAccepted(suggestion, source: source);
+  }
+
+  /// The quantity hint for a draft line, or null when the shop's history does
+  /// not support one — or when the buyer is already on that quantity.
+  PurchaseSuggestion? quantityHintFor(PurchaseDraftLine line) {
+    final hint = suggestions.quantityHintFor(line.variant.id);
+    if (hint == null) {
+      return null;
+    }
+    final unit = _purchaseUnitByCode(line.variant, hint.unitCode);
+    if ((unit?.code ?? '') == line.unitCode &&
+        line.quantity == hint.suggestedQuantity) {
+      return null;
+    }
+    return hint;
+  }
+
+  Future<void> _addSuggestedVariant(
+    ProductVariant variant,
+    PurchaseSuggestion suggestion, {
+    required String source,
+  }) async {
+    // Seed the cost cache from the suggestion so the add does not have to go
+    // back to the server for a number it was already handed. Both maps take it:
+    // they carry the same per-base-unit definition the last-cost endpoint does.
+    final baseCost = suggestion.baseUnitCost;
+    if (baseCost != null && baseCost > 0) {
+      _lastCostByVariantId[variant.id] = baseCost;
+      _previousBaseCostByVariantId[variant.id] = baseCost;
+    }
+    final unit = _purchaseUnitByCode(variant, suggestion.unitCode);
+    // Only carry the suggested cost when the suggested unit actually exists on
+    // this product; otherwise the line lands in a different unit and the cost
+    // would be per the wrong pack. The base-cost path below then rescales it.
+    final unitMatches = (unit?.code ?? '') == suggestion.unitCode;
+    await addVariant(
+      variant,
+      quantity: suggestion.suggestedQuantity ?? 1,
+      unit: unit,
+      unitCost: unitMatches ? suggestion.unitCost : null,
+      source: source,
+    );
+  }
+
+  /// A purchasable unit of [variant] by code; null for the base unit or for a
+  /// code the product no longer carries.
+  ProductUnit? _purchaseUnitByCode(ProductVariant variant, String unitCode) {
+    if (unitCode.isEmpty) {
+      return null;
+    }
+    final product = variant.productDetail;
+    if (product == null) {
+      return null;
+    }
+    for (final unit in product.purchasableUnits) {
+      if (unit.code == unitCode) {
+        return unit;
+      }
+    }
+    return null;
+  }
+
+  Future<ProductVariant?> _resolveVariant(int variantId) async {
+    final resolved = await _resolveVariants([variantId]);
+    return resolved[variantId];
+  }
+
+  /// Variants by id, preferring what the catalog page already holds and
+  /// fetching only the remainder — a suggestion for a product that is not on
+  /// the current page (the common case, since the strip's whole job is to name
+  /// products the buyer has not searched for) must still be one tap.
+  Future<Map<int, ProductVariant>> _resolveVariants(
+    Iterable<int> variantIds,
+  ) async {
+    final wanted = {...variantIds};
+    final resolved = <int, ProductVariant>{};
+    for (final variant in _variants) {
+      if (wanted.remove(variant.id)) {
+        resolved[variant.id] = variant;
+      }
+    }
+    for (final line in _draft) {
+      if (wanted.remove(line.variant.id)) {
+        resolved[line.variant.id] = line.variant;
+      }
+    }
+    if (wanted.isEmpty) {
+      return resolved;
+    }
+    final fetched = await _catalogRepository.loadVariantsByIds(wanted);
+    for (final variant in fetched) {
+      resolved[variant.id] = variant;
+    }
+    return resolved;
+  }
+
   /// The product's configured default purchase unit (if any), resolved from the
   /// variant's embedded product detail. Null = the base unit.
   ProductUnit? _defaultPurchaseUnit(ProductVariant variant) {
@@ -876,6 +1091,9 @@ class PurchaseViewModel extends ChangeNotifier {
     _supplierInvoiceDateInput = '';
     _resetLandedCosts();
     _clearDiscountPreview();
+    // A new order starts with a clean strip: a dismissal was "not now", and
+    // "now" has moved on.
+    suggestions.reset();
     _touchSubmissionIntent();
     notifyListeners();
   }
@@ -894,6 +1112,7 @@ class PurchaseViewModel extends ChangeNotifier {
       unawaited(loadCatalog());
     }
     _trackSupplierSelected(supplier);
+    _syncSuggestions();
     _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
@@ -1125,6 +1344,7 @@ class PurchaseViewModel extends ChangeNotifier {
     _draft
       ..clear()
       ..addAll(lines);
+    _syncSuggestions();
     notifyListeners();
     unawaited(refreshDiscountPreview());
     // A reopened order's lines carry the costs it was saved with, not what the
@@ -1550,6 +1770,8 @@ class PurchaseViewModel extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _persistDebounce?.cancel();
+    suggestions.removeListener(notifyListeners);
+    suggestions.dispose();
     super.dispose();
   }
 
@@ -1623,6 +1845,7 @@ class PurchaseViewModel extends ChangeNotifier {
       );
       // Fresh idempotency key so a restored draft submits as a new order.
       _submitIdempotencyKey = _newPurchaseIdempotencyKey('purchase-draft');
+      _syncSuggestions();
       notifyListeners();
       // The restored lines carry the selling price each product had when it
       // was added, which may be days old — refresh the whole cart in one go.
@@ -1817,6 +2040,74 @@ class PurchaseViewModel extends ChangeNotifier {
             'line_count': removedLines.length,
             'item_count': _draftItemCount(removedLines),
             'draft_total': _draftTotal(removedLines),
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Which suggestions the buyer actually took, and for which reason.
+  ///
+  /// This is the metric the whole feature is judged on: acceptance by reason,
+  /// paired with whether the line was still on the order at submit. Emitted on
+  /// the accept only — never on render, so a strip that rebuilds on every
+  /// keystroke cannot turn into an event storm.
+  void _trackSuggestionAccepted(
+    PurchaseSuggestion suggestion, {
+    required String source,
+  }) {
+    final analyticsEngine = _analyticsEngine;
+    if (analyticsEngine == null) {
+      return;
+    }
+    unawaited(
+      analyticsEngine.track(
+        AnalyticsEventDraft.audit(
+          name: 'purchasing.draft.suggestion.accepted',
+          entityType: 'purchase_suggestion',
+          entityId: '${suggestion.variantId}',
+          attributes: {
+            'source': source,
+            'reason': suggestion.reason.name,
+            'supplier_id': _selectedSupplier?.id,
+            'supplier_name': _selectedSupplier?.name,
+            'variant_id': suggestion.variantId,
+            'product_id': suggestion.productId,
+            'product_name': suggestion.productName,
+            'had_quantity': suggestion.hasQuantity,
+            'draft_line_count': _draft.length,
+          },
+          metrics: {
+            'score': suggestion.score,
+            'evidence_orders': suggestion.orderCount,
+            'suggested_quantity': suggestion.suggestedQuantity ?? 0,
+            'draft_line_count': _draft.length,
+          },
+        ),
+      ),
+    );
+  }
+
+  void _trackUsualBasketFilled(int lineCount, {required String source}) {
+    final analyticsEngine = _analyticsEngine;
+    if (analyticsEngine == null) {
+      return;
+    }
+    unawaited(
+      analyticsEngine.track(
+        AnalyticsEventDraft.audit(
+          name: 'purchasing.draft.suggestion.basket_filled',
+          entityType: 'supplier',
+          entityId: '${_selectedSupplier?.id}',
+          attributes: {
+            'source': source,
+            'supplier_id': _selectedSupplier?.id,
+            'supplier_name': _selectedSupplier?.name,
+            'draft_line_count': _draft.length,
+          },
+          metrics: {
+            'lines_added': lineCount,
+            'draft_line_count': _draft.length,
           },
         ),
       ),

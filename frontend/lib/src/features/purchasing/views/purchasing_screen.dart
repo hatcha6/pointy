@@ -180,6 +180,27 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
     return true;
   }
 
+  /// F6 — take the habitual quantity for the active line. The same accept the
+  /// line's chip performs, for hands that are on the scanner rather than the
+  /// mouse. Returns false (so the key falls through) when this shop's history
+  /// has no quantity to offer for that line.
+  bool _acceptSuggestedQuantityForActiveLine() {
+    final line = viewModel.activeDraftLine;
+    if (line == null || viewModel.isSubmitting) {
+      return false;
+    }
+    final hint = viewModel.quantityHintFor(line);
+    if (hint == null) {
+      return false;
+    }
+    viewModel.applySuggestedQuantity(
+      line,
+      hint,
+      source: 'purchase_keyboard_quantity_hint',
+    );
+    return true;
+  }
+
   /// F4 — delete the active line, with an Undo. A mis-fire on a delivery
   /// somebody is halfway through counting must be one tap to recover.
   bool _deleteActiveLine() {
@@ -244,6 +265,9 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
         }
         if (key == LogicalKeyboardKey.f4) {
           return _deleteActiveLine();
+        }
+        if (key == LogicalKeyboardKey.f6) {
+          return _acceptSuggestedQuantityForActiveLine();
         }
         return false;
       },

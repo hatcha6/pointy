@@ -15,6 +15,7 @@ import '../../../shared/product_tile.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_product_create.dart';
+import 'purchase_suggestion_strip.dart';
 
 class PurchaseCatalogPane extends StatelessWidget {
   const PurchaseCatalogPane({super.key, required this.viewModel});
@@ -52,6 +53,7 @@ class PurchaseCatalogPane extends StatelessWidget {
           viewModel.query.copyWith(categories: [category]),
         ),
       ),
+      suggestionStrip: PurchaseSuggestionStrip.maybeBuild(viewModel),
       statusLine: viewModel.scanStatus != PurchaseScanStatus.idle
           ? _PurchaseScanStatusLine(viewModel: viewModel)
           : null,

@@ -875,6 +875,8 @@ class _InventorySettingsFields extends StatelessWidget {
     required this.onPreventSellingAtLossChanged,
     required this.valuationMethod,
     required this.onValuationMethodChanged,
+    required this.enablePurchaseSuggestions,
+    required this.onEnablePurchaseSuggestionsChanged,
   });
 
   final TextEditingController controller;
@@ -889,6 +891,8 @@ class _InventorySettingsFields extends StatelessWidget {
   final ValueChanged<bool> onWarnLowStockBeforeSaleChanged;
   final ValueChanged<bool> onPreventSellingAtLossChanged;
   final ValueChanged<InventoryValuationMethod> onValuationMethodChanged;
+  final bool enablePurchaseSuggestions;
+  final ValueChanged<bool> onEnablePurchaseSuggestionsChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -960,6 +964,14 @@ class _InventorySettingsFields extends StatelessWidget {
             _valuationMethodDescription(l10n, valuationMethod),
             style: Theme.of(context).textTheme.bodySmall,
           ),
+        ),
+        SwitchListTile(
+          key: const ValueKey('enable_purchase_suggestions_switch'),
+          contentPadding: EdgeInsets.zero,
+          value: enablePurchaseSuggestions,
+          title: Text(l10n.enablePurchaseSuggestionsLabel),
+          subtitle: Text(l10n.enablePurchaseSuggestionsSubtitle),
+          onChanged: enabled ? onEnablePurchaseSuggestionsChanged : null,
         ),
       ],
     );

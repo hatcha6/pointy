@@ -1182,3 +1182,178 @@ def prime_supplier_balances(suppliers):
             Decimal("0.01")
         )
     return suppliers
+
+
+class SupplierPurchaseHabit(TimeStampedModel):
+    """How this shop habitually buys one product from one supplier.
+
+    A denormalized rollup of the supplier's purchase history, rebuilt by
+    :mod:`apps.purchasing.suggestions` — never edited by hand and never a source
+    of truth for anything financial. It exists so the purchasing screen can
+    answer "how many of these do we usually buy?" without aggregating
+    ``PurchaseLine`` on every draft change (the read pattern that made the
+    purchases list hang at 12K orders).
+
+    ``typical_quantity`` is NULL whenever the shop's quantities for this pair are
+    not repeatable enough to state — the feature stays silent rather than
+    inventing a number that would flow into stock and cost basis.
+    """
+
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.CASCADE,
+        related_name="purchase_habits",
+    )
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.CASCADE,
+        related_name="purchase_habits",
+    )
+    # Distinct purchase orders in the window that contain this variant, and the
+    # same count with each order weighted by recency (see suggestions.decay).
+    order_count = models.PositiveIntegerField(default=0)
+    weighted_count = models.FloatField(default=0.0)
+    last_ordered_at = models.DateTimeField(null=True, blank=True)
+
+    # The habitual quantity, in the habitual purchase unit. Both travel together
+    # — "12" is meaningless without knowing whether it counts cartons or pieces,
+    # and unit_factor is what keeps the cost-per-base-unit arithmetic honest.
+    typical_quantity = _quantity_field(null=True, blank=True)
+    typical_unit = models.CharField(max_length=32, blank=True, default="")
+    typical_unit_factor = models.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        default=Decimal("1"),
+        validators=[MinValueValidator(Decimal("0.000001"))],
+    )
+    # Share of the recent purchases that were for exactly ``typical_quantity``.
+    quantity_confidence = models.FloatField(default=0.0)
+
+    # Purchase cadence, for the "due again" suggestion. ``interval_cv`` is the
+    # coefficient of variation (stdev / mean) of the gaps between orders: low
+    # means a regular rhythm, high means sporadic buying we must not predict.
+    avg_interval_days = models.FloatField(null=True, blank=True)
+    interval_cv = models.FloatField(null=True, blank=True)
+    # When this product becomes "due again", precomputed so the read is an
+    # indexed ``next_due_at <= now`` instead of per-row date arithmetic. NULL
+    # whenever the cadence is too irregular (or too thinly evidenced) to predict
+    # — the overwhelming majority of pairs, and deliberately so.
+    next_due_at = models.DateTimeField(null=True, blank=True)
+
+    # ``weighted_count`` as a share of the supplier's total weighted order mass:
+    # 1.0 = on literally every order from this supplier. Drives the "usual
+    # order" basket, and stored rather than divided at read time so that basket
+    # is one indexed query.
+    presence_ratio = models.FloatField(default=0.0)
+
+    # Mean normalized entry position across the window's orders: 0.0 = always
+    # the first line typed, 1.0 = always the last. Only ever a tie-breaker —
+    # imported history whose lines share one timestamp collapses this to 0.5 for
+    # everything, which is harmless.
+    avg_position = models.FloatField(default=0.0)
+
+    last_base_unit_cost = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["supplier", "variant"],
+                name="purchasing_habit_supplier_variant_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["supplier", "-weighted_count"],
+                name="purch_habit_rank_idx",
+            ),
+            models.Index(
+                fields=["supplier", "next_due_at"],
+                name="purch_habit_due_idx",
+            ),
+            models.Index(
+                fields=["supplier", "-presence_ratio"],
+                name="purch_habit_basket_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.supplier_id}/{self.variant_id}"
+
+
+class SupplierPurchaseAffinity(TimeStampedModel):
+    """"What gets bought with what", per supplier — the "next product" signal.
+
+    One directed row per (supplier, anchor, neighbour): given that ``anchor`` is
+    already on the draft, ``confidence`` is the recency-weighted share of this
+    supplier's orders containing the anchor that also contained ``variant``.
+    Both directions are stored so a read is a single indexed lookup.
+
+    Bounded by construction: only the top neighbours per anchor survive, and only
+    above the support floors in :mod:`apps.purchasing.suggestions`.
+    """
+
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.CASCADE,
+        related_name="purchase_affinities",
+    )
+    anchor_variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.CASCADE,
+        related_name="+",
+    )
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.CASCADE,
+        related_name="+",
+    )
+    together_count = models.PositiveIntegerField(default=0)
+    confidence = models.FloatField(default=0.0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["supplier", "anchor_variant", "variant"],
+                name="purchasing_affinity_pair_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["supplier", "anchor_variant", "-confidence"],
+                name="purch_affinity_anchor_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.anchor_variant_id}→{self.variant_id}"
+
+
+class SupplierPurchaseProfile(TimeStampedModel):
+    """Per-supplier rollup that the habit rows are measured against.
+
+    ``version`` is bumped on every rebuild and is what read caches key on, so a
+    freshly received delivery invalidates that supplier's cached suggestions and
+    nobody else's.
+    """
+
+    supplier = models.OneToOneField(
+        Supplier,
+        on_delete=models.CASCADE,
+        related_name="purchase_profile",
+    )
+    # Purchase orders in the evidence window (capped — see suggestions.MAX_ORDERS).
+    order_count = models.PositiveIntegerField(default=0)
+    # The same count with each order weighted by recency; the denominator of
+    # every habit's ``presence_ratio`` and every affinity's ``confidence``.
+    weighted_orders = models.FloatField(default=0.0)
+    rebuilt_at = models.DateTimeField(null=True, blank=True)
+    version = models.PositiveIntegerField(default=0)
+
+    def __str__(self) -> str:
+        return f"profile/{self.supplier_id}"

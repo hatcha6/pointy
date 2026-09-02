@@ -295,6 +295,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late bool _allowOverselling;
   late bool _warnLowStockBeforeSale;
   late bool _preventSellingAtLoss;
+  late bool _enablePurchaseSuggestions;
   late InventoryValuationMethod _inventoryValuationMethod;
   late bool _enableCashPayments;
   late bool _enableCardPayments;
@@ -356,6 +357,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       _allowOverselling = widget.settings.allowOverselling;
       _warnLowStockBeforeSale = widget.settings.warnLowStockBeforeSale;
       _preventSellingAtLoss = widget.settings.preventSellingAtLoss;
+      _enablePurchaseSuggestions = widget.settings.enablePurchaseSuggestions;
       _inventoryValuationMethod = widget.settings.inventoryValuationMethod;
       _enableCashPayments = widget.settings.enableCashPayments;
       _enableCardPayments = widget.settings.enableCardPayments;
@@ -419,6 +421,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _allowOverselling = settings.allowOverselling;
     _warnLowStockBeforeSale = settings.warnLowStockBeforeSale;
     _preventSellingAtLoss = settings.preventSellingAtLoss;
+    _enablePurchaseSuggestions = settings.enablePurchaseSuggestions;
     _inventoryValuationMethod = settings.inventoryValuationMethod;
     _enableCashPayments = settings.enableCashPayments;
     _enableCardPayments = settings.enableCardPayments;
@@ -994,6 +997,11 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         },
         onPreventSellingAtLossChanged: (value) {
           setState(() => _preventSellingAtLoss = value);
+          refresh();
+        },
+        enablePurchaseSuggestions: _enablePurchaseSuggestions,
+        onEnablePurchaseSuggestionsChanged: (value) {
+          setState(() => _enablePurchaseSuggestions = value);
           refresh();
         },
       ),
@@ -1580,6 +1588,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       allowOverselling: _allowOverselling,
       warnLowStockBeforeSale: _warnLowStockBeforeSale,
       preventSellingAtLoss: _preventSellingAtLoss,
+      enablePurchaseSuggestions: _enablePurchaseSuggestions,
       lowStockThreshold:
           int.tryParse(_lowStockThresholdController.text.trim()) ?? 0,
       cashierReturnWindowHours: _cashierReturnWindowHours,

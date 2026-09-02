@@ -45,6 +45,7 @@ import '../models/expense_ledger_entry.dart';
 import '../models/money_position.dart';
 import '../models/fraud_finding.dart';
 import '../models/purchase_submission.dart';
+import '../models/purchase_suggestion.dart';
 import '../models/query.dart';
 import '../models/register_cash_movement.dart';
 import '../models/migration.dart';
@@ -1921,6 +1922,18 @@ class PosApiService {
 
   Future<double?> fetchLastProductCost(int productId, {int? variantId}) {
     return _purchasing.fetchLastProductCost(productId, variantId: variantId);
+  }
+
+  Future<PurchaseSuggestionSet> fetchPurchaseSuggestions({
+    required int supplierId,
+    List<int> variantIds = const [],
+    int limit = 8,
+  }) {
+    return _purchasing.fetchPurchaseSuggestions(
+      supplierId: supplierId,
+      variantIds: variantIds,
+      limit: limit,
+    );
   }
 
   Future<({double? suggestedPrice, double? markupPercent})>

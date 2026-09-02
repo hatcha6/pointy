@@ -23,6 +23,7 @@ class PointyCatalogPane extends StatelessWidget {
     this.hasMoreResults = false,
     this.notice,
     this.categoryStrip,
+    this.suggestionStrip,
     this.statusLine,
   });
 
@@ -49,6 +50,11 @@ class PointyCatalogPane extends StatelessWidget {
   /// Optional quick-access category chip strip.
   final Widget? categoryStrip;
 
+  /// Optional strip of one-tap suggestions between the categories and the grid.
+  /// Null — not an empty box — when there is nothing to suggest, so the grid
+  /// never shifts under the buyer as suggestions arrive or run out.
+  final Widget? suggestionStrip;
+
   /// Optional status line shown above the grid (e.g. barcode scan feedback).
   final Widget? statusLine;
 
@@ -73,6 +79,10 @@ class PointyCatalogPane extends StatelessWidget {
           if (categoryStrip != null) ...[
             SizedBox(height: spacing.sm),
             categoryStrip!,
+          ],
+          if (suggestionStrip != null) ...[
+            SizedBox(height: spacing.sm),
+            suggestionStrip!,
           ],
           if (statusLine != null) ...[
             SizedBox(height: spacing.sm),

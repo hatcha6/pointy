@@ -211,6 +211,13 @@ class ShopSettings(TimeStampedModel):
         null=True,
         validators=[MinValueValidator(0)],
     )
+    # Purchase suggestions: the purchasing screen offers the products and
+    # quantities this shop habitually buys from the chosen supplier (see
+    # apps.purchasing.suggestions). On by default because it is additive — every
+    # suggestion is a chip that costs one tap to take and none to ignore — and
+    # because a shop with no purchase history simply never sees one. Off means
+    # the surfaces disappear AND the client stops asking for them.
+    enable_purchase_suggestions = models.BooleanField(default=True)
     # --- Multi-currency ---------------------------------------------------
     # ``currency_code`` above IS the base currency: the currency every total,
     # balance, report and stored money column in this product is denominated

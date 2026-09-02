@@ -2304,3 +2304,53 @@ class SupplierPaymentSerializer(serializers.ModelSerializer):
             else None
         )
         return create_supplier_payment(created_by=created_by, **validated_data)
+
+
+class PurchaseSuggestionSerializer(serializers.Serializer):
+    """One suggestion chip: a product the buyer is likely to add next, and — only
+    when the shop's own history actually supports one — the quantity to add it in.
+
+    Read-only projection of a :class:`SupplierPurchaseHabit` row; the ranking and
+    every support threshold live in :mod:`apps.purchasing.suggestions`.
+    """
+
+    variant = serializers.IntegerField()
+    product = serializers.IntegerField()
+    product_name = serializers.CharField()
+    variant_name = serializers.CharField(allow_blank=True)
+    sku = serializers.CharField(allow_blank=True)
+    # Null whenever this shop's quantities for the pair are not repeatable
+    # enough to state — the client then offers the product with no quantity
+    # rather than inventing one.
+    suggested_quantity = serializers.DecimalField(
+        max_digits=12, decimal_places=3, allow_null=True
+    )
+    unit = serializers.CharField(allow_blank=True)
+    unit_factor = serializers.DecimalField(max_digits=18, decimal_places=6)
+    unit_cost = serializers.DecimalField(
+        max_digits=10, decimal_places=2, allow_null=True
+    )
+    # Per BASE unit, the same definition the last-cost endpoint returns, so the
+    # client can seed its cost cache from a suggestion without ever disagreeing
+    # with a fetched value.
+    base_unit_cost = serializers.DecimalField(
+        max_digits=10, decimal_places=2, allow_null=True
+    )
+    reason = serializers.CharField()
+    reason_variant = serializers.IntegerField(allow_null=True)
+    score = serializers.FloatField()
+    evidence = serializers.DictField()
+
+
+class PurchaseUsualBasketSerializer(serializers.Serializer):
+    available = serializers.BooleanField()
+    line_count = serializers.IntegerField()
+    items = PurchaseSuggestionSerializer(many=True)
+
+
+class PurchaseSuggestionResponseSerializer(serializers.Serializer):
+    supplier = serializers.IntegerField()
+    enabled = serializers.BooleanField()
+    version = serializers.IntegerField()
+    items = PurchaseSuggestionSerializer(many=True)
+    usual_basket = PurchaseUsualBasketSerializer()
