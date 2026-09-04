@@ -1,11 +1,13 @@
+from django.conf import settings
 from django.db.models import Count
-from rest_framework import status, views, viewsets
+from rest_framework import parsers, status, views, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.permissions import HasPointyPermission
 
+from . import uploads
 from .models import MigrationRun, MigrationSource
 from .serializers import (
     EntitySpecSerializer,
@@ -14,13 +16,29 @@ from .serializers import (
     MigrationRunSerializer,
     MigrationSourceSerializer,
     MigrationSystemSerializer,
+    UploadBeginSerializer,
+    UploadCompleteSerializer,
 )
-from .discovery import discover_sql_servers_as_dicts
-from .services import queue_migration_run, run_compatibility, test_connection
+from .services import discard_source, queue_migration_run, queue_preparation
+
+
+class RawChunkParser(parsers.BaseParser):
+    """Hand the request body back as a stream instead of buffering it.
+
+    Every other parser materialises the body — as bytes, as a dict, as a temp
+    file — before the view sees it. A 16 MB chunk survives that; it is still the
+    wrong shape, because the view's job is to copy bytes to a file descriptor and
+    nothing in between needs to hold them.
+    """
+
+    media_type = "application/octet-stream"
+
+    def parse(self, stream, media_type=None, parser_context=None):
+        return stream
 
 
 class MigrationSystemsView(views.APIView):
-    """The catalogue that drives the system picker + entity selection UI."""
+    """What Pointy can read, and how a file should be handed over."""
 
     permission_classes = [IsAuthenticated, HasPointyPermission]
 
@@ -32,45 +50,103 @@ class MigrationSystemsView(views.APIView):
             {
                 "systems": MigrationSystemSerializer.catalogue(),
                 "entities": EntitySpecSerializer.catalogue(),
+                "upload": {
+                    "chunk_size": settings.POINTY_MIGRATION_CHUNK_BYTES,
+                    "max_bytes": settings.POINTY_MIGRATION_MAX_UPLOAD_BYTES,
+                    "accepted_extensions": [".mdb", ".accdb", ".sqlite", ".sqlite3", ".db"],
+                },
             }
         )
 
 
-class MigrationSourceViewSet(viewsets.ModelViewSet):
+class MigrationSourceViewSet(viewsets.ReadOnlyModelViewSet):
+    """Uploaded files. Created by ``begin``, never by a plain POST."""
+
     serializer_class = MigrationSourceSerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
     permission_map = {
         "list": ("migration.view_migrationsource",),
         "retrieve": ("migration.view_migrationsource",),
-        "create": ("migration.add_migrationsource",),
-        "update": ("migration.change_migrationsource",),
-        "partial_update": ("migration.change_migrationsource",),
-        "destroy": ("migration.delete_migrationsource",),
-        "test": ("migration.change_migrationsource",),
-        "check": ("migration.change_migrationsource",),
-        "discover": ("migration.add_migrationsource",),
+        "begin": ("migration.add_migrationsource",),
+        "chunk": ("migration.add_migrationsource",),
+        "complete": ("migration.add_migrationsource",),
+        "discard": ("migration.delete_migrationsource",),
     }
     queryset = MigrationSource.objects.all()
-    filterset_fields = ("system_key", "transport_kind", "is_archived")
+    filterset_fields = ("system_key", "upload_state")
 
     @action(detail=False, methods=["post"])
-    def discover(self, request):
-        """List SQL Server instances reachable on the LAN (SSRP broadcast).
+    def begin(self, request):
+        """Reserve a row and an empty file; returns the chunk size to use."""
+        serializer = UploadBeginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        source = uploads.begin_upload(
+            filename=serializer.validated_data["filename"],
+            size_bytes=serializer.validated_data["size_bytes"],
+            user=request.user,
+        )
+        return Response(
+            {
+                "source": MigrationSourceSerializer(source).data,
+                "chunk_size": settings.POINTY_MIGRATION_CHUNK_BYTES,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
-        Discovery only — no credentials are sent and no data connection is
-        opened. The operator picks the client's POS server from this list; the
-        connection (and any default-credential fallback) happens afterwards
-        against that chosen target via the normal ``test``/``check`` flow.
+    @action(detail=True, methods=["put"], parser_classes=[RawChunkParser])
+    def chunk(self, request, pk=None):
+        """Append bytes at ``?offset=``.
+
+        A mismatched offset is a **409** carrying the server's real one, so the
+        client re-syncs rather than writing a chunk into the wrong place — which
+        would produce a database that is subtly, silently wrong.
         """
-        return Response({"servers": discover_sql_servers_as_dicts()})
+        source = self.get_object()
+        try:
+            offset = int(request.query_params.get("offset", ""))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "offset مطلوب."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            updated = uploads.append_chunk(source, offset, request.data)
+        except uploads.OffsetConflict as conflict:
+            return Response(
+                {
+                    "detail": "الموضع غير متطابق — تابع من الموضع المُرسَل.",
+                    "received_bytes": conflict.expected,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(
+            {
+                "received_bytes": updated.received_bytes,
+                "upload_state": updated.upload_state,
+                "upload_percent": updated.upload_percent,
+            }
+        )
 
     @action(detail=True, methods=["post"])
-    def test(self, request, pk=None):
-        return Response(test_connection(self.get_object()))
+    def complete(self, request, pk=None):
+        """Verify the received file, then queue conversion + identification."""
+        serializer = UploadCompleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        source = uploads.complete_upload(
+            self.get_object(),
+            expected_checksum=serializer.validated_data.get("checksum_sha256") or "",
+        )
+        source = queue_preparation(source, user=request.user)
+        return Response(MigrationSourceSerializer(source).data, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=True, methods=["post"])
-    def check(self, request, pk=None):
-        return Response(run_compatibility(self.get_object(), user=request.user))
+    def discard(self, request, pk=None):
+        """Delete this file from the server now."""
+        source = self.get_object()
+        freed = discard_source(source, user=request.user)
+        source.refresh_from_db()
+        return Response(
+            {"source": MigrationSourceSerializer(source).data, "freed_bytes": freed}
+        )
 
 
 class MigrationRunViewSet(viewsets.ModelViewSet):

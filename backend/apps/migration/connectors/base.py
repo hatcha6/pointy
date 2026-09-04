@@ -25,8 +25,7 @@ class ExtractContext:
     read the source and emit canonical records keyed by source key)."""
 
     source: object = None
-    options: dict = field(default_factory=dict)
-    # Per-run options chosen in the UI (e.g. products_without_quantities).
+    # Per-run options chosen in the UI (e.g. stock_source).
     run_options: dict = field(default_factory=dict)
     # Scratch space for a connector to memoise cross-entity lookups for one run
     # (e.g. group the BARCODE table by item once and reuse it).
@@ -78,15 +77,35 @@ class BaseConnector(abc.ABC):
     supported_entities: tuple[str, ...] = ()
     #: Declared schema variants this connector recognises.
     versions: tuple[VersionSpec, ...] = ()
-    #: Suggested transport ``options`` for this vendor (e.g. a legacy ODBC driver
-    #: + TDS version + text encoding for an old SQL Server). Surfaced in the
-    #: systems catalogue so the UI can pre-fill the source's advanced options.
-    recommended_options: dict = {}
+    #: What this vendor's file looks like *before* preparation, when that is a
+    #: different shape from what :attr:`versions` describes. Fahd is the reason
+    #: this exists: a freshly converted Fahd database has a catalogue and a
+    #: 4.6M-row audit log but no invoice tables at all, because Fahd wipes them
+    #: at year carry-over — the invoices only exist as log text until
+    #: :meth:`prepare` rebuilds them. Empty means the file is already in its
+    #: final shape and :attr:`versions` applies directly.
+    raw_versions: tuple[VersionSpec, ...] = ()
+
+    def prepare(self, source_path, output_path, *, tracker=None, stage_key="prepare") -> dict:
+        """Turn a raw converted file into the shape :attr:`versions` expects.
+
+        Only called for connectors that declared :attr:`raw_versions` and matched
+        one. Returns a stats dict for the report. The default is a connector
+        whose file needs no vendor-specific work.
+        """
+        raise NotImplementedError
 
     def check_compatibility(self, transport) -> CompatibilityReport:
         """Default: match each declared version against the live schema and pick
         the best fit. Override only for runtime/value-based detection."""
-        if not self.versions:
+        return self._match(transport, self.versions)
+
+    def check_raw(self, transport) -> CompatibilityReport:
+        """Same matching, against :attr:`raw_versions` — the pre-preparation shape."""
+        return self._match(transport, self.raw_versions)
+
+    def _match(self, transport, versions) -> CompatibilityReport:
+        if not versions:
             return CompatibilityReport(
                 compatible=False,
                 supported_entities=list(self.supported_entities),
@@ -95,7 +114,7 @@ class BaseConnector(abc.ABC):
 
         present_tables = {name.lower() for name in transport.list_tables()}
         best = None  # (score, version, missing_tables, missing_columns)
-        for version in self.versions:
+        for version in versions:
             missing_tables: list[str] = []
             missing_columns: dict[str, list[str]] = {}
             for required in version.required_tables:

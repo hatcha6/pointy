@@ -1,21 +1,26 @@
 from rest_framework import serializers
 
-from .connectors import get_connector, list_connectors
+from .connectors import list_connectors
 from .entity_plan import ENTITY_PLAN
 from .models import MigrationIssue, MigrationRun, MigrationSource
 from .reconstruct import VALID_STOCK_SOURCES
 
 
 class MigrationSystemSerializer(serializers.Serializer):
-    """Read-only catalogue entry describing one available connector."""
+    """Read-only catalogue of the systems Pointy can read.
+
+    Nobody picks from this any more — the system is detected from the uploaded
+    file's schema. It stays because the screen should be able to answer "will my
+    system work?" *before* someone spends twenty minutes uploading, and because
+    an unrecognised file's error is more useful next to the list of what is
+    recognised.
+    """
 
     system_key = serializers.CharField()
     display_name = serializers.CharField()
-    required_transport = serializers.CharField()
     supported_entities = serializers.ListField(child=serializers.CharField())
     versions = serializers.ListField(child=serializers.CharField())
     implemented = serializers.BooleanField()
-    recommended_options = serializers.DictField()
 
     @classmethod
     def catalogue(cls) -> list[dict]:
@@ -23,11 +28,9 @@ class MigrationSystemSerializer(serializers.Serializer):
             {
                 "system_key": connector.system_key,
                 "display_name": connector.display_name,
-                "required_transport": connector.required_transport,
                 "supported_entities": list(connector.supported_entities),
                 "versions": [version.version_key for version in connector.versions],
                 "implemented": connector.implemented,
-                "recommended_options": dict(connector.recommended_options or {}),
             }
             for connector in list_connectors()
         ]
@@ -47,73 +50,63 @@ class EntitySpecSerializer(serializers.Serializer):
 
 
 class MigrationSourceSerializer(serializers.ModelSerializer):
-    # Write-only like BioTime: an omitted/blank password keeps the stored one.
-    password = serializers.CharField(
-        write_only=True, required=False, allow_blank=True, trim_whitespace=False
-    )
-    has_password = serializers.SerializerMethodField()
+    """An uploaded file and everything we have worked out about it."""
+
+    upload_percent = serializers.IntegerField(read_only=True)
+    is_ready = serializers.BooleanField(read_only=True)
+    is_busy = serializers.BooleanField(read_only=True)
+    is_purged = serializers.BooleanField(read_only=True)
+    supported_entities = serializers.SerializerMethodField()
 
     class Meta:
         model = MigrationSource
         fields = [
             "id",
             "name",
+            "original_filename",
+            "declared_size_bytes",
+            "received_bytes",
+            "upload_percent",
+            "upload_state",
+            "is_ready",
+            "is_busy",
+            "is_purged",
+            "staged_size_bytes",
+            "prepared_size_bytes",
+            "stages",
+            "error_message",
             "system_key",
-            "transport_kind",
-            "host",
-            "port",
-            "database_name",
-            "username",
-            "password",
-            "has_password",
-            "extra_options",
             "detected_version",
+            "detection",
+            "analysis",
+            "supported_entities",
             "last_compat_status",
             "last_compat_report",
             "last_run_at",
-            "credentials_cleared",
-            "is_archived",
+            "purged_at",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = [
-            "detected_version",
-            "last_compat_status",
-            "last_compat_report",
-            "last_run_at",
-            "credentials_cleared",
-            "created_at",
-            "updated_at",
-        ]
+        read_only_fields = fields
 
-    def get_has_password(self, source):
-        return bool(source.password)
+    def get_supported_entities(self, source):
+        from .connectors import get_connector
 
-    def validate(self, attrs):
-        system_key = attrs.get("system_key") or getattr(self.instance, "system_key", None)
-        transport_kind = attrs.get("transport_kind") or getattr(
-            self.instance, "transport_kind", None
-        )
-        connector = get_connector(system_key) if system_key else None
-        if system_key and connector is None:
-            raise serializers.ValidationError({"system_key": "Unknown source system."})
-        if connector and transport_kind and connector.required_transport != transport_kind:
-            raise serializers.ValidationError(
-                {
-                    "transport_kind": (
-                        f"{connector.display_name} requires a "
-                        f"{connector.required_transport} connection."
-                    )
-                }
-            )
-        return attrs
+        connector = get_connector(source.system_key) if source.system_key else None
+        return list(connector.supported_entities) if connector else []
 
-    def update(self, instance, validated_data):
-        password = validated_data.pop("password", None)
-        if password:
-            instance.password = password
-            instance.credentials_cleared = False
-        return super().update(instance, validated_data)
+
+class UploadBeginSerializer(serializers.Serializer):
+    filename = serializers.CharField(max_length=255)
+    size_bytes = serializers.IntegerField(min_value=1)
+
+
+class UploadCompleteSerializer(serializers.Serializer):
+    # Optional: a client that can hash cheaply sends it and gets end-to-end
+    # verification; one that cannot still gets the size check.
+    checksum_sha256 = serializers.CharField(
+        max_length=64, required=False, allow_blank=True, default=""
+    )
 
 
 class MigrationRunSerializer(serializers.ModelSerializer):
@@ -131,6 +124,7 @@ class MigrationRunSerializer(serializers.ModelSerializer):
             "progress_percent",
             "progress_message",
             "current_entity",
+            "stages",
             "summary",
             "error_message",
             "issue_count",

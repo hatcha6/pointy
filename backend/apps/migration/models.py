@@ -7,76 +7,134 @@ from django.utils import timezone
 from apps.core.models import TimeStampedModel
 
 
-class TransportKind(models.TextChoices):
-    MSSQL = "mssql", "Microsoft SQL Server"
-    POSTGRES = "postgres", "PostgreSQL"
-    SQLITE = "sqlite", "SQLite"
-    MONGO = "mongo", "MongoDB"
-
-
 class MigrationSource(TimeStampedModel):
-    """A saved connection to a shop's previous POS database.
+    """One uploaded legacy-POS database file, and everything derived from it.
 
-    Unlike :class:`~apps.attendance.models.BioTimeConnection` there can be more
-    than one (an owner may keep a separate sales-archive DB), so this is a
-    normal table rather than a ``pk=1`` singleton. Credentials are stored as
-    entered because the connection must be re-opened on every test,
-    compatibility check, and run (mirroring BioTime). Because migration is a
-    one-time task, the password is blanked after a successful import — see
-    ``services.finalize_source_after_import`` — so it is not left at rest.
+    A migration starts with a file. The owner picks their old system's database
+    off a USB stick or a network share, the app uploads it in resumable chunks,
+    and the server converts it, identifies which POS wrote it, imports it, and
+    then deletes it. There is no host, no port, and no password: this model used
+    to describe a *database server* to connect to, and every field that did has
+    been removed, because in the field those fields were the migration.
+
+    The row outlives the file it came from. Purging clears the bytes, not the
+    record — :class:`MigrationIdentityMap` hangs off this row and is what makes a
+    second import update the same products instead of duplicating them, so the
+    row is what "this shop's data came from here" means afterwards.
     """
+
+    class UploadState(models.TextChoices):
+        # Chunks are still arriving; `received_bytes` is the resume offset.
+        UPLOADING = "uploading", "Receiving"
+        # All bytes in and verified, waiting for (or queued for) preparation.
+        UPLOADED = "uploaded", "Received"
+        # Converting / reconstructing / identifying — see `stages`.
+        PREPARING = "preparing", "Preparing"
+        # A readable database the connector understands. Ready to import.
+        READY = "ready", "Ready"
+        FAILED = "failed", "Failed"
+        # Bytes deleted from the server. Terminal, and the goal.
+        PURGED = "purged", "Deleted"
 
     class CompatStatus(models.TextChoices):
         UNKNOWN = "unknown", "Not checked"
         COMPATIBLE = "compatible", "Compatible"
         INCOMPATIBLE = "incompatible", "Incompatible"
 
+    #: Display label. Defaults to the uploaded file's name.
     name = models.CharField(max_length=120)
-    # Key of the connector that interprets this system, e.g. "aboghris_mssql".
-    system_key = models.CharField(max_length=64)
-    transport_kind = models.CharField(max_length=16, choices=TransportKind.choices)
-    host = models.CharField(max_length=255, blank=True)
-    port = models.PositiveIntegerField(blank=True, null=True)
-    # Database name for server engines; absolute file path for SQLite.
-    database_name = models.CharField(max_length=255, blank=True)
-    username = models.CharField(max_length=150, blank=True)
-    password = models.CharField(max_length=255, blank=True)
-    # Driver knobs that don't deserve a column of their own: ODBC driver name,
-    # TLS/encrypt flags, text encoding (legacy MSSQL is often Windows-1256),
-    # Mongo auth database, etc. Validated per-transport, never executed.
-    extra_options = models.JSONField(default=dict, blank=True)
+    original_filename = models.CharField(max_length=255, blank=True)
+    #: Size the client declared up front, so progress has a denominator before
+    #: the last chunk lands.
+    declared_size_bytes = models.PositiveBigIntegerField(default=0)
+    #: Bytes durably written. The resume offset: a client that reconnects asks
+    #: for this and continues from it rather than starting the GB again.
+    received_bytes = models.PositiveBigIntegerField(default=0)
+    checksum_sha256 = models.CharField(max_length=64, blank=True)
 
+    upload_state = models.CharField(
+        max_length=16,
+        choices=UploadState.choices,
+        default=UploadState.UPLOADING,
+        db_index=True,
+    )
+    #: File names (not paths) inside the staging root — see `storage.py`. Keeping
+    #: them relative means the volume can move without rewriting rows.
+    staged_filename = models.CharField(max_length=255, blank=True)
+    prepared_filename = models.CharField(max_length=255, blank=True)
+    #: Byte sizes kept after the files are gone, so the report can still say how
+    #: much was uploaded and how much was freed.
+    staged_size_bytes = models.PositiveBigIntegerField(default=0)
+    prepared_size_bytes = models.PositiveBigIntegerField(default=0)
+
+    #: Preparation timeline: a list of stage dicts (see `preparation.stages`).
+    #: The UI renders it as a checklist rather than one meaningless percentage,
+    #: because converting a 1.5 GB Access file takes long enough that "62%" with
+    #: no other information is indistinguishable from a hang.
+    stages = models.JSONField(default=list, blank=True)
+    error_message = models.TextField(blank=True)
+
+    #: Connector key, *detected* from the file's schema rather than chosen by the
+    #: owner — who knows their POS by its splash screen, not its table names.
+    system_key = models.CharField(max_length=64, blank=True)
     detected_version = models.CharField(max_length=64, blank=True)
+    #: Every connector's score against this file, best first. Kept so an
+    #: unrecognised file can say what it looked closest to and what was missing.
+    detection = models.JSONField(default=dict, blank=True)
     last_compat_status = models.CharField(
         max_length=16,
         choices=CompatStatus.choices,
         default=CompatStatus.UNKNOWN,
     )
     last_compat_report = models.JSONField(default=dict, blank=True)
+    #: What is inside: per-entity counts and the date range of the history.
+    #: Shown before the owner commits to anything.
+    analysis = models.JSONField(default=dict, blank=True)
+
     last_run_at = models.DateTimeField(blank=True, null=True)
-    credentials_cleared = models.BooleanField(default=False)
+    purged_at = models.DateTimeField(blank=True, null=True)
     is_archived = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [models.Index(fields=["upload_state", "-created_at"])]
 
     def __str__(self):
-        return f"{self.name} ({self.system_key})"
+        return f"{self.name} ({self.system_key or 'unidentified'})"
+
+    # --- state helpers ---------------------------------------------------
+    @property
+    def is_uploading(self):
+        return self.upload_state == self.UploadState.UPLOADING
 
     @property
-    def has_password(self):
-        return bool(self.password)
+    def is_ready(self):
+        return self.upload_state == self.UploadState.READY
+
+    @property
+    def is_purged(self):
+        return self.upload_state == self.UploadState.PURGED
+
+    @property
+    def is_busy(self):
+        """Preparation is in flight — the UI polls rather than offers actions."""
+        return self.upload_state in {
+            self.UploadState.UPLOADED,
+            self.UploadState.PREPARING,
+        }
+
+    @property
+    def upload_percent(self):
+        if not self.declared_size_bytes:
+            return 0
+        return min(100, int(self.received_bytes / self.declared_size_bytes * 100))
 
     def connection_dict(self):
-        """The shape consumed by transports (kept stable + driver-agnostic)."""
-        return {
-            "host": self.host,
-            "port": self.port,
-            "database": self.database_name,
-            "username": self.username,
-            "password": self.password,
-            "options": dict(self.extra_options or {}),
-        }
+        """The shape transports consume. One key now: the prepared file."""
+        from .storage import prepared_path
+
+        path = prepared_path(self)
+        return {"database": str(path) if path else "", "options": {}}
 
 
 class MigrationRun(TimeStampedModel):
@@ -112,9 +170,11 @@ class MigrationRun(TimeStampedModel):
     )
     # Entity types the owner chose to transfer (subset of ENTITY_PLAN keys).
     selected_entities = models.JSONField(default=list, blank=True)
-    # Per-run toggles chosen in the UI, generic across connectors. Currently:
-    # {"products_without_quantities": bool} — when true the stock entity is
-    # skipped so products are imported with no stock on hand.
+    # Per-run toggles, generic across connectors:
+    #   stock_source: "snapshot" | "reconstruct" | "none" — how stock on hand is
+    #     established (see `reconstruct.resolve_stock_source`)
+    #   keep_file: bool — skip the post-import purge (operators re-running from
+    #     the command line against one staged copy)
     options = models.JSONField(default=dict, blank=True)
     progress_percent = models.PositiveSmallIntegerField(
         default=0,
@@ -122,6 +182,10 @@ class MigrationRun(TimeStampedModel):
     )
     progress_message = models.CharField(max_length=240, blank=True)
     current_entity = models.CharField(max_length=48, blank=True)
+    #: Per-stage timeline (see `preparation.stages`) — one entry per entity plus
+    #: the framing stages. An import that walks 900,000 sale lines needs to show
+    #: *what* it is doing, not just how far along a single bar has crept.
+    stages = models.JSONField(default=list, blank=True)
     # Per-entity aggregate counts:
     # {"product": {"created": 10, "updated": 2, "skipped": 0, "failed": 1}, ...}
     summary = models.JSONField(default=dict, blank=True)

@@ -132,20 +132,28 @@ def iso_date(value: str) -> str | None:
         return None
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("source", help="raw converted MDB SQLite (with the control table)")
-    parser.add_argument("output", help="slim migration SQLite to create")
-    parser.add_argument("--limit", type=int, default=0, help="parse only the first N log rows")
-    args = parser.parse_args()
+def reconstruct(
+    source_path: str,
+    output_path: str,
+    *,
+    limit: int = 0,
+    tracker=None,
+    stage_key: str = "reconstruct",
+) -> dict:
+    """Replay the ``control`` log in ``source_path`` into ``output_path``.
 
+    Returns the stats dict that also lands in the ``fahd_recon_stats`` table.
+    ``tracker`` is an optional
+    :class:`~apps.migration.preparation.stages.StageTracker`; the log is millions
+    of rows and the caller wants to say so while it works.
+    """
     started = time.monotonic()
     # Not read-only: an index on control(id) is created on first run so the
     # ordered scan doesn't need a 4.6M-row external sort.
-    src = sqlite3.connect(args.source)
+    src = sqlite3.connect(source_path)
     src.execute("PRAGMA cache_size=-400000")
 
-    out = sqlite3.connect(args.output)
+    out = sqlite3.connect(output_path)
     out.executescript(
         """
         PRAGMA journal_mode=OFF;
@@ -224,16 +232,20 @@ def main() -> int:
     # Scan every log row in id order and dispatch on the *trimmed* op string —
     # several op values carry stray leading/trailing spaces in the source.
     query = "SELECT id, emp_id, prog, op, descrip, op_date FROM control ORDER BY id"
-    if args.limit:
-        query += f" LIMIT {int(args.limit)}"
+    if limit:
+        query += f" LIMIT {int(limit)}"
 
     src.execute("CREATE INDEX IF NOT EXISTS idx_control_id ON control(id)")
     src.commit()
     processed = 0
     for rid, emp_id, prog, op, descrip, op_date in src.execute(query):
         processed += 1
-        if processed % 500_000 == 0:
-            print(f"  … {processed:,} log rows", file=sys.stderr)
+        if processed % 100_000 == 0 and tracker is not None:
+            tracker.progress(
+                stage_key,
+                detail=f"{processed:,} سطر من سجل العمليات",
+                counts={"log_rows": processed},
+            )
         text = descrip or ""
         op = (op or "").strip()
         prog = (prog or "").strip()
@@ -446,7 +458,13 @@ def main() -> int:
                 del entry["lines"][ser]
                 stats["pur_del_removed_line"] += 1
 
-    print(f"parsed {processed:,} log rows in {time.monotonic() - started:.0f}s", file=sys.stderr)
+    if tracker is not None:
+        tracker.progress(
+            stage_key,
+            percent=70,
+            detail=f"تمت قراءة {processed:,} سطر · جارٍ بناء الفواتير",
+            counts={"log_rows": processed},
+        )
 
     # --- write sales ------------------------------------------------------
     sale_rows, line_rows = [], []
@@ -532,7 +550,7 @@ def main() -> int:
     # Attach read-only and qualify DDL with main.: SQLite resolves unqualified
     # table names across attached databases, so a bare DROP TABLE would hit the
     # source file when the table doesn't exist in the output yet.
-    out.execute("ATTACH DATABASE ? AS src", (f"file:{args.source}?mode=ro",))
+    out.execute("ATTACH DATABASE ? AS src", (f"file:{source_path}?mode=ro",))
     for table in CATALOG_TABLES:
         out.execute(f'DROP TABLE IF EXISTS main."{table}"')
         out.execute(f'CREATE TABLE main."{table}" AS SELECT * FROM src."{table}"')
@@ -566,14 +584,32 @@ def main() -> int:
     out.execute("VACUUM")
     out.close()
 
+    stats["elapsed_seconds"] = round(time.monotonic() - started, 1)
+    if unmatched_samples:
+        stats["unmatched_samples"] = len(unmatched_samples)
+    if tracker is not None:
+        tracker.done(
+            stage_key,
+            detail=(
+                f"{stats.get('sales_written', 0):,} فاتورة بيع · "
+                f"{stats.get('purchases_written', 0):,} فاتورة شراء"
+            ),
+            counts={key: value for key, value in stats.items() if isinstance(value, (int, float))},
+        )
+    return stats
+
+
+def main() -> int:
+    """Standalone CLI, kept for operators debugging a file by hand."""
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("source", help="raw converted MDB SQLite (with the control table)")
+    parser.add_argument("output", help="slim migration SQLite to create")
+    parser.add_argument("--limit", type=int, default=0, help="parse only the first N log rows")
+    args = parser.parse_args()
+    stats = reconstruct(args.source, args.output, limit=args.limit)
     print("--- reconstruction stats ---")
     for key, value in sorted(stats.items()):
         print(f"{key} = {value}")
-    if unmatched_samples:
-        print("--- unmatched samples ---")
-        for sample in unmatched_samples:
-            print(repr(sample))
-    print(f"done in {time.monotonic() - started:.0f}s")
     return 0
 
 

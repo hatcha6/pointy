@@ -166,18 +166,19 @@ def _is_system_party(name: str) -> bool:
     return any(token in text for token in _SYSTEM_PARTY_SUBSTRINGS)
 
 
-class FahdMssqlConnector(BaseConnector):
-    system_key = "fahd_mssql"
-    display_name = "Fahd (SQL Server)"
+class FahdBaseConnector(BaseConnector):
+    """Fahd's table mapping, shared by every Fahd build.
+
+    Not registered: ``system_key`` is empty, so the autodiscovery in
+    ``connectors/__init__`` skips it. The one concrete Fahd connector is
+    :class:`~apps.migration.connectors.fahd.FahdConnector`, which reads the
+    prepared SQLite file and inherits everything here.
+    """
+
+    system_key = ""
+    display_name = "Fahd"
     implemented = True
-    required_transport = "mssql"
-    # SQL Server 2000 needs a legacy driver (FreeTDS, TDS 7.0); the Arabic export
-    # this was built from is cp1256, so default the text fallback there too.
-    recommended_options = {
-        "odbc_driver": "FreeTDS",
-        "tds_version": "7.0",
-        "encoding": "cp1256",
-    }
+    required_transport = "sqlite"
     supported_entities = (
         CATEGORY,
         PRODUCT,

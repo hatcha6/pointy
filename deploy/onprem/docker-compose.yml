@@ -68,6 +68,9 @@ x-backend-environment: &backend-environment
   POINTY_COMPANION_EVENT_RETENTION_HOURS: "${POINTY_COMPANION_EVENT_RETENTION_HOURS:-48}"
   POINTY_BACKUP_ALLOWED_ROOTS: /var/lib/pointy/backups,/mnt/pointy-external
   POINTY_BACKUP_STAGING_ROOT: /tmp/pointy-backup-staging
+  # Uploaded legacy-POS database files and their converted copies. A named
+  # volume, not /tmp: container /tmp is a 64 MB tmpfs and these are GB-sized.
+  POINTY_MIGRATION_STAGING_ROOT: /var/lib/pointy/migration
   POINTY_BACKUP_RETENTION_COUNT: "14"
   # Enforced password floor. Everything above it (length 8, not numeric-only,
   # not a common password) is advice the UI shows, not a rule that blocks a
@@ -297,6 +300,7 @@ services:
       - pointy-backups:/var/lib/pointy/backups
       - pointy-clients:/var/lib/pointy/clients
       - pointy-backup-staging:/tmp/pointy-backup-staging
+      - pointy-migration-staging:/var/lib/pointy/migration
       - type: bind
         source: "${POINTY_BACKUP_DRIVE_1_SOURCE:-./external-backups/drive-1}"
         target: /mnt/pointy-external/drive-1
@@ -348,6 +352,7 @@ services:
       - pointy-media:/var/lib/pointy/media
       - pointy-backups:/var/lib/pointy/backups
       - pointy-backup-staging:/tmp/pointy-backup-staging
+      - pointy-migration-staging:/var/lib/pointy/migration
       - type: bind
         source: "${POINTY_BACKUP_DRIVE_1_SOURCE:-./external-backups/drive-1}"
         target: /mnt/pointy-external/drive-1
@@ -396,6 +401,7 @@ services:
       - pointy-celerybeat:/var/lib/pointy/celerybeat
       - pointy-backups:/var/lib/pointy/backups
       - pointy-backup-staging:/tmp/pointy-backup-staging
+      - pointy-migration-staging:/var/lib/pointy/migration
       - type: bind
         source: "${POINTY_BACKUP_DRIVE_1_SOURCE:-./external-backups/drive-1}"
         target: /mnt/pointy-external/drive-1
@@ -572,6 +578,7 @@ volumes:
   pointy-static:
   pointy-backups:
   pointy-backup-staging:
+  pointy-migration-staging:
   pointy-celerybeat:
   pointy-connector-state:
   pointy-clients:

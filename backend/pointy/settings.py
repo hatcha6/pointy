@@ -497,6 +497,42 @@ POINTY_BACKUP_EXCLUDED_TABLES = env.list(
         "django_session",
     ],
 )
+# --- Data migration (apps.migration) ----------------------------------------
+# A migration starts with a file the owner uploads: their old POS database.
+# These files are big (Fahd's Access database was 1.5 GB) and they are the
+# shop's entire trading history, so they live on their own volume with a short
+# life: the raw upload is deleted the moment it has been converted, the
+# converted copy the moment the import lands, and anything abandoned is swept
+# after the TTL below.
+#
+# NOT under /tmp — the container mounts a 64 MB tmpfs there.
+POINTY_MIGRATION_STAGING_ROOT = Path(
+    env("POINTY_MIGRATION_STAGING_ROOT", default=str(BASE_DIR / "migration-staging"))
+)
+# Ceiling on one uploaded database. Generous: the largest real one so far was
+# 1.5 GB, and an Access file that has never been compacted can be several times
+# the size of the data inside it.
+POINTY_MIGRATION_MAX_UPLOAD_BYTES = env.int(
+    "POINTY_MIGRATION_MAX_UPLOAD_BYTES", default=8 * 1024 * 1024 * 1024
+)
+# Upload chunk size. Small enough to sit well under the front door's
+# client_max_body_size (100 MB) and to make a resume after a dropped connection
+# cheap; large enough that a 1.5 GB file is ~96 requests, not thousands.
+POINTY_MIGRATION_CHUNK_BYTES = env.int(
+    "POINTY_MIGRATION_CHUNK_BYTES", default=16 * 1024 * 1024
+)
+# How long an upload nobody finished importing is kept before the sweep deletes
+# it. Long enough to survive "I'll do it tomorrow morning", short enough that a
+# shop's whole history is not sitting on disk indefinitely.
+POINTY_MIGRATION_UPLOAD_TTL_HOURS = max(
+    env.int("POINTY_MIGRATION_UPLOAD_TTL_HOURS", default=48), 1
+)
+# Wall-clock ceiling on one mdbtools table export. A huge table (Fahd's 4.6M-row
+# `control` log) takes minutes; anything past this is a wedged subprocess.
+POINTY_MIGRATION_CONVERT_TABLE_TIMEOUT_SECONDS = env.int(
+    "POINTY_MIGRATION_CONVERT_TABLE_TIMEOUT_SECONDS", default=60 * 60
+)
+
 POINTY_SMS_DEBT_REMINDERS_ENABLED = env.bool(
     "POINTY_SMS_DEBT_REMINDERS_ENABLED", default=False
 )
@@ -533,6 +569,13 @@ CELERY_BEAT_SCHEDULE = {
     },
     # The companion inbox is a replay buffer for a dropped stream, so it is
     # pruned rather than kept: a busy shop scans all day and every scan is a row.
+    # Uploaded legacy databases are the shop's entire history sitting on disk.
+    # Nothing else deletes one that was uploaded and then abandoned, so this
+    # does — see POINTY_MIGRATION_UPLOAD_TTL_HOURS.
+    "migration.purge-expired-uploads": {
+        "task": "migration.purge_expired_uploads",
+        "schedule": crontab(minute=43),
+    },
     "companion.purge-expired": {
         "task": "companion.purge_expired",
         "schedule": crontab(minute=17),
