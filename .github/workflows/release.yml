@@ -150,9 +150,23 @@ jobs:
         working-directory: frontend
         run: >
           flutter build apk --release
+          --obfuscate
+          --split-debug-info=build/symbols
           --build-name=${{ needs.version.outputs.version }}
           --build-number=${{ needs.version.outputs.build_number }}
           --dart-define=POINTY_VERSION=${{ needs.version.outputs.version }}
+
+      # Obfuscation symbols: the only way to read a stack trace from a shop once
+      # the binary is obfuscated. A PRIVATE Actions artifact, never a release
+      # asset — publishing these undoes the obfuscation. A few MB, so the long
+      # retention barely touches the storage quota.
+      - name: Upload obfuscation symbols (android)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pointy-android-symbols
+          path: frontend/build/symbols/*
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Stage artifact
         shell: bash
@@ -224,9 +238,23 @@ jobs:
         working-directory: frontend
         run: >
           flutter build windows --release
+          --obfuscate
+          --split-debug-info=build/symbols
           --build-name=${{ needs.version.outputs.version }}
           --build-number=${{ needs.version.outputs.build_number }}
           --dart-define=POINTY_VERSION=${{ needs.version.outputs.version }}
+
+      # Obfuscation symbols: the only way to read a stack trace from a shop once
+      # the binary is obfuscated. A PRIVATE Actions artifact, never a release
+      # asset — publishing these undoes the obfuscation. A few MB, so the long
+      # retention barely touches the storage quota.
+      - name: Upload obfuscation symbols (windows)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pointy-windows-symbols
+          path: frontend/build/symbols/*
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Bundle VC++ runtime
         shell: pwsh
@@ -420,9 +448,23 @@ jobs:
         working-directory: frontend
         run: >
           flutter build linux --release
+          --obfuscate
+          --split-debug-info=build/symbols
           --build-name=${{ needs.version.outputs.version }}
           --build-number=${{ needs.version.outputs.build_number }}
           --dart-define=POINTY_VERSION=${{ needs.version.outputs.version }}
+
+      # Obfuscation symbols: the only way to read a stack trace from a shop once
+      # the binary is obfuscated. A PRIVATE Actions artifact, never a release
+      # asset — publishing these undoes the obfuscation. A few MB, so the long
+      # retention barely touches the storage quota.
+      - name: Upload obfuscation symbols (linux)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pointy-linux-symbols
+          path: frontend/build/symbols/*
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Package portable tar.gz
         shell: bash
@@ -654,6 +696,34 @@ jobs:
           zip -r -q "dist/${BUNDLE}.zip" "${BUNDLE}"
           ( cd dist && sha256sum "${BUNDLE}.zip" > SHA256SUMS-onprem.txt )
           ls -lh dist "${BUNDLE}/images"
+
+      # Authenticity, separate from integrity. The sha256 above proves the
+      # download was not corrupted; it proves nothing about who produced it,
+      # because the relay serves both the bundle and its hash. This signature is
+      # made with a key that never touches the relay, and update-agent.sh refuses
+      # a bundle that fails it. See deploy/onprem/SIGNING.md.
+      - name: Sign the on-prem bundle
+        working-directory: .
+        env:
+          SIGNING_KEY: ${{ secrets.POINTY_RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          zip_path="$(ls dist/*-onprem-*.zip dist/*.zip 2>/dev/null | head -1)"
+          [ -n "$zip_path" ] || { echo "no bundle zip to sign" >&2; exit 1; }
+          digest="$(sha256sum "$zip_path" | awk '{print $1}')"
+          if [ -z "${SIGNING_KEY:-}" ]; then
+            echo "::warning title=Unsigned release::POINTY_RELEASE_SIGNING_KEY is not set — this bundle is UNSIGNED and shops with a release key configured will refuse it."
+            exit 0
+          fi
+          umask 077
+          keyfile="$(mktemp)"; msg="$(mktemp)"; raw="$(mktemp)"
+          printf '%s' "$SIGNING_KEY" > "$keyfile"
+          printf '%s' "$digest" > "$msg"
+          openssl pkeyutl -sign -inkey "$keyfile" -rawin -in "$msg" -out "$raw"
+          base64 -w0 < "$raw" > "${zip_path}.sig"
+          rm -f "$keyfile" "$msg" "$raw"
+          echo "signed sha256=${digest}"
+          echo "  -> ${zip_path}.sig"
 
       # Short retention: this is by far the largest artifact (it packs all six
       # docker image tars, several GB) and is the main quota consumer. For real

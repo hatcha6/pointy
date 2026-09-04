@@ -130,6 +130,40 @@ class _KeystrokeRun {
 /// where nothing catches it, so it surfaced as an unhandled "Null check
 /// operator used on a null value": 241 of them in the field, from telemetry
 /// code that is supposed to be invisible.
+/// Stable, build-independent name for a pointer event.
+///
+/// `runtimeType.toString()` returns the obfuscated symbol in release builds
+/// (`flutter build --obfuscate`), so telemetry would carry a different piece of
+/// gibberish for the same event on every release and the dashboards would stop
+/// aggregating. These strings are the exact names the unobfuscated build
+/// produced, so historical data keeps lining up.
+String pointerEventName(PointerEvent event) {
+  if (event is PointerDownEvent) return 'PointerDownEvent';
+  if (event is PointerUpEvent) return 'PointerUpEvent';
+  if (event is PointerMoveEvent) return 'PointerMoveEvent';
+  if (event is PointerHoverEvent) return 'PointerHoverEvent';
+  if (event is PointerCancelEvent) return 'PointerCancelEvent';
+  if (event is PointerEnterEvent) return 'PointerEnterEvent';
+  if (event is PointerExitEvent) return 'PointerExitEvent';
+  if (event is PointerScrollEvent) return 'PointerScrollEvent';
+  if (event is PointerScrollInertiaCancelEvent) {
+    return 'PointerScrollInertiaCancelEvent';
+  }
+  if (event is PointerScaleEvent) return 'PointerScaleEvent';
+  if (event is PointerPanZoomStartEvent) return 'PointerPanZoomStartEvent';
+  if (event is PointerPanZoomUpdateEvent) return 'PointerPanZoomUpdateEvent';
+  if (event is PointerPanZoomEndEvent) return 'PointerPanZoomEndEvent';
+  // Unknown subclass: obfuscated in release, readable in debug. Better than
+  // dropping the attribute entirely.
+  return event.runtimeType.toString();
+}
+
+/// NOTE: unlike [pointerEventName] this cannot be made obfuscation-stable —
+/// it reports whichever widget happens to hold focus, so there is no fixed set
+/// to map. Under `flutter build --obfuscate` it returns the obfuscated symbol,
+/// which is opaque AND changes between releases, so this attribute stops
+/// aggregating across versions. Giving tracked widgets an explicit stable name
+/// is the fix if this telemetry matters; see CODE_PROTECTION_PLAN.md P0.1.
 @visibleForTesting
 String? focusedWidgetTypeName(BuildContext? context) {
   if (context == null || !context.mounted) {
@@ -214,10 +248,7 @@ class _AnalyticsInteractionTrackerState
     _recordInteraction(
       action,
       target: 'pointer',
-      attributes: {
-        'kind': event.kind.name,
-        'event': event.runtimeType.toString(),
-      },
+      attributes: {'kind': event.kind.name, 'event': pointerEventName(event)},
       metrics: {
         'x': _round(event.position.dx),
         'y': _round(event.position.dy),
@@ -250,10 +281,7 @@ class _AnalyticsInteractionTrackerState
     _recordInteraction(
       'pointer_signal',
       target: 'pointer',
-      attributes: {
-        'kind': event.kind.name,
-        'event': event.runtimeType.toString(),
-      },
+      attributes: {'kind': event.kind.name, 'event': pointerEventName(event)},
       metrics: {
         'x': _round(event.position.dx),
         'y': _round(event.position.dy),

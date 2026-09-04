@@ -6,6 +6,7 @@ import shutil
 import tempfile
 import uuid
 import zipfile
+import zlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
@@ -649,7 +650,17 @@ def _verify_backup_archive(archive_path, *, manifest):
     counts and digests recorded while writing.
     """
     with zipfile.ZipFile(archive_path) as archive:
-        corrupt_entry = archive.testzip()
+        try:
+            corrupt_entry = archive.testzip()
+        except (zlib.error, zipfile.BadZipFile) as exception:
+            # testzip() NAMES the first bad entry when a CRC mismatches, but a
+            # malformed deflate stream raises out of it instead. Same corruption,
+            # two different exits — and only the named one was handled, so a
+            # mangled archive escaped as a raw zlib.error and skipped the "fail
+            # the job, spare the old backups" path this function exists to take.
+            raise BackupVerificationError(
+                "Backup archive is corrupt and could not be decompressed."
+            ) from exception
         if corrupt_entry is not None:
             raise BackupVerificationError(
                 f"Backup archive is corrupt at {corrupt_entry}."

@@ -4,6 +4,8 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../../data/models/card_payment_receipt.dart';
 import '../../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../../shared/barcode/camera_text_barcode_scanner_sheet.dart';
+import '../../../companion/companion_scan_listener.dart';
+import '../../../companion/companion_scope.dart';
 import '../../../../shared/components/components.dart';
 import '../../../../shared/formatters.dart';
 import '../../../../shared/responsive/responsive.dart';
@@ -66,67 +68,74 @@ class _CardReceiptValidationDialogState
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
 
-    return BarcodeScanListener(
-      minLength: 16,
-      ignoreTextInputFocus: false,
-      requireCurrentRoute: false,
-      onBarcodeScanned: _validateUrl,
-      child: AlertDialog(
-        icon: const Icon(Icons.qr_code_scanner_outlined),
-        title: Text(l10n.cardReceiptDialogTitle),
-        content: SizedBox(
-          width: 460,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              PointyInlineMessage(
-                compact: true,
-                icon: Icons.payments_outlined,
-                message: l10n.cardReceiptExpectedAmount(
-                  formatMoney(widget.expectedAmount),
-                ),
-              ),
-              SizedBox(height: spacing.md),
-              TextField(
-                key: const ValueKey('card_receipt_url_field'),
-                controller: _urlController,
-                autofocus: true,
-                minLines: 2,
-                maxLines: 4,
-                textDirection: TextDirection.ltr,
-                onSubmitted: _validateUrl,
-                decoration: InputDecoration(
-                  labelText: l10n.cardReceiptUrlLabel,
-                  prefixIcon: const Icon(Icons.link_outlined),
-                  suffixIcon: IconButton(
-                    tooltip: l10n.cardReceiptCameraTooltip,
-                    onPressed: _scanWithCamera,
-                    icon: const Icon(Icons.photo_camera_outlined),
+    // The QR on a payment-terminal receipt is exactly what a shop's laser wedge
+    // cannot read, which is why this dialog exists at all. A paired phone reads
+    // it and lands here through the same handler as any other scan.
+    return CompanionScanListener(
+      bridge: CompanionScope.bridgeOf(context),
+      onScan: _validateUrl,
+      child: BarcodeScanListener(
+        minLength: 16,
+        ignoreTextInputFocus: false,
+        requireCurrentRoute: false,
+        onBarcodeScanned: _validateUrl,
+        child: AlertDialog(
+          icon: const Icon(Icons.qr_code_scanner_outlined),
+          title: Text(l10n.cardReceiptDialogTitle),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                PointyInlineMessage(
+                  compact: true,
+                  icon: Icons.payments_outlined,
+                  message: l10n.cardReceiptExpectedAmount(
+                    formatMoney(widget.expectedAmount),
                   ),
                 ),
-              ),
-              if (_errorMessage != null) ...[
-                SizedBox(height: spacing.sm),
-                PointyInlineMessage.error(
-                  compact: true,
-                  message: _errorMessage!,
+                SizedBox(height: spacing.md),
+                TextField(
+                  key: const ValueKey('card_receipt_url_field'),
+                  controller: _urlController,
+                  autofocus: true,
+                  minLines: 2,
+                  maxLines: 4,
+                  textDirection: TextDirection.ltr,
+                  onSubmitted: _validateUrl,
+                  decoration: InputDecoration(
+                    labelText: l10n.cardReceiptUrlLabel,
+                    prefixIcon: const Icon(Icons.link_outlined),
+                    suffixIcon: IconButton(
+                      tooltip: l10n.cardReceiptCameraTooltip,
+                      onPressed: _scanWithCamera,
+                      icon: const Icon(Icons.photo_camera_outlined),
+                    ),
+                  ),
                 ),
+                if (_errorMessage != null) ...[
+                  SizedBox(height: spacing.sm),
+                  PointyInlineMessage.error(
+                    compact: true,
+                    message: _errorMessage!,
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(l10n.cancelButton),
+            ),
+            FilledButton.icon(
+              onPressed: () => _validateUrl(_urlController.text),
+              icon: const Icon(Icons.verified_outlined),
+              label: Text(l10n.cardReceiptValidateButton),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(l10n.cancelButton),
-          ),
-          FilledButton.icon(
-            onPressed: () => _validateUrl(_urlController.text),
-            icon: const Icon(Icons.verified_outlined),
-            label: Text(l10n.cardReceiptValidateButton),
-          ),
-        ],
       ),
     );
   }

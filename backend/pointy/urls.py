@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
@@ -103,6 +104,7 @@ from apps.clients.views import (
     ClientLandingView,
     ClientManifestView,
 )
+from apps.companion.urls import page_urlpatterns as companion_page_urlpatterns
 from apps.core.relay_views import (
     DiscoveryServiceView,
     RelayConnectorConfigView,
@@ -269,7 +271,6 @@ router.register(
 urlpatterns = [
     path("healthz/", healthz, name="healthz"),
     path("readyz/", readyz, name="readyz"),
-    path("admin/", admin.site.urls),
     path("api/setup/status/", setup_status_view, name="setup-status"),
     path("api/setup/admin/", setup_initial_admin_view, name="setup-initial-admin"),
     path("api/enrollment/status/", enrollment_status_view, name="enrollment-status"),
@@ -423,8 +424,22 @@ urlpatterns = [
     ),
     # Its own router (see apps.invoice_intake.urls) — mounted at
     # api/invoice-intakes/ alongside the project router below.
+    path("api/companion/", include("apps.companion.urls")),
     path("api/", include("apps.invoice_intake.urls")),
     path("api/", include(router.urls)),
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    # The companion camera page, served on the LAN at /c/ (top-level so the web
+    # front door can proxy it and the QR URL stays short enough to scan fast).
+    *companion_page_urlpatterns,
 ]
+
+# Both are development/support surfaces, not product. The admin exposes every
+# model and a bulk export; the schema documents the whole API. Neither belongs on
+# a shop LAN, so they are mounted only when explicitly enabled (see settings).
+if settings.POINTY_ENABLE_DJANGO_ADMIN:
+    urlpatterns += [path("admin/", admin.site.urls)]
+
+if settings.POINTY_ENABLE_API_DOCS:
+    urlpatterns += [
+        path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+        path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    ]

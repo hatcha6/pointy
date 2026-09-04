@@ -22,3 +22,13 @@ relay/.gomodcache/
 
 deploy/onprem/.env
 *.log
+
+# Local data dumps and agent worktrees. None of these belong in a build context;
+# together they are >1GB and the daemon transfer times out before the build starts.
+/pre-update-*.tar.gz
+/fahd_migration.sqlite
+/pointy-analytics-events-*.zip
+/aboghris.txt
+/fahd.txt
+/db.sqlite3
+.claude/

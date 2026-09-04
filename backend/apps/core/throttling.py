@@ -123,3 +123,36 @@ class AuthenticatedBurstCeilingThrottle(_FailOpenThrottleMixin, UserRateThrottle
         if user is None or not getattr(user, "is_authenticated", False):
             return True
         return super().allow_request(request, view)
+
+
+class CompanionPairRateThrottle(_FailOpenThrottleMixin, SimpleRateThrottle):
+    """Throttle companion pairing-code claims per client IP.
+
+    The pairing code is short and typable on purpose, so it is the one
+    companion secret with an entropy budget worth defending. At this rate a
+    phone on the LAN gets a handful of guesses per minute against a code that
+    lives for two, which leaves brute force far outside the window.
+    """
+
+    scope = "companion_pair"
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": self.get_ident(request),
+        }
+
+
+class CompanionUploadRateThrottle(_FailOpenThrottleMixin, SimpleRateThrottle):
+    """Bound how fast one paired phone can push photos into the shop's storage.
+
+    Keyed on the device, not the address: several phones behind one WiFi NAT
+    are a normal shop, a single phone stuck in a retry loop is not.
+    """
+
+    scope = "companion_upload"
+
+    def get_cache_key(self, request, view):
+        device = getattr(request, "companion_device", None)
+        ident = f"device:{device.pk}" if device is not None else self.get_ident(request)
+        return self.cache_format % {"scope": self.scope, "ident": ident}

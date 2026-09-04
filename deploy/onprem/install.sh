@@ -274,6 +274,15 @@ if [ ! -f .env ]; then
   echo "==> Created .env: generated local secrets (licensing off — offline install)."
 fi
 
+# The .env holds the Postgres password, DJANGO_SECRET_KEY (session forgery) and
+# the relay tokens in clear text. Owner-only, every run — not just the run that
+# created it, since an older install may predate this and a `cp` from a bundle
+# lands with the umask default.
+chmod 600 .env 2>/dev/null || true
+if [ "$(id -u)" -eq 0 ]; then
+  chown root:root .env 2>/dev/null || true
+fi
+
 # A full install/restart is the moment everything converges, so reset what a
 # live update may have left pointing elsewhere: the LAN front door goes back to
 # the managed backend, and any temporary container a previous update was serving

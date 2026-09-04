@@ -50,6 +50,22 @@ x-backend-environment: &backend-environment
   # contention is bounded.
   POINTY_ANALYTICS_EXPORT_PARALLEL_WORKERS: "${POINTY_ANALYTICS_EXPORT_PARALLEL_WORKERS:-2}"
   POINTY_ATTACHMENT_STORAGE_ROOT: /var/lib/pointy/media
+  # Companion camera: a staff phone paired to a till over the shop LAN, so the
+  # 2-D codes a laser scanner cannot read (payment-terminal receipts) and the
+  # photos a Windows till cannot take reach Pointy anyway. See apps.companion.
+  #
+  # The QR normally carries whatever address the till itself reached the backend
+  # on, which is the one address proven reachable at that moment. Set this only
+  # when the phone must use a different origin (a reverse proxy, a hostname).
+  POINTY_COMPANION_PUBLIC_ORIGIN: "${POINTY_COMPANION_PUBLIC_ORIGIN:-}"
+  # Short enough that a QR photographed off the till screen is stale before
+  # anyone could act on it; long enough to walk over and scan it.
+  POINTY_COMPANION_PAIRING_TTL_SECONDS: "${POINTY_COMPANION_PAIRING_TTL_SECONDS:-120}"
+  # A paired phone also dies when the pairing user's register session closes.
+  # 0 disables the idle half.
+  POINTY_COMPANION_IDLE_EXPIRY_HOURS: "${POINTY_COMPANION_IDLE_EXPIRY_HOURS:-24}"
+  # The inbox is a replay buffer for a dropped stream, not an archive.
+  POINTY_COMPANION_EVENT_RETENTION_HOURS: "${POINTY_COMPANION_EVENT_RETENTION_HOURS:-48}"
   POINTY_BACKUP_ALLOWED_ROOTS: /var/lib/pointy/backups,/mnt/pointy-external
   POINTY_BACKUP_STAGING_ROOT: /tmp/pointy-backup-staging
   POINTY_BACKUP_RETENTION_COUNT: "14"
@@ -62,6 +78,12 @@ x-backend-environment: &backend-environment
   POINTY_RELAY_CONNECTOR_ADDR: "${POINTY_RELAY_CONNECTOR_ADDR:?Set POINTY_RELAY_CONNECTOR_ADDR in deploy/onprem/.env}"
   POINTY_RELAY_ENROLLMENT_TOKEN: "${POINTY_RELAY_ENROLLMENT_TOKEN:-}"
   POINTY_REQUIRE_LICENSE: "${POINTY_REQUIRE_LICENSE:-false}"
+  # Support surfaces, off by default. The Django admin is a browsable map of
+  # every model plus a bulk export, and the schema documents the whole API —
+  # neither belongs on a shop LAN. Flip either in .env for a support session,
+  # then flip it back.
+  POINTY_ENABLE_DJANGO_ADMIN: "${POINTY_ENABLE_DJANGO_ADMIN:-false}"
+  POINTY_ENABLE_API_DOCS: "${POINTY_ENABLE_API_DOCS:-false}"
   POINTY_RELAY_CONNECTOR_SETUP_TOKEN: "${POINTY_RELAY_CONNECTOR_SETUP_TOKEN:?Set POINTY_RELAY_CONNECTOR_SETUP_TOKEN in deploy/onprem/.env}"
   POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME: "${POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME:-}"
   POINTY_RELAY_ALLOW_INSECURE_CONTROL: "${POINTY_RELAY_ALLOW_INSECURE_CONTROL:-false}"

@@ -1,0 +1,127 @@
+# Backend test suite.
+#
+# Two runs, deliberately. The source run is the fast feedback loop; the compiled
+# run is the one that matters for a release, because compilation breaks things
+# that are invisible in source (Django's as_manager(), builtins patching, and —
+# with the wrong flag — Decimal money silently becoming float). See
+# CYTHON_FEASIBILITY.md. Both run against real Postgres and Redis: on SQLite the
+# Postgres-only guards skip silently and every cache path fails open, so a green
+# run there proves much less than it looks.
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  config-guards:
+    name: Release hardening guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static assertions on what we ship
+        run: bash scripts/check_release_hardening.sh
+
+  backend-source:
+    name: Backend suite (source)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: pointy
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install backend
+        run: pip install --editable backend
+      - name: Run suite
+        working-directory: backend
+        env:
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/pointy
+          REDIS_URL: redis://127.0.0.1:6379/0
+          POINTY_REQUIRE_POSTGRES: "1"
+          DJANGO_SECRET_KEY: ci-secret-key-not-used-for-anything-real
+          DJANGO_DEBUG: "false"
+        run: python manage.py test apps
+
+  backend-compiled:
+    name: Backend suite (compiled image)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: pointy
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the compiled test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          target: test
+          load: true
+          tags: pointy-backend-test:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Prove the image carries no readable source
+        run: |
+          set -euo pipefail
+          leftover=$(docker run --rm --entrypoint python pointy-backend-test:ci -c "
+          from pathlib import Path
+          root = Path('/app/backend')
+          bad = [str(p.relative_to(root)) for p in root.rglob('*.py')
+                 if p.name not in {'__init__.py', 'manage.py'}
+                 and 'docker' not in p.relative_to(root).parts
+                 and not (p.name == 'tests.py' or p.name.startswith('test_') or 'tests' in p.parts)]
+          print('\n'.join(bad))")
+          if [ -n "$leftover" ]; then
+            echo \"::error::readable Python survived compilation:\"; echo \"$leftover\"; exit 1
+          fi
+          echo "no readable application source in the image"
+      - name: Run suite against the compiled image
+        run: |
+          docker run --rm --network host \
+            -e DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/pointy \
+            -e REDIS_URL=redis://127.0.0.1:6379/0 \
+            -e POINTY_REQUIRE_POSTGRES=1 \
+            -e DJANGO_SECRET_KEY=ci-secret-key-not-used-for-anything-real \
+            -e DJANGO_DEBUG=false \
+            pointy-backend-test:ci python manage.py test apps

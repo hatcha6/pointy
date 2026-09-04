@@ -26818,6 +26818,180 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'اقترح على شاشة المشتريات الأصناف والكميات التي يشتريها المحل عادة من المورد المختار.'**
   String get enablePurchaseSuggestionsSubtitle;
+
+  /// No description provided for @companionSheetTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كاميرا الجوال'**
+  String get companionSheetTitle;
+
+  /// No description provided for @companionSheetSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح الرمز بكاميرا هاتفك ليصبح ماسحًا للرموز وكاميرا للمنتجات.'**
+  String get companionSheetSubtitle;
+
+  /// No description provided for @companionScanQrInstruction.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح كاميرا الهاتف ووجّهها إلى الرمز، ثم افتح الرابط الذي يظهر.'**
+  String get companionScanQrInstruction;
+
+  /// No description provided for @companionCodeFallbackLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أو أدخل هذا الرمز في صفحة الكاميرا'**
+  String get companionCodeFallbackLabel;
+
+  /// No description provided for @companionCodeExpiresIn.
+  ///
+  /// In ar, this message translates to:
+  /// **'ينتهي الرمز خلال {seconds} ثانية'**
+  String companionCodeExpiresIn(int seconds);
+
+  /// No description provided for @companionCodeExpired.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت صلاحية الرمز'**
+  String get companionCodeExpired;
+
+  /// No description provided for @companionNewCode.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز جديد'**
+  String get companionNewCode;
+
+  /// No description provided for @companionPairingFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إنشاء رمز الاقتران'**
+  String get companionPairingFailed;
+
+  /// No description provided for @companionPairedDevicesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الهواتف المقترنة'**
+  String get companionPairedDevicesTitle;
+
+  /// No description provided for @companionNoPairedDevices.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد هاتف مقترن بعد'**
+  String get companionNoPairedDevices;
+
+  /// No description provided for @companionDeviceLastSeen.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر نشاط: {time}'**
+  String companionDeviceLastSeen(String time);
+
+  /// No description provided for @companionUnpair.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الاقتران'**
+  String get companionUnpair;
+
+  /// No description provided for @companionPause.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف مؤقت'**
+  String get companionPause;
+
+  /// No description provided for @companionResume.
+  ///
+  /// In ar, this message translates to:
+  /// **'استئناف'**
+  String get companionResume;
+
+  /// No description provided for @companionPausedNotice.
+  ///
+  /// In ar, this message translates to:
+  /// **'الهاتف موقوف مؤقتًا — لن تصل عمليات المسح.'**
+  String get companionPausedNotice;
+
+  /// No description provided for @companionStatusConnected.
+  ///
+  /// In ar, this message translates to:
+  /// **'الهاتف متصل'**
+  String get companionStatusConnected;
+
+  /// No description provided for @companionStatusConnecting.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ الاتصال بالهاتف…'**
+  String get companionStatusConnecting;
+
+  /// No description provided for @companionStatusPolling.
+  ///
+  /// In ar, this message translates to:
+  /// **'الهاتف متصل (وضع بطيء)'**
+  String get companionStatusPolling;
+
+  /// No description provided for @companionStatusIdle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد هاتف مقترن'**
+  String get companionStatusIdle;
+
+  /// No description provided for @companionOpenSheetTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'كاميرا الجوال'**
+  String get companionOpenSheetTooltip;
+
+  /// No description provided for @companionScanReceived.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصل رمز من الهاتف'**
+  String get companionScanReceived;
+
+  /// No description provided for @companionPhotoReceived.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصلت صورة من الهاتف'**
+  String get companionPhotoReceived;
+
+  /// No description provided for @companionUsePhoneCamera.
+  ///
+  /// In ar, this message translates to:
+  /// **'التقط بالهاتف'**
+  String get companionUsePhoneCamera;
+
+  /// No description provided for @companionCaptureRequested.
+  ///
+  /// In ar, this message translates to:
+  /// **'اطلب الصورة من الهاتف المقترن'**
+  String get companionCaptureRequested;
+
+  /// No description provided for @companionCaptureWaiting.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار الصورة من الهاتف…'**
+  String get companionCaptureWaiting;
+
+  /// No description provided for @companionCaptureCancel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الطلب'**
+  String get companionCaptureCancel;
+
+  /// No description provided for @companionCaptureFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر طلب الصورة من الهاتف'**
+  String get companionCaptureFailed;
+
+  /// No description provided for @companionCapturePromptProduct.
+  ///
+  /// In ar, this message translates to:
+  /// **'صوّر: {name}'**
+  String companionCapturePromptProduct(String name);
+
+  /// No description provided for @companionPairFirst.
+  ///
+  /// In ar, this message translates to:
+  /// **'اقترن بهاتف أولًا لاستخدام الكاميرا'**
+  String get companionPairFirst;
 }
 
 class _AppLocalizationsDelegate

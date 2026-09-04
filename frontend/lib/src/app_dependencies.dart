@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show ValueNotifier, kIsWeb;
 
 import 'core/analytics_engine.dart';
 import 'core/result.dart';
@@ -15,6 +15,7 @@ import 'data/repositories/business_alert_repository.dart';
 import 'data/repositories/attendance_repository.dart';
 import 'data/repositories/migration_repository.dart';
 import 'data/repositories/catalog_repository.dart';
+import 'data/repositories/companion_repository.dart';
 import 'data/repositories/contact_repository.dart';
 import 'data/repositories/dashboard_repository.dart';
 import 'data/repositories/device_settings_repository.dart';
@@ -48,6 +49,7 @@ import 'data/services/connection_status_controller.dart';
 import 'data/services/pos_api_service.dart';
 import 'data/services/pos_http_client.dart';
 import 'features/auth/view_models/auth_view_model.dart';
+import 'features/companion/companion_bridge.dart';
 import 'features/activity_log/view_models/activity_log_view_model.dart';
 import 'features/reports/view_models/reports_view_model.dart';
 import 'features/contacts/view_models/contact_management_view_model.dart';
@@ -113,6 +115,7 @@ class PointyAppDependencies {
     deviceSettingsRepository = const DeviceSettingsRepository();
     themeController = ThemeController();
     priceCheckerModeController = PriceCheckerModeController();
+    companionRepository = CompanionRepository(service);
     businessAlertRepository = BusinessAlertRepository(service);
     discountRepository = DiscountRepository(service);
     employeeRepository = EmployeeRepository(service);
@@ -186,6 +189,19 @@ class PointyAppDependencies {
   late final DeviceSettingsRepository deviceSettingsRepository;
   late final ThemeController themeController;
   late final PriceCheckerModeController priceCheckerModeController;
+  late final CompanionRepository companionRepository;
+
+  /// The link to a phone lending this till its camera. Created on sign-in
+  /// (its endpoints need a session) and torn down on sign-out, because a
+  /// companion is scoped to the shift that paired it.
+  ///
+  /// A notifier rather than a plain field: it appears asynchronously (the till
+  /// key is read from storage first), so the widget that publishes it to the
+  /// screen tree has to be told when, not guess from the auth transition.
+  final ValueNotifier<CompanionBridge?> companionBridgeListenable =
+      ValueNotifier(null);
+
+  CompanionBridge? get companionBridge => companionBridgeListenable.value;
   late final BusinessAlertRepository businessAlertRepository;
   late final DiscountRepository discountRepository;
   late final EmployeeRepository employeeRepository;
@@ -423,6 +439,7 @@ class PointyAppDependencies {
           attributes: {'role': currentUser.role.toJson()},
         ),
       );
+      unawaited(_startCompanionBridge());
       posViewModel.loadCurrentRegisterSession();
       posViewModel.loadCheckoutSettings();
       unawaited(posViewModel.restorePersistedSessions('${currentUser.id}'));
@@ -440,8 +457,31 @@ class PointyAppDependencies {
     if (authViewModel.status == AuthStatus.unauthenticated) {
       _lastAuthenticatedUserId = null;
       analyticsEngine.setCurrentUser(null);
+      _stopCompanionBridge();
       _disposeSessionViewModels();
     }
+  }
+
+  Future<void> _startCompanionBridge() async {
+    if (companionBridgeListenable.value != null) return;
+    // The till key is this install's own stable id — the same one the
+    // connection profile keeps — so a phone stays paired across restarts,
+    // updates and shift changes rather than to whoever happens to be signed in.
+    final tillKey = await const SharedPreferencesConnectionProfileStorage()
+        .loadOrCreateDeviceId();
+    if (authViewModel.status != AuthStatus.authenticated) return;
+    final bridge = CompanionBridge(
+      repository: companionRepository,
+      tillKey: tillKey,
+    );
+    companionBridgeListenable.value = bridge;
+    await bridge.start();
+  }
+
+  void _stopCompanionBridge() {
+    final bridge = companionBridgeListenable.value;
+    companionBridgeListenable.value = null;
+    bridge?.dispose();
   }
 
   Future<void> _refreshSessionViewModels() async {
@@ -477,6 +517,8 @@ class PointyAppDependencies {
     connectionCoordinator.dispose();
     analyticsEngine.dispose();
     themeController.dispose();
+    _stopCompanionBridge();
+    companionBridgeListenable.dispose();
     priceCheckerModeController.removeListener(_handlePriceCheckerModeChanged);
     priceCheckerModeController.dispose();
     authViewModel.dispose();

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0b111c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>كاميرا دفتر</title>
+<link rel="stylesheet" href="./app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <span class="mark" aria-hidden="true">
+    <svg viewBox="0 0 24 24"><path d="M9 3 7.2 5H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9Zm3 5.5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>
+  </span>
+  <span class="names">
+    <h1 id="shop-name">دفتر</h1>
+    <p id="till-name">كاميرا مساعدة</p>
+  </span>
+  <span class="live" id="live" hidden><span class="dot"></span><span id="live-label">متصل</span></span>
+</header>
+
+<main>
+  <!-- Unpaired: the token is missing or dead. Pairing normally happens from the
+       QR fragment without this screen ever being seen. -->
+  <section id="screen-pair" class="pair" hidden>
+    <h2>أدخل رمز الاقتران</h2>
+    <p style="margin:0;color:var(--muted);font-size:.9rem">الرمز معروض على شاشة الصندوق</p>
+    <input id="code-input" inputmode="latin" autocomplete="off" autocapitalize="characters"
+           spellcheck="false" maxlength="12" aria-label="رمز الاقتران" placeholder="––––––––––">
+    <button id="pair-submit" type="button">اقتران</button>
+    <div id="pair-error" class="banner warn" hidden></div>
+  </section>
+
+  <!-- Paired: the working screen. -->
+  <section id="screen-camera" hidden style="display:contents">
+    <div class="modes" id="modes" data-mode="scan" role="group" aria-label="الوضع">
+      <span class="thumb" aria-hidden="true"></span>
+      <button type="button" id="mode-scan" aria-pressed="true">مسح رمز</button>
+      <button type="button" id="mode-photo" aria-pressed="false">صورة</button>
+    </div>
+
+    <div class="stage" id="stage">
+      <div id="ask" class="banner ask" hidden>
+        <strong>الصندوق يطلب صورة</strong>
+        <span id="ask-prompt"></span>
+      </div>
+
+      <div id="paused" class="banner warn" hidden>
+        هذا الهاتف موقوف مؤقتًا من الصندوق — لن تصل عمليات المسح.
+      </div>
+
+      <div class="viewfinder" id="viewfinder">
+        <span class="b1"></span><span class="b2"></span>
+        <span class="glyph" id="viewfinder-glyph">
+          <svg viewBox="0 0 24 24"><path d="M3 3h7v7H3V3Zm2 2v3h3V5H5Zm9-2h7v7h-7V3Zm2 2v3h3V5h-3ZM3 14h7v7H3v-7Zm2 2v3h3v-3H5Zm9-2h3v3h-3v-3Zm5 0h2v2h-2v-2Zm-5 5h3v2h-3v-2Zm5 0h2v2h-2v-2Zm0-3h2v2h-2v-2Z"/></svg>
+        </span>
+      </div>
+
+      <h2 id="stage-title">وجّه الكاميرا نحو الرمز</h2>
+      <p id="stage-hint">اضغط الزر، صوّر الرمز، وسيصل إلى الصندوق فورًا</p>
+
+      <div id="result" class="result" hidden>
+        <div class="head">
+          <svg id="result-icon" viewBox="0 0 24 24"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z"/></svg>
+          <span id="result-label"></span>
+        </div>
+        <div class="value" id="result-value"></div>
+      </div>
+    </div>
+
+    <div class="shutter-wrap">
+      <button class="shutter" id="shutter" type="button" aria-label="التقاط"></button>
+      <span class="shutter-hint" id="shutter-hint">اضغط للالتقاط</span>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <button class="link" id="leave" type="button" hidden>إنهاء الاقتران</button>
+</footer>
+
+<div class="flash" id="flash" aria-hidden="true"></div>
+
+<!-- The camera input. Kept in the DOM (not created per tap) so the first tap
+     opens the camera instead of paying for a layout. `capture` asks Android for
+     the camera directly; iOS shows its own sheet, which is fine. -->
+<input id="camera" type="file" accept="image/*" capture="environment" hidden>
+
+<script src="./vendor/jsQR.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

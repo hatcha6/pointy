@@ -410,11 +410,13 @@ class PosApiSession {
   Stream<SseEvent> openEventStream(
     String path, {
     Object? body,
+    String method = 'POST',
+    Map<String, String>? query,
     Duration connectTimeout = const Duration(seconds: 30),
     Duration idleTimeout = const Duration(seconds: 90),
   }) async* {
-    final request = http.Request('POST', uri(path));
-    request.headers.addAll(headers(includeCsrf: true));
+    final request = http.Request(method, uri(path, queryParameters: query));
+    request.headers.addAll(headers(includeCsrf: method != 'GET'));
     if (body != null) {
       request.body = jsonEncode(body);
     }
@@ -426,7 +428,7 @@ class PosApiSession {
     var streamedBytes = 0;
     void record({int? statusCode, String errorMessage = ''}) {
       _recordPerformance(
-        method: 'POST',
+        method: method,
         path: path,
         duration: stopwatch.elapsed,
         statusCode: statusCode,

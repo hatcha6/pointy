@@ -138,7 +138,13 @@ class MoneyDateRegistryTests(TestCase):
         """The report that mixes sales, wages and expenses must not date them
         three different ways — the bug was a period that included a wage and
         excluded the sale that paid it."""
-        source = (APPS_ROOT / "reports" / "builders" / "profit.py").read_text()
+        profit_source = APPS_ROOT / "reports" / "builders" / "profit.py"
+        if not profit_source.exists():
+            # Compiled build: there is no source to read. This guard is enforced
+            # by the source-suite job in .github/workflows/tests.yml, which runs
+            # on the same commit — skipping here does not weaken it.
+            self.skipTest("static source guard; enforced by the source test run")
+        source = profit_source.read_text()
         body = source[source.index("def profit_costs(") :]
         body = body[: body.index("\ndef ", 1)]
 

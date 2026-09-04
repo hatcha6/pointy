@@ -13,6 +13,9 @@ import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
+import '../../companion/companion_scan_listener.dart';
+import '../../companion/views/companion_status_button.dart';
+import '../../companion/companion_scope.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
@@ -69,6 +72,14 @@ class PosScreen extends StatelessWidget {
             leading: const PointyNavigationMenuButton(),
             title: Text(l10n.appTitle),
             actions: [
+              // Always present, not only once a phone is paired: in ambient
+              // mode a paired phone can put a scan straight into the open
+              // cart, so the cashier needs to see at a glance that something
+              // is listening — and reach the pause switch in one tap.
+              CompanionStatusButton(
+                bridge: CompanionScope.bridgeOf(context),
+                repository: CompanionScope.maybeOf(context)?.repository,
+              ),
               // Discoverable keyboard-shortcuts cheat sheet — so cashiers who
               // don't use the till shortcuts can still find and learn them.
               IconButton(
@@ -584,69 +595,80 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
     final viewModel = widget.viewModel;
     final capabilities = widget.capabilities;
 
-    return BarcodeScanListener(
-      enabled:
-          capabilities.canCheckoutSale &&
-          !viewModel.isCheckingOut &&
-          !viewModel.isResolvingBarcode,
-      onBarcodeScanned: (barcode) =>
-          viewModel.addVariantByBarcode(barcode, source: 'hardware_scanner'),
-      // A scan only ever adds its own product; it never touches a line's
-      // quantity. Arrow keys flip the active line's unit of measure (the
-      // legacy shortcut, kept alongside the F-keys below).
-      onArrowKey: (key) => _cycleActiveLineUnit(key),
-      // Legacy till function keys (muscle memory from older POS systems):
-      // F1 hold-and-open-new-invoice, F2 cycle the active line's unit,
-      // F4 delete the active line. Dispatched through the global key handler
-      // above — NOT focus-tree Shortcuts, which silently die whenever focus
-      // parks outside the workspace (an app-bar tap, a closed dialog, or
-      // nothing focused at all). Same for the Ctrl/Cmd+Enter checkout chord.
-      onFunctionKey: (key) {
-        if (key == LogicalKeyboardKey.f1) {
-          _newInvoice();
-          return true;
-        }
-        if (key == LogicalKeyboardKey.f2) {
-          return _cycleActiveLineUnit();
-        }
-        if (key == LogicalKeyboardKey.f4) {
-          _deleteActiveLine();
-          return true;
-        }
-        return false;
-      },
-      // Page Down / Page Up cycle the held invoices, like F1 opens a new one —
-      // global (not focus-tree) so they work from anywhere on the POS.
-      onPageKey: (key) =>
-          _cycleHeldInvoice(forward: key == LogicalKeyboardKey.pageDown),
-      onCommandEnter: _requestCheckout,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.hasBoundedWidth
-              ? constraints.maxWidth
-              : MediaQuery.sizeOf(context).width;
-          if (AppBreakpoints.usesTwoPane(width)) {
-            return TwoPaneLayout(
-              minPrimaryWidth: 390,
-              primaryPane: PosCatalogPane(
-                viewModel: viewModel,
-                capabilities: capabilities,
-              ),
-              secondaryPane: PosCartPane(
-                viewModel: viewModel,
-                contactRepository: widget.contactRepository,
-                capabilities: capabilities,
-                checkoutController: _checkoutController,
-              ),
-            );
-          }
+    final scanEnabled =
+        capabilities.canCheckoutSale &&
+        !viewModel.isCheckingOut &&
+        !viewModel.isResolvingBarcode;
 
-          return _CompactPosWorkspace(
-            viewModel: viewModel,
-            contactRepository: widget.contactRepository,
-            capabilities: capabilities,
-          );
+    // A paired phone is treated as one more wedge scanner on this till: same
+    // gate, same handler, so it adds products exactly as the counter scanner
+    // does — and the source tag keeps the two apart in telemetry.
+    return CompanionScanListener(
+      bridge: CompanionScope.bridgeOf(context),
+      enabled: scanEnabled,
+      onScan: (barcode) =>
+          viewModel.addVariantByBarcode(barcode, source: 'companion_camera'),
+      child: BarcodeScanListener(
+        enabled: scanEnabled,
+        onBarcodeScanned: (barcode) =>
+            viewModel.addVariantByBarcode(barcode, source: 'hardware_scanner'),
+        // A scan only ever adds its own product; it never touches a line's
+        // quantity. Arrow keys flip the active line's unit of measure (the
+        // legacy shortcut, kept alongside the F-keys below).
+        onArrowKey: (key) => _cycleActiveLineUnit(key),
+        // Legacy till function keys (muscle memory from older POS systems):
+        // F1 hold-and-open-new-invoice, F2 cycle the active line's unit,
+        // F4 delete the active line. Dispatched through the global key handler
+        // above — NOT focus-tree Shortcuts, which silently die whenever focus
+        // parks outside the workspace (an app-bar tap, a closed dialog, or
+        // nothing focused at all). Same for the Ctrl/Cmd+Enter checkout chord.
+        onFunctionKey: (key) {
+          if (key == LogicalKeyboardKey.f1) {
+            _newInvoice();
+            return true;
+          }
+          if (key == LogicalKeyboardKey.f2) {
+            return _cycleActiveLineUnit();
+          }
+          if (key == LogicalKeyboardKey.f4) {
+            _deleteActiveLine();
+            return true;
+          }
+          return false;
         },
+        // Page Down / Page Up cycle the held invoices, like F1 opens a new one —
+        // global (not focus-tree) so they work from anywhere on the POS.
+        onPageKey: (key) =>
+            _cycleHeldInvoice(forward: key == LogicalKeyboardKey.pageDown),
+        onCommandEnter: _requestCheckout,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.hasBoundedWidth
+                ? constraints.maxWidth
+                : MediaQuery.sizeOf(context).width;
+            if (AppBreakpoints.usesTwoPane(width)) {
+              return TwoPaneLayout(
+                minPrimaryWidth: 390,
+                primaryPane: PosCatalogPane(
+                  viewModel: viewModel,
+                  capabilities: capabilities,
+                ),
+                secondaryPane: PosCartPane(
+                  viewModel: viewModel,
+                  contactRepository: widget.contactRepository,
+                  capabilities: capabilities,
+                  checkoutController: _checkoutController,
+                ),
+              );
+            }
+
+            return _CompactPosWorkspace(
+              viewModel: viewModel,
+              contactRepository: widget.contactRepository,
+              capabilities: capabilities,
+            );
+          },
+        ),
       ),
     );
   }

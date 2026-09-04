@@ -43,6 +43,8 @@ env = environ.Env(
     POINTY_DISCOVERY_TRUST_PROXY_HEADERS=(bool, False),
     POINTY_ALLOW_PRIVATE_HOSTS=(bool, False),
     POINTY_REQUIRE_LICENSE=(bool, False),
+    POINTY_ENABLE_DJANGO_ADMIN=(bool, False),
+    POINTY_ENABLE_API_DOCS=(bool, False),
     POINTY_PRICE_CHECKER_AUTOSTART=(bool, False),
     POINTY_PRICE_CHECKER_TCP_ENABLED=(bool, True),
     POINTY_PRICE_CHECKER_TCP_PORT=(int, 9101),
@@ -86,6 +88,13 @@ POINTY_ALLOW_PRIVATE_HOSTS = env("POINTY_ALLOW_PRIVATE_HOSTS")
 # On-prem only: refuse to serve the API until the installation is licensed
 # (enrolled). Off by default, so development and tests are unaffected.
 POINTY_REQUIRE_LICENSE = env("POINTY_REQUIRE_LICENSE")
+
+# The Django admin is a browsable map of every model and field plus a bulk data
+# export, and on-prem it would sit on the shop LAN. Off unless explicitly asked
+# for: developers enable it in backend/.env, deployments leave it off.
+# Same reasoning for the generated API schema/Swagger UI.
+POINTY_ENABLE_DJANGO_ADMIN = env("POINTY_ENABLE_DJANGO_ADMIN")
+POINTY_ENABLE_API_DOCS = env("POINTY_ENABLE_API_DOCS")
 if POINTY_ALLOW_PRIVATE_HOSTS:
     POINTY_LAN_ALLOWED_HOST_NAMES = sorted(
         {host.lower() for host in ALLOWED_HOSTS} | {"localhost", "127.0.0.1", "backend"}
@@ -132,6 +141,7 @@ INSTALLED_APPS = [
     "apps.holidays",
     "apps.fx",
     "apps.clients",
+    "apps.companion",
 ]
 
 MIDDLEWARE = [
@@ -521,6 +531,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.warm_dashboard_cache",
         "schedule": timedelta(minutes=POINTY_DASHBOARD_WARM_INTERVAL_MINUTES),
     },
+    # The companion inbox is a replay buffer for a dropped stream, so it is
+    # pruned rather than kept: a busy shop scans all day and every scan is a row.
+    "companion.purge-expired": {
+        "task": "companion.purge_expired",
+        "schedule": crontab(minute=17),
+    },
     "fraud.sync-suspected-fraud-findings": {
         "task": "fraud.sync_suspected_fraud_findings",
         "schedule": timedelta(minutes=POINTY_FRAUD_DETECTION_INTERVAL_MINUTES),
@@ -733,8 +749,59 @@ POINTY_ATTACHMENT_ALLOWED_TARGETS = env.list(
         "core.shopsettings",
         "operations.job",
         "customers.asset",
+        # A free capture from a paired phone is parked on the device that took
+        # it until the till files it somewhere; the device is its owner.
+        "companion.companiondevice",
+        "companion.companioncapturerequest",
     ],
 )
+# --- Companion camera -------------------------------------------------------
+# A phone paired to a till over the shop LAN: it scans 2-D codes the shop's
+# laser scanners cannot read, and photographs products and invoices straight
+# into the till. See apps.companion and COMPANION_CAMERA_PLAN.md.
+#
+# Short enough that a QR photographed off the till screen is useless by the time
+# anyone could act on it, long enough to walk over and scan it.
+POINTY_COMPANION_PAIRING_TTL_SECONDS = env.int(
+    "POINTY_COMPANION_PAIRING_TTL_SECONDS", default=120
+)
+# A paired phone is a tool for a shift. It also dies when the pairing user's
+# register session closes; 0 disables the idle half.
+POINTY_COMPANION_IDLE_EXPIRY_HOURS = env.int(
+    "POINTY_COMPANION_IDLE_EXPIRY_HOURS", default=24
+)
+POINTY_COMPANION_CAPTURE_TTL_SECONDS = env.int(
+    "POINTY_COMPANION_CAPTURE_TTL_SECONDS", default=600
+)
+# The inbox is a replay buffer for a dropped stream, not an archive.
+POINTY_COMPANION_EVENT_RETENTION_HOURS = env.int(
+    "POINTY_COMPANION_EVENT_RETENTION_HOURS", default=48
+)
+POINTY_COMPANION_MAX_SCAN_LENGTH = env.int(
+    "POINTY_COMPANION_MAX_SCAN_LENGTH", default=4096
+)
+# Stream pacing. The poll interval is what a cashier feels as scan latency; the
+# max age bounds how long any one connection, thread or socket can live.
+POINTY_COMPANION_STREAM_POLL_SECONDS = env.float(
+    "POINTY_COMPANION_STREAM_POLL_SECONDS", default=0.25
+)
+POINTY_COMPANION_STREAM_HEARTBEAT_SECONDS = env.float(
+    "POINTY_COMPANION_STREAM_HEARTBEAT_SECONDS", default=15.0
+)
+POINTY_COMPANION_STREAM_MAX_AGE_SECONDS = env.float(
+    "POINTY_COMPANION_STREAM_MAX_AGE_SECONDS", default=3600.0
+)
+# However stale or wrong the Redis hint is, read the table at least this often.
+# The hint is a latency optimisation; correctness comes from Postgres, and this
+# is what guarantees a cache in any state cannot make a till go deaf.
+POINTY_COMPANION_STREAM_RECONCILE_SECONDS = env.float(
+    "POINTY_COMPANION_STREAM_RECONCILE_SECONDS", default=5.0
+)
+# Overrides the origin encoded in the pairing QR. Empty (the default) means
+# "whatever address the till itself just reached us on", which is the one
+# address proven reachable at the moment the QR is drawn.
+POINTY_COMPANION_PUBLIC_ORIGIN = env("POINTY_COMPANION_PUBLIC_ORIGIN", default="")
+
 POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYTES = env("POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYTES")
 # Product image search is relay-hosted: the relay holds the Serper.dev key and
 # gates on the shop's remote-access entitlement, so no per-shop search key or
@@ -926,6 +993,16 @@ REST_FRAMEWORK = {
             None
             if TESTING
             else env("POINTY_ANALYTICS_INGEST_THROTTLE_RATE", default="120/min")
+        ),
+        # The pairing code is guessable-shaped (10 chars, typable), so its
+        # claim endpoint gets a tight per-IP bucket. Uploads get a separate,
+        # generous one keyed per phone: a shop photographing a delivery is
+        # normal, a phone in a retry loop filling the disk is not.
+        "companion_pair": (
+            None if TESTING else env("POINTY_COMPANION_PAIR_THROTTLE_RATE", default="10/min")
+        ),
+        "companion_upload": (
+            None if TESTING else env("POINTY_COMPANION_UPLOAD_THROTTLE_RATE", default="120/min")
         ),
         "authenticated_ceiling": (
             None

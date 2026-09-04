@@ -9,6 +9,7 @@ import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../core/result.dart';
 import '../../../data/models/ai_chat.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
@@ -21,6 +22,8 @@ import '../../../shared/shell/shell.dart';
 import '../ui/ai_surface_action.dart';
 import '../ui/ai_surface_host.dart';
 import '../ui/ai_surface_view.dart';
+import '../../companion/companion_scope.dart';
+import '../../companion/views/companion_capture_sheet.dart';
 import '../view_models/ai_chat_view_model.dart';
 import '../voice_recording.dart';
 import 'voice_recorder_bar.dart';
@@ -387,7 +390,39 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         await viewModel.addImage(fromCamera: true);
       case _AttachChoice.file:
         await viewModel.addFiles();
+      case _AttachChoice.phone:
+        await _attachFromPhone();
     }
+  }
+
+  /// The reason the companion camera exists on a desktop till: the assistant is
+  /// the most image-hungry thing in the app (invoice intake, "what is this
+  /// product"), and a Windows till has no camera at all. This asks the paired
+  /// phone for a photo and drops it straight into the composer.
+  Future<void> _attachFromPhone() async {
+    final l10n = AppLocalizations.of(context)!;
+    final repository = CompanionScope.maybeOf(context)?.repository;
+    if (repository == null) return;
+    final attachmentId = await showCompanionCaptureSheet(
+      context,
+      prompt: l10n.companionCaptureRequested,
+    );
+    if (attachmentId == null || !mounted) return;
+
+    final bytes = await repository.downloadCapture(attachmentId);
+    if (!mounted) return;
+    switch (bytes) {
+      case Ok(value: final data):
+        await widget.viewModel.addImageBytes(data);
+      case Error():
+        _showAttachError(l10n.companionCaptureFailed);
+    }
+  }
+
+  void _showAttachError(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _openUsageSheet() async {
@@ -3300,7 +3335,7 @@ class _FileChip extends StatelessWidget {
   }
 }
 
-enum _AttachChoice { gallery, camera, file }
+enum _AttachChoice { gallery, camera, phone, file }
 
 class _AttachSheet extends StatelessWidget {
   const _AttachSheet({required this.canAddImage});
@@ -3326,6 +3361,12 @@ class _AttachSheet extends StatelessWidget {
             title: Text(l10n.aiAssistantAttachCamera),
             enabled: canAddImage,
             onTap: () => Navigator.of(context).pop(_AttachChoice.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.add_a_photo_outlined),
+            title: Text(l10n.companionUsePhoneCamera),
+            enabled: canAddImage,
+            onTap: () => Navigator.of(context).pop(_AttachChoice.phone),
           ),
           ListTile(
             leading: const Icon(Icons.attach_file),

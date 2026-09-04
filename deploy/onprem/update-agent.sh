@@ -142,6 +142,51 @@ report_status() { # report_status <current_version> <status> <error>
     "${RELAY_URL}/v1/agent/status" >/dev/null 2>&1 || true
 }
 
+# ---------------------------------------------------------------------------
+# Release signature verification.
+#
+# The sha256 in the manifest proves the download was not corrupted; it proves
+# nothing about WHO produced it, because the same relay serves both. A relay
+# compromise or a leaked agent token is otherwise remote code execution on every
+# shop, with no second gate. The signature is that second gate: it is made with a
+# key that never touches the relay.
+#
+# We sign the 64-char sha256 hex, not the multi-GB zip — same binding, trivial
+# verification cost. Empty key = verification disabled (the pre-signing state);
+# once POINTY_RELEASE_PUBKEY is filled in, an unsigned or badly-signed bundle is
+# REFUSED. See deploy/onprem/SIGNING.md.
+# ---------------------------------------------------------------------------
+POINTY_RELEASE_PUBKEY="${POINTY_RELEASE_PUBKEY:-}"
+
+verify_bundle_signature() {
+  local digest="$1" signature_b64="$2" key sig msg rc
+
+  if [ -z "$POINTY_RELEASE_PUBKEY" ]; then
+    pu_log "WARNING: no release public key configured — bundle authenticity NOT verified."
+    return 0
+  fi
+  command -v openssl >/dev/null 2>&1 \
+    || fail "openssl is required to verify the release signature but is not installed"
+  [ -n "$signature_b64" ] \
+    || fail "bundle carries no signature but a release key is configured — refusing to apply"
+
+  key="$(mktemp)"; sig="$(mktemp)"; msg="$(mktemp)"
+  printf '%s\n' "$POINTY_RELEASE_PUBKEY" >"$key"
+  printf '%s' "$digest" >"$msg"
+  if ! printf '%s' "$signature_b64" | base64 -d >"$sig" 2>/dev/null; then
+    rm -f "$key" "$sig" "$msg"
+    fail "release signature is not valid base64 — refusing to apply"
+  fi
+  openssl pkeyutl -verify -pubin -inkey "$key" -rawin -in "$msg" -sigfile "$sig" >/dev/null 2>&1
+  rc=$?
+  rm -f "$key" "$sig" "$msg"
+  if [ "$rc" -ne 0 ]; then
+    return 1
+  fi
+  pu_log "release signature verified"
+  return 0
+}
+
 # 1. Ask the relay what to run.
 MANIFEST_FILE="$(mktemp)"
 if ! curl -fsS -H "$auth_header" "${RELAY_URL}/v1/agent/manifest" -o "$MANIFEST_FILE"; then
@@ -153,6 +198,7 @@ DIRECTIVE="$(jget "$MANIFEST_FILE" .directive)"
 ASSIGNED="$(jget "$MANIFEST_FILE" .assigned_version)"
 BUNDLE_PATH="$(jget "$MANIFEST_FILE" .bundle.path)"
 BUNDLE_SHA="$(jget "$MANIFEST_FILE" .bundle.sha256)"
+BUNDLE_SIG="$(jget "$MANIFEST_FILE" .bundle.signature)"
 rm -f "$MANIFEST_FILE"
 
 if [ "$DIRECTIVE" != "apply" ] || [ -z "$ASSIGNED" ] || [ "$ASSIGNED" = "$CURRENT_VERSION" ]; then
@@ -186,6 +232,11 @@ ACTUAL_SHA="$(sha256_of "${STAGING}/bundle.zip")"
 if [ -n "$BUNDLE_SHA" ] && [ "$ACTUAL_SHA" != "$BUNDLE_SHA" ]; then
   report_status "$CURRENT_VERSION" "failed" "sha256 mismatch"
   fail "sha256 mismatch (want ${BUNDLE_SHA}, got ${ACTUAL_SHA})"
+fi
+# Authenticity, not just integrity — checked BEFORE a single byte is unpacked.
+if ! verify_bundle_signature "$ACTUAL_SHA" "$BUNDLE_SIG"; then
+  report_status "$CURRENT_VERSION" "failed" "release signature invalid"
+  fail "release signature INVALID for ${ASSIGNED} — refusing to apply"
 fi
 
 pu_stage_bundle "${STAGING}/bundle.zip" || {

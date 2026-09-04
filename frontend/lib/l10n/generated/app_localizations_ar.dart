@@ -15487,4 +15487,100 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get enablePurchaseSuggestionsSubtitle =>
       'اقترح على شاشة المشتريات الأصناف والكميات التي يشتريها المحل عادة من المورد المختار.';
+
+  @override
+  String get companionSheetTitle => 'كاميرا الجوال';
+
+  @override
+  String get companionSheetSubtitle =>
+      'امسح الرمز بكاميرا هاتفك ليصبح ماسحًا للرموز وكاميرا للمنتجات.';
+
+  @override
+  String get companionScanQrInstruction =>
+      'افتح كاميرا الهاتف ووجّهها إلى الرمز، ثم افتح الرابط الذي يظهر.';
+
+  @override
+  String get companionCodeFallbackLabel => 'أو أدخل هذا الرمز في صفحة الكاميرا';
+
+  @override
+  String companionCodeExpiresIn(int seconds) {
+    return 'ينتهي الرمز خلال $seconds ثانية';
+  }
+
+  @override
+  String get companionCodeExpired => 'انتهت صلاحية الرمز';
+
+  @override
+  String get companionNewCode => 'رمز جديد';
+
+  @override
+  String get companionPairingFailed => 'تعذّر إنشاء رمز الاقتران';
+
+  @override
+  String get companionPairedDevicesTitle => 'الهواتف المقترنة';
+
+  @override
+  String get companionNoPairedDevices => 'لا يوجد هاتف مقترن بعد';
+
+  @override
+  String companionDeviceLastSeen(String time) {
+    return 'آخر نشاط: $time';
+  }
+
+  @override
+  String get companionUnpair => 'إلغاء الاقتران';
+
+  @override
+  String get companionPause => 'إيقاف مؤقت';
+
+  @override
+  String get companionResume => 'استئناف';
+
+  @override
+  String get companionPausedNotice =>
+      'الهاتف موقوف مؤقتًا — لن تصل عمليات المسح.';
+
+  @override
+  String get companionStatusConnected => 'الهاتف متصل';
+
+  @override
+  String get companionStatusConnecting => 'جارٍ الاتصال بالهاتف…';
+
+  @override
+  String get companionStatusPolling => 'الهاتف متصل (وضع بطيء)';
+
+  @override
+  String get companionStatusIdle => 'لا يوجد هاتف مقترن';
+
+  @override
+  String get companionOpenSheetTooltip => 'كاميرا الجوال';
+
+  @override
+  String get companionScanReceived => 'وصل رمز من الهاتف';
+
+  @override
+  String get companionPhotoReceived => 'وصلت صورة من الهاتف';
+
+  @override
+  String get companionUsePhoneCamera => 'التقط بالهاتف';
+
+  @override
+  String get companionCaptureRequested => 'اطلب الصورة من الهاتف المقترن';
+
+  @override
+  String get companionCaptureWaiting => 'بانتظار الصورة من الهاتف…';
+
+  @override
+  String get companionCaptureCancel => 'إلغاء الطلب';
+
+  @override
+  String get companionCaptureFailed => 'تعذّر طلب الصورة من الهاتف';
+
+  @override
+  String companionCapturePromptProduct(String name) {
+    return 'صوّر: $name';
+  }
+
+  @override
+  String get companionPairFirst => 'اقترن بهاتف أولًا لاستخدام الكاميرا';
 }
