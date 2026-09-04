@@ -1,6 +1,6 @@
 # File-Based Data Migration — Refactor Plan
 
-Status: in progress. Supersedes the connection-based design described in
+Status: **shipped**. Supersedes the connection-based design described in
 `apps/migration` docstrings and `DISCOVERY.md`.
 
 ## Why
@@ -155,12 +155,24 @@ in `job_intake_wizard.dart`) and `PointyStageTimeline`.
 
 ## Phases
 
-| # | Phase | Scope |
-|---|---|---|
-| 0 | Deployment | Dockerfile, compose volume, settings, pyproject |
-| 1 | Demolition | Delete connection transports, discovery, credentials, `*_mssql` connectors; fold Fahd's mapping into one transport-agnostic connector |
-| 2 | Upload spine | `MigrationSource` upload fields, chunked resumable endpoints, staging store, purge + TTL sweep |
-| 3 | Preparation | `preparation/` package, `mdbtools` conversion, Fahd reconstruction moved server-side, auto-detection, stage tracking |
-| 4 | Analyze | Per-entity counts + date ranges before the user commits |
-| 5 | Frontend | Chunked uploader, `PointyStepRail`, `PointyStageTimeline`, the seven-step wizard, l10n, preview harness |
-| 6 | Tests + docs | Upload/resume/purge/detection/stage tests, rework the existing 21, update `DISCOVERY.md` and the on-site scripts |
+| # | Phase | Scope | |
+|---|---|---|---|
+| 0 | Deployment | Dockerfile (mdbtools in, the whole ODBC stack out), `pointy-migration-staging` volume, settings, pyproject | ✅ |
+| 1 | Demolition | Deleted the connection transports, SSRP discovery, credentials + vendor default-password fallback, `*_mssql` connectors; Fahd's mapping folded into `fahd_base.py` + one registered `fahd` connector | ✅ |
+| 2 | Upload spine | `MigrationSource` upload fields, chunked resumable endpoints against an fsync'd offset, staging store, purge on clean import + discard + TTL sweep | ✅ |
+| 3 | Preparation | `preparation/` package, mdbtools conversion table by table, Fahd's control-log replay moved into the app, two-phase auto-detection, stage tracking | ✅ |
+| 4 | Analyze | Per-entity counts + date ranges, via each connector's `analysis_tables` | ✅ |
+| 5 | Frontend | Chunked uploader (seeks on disk, adopts the server's offset), `PointyStepRail`, `PointyStageTimeline`, the seven-step wizard, 47 l10n keys, `?screen=board` preview | ✅ |
+| 6 | Tests + docs | 65 backend tests (was 43) incl. a full `.mdb` → detected → analyzed run; 17 frontend tests; `DISCOVERY.md` and the on-site scripts rewritten for file input | ✅ |
+
+## What is not covered
+
+* **`.bak` / `.mdf`.** Unreadable without a running SQL Server. A shop on
+  AboGhris (SQL Server) cannot self-serve until someone hands us a file we can
+  read; the mapping in `connectors/aboghris.py` is kept and will match the moment
+  one appears, because detection is by schema rather than by a dropdown.
+* **ZIP archives.** People will send them. The identifier recognises the header
+  and says so by name, which is a next step rather than a dead end, but nothing
+  unpacks one yet.
+* **Drag-and-drop.** The drop zone is click-to-pick; `desktop_drop` would make it
+  literal on Windows.

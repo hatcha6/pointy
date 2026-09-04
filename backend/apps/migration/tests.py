@@ -1845,3 +1845,212 @@ class RunStageTests(MigrationTestBase):
             {stage["key"] for stage in run.stages if stage["status"] == "done"} >= {"product"},
             True,
         )
+
+
+class AccessConversionTests(MigrationTestBase):
+    """The Access → SQLite conversion, including its subprocess plumbing.
+
+    mdbtools is stood in for rather than required: what belongs to us is the
+    pumping of bytes between two processes, the per-table progress, and what
+    happens when one table fails — not whether mdbtools reads Jet correctly.
+    The stand-in emits exactly what the real tools emit, so the pipe mechanics
+    under test are the real ones.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.bin = Path(self._tmpdir.name) / "bin"
+        self.bin.mkdir()
+
+    def _install_fake_mdbtools(self, *, tables, failing=()):
+        import os
+        import stat
+
+        table_list = "\\n".join(tables)
+        schema = "".join(
+            f'CREATE TABLE "{table}" (id INTEGER, label TEXT);\\n' for table in tables
+        )
+        fail_check = ""
+        if failing:
+            names = " ".join(f'"{name}"' for name in failing)
+            fail_check = (
+                f'for bad in {names}; do\n'
+                '  if [ "$TABLE" = "$bad" ]; then echo "boom" >&2; exit 3; fi\n'
+                'done\n'
+            )
+        scripts = {
+            "mdb-tables": f'#!/bin/sh\nprintf "{table_list}\\n"\n',
+            "mdb-schema": f'#!/bin/sh\nprintf \'{schema}\'\n',
+            # mdb-export's argv is (..., source, table): the table is last.
+            # `for last; do :; done` walks to it — `$12` would parse as `$1`
+            # followed by a literal 2, and mdb-export gets twelve arguments.
+            "mdb-export": (
+                "#!/bin/sh\n"
+                'for last; do :; done\nTABLE="$last"\n'
+                f"{fail_check}"
+                'printf "INSERT INTO \\"$TABLE\\" VALUES (1, \'قيمة ; مع فاصلة\');\\n"\n'
+                'printf "INSERT INTO \\"$TABLE\\" VALUES (2, \'two\');\\n"\n'
+            ),
+        }
+        for name, body in scripts.items():
+            path = self.bin / name
+            path.write_text(body)
+            path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        original = os.environ["PATH"]
+        os.environ["PATH"] = f"{self.bin}{os.pathsep}{original}"
+        self.addCleanup(lambda: os.environ.__setitem__("PATH", original))
+
+    def _convert(self, source_name="db.mdb"):
+        from .preparation import access
+
+        source = Path(self._tmpdir.name) / source_name
+        source.write_bytes(b"\x00\x01\x00\x00Standard Jet DB\x00" + b"\x00" * 64)
+        destination = Path(self._tmpdir.name) / "converted.sqlite"
+        return access.convert(source, destination), destination
+
+    def test_every_table_lands_with_its_rows(self):
+        self._install_fake_mdbtools(tables=["CAR_PART", "TASNEEF", "control"])
+
+        stats, destination = self._convert()
+
+        self.assertEqual(stats["tables_converted"], 3)
+        self.assertEqual(stats["tables_failed"], [])
+        self.assertGreater(stats["bytes_streamed"], 0)
+        connection = sqlite3.connect(destination)
+        try:
+            for table in ("CAR_PART", "TASNEEF", "control"):
+                count = connection.execute(
+                    f'SELECT COUNT(*) FROM "{table}"'
+                ).fetchone()[0]
+                self.assertEqual(count, 2, table)
+            # A value containing a quote and a semicolon survives, because
+            # sqlite3 parses the SQL rather than us splitting it on lines.
+            label = connection.execute(
+                "SELECT label FROM CAR_PART WHERE id = 1"
+            ).fetchone()[0]
+            self.assertEqual(label, "قيمة ; مع فاصلة")
+        finally:
+            connection.close()
+
+    def test_one_bad_table_does_not_lose_the_others(self):
+        """Legacy Access files routinely carry one unreadable table nothing
+        reads. Losing the other sixty because of it helps nobody."""
+        self._install_fake_mdbtools(
+            tables=["CAR_PART", "broken", "TASNEEF"], failing=["broken"]
+        )
+
+        stats, destination = self._convert()
+
+        self.assertEqual(stats["tables_failed"], ["broken"])
+        self.assertEqual(stats["tables_converted"], 2)
+        connection = sqlite3.connect(destination)
+        try:
+            self.assertEqual(
+                connection.execute("SELECT COUNT(*) FROM CAR_PART").fetchone()[0], 2
+            )
+        finally:
+            connection.close()
+
+    def test_progress_is_reported_per_table(self):
+        from .preparation.stages import Stage, StageTracker
+
+        self._install_fake_mdbtools(tables=["one", "two", "three"])
+        source = MigrationSource.objects.create(name="db.mdb")
+        tracker = StageTracker(source, [Stage("convert", "تحويل")])
+
+        self._convert()
+        # Re-run under the tracker so the stage transitions are observable.
+        from .preparation import access
+
+        path = Path(self._tmpdir.name) / "db.mdb"
+        destination = Path(self._tmpdir.name) / "tracked.sqlite"
+        access.convert(path, destination, tracker=tracker)
+
+        stage = tracker.as_list()[0]
+        self.assertEqual(stage["status"], "done")
+        self.assertEqual(stage["counts"]["tables_total"], 3)
+        self.assertEqual(stage["counts"]["tables_converted"], 3)
+
+    def test_missing_tools_say_so(self):
+        import shutil
+        from unittest import mock
+
+        from .preparation import access
+
+        with mock.patch.object(shutil, "which", return_value=None):
+            with self.assertRaises(access.ConversionError) as ctx:
+                access.require_tools()
+        self.assertIn("mdb-tables", str(ctx.exception))
+
+    def test_access_upload_runs_the_whole_pipeline(self):
+        """An .mdb goes in; a prepared, identified source comes out."""
+        # The stand-in emits the reference connector's schema so detection has
+        # something real to match against on the far side of the conversion.
+        import os
+        import stat
+
+        schema = (
+            "CREATE TABLE categories (id INTEGER, name TEXT, parent_id INTEGER);\n"
+            "CREATE TABLE products (id INTEGER, name TEXT, sku TEXT, barcode TEXT, "
+            "price REAL, cost REAL, category_id INTEGER, is_service INTEGER, "
+            "is_active INTEGER);\n"
+            "CREATE TABLE customers (id INTEGER, full_name TEXT, phone TEXT);\n"
+            "CREATE TABLE suppliers (id INTEGER, name TEXT, phone TEXT);\n"
+            "CREATE TABLE stock (product_id INTEGER, quantity REAL);\n"
+        )
+        rows = {
+            "categories": "INSERT INTO categories VALUES (1, 'مشروبات', NULL);",
+            "products": (
+                "INSERT INTO products VALUES "
+                "(1, 'شاي', 'SKU1', '111', 2.5, 1.0, 1, 0, 1);"
+            ),
+            "customers": "INSERT INTO customers VALUES (1, 'أحمد', '0910000000');",
+            "suppliers": "INSERT INTO suppliers VALUES (1, 'مورد', '0920000000');",
+            "stock": "INSERT INTO stock VALUES (1, 7);",
+        }
+        cases = "".join(
+            f'  {name}) printf "{sql}\\n" ;;\n' for name, sql in rows.items()
+        )
+        scripts = {
+            "mdb-tables": (
+                "#!/bin/sh\n"
+                'printf "categories\\nproducts\\ncustomers\\nsuppliers\\nstock\\n"\n'
+            ),
+            "mdb-schema": f"#!/bin/sh\nprintf '{schema}'\n",
+            "mdb-export": (
+                "#!/bin/sh\n"
+                'for last; do :; done\nTABLE="$last"\n'
+                'case "$TABLE" in\n'
+                f"{cases}"
+                "esac\n"
+            ),
+        }
+        for name, body in scripts.items():
+            path = self.bin / name
+            path.write_text(body)
+            path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        original = os.environ["PATH"]
+        os.environ["PATH"] = f"{self.bin}{os.pathsep}{original}"
+        self.addCleanup(lambda: os.environ.__setitem__("PATH", original))
+
+        payload = b"\x00\x01\x00\x00Standard Jet DB\x00" + b"\x00" * 64
+        source = uploads.begin_upload(filename="db.mdb", size_bytes=len(payload))
+        source = uploads.append_chunk(source, 0, io.BytesIO(payload))
+        uploads.complete_upload(source)
+        source.refresh_from_db()
+
+        pipeline.prepare_source(source)
+        source.refresh_from_db()
+
+        self.assertEqual(
+            source.upload_state,
+            MigrationSource.UploadState.READY,
+            source.error_message,
+        )
+        self.assertEqual(source.system_key, "reference_sqlite")
+        statuses = {stage["key"]: stage["status"] for stage in source.stages}
+        self.assertEqual(statuses["convert"], "done")
+        # The multi-GB original is deleted as soon as it has been converted.
+        self.assertEqual(source.staged_filename, "")
+        self.assertTrue(storage.prepared_path(source).exists())
+        self.assertEqual(source.analysis["entities"]["product"]["count"], 1)
