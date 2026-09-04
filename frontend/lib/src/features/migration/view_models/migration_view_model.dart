@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/analytics_audit.dart';
@@ -7,6 +8,7 @@ import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../data/models/migration.dart';
 import '../../../data/repositories/migration_repository.dart';
+import '../../../data/services/migration_uploader.dart';
 
 /// How stock on-hand is established when products are imported.
 ///
@@ -24,8 +26,37 @@ enum MigrationStockSource {
   String get wireValue => name;
 }
 
-/// Drives the Data Migration page: connection config, compatibility check,
-/// dry-run / import, and live polling of the active run.
+/// Where the owner is in the migration.
+///
+/// Derived from server state rather than stored, so closing the page mid-way and
+/// coming back lands on the step the work is actually at — which matters when
+/// the work is a twenty-minute conversion nobody should have to watch.
+enum MigrationStep {
+  /// No file yet.
+  choose,
+
+  /// Bytes are moving.
+  uploading,
+
+  /// The server is converting / reconstructing / identifying.
+  preparing,
+
+  /// It failed, and we can say why.
+  failed,
+
+  /// Identified, counted, and waiting on the owner's choices.
+  review,
+
+  /// A dry run or an import is running.
+  running,
+
+  /// The import landed and the file is gone.
+  done,
+}
+
+/// Drives the Data Migration wizard: pick a file, upload it, watch it be
+/// prepared, see what is inside, preview, import, and confirm the file was
+/// deleted afterwards.
 class MigrationViewModel extends ChangeNotifier {
   MigrationViewModel(this._repository, {AnalyticsEngine? analyticsEngine})
     : _analyticsEngine = analyticsEngine;
@@ -33,48 +64,45 @@ class MigrationViewModel extends ChangeNotifier {
   final MigrationRepository _repository;
   final AnalyticsEngine? _analyticsEngine;
 
-  static const _pollInterval = Duration(seconds: 2);
+  /// Runs finish in seconds or minutes; two seconds is responsive without being
+  /// a load on a till that is also serving customers.
+  static const _runPollInterval = Duration(seconds: 2);
+
+  /// Preparation is measured in minutes, and its stage detail changes slowly.
+  static const _preparePollInterval = Duration(seconds: 3);
 
   MigrationCatalog? _catalog;
-  List<MigrationSource> _sources = const [];
-  int? _selectedSourceId;
+  MigrationSource? _source;
   final Set<String> _selectedEntities = <String>{};
-  MigrationStockSource _stockSource = MigrationStockSource.snapshot;
-  CompatibilityReport? _compatReport;
-  MigrationConnectionTest? _connectionTest;
+  MigrationStockSource _stockSource = MigrationStockSource.none;
   MigrationRun? _activeRun;
   MigrationRun? _lastRun;
   List<MigrationIssue> _issues = const [];
 
+  PlatformFile? _pickedFile;
+  MigrationUploader? _uploader;
+  MigrationUploadProgress? _uploadProgress;
+  bool _isUploading = false;
+
   bool _isLoading = false;
   bool _hasLoadError = false;
-  bool _isMutating = false;
-  bool _hasMutationError = false;
-  bool _isTesting = false;
-  bool _isChecking = false;
-  bool _isDiscovering = false;
   bool _isStartingRun = false;
   bool _isLoadingIssues = false;
-  String? _mutationMessage;
+  bool _isDiscarding = false;
+  String? _errorMessage;
 
   Timer? _pollTimer;
 
   // --- getters ---------------------------------------------------------
   MigrationCatalog? get catalog => _catalog;
   List<MigrationSystem> get systems => _catalog?.systems ?? const [];
-  List<MigrationSource> get sources => _sources;
-  MigrationSource? get selectedSource {
-    for (final source in _sources) {
-      if (source.id == _selectedSourceId) return source;
-    }
-    return null;
-  }
-
+  MigrationUploadConfig get uploadConfig =>
+      _catalog?.upload ?? MigrationUploadConfig.fallback;
+  MigrationSource? get source => _source;
+  PlatformFile? get pickedFile => _pickedFile;
+  MigrationUploadProgress? get uploadProgress => _uploadProgress;
   Set<String> get selectedEntities => _selectedEntities;
   MigrationStockSource get stockSource => _stockSource;
-  CompatibilityReport? get compatibilityReport =>
-      _compatReport ?? _checkedReportFromSource;
-  MigrationConnectionTest? get connectionTest => _connectionTest;
   MigrationRun? get activeRun => _activeRun;
   MigrationRun? get lastRun => _lastRun;
   MigrationRun? get currentRun => _activeRun ?? _lastRun;
@@ -82,43 +110,54 @@ class MigrationViewModel extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
   bool get hasLoadError => _hasLoadError;
-  bool get isMutating => _isMutating;
-  bool get hasMutationError => _hasMutationError;
-  bool get isTesting => _isTesting;
-  bool get isChecking => _isChecking;
-  bool get isDiscovering => _isDiscovering;
+  bool get isUploading => _isUploading;
   bool get isStartingRun => _isStartingRun;
   bool get isLoadingIssues => _isLoadingIssues;
-  String? get mutationMessage => _mutationMessage;
+  bool get isDiscarding => _isDiscarding;
+  String? get errorMessage => _errorMessage;
 
-  bool get isCompatible => compatibilityReport?.compatible ?? false;
+  MigrationAnalysis get analysis => _source?.analysis ?? MigrationAnalysis.empty;
 
-  /// Import is gated on a clean dry run (no failed records).
+  List<String> get supportedEntities => _source?.supportedEntities ?? const [];
+
+  /// The stage list to render: the running job's if there is one, else the
+  /// file's preparation history.
+  List<MigrationStage> get stages {
+    final run = currentRun;
+    if (run != null && run.stages.isNotEmpty) return run.stages;
+    return _source?.stages ?? const [];
+  }
+
+  /// Where the wizard is. Read from state, never stored, so a reopened page
+  /// resumes rather than restarts.
+  MigrationStep get step {
+    if (_isUploading) return MigrationStep.uploading;
+    final source = _source;
+    if (source == null) return MigrationStep.choose;
+    if (source.isPurged) {
+      return _lastRun != null && !_lastRun!.isDryRun
+          ? MigrationStep.done
+          : MigrationStep.choose;
+    }
+    if (source.isFailed) return MigrationStep.failed;
+    if (source.isUploading) return MigrationStep.uploading;
+    if (source.isBusy) return MigrationStep.preparing;
+    if (_activeRun != null) return MigrationStep.running;
+    final last = _lastRun;
+    if (last != null && !last.isDryRun && last.succeeded) {
+      return MigrationStep.done;
+    }
+    return MigrationStep.review;
+  }
+
+  /// A dry run must have passed cleanly before anything is written for real.
   bool get canImport {
     final run = _lastRun;
     return run != null &&
         run.isDryRun &&
         run.isTerminal &&
         run.totalFailed == 0 &&
-        isCompatible;
-  }
-
-  CompatibilityReport? get _checkedReportFromSource {
-    final report = selectedSource?.lastCompatReport;
-    return (report != null && report.checked) ? report : null;
-  }
-
-  MigrationSystem? systemFor(String systemKey) {
-    for (final system in systems) {
-      if (system.systemKey == systemKey) return system;
-    }
-    return null;
-  }
-
-  List<String> get supportedEntitiesForSelected {
-    final source = selectedSource;
-    if (source == null) return const [];
-    return systemFor(source.systemKey)?.supportedEntities ?? const [];
+        (_source?.isReady ?? false);
   }
 
   String entityLabel(String entityType) {
@@ -142,43 +181,204 @@ class MigrationViewModel extends ChangeNotifier {
         _hasLoadError = true;
     }
     if (!_hasLoadError) {
-      await _refreshSources(selectId: _selectedSourceId);
+      await _adoptLatestSource();
     }
 
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> _refreshSources({int? selectId}) async {
+  /// Re-attach to whatever is already in flight on the server.
+  ///
+  /// Preparing a big file outlives the screen: the owner can close the page,
+  /// serve a customer, and come back to a finished conversion. This is what
+  /// makes that work.
+  Future<void> _adoptLatestSource() async {
     final result = await _repository.loadSources();
-    if (result is Ok<List<MigrationSource>>) {
-      _sources = result.value.where((source) => !source.isArchived).toList();
-      final keep = selectId ?? _selectedSourceId;
-      _selectedSourceId = _sources.any((source) => source.id == keep)
-          ? keep
-          : (_sources.isEmpty ? null : _sources.first.id);
-      _syncSelectedEntities();
-    } else if (result is Error<List<MigrationSource>>) {
+    if (result is! Ok<List<MigrationSource>>) {
       _hasLoadError = true;
+      return;
+    }
+    final sources = result.value;
+    if (sources.isEmpty) {
+      _source = null;
+      return;
+    }
+    // Sources come back newest first; prefer one still in play over a purged
+    // one, so a finished migration does not hide a new upload.
+    final live = sources.where((source) => !source.isPurged).toList();
+    _source = live.isNotEmpty ? live.first : sources.first;
+    _syncSelectedEntities();
+    if (_source!.isBusy) {
+      _startPolling(_preparePollInterval);
+    } else {
+      // Not only when the source is ready: a *purged* source is a finished
+      // migration, and its run is the whole reason the screen has anything to
+      // show. Skipping it there dropped the owner back to "pick a file" the
+      // moment their import succeeded.
+      await _adoptLatestRun();
     }
   }
 
-  void selectSource(int id) {
-    _selectedSourceId = id;
-    _compatReport = null;
-    _connectionTest = null;
-    _lastRun = null;
-    _issues = const [];
-    _syncSelectedEntities();
-    notifyListeners();
+  Future<void> _adoptLatestRun() async {
+    final source = _source;
+    if (source == null) return;
+    final result = await _repository.loadRuns(sourceId: source.id);
+    if (result is! Ok<List<MigrationRun>>) return;
+    final runs = result.value;
+    if (runs.isEmpty) return;
+    final latest = runs.first;
+    if (latest.isActive) {
+      _activeRun = latest;
+      _startPolling(_runPollInterval);
+    } else {
+      _lastRun = latest;
+    }
   }
 
   void _syncSelectedEntities() {
     _selectedEntities
       ..clear()
-      ..addAll(supportedEntitiesForSelected);
+      ..addAll(supportedEntities);
   }
 
+  // --- choosing + uploading -------------------------------------------
+  /// Opens the file picker, restricted to what the server says it can read.
+  Future<PlatformFile?> pickFile() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: uploadConfig.pickerExtensions,
+      allowMultiple: false,
+      // Never `withData` on desktop: these files are gigabytes and the uploader
+      // seeks through them on disk. The web build has no choice, and the picker
+      // supplies bytes there regardless.
+      withData: kIsWeb,
+    );
+    final file = result?.files.singleOrNull;
+    if (file == null) return null;
+    if (file.size > uploadConfig.maxBytes) {
+      _errorMessage = 'tooLarge';
+      notifyListeners();
+      return null;
+    }
+    _pickedFile = file;
+    _errorMessage = null;
+    notifyListeners();
+    return file;
+  }
+
+  /// Uploads the picked file, then asks the server to prepare it.
+  Future<bool> startUpload() async {
+    final file = _pickedFile;
+    if (file == null || _isUploading) return false;
+
+    _isUploading = true;
+    _errorMessage = null;
+    _uploadProgress = MigrationUploadProgress(
+      sentBytes: 0,
+      totalBytes: file.size,
+      bytesPerSecond: 0,
+    );
+    final uploader = _repository.newUploader();
+    _uploader = uploader;
+    notifyListeners();
+
+    final result = await _repository.uploadFile(
+      file,
+      uploader: uploader,
+      resuming: _source?.isUploading ?? false ? _source : null,
+      onProgress: (progress) {
+        _uploadProgress = progress;
+        notifyListeners();
+      },
+    );
+
+    _isUploading = false;
+    _uploader = null;
+    switch (result) {
+      case Ok<MigrationSource>():
+        _source = result.value;
+        notifyListeners();
+        return await _completeUpload();
+      case Error<MigrationSource>():
+        // The upload is resumable, not lost: the server kept every byte it
+        // acknowledged, so retrying continues from there.
+        _errorMessage = result.exception.toString();
+        notifyListeners();
+        return false;
+    }
+  }
+
+  Future<bool> _completeUpload() async {
+    final source = _source;
+    if (source == null) return false;
+    final result = await _repository.completeUpload(source.id);
+    switch (result) {
+      case Ok<MigrationSource>():
+        _source = result.value;
+        _pickedFile = null;
+        _uploadProgress = null;
+        trackAuditEvent(
+          _analyticsEngine,
+          name: 'migration.upload.completed',
+          entityType: 'migration_source',
+          entityId: source.id,
+          attributes: {'size_bytes': '${source.declaredSizeBytes}'},
+        );
+        _startPolling(_preparePollInterval);
+      case Error<MigrationSource>():
+        _errorMessage = result.exception.toString();
+    }
+    notifyListeners();
+    return _source?.isBusy ?? false;
+  }
+
+  void cancelUpload() {
+    _uploader?.cancel();
+    _uploader = null;
+    _isUploading = false;
+    _uploadProgress = null;
+    notifyListeners();
+  }
+
+  /// Forgets the picked file and any half-finished upload, back to step one.
+  Future<void> startOver() async {
+    final source = _source;
+    _pickedFile = null;
+    _uploadProgress = null;
+    _activeRun = null;
+    _lastRun = null;
+    _issues = const [];
+    _errorMessage = null;
+    _stopPolling();
+    if (source != null && !source.isPurged) {
+      await discard();
+    }
+    _source = null;
+    notifyListeners();
+  }
+
+  /// Deletes the uploaded file from the server now.
+  Future<bool> discard() async {
+    final source = _source;
+    if (source == null || _isDiscarding) return false;
+    _isDiscarding = true;
+    notifyListeners();
+    final result = await _repository.discardSource(source.id);
+    var ok = false;
+    switch (result) {
+      case Ok<MigrationSource>():
+        _source = result.value;
+        ok = true;
+      case Error<MigrationSource>():
+        _errorMessage = result.exception.toString();
+    }
+    _isDiscarding = false;
+    notifyListeners();
+    return ok;
+  }
+
+  // --- choices ---------------------------------------------------------
   void toggleEntity(String entityType, bool selected) {
     if (selected) {
       _selectedEntities.add(entityType);
@@ -193,134 +393,14 @@ class MigrationViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // --- mutations -------------------------------------------------------
-  Future<bool> saveSource({
-    int? sourceId,
-    required String name,
-    required String systemKey,
-    required String transportKind,
-    String? host,
-    int? port,
-    String? databaseName,
-    String? username,
-    String? password,
-    Map<String, Object?>? extraOptions,
-  }) async {
-    return await _mutate(() async {
-          final draft = MigrationSourceDraft(
-            name: name,
-            systemKey: systemKey,
-            transportKind: transportKind,
-            host: host,
-            port: port,
-            databaseName: databaseName,
-            username: username,
-            password: password,
-            extraOptions: extraOptions,
-          );
-          final result = sourceId == null
-              ? await _repository.createSource(draft)
-              : await _repository.updateSource(sourceId, draft);
-          switch (result) {
-            case Ok<MigrationSource>():
-              _compatReport = null;
-              _connectionTest = null;
-              await _refreshSources(selectId: result.value.id);
-              return true;
-            case Error<MigrationSource>():
-              _failMutation(result.exception);
-              return false;
-          }
-        }) ??
-        false;
-  }
-
-  Future<bool> deleteSource(int id) async {
-    return await _mutate(() async {
-          final result = await _repository.deleteSource(id);
-          switch (result) {
-            case Ok<void>():
-              await _refreshSources();
-              return true;
-            case Error<void>():
-              _failMutation(result.exception);
-              return false;
-          }
-        }) ??
-        false;
-  }
-
-  /// Broadcasts on the LAN and returns reachable SQL Server instances. This is a
-  /// discovery probe only — no credentials are sent and no source is touched.
-  /// The caller lets the operator pick one to prefill host/port.
-  Future<List<DiscoveredServer>?> discoverServers() async {
-    if (_isDiscovering) return null;
-    _isDiscovering = true;
-    _hasMutationError = false;
-    notifyListeners();
-    final result = await _repository.discoverServers();
-    List<DiscoveredServer>? servers;
-    switch (result) {
-      case Ok<List<DiscoveredServer>>():
-        servers = result.value;
-      case Error<List<DiscoveredServer>>():
-        _failMutation(result.exception);
-    }
-    _isDiscovering = false;
-    notifyListeners();
-    return servers;
-  }
-
-  Future<MigrationConnectionTest?> testConnection() async {
-    final source = selectedSource;
-    if (source == null || _isTesting) return null;
-    _isTesting = true;
-    _hasMutationError = false;
-    _connectionTest = null;
-    notifyListeners();
-    final result = await _repository.testConnection(source.id);
-    MigrationConnectionTest? test;
-    switch (result) {
-      case Ok<MigrationConnectionTest>():
-        test = result.value;
-        _connectionTest = test;
-      case Error<MigrationConnectionTest>():
-        _failMutation(result.exception);
-    }
-    _isTesting = false;
-    notifyListeners();
-    return test;
-  }
-
-  Future<CompatibilityReport?> checkCompatibility() async {
-    final source = selectedSource;
-    if (source == null || _isChecking) return null;
-    _isChecking = true;
-    _hasMutationError = false;
-    notifyListeners();
-    final result = await _repository.checkCompatibility(source.id);
-    CompatibilityReport? report;
-    switch (result) {
-      case Ok<CompatibilityReport>():
-        report = result.value;
-        _compatReport = report;
-        // Refresh the source so its persisted status badge updates too.
-        await _refreshSources(selectId: source.id);
-      case Error<CompatibilityReport>():
-        _failMutation(result.exception);
-    }
-    _isChecking = false;
-    notifyListeners();
-    return report;
-  }
-
+  // --- runs ------------------------------------------------------------
   Future<MigrationRun?> startRun({required bool dryRun}) async {
-    final source = selectedSource;
+    final source = _source;
     if (source == null || _isStartingRun || (_activeRun?.isActive ?? false)) {
       return null;
     }
     _isStartingRun = true;
-    _hasMutationError = false;
+    _errorMessage = null;
     notifyListeners();
     final result = await _repository.startRun(
       sourceId: source.id,
@@ -342,9 +422,9 @@ class MigrationViewModel extends ChangeNotifier {
           entityId: source.id,
           attributes: {'mode': run.mode},
         );
-        _startPolling();
+        _startPolling(_runPollInterval);
       case Error<MigrationRun>():
-        _failMutation(result.exception);
+        _errorMessage = result.exception.toString();
     }
     _isStartingRun = false;
     notifyListeners();
@@ -365,9 +445,9 @@ class MigrationViewModel extends ChangeNotifier {
   }
 
   // --- polling ---------------------------------------------------------
-  void _startPolling() {
+  void _startPolling(Duration interval) {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(_pollInterval, (_) => _pollActiveRun());
+    _pollTimer = Timer.periodic(interval, (_) => _poll());
   }
 
   void _stopPolling() {
@@ -375,55 +455,64 @@ class MigrationViewModel extends ChangeNotifier {
     _pollTimer = null;
   }
 
-  Future<void> _pollActiveRun() async {
-    final active = _activeRun;
-    if (active == null) {
-      _stopPolling();
+  Future<void> _poll() async {
+    final run = _activeRun;
+    if (run != null) {
+      await _pollRun(run);
       return;
     }
-    final result = await _repository.loadRun(active.id);
+    final source = _source;
+    if (source != null && source.isBusy) {
+      await _pollSource(source);
+      return;
+    }
+    _stopPolling();
+  }
+
+  Future<void> _pollSource(MigrationSource source) async {
+    final result = await _repository.loadSource(source.id);
+    if (result is! Ok<MigrationSource>) {
+      return; // transient; keep polling
+    }
+    _source = result.value;
+    if (!_source!.isBusy) {
+      _stopPolling();
+      _syncSelectedEntities();
+    }
+    notifyListeners();
+  }
+
+  Future<void> _pollRun(MigrationRun run) async {
+    final result = await _repository.loadRun(run.id);
     if (result is! Ok<MigrationRun>) {
       return; // transient; keep polling
     }
-    final run = result.value;
-    if (run.isTerminal) {
+    final updated = result.value;
+    if (updated.isTerminal) {
       _activeRun = null;
-      _lastRun = run;
+      _lastRun = updated;
       _stopPolling();
-      await _refreshSources(selectId: _selectedSourceId);
+      // A clean import deletes the file — refresh so the screen can say so.
+      final source = _source;
+      if (source != null) {
+        final refreshed = await _repository.loadSource(source.id);
+        if (refreshed is Ok<MigrationSource>) _source = refreshed.value;
+      }
     } else {
-      _activeRun = run;
+      _activeRun = updated;
     }
     notifyListeners();
   }
 
-  void acknowledgeMutationError() {
-    _hasMutationError = false;
-    _mutationMessage = null;
-  }
-
-  // --- helpers ---------------------------------------------------------
-  Future<T?> _mutate<T>(Future<T?> Function() operation) async {
-    if (_isMutating) return null;
-    _isMutating = true;
-    _hasMutationError = false;
+  void acknowledgeError() {
+    _errorMessage = null;
     notifyListeners();
-    try {
-      return await operation();
-    } finally {
-      _isMutating = false;
-      notifyListeners();
-    }
-  }
-
-  void _failMutation(Object exception) {
-    _hasMutationError = true;
-    _mutationMessage = exception.toString();
   }
 
   @override
   void dispose() {
     _stopPolling();
+    _uploader?.cancel();
     super.dispose();
   }
 }

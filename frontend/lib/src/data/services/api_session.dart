@@ -602,6 +602,34 @@ class PosApiSession {
     );
   }
 
+  /// PUTs raw bytes, unencoded, for endpoints that take a file body.
+  ///
+  /// Everything else here JSON-encodes what it is given. A migration upload
+  /// chunk is a slice of a database and must arrive byte for byte, so it goes
+  /// out as `application/octet-stream` with no transformation and no retry — a
+  /// replayed chunk would be appended twice, and the server's offset check
+  /// exists precisely so a client never has to guess whether that happened.
+  Future<http.Response> putBytes(
+    String path, {
+    required Uint8List bytes,
+    Map<String, String>? queryParameters,
+    Duration? timeout,
+  }) async {
+    final target = uri(path, queryParameters: queryParameters);
+    return _send(
+      method: 'PUT',
+      path: path,
+      requestSizeBytes: bytes.length,
+      timeout: timeout,
+      replayable: false,
+      request: () {
+        final requestHeaders = headers(includeCsrf: true);
+        requestHeaders['Content-Type'] = 'application/octet-stream';
+        return client.put(target, headers: requestHeaders, body: bytes);
+      },
+    );
+  }
+
   Future<http.Response> delete(String path) async {
     return _send(
       method: 'DELETE',

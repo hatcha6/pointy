@@ -110,6 +110,7 @@ import 'messaging_api_client.dart';
 import 'price_checker_api_client.dart';
 import 'printing_api_client.dart';
 import 'migration_api_client.dart';
+import 'migration_uploader.dart';
 import 'purchasing_api_client.dart';
 import 'register_session_api_client.dart';
 import 'relay_api_client.dart';
@@ -421,31 +422,20 @@ class PosApiService {
     return _migration.fetchSources();
   }
 
-  Future<MigrationSource> createMigrationSource(MigrationSourceDraft draft) {
-    return _migration.createSource(draft);
+  Future<MigrationSource> fetchMigrationSource(int id) {
+    return _migration.fetchSource(id);
   }
 
-  Future<MigrationSource> updateMigrationSource(
-    int id,
-    MigrationSourceDraft draft,
-  ) {
-    return _migration.updateSource(id, draft);
+  /// A fresh uploader for one transfer. Not shared: it owns the cancel flag for
+  /// the upload it is running.
+  MigrationUploader newMigrationUploader() => MigrationUploader(_migration);
+
+  Future<MigrationSource> completeMigrationUpload(int id) {
+    return _migration.completeUpload(id);
   }
 
-  Future<void> deleteMigrationSource(int id) {
-    return _migration.deleteSource(id);
-  }
-
-  Future<List<DiscoveredServer>> discoverMigrationServers() {
-    return _migration.discoverServers();
-  }
-
-  Future<MigrationConnectionTest> testMigrationConnection(int id) {
-    return _migration.testConnection(id);
-  }
-
-  Future<CompatibilityReport> checkMigrationCompatibility(int id) {
-    return _migration.checkCompatibility(id);
+  Future<MigrationSource> discardMigrationSource(int id) {
+    return _migration.discardSource(id);
   }
 
   Future<MigrationRun> startMigrationRun({
