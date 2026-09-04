@@ -1,19 +1,20 @@
-"""Run a data migration synchronously from the command line.
+"""Run a migration from a file on the server's own disk, synchronously.
 
-The migration feature is normally driven from the app (REST API + Celery
-worker), but for on-site onboarding it's easier to run one-shot from a shell —
-e.g. inside the Docker deployment:
+The app is the way to do this: the owner uploads their database and watches it
+happen. This is the same pipeline with the upload step replaced by "the file is
+already here" — for an operator sitting at the shop's machine with the ``.mdb``
+on a USB stick, and for debugging a file without a browser.
 
-    docker compose exec backend python manage.py import_legacy \
-        --database /tmp/legacy-import.sqlite --mode dry_run
-    docker compose exec backend python manage.py import_legacy \
-        --database /tmp/legacy-import.sqlite --mode import
+    docker compose exec backend python manage.py import_legacy \\
+        --file /tmp/db.mdb --mode dry_run
+    docker compose exec backend python manage.py import_legacy \\
+        --file /tmp/db.mdb --mode import
 
-Defaults are tuned for the file-based Fahd flow (``fahd_sqlite`` connector,
-``--stock none`` because the shop recounts on the new system), but any
-registered connector/transport works. The command reuses the same
-``MigrationSource`` for the same file path, so dry-run → import → re-import
-all share one identity map and stay idempotent.
+The file is hard-linked (or copied) into the staging root and then goes through
+exactly the same identify → convert → prepare → detect → analyze pipeline as an
+upload, so there is one code path and it is the one that gets exercised. The
+system is detected, not declared. Preparation is skipped on a second run against
+the same file, so dry-run → import does not reconvert gigabytes.
 """
 
 from __future__ import annotations
@@ -25,31 +26,24 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import close_old_connections
 from rest_framework.serializers import ValidationError
 
-from apps.migration import services
-from apps.migration.connectors import get_connector, list_connectors
+from apps.migration import services, storage
 from apps.migration.entity_plan import all_entity_types
 from apps.migration.models import MigrationIssue, MigrationRun, MigrationSource
+from apps.migration.preparation import pipeline
 from apps.migration.reconstruct import VALID_STOCK_SOURCES
 
 _POLL_SECONDS = 10
 
 
 class Command(BaseCommand):
-    help = "Run a legacy-POS data migration synchronously (no Celery needed)."
+    help = "Migrate a legacy POS database file into Pointy (no Celery needed)."
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--database",
+            "--file",
             required=True,
-            help="Path of the source database (absolute path of the SQLite file).",
+            help="Path of the legacy database file (.mdb, .accdb, .sqlite).",
         )
-        parser.add_argument(
-            "--system",
-            default="fahd_sqlite",
-            help="Connector key (default: fahd_sqlite). Known: %s"
-            % ", ".join(sorted(connector.system_key for connector in list_connectors())),
-        )
-        parser.add_argument("--name", default="", help="Display name for the saved source.")
         parser.add_argument(
             "--mode",
             choices=[MigrationRun.Mode.DRY_RUN.value, MigrationRun.Mode.IMPORT.value],
@@ -70,6 +64,16 @@ class Command(BaseCommand):
             f"the connector supports). Known: {', '.join(all_entity_types())}",
         )
         parser.add_argument(
+            "--reprepare",
+            action="store_true",
+            help="Re-run conversion even if this file was already prepared.",
+        )
+        parser.add_argument(
+            "--keep-file",
+            action="store_true",
+            help="Do not delete the staged copy after a successful import.",
+        )
+        parser.add_argument(
             "--take-over",
             action="store_true",
             help="Mark any stuck queued/running run as failed before starting "
@@ -77,30 +81,24 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        connector = get_connector(options["system"])
-        if connector is None:
-            raise CommandError(f"Unknown system {options['system']!r}.")
-
-        database = Path(options["database"])
-        if connector.required_transport == "sqlite" and not database.is_file():
-            raise CommandError(f"Source database not found: {database}")
+        path = Path(options["file"]).expanduser().resolve()
+        if not path.is_file():
+            raise CommandError(f"File not found: {path}")
 
         if options["take_over"]:
-            stale = MigrationRun.objects.filter(
+            for run in MigrationRun.objects.filter(
                 status__in=[MigrationRun.Status.QUEUED, MigrationRun.Status.RUNNING]
-            )
-            for run in stale:
+            ):
                 run.mark_failed("أُلغيت من سطر الأوامر (--take-over).")
 
-        source, created = MigrationSource.objects.get_or_create(
-            system_key=connector.system_key,
-            transport_kind=connector.required_transport,
-            database_name=str(database),
-            defaults={"name": options["name"] or f"{connector.display_name} — CLI"},
-        )
+        source = self._source_for(path, reprepare=options["reprepare"])
+        if not source.is_ready:
+            raise CommandError(source.error_message or "Preparation failed.")
+
         self.stdout.write(
-            f"Source #{source.pk} ({'new' if created else 'existing — identity map reused'})"
+            f"Detected: {source.system_key} ({source.detected_version or 'unknown version'})"
         )
+        self._print_analysis(source)
 
         entities = [item.strip() for item in options["entities"].split(",") if item.strip()]
         try:
@@ -108,7 +106,12 @@ class Command(BaseCommand):
                 source,
                 mode=options["mode"],
                 entities=entities or None,
-                options={"stock_source": options["stock"]},
+                options={
+                    "stock_source": options["stock"],
+                    # Operators re-run against the same working copy; deleting it
+                    # after the first clean import would mean re-staging it.
+                    "keep_file": bool(options["keep_file"]),
+                },
                 user=None,
                 dispatch=False,
             )
@@ -134,6 +137,59 @@ class Command(BaseCommand):
         if run.status == MigrationRun.Status.FAILED:
             raise CommandError(run.error_message or "Migration failed.")
 
+    # --- preparation ------------------------------------------------------
+    def _source_for(self, path: Path, *, reprepare: bool) -> MigrationSource:
+        """Find the prepared source for this file, or stage and prepare it."""
+        name = path.name[:120]
+        existing = (
+            MigrationSource.objects.filter(original_filename=name)
+            .exclude(upload_state=MigrationSource.UploadState.PURGED)
+            .order_by("-created_at")
+            .first()
+        )
+        if existing is not None and existing.is_ready and not reprepare:
+            self.stdout.write(
+                f"Source #{existing.pk} already prepared — reusing it "
+                "(identity map preserved, so this stays idempotent)."
+            )
+            return existing
+
+        source = existing or MigrationSource.objects.create(
+            name=name,
+            original_filename=name,
+            declared_size_bytes=path.stat().st_size,
+        )
+        kind = "access" if path.suffix.lower() in {".mdb", ".accdb"} else "sqlite"
+        source.staged_filename = storage.staged_name(source.pk, kind)
+        source.received_bytes = source.declared_size_bytes = path.stat().st_size
+        source.staged_size_bytes = source.declared_size_bytes
+        source.upload_state = MigrationSource.UploadState.UPLOADED
+        source.save()
+
+        destination = storage.staged_path(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        self.stdout.write(f"Staging {path} → {destination}")
+        storage.adopt(path, destination)
+
+        self.stdout.write("Preparing (convert → reconstruct → detect)…")
+        pipeline.prepare_source(source)
+        source.refresh_from_db()
+        for stage in source.stages or []:
+            self.stdout.write(f"  {stage['status']:>8}  {stage['label']}  {stage['detail']}")
+        return source
+
+    def _print_analysis(self, source):
+        entities = (source.analysis or {}).get("entities") or {}
+        if not entities:
+            return
+        self.stdout.write("Contents:")
+        for entity_type, entry in entities.items():
+            span = ""
+            if entry.get("from") or entry.get("to"):
+                span = f"  ({entry.get('from', '?')} → {entry.get('to', '?')})"
+            self.stdout.write(f"  {entity_type:>18}: {entry.get('count', 0):,}{span}")
+
+    # --- reporting --------------------------------------------------------
     def _report_progress(self, run_pk, stop):
         last = None
         while not stop.wait(_POLL_SECONDS):

@@ -2,14 +2,16 @@
 #
 # One-shot legacy-data migration for a shop coming from Fahd (Access edition).
 #
-# Prepare the file on a workstation first (both scripts live in the repo):
-#   scripts/mdb_to_sqlite.sh db.mdb fahd_data.sqlite
-#   scripts/fahd_reconstruct.py fahd_data.sqlite fahd_migration.sqlite
-# then bring fahd_migration.sqlite to this machine and run, from the deploy
-# directory (next to docker-compose.yml):
+# Normally you don't need this: the shop's owner uploads their db.mdb from
+# Shop Settings → نقل البيانات and watches it happen. This is the same
+# pipeline for an operator standing at the machine with the file on a USB
+# stick. The .mdb is converted, its audit log replayed and its system
+# identified server-side — hand it the raw file.
 #
-#   bash migrate-fahd.sh /path/to/fahd_migration.sqlite            # dry run
-#   bash migrate-fahd.sh /path/to/fahd_migration.sqlite --import   # real import
+# Run from the deploy directory (next to docker-compose.yml):
+#
+#   bash migrate-fahd.sh /path/to/db.mdb            # dry run
+#   bash migrate-fahd.sh /path/to/db.mdb --import   # real import
 #
 # The dry run validates everything and writes nothing — read its report first.
 # Stock quantities are intentionally NOT transferred (--stock none): the shop
@@ -20,7 +22,7 @@ cd "$(dirname "$0")"
 err() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
 
 DB_FILE="${1:-}"
-[ -n "$DB_FILE" ] || err "Usage: bash migrate-fahd.sh /path/to/fahd_migration.sqlite [--import] [--stock none|snapshot|reconstruct]"
+[ -n "$DB_FILE" ] || err "Usage: bash migrate-fahd.sh /path/to/db.mdb [--import] [--stock none|snapshot|reconstruct]"
 [ -f "$DB_FILE" ] || err "File not found: $DB_FILE"
 shift
 
@@ -45,14 +47,13 @@ docker compose ps --status running backend --quiet 2>/dev/null | grep -q . \
 # Stage the file on a real volume, NOT /tmp: the backend's /tmp is a small
 # tmpfs (64 MB) and a real export easily exceeds it. /var/lib/pointy/backups is
 # a persistent volume with room to spare and is cleaned up afterwards.
-CONTAINER_PATH="/var/lib/pointy/backups/legacy-import.sqlite"
+CONTAINER_PATH="/var/lib/pointy/migration/legacy-import-source"
 echo "==> Copying $(basename "$DB_FILE") into the backend container…"
 docker compose cp "$DB_FILE" "backend:$CONTAINER_PATH"
 
 echo "==> Running migration ($MODE, stock=$STOCK)…"
 docker compose exec -T backend python manage.py import_legacy \
-  --database "$CONTAINER_PATH" \
-  --system fahd_sqlite \
+  --file "$CONTAINER_PATH" \
   --mode "$MODE" \
   --stock "$STOCK" \
   ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}

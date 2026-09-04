@@ -1,10 +1,15 @@
 """Orchestration entrypoints for the data-migration feature.
 
-Mirrors ``apps.core.backup``: the API layer calls ``test_connection`` /
-``run_compatibility`` synchronously, and ``queue_migration_run`` creates a
-``MigrationRun`` then hands it to a Celery worker via ``_dispatch_run`` (with the
-same "mark the job failed if the broker is unreachable" guard). The worker calls
-``run_migration``.
+Two things get queued here, both to a Celery worker and both with the same "mark
+it failed if the broker is unreachable" guard ``apps.core.backup`` uses:
+
+* **preparation** — converting, reconstructing and identifying an uploaded file.
+  Runs once per upload, and is why a source is not importable the instant its
+  last byte arrives.
+* **runs** — a dry run or an import against a prepared file.
+
+Nothing here opens a network connection to anything. The source of a migration is
+a file on disk.
 """
 
 from __future__ import annotations
@@ -21,7 +26,7 @@ from .engine import MigrationEngine
 from .entity_plan import ENTITY_PLAN_BY_TYPE
 from .exceptions import CompatibilityError, MigrationError
 from .models import MigrationRun, MigrationSource
-from .transports import build_transport
+from .preparation import pipeline
 
 
 def record_migration_event(*, name, user, entity_id, attributes=None, metrics=None, severity=None):
@@ -52,51 +57,74 @@ def _initiator_fields(user):
     }
 
 
-def test_connection(source: MigrationSource) -> dict:
-    """Open the source and list its tables — a fast "can we even connect?" probe."""
-    transport = build_transport(source.transport_kind, source.connection_dict())
-    try:
-        with transport:
-            tables = transport.list_tables()
-    except MigrationError as exc:
-        raise ValidationError({"detail": str(exc)}) from exc
-    return {"ok": True, "table_count": len(tables), "tables": sorted(tables)[:100]}
+def queue_preparation(source: MigrationSource, *, user=None, dispatch=True) -> MigrationSource:
+    """Hand a fully-received upload to the preparation pipeline."""
+    if source.upload_state == MigrationSource.UploadState.PURGED:
+        raise ValidationError({"detail": "تم حذف هذا الملف من الخادم."})
+    if source.upload_state == MigrationSource.UploadState.UPLOADING:
+        raise ValidationError({"detail": "لم يكتمل رفع الملف بعد."})
 
-
-def run_compatibility(source: MigrationSource, *, user=None) -> dict:
-    """Introspect the live schema and persist a compatibility report."""
-    connector = get_connector(source.system_key)
-    if connector is None:
-        raise ValidationError({"detail": f"Unknown source system: {source.system_key}."})
-    transport = build_transport(source.transport_kind, source.connection_dict())
-    try:
-        with transport:
-            report = connector.check_compatibility(transport)
-    except MigrationError as exc:
-        raise ValidationError({"detail": str(exc)}) from exc
-
-    source.detected_version = report.detected_version or ""
-    source.last_compat_status = (
-        MigrationSource.CompatStatus.COMPATIBLE
-        if report.compatible
-        else MigrationSource.CompatStatus.INCOMPATIBLE
-    )
-    source.last_compat_report = report.as_dict()
-    source.save(
-        update_fields=[
-            "detected_version",
-            "last_compat_status",
-            "last_compat_report",
-            "updated_at",
-        ]
-    )
+    source.upload_state = MigrationSource.UploadState.UPLOADED
+    source.error_message = ""
+    source.stages = []
+    source.save(update_fields=["upload_state", "error_message", "stages", "updated_at"])
     record_migration_event(
-        name="migration.source.compatibility_checked",
+        name="migration.upload.prepare_queued",
         user=user,
         entity_id=source.pk,
-        attributes={"compatible": report.compatible, "detected_version": report.detected_version},
+        attributes={"filename": source.original_filename},
+        metrics={"size_bytes": source.declared_size_bytes},
     )
-    return report.as_dict()
+    if dispatch:
+        _dispatch_preparation(source)
+    return source
+
+
+def _dispatch_preparation(source: MigrationSource) -> None:
+    try:
+        from .tasks import prepare_migration_source
+
+        enqueue_or_raise(prepare_migration_source, source.pk)
+    except Exception as exc:  # noqa: BLE001 - broker unreachable etc.
+        source.upload_state = MigrationSource.UploadState.FAILED
+        source.error_message = "تعذر إرسال الملف إلى عامل الخلفية."
+        source.save(update_fields=["upload_state", "error_message", "updated_at"])
+        raise ValidationError({"detail": str(exc)}) from exc
+
+
+def prepare_source(source_id: int) -> None:
+    """Worker entrypoint for preparation."""
+    source = MigrationSource.objects.filter(pk=source_id).first()
+    if source is None or source.is_purged:
+        return
+    pipeline.prepare_source(source)
+    record_migration_event(
+        name="migration.upload.prepared",
+        user=None,
+        entity_id=source.pk,
+        attributes={
+            "state": source.upload_state,
+            "system_key": source.system_key,
+            "detected_version": source.detected_version,
+        },
+        severity=(
+            AnalyticsEvent.Severity.WARNING
+            if source.upload_state == MigrationSource.UploadState.FAILED
+            else AnalyticsEvent.Severity.INFO
+        ),
+    )
+
+
+def discard_source(source: MigrationSource, *, user=None) -> int:
+    """Delete a source's files on request. Returns bytes freed."""
+    freed = pipeline.purge(source, reason="discarded")
+    record_migration_event(
+        name="migration.upload.discarded",
+        user=user,
+        entity_id=source.pk,
+        metrics={"freed_bytes": freed},
+    )
+    return freed
 
 
 def _ensure_no_active_run() -> None:
@@ -110,8 +138,8 @@ def _ensure_no_active_run() -> None:
 def queue_migration_run(
     source, *, mode, entities=None, options=None, user=None, dispatch=True
 ) -> MigrationRun:
-    if source.is_archived:
-        raise ValidationError({"detail": "This source is archived."})
+    if not source.is_ready:
+        raise ValidationError({"detail": "هذا الملف غير جاهز للنقل بعد."})
     connector = get_connector(source.system_key)
     if connector is None:
         raise ValidationError({"detail": f"Unknown source system: {source.system_key}."})
@@ -180,20 +208,30 @@ def run_migration(run_id: int) -> None:
 
 
 def _finalize_source(run: MigrationRun) -> None:
+    """Record the run, and delete the file once it has done its job.
+
+    The shop's entire trading history is sitting on this disk. It is here to be
+    imported, and after a clean import there is no reason for it to still exist —
+    the identity map on the source row is what a re-import needs, not the bytes.
+    A *partial* import keeps the file: the owner may fix something and re-run,
+    and making them re-upload a gigabyte to do that would be its own cruelty.
+    """
     source = run.source
     source.last_run_at = timezone.now()
-    update_fields = ["last_run_at", "updated_at"]
-    # Clear the stored password only after a clean import (migration is one-time).
-    # A partial import keeps it so the owner can fix issues and re-run.
+    source.save(update_fields=["last_run_at", "updated_at"])
     if (
         run.mode == MigrationRun.Mode.IMPORT
         and run.status == MigrationRun.Status.SUCCEEDED
-        and source.password
+        and not (run.options or {}).get("keep_file")
     ):
-        source.password = ""
-        source.credentials_cleared = True
-        update_fields += ["password", "credentials_cleared"]
-    source.save(update_fields=update_fields)
+        freed = pipeline.purge(source, reason="imported")
+        record_migration_event(
+            name="migration.upload.purged",
+            user=None,
+            entity_id=source.pk,
+            attributes={"reason": "imported"},
+            metrics={"freed_bytes": freed},
+        )
 
 
 def _record_outcome(run: MigrationRun, *, failed: bool) -> None:

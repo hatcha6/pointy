@@ -29,6 +29,7 @@ from .identity import IdentityResolver
 from .loaders import get_loader
 from .loaders.base import ERROR, FAILED
 from .models import MigrationIssue, MigrationRun
+from .preparation.stages import Stage, StageTracker
 from .reconstruct import (
     STOCK_SOURCE_NONE,
     STOCK_SOURCE_RECONSTRUCT,
@@ -64,6 +65,7 @@ class MigrationEngine:
         # none (no quantities), or reconstruct (compute from purchases − sales).
         self._stock_source = resolve_stock_source(run.options)
         self._reconstructor: StockReconstructor | None = None
+        self._tracker: StageTracker | None = None
 
     # --- public entrypoint ----------------------------------------------
     def execute(self) -> dict:
@@ -71,11 +73,21 @@ class MigrationEngine:
         if connector is None:
             raise MigrationError(f"Unknown source system: {self.source.system_key!r}.")
 
-        transport = build_transport(self.source.transport_kind, self.source.connection_dict())
+        transport = build_transport(connector.required_transport, self.source.connection_dict())
         specs = self._specs_to_run(connector)
+        # One stage per entity. An import that walks 900,000 sale lines spends
+        # most of its life inside a single entity, so "Sales: 412,000" is the
+        # only progress report that means anything.
+        self._tracker = StageTracker(
+            self.run,
+            [Stage(spec.entity_type, spec.label) for spec in specs]
+            + ([Stage(STOCK, "احتساب الكميات")] if self._stock_source == STOCK_SOURCE_RECONSTRUCT else []),
+            # A dry run's writes are rolled back, so its stage timeline is kept
+            # in memory and persisted with the rest of the report afterwards.
+            persist=not self.dry_run,
+        )
         context = ExtractContext(
             source=self.source,
-            options=dict(self.source.extra_options or {}),
             run_options=dict(self.run.options or {}),
         )
         resolver = IdentityResolver(self.source, self.run, dry_run=self.dry_run)
@@ -110,6 +122,7 @@ class MigrationEngine:
             self._process_entity(spec, connector, transport, context, resolver)
             self._persist_summary()
         if self._reconstructor is not None:
+            self._tracker.start(STOCK)
             self.run.update_progress(96, "احتساب الكميات من الحركات…", current_entity=STOCK)
             self._feed_reconstruction_snapshot(connector, transport, context, resolver)
             self._reconstruct_stock()
@@ -139,11 +152,15 @@ class MigrationEngine:
     def _process_entity(self, spec, connector, transport, context, resolver):
         counts = {action: 0 for action in _ACTIONS}
         self._summary[spec.entity_type] = counts
+        if self._tracker is not None:
+            self._tracker.start(spec.entity_type)
         loader = get_loader(spec.entity_type)
         if loader is None:
             self._add_issue(
                 spec.entity_type, "", ERROR, "no_loader", "No loader is registered for this entity."
             )
+            if self._tracker is not None:
+                self._tracker.skip(spec.entity_type, "لا يوجد مُحمِّل لهذا النوع")
             return
         processed = 0
         try:
@@ -157,14 +174,30 @@ class MigrationEngine:
                 processed += 1
                 # Live count for big entities. Skipped during a dry run because
                 # those writes would be rolled back with the rest of the run.
-                if not self.dry_run and processed % _PROGRESS_EVERY == 0:
-                    self.run.update_progress(
-                        self.run.progress_percent,
-                        f"{spec.label}: {processed}",
-                        current_entity=spec.entity_type,
-                    )
+                if processed % _PROGRESS_EVERY == 0:
+                    if self._tracker is not None:
+                        self._tracker.progress(
+                            spec.entity_type,
+                            detail=f"{processed:,} سجل",
+                            counts=dict(counts),
+                        )
+                    if not self.dry_run:
+                        self.run.update_progress(
+                            self.run.progress_percent,
+                            f"{spec.label}: {processed}",
+                            current_entity=spec.entity_type,
+                        )
         except Exception as exc:  # noqa: BLE001 - extract/transport failure for the whole entity
             self._add_issue(spec.entity_type, "", ERROR, "extract_failed", _friendly(exc))
+            if self._tracker is not None:
+                self._tracker.fail(spec.entity_type, _friendly(exc))
+            return
+        if self._tracker is not None:
+            self._tracker.done(
+                spec.entity_type,
+                detail=self._entity_detail(counts),
+                counts=dict(counts),
+            )
 
     def _load_one(self, spec, loader, record, resolver, counts):
         source_key = str(getattr(record, "source_key", "") or "")
@@ -213,6 +246,8 @@ class MigrationEngine:
         if self._reconstructor is None:
             return
         result = self._reconstructor.flush(dry_run=self.dry_run)
+        if self._tracker is not None:
+            self._tracker.done(STOCK, counts=dict(result.counts))
         bucket = dict(result.counts)
         if result.stats:
             bucket["reconstruction"] = result.stats
@@ -221,6 +256,17 @@ class MigrationEngine:
             self._add_issue(
                 STOCK, issue.source_key, issue.severity, issue.code, issue.message, issue.detail
             )
+
+    @staticmethod
+    def _entity_detail(counts):
+        parts = []
+        if counts.get("created"):
+            parts.append(f"{counts['created']:,} جديد")
+        if counts.get("updated"):
+            parts.append(f"{counts['updated']:,} تحديث")
+        if counts.get("failed"):
+            parts.append(f"{counts['failed']:,} فشل")
+        return " · ".join(parts) or "لا توجد سجلات"
 
     # --- issues + summary ------------------------------------------------
     def _add_issue(self, entity_type, source_key, severity, code, message, detail=None):
@@ -249,7 +295,13 @@ class MigrationEngine:
 
     def _persist_summary(self):
         self.run.summary = self._summary
-        self.run.save(update_fields=["summary", "updated_at"])
+        fields = ["summary", "updated_at"]
+        if self._tracker is not None and not self._tracker.persist:
+            # Dry run: the tracker never wrote (its writes would be rolled back
+            # with everything else), so the timeline goes out with the summary.
+            self.run.stages = self._tracker.as_list()
+            fields.insert(1, "stages")
+        self.run.save(update_fields=fields)
 
     # --- finalisation ----------------------------------------------------
     def _specs_to_run(self, connector):

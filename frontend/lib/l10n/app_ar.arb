@@ -8238,53 +8238,8 @@
   "migrationSubtitle": "استيراد بياناتك من نظام نقاط البيع القديم",
   "migrationHeroDescription": "انقل منتجاتك وفئاتك وعملاءك ومورّديك ومخزونك من نظامك القديم إلى دفتر.",
   "migrationLoadError": "تعذّر تحميل أدوات النقل",
-  "migrationConnectionSectionTitle": "الاتصال بقاعدة البيانات القديمة",
-  "migrationConnectionSectionSubtitle": "اختر نظامك القديم وأدخل بيانات الاتصال بقاعدة بياناته.",
-  "migrationSourceNameLabel": "اسم مصدر البيانات",
-  "migrationSystemLabel": "النظام القديم",
   "migrationStubSystemNotice": "هذا النظام متاح لفحص التوافق فقط حاليًا؛ سيُفعَّل الاستيراد لاحقًا.",
-  "migrationDatabaseFileLabel": "مسار ملف قاعدة البيانات",
-  "migrationHostLabel": "المضيف",
-  "migrationPortLabel": "المنفذ",
-  "migrationDatabaseLabel": "قاعدة البيانات",
-  "migrationUsernameLabel": "اسم المستخدم",
-  "migrationPasswordLabel": "كلمة المرور",
-  "migrationPasswordKeepHint": "اتركها فارغة للإبقاء على كلمة المرور المحفوظة",
-  "migrationAdvancedSectionTitle": "خيارات متقدمة (اختياري)",
-  "migrationAdvancedSectionSubtitle": "لازمة للأنظمة القديمة جدًا (مثل SQL Server 2000 الذي يحتاج مُشغّل FreeTDS).",
-  "migrationOdbcDriverLabel": "مُشغّل ODBC",
-  "migrationOdbcDriverHint": "مثال: FreeTDS أو ODBC Driver 18 for SQL Server",
-  "migrationTdsVersionLabel": "إصدار TDS",
-  "migrationTdsVersionHint": "مثال: 7.0 لـ SQL Server 2000",
-  "migrationEncodingLabel": "ترميز النص",
-  "migrationEncodingHint": "مثال: cp1256 للنصوص العربية القديمة",
-  "migrationScanButton": "بحث في الشبكة",
-  "migrationScanTitle": "خوادم SQL Server في الشبكة",
-  "migrationScanSubtitle": "اختر خادم نظام نقاط البيع الخاص بالعميل لتعبئة المضيف والمنفذ.",
-  "migrationScanEmpty": "لم يُعثر على أي خادم. تأكد من تشغيل الجهاز على نفس الشبكة، أو أدخل المضيف يدويًا.",
-  "migrationScanFailed": "تعذّر البحث في الشبكة",
-  "migrationScanSelected": "تم اختيار {server}",
-  "@migrationScanSelected": {
-    "placeholders": {
-      "server": {
-        "type": "String"
-      }
-    }
-  },
-  "migrationSaveSourceButton": "حفظ المصدر",
-  "migrationTestButton": "اختبار الاتصال",
-  "migrationCheckButton": "فحص التوافق",
-  "migrationTestSuccess": "تم الاتصال — {count} جدول",
-  "@migrationTestSuccess": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "migrationTestFailed": "فشل الاتصال بقاعدة البيانات",
   "migrationCompatTitle": "التوافق",
-  "migrationNotChecked": "لم يتم فحص التوافق بعد",
   "migrationCompatibleMessage": "قاعدة البيانات متوافقة وجاهزة للنقل.",
   "migrationIncompatibleMessage": "قاعدة البيانات غير متوافقة مع هذا النظام.",
   "migrationDetectedVersion": "الإصدار المكتشف: {version}",
@@ -8300,8 +8255,6 @@
   "migrationMissingTables": "جداول مفقودة",
   "migrationEntitiesSectionTitle": "البيانات المراد نقلها",
   "migrationEntitiesSectionSubtitle": "اختر أنواع البيانات التي تريد نقلها.",
-  "migrationWithoutQuantitiesLabel": "نقل المنتجات بدون كميات",
-  "migrationWithoutQuantitiesSubtitle": "استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في دفتر.",
   "migrationStockSourceSectionTitle": "كميات المخزون",
   "migrationStockSourceSnapshotLabel": "نقل الكميات كما هي",
   "migrationStockSourceSnapshotSubtitle": "تُنقل كميات المخزون الحالية من النظام القديم كما هي.",
@@ -8337,8 +8290,6 @@
   "migrationImportGatedHint": "أكمِل تشغيلًا تجريبيًا ناجحًا بلا أخطاء لتفعيل النقل.",
   "migrationImportButton": "بدء النقل",
   "migrationDryRunButton": "تشغيل تجريبي",
-  "migrationSourceSaved": "تم حفظ المصدر",
-  "migrationSourceSaveError": "تعذّر حفظ المصدر",
   "migrationRunStartError": "تعذّر بدء العملية",
   "migrationDryRunStarted": "بدأ التشغيل التجريبي",
   "migrationImportStarted": "بدأ النقل",
@@ -9858,5 +9809,234 @@
       }
     }
   },
-  "companionPairFirst": "اقترن بهاتف أولًا لاستخدام الكاميرا"
+  "companionPairFirst": "اقترن بهاتف أولًا لاستخدام الكاميرا",
+  "migrationStepChoose": "الملف",
+  "@migrationStepChoose": {
+    "description": "Wizard step 1: pick the file."
+  },
+  "migrationStepUpload": "الرفع",
+  "@migrationStepUpload": {
+    "description": "Wizard step 2: uploading."
+  },
+  "migrationStepPrepare": "التحضير",
+  "@migrationStepPrepare": {
+    "description": "Wizard step 3: server-side preparation."
+  },
+  "migrationStepReview": "المراجعة",
+  "@migrationStepReview": {
+    "description": "Wizard step 4: what we found + choices."
+  },
+  "migrationStepImport": "النقل",
+  "@migrationStepImport": {
+    "description": "Wizard step 5: the import itself."
+  },
+  "migrationChooseTitle": "أحضر بيانات نظامك القديم",
+  "@migrationChooseTitle": {
+    "description": "Headline on the file-picking step."
+  },
+  "migrationChooseSubtitle": "اختر ملف قاعدة بيانات نظامك القديم وسنتولى الباقي: نقرأه، نتعرف على النظام، ننقل البيانات، ثم نحذف الملف من الخادم.",
+  "@migrationChooseSubtitle": {
+    "description": "Explains the whole flow in one sentence before anything happens."
+  },
+  "migrationPickFileButton": "اختيار ملف",
+  "@migrationPickFileButton": {
+    "description": "Opens the file picker."
+  },
+  "migrationChooseAnotherFile": "اختيار ملف آخر",
+  "@migrationChooseAnotherFile": {
+    "description": "Replaces the picked file."
+  },
+  "migrationAcceptedFormats": "الصيغ المقبولة: {formats}",
+  "@migrationAcceptedFormats": {
+    "description": "List of accepted file extensions.",
+    "placeholders": {
+      "formats": {
+        "type": "String"
+      }
+    }
+  },
+  "migrationMaxFileSize": "الحد الأقصى لحجم الملف: {size}",
+  "@migrationMaxFileSize": {
+    "description": "Upload size ceiling.",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "migrationFileTooLarge": "هذا الملف أكبر من الحد المسموح به.",
+  "@migrationFileTooLarge": {
+    "description": "Shown when the picked file exceeds the server's ceiling."
+  },
+  "migrationWhereIsMyFileTitle": "أين أجد هذا الملف؟",
+  "@migrationWhereIsMyFileTitle": {
+    "description": "Header of the help section on the choose step."
+  },
+  "migrationWhereIsMyFileBody": "الملف موجود عادةً على الجهاز الذي يعمل عليه نظامك القديم، داخل مجلد البرنامج. إن لم تجده، اسأل من ركّب لك النظام عن «ملف قاعدة البيانات». انسخه على ذاكرة USB وأحضره إلى هنا.",
+  "@migrationWhereIsMyFileBody": {
+    "description": "Practical advice for finding the legacy database file."
+  },
+  "migrationSupportedSystemsTitle": "الأنظمة التي نقرأها",
+  "@migrationSupportedSystemsTitle": {
+    "description": "Header above the list of supported POS systems."
+  },
+  "migrationSystemDetectedAutomatically": "لا حاجة لاختيار نظامك — نتعرف عليه من الملف نفسه.",
+  "@migrationSystemDetectedAutomatically": {
+    "description": "Reassurance that the vendor is auto-detected."
+  },
+  "migrationStartUploadButton": "ابدأ الرفع",
+  "@migrationStartUploadButton": {
+    "description": "Begins the chunked upload."
+  },
+  "migrationUploadingTitle": "جارٍ رفع الملف",
+  "@migrationUploadingTitle": {
+    "description": "Headline while bytes move."
+  },
+  "migrationUploadedOf": "{sent} من {total}",
+  "@migrationUploadedOf": {
+    "description": "Bytes uploaded out of the total.",
+    "placeholders": {
+      "sent": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "migrationUploadRate": "{rate}/ث",
+  "@migrationUploadRate": {
+    "description": "Upload speed per second.",
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "migrationUploadRemaining": "يتبقى {duration}",
+  "@migrationUploadRemaining": {
+    "description": "Estimated time left.",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "migrationUploadResumeNote": "إن انقطع الاتصال يمكنك المتابعة من حيث توقف الرفع — لن تبدأ من جديد.",
+  "@migrationUploadResumeNote": {
+    "description": "Explains that the upload is resumable, which matters for a GB file."
+  },
+  "migrationCancelUploadButton": "إلغاء الرفع",
+  "@migrationCancelUploadButton": {
+    "description": "Cancels an upload in flight."
+  },
+  "migrationUploadFailedTitle": "توقف الرفع",
+  "@migrationUploadFailedTitle": {
+    "description": "Headline when an upload fails."
+  },
+  "migrationResumeUploadButton": "متابعة الرفع",
+  "@migrationResumeUploadButton": {
+    "description": "Resumes an interrupted upload from the server's offset."
+  },
+  "migrationPreparingTitle": "جارٍ تحضير البيانات",
+  "@migrationPreparingTitle": {
+    "description": "Headline during server-side conversion."
+  },
+  "migrationPreparingSubtitle": "يمكنك إغلاق هذه الصفحة والعودة لاحقًا — تستمر العملية على الخادم.",
+  "@migrationPreparingSubtitle": {
+    "description": "Tells the owner the long job survives them leaving."
+  },
+  "migrationPreparationFailedTitle": "تعذر قراءة هذا الملف",
+  "@migrationPreparationFailedTitle": {
+    "description": "Headline when preparation fails."
+  },
+  "migrationTryAnotherFileButton": "تجربة ملف آخر",
+  "@migrationTryAnotherFileButton": {
+    "description": "Discards the failed file and returns to the picker."
+  },
+  "migrationFoundTitle": "هذا ما وجدناه",
+  "@migrationFoundTitle": {
+    "description": "Headline of the contents-preview step."
+  },
+  "migrationDetectedSystemLabel": "النظام",
+  "@migrationDetectedSystemLabel": {
+    "description": "Label for the auto-detected POS name."
+  },
+  "migrationHistoryRange": "السجل من {from} إلى {to}",
+  "@migrationHistoryRange": {
+    "description": "Date span covered by the transactional history.",
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "migrationNothingToImport": "لم نعثر على بيانات قابلة للنقل في هذا الملف.",
+  "@migrationNothingToImport": {
+    "description": "Shown when analysis found no records."
+  },
+  "migrationWhatToTransferTitle": "ما الذي ننقله؟",
+  "@migrationWhatToTransferTitle": {
+    "description": "Header above the per-entity toggles."
+  },
+  "migrationPreviewButton": "معاينة قبل النقل",
+  "@migrationPreviewButton": {
+    "description": "Starts a dry run."
+  },
+  "migrationDiscardFileButton": "حذف الملف",
+  "@migrationDiscardFileButton": {
+    "description": "Deletes the uploaded file from the server without importing."
+  },
+  "migrationDiscardFileConfirm": "سيُحذف الملف من الخادم ولن تتمكن من النقل منه دون رفعه مرة أخرى. هل تريد المتابعة؟",
+  "@migrationDiscardFileConfirm": {
+    "description": "Confirmation before discarding an uploaded file."
+  },
+  "migrationDryRunningTitle": "جارٍ فحص البيانات",
+  "@migrationDryRunningTitle": {
+    "description": "Headline while a dry run is in progress."
+  },
+  "migrationImportingTitle": "جارٍ نقل البيانات",
+  "@migrationImportingTitle": {
+    "description": "Headline while an import is in progress."
+  },
+  "migrationDryRunCleanTitle": "المعاينة نظيفة",
+  "@migrationDryRunCleanTitle": {
+    "description": "Dry run finished with no failed records."
+  },
+  "migrationDryRunCleanMessage": "فحصنا كل شيء دون كتابة أي بيانات. يمكنك النقل الآن.",
+  "@migrationDryRunCleanMessage": {
+    "description": "What a clean dry run means."
+  },
+  "migrationDryRunIssuesTitle": "وجدنا مشاكل في المعاينة",
+  "@migrationDryRunIssuesTitle": {
+    "description": "Dry run finished with failures."
+  },
+  "migrationDoneTitle": "تم نقل بياناتك",
+  "@migrationDoneTitle": {
+    "description": "Headline after a successful import."
+  },
+  "migrationFileDeletedNotice": "تم حذف ملفك من الخادم.",
+  "@migrationFileDeletedNotice": {
+    "description": "Confirms the uploaded database no longer exists on the server."
+  },
+  "migrationFileKeptNotice": "احتفظنا بالملف مؤقتًا لتتمكن من إعادة المحاولة بعد إصلاح المشاكل.",
+  "@migrationFileKeptNotice": {
+    "description": "Explains why a partial import did not delete the file."
+  },
+  "migrationStartAnotherButton": "نقل ملف آخر",
+  "@migrationStartAnotherButton": {
+    "description": "Starts the wizard again from step one."
+  },
+  "migrationRecordsImported": "{count} سجل",
+  "@migrationRecordsImported": {
+    "description": "Total records imported (pre-formatted with separators).",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  }
 }

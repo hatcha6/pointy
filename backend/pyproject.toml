@@ -26,10 +26,6 @@ dependencies = [
   # system package is needed in the backend image.
   "pillow-heif>=1,<2",
   "psycopg[binary]>=3.2,<4",
-  # SQL Server is the most common legacy POS backend, so the data-migration
-  # driver ships on every install (the system still needs an ODBC driver to
-  # actually connect).
-  "pyodbc>=5,<6",
   "python-bidi>=0.4",
   "requests>=2.32,<3",
   # Reads a barcode out of a PHOTOGRAPH, for the companion camera. The phone
@@ -49,14 +45,6 @@ dev = [
   "pytest-django>=4.9,<5",
   "ruff>=0.8,<1",
 ]
-# Extra source-database drivers for the data-migration feature (apps.migration).
-# Postgres (psycopg), SQLite (stdlib), and SQL Server (pyodbc) are in the base
-# deps; only MongoDB is gated here. Install with
-# `pip install pointy-backend[migration]` on deployments that migrate from Mongo.
-migration = [
-  "pymongo>=4,<5",
-]
-
 [tool.setuptools]
 packages = [
   "pointy",
@@ -103,6 +91,7 @@ packages = [
   "apps.migration",
   "apps.migration.migrations",
   "apps.migration.transports",
+  "apps.migration.preparation",
   "apps.migration.connectors",
   "apps.migration.loaders",
 ]

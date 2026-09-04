@@ -1,16 +1,22 @@
 """End-to-end tests for the data-migration pipeline.
 
 Everything runs against the working reference SQLite connector + a seeded toy
-database, so the whole pipeline (connect → compatibility → dry-run → import →
-re-run) is exercised without any vendor dump or optional driver.
+database, so the whole pipeline (upload → prepare → detect → dry-run → import →
+re-run → purge) is exercised without any vendor dump.
+
+Every test overrides the staging root to a temp directory: the pipeline resolves
+a source's file from ``POINTY_MIGRATION_STAGING_ROOT`` and deletes it when the
+import lands, and neither of those should touch a real deployment's volume.
 """
 
+import io
 import sqlite3
 import tempfile
 from decimal import Decimal
 from pathlib import Path
+from unittest import mock
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.catalog.models import (
     Product,
@@ -23,11 +29,13 @@ from apps.customers.models import Customer
 from apps.inventory.models import StockItem
 from apps.purchasing.models import Supplier
 
-from . import canonical, services
+from . import canonical, services, storage, uploads
 from .connectors import get_connector
 from .connectors.reference_sqlite import build_sample_database
-from .exceptions import DriverNotInstalled
 from .identity import IdentityResolver
+from .preparation import detect as detection
+from .preparation import identify as identification
+from .preparation import pipeline
 from .loaders.catalog import ProductLoader, VariantLoader
 from .models import (
     MigrationIdentityMap,
@@ -45,6 +53,11 @@ class MigrationTestBase(TestCase):
     def setUp(self):
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
+        self.staging = Path(self._tmpdir.name) / "staging"
+        self.staging.mkdir()
+        staging_override = override_settings(POINTY_MIGRATION_STAGING_ROOT=self.staging)
+        staging_override.enable()
+        self.addCleanup(staging_override.disable)
         self.db_path = Path(self._tmpdir.name) / "legacy.sqlite"
         # The fresh test DB already contains seeded rows (e.g. an "unspecified"
         # supplier from a data migration), so assert on deltas, not absolutes.
@@ -61,14 +74,29 @@ class MigrationTestBase(TestCase):
         self.assertEqual(model.objects.count() - self.baseline[model], expected)
 
     def make_source(self, **overrides):
+        """A source whose preparation already succeeded, pointing at db_path.
+
+        Most tests are about the engine, not the pipeline that feeds it, so this
+        shortcut puts the fixture where a prepared file would be and marks the
+        source ready. The pipeline itself is covered by
+        :class:`PreparationPipelineTests`.
+        """
         defaults = dict(
             name="Old POS",
+            original_filename="legacy.sqlite",
             system_key="reference_sqlite",
-            transport_kind="sqlite",
-            database_name=str(self.db_path),
+            upload_state=MigrationSource.UploadState.READY,
         )
         defaults.update(overrides)
-        return MigrationSource.objects.create(**defaults)
+        source = MigrationSource.objects.create(**defaults)
+        if not source.prepared_filename and self.db_path.exists():
+            source.prepared_filename = storage.prepared_name(source.pk)
+            storage.adopt(self.db_path, self.staging / source.prepared_filename)
+            source.prepared_size_bytes = storage.file_size(storage.prepared_path(source))
+            source.save(
+                update_fields=["prepared_filename", "prepared_size_bytes", "updated_at"]
+            )
+        return source
 
     def run_sync(self, source, mode, entities=None, options=None):
         run = services.queue_migration_run(
@@ -160,7 +188,10 @@ class ImportTests(MigrationTestBase):
     def test_reimport_updates_in_place(self):
         build_sample_database(self.db_path)
         source = self.make_source()
-        self.run_sync(source, IMPORT)
+        # keep_file: a clean import normally deletes the uploaded database (see
+        # services._finalize_source), so re-running against the same file is
+        # something only an operator asks for explicitly.
+        self.run_sync(source, IMPORT, options={"keep_file": True})
 
         # Mutate the source and re-run.
         connection = sqlite3.connect(self.db_path)
@@ -230,32 +261,6 @@ class VariantLoaderTests(MigrationTestBase):
 
         self.assertEqual(outcome.action, "created")
         self.assertTrue(ProductVariant.objects.filter(sku="WID-1", is_default=True).exists())
-
-
-class DriverTests(MigrationTestBase):
-    def test_missing_mssql_driver_is_friendly(self):
-        try:
-            import pyodbc  # noqa: F401
-        except ImportError:
-            pass
-        else:
-            self.skipTest("pyodbc is installed in this environment")
-        transport = build_transport("mssql", {"host": "x", "database": "y"})
-        with self.assertRaises(DriverNotInstalled) as ctx:
-            transport.connect()
-        self.assertIn("pyodbc", str(ctx.exception))
-
-    def test_missing_mongo_driver_is_friendly(self):
-        try:
-            import pymongo  # noqa: F401
-        except ImportError:
-            pass
-        else:
-            self.skipTest("pymongo is installed in this environment")
-        transport = build_transport("mongo", {"host": "x", "database": "y"})
-        with self.assertRaises(DriverNotInstalled) as ctx:
-            transport.connect()
-        self.assertIn("pymongo", str(ctx.exception))
 
 
 def build_aboghris_sample(path):
@@ -409,7 +414,8 @@ def build_fahd_sample(path):
             CREATE TABLE TASNEEF (NO INTEGER, TASNEEF TEXT);
             CREATE TABLE CAR_PART (
                 ser TEXT, id INTEGER, CAR_PART TEXT, COUNT_ORG REAL, BUY_PRICE REAL,
-                SER_GOMLA REAL, SER_KETAEE REAL, TASNEEF TEXT, hideornot INTEGER
+                SER_GOMLA REAL, SER_KETAEE REAL, TAK_ONE REAL, TASNEEF TEXT,
+                hideornot INTEGER
             );
             CREATE TABLE "asnaf$" (
                 buy_price TEXT, ser_gomla TEXT, ser_ketaee TEXT, place TEXT,
@@ -449,14 +455,16 @@ def build_fahd_sample(path):
             [(59, "عام"), (60, "عدة يدوية")],
         )
         connection.executemany(
-            "INSERT INTO CAR_PART VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            # ser, id, CAR_PART, COUNT_ORG, BUY_PRICE, SER_GOMLA, SER_KETAEE,
+            # TAK_ONE, TASNEEF, hideornot
+            "INSERT INTO CAR_PART VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 # System placeholder (ser '0' / "دين سابق") -> skipped.
-                ("0", 1989, "دين سابق", 0, 4, 0, 0, "عام", 1),
+                ("0", 1989, "دين سابق", 0, 4, 0, 0, 1, "عام", 1),
                 # A real native item.
-                ("5000", 2000, "مفتاح ربط", 12, 20, 28, 35, "عدة يدوية", 0),
-                # Same code as an asnaf$ row -> CAR_PART wins on dedup.
-                ("2661-15", 2001, "رول مبطن (محدّث)", 5, 70, 95, 120, "عام", 0),
+                ("5000", 2000, "مفتاح ربط", 12, 20, 28, 35, 1, "عدة يدوية", 0),
+                # Same code as an asnaf$ row -> the CAR_PART row is what lands.
+                ("2661-15", 2001, "رول مبطن (محدّث)", 5, 70, 95, 120, 1, "عام", 0),
             ],
         )
         connection.executemany(
@@ -564,9 +572,7 @@ class ResolverPerformanceTests(MigrationTestBase):
     def _make_aboghris_source(self):
         return self.make_source(
             name="AboGhris",
-            system_key="aboghris_mssql",
-            transport_kind="sqlite",
-            database_name=str(self.db_path),
+            system_key="aboghris",
         )
 
 
@@ -574,9 +580,7 @@ class AboGhrisConnectorTests(MigrationTestBase):
     def _aboghris_source(self, **overrides):
         return self.make_source(
             name="AboGhris",
-            system_key="aboghris_mssql",
-            transport_kind="sqlite",
-            database_name=str(self.db_path),
+            system_key="aboghris",
             **overrides,
         )
 
@@ -859,26 +863,69 @@ class StockReconstructorTests(MigrationTestBase):
         self.assertIn("inventory_valuation", codes)  # headline
 
 
+def _add_empty_reconstruction_tables(path):
+    """Add the tables ``preparation.fahd_reconstruct`` writes, with no rows.
+
+    A Fahd shop whose audit log holds no invoices — a till installed last month,
+    or one whose log was truncated — produces exactly this: a full catalogue and
+    empty invoice tables. The connector must read that rather than reject it.
+    """
+    connection = sqlite3.connect(path)
+    try:
+        connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS fahd_sales (
+                invoice_no INTEGER PRIMARY KEY, occurred_at TEXT, doc_date TEXT,
+                cashier TEXT, gross REAL, discount REAL, net REAL, n_lines INTEGER,
+                total_qty REAL, status TEXT
+            );
+            CREATE TABLE IF NOT EXISTS fahd_sale_lines (
+                invoice_no INTEGER, ser TEXT, qty REAL, unit_price REAL, total REAL
+            );
+            CREATE TABLE IF NOT EXISTS fahd_purchases (
+                id INTEGER PRIMARY KEY, supplier_name TEXT, invoice_no TEXT,
+                occurred_at TEXT, is_opening INTEGER DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS fahd_purchase_lines (
+                purchase_id INTEGER, ser TEXT, qty REAL, unit_cost REAL, total REAL
+            );
+            CREATE TABLE IF NOT EXISTS CAR_PART_D (ser TEXT, NO_N TEXT, PLACE TEXT);
+            CREATE TABLE IF NOT EXISTS CAR_PART_D2 (ser TEXT, NO_N TEXT, TAK_ONE REAL);
+            """
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
 class FahdConnectorTests(MigrationTestBase):
+    """The Fahd master-data mapping: categories, products, parties, stock.
+
+    Fed the catalogue fixture plus empty reconstructed-invoice tables — the shape
+    a Fahd file has when its audit log carries no invoices. Transactions are
+    covered by :class:`FahdSqliteTests`, against a fixture that has some.
+    """
+
+    def _fahd_fixture(self):
+        build_fahd_sample(self.db_path)
+        _add_empty_reconstruction_tables(self.db_path)
     def _fahd_source(self, **overrides):
         return self.make_source(
             name="Fahd",
-            system_key="fahd_mssql",
-            transport_kind="sqlite",
-            database_name=str(self.db_path),
+            system_key="fahd",
             **overrides,
         )
 
     def test_compatible_schema(self):
-        build_fahd_sample(self.db_path)
-        connector = get_connector("fahd_mssql")
+        self._fahd_fixture()
+        connector = get_connector("fahd")
         with build_transport("sqlite", {"database": str(self.db_path)}) as transport:
             report = connector.check_compatibility(transport)
         self.assertTrue(report.compatible)
-        self.assertEqual(report.detected_version, "fahd-v22-2023")
+        self.assertEqual(report.detected_version, "fahd-mdb-recon-1")
 
     def test_master_data_import(self):
-        build_fahd_sample(self.db_path)
+        self._fahd_fixture()
         source = self._fahd_source()
 
         run = self.run_sync(source, IMPORT)
@@ -886,11 +933,13 @@ class FahdConnectorTests(MigrationTestBase):
         self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
         # Categories from TASNEEF.
         self.assertCreated(ProductCategory, 2)
-        # Products: 2 from CAR_PART (system row skipped) + 2 from asnaf$ (the
-        # overlapping "2661-15" is deduped to the CAR_PART row) = 4.
-        self.assertCreated(Product, 4)
-        self.assertCreated(ProductVariant, 4)
-        # The CAR_PART row wins the dedup (its name + price, not the asnaf$ one).
+        # Products: the two real CAR_PART rows (the "دين سابق" system row is
+        # skipped). `asnaf$` is deliberately not read on this build — it is a
+        # stale Excel side-catalogue whose codes mostly do not exist in the
+        # master and never appear on an invoice.
+        self.assertCreated(Product, 2)
+        self.assertCreated(ProductVariant, 2)
+        # The CAR_PART row is the one that lands, with its own name + price.
         v_dedup = ProductVariant.objects.get(barcode="2661-15")
         self.assertEqual(v_dedup.unit_price, Decimal("120.00"))
         self.assertEqual(v_dedup.product.name, "رول مبطن (محدّث)")
@@ -898,10 +947,9 @@ class FahdConnectorTests(MigrationTestBase):
         native = Product.objects.get(name="مفتاح ربط")
         self.assertEqual(native.categories.first().name, "عدة يدوية")
         self.assertEqual(ProductVariant.objects.get(sku="5000").unit_price, Decimal("35.00"))
-        # asnaf$-only product imported at its retail (ser_ketaee) price.
-        asnaf = ProductVariant.objects.get(barcode="2229-10")
-        self.assertEqual(asnaf.unit_price, Decimal("16.00"))
-        # Stock only from CAR_PART real rows (asnaf$ has none, system row skipped).
+        # An `asnaf$`-only code is not a product at all.
+        self.assertFalse(ProductVariant.objects.filter(barcode="2229-10").exists())
+        # Stock only from the real CAR_PART rows (the system row is skipped).
         self.assertCreated(StockItem, 2)
         self.assertEqual(
             StockItem.objects.get(variant=ProductVariant.objects.get(sku="5000")).quantity_on_hand,
@@ -915,166 +963,17 @@ class FahdConnectorTests(MigrationTestBase):
         self.assertCreated(Supplier, 1)
         self.assertTrue(Supplier.objects.filter(name="شركة قطع الغيار").exists())
 
-    def test_transactional_import(self):
-        from apps.expenses.models import Expense
-        from apps.payments.models import Payment
-        from apps.purchasing.models import PurchaseOrder, SupplierPayment
-        from apps.sales.models import Order
-
-        build_fahd_sample(self.db_path)
-        source = self._fahd_source()
-        orders_before = Order.objects.count()
-        payments_before = Payment.objects.count()
-        pos_before = PurchaseOrder.objects.count()
-        expenses_before = Expense.objects.count()
-        supplier_payments_before = SupplierPayment.objects.count()
-
-        run = self.run_sync(source, IMPORT)
-
-        self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
-        # Sales: one resolvable invoice (the system-item invoice yields no lines).
-        self.assertEqual(Order.objects.count() - orders_before, 1)
-        self.assertEqual(Payment.objects.count() - payments_before, 1)
-        sale = Order.objects.get(total=Decimal("190.00"))  # 2×35 + 1×120
-        self.assertEqual(sale.status, "paid")
-        self.assertEqual(sale.payments.first().amount, Decimal("190.00"))
-        self.assertEqual(sale.created_at.year, 2024)  # historical date preserved
-        self.assertEqual(sale.customer.full_name, "أحمد علي")
-        # Purchase order: one invoice, two lines, 10×20 + 5×80 = 600.
-        self.assertEqual(PurchaseOrder.objects.count() - pos_before, 1)
-        po = PurchaseOrder.objects.get(total=Decimal("600.00"))
-        self.assertEqual(po.lines.count(), 2)
-        self.assertEqual(po.supplier.name, "شركة قطع الغيار")
-        self.assertEqual(po.status, "received")
-        # Supplier payment from ESAL_WARED1.
-        self.assertEqual(SupplierPayment.objects.count() - supplier_payments_before, 1)
-        payment = SupplierPayment.objects.get(reference="R-1")
-        self.assertEqual(payment.amount, Decimal("600.00"))
-        self.assertEqual(payment.supplier.name, "شركة قطع الغيار")
-        # Expense from MASAREEF_S (zero-amount row skipped); category from S_NAME.
-        self.assertEqual(Expense.objects.count() - expenses_before, 1)
-        expense = Expense.objects.get(amount=Decimal("250.00"))
-        self.assertEqual(expense.category.name, "كهرباء")
-        self.assertEqual(expense.spent_at.year, 2024)
-
     def test_products_without_quantities_option_skips_stock(self):
-        build_fahd_sample(self.db_path)
+        self._fahd_fixture()
         source = self._fahd_source()
         stock_before = StockItem.objects.count()
 
         run = self.run_sync(source, IMPORT, options={"products_without_quantities": True})
 
         self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
-        self.assertCreated(Product, 4)
+        self.assertCreated(Product, 2)
         self.assertEqual(StockItem.objects.count(), stock_before)
         self.assertNotIn("stock", run.summary)
-
-
-class MssqlConnectionStringTests(TestCase):
-    def _conn_string(self, options):
-        transport = build_transport(
-            "mssql",
-            {
-                "host": "10.0.0.5",
-                "port": 1433,
-                "database": "FAHD2023",
-                "username": "sa",
-                "password": "secret",
-                "options": options,
-            },
-        )
-        return transport._build_connection_string()
-
-    def test_freetds_for_sql_server_2000(self):
-        # FreeTDS needs a separate PORT + TDS version and rejects the TLS keywords.
-        conn = self._conn_string({"odbc_driver": "FreeTDS", "tds_version": "7.0"})
-        self.assertIn("DRIVER={FreeTDS}", conn)
-        self.assertIn("SERVER=10.0.0.5", conn)
-        self.assertIn("PORT=1433", conn)
-        self.assertIn("TDS_Version=7.0", conn)
-        self.assertNotIn("Encrypt", conn)
-        self.assertNotIn("10.0.0.5,1433", conn)
-
-    def test_modern_driver_keeps_tls_keywords(self):
-        conn = self._conn_string({})
-        self.assertIn("ODBC Driver 18 for SQL Server", conn)
-        self.assertIn("SERVER=10.0.0.5,1433", conn)
-        self.assertIn("Encrypt=yes", conn)
-        self.assertIn("TrustServerCertificate=yes", conn)
-
-    def test_trusted_auth_connection_string(self):
-        # A None username switches to Windows/trusted auth, omitting UID/PWD.
-        transport = build_transport("mssql", {"host": "h", "database": "d"})
-        conn = transport._build_connection_string(None, "")
-        self.assertIn("Trusted_Connection=yes", conn)
-        self.assertNotIn("UID=", conn)
-        self.assertNotIn("PWD=", conn)
-
-
-class MssqlDefaultCredentialTests(TestCase):
-    def _candidates(self, config):
-        return build_transport("mssql", config)._credential_candidates()
-
-    def test_explicit_login_is_only_candidate(self):
-        # When the operator supplies a login we never try anything else.
-        cands = self._candidates(
-            {"host": "h", "database": "d", "username": "sa", "password": "secret"}
-        )
-        self.assertEqual(cands, [("sa", "secret")])
-
-    def test_blank_login_falls_back_to_vendor_defaults(self):
-        cands = self._candidates({"host": "h", "database": "d"})
-        self.assertGreater(len(cands), 1)
-        self.assertEqual(cands[0], (None, ""))  # trusted auth first
-        self.assertIn(("sa", ""), cands)  # blank sa (MSDE / SQL 2000)
-
-    def test_fallback_can_be_disabled(self):
-        # With the toggle off and no login, only trusted auth is attempted.
-        cands = self._candidates(
-            {"host": "h", "database": "d", "options": {"try_default_credentials": False}}
-        )
-        self.assertEqual(cands, [(None, "")])
-
-
-class SsrpDiscoveryParseTests(TestCase):
-    def _payload(self, body: str) -> bytes:
-        encoded = body.encode("latin-1")
-        return b"\x05" + len(encoded).to_bytes(2, "little") + encoded
-
-    def test_parses_single_instance(self):
-        from .discovery import _parse_ssrp_payload
-
-        raw = self._payload(
-            "ServerName;POSPC;InstanceName;SQLEXPRESS;IsClustered;No;"
-            "Version;10.50.1600.1;tcp;1433;;"
-        )
-        instances = _parse_ssrp_payload("192.168.1.20", raw)
-        self.assertEqual(len(instances), 1)
-        inst = instances[0]
-        self.assertEqual(inst.server_name, "POSPC")
-        self.assertEqual(inst.instance_name, "SQLEXPRESS")
-        self.assertEqual(inst.version, "10.50.1600.1")
-        self.assertEqual(inst.tcp_port, 1433)
-        self.assertEqual(inst.host, "192.168.1.20")
-
-    def test_parses_multiple_instances(self):
-        from .discovery import _parse_ssrp_payload
-
-        raw = self._payload(
-            "ServerName;SRV;InstanceName;MSSQLSERVER;Version;8.00.760;tcp;1433;;"
-            "ServerName;SRV;InstanceName;POS;Version;10.0.0;tcp;1450;;"
-        )
-        instances = _parse_ssrp_payload("10.0.0.9", raw)
-        self.assertEqual({i.instance_name for i in instances}, {"MSSQLSERVER", "POS"})
-
-    def test_ignores_non_ssrp_bytes(self):
-        from .discovery import _parse_ssrp_payload
-
-        self.assertEqual(_parse_ssrp_payload("10.0.0.1", b"\x00garbage"), [])
-        self.assertEqual(_parse_ssrp_payload("10.0.0.1", b""), [])
-
-
-# --- Fahd (Access/SQLite export) connector ------------------------------------
 
 
 def build_fahd_database(path):
@@ -1220,7 +1119,7 @@ def build_fahd_database(path):
 class FahdSqliteTests(MigrationTestBase):
     def make_fahd_source(self):
         build_fahd_database(self.db_path)
-        return self.make_source(system_key="fahd_sqlite")
+        return self.make_source(system_key="fahd")
 
     def test_compatibility_requires_reconstructed_tables(self):
         build_fahd_database(self.db_path)
@@ -1228,7 +1127,7 @@ class FahdSqliteTests(MigrationTestBase):
         connection.execute("DROP TABLE fahd_sales")
         connection.commit()
         connection.close()
-        connector = get_connector("fahd_sqlite")
+        connector = get_connector("fahd")
         with build_transport("sqlite", {"database": str(self.db_path)}) as transport:
             report = connector.check_compatibility(transport)
         self.assertFalse(report.compatible)
@@ -1380,7 +1279,11 @@ class FahdSqliteTests(MigrationTestBase):
         plain active variants) is repaired in place by re-running just the
         unit entities — the exact flow of deploy/onprem/backfill-fahd-units.sh."""
         source = self.make_fahd_source()
-        self.run_sync(source, IMPORT, options={"stock_source": "none"})
+        # keep_file: this flow re-runs against the same file, which a clean
+        # import would otherwise have deleted.
+        self.run_sync(
+            source, IMPORT, options={"stock_source": "none", "keep_file": True}
+        )
 
         # Rewind to the pre-units state the old importer left behind: the pack
         # code lives on an active variant, no units, no purchasing default.
@@ -1395,7 +1298,7 @@ class FahdSqliteTests(MigrationTestBase):
             source,
             IMPORT,
             entities=["unit", "product_unit"],
-            options={"stock_source": "none"},
+            options={"stock_source": "none", "keep_file": True},
         )
         self.assertEqual(run.status, MigrationRun.Status.SUCCEEDED)
 
@@ -1599,9 +1502,7 @@ class PurchaseQuantityFidelityTests(MigrationTestBase):
 
         source = self.make_source(
             name="AboGhris",
-            system_key="aboghris_mssql",
-            transport_kind="sqlite",
-            database_name=str(self.db_path),
+            system_key="aboghris",
         )
         run = self.run_sync(source, IMPORT)
 
@@ -1609,3 +1510,776 @@ class PurchaseQuantityFidelityTests(MigrationTestBase):
         po = PurchaseOrder.objects.get(supplier_invoice_number="REF-FRAC")
         self.assertEqual(po.lines.get().quantity, Decimal("2.500"))
         self.assertEqual(po.total, Decimal("10.00"))
+
+
+# --- the file pipeline ------------------------------------------------------
+class UploadTests(MigrationTestBase):
+    """Chunked, resumable receipt of a database file."""
+
+    def _begin(self, payload=b"x" * 100, filename="db.mdb"):
+        return uploads.begin_upload(filename=filename, size_bytes=len(payload))
+
+    def test_chunks_assemble_in_order(self):
+        payload = b"".join(bytes([index % 256]) * 64 for index in range(40))
+        source = self._begin(payload)
+        cursor = 0
+        while cursor < len(payload):
+            chunk = payload[cursor : cursor + 512]
+            source = uploads.append_chunk(source, cursor, io.BytesIO(chunk))
+            cursor += len(chunk)
+        self.assertEqual(source.upload_state, MigrationSource.UploadState.UPLOADED)
+        self.assertEqual(storage.staged_path(source).read_bytes(), payload)
+
+    def test_wrong_offset_is_refused_with_the_real_one(self):
+        """A chunk written at the wrong place corrupts a database silently.
+
+        So the server never guesses: it refuses and reports where it actually is,
+        and the client re-syncs to that.
+        """
+        source = self._begin(b"y" * 100)
+        source = uploads.append_chunk(source, 0, io.BytesIO(b"y" * 40))
+        with self.assertRaises(uploads.OffsetConflict) as ctx:
+            uploads.append_chunk(source, 90, io.BytesIO(b"y" * 10))
+        self.assertEqual(ctx.exception.expected, 40)
+        # Nothing was written past the real offset.
+        self.assertEqual(storage.file_size(storage.staged_path(source)), 40)
+
+    def test_resume_continues_from_the_recorded_offset(self):
+        payload = b"z" * 300
+        source = self._begin(payload)
+        source = uploads.append_chunk(source, 0, io.BytesIO(payload[:120]))
+        # The client "reconnects" and asks where to continue.
+        resumed = MigrationSource.objects.get(pk=source.pk)
+        self.assertEqual(resumed.received_bytes, 120)
+        source = uploads.append_chunk(resumed, 120, io.BytesIO(payload[120:]))
+        self.assertEqual(storage.staged_path(source).read_bytes(), payload)
+
+    def test_chunk_cannot_overrun_the_declared_size(self):
+        source = self._begin(b"q" * 50)
+        source = uploads.append_chunk(source, 0, io.BytesIO(b"q" * 500))
+        self.assertEqual(source.received_bytes, 50)
+        self.assertEqual(storage.file_size(storage.staged_path(source)), 50)
+
+    def test_oversize_upload_is_refused_up_front(self):
+        with override_settings(POINTY_MIGRATION_MAX_UPLOAD_BYTES=10):
+            with self.assertRaises(Exception) as ctx:
+                uploads.begin_upload(filename="huge.mdb", size_bytes=11)
+        self.assertIn("الحد المسموح", str(ctx.exception))
+
+    def test_completing_a_short_upload_is_refused(self):
+        source = self._begin(b"a" * 100)
+        uploads.append_chunk(source, 0, io.BytesIO(b"a" * 30))
+        with self.assertRaises(Exception):
+            uploads.complete_upload(MigrationSource.objects.get(pk=source.pk))
+
+    def test_checksum_mismatch_is_refused(self):
+        payload = b"b" * 64
+        source = self._begin(payload)
+        source = uploads.append_chunk(source, 0, io.BytesIO(payload))
+        with self.assertRaises(Exception) as ctx:
+            uploads.complete_upload(source, expected_checksum="0" * 64)
+        self.assertIn("تالف", str(ctx.exception))
+
+    def test_filename_cannot_escape_the_staging_root(self):
+        """The client's filename is a label, never part of a path."""
+        source = uploads.begin_upload(filename="../../etc/passwd", size_bytes=8)
+        staged = storage.staged_path(source)
+        self.assertEqual(staged.parent.resolve(), self.staging.resolve())
+        self.assertNotIn("..", source.staged_filename)
+
+
+class IdentifyTests(MigrationTestBase):
+    def _write(self, header, name="f.bin"):
+        path = Path(self._tmpdir.name) / name
+        path.write_bytes(header + b"\x00" * 64)
+        return path
+
+    def test_recognises_sqlite(self):
+        build_sample_database(self.db_path)
+        self.assertEqual(identification.identify(self.db_path), identification.SQLITE)
+
+    def test_recognises_access(self):
+        path = self._write(b"\x00\x01\x00\x00Standard Jet DB\x00")
+        self.assertEqual(identification.identify(path), identification.ACCESS)
+
+    def test_recognises_accdb(self):
+        path = self._write(b"\x00\x01\x00\x00Standard ACE DB\x00")
+        self.assertEqual(identification.identify(path), identification.ACCESS)
+
+    def test_names_what_it_found_for_a_zip(self):
+        """A dead end helps nobody; "this is a ZIP" is a next step."""
+        path = self._write(b"PK\x03\x04")
+        with self.assertRaises(identification.UnsupportedFile) as ctx:
+            identification.identify(path)
+        self.assertEqual(ctx.exception.detected, "ZIP")
+        self.assertIn("مضغوط", str(ctx.exception))
+
+    def test_explains_a_sql_server_backup(self):
+        path = self._write(b"TAPE")
+        with self.assertRaises(identification.UnsupportedFile) as ctx:
+            identification.identify(path)
+        self.assertIn("SQL Server", str(ctx.exception))
+
+    def test_empty_file(self):
+        path = Path(self._tmpdir.name) / "empty.mdb"
+        path.write_bytes(b"")
+        with self.assertRaises(identification.UnsupportedFile):
+            identification.identify(path)
+
+
+class DetectionTests(MigrationTestBase):
+    def test_identifies_the_reference_schema(self):
+        build_sample_database(self.db_path)
+        with build_transport("sqlite", {"database": str(self.db_path)}) as transport:
+            result = detection.detect(transport)
+        self.assertTrue(result.matched)
+        self.assertEqual(result.match.system_key, "reference_sqlite")
+
+    def test_identifies_a_prepared_fahd_file(self):
+        build_fahd_database(self.db_path)
+        with build_transport("sqlite", {"database": str(self.db_path)}) as transport:
+            result = detection.detect(transport)
+        self.assertTrue(result.matched)
+        self.assertEqual(result.match.system_key, "fahd")
+
+    def test_raw_phase_spots_an_unreconstructed_fahd_file(self):
+        """A converted .mdb has the catalogue and the log, and no invoices.
+
+        Matching the raw shape is what tells the pipeline to run the replay.
+        """
+        build_fahd_sample(self.db_path)
+        connection = sqlite3.connect(self.db_path)
+        connection.execute(
+            "CREATE TABLE control (id INTEGER, emp_id INTEGER, prog TEXT, "
+            "op TEXT, descrip TEXT, op_date TEXT)"
+        )
+        connection.commit()
+        connection.close()
+        with build_transport("sqlite", {"database": str(self.db_path)}) as transport:
+            final = detection.detect(transport)
+            raw = detection.detect(transport, raw=True)
+        self.assertFalse(final.matched)  # no invoice tables yet
+        self.assertTrue(raw.matched)
+        self.assertEqual(raw.match.system_key, "fahd")
+
+    def test_unknown_file_explains_the_closest_miss(self):
+        connection = sqlite3.connect(self.db_path)
+        connection.execute("CREATE TABLE unrelated (id INTEGER)")
+        connection.commit()
+        connection.close()
+        with build_transport("sqlite", {"database": str(self.db_path)}) as transport:
+            result = detection.detect(transport)
+        self.assertFalse(result.matched)
+        message = result.failure_message()
+        self.assertTrue(message)
+        self.assertIn("جداول", message)
+
+
+class PreparationPipelineTests(MigrationTestBase):
+    """The whole path from staged bytes to a source a run can use."""
+
+    def _staged_source(self, path):
+        source = MigrationSource.objects.create(
+            name=path.name,
+            original_filename=path.name,
+            declared_size_bytes=path.stat().st_size,
+            received_bytes=path.stat().st_size,
+            upload_state=MigrationSource.UploadState.UPLOADED,
+        )
+        source.staged_filename = storage.staged_name(source.pk, "sqlite")
+        source.save(update_fields=["staged_filename"])
+        storage.adopt(path, storage.staged_path(source))
+        return source
+
+    def test_sqlite_upload_becomes_a_ready_source(self):
+        build_sample_database(self.db_path)
+        source = self._staged_source(self.db_path)
+
+        pipeline.prepare_source(source)
+        source.refresh_from_db()
+
+        self.assertEqual(source.upload_state, MigrationSource.UploadState.READY)
+        self.assertEqual(source.system_key, "reference_sqlite")
+        self.assertTrue(storage.prepared_path(source).exists())
+        # Conversion is skipped for a file that is already SQLite; identification
+        # and detection are not.
+        statuses = {stage["key"]: stage["status"] for stage in source.stages}
+        self.assertEqual(statuses["identify"], "done")
+        self.assertEqual(statuses["convert"], "skipped")
+        self.assertEqual(statuses["detect"], "done")
+
+    def test_analysis_counts_what_is_in_the_file(self):
+        build_sample_database(self.db_path)
+        source = self._staged_source(self.db_path)
+
+        pipeline.prepare_source(source)
+        source.refresh_from_db()
+
+        entities = source.analysis["entities"]
+        self.assertEqual(entities["product"]["count"], 5)
+        self.assertEqual(entities["customer"]["count"], 2)
+
+    def test_unreadable_file_fails_with_an_explanation(self):
+        path = Path(self._tmpdir.name) / "notes.txt"
+        path.write_bytes(b"PK\x03\x04 not a database")
+        source = self._staged_source(path)
+
+        pipeline.prepare_source(source)
+        source.refresh_from_db()
+
+        self.assertEqual(source.upload_state, MigrationSource.UploadState.FAILED)
+        self.assertIn("مضغوط", source.error_message)
+        self.assertEqual(source.stages[0]["status"], "failed")
+        # Stages after the failure say they never ran rather than looking queued.
+        self.assertEqual(source.stages[-1]["status"], "skipped")
+
+    def test_unrecognised_schema_fails_at_detection(self):
+        connection = sqlite3.connect(self.db_path)
+        connection.execute("CREATE TABLE nothing_we_know (id INTEGER)")
+        connection.commit()
+        connection.close()
+        source = self._staged_source(self.db_path)
+
+        pipeline.prepare_source(source)
+        source.refresh_from_db()
+
+        self.assertEqual(source.upload_state, MigrationSource.UploadState.FAILED)
+        self.assertTrue(source.error_message)
+        self.assertFalse(source.detection["matched"])
+
+
+class PurgeTests(MigrationTestBase):
+    def test_clean_import_deletes_the_file(self):
+        """The point of the feature: the shop's history does not linger here."""
+        build_sample_database(self.db_path)
+        source = self.make_source()
+        prepared = storage.prepared_path(source)
+        self.assertTrue(prepared.exists())
+
+        run = self.run_sync(source, IMPORT)
+        source.refresh_from_db()
+
+        self.assertEqual(run.status, MigrationRun.Status.SUCCEEDED)
+        self.assertEqual(source.upload_state, MigrationSource.UploadState.PURGED)
+        self.assertFalse(prepared.exists())
+        self.assertIsNotNone(source.purged_at)
+
+    def test_identity_map_survives_the_purge(self):
+        """Deleting the file must not make a re-import duplicate the catalogue."""
+        build_sample_database(self.db_path)
+        source = self.make_source()
+        self.run_sync(source, IMPORT)
+
+        source.refresh_from_db()
+        self.assertTrue(source.is_purged)
+        self.assertEqual(
+            MigrationIdentityMap.objects.filter(source=source, entity_type="product").count(),
+            5,
+        )
+
+    def test_partial_import_keeps_the_file(self):
+        """A run with failures may be re-run after a fix; do not make them
+        re-upload a gigabyte to do it."""
+        build_sample_database(self.db_path)
+        connection = sqlite3.connect(self.db_path)
+        connection.execute("UPDATE products SET name = '' WHERE id = 1")
+        connection.commit()
+        connection.close()
+        source = self.make_source()
+
+        run = self.run_sync(source, IMPORT)
+        source.refresh_from_db()
+
+        if run.status == MigrationRun.Status.PARTIAL:
+            self.assertNotEqual(source.upload_state, MigrationSource.UploadState.PURGED)
+            self.assertTrue(storage.prepared_path(source).exists())
+
+    def test_expired_uploads_are_swept(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        build_sample_database(self.db_path)
+        source = self.make_source()
+        MigrationSource.objects.filter(pk=source.pk).update(
+            updated_at=timezone.now() - timedelta(hours=100)
+        )
+
+        freed = pipeline.purge_expired()
+        source.refresh_from_db()
+
+        self.assertGreater(freed, 0)
+        self.assertEqual(source.upload_state, MigrationSource.UploadState.PURGED)
+
+    def test_a_run_cannot_start_against_a_purged_source(self):
+        build_sample_database(self.db_path)
+        source = self.make_source()
+        pipeline.purge(source)
+        source.refresh_from_db()
+        with self.assertRaises(Exception) as ctx:
+            services.queue_migration_run(source, mode=IMPORT, dispatch=False)
+        self.assertIn("غير جاهز", str(ctx.exception))
+
+
+class RunStageTests(MigrationTestBase):
+    def test_import_reports_a_stage_per_entity(self):
+        build_sample_database(self.db_path)
+        source = self.make_source()
+
+        run = self.run_sync(source, IMPORT)
+
+        stages = {stage["key"]: stage for stage in run.stages}
+        self.assertIn("product", stages)
+        self.assertEqual(stages["product"]["status"], "done")
+        self.assertEqual(stages["product"]["counts"]["created"], 5)
+        self.assertTrue(stages["product"]["detail"])
+
+    def test_dry_run_stages_survive_the_rollback(self):
+        """A dry run's writes are discarded; its report is not."""
+        build_sample_database(self.db_path)
+        source = self.make_source()
+
+        run = self.run_sync(source, DRY_RUN)
+
+        self.assertTrue(run.stages)
+        self.assertEqual(
+            {stage["key"] for stage in run.stages if stage["status"] == "done"} >= {"product"},
+            True,
+        )
+
+
+class AccessConversionTests(MigrationTestBase):
+    """The Access → SQLite conversion, including its subprocess plumbing.
+
+    mdbtools is stood in for rather than required: what belongs to us is the
+    pumping of bytes between two processes, the per-table progress, and what
+    happens when one table fails — not whether mdbtools reads Jet correctly.
+    The stand-in emits exactly what the real tools emit, so the pipe mechanics
+    under test are the real ones.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.bin = Path(self._tmpdir.name) / "bin"
+        self.bin.mkdir()
+
+    def _install_fake_mdbtools(self, *, tables, failing=()):
+        import os
+        import stat
+
+        table_list = "\\n".join(tables)
+        schema = "".join(
+            f'CREATE TABLE "{table}" (id INTEGER, label TEXT);\\n' for table in tables
+        )
+        fail_check = ""
+        if failing:
+            names = " ".join(f'"{name}"' for name in failing)
+            fail_check = (
+                f'for bad in {names}; do\n'
+                '  if [ "$TABLE" = "$bad" ]; then echo "boom" >&2; exit 3; fi\n'
+                'done\n'
+            )
+        scripts = {
+            "mdb-tables": f'#!/bin/sh\nprintf "{table_list}\\n"\n',
+            "mdb-schema": f'#!/bin/sh\nprintf \'{schema}\'\n',
+            # mdb-export's argv is (..., source, table): the table is last.
+            # `for last; do :; done` walks to it — `$12` would parse as `$1`
+            # followed by a literal 2, and mdb-export gets twelve arguments.
+            "mdb-export": (
+                "#!/bin/sh\n"
+                'for last; do :; done\nTABLE="$last"\n'
+                f"{fail_check}"
+                'printf "INSERT INTO \\"$TABLE\\" VALUES (1, \'قيمة ; مع فاصلة\');\\n"\n'
+                'printf "INSERT INTO \\"$TABLE\\" VALUES (2, \'two\');\\n"\n'
+            ),
+        }
+        for name, body in scripts.items():
+            path = self.bin / name
+            path.write_text(body)
+            path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        original = os.environ["PATH"]
+        os.environ["PATH"] = f"{self.bin}{os.pathsep}{original}"
+        self.addCleanup(lambda: os.environ.__setitem__("PATH", original))
+
+    def _convert(self, source_name="db.mdb"):
+        from .preparation import access
+
+        source = Path(self._tmpdir.name) / source_name
+        source.write_bytes(b"\x00\x01\x00\x00Standard Jet DB\x00" + b"\x00" * 64)
+        destination = Path(self._tmpdir.name) / "converted.sqlite"
+        return access.convert(source, destination), destination
+
+    def test_every_table_lands_with_its_rows(self):
+        self._install_fake_mdbtools(tables=["CAR_PART", "TASNEEF", "control"])
+
+        stats, destination = self._convert()
+
+        self.assertEqual(stats["tables_converted"], 3)
+        self.assertEqual(stats["tables_failed"], [])
+        self.assertGreater(stats["bytes_streamed"], 0)
+        connection = sqlite3.connect(destination)
+        try:
+            for table in ("CAR_PART", "TASNEEF", "control"):
+                count = connection.execute(
+                    f'SELECT COUNT(*) FROM "{table}"'
+                ).fetchone()[0]
+                self.assertEqual(count, 2, table)
+            # A value containing a quote and a semicolon survives, because
+            # sqlite3 parses the SQL rather than us splitting it on lines.
+            label = connection.execute(
+                "SELECT label FROM CAR_PART WHERE id = 1"
+            ).fetchone()[0]
+            self.assertEqual(label, "قيمة ; مع فاصلة")
+        finally:
+            connection.close()
+
+    def test_one_bad_table_does_not_lose_the_others(self):
+        """Legacy Access files routinely carry one unreadable table nothing
+        reads. Losing the other sixty because of it helps nobody."""
+        self._install_fake_mdbtools(
+            tables=["CAR_PART", "broken", "TASNEEF"], failing=["broken"]
+        )
+
+        stats, destination = self._convert()
+
+        self.assertEqual(stats["tables_failed"], ["broken"])
+        self.assertEqual(stats["tables_converted"], 2)
+        connection = sqlite3.connect(destination)
+        try:
+            self.assertEqual(
+                connection.execute("SELECT COUNT(*) FROM CAR_PART").fetchone()[0], 2
+            )
+        finally:
+            connection.close()
+
+    def test_progress_is_reported_per_table(self):
+        from .preparation.stages import Stage, StageTracker
+
+        self._install_fake_mdbtools(tables=["one", "two", "three"])
+        source = MigrationSource.objects.create(name="db.mdb")
+        tracker = StageTracker(source, [Stage("convert", "تحويل")])
+
+        self._convert()
+        # Re-run under the tracker so the stage transitions are observable.
+        from .preparation import access
+
+        path = Path(self._tmpdir.name) / "db.mdb"
+        destination = Path(self._tmpdir.name) / "tracked.sqlite"
+        access.convert(path, destination, tracker=tracker)
+
+        stage = tracker.as_list()[0]
+        self.assertEqual(stage["status"], "done")
+        self.assertEqual(stage["counts"]["tables_total"], 3)
+        self.assertEqual(stage["counts"]["tables_converted"], 3)
+
+    def test_missing_tools_say_so(self):
+        import shutil
+        from unittest import mock
+
+        from .preparation import access
+
+        with mock.patch.object(shutil, "which", return_value=None):
+            with self.assertRaises(access.ConversionError) as ctx:
+                access.require_tools()
+        self.assertIn("mdb-tables", str(ctx.exception))
+
+    def test_access_upload_runs_the_whole_pipeline(self):
+        """An .mdb goes in; a prepared, identified source comes out."""
+        # The stand-in emits the reference connector's schema so detection has
+        # something real to match against on the far side of the conversion.
+        import os
+        import stat
+
+        schema = (
+            "CREATE TABLE categories (id INTEGER, name TEXT, parent_id INTEGER);\n"
+            "CREATE TABLE products (id INTEGER, name TEXT, sku TEXT, barcode TEXT, "
+            "price REAL, cost REAL, category_id INTEGER, is_service INTEGER, "
+            "is_active INTEGER);\n"
+            "CREATE TABLE customers (id INTEGER, full_name TEXT, phone TEXT);\n"
+            "CREATE TABLE suppliers (id INTEGER, name TEXT, phone TEXT);\n"
+            "CREATE TABLE stock (product_id INTEGER, quantity REAL);\n"
+        )
+        rows = {
+            "categories": "INSERT INTO categories VALUES (1, 'مشروبات', NULL);",
+            "products": (
+                "INSERT INTO products VALUES "
+                "(1, 'شاي', 'SKU1', '111', 2.5, 1.0, 1, 0, 1);"
+            ),
+            "customers": "INSERT INTO customers VALUES (1, 'أحمد', '0910000000');",
+            "suppliers": "INSERT INTO suppliers VALUES (1, 'مورد', '0920000000');",
+            "stock": "INSERT INTO stock VALUES (1, 7);",
+        }
+        cases = "".join(
+            f'  {name}) printf "{sql}\\n" ;;\n' for name, sql in rows.items()
+        )
+        scripts = {
+            "mdb-tables": (
+                "#!/bin/sh\n"
+                'printf "categories\\nproducts\\ncustomers\\nsuppliers\\nstock\\n"\n'
+            ),
+            "mdb-schema": f"#!/bin/sh\nprintf '{schema}'\n",
+            "mdb-export": (
+                "#!/bin/sh\n"
+                'for last; do :; done\nTABLE="$last"\n'
+                'case "$TABLE" in\n'
+                f"{cases}"
+                "esac\n"
+            ),
+        }
+        for name, body in scripts.items():
+            path = self.bin / name
+            path.write_text(body)
+            path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        original = os.environ["PATH"]
+        os.environ["PATH"] = f"{self.bin}{os.pathsep}{original}"
+        self.addCleanup(lambda: os.environ.__setitem__("PATH", original))
+
+        payload = b"\x00\x01\x00\x00Standard Jet DB\x00" + b"\x00" * 64
+        source = uploads.begin_upload(filename="db.mdb", size_bytes=len(payload))
+        source = uploads.append_chunk(source, 0, io.BytesIO(payload))
+        uploads.complete_upload(source)
+        source.refresh_from_db()
+
+        pipeline.prepare_source(source)
+        source.refresh_from_db()
+
+        self.assertEqual(
+            source.upload_state,
+            MigrationSource.UploadState.READY,
+            source.error_message,
+        )
+        self.assertEqual(source.system_key, "reference_sqlite")
+        statuses = {stage["key"]: stage["status"] for stage in source.stages}
+        self.assertEqual(statuses["convert"], "done")
+        # The multi-GB original is deleted as soon as it has been converted.
+        self.assertEqual(source.staged_filename, "")
+        self.assertTrue(storage.prepared_path(source).exists())
+        self.assertEqual(source.analysis["entities"]["product"]["count"], 1)
+
+    def test_a_conversion_that_fails_later_leaves_nothing_behind(self):
+        """Detection can reject a file the conversion produced fine.
+
+        The intermediate is the size of the whole database and nothing on the
+        source row names it, so only a derived name can find it afterwards.
+        """
+        import os
+        import stat
+
+        scripts = {
+            "mdb-tables": '#!/bin/sh\nprintf "unrelated\\n"\n',
+            "mdb-schema": "#!/bin/sh\nprintf 'CREATE TABLE unrelated (id INTEGER);\\n'\n",
+            "mdb-export": (
+                "#!/bin/sh\n"
+                'for last; do :; done\nTABLE="$last"\n'
+                'printf "INSERT INTO unrelated VALUES (1);\\n"\n'
+            ),
+        }
+        for name, body in scripts.items():
+            path = self.bin / name
+            path.write_text(body)
+            path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        original = os.environ["PATH"]
+        os.environ["PATH"] = f"{self.bin}{os.pathsep}{original}"
+        self.addCleanup(lambda: os.environ.__setitem__("PATH", original))
+
+        payload = b"\x00\x01\x00\x00Standard Jet DB\x00" + b"\x00" * 64
+        source = uploads.begin_upload(filename="db.mdb", size_bytes=len(payload))
+        source = uploads.append_chunk(source, 0, io.BytesIO(payload))
+        uploads.complete_upload(source)
+        source.refresh_from_db()
+
+        pipeline.prepare_source(source)
+        source.refresh_from_db()
+
+        self.assertEqual(source.upload_state, MigrationSource.UploadState.FAILED)
+        working = self.staging / storage.working_name(source.pk)
+        self.assertFalse(working.exists(), "the converted intermediate leaked")
+        # The upload itself is kept: preparation can be retried without asking
+        # for the gigabytes again.
+        self.assertTrue(storage.staged_path(source).exists())
+
+
+class UploadApiTests(MigrationTestBase):
+    """The HTTP layer of the upload — the parser wiring in particular.
+
+    ``append_chunk`` is unit-tested above; what these cover is that a raw
+    ``application/octet-stream`` body actually reaches it. DRF materialises a
+    request body through a parser by default, and a chunk is a slice of a
+    database that must arrive byte for byte, so the view installs one that hands
+    the stream straight through. That is easy to break and invisible when it is.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Group
+        from rest_framework.test import APIClient
+
+        from apps.core.roles import MANAGER_GROUP
+
+        self.user = get_user_model().objects.create_user(
+            username="owner", password="pass"
+        )
+        self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.api = APIClient()
+        self.api.force_authenticate(self.user)
+
+    def _begin(self, payload, filename="db.sqlite"):
+        response = self.api.post(
+            "/api/migration/sources/begin/",
+            {"filename": filename, "size_bytes": len(payload)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        return response.data["source"]["id"], response.data["chunk_size"]
+
+    def _put_chunk(self, source_id, offset, chunk):
+        return self.api.put(
+            f"/api/migration/sources/{source_id}/chunk/?offset={offset}",
+            data=chunk,
+            content_type="application/octet-stream",
+        )
+
+    def test_a_raw_body_reaches_the_file_intact(self):
+        # Bytes that would not survive being decoded as text or re-encoded.
+        payload = bytes(range(256)) * 4
+        source_id, _ = self._begin(payload)
+
+        response = self._put_chunk(source_id, 0, payload)
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["received_bytes"], len(payload))
+        source = MigrationSource.objects.get(pk=source_id)
+        self.assertEqual(storage.staged_path(source).read_bytes(), payload)
+
+    def test_chunks_arrive_in_sequence(self):
+        payload = bytes(range(256)) * 8
+        source_id, _ = self._begin(payload)
+        cursor = 0
+        while cursor < len(payload):
+            chunk = payload[cursor : cursor + 300]
+            response = self._put_chunk(source_id, cursor, chunk)
+            self.assertEqual(response.status_code, 200)
+            cursor = response.data["received_bytes"]
+
+        source = MigrationSource.objects.get(pk=source_id)
+        self.assertEqual(storage.staged_path(source).read_bytes(), payload)
+        self.assertEqual(response.data["upload_percent"], 100)
+
+    def test_a_wrong_offset_is_a_409_carrying_the_real_one(self):
+        payload = b"a" * 100
+        source_id, _ = self._begin(payload)
+        self._put_chunk(source_id, 0, payload[:40])
+
+        response = self._put_chunk(source_id, 90, payload[90:])
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["received_bytes"], 40)
+
+    def test_a_missing_offset_is_rejected_rather_than_guessed(self):
+        payload = b"b" * 20
+        source_id, _ = self._begin(payload)
+
+        response = self.api.put(
+            f"/api/migration/sources/{source_id}/chunk/",
+            data=payload,
+            content_type="application/octet-stream",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_completing_queues_preparation(self):
+        build_sample_database(self.db_path)
+        payload = self.db_path.read_bytes()
+        source_id, _ = self._begin(payload)
+        self._put_chunk(source_id, 0, payload)
+
+        with mock.patch("apps.migration.services._dispatch_preparation") as dispatch:
+            response = self.api.post(
+                f"/api/migration/sources/{source_id}/complete/",
+                {"checksum_sha256": uploads.checksum(
+                    storage.staged_path(MigrationSource.objects.get(pk=source_id))
+                )},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 202, response.data)
+        dispatch.assert_called_once()
+        self.assertEqual(response.data["upload_state"], "uploaded")
+
+    def test_the_advertised_chunk_never_exceeds_what_the_proxy_carries(self):
+        """The chunk size and the front door's cap live in different files.
+
+        The browser reaches the backend through `web` (client_max_body_size
+        100m); a native till reaches `edge` (uncapped). So an over-large chunk
+        fails only from the browser, with a bare nginx 413 — a failure that
+        depends on how you opened the app. Clamping the advertised value is what
+        makes that impossible to configure.
+        """
+        with override_settings(
+            POINTY_MIGRATION_CHUNK_BYTES=512 * 1024 * 1024,
+            POINTY_MIGRATION_MAX_CHUNK_BYTES=64 * 1024 * 1024,
+        ):
+            # The setting is clamped where it is read, so an override that skips
+            # settings.py's own clamp is still caught at the boundary.
+            response = self.api.get("/api/migration/systems/")
+        advertised = response.data["upload"]["chunk_size"]
+        self.assertLessEqual(advertised, 64 * 1024 * 1024)
+
+    def test_the_catalogue_tells_the_client_how_to_upload(self):
+        response = self.api.get("/api/migration/systems/")
+
+        self.assertEqual(response.status_code, 200)
+        upload = response.data["upload"]
+        self.assertGreater(upload["chunk_size"], 0)
+        self.assertIn(".mdb", upload["accepted_extensions"])
+        # The connection-era catalogue fields are gone.
+        self.assertNotIn("required_transport", response.data["systems"][0])
+
+    def test_discarding_deletes_the_file(self):
+        payload = b"c" * 64
+        source_id, _ = self._begin(payload)
+        self._put_chunk(source_id, 0, payload)
+        source = MigrationSource.objects.get(pk=source_id)
+        staged = storage.staged_path(source)
+        self.assertTrue(staged.exists())
+
+        response = self.api.post(f"/api/migration/sources/{source_id}/discard/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreater(response.data["freed_bytes"], 0)
+        self.assertFalse(staged.exists())
+        self.assertEqual(response.data["source"]["upload_state"], "purged")
+
+    def test_a_cashier_cannot_upload_a_database(self):
+        from django.contrib.auth import get_user_model
+
+        cashier = get_user_model().objects.create_user(
+            username="cashier", password="pass"
+        )
+        api = self.api.__class__()
+        api.force_authenticate(cashier)
+
+        response = api.post(
+            "/api/migration/sources/begin/",
+            {"filename": "db.mdb", "size_bytes": 10},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_a_prepared_file_written_before_a_late_failure_is_still_purged(self):
+        """Reconstruction can succeed and identification still reject the result.
+
+        The prepared database is written before the row names it, so only a
+        derived name finds it afterwards.
+        """
+        source = MigrationSource.objects.create(name="db.mdb")
+        orphan = self.staging / storage.prepared_name(source.pk)
+        orphan.write_bytes(b"x" * 4096)
+        self.assertEqual(source.prepared_filename, "")
+
+        freed = pipeline.purge(source)
+
+        self.assertEqual(freed, 4096)
+        self.assertFalse(orphan.exists())

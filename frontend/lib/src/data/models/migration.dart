@@ -1,36 +1,30 @@
-// Models for the data-migration feature (importing from an old POS system).
-
+/// A POS Pointy knows how to read.
+///
+/// Nobody picks from this list — the system is worked out from the uploaded
+/// file's schema. It is here so the screen can answer "will my system work?"
+/// before someone spends twenty minutes uploading.
 class MigrationSystem {
   const MigrationSystem({
     required this.systemKey,
     required this.displayName,
-    required this.requiredTransport,
     required this.supportedEntities,
     required this.versions,
     required this.implemented,
-    this.recommendedOptions = const {},
   });
 
   final String systemKey;
   final String displayName;
-  final String requiredTransport;
   final List<String> supportedEntities;
   final List<String> versions;
   final bool implemented;
-
-  /// Suggested transport options (e.g. a legacy ODBC driver + TDS version for an
-  /// old SQL Server) used to pre-fill the source's advanced options.
-  final Map<String, Object?> recommendedOptions;
 
   factory MigrationSystem.fromJson(Map<String, Object?> json) {
     return MigrationSystem(
       systemKey: _str(json['system_key']),
       displayName: _str(json['display_name']),
-      requiredTransport: _str(json['required_transport']),
       supportedEntities: _stringList(json['supported_entities']),
       versions: _stringList(json['versions']),
-      implemented: json['implemented'] as bool? ?? true,
-      recommendedOptions: _map(json['recommended_options']),
+      implemented: json['implemented'] as bool? ?? false,
     );
   }
 }
@@ -50,229 +44,320 @@ class MigrationEntitySpec {
     return MigrationEntitySpec(
       entityType: _str(json['entity_type']),
       label: _str(json['label']),
-      implemented: json['implemented'] as bool? ?? true,
+      implemented: json['implemented'] as bool? ?? false,
+    );
+  }
+}
+
+/// Upload limits the server advertises, so the client never has to guess them.
+class MigrationUploadConfig {
+  const MigrationUploadConfig({
+    required this.chunkSize,
+    required this.maxBytes,
+    required this.acceptedExtensions,
+  });
+
+  final int chunkSize;
+  final int maxBytes;
+  final List<String> acceptedExtensions;
+
+  static const fallback = MigrationUploadConfig(
+    chunkSize: 16 * 1024 * 1024,
+    maxBytes: 8 * 1024 * 1024 * 1024,
+    acceptedExtensions: ['.mdb', '.accdb', '.sqlite', '.sqlite3', '.db'],
+  );
+
+  /// Extensions without the leading dot, which is what `file_picker` wants.
+  List<String> get pickerExtensions => [
+    for (final extension in acceptedExtensions)
+      extension.startsWith('.') ? extension.substring(1) : extension,
+  ];
+
+  factory MigrationUploadConfig.fromJson(Map<String, Object?> json) {
+    if (json.isEmpty) return fallback;
+    return MigrationUploadConfig(
+      chunkSize: _intOrNull(json['chunk_size']) ?? fallback.chunkSize,
+      maxBytes: _intOrNull(json['max_bytes']) ?? fallback.maxBytes,
+      acceptedExtensions: _stringList(json['accepted_extensions']).isEmpty
+          ? fallback.acceptedExtensions
+          : _stringList(json['accepted_extensions']),
     );
   }
 }
 
 class MigrationCatalog {
-  const MigrationCatalog({required this.systems, required this.entities});
+  const MigrationCatalog({
+    required this.systems,
+    required this.entities,
+    required this.upload,
+  });
 
   final List<MigrationSystem> systems;
   final List<MigrationEntitySpec> entities;
+  final MigrationUploadConfig upload;
 
   factory MigrationCatalog.fromJson(Map<String, Object?> json) {
     return MigrationCatalog(
       systems: [
-        for (final item in _list(json['systems']))
-          MigrationSystem.fromJson(item),
+        for (final item in _list(json['systems'])) MigrationSystem.fromJson(item),
       ],
       entities: [
         for (final item in _list(json['entities']))
           MigrationEntitySpec.fromJson(item),
       ],
+      upload: MigrationUploadConfig.fromJson(_map(json['upload'])),
     );
   }
 }
 
+/// One step of a long job, as the server reports it.
+///
+/// A twenty-minute conversion needs to say what it is doing, not just how far a
+/// single bar has crept — at that length "62%" and "hung" look the same.
+class MigrationStage {
+  const MigrationStage({
+    required this.key,
+    required this.label,
+    required this.status,
+    required this.percent,
+    required this.detail,
+    required this.counts,
+  });
+
+  final String key;
+  final String label;
+  final String status; // pending | running | done | failed | skipped
+  final int percent;
+  final String detail;
+  final Map<String, Object?> counts;
+
+  bool get isRunning => status == 'running';
+  bool get isDone => status == 'done';
+  bool get isFailed => status == 'failed';
+  bool get isSkipped => status == 'skipped';
+  bool get isPending => status == 'pending';
+  bool get isSettled => isDone || isFailed || isSkipped;
+
+  factory MigrationStage.fromJson(Map<String, Object?> json) {
+    return MigrationStage(
+      key: _str(json['key']),
+      label: _str(json['label']),
+      status: _str(json['status'], fallback: 'pending'),
+      percent: _int(json['percent']),
+      detail: _str(json['detail']),
+      counts: _map(json['counts']),
+    );
+  }
+}
+
+/// How much of what a file holds — shown before the owner commits to anything.
+class MigrationEntityCount {
+  const MigrationEntityCount({
+    required this.entityType,
+    required this.count,
+    required this.from,
+    required this.to,
+  });
+
+  final String entityType;
+  final int count;
+  final String from;
+  final String to;
+
+  bool get hasRange => from.isNotEmpty || to.isNotEmpty;
+}
+
+class MigrationAnalysis {
+  const MigrationAnalysis({
+    required this.entities,
+    required this.historyFrom,
+    required this.historyTo,
+  });
+
+  final List<MigrationEntityCount> entities;
+  final String historyFrom;
+  final String historyTo;
+
+  static const empty = MigrationAnalysis(
+    entities: [],
+    historyFrom: '',
+    historyTo: '',
+  );
+
+  bool get isEmpty => entities.isEmpty;
+  bool get hasHistory => historyFrom.isNotEmpty || historyTo.isNotEmpty;
+
+  int countFor(String entityType) {
+    for (final entity in entities) {
+      if (entity.entityType == entityType) return entity.count;
+    }
+    return 0;
+  }
+
+  factory MigrationAnalysis.fromJson(Map<String, Object?> json) {
+    final raw = _map(json['entities']);
+    final entities = <MigrationEntityCount>[];
+    raw.forEach((key, value) {
+      final entry = _map(value);
+      entities.add(
+        MigrationEntityCount(
+          entityType: key,
+          count: _int(entry['count']),
+          from: _str(entry['from']),
+          to: _str(entry['to']),
+        ),
+      );
+    });
+    entities.sort((a, b) => b.count.compareTo(a.count));
+    return MigrationAnalysis(
+      entities: entities,
+      historyFrom: _str(json['history_from']),
+      historyTo: _str(json['history_to']),
+    );
+  }
+}
+
+/// Why a file was, or was not, recognised.
+class MigrationDetection {
+  const MigrationDetection({
+    required this.matched,
+    required this.systemKey,
+    required this.displayName,
+    required this.detectedVersion,
+  });
+
+  final bool matched;
+  final String systemKey;
+  final String displayName;
+  final String detectedVersion;
+
+  static const unknown = MigrationDetection(
+    matched: false,
+    systemKey: '',
+    displayName: '',
+    detectedVersion: '',
+  );
+
+  factory MigrationDetection.fromJson(Map<String, Object?> json) {
+    if (json.isEmpty) return unknown;
+    return MigrationDetection(
+      matched: json['matched'] as bool? ?? false,
+      systemKey: _str(json['system_key']),
+      displayName: _str(json['display_name']),
+      detectedVersion: _str(json['detected_version']),
+    );
+  }
+}
+
+/// An uploaded legacy database, and everything derived from it.
 class MigrationSource {
   const MigrationSource({
     required this.id,
     required this.name,
+    required this.originalFilename,
+    required this.declaredSizeBytes,
+    required this.receivedBytes,
+    required this.uploadPercent,
+    required this.uploadState,
+    required this.stagedSizeBytes,
+    required this.preparedSizeBytes,
+    required this.stages,
+    required this.errorMessage,
     required this.systemKey,
-    required this.transportKind,
-    required this.host,
-    required this.port,
-    required this.databaseName,
-    required this.username,
-    required this.hasPassword,
-    required this.extraOptions,
     required this.detectedVersion,
-    required this.lastCompatStatus,
-    required this.lastCompatReport,
+    required this.detection,
+    required this.analysis,
+    required this.supportedEntities,
     required this.lastRunAt,
-    required this.credentialsCleared,
-    required this.isArchived,
+    required this.purgedAt,
   });
 
   final int id;
   final String name;
-  final String systemKey;
-  final String transportKind;
-  final String host;
-  final int? port;
-  final String databaseName;
-  final String username;
-  final bool hasPassword;
-  final Map<String, Object?> extraOptions;
-  final String detectedVersion;
-  final String lastCompatStatus; // unknown | compatible | incompatible
-  final CompatibilityReport lastCompatReport;
-  final DateTime? lastRunAt;
-  final bool credentialsCleared;
-  final bool isArchived;
+  final String originalFilename;
+  final int declaredSizeBytes;
+  final int receivedBytes;
+  final int uploadPercent;
 
-  bool get isCompatible => lastCompatStatus == 'compatible';
+  /// uploading | uploaded | preparing | ready | failed | purged
+  final String uploadState;
+  final int stagedSizeBytes;
+  final int preparedSizeBytes;
+  final List<MigrationStage> stages;
+  final String errorMessage;
+  final String systemKey;
+  final String detectedVersion;
+  final MigrationDetection detection;
+  final MigrationAnalysis analysis;
+  final List<String> supportedEntities;
+  final DateTime? lastRunAt;
+  final DateTime? purgedAt;
+
+  bool get isUploading => uploadState == 'uploading';
+  bool get isReady => uploadState == 'ready';
+  bool get isFailed => uploadState == 'failed';
+  bool get isPurged => uploadState == 'purged';
+
+  /// Preparation is in flight: poll, don't offer actions.
+  bool get isBusy => uploadState == 'uploaded' || uploadState == 'preparing';
+
+  /// The stage the server is on right now, for a one-line status.
+  MigrationStage? get currentStage {
+    for (final stage in stages) {
+      if (stage.isRunning) return stage;
+    }
+    return null;
+  }
+
+  /// Mean completion across stages — the number for a single bar.
+  int get preparationPercent {
+    if (stages.isEmpty) return 0;
+    var total = 0;
+    for (final stage in stages) {
+      total += (stage.isDone || stage.isSkipped) ? 100 : stage.percent;
+    }
+    return total ~/ stages.length;
+  }
 
   factory MigrationSource.fromJson(Map<String, Object?> json) {
     return MigrationSource(
       id: _int(json['id']),
       name: _str(json['name']),
+      originalFilename: _str(json['original_filename']),
+      declaredSizeBytes: _int(json['declared_size_bytes']),
+      receivedBytes: _int(json['received_bytes']),
+      uploadPercent: _int(json['upload_percent']),
+      uploadState: _str(json['upload_state'], fallback: 'uploading'),
+      stagedSizeBytes: _int(json['staged_size_bytes']),
+      preparedSizeBytes: _int(json['prepared_size_bytes']),
+      stages: [
+        for (final item in _list(json['stages'])) MigrationStage.fromJson(item),
+      ],
+      errorMessage: _str(json['error_message']),
       systemKey: _str(json['system_key']),
-      transportKind: _str(json['transport_kind']),
-      host: _str(json['host']),
-      port: _intOrNull(json['port']),
-      databaseName: _str(json['database_name']),
-      username: _str(json['username']),
-      hasPassword: json['has_password'] as bool? ?? false,
-      extraOptions: _map(json['extra_options']),
       detectedVersion: _str(json['detected_version']),
-      lastCompatStatus: _str(json['last_compat_status'], fallback: 'unknown'),
-      lastCompatReport: CompatibilityReport.fromJson(
-        _map(json['last_compat_report']),
-      ),
-      lastRunAt: _dateOrNull(json['last_run_at']),
-      credentialsCleared: json['credentials_cleared'] as bool? ?? false,
-      isArchived: json['is_archived'] as bool? ?? false,
-    );
-  }
-}
-
-/// Body for creating/updating a source. Only non-null fields are sent, so the
-/// same draft works for create (all fields) and partial update.
-class MigrationSourceDraft {
-  const MigrationSourceDraft({
-    this.name,
-    this.systemKey,
-    this.transportKind,
-    this.host,
-    this.port,
-    this.databaseName,
-    this.username,
-    this.password,
-    this.extraOptions,
-    this.isArchived,
-  });
-
-  final String? name;
-  final String? systemKey;
-  final String? transportKind;
-  final String? host;
-  final int? port;
-  final String? databaseName;
-  final String? username;
-  final String? password;
-  final Map<String, Object?>? extraOptions;
-  final bool? isArchived;
-
-  Map<String, Object?> toJson() {
-    final body = <String, Object?>{};
-    if (name != null) body['name'] = name;
-    if (systemKey != null) body['system_key'] = systemKey;
-    if (transportKind != null) body['transport_kind'] = transportKind;
-    if (host != null) body['host'] = host;
-    if (port != null) body['port'] = port;
-    if (databaseName != null) body['database_name'] = databaseName;
-    if (username != null) body['username'] = username;
-    if (password != null && password!.isNotEmpty) body['password'] = password;
-    if (extraOptions != null) body['extra_options'] = extraOptions;
-    if (isArchived != null) body['is_archived'] = isArchived;
-    return body;
-  }
-}
-
-class CompatibilityReport {
-  const CompatibilityReport({
-    required this.compatible,
-    required this.detectedVersion,
-    required this.missingTables,
-    required this.missingColumns,
-    required this.supportedEntities,
-    required this.notes,
-    required this.checked,
-  });
-
-  final bool compatible;
-  final String? detectedVersion;
-  final List<String> missingTables;
-  final Map<String, List<String>> missingColumns;
-  final List<String> supportedEntities;
-  final List<String> notes;
-
-  /// False when the report is an empty placeholder (never checked).
-  final bool checked;
-
-  factory CompatibilityReport.fromJson(Map<String, Object?> json) {
-    final missingColumns = <String, List<String>>{};
-    final rawColumns = json['missing_columns'];
-    if (rawColumns is Map) {
-      rawColumns.forEach((key, value) {
-        missingColumns['$key'] = _stringList(value);
-      });
-    }
-    return CompatibilityReport(
-      compatible: json['compatible'] as bool? ?? false,
-      detectedVersion: json['detected_version'] as String?,
-      missingTables: _stringList(json['missing_tables']),
-      missingColumns: missingColumns,
+      detection: MigrationDetection.fromJson(_map(json['detection'])),
+      analysis: MigrationAnalysis.fromJson(_map(json['analysis'])),
       supportedEntities: _stringList(json['supported_entities']),
-      notes: _stringList(json['notes']),
-      checked: json.isNotEmpty && json.containsKey('compatible'),
+      lastRunAt: _dateOrNull(json['last_run_at']),
+      purgedAt: _dateOrNull(json['purged_at']),
     );
   }
 }
 
-class MigrationConnectionTest {
-  const MigrationConnectionTest({
-    required this.ok,
-    required this.tableCount,
-    required this.tables,
-  });
+/// The handle returned when an upload is opened: where to send bytes, and how
+/// big each piece should be.
+class MigrationUploadTicket {
+  const MigrationUploadTicket({required this.source, required this.chunkSize});
 
-  final bool ok;
-  final int tableCount;
-  final List<String> tables;
+  final MigrationSource source;
+  final int chunkSize;
 
-  factory MigrationConnectionTest.fromJson(Map<String, Object?> json) {
-    return MigrationConnectionTest(
-      ok: json['ok'] as bool? ?? false,
-      tableCount: _int(json['table_count']),
-      tables: _stringList(json['tables']),
-    );
-  }
-}
-
-/// A SQL Server instance found on the LAN via the discovery broadcast. This is
-/// the result of a *discovery* probe only — no credentials were sent. The
-/// operator picks the client's POS box from these, which prefills host/port.
-class DiscoveredServer {
-  const DiscoveredServer({
-    required this.address,
-    required this.serverName,
-    required this.instanceName,
-    required this.version,
-    required this.tcpPort,
-  });
-
-  final String address;
-  final String serverName;
-  final String instanceName;
-  final String version;
-  final int? tcpPort;
-
-  /// "POSPC\\SQLEXPRESS" style label, falling back to the IP.
-  String get displayName {
-    final name = serverName.isNotEmpty ? serverName : address;
-    return instanceName.isEmpty ? name : '$name\\$instanceName';
-  }
-
-  factory DiscoveredServer.fromJson(Map<String, Object?> json) {
-    return DiscoveredServer(
-      address: _str(json['address']),
-      serverName: _str(json['server_name']),
-      instanceName: _str(json['instance_name']),
-      version: _str(json['version']),
-      tcpPort: _intOrNull(json['tcp_port']),
+  factory MigrationUploadTicket.fromJson(Map<String, Object?> json) {
+    return MigrationUploadTicket(
+      source: MigrationSource.fromJson(_map(json['source'])),
+      chunkSize:
+          _intOrNull(json['chunk_size']) ?? MigrationUploadConfig.fallback.chunkSize,
     );
   }
 }
@@ -305,6 +390,7 @@ class MigrationRun {
     required this.progressPercent,
     required this.progressMessage,
     required this.currentEntity,
+    required this.stages,
     required this.summary,
     required this.errorMessage,
     required this.issueCount,
@@ -320,6 +406,7 @@ class MigrationRun {
   final int progressPercent;
   final String progressMessage;
   final String currentEntity;
+  final List<MigrationStage> stages;
   final Map<String, MigrationEntitySummary> summary;
   final String errorMessage;
   final int issueCount;
@@ -364,6 +451,9 @@ class MigrationRun {
       progressPercent: _int(json['progress_percent']),
       progressMessage: _str(json['progress_message']),
       currentEntity: _str(json['current_entity']),
+      stages: [
+        for (final item in _list(json['stages'])) MigrationStage.fromJson(item),
+      ],
       summary: summary,
       errorMessage: _str(json['error_message']),
       issueCount: _int(json['issue_count']),

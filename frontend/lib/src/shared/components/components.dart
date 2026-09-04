@@ -21,6 +21,8 @@ export 'pointy_number_entry_dialog.dart';
 export 'pointy_password_field.dart';
 export 'pointy_permission_denied_view.dart';
 export 'pointy_progress.dart';
+export 'pointy_stage_timeline.dart';
+export 'pointy_step_rail.dart';
 export 'pointy_qr_image.dart';
 export 'pointy_searchable_picker.dart';
 export 'pointy_section_header.dart';

@@ -13,7 +13,7 @@ offline into one SQLite file by two repo scripts:
 
 This connector reads that *prepared* file (the version spec requires the
 ``fahd_*`` tables, so pointing it at a raw conversion fails compatibility
-loudly). Differences from :class:`FahdMssqlConnector` beyond the transport:
+loudly). Differences from :class:`FahdBaseConnector` beyond the transport:
 
 * **Sub-barcodes.** ``CAR_PART_D`` (sub-items — flavours/colours of a main
   item) holds plain alias barcodes: emitted as additional
@@ -62,10 +62,10 @@ from ..entity_plan import (
     VARIANT,
 )
 from .base import ExtractContext, RequiredTable, VersionSpec
-from .fahd_mssql import (
+from .fahd_base import (
     _PLACEHOLDER_VALUES,
     _SYSTEM_ITEM_NAMES,
-    FahdMssqlConnector,
+    FahdBaseConnector,
     _clean,
     _is_system_party,
     _lower,
@@ -124,12 +124,11 @@ def _is_opening_party(name: str) -> bool:
     return any(token in name for token in _OPENING_PARTY_TOKENS)
 
 
-class FahdSqliteConnector(FahdMssqlConnector):
-    system_key = "fahd_sqlite"
-    display_name = "Fahd (ملف مُصدَّر — Access/SQLite)"
+class FahdConnector(FahdBaseConnector):
+    system_key = "fahd"
+    display_name = "برنامج فهد"
     implemented = True
     required_transport = "sqlite"
-    recommended_options: dict = {}
     supported_entities = (
         UNIT,
         CATEGORY,
@@ -142,6 +141,30 @@ class FahdSqliteConnector(FahdMssqlConnector):
         PURCHASE_ORDER,
         SALE,
     )
+    # What a freshly converted Fahd .mdb looks like: a catalogue and the audit
+    # log, and no invoice tables at all — Fahd wipes those at year carry-over, so
+    # the shop's entire trading history exists only as Arabic log text until
+    # `prepare` replays it. Matching this is what tells the pipeline to run that
+    # replay before trying to read the file as a Fahd database.
+    raw_versions = (
+        VersionSpec(
+            version_key="fahd-mdb-raw",
+            required_tables=(
+                RequiredTable("CAR_PART", ("ser", "CAR_PART", "SER_KETAEE", "TASNEEF")),
+                RequiredTable("TASNEEF", ("NO", "TASNEEF")),
+                RequiredTable("control", ("id", "emp_id", "prog", "op", "descrip", "op_date")),
+            ),
+        ),
+    )
+    # Cheap COUNT(*) / MIN..MAX for the "this is what we found" screen.
+    analysis_tables = {
+        CATEGORY: ("TASNEEF", None),
+        PRODUCT: ("CAR_PART", None),
+        CUSTOMER: ("COUSTMER", None),
+        SUPPLIER: ("WARED", None),
+        SALE: ("fahd_sales", "occurred_at"),
+        PURCHASE_ORDER: ("fahd_purchases", "occurred_at"),
+    }
     versions = (
         VersionSpec(
             version_key="fahd-mdb-recon-1",
@@ -167,6 +190,23 @@ class FahdSqliteConnector(FahdMssqlConnector):
             ),
         ),
     )
+
+    def prepare(self, source_path, output_path, *, tracker=None, stage_key="prepare"):
+        """Rebuild Fahd's invoices from its ``control`` audit log.
+
+        This used to be ``scripts/fahd_reconstruct.py``, run by hand on a laptop.
+        It is the single most important step for a Fahd shop — 100% of their
+        sales and purchase history comes out of it — so it belongs in the product
+        rather than in a repository nobody on site has checked out.
+        """
+        from ..preparation.fahd_reconstruct import reconstruct
+
+        return reconstruct(
+            str(source_path),
+            str(output_path),
+            tracker=tracker,
+            stage_key=stage_key,
+        )
 
     def extract(self, entity_type: str, transport, ctx: ExtractContext):
         if entity_type == UNIT:

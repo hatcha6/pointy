@@ -16,16 +16,14 @@
 #   * pack codes whose sale history shows they were really used to ring loose
 #     pieces are left exactly as they are (still scan as one piece).
 #
-# Uses the SAME fahd_migration.sqlite file the original migration used (the
+# Uses the SAME db.mdb file the original migration used (the
 # identity map is keyed on it). If the file is gone, regenerate it on a
 # workstation from the shop's db.mdb:
-#   scripts/mdb_to_sqlite.sh db.mdb fahd_data.sqlite
-#   scripts/fahd_reconstruct.py fahd_data.sqlite fahd_migration.sqlite
 #
 # Run from the deploy directory (next to docker-compose.yml):
 #
-#   bash backfill-fahd-units.sh /path/to/fahd_migration.sqlite            # dry run
-#   bash backfill-fahd-units.sh /path/to/fahd_migration.sqlite --import   # real run
+#   bash backfill-fahd-units.sh /path/to/db.mdb            # dry run
+#   bash backfill-fahd-units.sh /path/to/db.mdb --import   # real run
 #
 # The dry run validates everything and writes nothing — read its report first.
 # Re-running is safe (idempotent): existing units are updated, not duplicated.
@@ -35,7 +33,7 @@ cd "$(dirname "$0")"
 err() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
 
 DB_FILE="${1:-}"
-[ -n "$DB_FILE" ] || err "Usage: bash backfill-fahd-units.sh /path/to/fahd_migration.sqlite [--import]"
+[ -n "$DB_FILE" ] || err "Usage: bash backfill-fahd-units.sh /path/to/db.mdb [--import]"
 [ -f "$DB_FILE" ] || err "File not found: $DB_FILE"
 shift
 
@@ -57,14 +55,13 @@ docker compose ps --status running backend --quiet 2>/dev/null | grep -q . \
 
 # Stage at the SAME path the original migration used — the identity map that
 # links legacy codes to the imported products is keyed on it.
-CONTAINER_PATH="/var/lib/pointy/backups/legacy-import.sqlite"
+CONTAINER_PATH="/var/lib/pointy/migration/legacy-import-source"
 echo "==> Copying $(basename "$DB_FILE") into the backend container…"
 docker compose cp "$DB_FILE" "backend:$CONTAINER_PATH"
 
 echo "==> Backfilling packaging units ($MODE)…"
 docker compose exec -T backend python manage.py import_legacy \
-  --database "$CONTAINER_PATH" \
-  --system fahd_sqlite \
+  --file "$CONTAINER_PATH" \
   --mode "$MODE" \
   --stock none \
   --entities unit,product_unit \

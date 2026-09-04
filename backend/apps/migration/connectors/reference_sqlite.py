@@ -34,6 +34,11 @@ class ReferenceSqliteConnector(BaseConnector):
     display_name = "Generic POS (SQLite — reference)"
     required_transport = "sqlite"
     supported_entities = (UNIT, CATEGORY, PRODUCT, STOCK, CUSTOMER, SUPPLIER)
+    analysis_tables = {
+        CATEGORY: ("categories", None),
+        PRODUCT: ("products", None),
+        CUSTOMER: ("customers", None),
+    }
     versions = (
         VersionSpec(
             version_key="generic-1",

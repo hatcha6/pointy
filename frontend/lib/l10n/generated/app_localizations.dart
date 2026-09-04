@@ -23711,203 +23711,17 @@ abstract class AppLocalizations {
   /// **'تعذّر تحميل أدوات النقل'**
   String get migrationLoadError;
 
-  /// No description provided for @migrationConnectionSectionTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'الاتصال بقاعدة البيانات القديمة'**
-  String get migrationConnectionSectionTitle;
-
-  /// No description provided for @migrationConnectionSectionSubtitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'اختر نظامك القديم وأدخل بيانات الاتصال بقاعدة بياناته.'**
-  String get migrationConnectionSectionSubtitle;
-
-  /// No description provided for @migrationSourceNameLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'اسم مصدر البيانات'**
-  String get migrationSourceNameLabel;
-
-  /// No description provided for @migrationSystemLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'النظام القديم'**
-  String get migrationSystemLabel;
-
   /// No description provided for @migrationStubSystemNotice.
   ///
   /// In ar, this message translates to:
   /// **'هذا النظام متاح لفحص التوافق فقط حاليًا؛ سيُفعَّل الاستيراد لاحقًا.'**
   String get migrationStubSystemNotice;
 
-  /// No description provided for @migrationDatabaseFileLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'مسار ملف قاعدة البيانات'**
-  String get migrationDatabaseFileLabel;
-
-  /// No description provided for @migrationHostLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'المضيف'**
-  String get migrationHostLabel;
-
-  /// No description provided for @migrationPortLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'المنفذ'**
-  String get migrationPortLabel;
-
-  /// No description provided for @migrationDatabaseLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'قاعدة البيانات'**
-  String get migrationDatabaseLabel;
-
-  /// No description provided for @migrationUsernameLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'اسم المستخدم'**
-  String get migrationUsernameLabel;
-
-  /// No description provided for @migrationPasswordLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'كلمة المرور'**
-  String get migrationPasswordLabel;
-
-  /// No description provided for @migrationPasswordKeepHint.
-  ///
-  /// In ar, this message translates to:
-  /// **'اتركها فارغة للإبقاء على كلمة المرور المحفوظة'**
-  String get migrationPasswordKeepHint;
-
-  /// No description provided for @migrationAdvancedSectionTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'خيارات متقدمة (اختياري)'**
-  String get migrationAdvancedSectionTitle;
-
-  /// No description provided for @migrationAdvancedSectionSubtitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'لازمة للأنظمة القديمة جدًا (مثل SQL Server 2000 الذي يحتاج مُشغّل FreeTDS).'**
-  String get migrationAdvancedSectionSubtitle;
-
-  /// No description provided for @migrationOdbcDriverLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'مُشغّل ODBC'**
-  String get migrationOdbcDriverLabel;
-
-  /// No description provided for @migrationOdbcDriverHint.
-  ///
-  /// In ar, this message translates to:
-  /// **'مثال: FreeTDS أو ODBC Driver 18 for SQL Server'**
-  String get migrationOdbcDriverHint;
-
-  /// No description provided for @migrationTdsVersionLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'إصدار TDS'**
-  String get migrationTdsVersionLabel;
-
-  /// No description provided for @migrationTdsVersionHint.
-  ///
-  /// In ar, this message translates to:
-  /// **'مثال: 7.0 لـ SQL Server 2000'**
-  String get migrationTdsVersionHint;
-
-  /// No description provided for @migrationEncodingLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'ترميز النص'**
-  String get migrationEncodingLabel;
-
-  /// No description provided for @migrationEncodingHint.
-  ///
-  /// In ar, this message translates to:
-  /// **'مثال: cp1256 للنصوص العربية القديمة'**
-  String get migrationEncodingHint;
-
-  /// No description provided for @migrationScanButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'بحث في الشبكة'**
-  String get migrationScanButton;
-
-  /// No description provided for @migrationScanTitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'خوادم SQL Server في الشبكة'**
-  String get migrationScanTitle;
-
-  /// No description provided for @migrationScanSubtitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'اختر خادم نظام نقاط البيع الخاص بالعميل لتعبئة المضيف والمنفذ.'**
-  String get migrationScanSubtitle;
-
-  /// No description provided for @migrationScanEmpty.
-  ///
-  /// In ar, this message translates to:
-  /// **'لم يُعثر على أي خادم. تأكد من تشغيل الجهاز على نفس الشبكة، أو أدخل المضيف يدويًا.'**
-  String get migrationScanEmpty;
-
-  /// No description provided for @migrationScanFailed.
-  ///
-  /// In ar, this message translates to:
-  /// **'تعذّر البحث في الشبكة'**
-  String get migrationScanFailed;
-
-  /// No description provided for @migrationScanSelected.
-  ///
-  /// In ar, this message translates to:
-  /// **'تم اختيار {server}'**
-  String migrationScanSelected(String server);
-
-  /// No description provided for @migrationSaveSourceButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'حفظ المصدر'**
-  String get migrationSaveSourceButton;
-
-  /// No description provided for @migrationTestButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'اختبار الاتصال'**
-  String get migrationTestButton;
-
-  /// No description provided for @migrationCheckButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'فحص التوافق'**
-  String get migrationCheckButton;
-
-  /// No description provided for @migrationTestSuccess.
-  ///
-  /// In ar, this message translates to:
-  /// **'تم الاتصال — {count} جدول'**
-  String migrationTestSuccess(int count);
-
-  /// No description provided for @migrationTestFailed.
-  ///
-  /// In ar, this message translates to:
-  /// **'فشل الاتصال بقاعدة البيانات'**
-  String get migrationTestFailed;
-
   /// No description provided for @migrationCompatTitle.
   ///
   /// In ar, this message translates to:
   /// **'التوافق'**
   String get migrationCompatTitle;
-
-  /// No description provided for @migrationNotChecked.
-  ///
-  /// In ar, this message translates to:
-  /// **'لم يتم فحص التوافق بعد'**
-  String get migrationNotChecked;
 
   /// No description provided for @migrationCompatibleMessage.
   ///
@@ -23956,18 +23770,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'اختر أنواع البيانات التي تريد نقلها.'**
   String get migrationEntitiesSectionSubtitle;
-
-  /// No description provided for @migrationWithoutQuantitiesLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'نقل المنتجات بدون كميات'**
-  String get migrationWithoutQuantitiesLabel;
-
-  /// No description provided for @migrationWithoutQuantitiesSubtitle.
-  ///
-  /// In ar, this message translates to:
-  /// **'استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في دفتر.'**
-  String get migrationWithoutQuantitiesSubtitle;
 
   /// No description provided for @migrationStockSourceSectionTitle.
   ///
@@ -24178,18 +23980,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تشغيل تجريبي'**
   String get migrationDryRunButton;
-
-  /// No description provided for @migrationSourceSaved.
-  ///
-  /// In ar, this message translates to:
-  /// **'تم حفظ المصدر'**
-  String get migrationSourceSaved;
-
-  /// No description provided for @migrationSourceSaveError.
-  ///
-  /// In ar, this message translates to:
-  /// **'تعذّر حفظ المصدر'**
-  String get migrationSourceSaveError;
 
   /// No description provided for @migrationRunStartError.
   ///
@@ -26992,6 +26782,288 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'اقترن بهاتف أولًا لاستخدام الكاميرا'**
   String get companionPairFirst;
+
+  /// Wizard step 1: pick the file.
+  ///
+  /// In ar, this message translates to:
+  /// **'الملف'**
+  String get migrationStepChoose;
+
+  /// Wizard step 2: uploading.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرفع'**
+  String get migrationStepUpload;
+
+  /// Wizard step 3: server-side preparation.
+  ///
+  /// In ar, this message translates to:
+  /// **'التحضير'**
+  String get migrationStepPrepare;
+
+  /// Wizard step 4: what we found + choices.
+  ///
+  /// In ar, this message translates to:
+  /// **'المراجعة'**
+  String get migrationStepReview;
+
+  /// Wizard step 5: the import itself.
+  ///
+  /// In ar, this message translates to:
+  /// **'النقل'**
+  String get migrationStepImport;
+
+  /// Headline on the file-picking step.
+  ///
+  /// In ar, this message translates to:
+  /// **'أحضر بيانات نظامك القديم'**
+  String get migrationChooseTitle;
+
+  /// Explains the whole flow in one sentence before anything happens.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر ملف قاعدة بيانات نظامك القديم وسنتولى الباقي: نقرأه، نتعرف على النظام، ننقل البيانات، ثم نحذف الملف من الخادم.'**
+  String get migrationChooseSubtitle;
+
+  /// Opens the file picker.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار ملف'**
+  String get migrationPickFileButton;
+
+  /// Replaces the picked file.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار ملف آخر'**
+  String get migrationChooseAnotherFile;
+
+  /// List of accepted file extensions.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصيغ المقبولة: {formats}'**
+  String migrationAcceptedFormats(String formats);
+
+  /// Upload size ceiling.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد الأقصى لحجم الملف: {size}'**
+  String migrationMaxFileSize(String size);
+
+  /// Shown when the picked file exceeds the server's ceiling.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الملف أكبر من الحد المسموح به.'**
+  String get migrationFileTooLarge;
+
+  /// Header of the help section on the choose step.
+  ///
+  /// In ar, this message translates to:
+  /// **'أين أجد هذا الملف؟'**
+  String get migrationWhereIsMyFileTitle;
+
+  /// Practical advice for finding the legacy database file.
+  ///
+  /// In ar, this message translates to:
+  /// **'الملف موجود عادةً على الجهاز الذي يعمل عليه نظامك القديم، داخل مجلد البرنامج. إن لم تجده، اسأل من ركّب لك النظام عن «ملف قاعدة البيانات». انسخه على ذاكرة USB وأحضره إلى هنا.'**
+  String get migrationWhereIsMyFileBody;
+
+  /// Header above the list of supported POS systems.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأنظمة التي نقرأها'**
+  String get migrationSupportedSystemsTitle;
+
+  /// Reassurance that the vendor is auto-detected.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا حاجة لاختيار نظامك — نتعرف عليه من الملف نفسه.'**
+  String get migrationSystemDetectedAutomatically;
+
+  /// Begins the chunked upload.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابدأ الرفع'**
+  String get migrationStartUploadButton;
+
+  /// Headline while bytes move.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ رفع الملف'**
+  String get migrationUploadingTitle;
+
+  /// Bytes uploaded out of the total.
+  ///
+  /// In ar, this message translates to:
+  /// **'{sent} من {total}'**
+  String migrationUploadedOf(String sent, String total);
+
+  /// Upload speed per second.
+  ///
+  /// In ar, this message translates to:
+  /// **'{rate}/ث'**
+  String migrationUploadRate(String rate);
+
+  /// Estimated time left.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتبقى {duration}'**
+  String migrationUploadRemaining(String duration);
+
+  /// Explains that the upload is resumable, which matters for a GB file.
+  ///
+  /// In ar, this message translates to:
+  /// **'إن انقطع الاتصال يمكنك المتابعة من حيث توقف الرفع — لن تبدأ من جديد.'**
+  String get migrationUploadResumeNote;
+
+  /// Cancels an upload in flight.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الرفع'**
+  String get migrationCancelUploadButton;
+
+  /// Headline when an upload fails.
+  ///
+  /// In ar, this message translates to:
+  /// **'توقف الرفع'**
+  String get migrationUploadFailedTitle;
+
+  /// Resumes an interrupted upload from the server's offset.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة الرفع'**
+  String get migrationResumeUploadButton;
+
+  /// Headline during server-side conversion.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ تحضير البيانات'**
+  String get migrationPreparingTitle;
+
+  /// Tells the owner the long job survives them leaving.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكنك إغلاق هذه الصفحة والعودة لاحقًا — تستمر العملية على الخادم.'**
+  String get migrationPreparingSubtitle;
+
+  /// Headline when preparation fails.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر قراءة هذا الملف'**
+  String get migrationPreparationFailedTitle;
+
+  /// Discards the failed file and returns to the picker.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجربة ملف آخر'**
+  String get migrationTryAnotherFileButton;
+
+  /// Headline of the contents-preview step.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا ما وجدناه'**
+  String get migrationFoundTitle;
+
+  /// Label for the auto-detected POS name.
+  ///
+  /// In ar, this message translates to:
+  /// **'النظام'**
+  String get migrationDetectedSystemLabel;
+
+  /// Date span covered by the transactional history.
+  ///
+  /// In ar, this message translates to:
+  /// **'السجل من {from} إلى {to}'**
+  String migrationHistoryRange(String from, String to);
+
+  /// Shown when analysis found no records.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم نعثر على بيانات قابلة للنقل في هذا الملف.'**
+  String get migrationNothingToImport;
+
+  /// Header above the per-entity toggles.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما الذي ننقله؟'**
+  String get migrationWhatToTransferTitle;
+
+  /// Starts a dry run.
+  ///
+  /// In ar, this message translates to:
+  /// **'معاينة قبل النقل'**
+  String get migrationPreviewButton;
+
+  /// Deletes the uploaded file from the server without importing.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الملف'**
+  String get migrationDiscardFileButton;
+
+  /// Confirmation before discarding an uploaded file.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُحذف الملف من الخادم ولن تتمكن من النقل منه دون رفعه مرة أخرى. هل تريد المتابعة؟'**
+  String get migrationDiscardFileConfirm;
+
+  /// Headline while a dry run is in progress.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ فحص البيانات'**
+  String get migrationDryRunningTitle;
+
+  /// Headline while an import is in progress.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ نقل البيانات'**
+  String get migrationImportingTitle;
+
+  /// Dry run finished with no failed records.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعاينة نظيفة'**
+  String get migrationDryRunCleanTitle;
+
+  /// What a clean dry run means.
+  ///
+  /// In ar, this message translates to:
+  /// **'فحصنا كل شيء دون كتابة أي بيانات. يمكنك النقل الآن.'**
+  String get migrationDryRunCleanMessage;
+
+  /// Dry run finished with failures.
+  ///
+  /// In ar, this message translates to:
+  /// **'وجدنا مشاكل في المعاينة'**
+  String get migrationDryRunIssuesTitle;
+
+  /// Headline after a successful import.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نقل بياناتك'**
+  String get migrationDoneTitle;
+
+  /// Confirms the uploaded database no longer exists on the server.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حذف ملفك من الخادم.'**
+  String get migrationFileDeletedNotice;
+
+  /// Explains why a partial import did not delete the file.
+  ///
+  /// In ar, this message translates to:
+  /// **'احتفظنا بالملف مؤقتًا لتتمكن من إعادة المحاولة بعد إصلاح المشاكل.'**
+  String get migrationFileKeptNotice;
+
+  /// Starts the wizard again from step one.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقل ملف آخر'**
+  String get migrationStartAnotherButton;
+
+  /// Total records imported (pre-formatted with separators).
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} سجل'**
+  String migrationRecordsImported(String count);
 }
 
 class _AppLocalizationsDelegate

@@ -1,5 +1,34 @@
+import 'dart:typed_data';
+
 import '../models/migration.dart';
 import 'api_session.dart';
+
+/// The outcome of one chunk PUT: where the server now is, and whether it
+/// rejected our idea of where the file ended.
+class MigrationChunkResult {
+  const MigrationChunkResult({
+    required this.receivedBytes,
+    required this.conflicted,
+  });
+
+  final int receivedBytes;
+  final bool conflicted;
+}
+
+/// A chunk the server will never accept, however many times we send it.
+///
+/// The retry loop exists for a shop's Wi-Fi dropping mid-transfer. A 413 from
+/// the front door or a 403 from an expired session is not that: resending tens
+/// of megabytes four times only delays telling the person what went wrong.
+class MigrationChunkRejected implements Exception {
+  const MigrationChunkRejected(this.statusCode, this.message);
+
+  final int statusCode;
+  final String message;
+
+  @override
+  String toString() => message;
+}
 
 class MigrationApiClient {
   const MigrationApiClient(this._session);
@@ -28,85 +57,111 @@ class MigrationApiClient {
     ).map(MigrationSource.fromJson).toList();
   }
 
-  Future<MigrationSource> createSource(MigrationSourceDraft draft) async {
+  Future<MigrationSource> fetchSource(int id) async {
+    final response = await _session.get('migration/sources/$id/');
+    _session.ensureSuccess(
+      response,
+      'Migration source request failed with status',
+    );
+    return MigrationSource.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Opens an upload: reserves the row and an empty file, and reports the chunk
+  /// size to send. Nothing is transferred yet.
+  Future<MigrationUploadTicket> beginUpload({
+    required String filename,
+    required int sizeBytes,
+  }) async {
     final response = await _session.post(
-      'migration/sources/',
-      body: draft.toJson(),
+      'migration/sources/begin/',
+      body: {'filename': filename, 'size_bytes': sizeBytes},
     );
-    _session.ensureSuccess(
-      response,
-      'Create migration source failed with status',
-    );
-    return MigrationSource.fromJson(
+    _session.ensureSuccess(response, 'Begin migration upload failed with status');
+    return MigrationUploadTicket.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }
 
-  Future<MigrationSource> updateSource(
-    int id,
-    MigrationSourceDraft draft,
-  ) async {
-    final response = await _session.patch(
-      'migration/sources/$id/',
-      body: draft.toJson(),
-    );
-    _session.ensureSuccess(
-      response,
-      'Update migration source failed with status',
-    );
-    return MigrationSource.fromJson(
-      _session.decodedBody(response) as Map<String, Object?>,
-    );
-  }
-
-  Future<void> deleteSource(int id) async {
-    final response = await _session.delete('migration/sources/$id/');
-    _session.ensureSuccess(
-      response,
-      'Delete migration source failed with status',
-    );
-  }
-
-  /// Discovery only — broadcasts an SSRP request and lists reachable SQL Server
-  /// instances. No credentials are sent; the operator picks the target.
-  Future<List<DiscoveredServer>> discoverServers() async {
-    final response = await _session.post('migration/sources/discover/');
-    _session.ensureSuccess(
-      response,
-      'Migration server discovery failed with status',
+  /// Sends one chunk at [offset].
+  ///
+  /// Returns the server's new offset on success. A **409** means the server
+  /// disagreed about where the file ends — it carries the real offset, and the
+  /// caller re-syncs to it rather than writing into the wrong place, which
+  /// would corrupt the database silently.
+  Future<MigrationChunkResult> uploadChunk({
+    required int sourceId,
+    required int offset,
+    required Uint8List bytes,
+  }) async {
+    final response = await _session.putBytes(
+      'migration/sources/$sourceId/chunk/',
+      bytes: bytes,
+      queryParameters: {'offset': '$offset'},
+      timeout: PosApiSession.longRunningRequestTimeout,
     );
     final decoded = _session.decodedBody(response);
-    final servers = decoded is Map<String, Object?> ? decoded['servers'] : null;
-    return [
-      if (servers is List)
-        for (final item in servers)
-          if (item is Map<String, Object?>) DiscoveredServer.fromJson(item),
-    ];
+    final body = decoded is Map<String, Object?> ? decoded : const <String, Object?>{};
+    if (response.statusCode == 409) {
+      return MigrationChunkResult(
+        receivedBytes: (body['received_bytes'] as num?)?.toInt() ?? 0,
+        conflicted: true,
+      );
+    }
+    if (response.statusCode == 413) {
+      // The proxy in front of the backend refused the body. Retrying cannot
+      // help, and the server is the one that chose this chunk size, so say so
+      // rather than blaming the network.
+      throw const MigrationChunkRejected(
+        413,
+        'الخادم رفض حجم الجزء المُرسَل. راجع إعداد حجم الأجزاء على الخادم.',
+      );
+    }
+    if (response.statusCode >= 400 && response.statusCode < 500 &&
+        response.statusCode != 429) {
+      throw MigrationChunkRejected(
+        response.statusCode,
+        '${body['detail'] ?? 'تعذر رفع الملف'} (${response.statusCode})',
+      );
+    }
+    _session.ensureSuccess(response, 'Migration chunk upload failed with status');
+    return MigrationChunkResult(
+      receivedBytes: (body['received_bytes'] as num?)?.toInt() ?? 0,
+      conflicted: false,
+    );
   }
 
-  Future<MigrationConnectionTest> testConnection(int id) async {
-    final response = await _session.post('migration/sources/$id/test/');
-    _session.ensureSuccess(
-      response,
-      'Migration connection test failed with status',
-    );
-    return MigrationConnectionTest.fromJson(
-      _session.decodedBody(response) as Map<String, Object?>,
-    );
-  }
-
-  Future<CompatibilityReport> checkCompatibility(int id) async {
-    // Reads the whole legacy database to report what can be imported.
+  /// Verifies the received bytes and starts conversion + identification.
+  Future<MigrationSource> completeUpload(
+    int sourceId, {
+    String checksumSha256 = '',
+  }) async {
     final response = await _session.post(
-      'migration/sources/$id/check/',
+      'migration/sources/$sourceId/complete/',
+      body: {'checksum_sha256': checksumSha256},
       timeout: PosApiSession.longRunningRequestTimeout,
     );
     _session.ensureSuccess(
       response,
-      'Migration compatibility check failed with status',
+      'Complete migration upload failed with status',
     );
-    return CompatibilityReport.fromJson(
+    return MigrationSource.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Deletes the file from the server now.
+  Future<MigrationSource> discardSource(int id) async {
+    final response = await _session.post('migration/sources/$id/discard/');
+    _session.ensureSuccess(
+      response,
+      'Discard migration source failed with status',
+    );
+    final decoded = _session.decodedBody(response);
+    final body = decoded is Map<String, Object?> ? decoded : const <String, Object?>{};
+    return MigrationSource.fromJson(
+      (body['source'] as Map<String, Object?>?) ?? const {},
     );
   }
 

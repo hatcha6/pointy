@@ -1,293 +1,374 @@
-# Source database discovery kit
+# Legacy database discovery kit
 
-Run these **read-only** commands against a client's *old* POS database and send the
-captured output back. They give everything needed to write a new connector for
-`apps/migration/connectors/` (the `VersionSpec` of required tables/columns, the
-row→canonical mappings, and the transport settings).
+A migration starts with a **file**. The shop hands over their old POS's database,
+the server converts it, works out which system wrote it, imports it, and then
+deletes it. There is no host, no port, no password and no remote session: the
+connection-based flow asked the person sitting in front of the screen for an ODBC
+driver name and a TDS version, and every one of those questions failed in the
+field. The one migration that ever worked used a file.
 
-Nothing here writes to or modifies the source database — they only read system
-catalogs and a few sample rows.
+So this kit is no longer "run these queries against the client's live server". It
+is four jobs:
 
-## What to send back
+1. [ask the client for the right file](#1-what-to-ask-the-client-for)
+2. [read a file from a POS nobody has mapped](#2-inspecting-an-unknown-file)
+3. [write the connector](#3-writing-the-connector)
+4. [test it without a vendor dump](#4-testing-without-a-vendor-dump)
 
-1. **Which engine + version** (e.g. "Microsoft SQL Server 2014") and **which POS
-   product + version** the database belongs to (e.g. "AboGhris 7.2").
-2. The captured output of the script(s) for that engine (sections A–F below).
-3. The **text encoding / collation** line from section A (legacy Arabic systems
-   are often Windows‑1256 — the importer needs to know).
-4. A one‑line note on any **non‑obvious table/column meaning** you already know
-   (e.g. "tbl_Mat = products, Barcode2 is the wholesale barcode").
-
-> Privacy: section F returns up to 10 real rows per table, which may include
-> customer names/phones. That's fine for mapping, but redact freely if needed —
-> column **names and types** matter most; a few representative rows are enough.
-
-Each script is structured as: **A** engine & encoding · **B** tables + row counts
-· **C** columns · **D** primary/foreign keys · **E** unique indexes · **F** sample
-rows.
+Everything the app does between "these bytes arrived" and "a connector can read
+this" lives in `apps/migration/preparation/`: **identify → convert → prepare →
+detect → analyze → tidy**. Doing it by hand, below, is doing those same steps
+yourself.
 
 ---
 
-## Microsoft SQL Server (most common — AboGhris, Tajer, …)
+## 1. What to ask the client for
 
-Run in SQL Server Management Studio / Azure Data Studio. Set **Results → Results
-to Text** (so every result set lands in one capture), run, and save/send the
-output. Or use `sqlcmd` (see bottom).
+> نحتاج نسخة من ملف قاعدة البيانات الخاص ببرنامجكم الحالي.
 
-```sql
--- ===== A. Engine & encoding =====
-SELECT @@VERSION AS sql_server_version;
-SELECT DB_NAME() AS database_name,
-       DATABASEPROPERTYEX(DB_NAME(), 'Collation') AS db_collation;
+That is the whole request. Say the other half out loud too, because shops expect
+this to be a negotiation with whoever sold them the old system: **we do not need
+their server, their password, a port opened, a remote-desktop session, or
+anything from the vendor.** One file on a USB stick is the entire input.
 
--- ===== B. Tables + row counts (largest first) =====
-SELECT s.name AS [schema], t.name AS [table], SUM(p.rows) AS [row_count]
-FROM sys.tables t
-JOIN sys.schemas s ON s.schema_id = t.schema_id
-JOIN sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0, 1)
-WHERE t.is_ms_shipped = 0
-GROUP BY s.name, t.name
-ORDER BY [row_count] DESC;
+**What we take.** Microsoft Access `.mdb` / `.accdb`, or SQLite `.db` /
+`.sqlite` / `.sqlite3`. The extension is only a hint — the server identifies the
+file from its first 32 bytes (`preparation/identify.py`), so a database whose
+installer named it `.dat` still works, and a `data.mdb` that is really a Word
+document is caught rather than half-imported.
 
--- ===== C. Columns (type, length, nullability, default) =====
-SELECT TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION, COLUMN_NAME,
-       DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE,
-       IS_NULLABLE, COLUMN_DEFAULT
-FROM INFORMATION_SCHEMA.COLUMNS
-ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION;
+**Where it usually is.** Beside the POS's `.exe` under `C:\<vendor>\`, or under
+`C:\ProgramData\<vendor>\`; Fahd shops keep `db.mdb` in the program folder. A
+"backup" folder full of dated copies is fine — take the newest. If nobody knows,
+ask for "the file the program's own backup makes".
 
--- ===== D. Foreign keys (the relationship map) =====
-SELECT fk.name AS fk_name,
-       sch.name + '.' + tp.name AS from_table, cp.name AS from_column,
-       sch2.name + '.' + tr.name AS to_table, cr.name AS to_column
-FROM sys.foreign_keys fk
-JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
-JOIN sys.tables tp ON tp.object_id = fk.parent_object_id
-JOIN sys.schemas sch ON sch.schema_id = tp.schema_id
-JOIN sys.columns cp ON cp.object_id = tp.object_id AND cp.column_id = fkc.parent_column_id
-JOIN sys.tables tr ON tr.object_id = fk.referenced_object_id
-JOIN sys.schemas sch2 ON sch2.schema_id = tr.schema_id
-JOIN sys.columns cr ON cr.object_id = tr.object_id AND cr.column_id = fkc.referenced_column_id
-ORDER BY from_table, fk_name;
+**Size.** 1.5 GB is ordinary for ten years of trading. The upload is chunked and
+resumable (a shop's WiFi *will* drop it at 94%, and it resumes at the byte
+offset), the cap is `POINTY_MIGRATION_MAX_UPLOAD_BYTES` (8 GB by default), and
+the server refuses the upload up front unless it has roughly twice the file's
+size free — conversion writes a second copy alongside the original.
 
--- ===== E. Primary keys & unique indexes (natural keys for dedup) =====
--- SQL Server 2017+ (uses STRING_AGG):
-SELECT s.name + '.' + t.name AS [table], i.name AS index_name,
-       i.is_primary_key, i.is_unique,
-       STRING_AGG(c.name, ', ') WITHIN GROUP (ORDER BY ic.key_ordinal) AS columns
-FROM sys.indexes i
-JOIN sys.tables t ON t.object_id = i.object_id
-JOIN sys.schemas s ON s.schema_id = t.schema_id
-JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
-JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
-WHERE t.is_ms_shipped = 0 AND (i.is_primary_key = 1 OR i.is_unique = 1)
-GROUP BY s.name, t.name, i.name, i.is_primary_key, i.is_unique
-ORDER BY [table], index_name;
-```
+**A copy taken while the POS is running** is usually readable. If the conversion
+reports failed tables, ask for another taken with the program closed.
 
-If section E errors with *"STRING_AGG is not a recognized built-in function"*
-(SQL Server 2008/2012/2014), run this instead — one row per index column:
+**What we cannot read**, and what to ask for instead:
 
-```sql
-SELECT s.name + '.' + t.name AS [table], i.name AS index_name,
-       i.is_primary_key, i.is_unique, ic.key_ordinal, c.name AS column_name
-FROM sys.indexes i
-JOIN sys.tables t ON t.object_id = i.object_id
-JOIN sys.schemas s ON s.schema_id = t.schema_id
-JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
-JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
-WHERE t.is_ms_shipped = 0 AND (i.is_primary_key = 1 OR i.is_unique = 1)
-ORDER BY [table], index_name, ic.key_ordinal;
-```
+| They send | Why not | Ask for |
+|---|---|---|
+| `.bak`, `.mdf` | SQL Server's own formats — unreadable without a running SQL Server | the Access/SQLite database, or a SQLite copy made on the machine that still has the server |
+| `.zip`, `.rar`, `.7z` | we need the database, not an archive of it | the same file, unzipped |
+| `.pdf`, Word/Excel (OLE) | not a database at all | the database file |
 
-```sql
--- ===== F. Sample rows (TOP 10 of every table, labelled) =====
-DECLARE @sql NVARCHAR(MAX) = N'';
-SELECT @sql = @sql
-  + 'SELECT ''===== ' + s.name + '.' + t.name + ' ====='' AS sample_block;' + CHAR(10)
-  + 'SELECT TOP (10) * FROM [' + s.name + '].[' + t.name + '];' + CHAR(10)
-FROM sys.tables t
-JOIN sys.schemas s ON s.schema_id = t.schema_id
-WHERE t.is_ms_shipped = 0;
-EXEC sp_executesql @sql;
-```
+`identify.py` recognises every one of these by header and names it in Arabic, so
+a wrong file produces a next step ("هذا ملف مضغوط (ZIP) — نحتاج ملف قاعدة
+البيانات نفسه") instead of a dead end. When you are triaging a screenshot from
+the field, that message is the diagnosis.
 
-**Capture to a file with `sqlcmd`** (put the four sections above into
-`discovery_mssql.sql` first):
+Note that a connector's display name says which POS wrote the schema, not what
+the connector reads: `AboGhris (SQL Server)` reads a **SQLite** file carrying the
+AboGhris tables. Every connector reads SQLite now, because preparation converts
+everything before a connector sees it.
+
+---
+
+## 2. Inspecting an unknown file
+
+The app does all of this by itself. Do it by hand when you are writing a
+connector for a system nobody has mapped, or when a file failed detection and you
+need to know what it actually contains.
+
+### Is it what they think it is?
 
 ```bash
-sqlcmd -S <host>[,<port>] -d <database> -U <user> -P <password> \
-       -i discovery_mssql.sql -o mssql_discovery.txt -W -s "|" -w 65535
+file db.mdb
+head -c 32 db.mdb | xxd | head -2
 ```
 
-### Very old SQL Server (2000 / 7.0 — e.g. Fahd)
+`Standard Jet DB` (Access 97–2003) or `Standard ACE DB` (`.accdb`) in the header
+→ Access, convert it below. `SQLite format 3\0` at offset 0 → SQLite, skip
+straight to [reading the result](#reading-the-result). Anything else is one of
+the rejects in the table above.
 
-The modern `ODBC Driver 18 for SQL Server` only talks to SQL Server 2008+. For a
-genuinely old server (Fahd runs on **SQL Server 2000**, `8.00.x`) the source's
-`extra_options` must point at a legacy driver — **FreeTDS** is the portable
-choice and is what the Fahd connector recommends by default:
+### Access → SQLite
 
-```json
-{ "odbc_driver": "FreeTDS", "tds_version": "7.0", "encoding": "cp1256" }
-```
-
-- `tds_version` **7.0** is the protocol SQL Server 2000 speaks (use `7.1` for
-  2005, `7.2` for 2008). The transport passes the port separately and omits the
-  `Encrypt`/`TrustServerCertificate` keywords that FreeTDS rejects.
-- `encoding` is the fallback codepage for any non-Unicode (`char`/`varchar`)
-  Arabic columns; `nvarchar` already returns Unicode. The Windows built-in
-  `SQL Server` driver also works in place of FreeTDS.
-- The **backend Docker image already bundles both** the Microsoft `ODBC Driver
-  18 for SQL Server` (the default) and `FreeTDS`, so nothing extra is needed in
-  production. For local dev install FreeTDS yourself: `brew install freetds`
-  (macOS) / `apt-get install tdsodbc` (Debian/Ubuntu), then register it in
-  `odbcinst.ini`.
-
-These are set in the source's **Advanced (optional)** section in the UI; the
-Fahd connector pre-fills them.
-
----
-
-## PostgreSQL
-
-Save the block to `discovery_postgres.sql` and run:
-`psql "postgresql://<user>:<pass>@<host>:<port>/<db>" -f discovery_postgres.sql -o postgres_discovery.txt`
-
-```sql
--- ===== A. Engine & encoding =====
-SELECT version();
-SHOW server_encoding;
-
--- ===== B. Tables + estimated row counts =====
-SELECT schemaname, relname AS table, n_live_tup AS approx_rows
-FROM pg_stat_user_tables
-ORDER BY n_live_tup DESC;
-
--- ===== C. Columns =====
-SELECT table_schema, table_name, ordinal_position, column_name,
-       data_type, character_maximum_length, numeric_precision, numeric_scale,
-       is_nullable, column_default
-FROM information_schema.columns
-WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
-ORDER BY table_schema, table_name, ordinal_position;
-
--- ===== D. Foreign keys =====
-SELECT tc.constraint_name AS fk_name,
-       tc.table_schema || '.' || tc.table_name AS from_table,
-       kcu.column_name AS from_column,
-       ccu.table_schema || '.' || ccu.table_name AS to_table,
-       ccu.column_name AS to_column
-FROM information_schema.table_constraints tc
-JOIN information_schema.key_column_usage kcu
-  ON kcu.constraint_name = tc.constraint_name AND kcu.table_schema = tc.table_schema
-JOIN information_schema.constraint_column_usage ccu
-  ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
-WHERE tc.constraint_type = 'FOREIGN KEY'
-ORDER BY from_table, fk_name;
-
--- ===== E. Primary keys & unique constraints =====
-SELECT tc.table_schema || '.' || tc.table_name AS table,
-       tc.constraint_type, tc.constraint_name,
-       string_agg(kcu.column_name, ', ' ORDER BY kcu.ordinal_position) AS columns
-FROM information_schema.table_constraints tc
-JOIN information_schema.key_column_usage kcu
-  ON kcu.constraint_name = tc.constraint_name AND kcu.table_schema = tc.table_schema
-WHERE tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
-  AND tc.table_schema NOT IN ('pg_catalog', 'information_schema')
-GROUP BY tc.table_schema, tc.table_name, tc.constraint_type, tc.constraint_name
-ORDER BY table;
-
--- ===== F. Sample rows (10 per table; \gexec runs the generated SELECTs) =====
-SELECT format(
-  'SELECT %L AS sample_block; SELECT * FROM %I.%I LIMIT 10;',
-  schemaname || '.' || tablename, schemaname, tablename)
-FROM pg_tables
-WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
-ORDER BY schemaname, tablename
-\gexec
-```
-
----
-
-## SQLite
-
-SQLite's `.schema` already contains full DDL (columns, PKs, FKs inline), so it
-covers sections C–E in one shot. Run from a shell:
+`mdbtools` does the conversion. The backend image already carries it (plus
+`sqlite3`); locally:
 
 ```bash
-# A–E: version + full schema DDL
-sqlite3 old_pos.db ".output sqlite_discovery.txt" \
-  "SELECT 'sqlite_version: ' || sqlite_version();" \
-  ".mode box" ".headers on" \
-  "SELECT type, name FROM sqlite_master WHERE type IN ('table','view') ORDER BY name;" \
-  "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name;"
-
-# B + F: row counts + 10 sample rows per table (generate, then run)
-sqlite3 old_pos.db ".mode list" \
-  "SELECT 'SELECT ''===== '||name||' ====='' AS sample_block;'||char(10)||
-          'SELECT count(*) AS row_count FROM \"'||name||'\";'||char(10)||
-          'SELECT * FROM \"'||name||'\" LIMIT 10;'
-   FROM sqlite_master WHERE type='table';" > _samples.sql
-sqlite3 old_pos.db ".mode box" ".headers on" ".read _samples.sql" >> sqlite_discovery.txt
-rm _samples.sql
+brew install mdbtools          # macOS
+sudo apt install mdbtools      # Debian/Ubuntu
 ```
 
-Then send `sqlite_discovery.txt`. (For a small database you may instead just send
-the file itself, or `sqlite3 old_pos.db .dump > dump.sql` — but the discovery
-output above is usually enough and smaller.)
+The repo script is the same conversion the server now runs, and is still the
+quickest way to convert a file on your own machine:
+
+```bash
+scripts/mdb_to_sqlite.sh db.mdb converted.sqlite
+```
+
+By hand — worth knowing, because this is exactly what `preparation/access.py`
+shells out to:
+
+```bash
+mdb-tables -1 db.mdb                      # one table name per line
+mdb-schema db.mdb sqlite > schema.sql     # CREATE TABLEs in SQLite dialect
+sqlite3 -bail converted.sqlite < schema.sql
+
+# then one table at a time, never the whole database in one pipeline
+mdb-export -I sqlite -S 500 -b strip \
+    -D '%Y-%m-%d' -T '%Y-%m-%d %H:%M:%S' \
+    db.mdb CAR_PART | sqlite3 -bail converted.sqlite
+```
+
+- `-I sqlite` emits `INSERT`s rather than CSV; `-S 500` escapes them as SQL, not
+  for a shell.
+- `-b strip` drops OLE/attachment columns — usually most of the bytes in an
+  Access file, and no connector reads them.
+- `-D` / `-T` produce date formats the connectors' `_parse_dt` helpers accept.
+- Table at a time, because a Fahd `control` log is 4.6M rows and nothing wants
+  that buffered anywhere.
+- A table that fails to export is normal: legacy Access files routinely carry one
+  corrupt or exotically-typed table nothing reads. Note which one and carry on —
+  the server does the same, and lets detection decide whether it mattered.
+
+### Reading the result
+
+SQLite's `.schema` covers in one shot what took three catalogue queries per
+engine in the old kit: columns, types, primary keys, and any foreign keys,
+inline.
+
+```bash
+sqlite3 converted.sqlite ".tables"
+sqlite3 converted.sqlite ".schema" > schema.txt
+sqlite3 converted.sqlite ".schema CAR_PART"
+
+# row counts, biggest first — where the data actually is
+sqlite3 converted.sqlite ".mode list" \
+  "SELECT 'SELECT '''||name||''', COUNT(*) FROM \"'||name||'\";'
+     FROM sqlite_master WHERE type='table';" > counts.sql
+sqlite3 -separator ' = ' converted.sqlite ".read counts.sql" | sort -t= -k2 -nr
+
+# sample rows, readable in a terminal (Arabic included)
+sqlite3 -header -box converted.sqlite "SELECT * FROM CAR_PART LIMIT 10;"
+```
+
+mdbtools writes UTF-8, so the collation/codepage question the old kit had to ask
+(`Windows-1256`) no longer exists — text comes out of the conversion already
+decoded.
+
+### What you are looking for
+
+Ten sample rows from the biggest tables answer nearly all of it:
+
+- **The items master** — name, retail price, barcode/SKU, active flag, and how it
+  points at its category. Fahd's `CAR_PART` references `TASNEEF` **by name**;
+  AboGhris' `ITEMS` carries two independent category id axes.
+- **Parties** — one table with a customer/supplier flag (AboGhris
+  `CUSTOMERS.CUST_VENDOR`) or two tables (Fahd `COUSTMER` / `WARED`).
+- **The invoice header/line pair**, and **what a line references its item by** —
+  the row id, an item code, or a barcode. Whatever it is has to become the
+  product's `source_key`, or no line will resolve.
+- **Stock** — a column on the item row, or a per-store table to sum.
+- **Rows that are not data** — placeholder items ("دين سابق", `N/A`),
+  opening-balance pseudo-suppliers (جرد بداية المدة), accounting accounts posing
+  as customers. Every legacy schema has them, and importing them is a visible
+  bug.
+- **A flag that lies** — Fahd's `hideornot` is `1` on every row in an Access
+  export, so honouring it would import the shop's entire catalogue hidden.
+- **Missing history** — if the invoice tables are empty, that is not necessarily
+  a bad file (see `prepare()` below). Check the audit/log tables before
+  concluding the shop has no sales.
 
 ---
 
-## MongoDB
+## 3. Writing the connector
 
-Save as `discovery_mongo.js` and run:
-`mongosh "mongodb://<user>:<pass>@<host>:<port>/<db>?authSource=admin" --quiet discovery_mongo.js > mongo_discovery.txt`
+One file: `apps/migration/connectors/<vendor>.py`. Autodiscovery imports every
+module in the package and registers any `BaseConnector` subclass with a non-empty
+`system_key`, so there is nothing else to wire up. (A subclass with an *empty*
+`system_key` is deliberately not registered — that is how `fahd_base.py` holds
+Fahd's shared mapping without appearing as a second Fahd.)
 
-```javascript
-// A. Engine
-print('mongo_version: ' + db.version());
-print('database: ' + db.getName());
+`connectors/reference_sqlite.py` is the worked example end to end, and it backs
+the test suite. Copy its shape.
 
-// B–C–F. Per collection: count, inferred field types, 3 sample documents
-db.getCollectionNames().forEach(function (name) {
-  const coll = db.getCollection(name);
-  print('\n===== ' + name + '  (count=' + coll.estimatedDocumentCount() + ') =====');
+```python
+from ..entity_plan import CATEGORY, CUSTOMER, PRODUCT, SALE, STOCK, SUPPLIER
+from .base import BaseConnector, ExtractContext, RequiredTable, VersionSpec
 
-  // Infer top-level field names + the set of value types seen across 200 docs.
-  const fields = {};
-  coll.find().limit(200).forEach(function (doc) {
-    for (const key in doc) {
-      const v = doc[key];
-      const t = Array.isArray(v) ? 'array' : (v === null ? 'null' : typeof v);
-      fields[key] = fields[key] || {};
-      fields[key][t] = true;
+
+class VendorConnector(BaseConnector):
+    system_key = "vendor"          # stored on MigrationSource — never rename after a shop has imported
+    display_name = "برنامج المورد"  # the headline on the "this is what we found" screen
+    required_transport = "sqlite"  # the only transport there is; anything else hides it from detection
+    supported_entities = (CATEGORY, PRODUCT, STOCK, CUSTOMER, SUPPLIER, SALE)
+
+    versions = (
+        VersionSpec(
+            version_key="vendor-2019",
+            required_tables=(
+                RequiredTable("ITEMS", ("ITEM_ID", "ITEM_NAME", "PRICE")),
+                RequiredTable("CATEGORIES", ("CAT_ID", "CAT_NAME")),
+                RequiredTable("SALE_INVOICE", ("S_ID", "S_DATE")),
+            ),
+        ),
+    )
+
+    #: Cheap COUNT(*) / MIN..MAX for the preview: entity → (table, date column)
+    analysis_tables = {
+        CATEGORY: ("CATEGORIES", None),
+        PRODUCT: ("ITEMS", None),
+        SALE: ("SALE_INVOICE", "S_DATE"),
     }
-  });
-  Object.keys(fields).forEach(function (key) {
-    print('  ' + key + ': ' + Object.keys(fields[key]).join('|'));
-  });
 
-  print('-- sample documents --');
-  printjson(coll.find().limit(3).toArray());
-});
+    def extract(self, entity_type, transport, ctx: ExtractContext):
+        if entity_type == PRODUCT:
+            yield from self._products(transport, ctx)
+        ...
 ```
+
+### `versions` — the claim that identifies the file
+
+There is no vendor dropdown any more. `preparation/detect.py` scores **every**
+connector against the uploaded file and takes the best fit, so your `VersionSpec`
+*is* the identification:
+
+- List every table you actually read, with the columns you actually read. Table
+  and column names match case-insensitively.
+- A missing table costs 10, a missing column 1, and ties break toward the spec
+  that required *more* tables. A thin spec is both a weak claim and a way for
+  someone else's file to match yours by accident.
+- One `VersionSpec` per genuinely different schema; market versions with the same
+  tables collapse into one. `detected_version` is shown to the user and stored on
+  the source.
+- When nothing matches, the runner-up is what the failure message names ("this
+  looks like X but `CAR_PART` is missing"), which is only useful if the specs are
+  honest.
+- Override `check_compatibility` only for detection that must read *values* (a
+  version stamped in a settings row). Schema matching has covered everything so
+  far.
+
+### `extract` — rows to canonical records
+
+`extract` yields the dataclasses in `apps/migration/canonical.py`. It never
+touches Django models and never writes: the loaders do that, and `identity.py`
+maps `source_key` → the Pointy row, which is what makes a second import update
+instead of duplicate.
+
+- **`source_key` is the contract.** Use the value the source's own transaction
+  lines reference — Fahd keys products on the item code `ser`, not the row id,
+  because that is what invoice lines carry. Get it wrong and every line silently
+  fails to resolve.
+- Read through the transport, never `sqlite3` directly: `list_tables()`,
+  `has_table()`, `describe_table()`, `iter_records(table, fields=…, where=…)`,
+  `count(table)`, and `raw_query(sql, params)` as the escape hatch for a genuine
+  join.
+- Rows arrive keyed by the source's own column case. Normalise with a
+  `_lower(row)` helper the way `fahd_base.py` and `aboghris.py` do.
+- Emit parents before children (categories) so the parent FK resolves on the
+  first pass.
+- `ctx.run_options` carries the run's choices (e.g. `stock_source`); `ctx.cache`
+  is scratch for one run — group a lookup table once and reuse it across
+  entities instead of re-reading it per product.
+- Skip the non-data rows you found in section 2, and write down *why* in a
+  comment. Those comments are the most re-read lines in the existing connectors.
+
+### `analysis_tables` — the preview
+
+`{entity_type: (table, date_column_or_None)}`, read by `preparation/analyze.py`
+for the screen that says "٣٤٬١١٢ صنف · ٨٩٢٬٤٤١ فاتورة · من ٢٠١٩/٠٣ إلى
+٢٠٢٦/٠٨" before the owner commits to anything. Deliberately `COUNT(*)` and
+`MIN`/`MAX` only — never an extract — and best-effort: an entity you do not
+declare is simply absent from the preview rather than guessed at.
+
+### `raw_versions` + `prepare()` — when the file is not the data yet
+
+Most files are readable the moment they are SQLite. Some are not, and Fahd is why
+this hook exists.
+
+A freshly converted Fahd `db.mdb` holds a catalogue and a 4.6-million-row
+`control` audit log — and **no invoice tables at all**, because Fahd wipes them
+at year carry-over. The shop's entire trading history exists only as structured
+Arabic log text. So:
+
+- `raw_versions` describes that pre-preparation shape (`CAR_PART` + `TASNEEF` +
+  `control`). The pipeline detects **twice**: once with `raw=True`, which is what
+  tells it this file needs vendor-specific work, and again afterwards against
+  `versions` to confirm the result is readable.
+- `prepare(source_path, output_path, *, tracker=None, stage_key="prepare")` does
+  that work and returns a stats dict for the report. Fahd's calls
+  `preparation/fahd_reconstruct.py`, which replays the log into `fahd_sales` /
+  `fahd_sale_lines` / `fahd_purchases` / `fahd_purchase_lines` alongside a copy
+  of the catalogue tables. Write to `output_path`; the intermediate conversion is
+  deleted for you.
+- `versions` then **requires** the rebuilt tables. That is deliberate: pointing
+  the connector at an unreconstructed file fails compatibility loudly instead of
+  importing a shop with zero sales.
+- Push progress through the `tracker` (`tracker.progress(stage_key, percent=…,
+  detail=…)`). This is the stage that takes twenty minutes, and a stage that says
+  nothing for twenty minutes is indistinguishable from a hang.
+
+Leave both out for a file that arrives in its final shape: the default `prepare`
+raises `NotImplementedError`, which the pipeline reads as "nothing to do" and
+skips.
 
 ---
 
-## How this maps to a connector
+## 4. Testing without a vendor dump
 
-Once you send the output, a new connector is one file —
-`apps/migration/connectors/<vendor>_<engine>.py` — modeled on
-`connectors/reference_sqlite.py`:
+The whole suite runs against SQLite fixtures built in Python in
+`apps/migration/tests.py` — no vendor file, no server, no mdbtools:
 
-- **Sections B + C + E** → the connector's `VersionSpec` (which tables/columns must
-  exist) and the natural keys used to dedup on import.
-- **Sections C + D + F** → the `extract()` row→canonical mappings (which source
-  columns become product name / price / barcode / category parent / customer
-  phone, how variants and stock relate, etc.).
-- **Section A** → the transport settings (engine → `transport_kind`, collation →
-  `extra_options["encoding"]`).
+| Builder | Shape |
+|---|---|
+| `build_sample_database(path, with_bad_rows=False)` | the generic reference schema (it lives in `connectors/reference_sqlite.py`); `with_bad_rows` adds a row that violates a Pointy constraint, so the dry-run and partial-import paths get exercised |
+| `build_aboghris_sample(path)` | AboGhris' tables |
+| `build_fahd_sample(path)` | Fahd's catalogue only — plus `_add_empty_reconstruction_tables(path)` for the shape a Fahd file has when its log carried no invoices |
+| `build_fahd_database(path)` | Fahd catalogue **and** reconstructed invoice tables: what `prepare()` produces |
 
-If a system ships in several market versions with *different* schemas, send the
-discovery output from each; identical schemas collapse to one `VersionSpec`, and
-the dry run confirms compatibility against any given installation.
+Add `build_<vendor>_sample(path)` beside them. The fixture is where a mapping's
+judgement calls get pinned, so seed the awkward rows rather than the happy path:
+the placeholder item, the sub-code that collides with a real one, the party that
+is really a system account, the line referencing a product that was deleted from
+the catalogue.
+
+```python
+class VendorConnectorTests(MigrationTestBase):
+    def test_master_data_import(self):
+        build_vendor_sample(self.db_path)
+        source = self.make_source(system_key="vendor")  # puts the fixture where a prepared file goes
+        run = self.run_sync(source, IMPORT)             # synchronous — no Celery
+        self.assertCreated(Product, 2)                  # deltas, not absolutes
+```
+
+`MigrationTestBase` points the staging root at a temp directory, so nothing
+touches a real deployment's volume.
+
+```bash
+make backend-test                                          # everything
+backend/.venv/bin/python backend/manage.py test apps.migration
+DATABASE_URL='sqlite://:memory:' \
+  backend/.venv/bin/python backend/manage.py test apps.migration.tests.DetectionTests
+```
+
+Worth writing for a new connector, in this order: `check_compatibility` against
+the fixture *and* against the fixture with one required table dropped;
+`detection.detect()` picking your connector out of the registry; a dry run that
+writes nothing; an import; and a second import that creates nothing new.
+
+### Against a real file
+
+When a dump does arrive, run it through the same pipeline the app uses, without a
+browser:
+
+```bash
+docker compose exec backend python manage.py import_legacy \
+    --file /tmp/db.mdb --mode dry_run
+docker compose exec backend python manage.py import_legacy \
+    --file /tmp/db.mdb --mode import --stock none
+```
+
+The file is hard-linked (or copied) into the staging root and goes through
+identify → convert → prepare → detect → analyze exactly as an upload does — the
+system is detected, not declared — and preparation is skipped on a second run, so
+dry-run → import does not reconvert gigabytes. `--reprepare` forces it.

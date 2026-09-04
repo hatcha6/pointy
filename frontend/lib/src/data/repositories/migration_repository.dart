@@ -1,5 +1,8 @@
+import 'package:file_picker/file_picker.dart';
+
 import '../../core/result.dart';
 import '../models/migration.dart';
+import '../services/migration_uploader.dart';
 import '../services/pos_api_service.dart';
 
 class MigrationRepository {
@@ -15,31 +18,33 @@ class MigrationRepository {
     return Result.guard(() => _service.fetchMigrationSources());
   }
 
-  Future<Result<MigrationSource>> createSource(MigrationSourceDraft draft) {
-    return Result.guard(() => _service.createMigrationSource(draft));
+  Future<Result<MigrationSource>> loadSource(int id) {
+    return Result.guard(() => _service.fetchMigrationSource(id));
   }
 
-  Future<Result<MigrationSource>> updateSource(
-    int id,
-    MigrationSourceDraft draft,
-  ) {
-    return Result.guard(() => _service.updateMigrationSource(id, draft));
+  /// Sends a picked file up in resumable chunks.
+  ///
+  /// Returns an uploader-backed future; [onProgress] fires as bytes land, and
+  /// [uploader] is the handle a caller keeps to cancel mid-transfer.
+  Future<Result<MigrationSource>> uploadFile(
+    PlatformFile file, {
+    required MigrationUploader uploader,
+    MigrationSource? resuming,
+    void Function(MigrationUploadProgress)? onProgress,
+  }) {
+    return Result.guard(
+      () => uploader.upload(file, resuming: resuming, onProgress: onProgress),
+    );
   }
 
-  Future<Result<void>> deleteSource(int id) {
-    return Result.guard(() => _service.deleteMigrationSource(id));
+  MigrationUploader newUploader() => _service.newMigrationUploader();
+
+  Future<Result<MigrationSource>> completeUpload(int id) {
+    return Result.guard(() => _service.completeMigrationUpload(id));
   }
 
-  Future<Result<List<DiscoveredServer>>> discoverServers() {
-    return Result.guard(() => _service.discoverMigrationServers());
-  }
-
-  Future<Result<MigrationConnectionTest>> testConnection(int id) {
-    return Result.guard(() => _service.testMigrationConnection(id));
-  }
-
-  Future<Result<CompatibilityReport>> checkCompatibility(int id) {
-    return Result.guard(() => _service.checkMigrationCompatibility(id));
+  Future<Result<MigrationSource>> discardSource(int id) {
+    return Result.guard(() => _service.discardMigrationSource(id));
   }
 
   Future<Result<MigrationRun>> startRun({

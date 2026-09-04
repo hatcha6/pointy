@@ -1,27 +1,24 @@
 """Source-transport registry.
 
-Importing this package is always safe even when optional drivers (pyodbc,
-pymongo) are missing — the drivers are imported lazily inside each transport's
-``connect``/``_create_connection``, never at module load.
+Only one transport survives the move to file-based migration: SQLite. Every
+supported input format is converted to a SQLite file by ``preparation/`` before
+a connector ever sees it, so a connector reads exactly one kind of thing no
+matter what the shop handed over.
+
+The registry is kept (rather than collapsed into a direct import) because the
+two-axis transport × connector split is still what lets a connector stay a pure
+schema interpreter, and because the next format that needs a genuinely different
+reader plugs in here.
 """
 
 from __future__ import annotations
 
 from ..exceptions import TransportError
 from .base import BaseTransport, ColumnInfo, TableInfo
-from .mongo import MongoTransport
-from .mssql import MssqlTransport
-from .postgres import PostgresTransport
 from .sqlite import SqliteTransport
 
 TRANSPORT_REGISTRY: dict[str, type[BaseTransport]] = {
-    transport.kind: transport
-    for transport in (
-        MssqlTransport,
-        PostgresTransport,
-        SqliteTransport,
-        MongoTransport,
-    )
+    transport.kind: transport for transport in (SqliteTransport,)
 }
 
 
@@ -43,8 +40,5 @@ __all__ = [
     "TRANSPORT_REGISTRY",
     "get_transport_class",
     "build_transport",
-    "MssqlTransport",
-    "PostgresTransport",
     "SqliteTransport",
-    "MongoTransport",
 ]

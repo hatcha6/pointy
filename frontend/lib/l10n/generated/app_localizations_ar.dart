@@ -13669,115 +13669,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get migrationLoadError => 'تعذّر تحميل أدوات النقل';
 
   @override
-  String get migrationConnectionSectionTitle =>
-      'الاتصال بقاعدة البيانات القديمة';
-
-  @override
-  String get migrationConnectionSectionSubtitle =>
-      'اختر نظامك القديم وأدخل بيانات الاتصال بقاعدة بياناته.';
-
-  @override
-  String get migrationSourceNameLabel => 'اسم مصدر البيانات';
-
-  @override
-  String get migrationSystemLabel => 'النظام القديم';
-
-  @override
   String get migrationStubSystemNotice =>
       'هذا النظام متاح لفحص التوافق فقط حاليًا؛ سيُفعَّل الاستيراد لاحقًا.';
 
   @override
-  String get migrationDatabaseFileLabel => 'مسار ملف قاعدة البيانات';
-
-  @override
-  String get migrationHostLabel => 'المضيف';
-
-  @override
-  String get migrationPortLabel => 'المنفذ';
-
-  @override
-  String get migrationDatabaseLabel => 'قاعدة البيانات';
-
-  @override
-  String get migrationUsernameLabel => 'اسم المستخدم';
-
-  @override
-  String get migrationPasswordLabel => 'كلمة المرور';
-
-  @override
-  String get migrationPasswordKeepHint =>
-      'اتركها فارغة للإبقاء على كلمة المرور المحفوظة';
-
-  @override
-  String get migrationAdvancedSectionTitle => 'خيارات متقدمة (اختياري)';
-
-  @override
-  String get migrationAdvancedSectionSubtitle =>
-      'لازمة للأنظمة القديمة جدًا (مثل SQL Server 2000 الذي يحتاج مُشغّل FreeTDS).';
-
-  @override
-  String get migrationOdbcDriverLabel => 'مُشغّل ODBC';
-
-  @override
-  String get migrationOdbcDriverHint =>
-      'مثال: FreeTDS أو ODBC Driver 18 for SQL Server';
-
-  @override
-  String get migrationTdsVersionLabel => 'إصدار TDS';
-
-  @override
-  String get migrationTdsVersionHint => 'مثال: 7.0 لـ SQL Server 2000';
-
-  @override
-  String get migrationEncodingLabel => 'ترميز النص';
-
-  @override
-  String get migrationEncodingHint => 'مثال: cp1256 للنصوص العربية القديمة';
-
-  @override
-  String get migrationScanButton => 'بحث في الشبكة';
-
-  @override
-  String get migrationScanTitle => 'خوادم SQL Server في الشبكة';
-
-  @override
-  String get migrationScanSubtitle =>
-      'اختر خادم نظام نقاط البيع الخاص بالعميل لتعبئة المضيف والمنفذ.';
-
-  @override
-  String get migrationScanEmpty =>
-      'لم يُعثر على أي خادم. تأكد من تشغيل الجهاز على نفس الشبكة، أو أدخل المضيف يدويًا.';
-
-  @override
-  String get migrationScanFailed => 'تعذّر البحث في الشبكة';
-
-  @override
-  String migrationScanSelected(String server) {
-    return 'تم اختيار $server';
-  }
-
-  @override
-  String get migrationSaveSourceButton => 'حفظ المصدر';
-
-  @override
-  String get migrationTestButton => 'اختبار الاتصال';
-
-  @override
-  String get migrationCheckButton => 'فحص التوافق';
-
-  @override
-  String migrationTestSuccess(int count) {
-    return 'تم الاتصال — $count جدول';
-  }
-
-  @override
-  String get migrationTestFailed => 'فشل الاتصال بقاعدة البيانات';
-
-  @override
   String get migrationCompatTitle => 'التوافق';
-
-  @override
-  String get migrationNotChecked => 'لم يتم فحص التوافق بعد';
 
   @override
   String get migrationCompatibleMessage =>
@@ -13807,13 +13703,6 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get migrationEntitiesSectionSubtitle =>
       'اختر أنواع البيانات التي تريد نقلها.';
-
-  @override
-  String get migrationWithoutQuantitiesLabel => 'نقل المنتجات بدون كميات';
-
-  @override
-  String get migrationWithoutQuantitiesSubtitle =>
-      'استورد المنتجات فقط دون كميات المخزون، وابدأ الجرد من جديد في دفتر.';
 
   @override
   String get migrationStockSourceSectionTitle => 'كميات المخزون';
@@ -13925,12 +13814,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get migrationDryRunButton => 'تشغيل تجريبي';
-
-  @override
-  String get migrationSourceSaved => 'تم حفظ المصدر';
-
-  @override
-  String get migrationSourceSaveError => 'تعذّر حفظ المصدر';
 
   @override
   String get migrationRunStartError => 'تعذّر بدء العملية';
@@ -15583,4 +15466,168 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get companionPairFirst => 'اقترن بهاتف أولًا لاستخدام الكاميرا';
+
+  @override
+  String get migrationStepChoose => 'الملف';
+
+  @override
+  String get migrationStepUpload => 'الرفع';
+
+  @override
+  String get migrationStepPrepare => 'التحضير';
+
+  @override
+  String get migrationStepReview => 'المراجعة';
+
+  @override
+  String get migrationStepImport => 'النقل';
+
+  @override
+  String get migrationChooseTitle => 'أحضر بيانات نظامك القديم';
+
+  @override
+  String get migrationChooseSubtitle =>
+      'اختر ملف قاعدة بيانات نظامك القديم وسنتولى الباقي: نقرأه، نتعرف على النظام، ننقل البيانات، ثم نحذف الملف من الخادم.';
+
+  @override
+  String get migrationPickFileButton => 'اختيار ملف';
+
+  @override
+  String get migrationChooseAnotherFile => 'اختيار ملف آخر';
+
+  @override
+  String migrationAcceptedFormats(String formats) {
+    return 'الصيغ المقبولة: $formats';
+  }
+
+  @override
+  String migrationMaxFileSize(String size) {
+    return 'الحد الأقصى لحجم الملف: $size';
+  }
+
+  @override
+  String get migrationFileTooLarge => 'هذا الملف أكبر من الحد المسموح به.';
+
+  @override
+  String get migrationWhereIsMyFileTitle => 'أين أجد هذا الملف؟';
+
+  @override
+  String get migrationWhereIsMyFileBody =>
+      'الملف موجود عادةً على الجهاز الذي يعمل عليه نظامك القديم، داخل مجلد البرنامج. إن لم تجده، اسأل من ركّب لك النظام عن «ملف قاعدة البيانات». انسخه على ذاكرة USB وأحضره إلى هنا.';
+
+  @override
+  String get migrationSupportedSystemsTitle => 'الأنظمة التي نقرأها';
+
+  @override
+  String get migrationSystemDetectedAutomatically =>
+      'لا حاجة لاختيار نظامك — نتعرف عليه من الملف نفسه.';
+
+  @override
+  String get migrationStartUploadButton => 'ابدأ الرفع';
+
+  @override
+  String get migrationUploadingTitle => 'جارٍ رفع الملف';
+
+  @override
+  String migrationUploadedOf(String sent, String total) {
+    return '$sent من $total';
+  }
+
+  @override
+  String migrationUploadRate(String rate) {
+    return '$rate/ث';
+  }
+
+  @override
+  String migrationUploadRemaining(String duration) {
+    return 'يتبقى $duration';
+  }
+
+  @override
+  String get migrationUploadResumeNote =>
+      'إن انقطع الاتصال يمكنك المتابعة من حيث توقف الرفع — لن تبدأ من جديد.';
+
+  @override
+  String get migrationCancelUploadButton => 'إلغاء الرفع';
+
+  @override
+  String get migrationUploadFailedTitle => 'توقف الرفع';
+
+  @override
+  String get migrationResumeUploadButton => 'متابعة الرفع';
+
+  @override
+  String get migrationPreparingTitle => 'جارٍ تحضير البيانات';
+
+  @override
+  String get migrationPreparingSubtitle =>
+      'يمكنك إغلاق هذه الصفحة والعودة لاحقًا — تستمر العملية على الخادم.';
+
+  @override
+  String get migrationPreparationFailedTitle => 'تعذر قراءة هذا الملف';
+
+  @override
+  String get migrationTryAnotherFileButton => 'تجربة ملف آخر';
+
+  @override
+  String get migrationFoundTitle => 'هذا ما وجدناه';
+
+  @override
+  String get migrationDetectedSystemLabel => 'النظام';
+
+  @override
+  String migrationHistoryRange(String from, String to) {
+    return 'السجل من $from إلى $to';
+  }
+
+  @override
+  String get migrationNothingToImport =>
+      'لم نعثر على بيانات قابلة للنقل في هذا الملف.';
+
+  @override
+  String get migrationWhatToTransferTitle => 'ما الذي ننقله؟';
+
+  @override
+  String get migrationPreviewButton => 'معاينة قبل النقل';
+
+  @override
+  String get migrationDiscardFileButton => 'حذف الملف';
+
+  @override
+  String get migrationDiscardFileConfirm =>
+      'سيُحذف الملف من الخادم ولن تتمكن من النقل منه دون رفعه مرة أخرى. هل تريد المتابعة؟';
+
+  @override
+  String get migrationDryRunningTitle => 'جارٍ فحص البيانات';
+
+  @override
+  String get migrationImportingTitle => 'جارٍ نقل البيانات';
+
+  @override
+  String get migrationDryRunCleanTitle => 'المعاينة نظيفة';
+
+  @override
+  String get migrationDryRunCleanMessage =>
+      'فحصنا كل شيء دون كتابة أي بيانات. يمكنك النقل الآن.';
+
+  @override
+  String get migrationDryRunIssuesTitle => 'وجدنا مشاكل في المعاينة';
+
+  @override
+  String get migrationDoneTitle => 'تم نقل بياناتك';
+
+  @override
+  String get migrationFileDeletedNotice => 'تم حذف ملفك من الخادم.';
+
+  @override
+  String get migrationFileKeptNotice =>
+      'احتفظنا بالملف مؤقتًا لتتمكن من إعادة المحاولة بعد إصلاح المشاكل.';
+
+  @override
+  String get migrationStartAnotherButton => 'نقل ملف آخر';
+
+  @override
+  String migrationRecordsImported(String count) {
+    return '$count سجل';
+  }
 }

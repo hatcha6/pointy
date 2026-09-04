@@ -135,11 +135,11 @@ def _base_row(rows: list[dict]) -> dict | None:
     return min(rows, key=sort_key)
 
 
-class AboGhrisMssqlConnector(BaseConnector):
-    system_key = "aboghris_mssql"
+class AboGhrisConnector(BaseConnector):
+    system_key = "aboghris"
     display_name = "AboGhris (SQL Server)"
     implemented = True
-    required_transport = "mssql"
+    required_transport = "sqlite"
     supported_entities = (
         UNIT,
         CATEGORY,
@@ -154,6 +154,15 @@ class AboGhrisMssqlConnector(BaseConnector):
         EXPENSE_CATEGORY,
         EXPENSE,
     )
+    # Cheap COUNT(*) / MIN..MAX for the "this is what we found" screen.
+    analysis_tables = {
+        CATEGORY: ("CATEGORY1", None),
+        PRODUCT: ("ITEMS", None),
+        CUSTOMER: ("CUSTOMERS", None),
+        SALE: ("SALE_INVOICE", "S_DATE"),
+        PURCHASE_ORDER: ("BUY_INVOICE", "B_DATE"),
+        EXPENSE: ("GIVE", "G_DATE"),
+    }
     versions = (
         VersionSpec(
             version_key="aboghris-v30-2025",
