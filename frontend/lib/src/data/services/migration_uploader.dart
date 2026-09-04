@@ -153,6 +153,10 @@ class MigrationUploader {
           offset: offset,
           bytes: bytes,
         );
+      } on MigrationChunkRejected {
+        // Refused on its merits, not dropped in transit — resending tens of
+        // megabytes three more times would only delay the explanation.
+        rethrow;
       } on Exception catch (error) {
         lastError = error;
         if (attempt < _maxAttemptsPerChunk) {

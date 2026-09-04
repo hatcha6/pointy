@@ -35,6 +35,21 @@ from .models import MigrationSource
 _READ_CHUNK = 1 << 20
 
 
+def chunk_size() -> int:
+    """How many bytes a client should send per request.
+
+    Clamped here, at the point it is handed out, rather than only where it is
+    configured: this number has to stay under the browser front door's
+    ``client_max_body_size`` (100m, deploy/onprem/web/nginx.conf), and those two
+    live in different files. Over the cap, an upload fails with a bare nginx 413
+    from the browser while a native till — which reaches ``edge``, where the body
+    size is uncapped — carries on working. A failure that depends on how you
+    opened the app is not one to leave configurable.
+    """
+    ceiling = getattr(settings, "POINTY_MIGRATION_MAX_CHUNK_BYTES", 64 * 1024 * 1024)
+    return max(min(settings.POINTY_MIGRATION_CHUNK_BYTES, ceiling), 64 * 1024)
+
+
 class OffsetConflict(Exception):
     """The client's idea of the offset and the server's disagree."""
 

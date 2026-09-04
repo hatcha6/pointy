@@ -515,11 +515,21 @@ POINTY_MIGRATION_STAGING_ROOT = Path(
 POINTY_MIGRATION_MAX_UPLOAD_BYTES = env.int(
     "POINTY_MIGRATION_MAX_UPLOAD_BYTES", default=8 * 1024 * 1024 * 1024
 )
-# Upload chunk size. Small enough to sit well under the front door's
-# client_max_body_size (100 MB) and to make a resume after a dropped connection
+# Upload chunk size. Small enough to make a resume after a dropped connection
 # cheap; large enough that a 1.5 GB file is ~96 requests, not thousands.
-POINTY_MIGRATION_CHUNK_BYTES = env.int(
-    "POINTY_MIGRATION_CHUNK_BYTES", default=16 * 1024 * 1024
+#
+# Hard-capped, because this number and the browser front door's
+# `client_max_body_size` (100m, deploy/onprem/web/nginx.conf) are set in two
+# different places and would otherwise drift. Raising the env var past that cap
+# breaks uploads from the browser with a bare nginx 413 while native tills —
+# which reach `edge` directly, where the body size is uncapped — keep working:
+# a failure that depends on how you opened the app is the worst kind to debug.
+# The server advertises this value to clients, so clamping it here is what makes
+# it impossible to ask for a chunk the path cannot carry.
+POINTY_MIGRATION_MAX_CHUNK_BYTES = 64 * 1024 * 1024
+POINTY_MIGRATION_CHUNK_BYTES = min(
+    max(env.int("POINTY_MIGRATION_CHUNK_BYTES", default=16 * 1024 * 1024), 64 * 1024),
+    POINTY_MIGRATION_MAX_CHUNK_BYTES,
 )
 # How long an upload nobody finished importing is kept before the sweep deletes
 # it. Long enough to survive "I'll do it tomorrow morning", short enough that a

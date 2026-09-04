@@ -51,7 +51,7 @@ class MigrationSystemsView(views.APIView):
                 "systems": MigrationSystemSerializer.catalogue(),
                 "entities": EntitySpecSerializer.catalogue(),
                 "upload": {
-                    "chunk_size": settings.POINTY_MIGRATION_CHUNK_BYTES,
+                    "chunk_size": uploads.chunk_size(),
                     "max_bytes": settings.POINTY_MIGRATION_MAX_UPLOAD_BYTES,
                     "accepted_extensions": [".mdb", ".accdb", ".sqlite", ".sqlite3", ".db"],
                 },
@@ -88,7 +88,7 @@ class MigrationSourceViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(
             {
                 "source": MigrationSourceSerializer(source).data,
-                "chunk_size": settings.POINTY_MIGRATION_CHUNK_BYTES,
+                "chunk_size": uploads.chunk_size(),
             },
             status=status.HTTP_201_CREATED,
         )

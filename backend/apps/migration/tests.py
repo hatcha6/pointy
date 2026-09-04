@@ -2207,6 +2207,25 @@ class UploadApiTests(MigrationTestBase):
         dispatch.assert_called_once()
         self.assertEqual(response.data["upload_state"], "uploaded")
 
+    def test_the_advertised_chunk_never_exceeds_what_the_proxy_carries(self):
+        """The chunk size and the front door's cap live in different files.
+
+        The browser reaches the backend through `web` (client_max_body_size
+        100m); a native till reaches `edge` (uncapped). So an over-large chunk
+        fails only from the browser, with a bare nginx 413 — a failure that
+        depends on how you opened the app. Clamping the advertised value is what
+        makes that impossible to configure.
+        """
+        with override_settings(
+            POINTY_MIGRATION_CHUNK_BYTES=512 * 1024 * 1024,
+            POINTY_MIGRATION_MAX_CHUNK_BYTES=64 * 1024 * 1024,
+        ):
+            # The setting is clamped where it is read, so an override that skips
+            # settings.py's own clamp is still caught at the boundary.
+            response = self.api.get("/api/migration/systems/")
+        advertised = response.data["upload"]["chunk_size"]
+        self.assertLessEqual(advertised, 64 * 1024 * 1024)
+
     def test_the_catalogue_tells_the_client_how_to_upload(self):
         response = self.api.get("/api/migration/systems/")
 

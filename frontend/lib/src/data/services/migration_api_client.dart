@@ -15,6 +15,21 @@ class MigrationChunkResult {
   final bool conflicted;
 }
 
+/// A chunk the server will never accept, however many times we send it.
+///
+/// The retry loop exists for a shop's Wi-Fi dropping mid-transfer. A 413 from
+/// the front door or a 403 from an expired session is not that: resending tens
+/// of megabytes four times only delays telling the person what went wrong.
+class MigrationChunkRejected implements Exception {
+  const MigrationChunkRejected(this.statusCode, this.message);
+
+  final int statusCode;
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class MigrationApiClient {
   const MigrationApiClient(this._session);
 
@@ -92,6 +107,22 @@ class MigrationApiClient {
       return MigrationChunkResult(
         receivedBytes: (body['received_bytes'] as num?)?.toInt() ?? 0,
         conflicted: true,
+      );
+    }
+    if (response.statusCode == 413) {
+      // The proxy in front of the backend refused the body. Retrying cannot
+      // help, and the server is the one that chose this chunk size, so say so
+      // rather than blaming the network.
+      throw const MigrationChunkRejected(
+        413,
+        'الخادم رفض حجم الجزء المُرسَل. راجع إعداد حجم الأجزاء على الخادم.',
+      );
+    }
+    if (response.statusCode >= 400 && response.statusCode < 500 &&
+        response.statusCode != 429) {
+      throw MigrationChunkRejected(
+        response.statusCode,
+        '${body['detail'] ?? 'تعذر رفع الملف'} (${response.statusCode})',
       );
     }
     _session.ensureSuccess(response, 'Migration chunk upload failed with status');
