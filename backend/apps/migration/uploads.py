@@ -147,8 +147,10 @@ def complete_upload(source: MigrationSource, *, expected_checksum="") -> Migrati
     actual = storage.file_size(path)
     if actual != source.declared_size_bytes:
         raise ValidationError(
-            {"detail": f"حجم الملف المستلم ({actual}) لا يطابق المتوقع "
-                       f"({source.declared_size_bytes})."}
+            {
+                "detail": f"حجم الملف المستلم ({actual}) لا يطابق المتوقع "
+                f"({source.declared_size_bytes})."
+            }
         )
 
     source.staged_size_bytes = actual

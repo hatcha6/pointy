@@ -45,6 +45,17 @@ def prepared_name(source_id: int) -> str:
     return f"source-{source_id}-prepared{PREPARED_SUFFIX}"
 
 
+def working_name(source_id: int) -> str:
+    """The intermediate a conversion writes before the vendor's prepare step.
+
+    Deterministic rather than recorded on the row, because the row is not what
+    finds it: preparation can fail *after* conversion (an unrecognised schema,
+    say), leaving this file behind with nothing on the source pointing at it.
+    Deriving the name means the purge can always clean it up.
+    """
+    return f"source-{source_id}-working{PREPARED_SUFFIX}"
+
+
 def _resolve(name: str) -> Path | None:
     """Join ``name`` under the staging root, refusing anything that escapes it.
 
@@ -119,6 +130,13 @@ def adopt(external: Path, destination: Path) -> None:
 
 
 def purge_source_files(source) -> int:
-    """Delete both files for one source. Returns bytes freed."""
-    freed = delete_quietly(staged_path(source)) + delete_quietly(prepared_path(source))
-    return freed
+    """Delete every file this source produced. Returns bytes freed.
+
+    Includes the conversion intermediate, which the source row never names —
+    see :func:`working_name`.
+    """
+    return (
+        delete_quietly(staged_path(source))
+        + delete_quietly(prepared_path(source))
+        + delete_quietly(_resolve(working_name(source.pk)))
+    )

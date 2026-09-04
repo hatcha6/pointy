@@ -105,9 +105,7 @@ class MigrationSourceViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             offset = int(request.query_params.get("offset", ""))
         except (TypeError, ValueError):
-            return Response(
-                {"detail": "offset مطلوب."}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "offset مطلوب."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             updated = uploads.append_chunk(source, offset, request.data)
         except uploads.OffsetConflict as conflict:
@@ -144,9 +142,7 @@ class MigrationSourceViewSet(viewsets.ReadOnlyModelViewSet):
         source = self.get_object()
         freed = discard_source(source, user=request.user)
         source.refresh_from_db()
-        return Response(
-            {"source": MigrationSourceSerializer(source).data, "freed_bytes": freed}
-        )
+        return Response({"source": MigrationSourceSerializer(source).data, "freed_bytes": freed})
 
 
 class MigrationRunViewSet(viewsets.ModelViewSet):

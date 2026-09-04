@@ -76,6 +76,11 @@ def prepare_source(source) -> None:
     except Exception as exc:  # noqa: BLE001 - never leave a source stuck "preparing"
         _fail(source, str(exc)[:480])
         return
+    finally:
+        # A conversion that succeeded and then failed at detection leaves its
+        # intermediate behind; the staged upload is kept, because the owner can
+        # retry preparation without re-sending gigabytes.
+        _drop_working_file(source, staged)
 
     source.upload_state = MigrationSource.UploadState.READY
     source.save(update_fields=["upload_state", "updated_at"])
@@ -95,7 +100,7 @@ def _identify(source, staged, tracker):
 
 def _convert(source, staged, kind, tracker):
     """Return the path of a SQLite file holding the source's tables."""
-    working = storage.staging_root() / f"source-{source.pk}-working.sqlite"
+    working = storage.staging_root() / storage.working_name(source.pk)
     if kind == identification.SQLITE:
         # Already SQLite: the staged file *is* the working file. Not copied —
         # there is no point duplicating gigabytes to rename them.
@@ -206,6 +211,12 @@ def _tidy(source, staged, prepared, tracker):
 
 
 # --- helpers ----------------------------------------------------------------
+def _drop_working_file(source, staged):
+    working = storage.staging_root() / storage.working_name(source.pk)
+    if working != staged and working.name != source.prepared_filename:
+        storage.delete_quietly(working)
+
+
 def _fail(source, message):
     from ..models import MigrationSource
 
@@ -228,9 +239,7 @@ def _fail(source, message):
 
 def _numeric(stats):
     return {
-        key: value
-        for key, value in (stats or {}).items()
-        if isinstance(value, (int, float, str))
+        key: value for key, value in (stats or {}).items() if isinstance(value, (int, float, str))
     }
 
 

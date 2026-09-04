@@ -2054,3 +2054,45 @@ class AccessConversionTests(MigrationTestBase):
         self.assertEqual(source.staged_filename, "")
         self.assertTrue(storage.prepared_path(source).exists())
         self.assertEqual(source.analysis["entities"]["product"]["count"], 1)
+
+    def test_a_conversion_that_fails_later_leaves_nothing_behind(self):
+        """Detection can reject a file the conversion produced fine.
+
+        The intermediate is the size of the whole database and nothing on the
+        source row names it, so only a derived name can find it afterwards.
+        """
+        import os
+        import stat
+
+        scripts = {
+            "mdb-tables": '#!/bin/sh\nprintf "unrelated\\n"\n',
+            "mdb-schema": "#!/bin/sh\nprintf 'CREATE TABLE unrelated (id INTEGER);\\n'\n",
+            "mdb-export": (
+                "#!/bin/sh\n"
+                'for last; do :; done\nTABLE="$last"\n'
+                'printf "INSERT INTO unrelated VALUES (1);\\n"\n'
+            ),
+        }
+        for name, body in scripts.items():
+            path = self.bin / name
+            path.write_text(body)
+            path.chmod(path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        original = os.environ["PATH"]
+        os.environ["PATH"] = f"{self.bin}{os.pathsep}{original}"
+        self.addCleanup(lambda: os.environ.__setitem__("PATH", original))
+
+        payload = b"\x00\x01\x00\x00Standard Jet DB\x00" + b"\x00" * 64
+        source = uploads.begin_upload(filename="db.mdb", size_bytes=len(payload))
+        source = uploads.append_chunk(source, 0, io.BytesIO(payload))
+        uploads.complete_upload(source)
+        source.refresh_from_db()
+
+        pipeline.prepare_source(source)
+        source.refresh_from_db()
+
+        self.assertEqual(source.upload_state, MigrationSource.UploadState.FAILED)
+        working = self.staging / storage.working_name(source.pk)
+        self.assertFalse(working.exists(), "the converted intermediate leaked")
+        # The upload itself is kept: preparation can be retried without asking
+        # for the gigabytes again.
+        self.assertTrue(storage.staged_path(source).exists())

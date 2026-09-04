@@ -56,8 +56,7 @@ def require_tools() -> None:
     missing = [tool for tool in _TOOLS if not shutil.which(tool)]
     if missing:
         raise ConversionError(
-            "أدوات تحويل ملفات Access غير متوفرة على الخادم "
-            f"({', '.join(missing)})."
+            f"أدوات تحويل ملفات Access غير متوفرة على الخادم ({', '.join(missing)})."
         )
 
 
@@ -111,7 +110,9 @@ def convert(source: Path, destination: Path, *, tracker=None, stage_key="convert
                 counts={"tables_total": len(tables), "tables_done": index},
             )
         try:
-            total_bytes += _export_table(source, destination, table, tracker, stage_key, index, len(tables))
+            total_bytes += _export_table(
+                source, destination, table, tracker, stage_key, index, len(tables)
+            )
         except ConversionError:
             failed.append(table)
         else:
@@ -145,11 +146,16 @@ def _export_table(source, destination, table, tracker, stage_key, index, table_c
     deadline = time.monotonic() + timeout
     export_argv = [
         "mdb-export",
-        "-I", "sqlite",
-        "-S", "500",          # SQL-escape, not shell-escape
-        "-b", "strip",        # drop OLE/binary columns
-        "-D", "%Y-%m-%d",
-        "-T", "%Y-%m-%d %H:%M:%S",
+        "-I",
+        "sqlite",
+        "-S",
+        "500",  # SQL-escape, not shell-escape
+        "-b",
+        "strip",  # drop OLE/binary columns
+        "-D",
+        "%Y-%m-%d",
+        "-T",
+        "%Y-%m-%d %H:%M:%S",
         str(source),
         table,
     ]
