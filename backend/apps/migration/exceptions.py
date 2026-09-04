@@ -1,10 +1,9 @@
 """Error types for the data-migration subsystem.
 
-These intentionally mirror the friendly-message style of
-``apps.attendance.biotime.BioTimeError``: every failure that crosses the
-network or touches a third-party driver is wrapped in one of these with a
-human-readable message, and raw DSNs / credentials are never echoed into the
-message so they cannot leak into a stored run report.
+Every failure a person could see is wrapped in one of these with a message
+written for them rather than for a log — the migration screen shows these
+verbatim, and "this is a ZIP, we need the database itself" is a next step where
+a stack trace is a dead end.
 """
 
 from __future__ import annotations
@@ -16,14 +15,6 @@ class MigrationError(Exception):
 
 class TransportError(MigrationError):
     """A source-database transport failed to connect, introspect, or read."""
-
-
-class DriverNotInstalled(TransportError):
-    """The optional Python driver for a source transport is not installed.
-
-    The message tells the operator exactly which extra to install, e.g.
-    ``pip install pointy-backend[migration]``.
-    """
 
 
 class CompatibilityError(MigrationError):

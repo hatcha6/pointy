@@ -93,7 +93,6 @@ class MigrationSource(TimeStampedModel):
 
     last_run_at = models.DateTimeField(blank=True, null=True)
     purged_at = models.DateTimeField(blank=True, null=True)
-    is_archived = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-created_at"]

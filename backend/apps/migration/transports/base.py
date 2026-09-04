@@ -40,10 +40,10 @@ class TableInfo:
 class BaseTransport(abc.ABC):
     """Base class every source transport implements.
 
-    Subclasses lazily import their third-party driver inside ``connect`` (or the
-    SQL helper that opens the connection) and raise
-    :class:`~apps.migration.exceptions.DriverNotInstalled` if it is missing, so
-    importing this package never requires every driver to be present.
+    One concrete transport exists today — SQLite, which the preparation pipeline
+    converts every accepted format into. The abstraction is kept because it is
+    what lets a connector stay a pure schema interpreter with no idea how the
+    bytes were read.
     """
 
     #: Stable key used in the transport registry and on ``MigrationSource``.
