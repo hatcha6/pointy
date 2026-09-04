@@ -15,7 +15,6 @@ import tempfile
 from decimal import Decimal
 from pathlib import Path
 from unittest import mock
-from unittest import mock
 
 from django.test import TestCase, override_settings
 
@@ -2249,3 +2248,19 @@ class UploadApiTests(MigrationTestBase):
         )
 
         self.assertEqual(response.status_code, 403)
+
+    def test_a_prepared_file_written_before_a_late_failure_is_still_purged(self):
+        """Reconstruction can succeed and identification still reject the result.
+
+        The prepared database is written before the row names it, so only a
+        derived name finds it afterwards.
+        """
+        source = MigrationSource.objects.create(name="db.mdb")
+        orphan = self.staging / storage.prepared_name(source.pk)
+        orphan.write_bytes(b"x" * 4096)
+        self.assertEqual(source.prepared_filename, "")
+
+        freed = pipeline.purge(source)
+
+        self.assertEqual(freed, 4096)
+        self.assertFalse(orphan.exists())

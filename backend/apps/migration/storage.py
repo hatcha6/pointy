@@ -132,11 +132,16 @@ def adopt(external: Path, destination: Path) -> None:
 def purge_source_files(source) -> int:
     """Delete every file this source produced. Returns bytes freed.
 
-    Includes the conversion intermediate, which the source row never names —
-    see :func:`working_name`.
+    Both derived names are tried alongside the recorded ones, because
+    preparation can fail *after* writing a file and before recording it: a
+    reconstruction that succeeds and then fails identification leaves a prepared
+    database that the row never names. Deriving both from the source id means
+    the purge finds whatever actually got written.
     """
-    return (
-        delete_quietly(staged_path(source))
-        + delete_quietly(prepared_path(source))
-        + delete_quietly(_resolve(working_name(source.pk)))
-    )
+    candidates = {
+        staged_path(source),
+        prepared_path(source),
+        _resolve(working_name(source.pk)),
+        _resolve(prepared_name(source.pk)),
+    }
+    return sum(delete_quietly(path) for path in candidates)
