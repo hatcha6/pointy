@@ -14,6 +14,8 @@ import sqlite3
 import tempfile
 from decimal import Decimal
 from pathlib import Path
+from unittest import mock
+from unittest import mock
 
 from django.test import TestCase, override_settings
 
@@ -2096,3 +2098,154 @@ class AccessConversionTests(MigrationTestBase):
         # The upload itself is kept: preparation can be retried without asking
         # for the gigabytes again.
         self.assertTrue(storage.staged_path(source).exists())
+
+
+class UploadApiTests(MigrationTestBase):
+    """The HTTP layer of the upload — the parser wiring in particular.
+
+    ``append_chunk`` is unit-tested above; what these cover is that a raw
+    ``application/octet-stream`` body actually reaches it. DRF materialises a
+    request body through a parser by default, and a chunk is a slice of a
+    database that must arrive byte for byte, so the view installs one that hands
+    the stream straight through. That is easy to break and invisible when it is.
+    """
+
+    def setUp(self):
+        super().setUp()
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Group
+        from rest_framework.test import APIClient
+
+        from apps.core.roles import MANAGER_GROUP
+
+        self.user = get_user_model().objects.create_user(
+            username="owner", password="pass"
+        )
+        self.user.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.api = APIClient()
+        self.api.force_authenticate(self.user)
+
+    def _begin(self, payload, filename="db.sqlite"):
+        response = self.api.post(
+            "/api/migration/sources/begin/",
+            {"filename": filename, "size_bytes": len(payload)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        return response.data["source"]["id"], response.data["chunk_size"]
+
+    def _put_chunk(self, source_id, offset, chunk):
+        return self.api.put(
+            f"/api/migration/sources/{source_id}/chunk/?offset={offset}",
+            data=chunk,
+            content_type="application/octet-stream",
+        )
+
+    def test_a_raw_body_reaches_the_file_intact(self):
+        # Bytes that would not survive being decoded as text or re-encoded.
+        payload = bytes(range(256)) * 4
+        source_id, _ = self._begin(payload)
+
+        response = self._put_chunk(source_id, 0, payload)
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["received_bytes"], len(payload))
+        source = MigrationSource.objects.get(pk=source_id)
+        self.assertEqual(storage.staged_path(source).read_bytes(), payload)
+
+    def test_chunks_arrive_in_sequence(self):
+        payload = bytes(range(256)) * 8
+        source_id, _ = self._begin(payload)
+        cursor = 0
+        while cursor < len(payload):
+            chunk = payload[cursor : cursor + 300]
+            response = self._put_chunk(source_id, cursor, chunk)
+            self.assertEqual(response.status_code, 200)
+            cursor = response.data["received_bytes"]
+
+        source = MigrationSource.objects.get(pk=source_id)
+        self.assertEqual(storage.staged_path(source).read_bytes(), payload)
+        self.assertEqual(response.data["upload_percent"], 100)
+
+    def test_a_wrong_offset_is_a_409_carrying_the_real_one(self):
+        payload = b"a" * 100
+        source_id, _ = self._begin(payload)
+        self._put_chunk(source_id, 0, payload[:40])
+
+        response = self._put_chunk(source_id, 90, payload[90:])
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.data["received_bytes"], 40)
+
+    def test_a_missing_offset_is_rejected_rather_than_guessed(self):
+        payload = b"b" * 20
+        source_id, _ = self._begin(payload)
+
+        response = self.api.put(
+            f"/api/migration/sources/{source_id}/chunk/",
+            data=payload,
+            content_type="application/octet-stream",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_completing_queues_preparation(self):
+        build_sample_database(self.db_path)
+        payload = self.db_path.read_bytes()
+        source_id, _ = self._begin(payload)
+        self._put_chunk(source_id, 0, payload)
+
+        with mock.patch("apps.migration.services._dispatch_preparation") as dispatch:
+            response = self.api.post(
+                f"/api/migration/sources/{source_id}/complete/",
+                {"checksum_sha256": uploads.checksum(
+                    storage.staged_path(MigrationSource.objects.get(pk=source_id))
+                )},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 202, response.data)
+        dispatch.assert_called_once()
+        self.assertEqual(response.data["upload_state"], "uploaded")
+
+    def test_the_catalogue_tells_the_client_how_to_upload(self):
+        response = self.api.get("/api/migration/systems/")
+
+        self.assertEqual(response.status_code, 200)
+        upload = response.data["upload"]
+        self.assertGreater(upload["chunk_size"], 0)
+        self.assertIn(".mdb", upload["accepted_extensions"])
+        # The connection-era catalogue fields are gone.
+        self.assertNotIn("required_transport", response.data["systems"][0])
+
+    def test_discarding_deletes_the_file(self):
+        payload = b"c" * 64
+        source_id, _ = self._begin(payload)
+        self._put_chunk(source_id, 0, payload)
+        source = MigrationSource.objects.get(pk=source_id)
+        staged = storage.staged_path(source)
+        self.assertTrue(staged.exists())
+
+        response = self.api.post(f"/api/migration/sources/{source_id}/discard/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreater(response.data["freed_bytes"], 0)
+        self.assertFalse(staged.exists())
+        self.assertEqual(response.data["source"]["upload_state"], "purged")
+
+    def test_a_cashier_cannot_upload_a_database(self):
+        from django.contrib.auth import get_user_model
+
+        cashier = get_user_model().objects.create_user(
+            username="cashier", password="pass"
+        )
+        api = self.api.__class__()
+        api.force_authenticate(cashier)
+
+        response = api.post(
+            "/api/migration/sources/begin/",
+            {"filename": "db.mdb", "size_bytes": 10},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
