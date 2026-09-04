@@ -51,8 +51,7 @@ Deliberate choices:
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from .. import canonical
 from ..entity_plan import (
@@ -65,6 +64,14 @@ from ..entity_plan import (
     STOCK,
     SUPPLIER,
     SUPPLIER_PAYMENT,
+)
+from .values import (
+    clean as _clean,
+    lower_keys as _lower,
+    parse_datetime as _parse_dt,
+    to_bool as _to_bool,
+    to_decimal as _to_decimal,
+    to_int as _to_int,
 )
 from .base import BaseConnector, ExtractContext, RequiredTable, VersionSpec
 
@@ -89,64 +96,10 @@ _SYSTEM_PARTY_SUBSTRINGS = ("مدير النظام", "رصيد اول المدة
 _PLACEHOLDER_VALUES = {"", "0", "n/a", "null"}
 
 
-def _lower(row: dict) -> dict:
-    return {str(key).lower(): value for key, value in row.items()}
-
-
-def _clean(value) -> str:
-    return "" if value is None else str(value).strip()
-
-
 def _note(value) -> str:
     """Clean a free-text field, dropping the ``0`` placeholder Fahd writes."""
     text = _clean(value)
     return "" if text.lower() in _PLACEHOLDER_VALUES else text
-
-
-def _to_int(value) -> int | None:
-    if value is None or value == "":
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        try:
-            return int(float(value))
-        except (TypeError, ValueError):
-            return None
-
-
-def _to_decimal(value) -> Decimal:
-    if value is None or value == "":
-        return Decimal("0")
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, ValueError):
-        return Decimal("0")
-
-
-def _to_bool(value) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, str):
-        return value.strip().lower() in ("1", "true", "yes", "y", "t")
-    return bool(value)
-
-
-def _parse_dt(value):
-    if value is None or value == "":
-        return None
-    if isinstance(value, datetime):
-        return value
-    text = str(value).strip()
-    try:
-        return datetime.fromisoformat(text)
-    except ValueError:
-        for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
-            try:
-                return datetime.strptime(text[:26], fmt)
-            except ValueError:
-                continue
-    return None
 
 
 def _retail_price(record: dict) -> Decimal:

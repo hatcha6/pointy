@@ -167,10 +167,12 @@ in `job_intake_wizard.dart`) and `PointyStageTimeline`.
 
 ## What is not covered
 
-* **`.bak` / `.mdf`.** Unreadable without a running SQL Server. A shop on
-  AboGhris (SQL Server) cannot self-serve until someone hands us a file we can
-  read; the mapping in `connectors/aboghris.py` is kept and will match the moment
-  one appears, because detection is by schema rather than by a dropdown.
+* **`.bak` / `.mdf`.** Unreadable without a running SQL Server. No supported
+  vendor needs them: AboGhris shops hand over an Access file like Fahd shops do,
+  and `connectors/aboghris.py` reads it through the same conversion — its mapping
+  came from a SQL Server export, so the tests assert it emits identical records
+  from both shapes. If a vendor ever turns up that only exists as `.bak`, this is
+  the gap.
 * **ZIP archives.** People will send them. The identifier recognises the header
   and says so by name, which is a next step rather than a dead end, but nothing
   unpacks one yet.

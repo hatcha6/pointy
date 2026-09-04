@@ -1,6 +1,14 @@
-"""AboGhris (SQL Server) connector — version 30 / 2025 schema.
+"""AboGhris connector — version 30 / 2025 schema.
 
-Maps the AboGhris "Marketing" database onto Pointy's canonical IR:
+Maps the AboGhris "Marketing" database onto Pointy's canonical IR. The mapping
+was written from a SQL Server schema export, but shops hand over an **Access
+file**: it is read through an mdbtools conversion like every other source, so
+every value arrives as text and every Yes/No field as Access's ``-1``. The
+coercions in ``values.py`` are what make those two shapes indistinguishable
+here — see ``AboGhrisAccessConversionTests``, which asserts the connector emits
+identical records either way.
+
+
 
 * ``UNITS``                  → units of measure (قطعة / علبة / …)
 * ``CATEGORY1`` + ``CATEGORY2`` → categories (two independent axes — a product is
@@ -35,8 +43,7 @@ Notes / deliberate choices:
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from .. import canonical
 from ..entity_plan import (
@@ -53,46 +60,17 @@ from ..entity_plan import (
     SUPPLIER_PAYMENT,
     UNIT,
 )
+from .values import (
+    clean as _clean,
+    lower_keys as _lower,
+    parse_datetime as _parse_dt,
+    to_bool as _to_bool,
+    to_decimal as _to_decimal,
+    to_int as _to_int,
+)
 from .base import BaseConnector, ExtractContext, RequiredTable, VersionSpec
 
 _PLACEHOLDER_NAMES = {"", "N/A", "n/a"}
-
-
-def _lower(row: dict) -> dict:
-    return {str(key).lower(): value for key, value in row.items()}
-
-
-def _clean(value) -> str:
-    return "" if value is None else str(value).strip()
-
-
-def _to_int(value) -> int | None:
-    if value is None or value == "":
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        try:
-            return int(float(value))
-        except (TypeError, ValueError):
-            return None
-
-
-def _to_decimal(value) -> Decimal:
-    if value is None or value == "":
-        return Decimal("0")
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, ValueError):
-        return Decimal("0")
-
-
-def _to_bool(value) -> bool:
-    if value is None:
-        return False
-    if isinstance(value, str):
-        return value.strip().lower() in ("1", "true", "yes", "y", "t")
-    return bool(value)
 
 
 def _price(row: dict) -> Decimal:
@@ -101,23 +79,6 @@ def _price(row: dict) -> Decimal:
         return price1
     public = _to_decimal(row.get("public_price"))
     return public if public > 0 else Decimal("0")
-
-
-def _parse_dt(value):
-    if value is None or value == "":
-        return None
-    if isinstance(value, datetime):
-        return value
-    text = str(value).strip()
-    try:
-        return datetime.fromisoformat(text)
-    except ValueError:
-        for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
-            try:
-                return datetime.strptime(text[:26], fmt)
-            except ValueError:
-                continue
-    return None
 
 
 def _base_row(rows: list[dict]) -> dict | None:

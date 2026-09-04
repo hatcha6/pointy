@@ -31,6 +31,7 @@ from apps.purchasing.models import Supplier
 
 from . import canonical, services, storage, uploads
 from .connectors import get_connector
+from .connectors.base import ExtractContext
 from .connectors.reference_sqlite import build_sample_database
 from .identity import IdentityResolver
 from .preparation import detect as detection
@@ -2283,3 +2284,188 @@ class UploadApiTests(MigrationTestBase):
 
         self.assertEqual(freed, 4096)
         self.assertFalse(orphan.exists())
+
+
+def rewrite_as_access_conversion(path, boolean_columns):
+    """Rewrite a fixture the way ``mdbtools`` hands an Access database over.
+
+    Two things change on the way through ``preparation/access.py``, and both are
+    invisible until a real shop's file arrives:
+
+    * **Every value becomes text.** ``mdb-export`` emits SQL literals, and
+      ``mdb-schema`` types the columns loosely, so a connector that was written
+      against a driver returning ``int``/``Decimal``/``datetime`` now sees
+      strings.
+    * **Access stores True as -1.** A Jet Yes/No field is a bitmask, so a
+      boolean column arrives as ``"-1"`` rather than ``"1"``.
+
+    ``boolean_columns`` names the Yes/No fields, which is the one thing that
+    cannot be inferred from a SQL Server-shaped fixture: nothing distinguishes a
+    flag from a count once both are integers.
+    """
+    connection = sqlite3.connect(path)
+    try:
+        tables = [
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        ]
+        flags = {name.lower() for name in boolean_columns}
+        for table in tables:
+            columns = [
+                row[1] for row in connection.execute(f'PRAGMA table_info("{table}")')
+            ]
+            rows = list(connection.execute(f'SELECT * FROM "{table}"'))
+            connection.execute(f'DROP TABLE "{table}"')
+            declared = ", ".join(f'"{column}" TEXT' for column in columns)
+            connection.execute(f'CREATE TABLE "{table}" ({declared})')
+            converted = []
+            for row in rows:
+                values = []
+                for column, value in zip(columns, row):
+                    if value is None:
+                        values.append(None)
+                    elif column.lower() in flags:
+                        values.append("-1" if value else "0")
+                    else:
+                        values.append(str(value))
+                converted.append(tuple(values))
+            placeholders = ", ".join("?" for _ in columns)
+            connection.executemany(
+                f'INSERT INTO "{table}" VALUES ({placeholders})', converted
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+#: The Yes/No fields in the AboGhris schema.
+ABOGHRIS_BOOLEAN_COLUMNS = (
+    "CUST_VENDOR",
+    "CUST_INVISIBLE",
+    "ITEM_INVISIBLE",
+    "CAT1_INVISIBLE",
+    "CAT2_INVISIBLE",
+    "EXPENSE_INVISIBLE",
+)
+
+
+class AboGhrisAccessConversionTests(MigrationTestBase):
+    """AboGhris arriving as an Access file rather than a SQL Server connection.
+
+    The connector was written from a SQL Server schema export and read through
+    pyodbc. Shops hand over `.mdb` files, so the same mapping now runs over an
+    mdbtools conversion — every value text, every Yes/No field ``-1``. These
+    assert the import is *identical* either way, because a difference here would
+    not raise: it would quietly file every supplier as a customer.
+    """
+
+    def _access_source(self):
+        build_aboghris_sample(self.db_path)
+        rewrite_as_access_conversion(self.db_path, ABOGHRIS_BOOLEAN_COLUMNS)
+        return self.make_source(name="AboGhris", system_key="aboghris")
+
+    def test_the_schema_is_still_recognised_after_conversion(self):
+        build_aboghris_sample(self.db_path)
+        rewrite_as_access_conversion(self.db_path, ABOGHRIS_BOOLEAN_COLUMNS)
+
+        with build_transport("sqlite", {"database": str(self.db_path)}) as transport:
+            result = detection.detect(transport)
+
+        self.assertTrue(result.matched, result.failure_message())
+        self.assertEqual(result.match.system_key, "aboghris")
+
+    def test_suppliers_are_still_suppliers(self):
+        """The one that would have been silent.
+
+        Suppliers are split from customers on ``CUST_VENDOR``. Read Access's
+        ``-1`` as false and every supplier lands in the customer list instead,
+        with no error and no missing rows to notice.
+        """
+        source = self._access_source()
+
+        run = self.run_sync(source, IMPORT, options={"stock_source": "none"})
+
+        self.assertIn(
+            run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL)
+        )
+        self.assertTrue(Supplier.objects.filter(name="شركة النسيم").exists())
+        self.assertFalse(Customer.objects.filter(full_name="شركة النسيم").exists())
+        # And the one genuine customer did not drift the other way.
+        self.assertTrue(Customer.objects.filter(full_name="زبون نقدي").exists())
+
+    def test_hidden_rows_stay_hidden(self):
+        source = self._access_source()
+
+        self.run_sync(source, IMPORT, options={"stock_source": "none"})
+
+        # ITEM_INVISIBLE is set on item 500 only.
+        hidden = Product.objects.filter(name="Item 500").first()
+        self.assertIsNotNone(hidden)
+        self.assertFalse(hidden.is_active)
+        self.assertTrue(Product.objects.get(name="Item 401").is_active)
+
+    def test_the_connector_reads_both_shapes_identically(self):
+        """The strongest form of the claim: same records out, either way in.
+
+        Comparing imported row counts cannot show this — the loaders dedupe on
+        natural keys, so importing the same shop twice correctly updates rather
+        than duplicates. What matters is upstream of that: whether the connector
+        understands a converted file the same way it understood a live one. So
+        compare the canonical records it emits, field by field.
+        """
+        native_path = Path(self._tmpdir.name) / "native.sqlite"
+        build_aboghris_sample(native_path)
+        access_path = Path(self._tmpdir.name) / "access.sqlite"
+        build_aboghris_sample(access_path)
+        rewrite_as_access_conversion(access_path, ABOGHRIS_BOOLEAN_COLUMNS)
+
+        connector = get_connector("aboghris")
+
+        def extracted(path):
+            out = {}
+            with build_transport("sqlite", {"database": str(path)}) as transport:
+                for entity_type in connector.supported_entities:
+                    context = ExtractContext(run_options={})
+                    out[entity_type] = [
+                        repr(record)
+                        for record in connector.extract(entity_type, transport, context)
+                    ]
+            return out
+
+        native = extracted(native_path)
+        converted = extracted(access_path)
+
+        self.assertEqual(sorted(native), sorted(converted))
+        for entity_type in native:
+            self.assertEqual(
+                native[entity_type],
+                converted[entity_type],
+                f"{entity_type} differs between the two shapes",
+            )
+        # Guard against the comparison passing because both read nothing.
+        self.assertGreater(len(native["product"]), 0)
+        self.assertGreater(len(native["supplier"]), 0)
+
+
+class JetBooleanTests(TestCase):
+    """Access's -1, and everything else a legacy boolean arrives as."""
+
+    def test_access_true_is_minus_one(self):
+        from .connectors.values import to_bool
+
+        self.assertTrue(to_bool("-1"))
+        self.assertTrue(to_bool(-1))
+
+    def test_sql_server_and_driver_shapes_still_work(self):
+        from .connectors.values import to_bool
+
+        for truthy in (True, 1, "1", "true", "True", "yes", "Y", "t", 2, "2"):
+            self.assertTrue(to_bool(truthy), truthy)
+
+    def test_falsehood(self):
+        from .connectors.values import to_bool
+
+        for falsy in (None, "", "  ", False, 0, "0", "-0", "no", "false", "n"):
+            self.assertFalse(to_bool(falsy), repr(falsy))

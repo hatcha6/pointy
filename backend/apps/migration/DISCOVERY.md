@@ -65,7 +65,7 @@ a wrong file produces a next step ("هذا ملف مضغوط (ZIP) — نحتا�
 the field, that message is the diagnosis.
 
 Note that a connector's display name says which POS wrote the schema, not what
-the connector reads: `AboGhris (SQL Server)` reads a **SQLite** file carrying the
+the connector reads: `AboGhris` reads a **SQLite** file carrying the
 AboGhris tables. Every connector reads SQLite now, because preparation converts
 everything before a connector sees it.
 
