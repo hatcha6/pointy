@@ -15,6 +15,10 @@ class CustomerSerializer(serializers.ModelSerializer):
     # Contact-consent state (read-only; changed via the CRM consent endpoint so
     # every change is recorded as a ConsentEvent).
     marketing_opted_out = serializers.SerializerMethodField()
+    # The ceiling that actually applies once the policy and the shop default
+    # have been resolved. Null means no limit. Read-only: it is an answer, not
+    # a setting — the two columns below are what an owner edits.
+    effective_credit_limit = serializers.SerializerMethodField()
 
     class Meta:
         model = Customer
@@ -33,6 +37,10 @@ class CustomerSerializer(serializers.ModelSerializer):
             "is_active",
             "is_auto_created",
             "card_count",
+            # Credit (آجل) ceiling.
+            "credit_limit_policy",
+            "credit_limit",
+            "effective_credit_limit",
             # RFM segmentation (read-only; set by the nightly task).
             "rfm_segment",
             "rfm_segment_display",
@@ -53,6 +61,7 @@ class CustomerSerializer(serializers.ModelSerializer):
             "customer_number",
             "marketing_opted_out",
             "do_not_contact",
+            "effective_credit_limit",
             "rfm_segment",
             "rfm_segment_display",
             "rfm_score",
@@ -70,6 +79,27 @@ class CustomerSerializer(serializers.ModelSerializer):
 
     def get_marketing_opted_out(self, obj) -> bool:
         return bool(obj.marketing_opted_out_at)
+
+    def get_effective_credit_limit(self, obj) -> str | None:
+        from apps.customers.receivables import effective_credit_limit
+
+        limit = effective_credit_limit(obj)
+        return None if limit is None else f"{limit:.2f}"
+
+    def validate(self, attrs):
+        # Mirrors ``Customer.clean``. The model would catch it anyway (``save``
+        # calls ``full_clean``), but a DRF-shaped field error is what the form
+        # can point at, where a model ValidationError surfaces as a 500-ish blob.
+        policy = attrs.get(
+            "credit_limit_policy",
+            getattr(self.instance, "credit_limit_policy", None),
+        )
+        limit = attrs.get("credit_limit", getattr(self.instance, "credit_limit", None))
+        if policy == Customer.CreditLimitPolicy.CUSTOM and limit is None:
+            raise serializers.ValidationError(
+                {"credit_limit": "A custom credit limit needs an amount."}
+            )
+        return attrs
 
     def get_card_count(self, obj):
         # Uses the list queryset's annotation when present, falling back to a

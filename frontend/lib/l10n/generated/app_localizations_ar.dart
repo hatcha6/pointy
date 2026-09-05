@@ -4286,6 +4286,90 @@ class AppLocalizationsAr extends AppLocalizations {
       'عند تفعيله يجب اختيار عميل قبل إتمام بيع آجل أو عرض سعر.';
 
   @override
+  String get enforceCustomerCreditLimitsLabel => 'تفعيل سقف الدين للعملاء';
+
+  @override
+  String get enforceCustomerCreditLimitsSubtitle =>
+      'عند تفعيله يُرفض البيع الآجل الذي يتجاوز سقف دين العميل. مغلق افتراضيًا، ولا يتغيّر شيء حتى تُفعّله.';
+
+  @override
+  String get defaultCustomerCreditLimitLabel => 'سقف الدين الافتراضي';
+
+  @override
+  String get defaultCustomerCreditLimitHelp =>
+      'يُطبَّق على كل عميل ما لم يُحدَّد له سقف خاص من صفحته. اتركه فارغًا لعدم وضع سقف، أو اكتب 0 لمنع البيع الآجل افتراضيًا.';
+
+  @override
+  String get creditLimitBlockedTitle => 'تجاوز سقف الدين';
+
+  @override
+  String get creditLimitBlockedMessage =>
+      'هذه الفاتورة الآجلة تتجاوز سقف دين العميل. حصِّل دفعة أولى، أو عدّل سقف العميل من صفحته.';
+
+  @override
+  String creditLimitBlockedOutstanding(String amount) {
+    return 'الدين الحالي: $amount';
+  }
+
+  @override
+  String creditLimitBlockedLimit(String amount) {
+    return 'السقف: $amount';
+  }
+
+  @override
+  String creditLimitBlockedAvailable(String amount) {
+    return 'المتاح: $amount';
+  }
+
+  @override
+  String creditLimitBlockedNewDebt(String amount) {
+    return 'هذه الفاتورة تضيف: $amount';
+  }
+
+  @override
+  String get customerCreditLimitTitle => 'سقف الدين (آجل)';
+
+  @override
+  String get customerCreditLimitPolicyShopDefault => 'افتراضي المتجر';
+
+  @override
+  String get customerCreditLimitPolicyUnlimited => 'بلا سقف';
+
+  @override
+  String get customerCreditLimitPolicyCustom => 'سقف خاص';
+
+  @override
+  String get customerCreditLimitAmountLabel => 'المبلغ';
+
+  @override
+  String get customerCreditLimitAmountRequired => 'أدخل مبلغ السقف.';
+
+  @override
+  String customerCreditLimitEffective(String amount) {
+    return 'السقف المطبَّق: $amount';
+  }
+
+  @override
+  String get customerCreditLimitNone => 'بلا سقف';
+
+  @override
+  String customerCreditLimitShopDefaultHint(String amount) {
+    return 'افتراضي المتجر: $amount';
+  }
+
+  @override
+  String customerCreditLimitAvailable(String amount) {
+    return 'المتاح للشراء الآجل: $amount';
+  }
+
+  @override
+  String get customerCreditLimitSaveError =>
+      'تعذّر حفظ سقف الدين. حاول مرة أخرى.';
+
+  @override
+  String get customerCreditLimitSaved => 'تم حفظ سقف الدين.';
+
+  @override
   String get allowCashierCustomerAccessLabel =>
       'السماح للكاشير بالعملاء والتحصيل';
 

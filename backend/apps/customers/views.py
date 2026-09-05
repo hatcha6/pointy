@@ -19,6 +19,7 @@ from apps.sales.serializers import (
     OrderSerializer,
 )
 from .models import Customer, PaymentCard
+from .receivables import assess_credit
 from .serializers import (
     CustomerOrderAdjustmentSerializer,
     CustomerSerializer,
@@ -280,18 +281,14 @@ class CustomerViewSet(viewsets.ModelViewSet):
             .values_list("created_at", flat=True)
             .first()
         )
-        # Outstanding receivable: the balance still owed across the customer's
-        # open debt (آجل) invoices.
-        # The customer's FULL open debt across all sessions — a cashier
-        # collecting must see the real balance, not just invoices they personally
-        # issued. (The invoice list above stays owner-scoped for cashiers.)
-        outstanding_orders = customer.orders.open_credit().prefetch_related(
-            "payments"
-        )
-        outstanding_balance = sum(
-            (order.balance_due for order in outstanding_orders),
-            Decimal("0.00"),
-        )
+        # Outstanding receivable and the ceiling it is judged against, both
+        # from the one definition in apps.customers.receivables — so the number
+        # on this screen and the number the till refuses a sale over can never
+        # drift apart.
+        assessment = assess_credit(customer, Decimal("0.00"))
+        outstanding_balance = assessment.outstanding
+        credit_limit = assessment.limit
+        available_credit = assessment.available
 
         return Response(
             {
@@ -311,6 +308,12 @@ class CustomerViewSet(viewsets.ModelViewSet):
                 "exchange_total": _money_string(Decimal("0.00")),
                 "net_sales": _money_string(total_invoiced - refund_total),
                 "outstanding_balance": _money_string(outstanding_balance),
+                "credit_limit": (
+                    None if credit_limit is None else _money_string(credit_limit)
+                ),
+                "available_credit": (
+                    None if available_credit is None else _money_string(available_credit)
+                ),
                 "last_invoice_at": last_invoice_at,
             }
         )

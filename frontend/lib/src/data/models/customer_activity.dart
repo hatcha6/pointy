@@ -17,6 +17,8 @@ class CustomerSalesSummary {
     required this.exchangeTotal,
     required this.netSales,
     this.outstandingBalance = 0,
+    this.creditLimit,
+    this.availableCredit,
     this.quotationCount = 0,
     this.lastInvoiceAt,
     this.representativePaymentId,
@@ -39,6 +41,14 @@ class CustomerSalesSummary {
 
   /// Total still owed across the customer's open (credit) debt invoices.
   final double outstandingBalance;
+
+  /// The ceiling this customer's debt is judged against, after the shop default
+  /// and any per-customer override have been resolved. Null = no limit.
+  final double? creditLimit;
+
+  /// Head-room left under [creditLimit]; null when there is no limit. Never
+  /// negative — a customer already past their ceiling has zero, not a deficit.
+  final double? availableCredit;
 
   /// Number of outstanding price quotations issued to this customer.
   final int quotationCount;
@@ -85,6 +95,12 @@ class CustomerSalesSummary {
       exchangeTotal: _moneyFromJson(json['exchange_total']),
       netSales: _moneyFromJson(json['net_sales']),
       outstandingBalance: _moneyFromJson(json['outstanding_balance']),
+      creditLimit: json['credit_limit'] == null
+          ? null
+          : _moneyFromJson(json['credit_limit']),
+      availableCredit: json['available_credit'] == null
+          ? null
+          : _moneyFromJson(json['available_credit']),
       quotationCount: _intFromJson(json['quotation_count']),
       lastInvoiceAt: _dateTimeFromJson(json['last_invoice_at']),
       representativePaymentId: json['payment'] is Map<String, Object?>

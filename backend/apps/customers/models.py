@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.utils import timezone
 
@@ -32,6 +33,22 @@ class Customer(TimeStampedModel):
         # contacts). Kept distinct from a scored rank so the UI can hide them.
         INACTIVE = "inactive", "No purchases"
 
+    class CreditLimitPolicy(models.TextChoices):
+        """How much this customer is allowed to owe on آجل invoices.
+
+        Three states rather than one nullable number, because all three are
+        things a shop owner actually says. ``SHOP_DEFAULT`` follows
+        ``ShopSettings.default_customer_credit_limit`` so lowering the shop's
+        appetite for risk does not mean editing every contact. ``UNLIMITED`` is
+        the wholesale buyer everyone trusts, who must not be capped by a default
+        written for walk-ins. ``CUSTOM`` carries its own ceiling — including
+        ``0``, which is how you say "this one pays cash".
+        """
+
+        SHOP_DEFAULT = "shop_default", "Shop default"
+        UNLIMITED = "unlimited", "No limit"
+        CUSTOM = "custom", "Custom limit"
+
     customer_number = models.CharField(max_length=32, unique=True, blank=True)
     full_name = models.CharField(max_length=255)
     phone = models.CharField(max_length=64, blank=True)
@@ -56,6 +73,26 @@ class Customer(TimeStampedModel):
     # seen. They stay hidden from the contacts list until a human names one
     # (claiming it) or merges it into a real customer.
     is_auto_created = models.BooleanField(default=False)
+
+    # --- Credit (آجل) ---------------------------------------------------------
+    # What this customer may owe. The policy decides whether ``credit_limit`` is
+    # read at all; it is only meaningful under ``CUSTOM``. Resolved for real by
+    # ``apps.customers.receivables.effective_credit_limit`` — nothing else
+    # should reach for these two columns directly, because "no limit" is
+    # expressed differently at each level and conflating the two spellings is
+    # the way this feature would silently stop blocking anything.
+    credit_limit_policy = models.CharField(
+        max_length=16,
+        choices=CreditLimitPolicy.choices,
+        default=CreditLimitPolicy.SHOP_DEFAULT,
+    )
+    credit_limit = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(0)],
+    )
 
     # --- RFM segmentation (recomputed nightly, never edited by hand) ----------
     # The named segment a customer falls into, used for targeting and the
@@ -87,6 +124,16 @@ class Customer(TimeStampedModel):
     def clean(self):
         if self.birthday and self.birthday > timezone.localdate():
             raise ValidationError({"birthday": "Birthday cannot be in the future."})
+        # A custom policy with no number is not "no limit" — it is a customer
+        # whose ceiling nobody wrote down, and reading it as unlimited would let
+        # a half-filled form quietly disable the gate.
+        if (
+            self.credit_limit_policy == self.CreditLimitPolicy.CUSTOM
+            and self.credit_limit is None
+        ):
+            raise ValidationError(
+                {"credit_limit": "A custom credit limit needs an amount."}
+            )
 
     def save(self, *args, **kwargs):
         self.full_clean()

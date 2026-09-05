@@ -423,6 +423,8 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "card_commission_percent",
             "transfer_commission_percent",
             "require_customer_for_credit",
+            "enforce_customer_credit_limits",
+            "default_customer_credit_limit",
             "allow_cashier_customer_access",
             "logo_attachment",
             "updated_at",

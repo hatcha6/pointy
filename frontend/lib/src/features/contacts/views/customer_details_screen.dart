@@ -144,6 +144,14 @@ class CustomerDetailsView extends StatelessWidget {
                 ),
                 child: _CustomerProfile(viewModel: viewModel),
               ),
+              if (viewModel.creditLimitsEnforced) ...[
+                SizedBox(height: spacing.md),
+                PointyDetailSection(
+                  title: l10n.customerCreditLimitTitle,
+                  icon: Icons.account_balance_wallet_outlined,
+                  child: _CustomerCreditLimit(viewModel: viewModel),
+                ),
+              ],
               SizedBox(height: spacing.md),
               PointyDetailSection(
                 title: l10n.customerConsentTitle,
@@ -194,6 +202,169 @@ class CustomerDetailsView extends StatelessWidget {
     viewModel.applyUpdatedCustomer(updated);
     _showSnack(context, l10n.customerUpdatedMessage);
     onEdited?.call();
+  }
+}
+
+/// How much this customer may owe. Three choices rather than one number,
+/// because "follow the shop", "never cap this one" and "exactly this much" are
+/// three different decisions an owner makes about three different customers.
+class _CustomerCreditLimit extends StatefulWidget {
+  const _CustomerCreditLimit({required this.viewModel});
+
+  final CustomerDetailsViewModel viewModel;
+
+  @override
+  State<_CustomerCreditLimit> createState() => _CustomerCreditLimitState();
+}
+
+class _CustomerCreditLimitState extends State<_CustomerCreditLimit> {
+  late CreditLimitPolicy _policy;
+  late final TextEditingController _amountController;
+  String? _amountError;
+
+  @override
+  void initState() {
+    super.initState();
+    final customer = widget.viewModel.customer;
+    _policy = customer.creditLimitPolicy;
+    _amountController = TextEditingController(
+      text: customer.creditLimit == null
+          ? ''
+          : customer.creditLimit!.toStringAsFixed(2),
+    );
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  bool get _isDirty {
+    final customer = widget.viewModel.customer;
+    if (_policy != customer.creditLimitPolicy) {
+      return true;
+    }
+    if (_policy != CreditLimitPolicy.custom) {
+      return false;
+    }
+    return _parsedAmount() != customer.creditLimit;
+  }
+
+  double? _parsedAmount() {
+    final text = _amountController.text.trim();
+    if (text.isEmpty) {
+      return null;
+    }
+    return double.tryParse(text);
+  }
+
+  Future<void> _save() async {
+    final l10n = AppLocalizations.of(context)!;
+    final amount = _parsedAmount();
+    if (_policy == CreditLimitPolicy.custom &&
+        (amount == null || amount < 0)) {
+      setState(() => _amountError = l10n.customerCreditLimitAmountRequired);
+      return;
+    }
+    setState(() => _amountError = null);
+    final ok = await widget.viewModel.setCreditLimit(
+      policy: _policy,
+      amount: amount,
+    );
+    if (!mounted) {
+      return;
+    }
+    _showSnack(
+      context,
+      ok ? l10n.customerCreditLimitSaved : l10n.customerCreditLimitSaveError,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final viewModel = widget.viewModel;
+    final shopDefault = viewModel.shopDefaultCreditLimit;
+    final effective = viewModel.effectiveCreditLimit;
+    final available = viewModel.availableCredit;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<CreditLimitPolicy>(
+          key: const ValueKey('customer_credit_limit_policy'),
+          segments: [
+            ButtonSegment(
+              value: CreditLimitPolicy.shopDefault,
+              label: Text(l10n.customerCreditLimitPolicyShopDefault),
+            ),
+            ButtonSegment(
+              value: CreditLimitPolicy.unlimited,
+              label: Text(l10n.customerCreditLimitPolicyUnlimited),
+            ),
+            ButtonSegment(
+              value: CreditLimitPolicy.custom,
+              label: Text(l10n.customerCreditLimitPolicyCustom),
+            ),
+          ],
+          selected: {_policy},
+          onSelectionChanged: viewModel.isSaving
+              ? null
+              : (selection) => setState(() => _policy = selection.first),
+        ),
+        if (_policy == CreditLimitPolicy.shopDefault) ...[
+          SizedBox(height: spacing.sm),
+          Text(
+            l10n.customerCreditLimitShopDefaultHint(
+              shopDefault == null
+                  ? l10n.customerCreditLimitNone
+                  : formatMoney(shopDefault),
+            ),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        if (_policy == CreditLimitPolicy.custom) ...[
+          SizedBox(height: spacing.sm),
+          TextField(
+            key: const ValueKey('customer_credit_limit_amount'),
+            controller: _amountController,
+            enabled: !viewModel.isSaving,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: l10n.customerCreditLimitAmountLabel,
+              errorText: _amountError,
+              prefixIcon: const Icon(Icons.attach_money),
+            ),
+          ),
+        ],
+        SizedBox(height: spacing.sm),
+        Text(
+          l10n.customerCreditLimitEffective(
+            effective == null
+                ? l10n.customerCreditLimitNone
+                : formatMoney(effective),
+          ),
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        if (available != null)
+          Text(
+            l10n.customerCreditLimitAvailable(formatMoney(available)),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        SizedBox(height: spacing.sm),
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: FilledButton(
+            key: const ValueKey('customer_credit_limit_save'),
+            onPressed: viewModel.isSaving || !_isDirty ? null : _save,
+            child: Text(l10n.saveButton),
+          ),
+        ),
+      ],
+    );
   }
 }
 

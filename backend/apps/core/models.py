@@ -138,6 +138,26 @@ class ShopSettings(TimeStampedModel):
     # a customer account so the receivable is collectable. Owners can disable it
     # for walk-in flexibility. Standard cash-and-carry sales are never gated.
     require_customer_for_credit = models.BooleanField(default=True)
+    # Master switch for credit ceilings. OFF by default, deliberately: shops
+    # already trading on آجل have been extending credit on judgement and a
+    # relationship, and a limit that switched itself on during an update would
+    # start refusing their regulars at the till with no warning. An owner turns
+    # this on when they want the rule, and nothing below is consulted until
+    # they do.
+    enforce_customer_credit_limits = models.BooleanField(default=False)
+    # The credit ceiling every customer inherits unless their own record says
+    # otherwise (آجل). Null = no limit, which is what every shop had before this
+    # setting existed and therefore what an upgrade must keep. 0 is the
+    # opposite and a legitimate choice: nobody buys on credit unless a specific
+    # customer is exempted or given their own number. The gate is applied
+    # wherever credit is issued — see apps.customers.receivables.assess_credit.
+    default_customer_credit_limit = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(0)],
+    )
     # Lets cashiers look up customers — to attach one to an آجل/quote sale and to
     # collect a customer's debt via the focused collect-debt flow. They still
     # can't browse other cashiers' invoices or edit customer records. Off =

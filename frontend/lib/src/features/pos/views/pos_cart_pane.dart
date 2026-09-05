@@ -244,6 +244,11 @@ class PosCartPane extends StatelessWidget {
       );
       return;
     }
+    final creditLimit = outcome.creditLimit;
+    if (creditLimit != null) {
+      await _showCreditLimitDialog(context, credit: creditLimit);
+      return;
+    }
     if (outcome.isSessionExpired) {
       messenger
         ..clearSnackBars()
@@ -378,6 +383,58 @@ class PosCartPane extends StatelessWidget {
                 onPressed: () => Navigator.of(context).pop(true),
                 child: Text(l10n.continueSaleButton),
               ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// The آجل sale was refused for breaching the customer's ceiling. There is no
+  /// "continue anyway" here on purpose: raising the limit is an owner's decision
+  /// made on the customer's record, not a cashier's at the till.
+  Future<void> _showCreditLimitDialog(
+    BuildContext context, {
+    required SaleCheckoutCreditLimitException credit,
+  }) {
+    final l10n = AppLocalizations.of(context)!;
+    return showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          icon: const Icon(Icons.account_balance_wallet_outlined),
+          title: Text(l10n.creditLimitBlockedTitle),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(l10n.creditLimitBlockedMessage),
+                const SizedBox(height: 12),
+                Text(
+                  l10n.creditLimitBlockedOutstanding(
+                    formatMoney(credit.outstanding),
+                  ),
+                ),
+                Text(
+                  l10n.creditLimitBlockedLimit(formatMoney(credit.limit)),
+                ),
+                Text(
+                  l10n.creditLimitBlockedAvailable(
+                    formatMoney(credit.available),
+                  ),
+                ),
+                Text(
+                  l10n.creditLimitBlockedNewDebt(formatMoney(credit.newDebt)),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(l10n.reviewCartButton),
+            ),
           ],
         );
       },

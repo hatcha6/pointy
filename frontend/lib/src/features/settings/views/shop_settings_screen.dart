@@ -265,6 +265,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late final TextEditingController _cardCommissionController;
   late final TextEditingController _transferCommissionController;
   late final TextEditingController _posCashPurchaseLimitController;
+  late final TextEditingController _defaultCustomerCreditLimitController;
   late final TextEditingController _analyticsSearchController;
   late final TextEditingController _analyticsPlatformController;
   late final TextEditingController _analyticsSessionController;
@@ -281,6 +282,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late bool _enableTransferPayments;
   late bool _requireCardPaymentReceipt;
   late bool _requireCustomerForCredit;
+  late bool _enforceCustomerCreditLimits;
   late bool _allowCashierCustomerAccess;
   late List<String> _trustedCardTerminalIds;
   AttachmentSummary? _logoAttachment;
@@ -329,6 +331,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         _posCashPurchaseLimitController,
         _formatPosCashPurchaseLimit(widget.settings.posCashPurchaseLimit),
       );
+      _setControllerText(
+        _defaultCustomerCreditLimitController,
+        _formatCreditLimit(widget.settings.defaultCustomerCreditLimit),
+      );
       _cashierReturnWindowHours = widget.settings.cashierReturnWindowHours;
       _requireOpeningCash = widget.settings.requireOpeningCash;
       _autoPrintReceipts = widget.settings.autoPrintReceipts;
@@ -341,6 +347,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       _enableTransferPayments = widget.settings.enableTransferPayments;
       _requireCardPaymentReceipt = widget.settings.requireCardPaymentReceipt;
       _requireCustomerForCredit = widget.settings.requireCustomerForCredit;
+      _enforceCustomerCreditLimits =
+          widget.settings.enforceCustomerCreditLimits;
       _allowCashierCustomerAccess = widget.settings.allowCashierCustomerAccess;
       _trustedCardTerminalIds = _normalizeTrustedTerminalIds(
         widget.settings.trustedCardTerminalIds,
@@ -360,6 +368,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _cardCommissionController.dispose();
     _transferCommissionController.dispose();
     _posCashPurchaseLimitController.dispose();
+    _defaultCustomerCreditLimitController.dispose();
     _analyticsSearchController.dispose();
     _analyticsPlatformController.dispose();
     _analyticsSessionController.dispose();
@@ -387,6 +396,9 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _posCashPurchaseLimitController = TextEditingController(
       text: _formatPosCashPurchaseLimit(settings.posCashPurchaseLimit),
     );
+    _defaultCustomerCreditLimitController = TextEditingController(
+      text: _formatCreditLimit(settings.defaultCustomerCreditLimit),
+    );
     _analyticsSearchController = TextEditingController();
     _analyticsPlatformController = TextEditingController();
     _analyticsSessionController = TextEditingController();
@@ -403,6 +415,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _enableTransferPayments = settings.enableTransferPayments;
     _requireCardPaymentReceipt = settings.requireCardPaymentReceipt;
     _requireCustomerForCredit = settings.requireCustomerForCredit;
+    _enforceCustomerCreditLimits = settings.enforceCustomerCreditLimits;
     _allowCashierCustomerAccess = settings.allowCashierCustomerAccess;
     _trustedCardTerminalIds = _normalizeTrustedTerminalIds(
       settings.trustedCardTerminalIds,
@@ -419,6 +432,30 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     return limit == limit.roundToDouble()
         ? limit.toStringAsFixed(0)
         : limit.toStringAsFixed(2);
+  }
+
+  static String _formatCreditLimit(double? limit) {
+    if (limit == null) {
+      return '';
+    }
+    return limit == limit.roundToDouble()
+        ? limit.toStringAsFixed(0)
+        : limit.toStringAsFixed(2);
+  }
+
+  /// Blank = no limit. 0 is kept, because "nobody buys on credit by default" is
+  /// a thing an owner means to say — this is the one place it differs from the
+  /// cash-purchase cap below, where 0 would simply disable the feature.
+  double? _parseDefaultCustomerCreditLimit() {
+    final text = _defaultCustomerCreditLimitController.text.trim();
+    if (text.isEmpty) {
+      return null;
+    }
+    final parsed = double.tryParse(text);
+    if (parsed == null || parsed < 0) {
+      return null;
+    }
+    return parsed;
   }
 
   double? _parsePosCashPurchaseLimit() {
@@ -898,6 +935,9 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         enableTransferPayments: _enableTransferPayments,
         requireCardPaymentReceipt: _requireCardPaymentReceipt,
         requireCustomerForCredit: _requireCustomerForCredit,
+        enforceCustomerCreditLimits: _enforceCustomerCreditLimits,
+        defaultCustomerCreditLimitController:
+            _defaultCustomerCreditLimitController,
         allowCashierCustomerAccess: _allowCashierCustomerAccess,
         paymentMethodsError: _paymentMethodsError(l10n),
         cardCommissionError: _commissionError(l10n, _cardCommissionController),
@@ -919,6 +959,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         },
         onRequireCustomerForCreditChanged: (value) {
           setState(() => _requireCustomerForCredit = value);
+          refresh();
+        },
+        onEnforceCustomerCreditLimitsChanged: (value) {
+          setState(() => _enforceCustomerCreditLimits = value);
           refresh();
         },
         onAllowCashierCustomerAccessChanged: (value) {
@@ -1477,6 +1521,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
           _transferCommissionController.text,
         ),
         requireCustomerForCredit: _requireCustomerForCredit,
+        enforceCustomerCreditLimits: _enforceCustomerCreditLimits,
+        defaultCustomerCreditLimit: _parseDefaultCustomerCreditLimit(),
         allowCashierCustomerAccess: _allowCashierCustomerAccess,
         posCashPurchaseLimit: _parsePosCashPurchaseLimit(),
         enableRepairOperations: currentSettings.enableRepairOperations,

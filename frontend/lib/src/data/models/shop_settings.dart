@@ -30,6 +30,8 @@ class ShopSettings {
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
     this.posCashPurchaseLimit,
+    this.enforceCustomerCreditLimits = false,
+    this.defaultCustomerCreditLimit,
     this.currencyCode = 'LYD',
     this.currencySymbol = 'د.ل',
     this.logoAttachment,
@@ -70,12 +72,25 @@ class ShopSettings {
   /// Per-purchase ceiling for POS cash purchases (drawer-paid POs from the
   /// sell screen). Null or 0 = no cap.
   final double? posCashPurchaseLimit;
+
+  /// Master switch for credit ceilings. Off by default: a shop already trading
+  /// on آجل keeps selling exactly as it did until an owner asks for the rule.
+  final bool enforceCustomerCreditLimits;
+
+  /// The credit (آجل) ceiling every customer inherits unless their own record
+  /// overrides it. Null = no limit — which is what a shop that never sets this
+  /// keeps. 0 is the opposite and deliberate: nobody buys on credit by default.
+  final double? defaultCustomerCreditLimit;
   final String currencyCode;
   final String currencySymbol;
   final AttachmentSummary? logoAttachment;
 
   bool get hasPosCashPurchaseLimit =>
       posCashPurchaseLimit != null && posCashPurchaseLimit! > 0;
+
+  /// Whether the shop has expressed any default at all. Unlike the cash-purchase
+  /// cap, 0 counts: it means "no credit by default", not "no rule".
+  bool get hasDefaultCustomerCreditLimit => defaultCustomerCreditLimit != null;
 
   factory ShopSettings.fromJson(Map<String, Object?> json) {
     final logoJson = json['logo_attachment'];
@@ -153,6 +168,14 @@ class ShopSettings {
       posCashPurchaseLimit: json['pos_cash_purchase_limit'] == null
           ? null
           : _moneyFromJson(json['pos_cash_purchase_limit'], 0),
+      enforceCustomerCreditLimits: _boolFromJson(
+        json['enforce_customer_credit_limits'],
+        false,
+      ),
+      defaultCustomerCreditLimit:
+          json['default_customer_credit_limit'] == null
+          ? null
+          : _moneyFromJson(json['default_customer_credit_limit'], 0),
       currencyCode: json['currency_code']?.toString() ?? 'LYD',
       currencySymbol: json['currency_symbol']?.toString() ?? 'د.ل',
       logoAttachment: logoJson is Map<String, Object?>
@@ -202,8 +225,12 @@ class ShopSettingsDraft {
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
     this.posCashPurchaseLimit,
+    this.enforceCustomerCreditLimits = false,
+    this.defaultCustomerCreditLimit,
   });
 
+  final bool enforceCustomerCreditLimits;
+  final double? defaultCustomerCreditLimit;
   final String shopName;
   final String receiptHeader;
   final String receiptFooter;
@@ -261,6 +288,9 @@ class ShopSettingsDraft {
       'enable_kitchen_operations': enableKitchenOperations,
       'enable_job_tracking': enableJobTracking,
       'pos_cash_purchase_limit': posCashPurchaseLimit?.toStringAsFixed(2),
+      'enforce_customer_credit_limits': enforceCustomerCreditLimits,
+      'default_customer_credit_limit': defaultCustomerCreditLimit
+          ?.toStringAsFixed(2),
     };
   }
 }

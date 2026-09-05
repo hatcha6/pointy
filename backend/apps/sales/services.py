@@ -404,6 +404,52 @@ def sale_loss_blocked_payload(loss_lines):
     }
 
 
+def validate_customer_credit_limit(
+    *, customer, new_debt, settings=None, exclude_order_id=None
+):
+    """Refuse an آجل sale that would put the customer over their ceiling.
+
+    ``new_debt`` is what the sale actually adds to the receivable — the total
+    less whatever is tendered at the till — so a fully-paid sale is never
+    refused and a part-paid one is judged on the part that stays owed.
+
+    A credit sale with no customer is unbounded by definition — the shop chose
+    to allow anonymous debt by turning ``require_customer_for_credit`` off — so
+    there is nobody to hold a limit and nothing to check.
+    """
+    if customer is None:
+        return
+    if settings is None:
+        from apps.core.models import ShopSettings
+
+        settings = ShopSettings.load()
+    if not settings.enforce_customer_credit_limits:
+        return
+    from apps.customers.receivables import assess_credit
+
+    assessment = assess_credit(
+        customer, new_debt, settings=settings, exclude_order_id=exclude_order_id
+    )
+    if assessment.allowed:
+        return
+    raise serializers.ValidationError(credit_limit_blocked_payload(assessment))
+
+
+def credit_limit_blocked_payload(assessment):
+    available = assessment.available
+    return {
+        "code": "credit_limit_exceeded",
+        "detail": "This sale would put the customer over their credit limit.",
+        "credit": {
+            "limit": f"{assessment.limit:.2f}",
+            "outstanding": f"{assessment.outstanding:.2f}",
+            "available": f"{available:.2f}" if available is not None else None,
+            "new_debt": f"{assessment.new_debt:.2f}",
+            "projected": f"{assessment.projected:.2f}",
+        },
+    }
+
+
 def validate_sale_variants_sellable(lines_data):
     """Reject a checkout that references an archived or deactivated product.
 
@@ -480,6 +526,20 @@ def checkout_order(
         coupon_codes=coupon_codes,
         discount_result=discount_result,
     )
+    # The credit ceiling is judged on what the sale leaves owed — the total less
+    # whatever is tendered now — so it waits until the order has a total. Raising
+    # inside this atomic block unwinds the order rows with it.
+    if sale_type == Order.SaleType.CREDIT:
+        paid_total = sum(
+            (Decimal(str(payment_data["amount"])) for payment_data in payments_data),
+            Decimal("0.00"),
+        )
+        validate_customer_credit_limit(
+            customer=customer,
+            new_debt=order.total - paid_total,
+            settings=settings,
+            exclude_order_id=order.pk,
+        )
     if is_quotation:
         # A quote is a price offer, not a sale: no stock movement, no payment.
         # Optionally hold the quoted quantities until valid_until.
