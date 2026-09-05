@@ -3029,6 +3029,56 @@
   "requireCardReceiptSettingSubtitle": "يجب مسح رابط QR من إيصال معاملات ومطابقة المبلغ لكل دفعة بطاقة.",
   "requireCustomerForCreditLabel": "طلب عميل للبيع الآجل وعروض الأسعار",
   "requireCustomerForCreditSubtitle": "عند تفعيله يجب اختيار عميل قبل إتمام بيع آجل أو عرض سعر.",
+  "enforceCustomerCreditLimitsLabel": "تفعيل سقف الدين للعملاء",
+  "enforceCustomerCreditLimitsSubtitle": "عند تفعيله يُرفض البيع الآجل الذي يتجاوز سقف دين العميل. مغلق افتراضيًا، ولا يتغيّر شيء حتى تُفعّله.",
+  "defaultCustomerCreditLimitLabel": "سقف الدين الافتراضي",
+  "defaultCustomerCreditLimitHelp": "يُطبَّق على كل عميل ما لم يُحدَّد له سقف خاص من صفحته. اتركه فارغًا لعدم وضع سقف، أو اكتب 0 لمنع البيع الآجل افتراضيًا.",
+  "creditLimitBlockedTitle": "تجاوز سقف الدين",
+  "creditLimitBlockedMessage": "هذه الفاتورة الآجلة تتجاوز سقف دين العميل. حصِّل دفعة أولى، أو عدّل سقف العميل من صفحته.",
+  "creditLimitBlockedOutstanding": "الدين الحالي: {amount}",
+  "@creditLimitBlockedOutstanding": {
+    "description": "Customer's current outstanding debt in the credit-limit refusal dialog.",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "creditLimitBlockedLimit": "السقف: {amount}",
+  "@creditLimitBlockedLimit": {
+    "description": "The applicable credit ceiling in the refusal dialog.",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "creditLimitBlockedAvailable": "المتاح: {amount}",
+  "@creditLimitBlockedAvailable": {
+    "description": "Remaining head-room under the ceiling in the refusal dialog.",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "creditLimitBlockedNewDebt": "هذه الفاتورة تضيف: {amount}",
+  "@creditLimitBlockedNewDebt": {
+    "description": "What this sale would add to the receivable.",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "customerCreditLimitTitle": "سقف الدين (آجل)",
+  "customerCreditLimitPolicyShopDefault": "افتراضي المتجر",
+  "customerCreditLimitPolicyUnlimited": "بلا سقف",
+  "customerCreditLimitPolicyCustom": "سقف خاص",
+  "customerCreditLimitAmountLabel": "المبلغ",
+  "customerCreditLimitAmountRequired": "أدخل مبلغ السقف.",
+  "customerCreditLimitEffective": "السقف المطبَّق: {amount}",
+  "@customerCreditLimitEffective": {
+    "description": "The resolved ceiling shown on the customer details screen.",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "customerCreditLimitNone": "بلا سقف",
+  "customerCreditLimitShopDefaultHint": "افتراضي المتجر: {amount}",
+  "@customerCreditLimitShopDefaultHint": {
+    "description": "Hint showing the shop-wide default a customer inherits.",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "customerCreditLimitAvailable": "المتاح للشراء الآجل: {amount}",
+  "@customerCreditLimitAvailable": {
+    "description": "Remaining credit head-room on the customer details screen.",
+    "placeholders": {"amount": {"type": "String"}}
+  },
+  "customerCreditLimitSaveError": "تعذّر حفظ سقف الدين. حاول مرة أخرى.",
+  "customerCreditLimitSaved": "تم حفظ سقف الدين.",
   "allowCashierCustomerAccessLabel": "السماح للكاشير بالعملاء والتحصيل",
   "allowCashierCustomerAccessSubtitle": "يتيح للكاشير اختيار عميل للبيع الآجل/عرض السعر وتحصيل ديون العملاء — دون رؤية فواتير الكاشيرين الآخرين أو تعديل بيانات العملاء.",
   "collectDebtTitle": "تحصيل دين",

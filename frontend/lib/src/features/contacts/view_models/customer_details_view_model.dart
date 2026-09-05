@@ -7,6 +7,7 @@ import '../../../data/models/customer_activity.dart';
 import '../../../data/models/payment_card.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/models/sale_order_page.dart';
+import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
@@ -57,6 +58,7 @@ class CustomerDetailsViewModel extends ChangeNotifier {
   bool _hasSummaryError = false;
   bool _hasOrderError = false;
   bool _hasAdjustmentError = false;
+  ShopSettings? _shopSettings;
   bool _isRecordingPayment = false;
   bool _hasPaymentError = false;
   final Map<String, String> _idempotencyKeysBySignature = {};
@@ -66,6 +68,21 @@ class CustomerDetailsViewModel extends ChangeNotifier {
 
   /// Total the customer still owes across their open debt invoices.
   double get outstandingBalance => _summary.outstandingBalance;
+
+  /// Whether the shop has switched credit ceilings on at all. Off (the default)
+  /// hides the whole section: a control that decides nothing is worse than no
+  /// control, and the owner turns the feature on in Shop Settings first.
+  bool get creditLimitsEnforced =>
+      _shopSettings?.enforceCustomerCreditLimits ?? false;
+
+  /// The ceiling an inheriting customer picks up. Null = the shop sets none.
+  double? get shopDefaultCreditLimit => _shopSettings?.defaultCustomerCreditLimit;
+
+  /// The ceiling that actually applies to this customer; null = no limit.
+  double? get effectiveCreditLimit => _customer.effectiveCreditLimit;
+
+  /// Head-room left under the ceiling; null when there is no limit.
+  double? get availableCredit => _summary.availableCredit;
   bool get isRecordingPayment => _isRecordingPayment;
   bool get hasPaymentError => _hasPaymentError;
   List<SaleOrder> get orderHistory => List.unmodifiable(_orderHistory);
@@ -120,12 +137,23 @@ class CustomerDetailsViewModel extends ChangeNotifier {
 
   Future<void> load() async {
     await Future.wait([
+      loadShopSettings(),
       loadCustomer(),
       loadSummary(),
       loadOrderHistory(),
       loadAdjustmentHistory(),
       loadCards(),
     ]);
+  }
+
+  /// The credit section needs the shop's switch and default. A failure leaves
+  /// the section hidden rather than showing a control whose meaning is unknown.
+  Future<void> loadShopSettings() async {
+    final result = await _shopSettingsRepository.loadSettings();
+    if (result is Ok<ShopSettings>) {
+      _shopSettings = result.value;
+      notifyListeners();
+    }
   }
 
   Future<void> loadCards() async {
@@ -174,6 +202,38 @@ class CustomerDetailsViewModel extends ChangeNotifier {
 
     _isSaving = false;
     notifyListeners();
+    return ok;
+  }
+
+  /// Sets this customer's credit ceiling. [amount] is only read under
+  /// [CreditLimitPolicy.custom]; the server refuses that policy without one.
+  /// Reloads the summary too, because the head-room it reports has just moved.
+  Future<bool> setCreditLimit({
+    required CreditLimitPolicy policy,
+    double? amount,
+  }) async {
+    if (_isSaving) {
+      return false;
+    }
+    _isSaving = true;
+    notifyListeners();
+
+    final result = await _contactRepository.patchCustomer(_customer.id, {
+      'credit_limit_policy': policy.apiValue,
+      'credit_limit': policy == CreditLimitPolicy.custom
+          ? amount?.toStringAsFixed(2)
+          : null,
+    });
+    final ok = result is Ok<Customer>;
+    if (ok) {
+      _customer = result.value;
+    }
+
+    _isSaving = false;
+    notifyListeners();
+    if (ok) {
+      await loadSummary();
+    }
     return ok;
   }
 

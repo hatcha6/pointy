@@ -163,7 +163,11 @@ class CustomerSalesSummaryQueryCountTests(APITestCase):
         self.assertEqual(small_count, large_count)
         # Was 18 before the aggregates were folded (13 of them counts and sums
         # over two tables); a regression here means a per-filter query came back.
-        self.assertLessEqual(large_count, 8)
+        # 8 → 9 when the summary began reporting the credit ceiling: one
+        # constant ShopSettings read (per-request cached in production), not a
+        # query that grows with history — which is what the equality above and
+        # this ceiling together are guarding.
+        self.assertLessEqual(large_count, 9)
 
     def test_summary_values_cover_every_order_and_adjustment_shape(self):
         self._seed_every_order_shape()

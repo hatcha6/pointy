@@ -9238,6 +9238,138 @@ abstract class AppLocalizations {
   /// **'عند تفعيله يجب اختيار عميل قبل إتمام بيع آجل أو عرض سعر.'**
   String get requireCustomerForCreditSubtitle;
 
+  /// No description provided for @enforceCustomerCreditLimitsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل سقف الدين للعملاء'**
+  String get enforceCustomerCreditLimitsLabel;
+
+  /// No description provided for @enforceCustomerCreditLimitsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند تفعيله يُرفض البيع الآجل الذي يتجاوز سقف دين العميل. مغلق افتراضيًا، ولا يتغيّر شيء حتى تُفعّله.'**
+  String get enforceCustomerCreditLimitsSubtitle;
+
+  /// No description provided for @defaultCustomerCreditLimitLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سقف الدين الافتراضي'**
+  String get defaultCustomerCreditLimitLabel;
+
+  /// No description provided for @defaultCustomerCreditLimitHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُطبَّق على كل عميل ما لم يُحدَّد له سقف خاص من صفحته. اتركه فارغًا لعدم وضع سقف، أو اكتب 0 لمنع البيع الآجل افتراضيًا.'**
+  String get defaultCustomerCreditLimitHelp;
+
+  /// No description provided for @creditLimitBlockedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجاوز سقف الدين'**
+  String get creditLimitBlockedTitle;
+
+  /// No description provided for @creditLimitBlockedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الفاتورة الآجلة تتجاوز سقف دين العميل. حصِّل دفعة أولى، أو عدّل سقف العميل من صفحته.'**
+  String get creditLimitBlockedMessage;
+
+  /// Customer's current outstanding debt in the credit-limit refusal dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدين الحالي: {amount}'**
+  String creditLimitBlockedOutstanding(String amount);
+
+  /// The applicable credit ceiling in the refusal dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'السقف: {amount}'**
+  String creditLimitBlockedLimit(String amount);
+
+  /// Remaining head-room under the ceiling in the refusal dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتاح: {amount}'**
+  String creditLimitBlockedAvailable(String amount);
+
+  /// What this sale would add to the receivable.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الفاتورة تضيف: {amount}'**
+  String creditLimitBlockedNewDebt(String amount);
+
+  /// No description provided for @customerCreditLimitTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سقف الدين (آجل)'**
+  String get customerCreditLimitTitle;
+
+  /// No description provided for @customerCreditLimitPolicyShopDefault.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتراضي المتجر'**
+  String get customerCreditLimitPolicyShopDefault;
+
+  /// No description provided for @customerCreditLimitPolicyUnlimited.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا سقف'**
+  String get customerCreditLimitPolicyUnlimited;
+
+  /// No description provided for @customerCreditLimitPolicyCustom.
+  ///
+  /// In ar, this message translates to:
+  /// **'سقف خاص'**
+  String get customerCreditLimitPolicyCustom;
+
+  /// No description provided for @customerCreditLimitAmountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get customerCreditLimitAmountLabel;
+
+  /// No description provided for @customerCreditLimitAmountRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل مبلغ السقف.'**
+  String get customerCreditLimitAmountRequired;
+
+  /// The resolved ceiling shown on the customer details screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'السقف المطبَّق: {amount}'**
+  String customerCreditLimitEffective(String amount);
+
+  /// No description provided for @customerCreditLimitNone.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا سقف'**
+  String get customerCreditLimitNone;
+
+  /// Hint showing the shop-wide default a customer inherits.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتراضي المتجر: {amount}'**
+  String customerCreditLimitShopDefaultHint(String amount);
+
+  /// Remaining credit head-room on the customer details screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتاح للشراء الآجل: {amount}'**
+  String customerCreditLimitAvailable(String amount);
+
+  /// No description provided for @customerCreditLimitSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ سقف الدين. حاول مرة أخرى.'**
+  String get customerCreditLimitSaveError;
+
+  /// No description provided for @customerCreditLimitSaved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ سقف الدين.'**
+  String get customerCreditLimitSaved;
+
   /// No description provided for @allowCashierCustomerAccessLabel.
   ///
   /// In ar, this message translates to:

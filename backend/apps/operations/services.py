@@ -1038,7 +1038,7 @@ def invoice_job(
     """
     from apps.payments.serializers import PaymentSerializer
     from apps.sales.models import Order, OrderLine
-    from apps.sales.services import mark_order_paid
+    from apps.sales.services import mark_order_paid, validate_customer_credit_limit
 
     job = Job.objects.select_for_update().select_related("workflow_template").get(
         pk=job.pk
@@ -1159,6 +1159,16 @@ def invoice_job(
                     "آجل invoice to leave a balance owed."
                 )
             }
+        )
+
+    # The same ceiling the till enforces. A repair settled on آجل is credit
+    # issued by another door, and a limit one door ignores is not a limit.
+    if is_credit:
+        validate_customer_credit_limit(
+            customer=job.customer,
+            new_debt=order.total - paid_total,
+            settings=shop_settings,
+            exclude_order_id=order.pk,
         )
 
     for payment_data in payments_data:

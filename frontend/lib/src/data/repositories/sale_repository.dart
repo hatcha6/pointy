@@ -28,6 +28,24 @@ class SaleCheckoutLossException implements Exception {
   final List<SaleLossLine> lossLines;
 }
 
+/// The آجل sale would put the customer past their credit ceiling. Carries the
+/// server's numbers so the till can say *why* rather than only "refused".
+class SaleCheckoutCreditLimitException implements Exception {
+  const SaleCheckoutCreditLimitException({
+    required this.limit,
+    required this.outstanding,
+    required this.available,
+    required this.newDebt,
+    required this.projected,
+  });
+
+  final double limit;
+  final double outstanding;
+  final double available;
+  final double newDebt;
+  final double projected;
+}
+
 /// The backend has no open register session for this request owner — the
 /// frontend's cached session is stale (closed elsewhere, or the data was
 /// reset). The POS must send the user back to open a fresh session.
@@ -62,6 +80,10 @@ class SaleRepository {
       final lossLines = _lossLinesFromException(exception);
       if (lossLines.isNotEmpty) {
         return Error(SaleCheckoutLossException(lossLines));
+      }
+      final creditLimit = _creditLimitFromException(exception);
+      if (creditLimit != null) {
+        return Error(creditLimit);
       }
       if (_isNoOpenSessionError(exception)) {
         return const Error(SaleCheckoutNoSessionException());
@@ -235,6 +257,29 @@ class SaleRepository {
     }
     final detail = decoded['detail']?.toString().toLowerCase() ?? '';
     return detail.contains('register session');
+  }
+
+  SaleCheckoutCreditLimitException? _creditLimitFromException(
+    PosApiException exception,
+  ) {
+    if (exception.statusCode != 400) {
+      return null;
+    }
+    final decoded = exception.decodedBody;
+    if (decoded is! Map<String, Object?>) {
+      return null;
+    }
+    final credit = decoded['credit'];
+    if (credit is! Map<String, Object?>) {
+      return null;
+    }
+    return SaleCheckoutCreditLimitException(
+      limit: _shortageQtyFromJson(credit['limit']),
+      outstanding: _shortageQtyFromJson(credit['outstanding']),
+      available: _shortageQtyFromJson(credit['available']),
+      newDebt: _shortageQtyFromJson(credit['new_debt']),
+      projected: _shortageQtyFromJson(credit['projected']),
+    );
   }
 
   List<SaleLossLine> _lossLinesFromException(PosApiException exception) {

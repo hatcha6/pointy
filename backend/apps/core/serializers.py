@@ -536,6 +536,8 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "card_commission_percent",
             "transfer_commission_percent",
             "require_customer_for_credit",
+            "enforce_customer_credit_limits",
+            "default_customer_credit_limit",
             "allow_cashier_customer_access",
             "pos_cash_purchase_limit",
             "enable_purchase_suggestions",

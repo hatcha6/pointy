@@ -381,6 +381,9 @@ class _PaymentSettingsFields extends StatelessWidget {
     required this.enableTransferPayments,
     required this.requireCardPaymentReceipt,
     required this.requireCustomerForCredit,
+    required this.enforceCustomerCreditLimits,
+    required this.defaultCustomerCreditLimitController,
+    required this.onEnforceCustomerCreditLimitsChanged,
     required this.allowCashierCustomerAccess,
     required this.paymentMethodsError,
     required this.cardCommissionError,
@@ -404,6 +407,9 @@ class _PaymentSettingsFields extends StatelessWidget {
   final bool enableTransferPayments;
   final bool requireCardPaymentReceipt;
   final bool requireCustomerForCredit;
+  final bool enforceCustomerCreditLimits;
+  final TextEditingController defaultCustomerCreditLimitController;
+  final ValueChanged<bool> onEnforceCustomerCreditLimitsChanged;
   final bool allowCashierCustomerAccess;
   final String? paymentMethodsError;
   final String? cardCommissionError;
@@ -492,6 +498,34 @@ class _PaymentSettingsFields extends StatelessWidget {
           subtitle: Text(l10n.requireCustomerForCreditSubtitle),
           onChanged: enabled ? onRequireCustomerForCreditChanged : null,
         ),
+        // Credit ceilings. Off by default so a shop already trading on آجل is
+        // never surprised by a refusal it did not ask for; the amount below is
+        // only consulted once the switch is on.
+        SwitchListTile(
+          key: const ValueKey('enforce_customer_credit_limits_switch'),
+          contentPadding: EdgeInsets.zero,
+          value: enforceCustomerCreditLimits,
+          title: Text(l10n.enforceCustomerCreditLimitsLabel),
+          subtitle: Text(l10n.enforceCustomerCreditLimitsSubtitle),
+          onChanged: enabled ? onEnforceCustomerCreditLimitsChanged : null,
+        ),
+        if (enforceCustomerCreditLimits) ...[
+          const SizedBox(height: 8),
+          TextFormField(
+            key: const ValueKey('default_customer_credit_limit_field'),
+            controller: defaultCustomerCreditLimitController,
+            enabled: enabled,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [DecimalTextInputFormatter()],
+            decoration: InputDecoration(
+              labelText: l10n.defaultCustomerCreditLimitLabel,
+              helperText: l10n.defaultCustomerCreditLimitHelp,
+              helperMaxLines: 3,
+              prefixIcon: const Icon(Icons.account_balance_wallet_outlined),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
         SwitchListTile(
           key: const ValueKey('allow_cashier_customer_access_switch'),
           contentPadding: EdgeInsets.zero,

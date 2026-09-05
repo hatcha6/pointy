@@ -427,6 +427,28 @@ extension PosCheckoutActions on PosViewModel {
           );
           return SaleCheckoutOutcome.lossRejected(exception.lossLines);
         }
+        if (exception is SaleCheckoutCreditLimitException) {
+          unawaited(
+            _analyticsEngine?.trackUsage(
+                  AnalyticsEventName.posCheckoutFailed,
+                  severity: AnalyticsEventSeverity.warning,
+                  attributes: {
+                    'register_session_id': _activeRegisterSession?.id,
+                    'failure_reason': 'credit_limit_rejected',
+                    'line_count': cartSnapshot.length,
+                  },
+                  metrics: {
+                    'credit_limit': exception.limit,
+                    'credit_outstanding': exception.outstanding,
+                    'credit_new_debt': exception.newDebt,
+                    'total': total,
+                  },
+                  flushImmediately: true,
+                ) ??
+                Future<void>.value(),
+          );
+          return SaleCheckoutOutcome.creditLimitRejected(exception);
+        }
         unawaited(
           _analyticsEngine?.trackPerformance(
                 name: analyticsEventNameToJson(
@@ -748,6 +770,7 @@ class SaleCheckoutOutcome {
     this.printStatus = InvoicePrintStatus.notRequested,
     this.shortages = const [],
     this.lossLines = const [],
+    this.creditLimit,
   });
 
   const SaleCheckoutOutcome.success(
@@ -788,6 +811,15 @@ class SaleCheckoutOutcome {
         lossLines: lossLines,
       );
 
+  const SaleCheckoutOutcome.creditLimitRejected(
+    SaleCheckoutCreditLimitException creditLimit,
+  ) : this._(
+        isSuccess: false,
+        isStockRejected: false,
+        isLossRejected: false,
+        creditLimit: creditLimit,
+      );
+
   final bool isSuccess;
   final bool isStockRejected;
   final bool isLossRejected;
@@ -796,4 +828,9 @@ class SaleCheckoutOutcome {
   final InvoicePrintStatus printStatus;
   final List<SaleStockShortage> shortages;
   final List<SaleLossLine> lossLines;
+
+  /// Set when the آجل sale was refused for breaching the customer's ceiling.
+  final SaleCheckoutCreditLimitException? creditLimit;
+
+  bool get isCreditLimitRejected => creditLimit != null;
 }

@@ -59,6 +59,8 @@ class ShopSettings {
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
     this.posCashPurchaseLimit,
+    this.enforceCustomerCreditLimits = false,
+    this.defaultCustomerCreditLimit,
     this.enablePurchaseSuggestions = true,
     this.inventoryValuationMethod = InventoryValuationMethod.movingAverage,
     this.currencyCode = 'LYD',
@@ -107,6 +109,15 @@ class ShopSettings {
   /// sell screen). Null or 0 = no cap.
   final double? posCashPurchaseLimit;
 
+  /// Master switch for credit ceilings. Off by default: a shop already trading
+  /// on آجل keeps selling exactly as it did until an owner asks for the rule.
+  final bool enforceCustomerCreditLimits;
+
+  /// The credit (آجل) ceiling every customer inherits unless their own record
+  /// overrides it. Null = no limit — which is what a shop that never sets this
+  /// keeps. 0 is the opposite and deliberate: nobody buys on credit by default.
+  final double? defaultCustomerCreditLimit;
+
   /// Whether the purchasing screen offers the products and quantities this shop
   /// habitually buys from the chosen supplier. Off hides all three surfaces and
   /// stops the client asking for them at all.
@@ -120,6 +131,10 @@ class ShopSettings {
 
   bool get hasPosCashPurchaseLimit =>
       posCashPurchaseLimit != null && posCashPurchaseLimit! > 0;
+
+  /// Whether the shop has expressed any default at all. Unlike the cash-purchase
+  /// cap, 0 counts: it means "no credit by default", not "no rule".
+  bool get hasDefaultCustomerCreditLimit => defaultCustomerCreditLimit != null;
 
   factory ShopSettings.fromJson(Map<String, Object?> json) {
     final logoJson = json['logo_attachment'];
@@ -198,6 +213,14 @@ class ShopSettings {
       posCashPurchaseLimit: json['pos_cash_purchase_limit'] == null
           ? null
           : _moneyFromJson(json['pos_cash_purchase_limit'], 0),
+      enforceCustomerCreditLimits: _boolFromJson(
+        json['enforce_customer_credit_limits'],
+        false,
+      ),
+      defaultCustomerCreditLimit:
+          json['default_customer_credit_limit'] == null
+          ? null
+          : _moneyFromJson(json['default_customer_credit_limit'], 0),
       enablePurchaseSuggestions: _boolFromJson(
         json['enable_purchase_suggestions'],
         true,
@@ -254,11 +277,15 @@ class ShopSettingsDraft {
     this.enableKitchenOperations = false,
     this.enableJobTracking = false,
     this.posCashPurchaseLimit,
+    this.enforceCustomerCreditLimits = false,
+    this.defaultCustomerCreditLimit,
     this.enablePurchaseSuggestions = true,
     this.inventoryValuationMethod = InventoryValuationMethod.movingAverage,
     this.valuationMethodChangeAcknowledged = false,
   });
 
+  final bool enforceCustomerCreditLimits;
+  final double? defaultCustomerCreditLimit;
   final String shopName;
   final String receiptHeader;
   final String receiptFooter;
@@ -367,6 +394,9 @@ class ShopSettingsDraft {
       'enable_kitchen_operations': enableKitchenOperations,
       'enable_job_tracking': enableJobTracking,
       'pos_cash_purchase_limit': posCashPurchaseLimit?.toStringAsFixed(2),
+      'enforce_customer_credit_limits': enforceCustomerCreditLimits,
+      'default_customer_credit_limit': defaultCustomerCreditLimit
+          ?.toStringAsFixed(2),
       'enable_purchase_suggestions': enablePurchaseSuggestions,
       'inventory_valuation_method': inventoryValuationMethod.wireValue,
       // Only sent when the user has actually confirmed, so an ordinary save

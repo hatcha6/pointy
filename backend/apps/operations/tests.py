@@ -443,6 +443,50 @@ class JobInvoiceTests(OperationsTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_credit_job_invoice_respects_the_customer_credit_limit(self):
+        """A repair settled on آجل is credit issued by another door, and a
+        ceiling one door ignores is not a ceiling."""
+        ShopSettings.load()
+        ShopSettings.objects.filter(pk=1).update(
+            enforce_customer_credit_limits=True,
+            default_customer_credit_limit=Decimal("10.00"),
+        )
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        self.open_register(self.cashier)
+
+        response = client.post(
+            reverse("job-invoice", args=[data["id"]]),
+            {"labor_total": "30.00", "sale_type": "credit", "payments": []},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["code"], "credit_limit_exceeded")
+
+    def test_a_down_payment_can_bring_a_credit_job_under_the_limit(self):
+        ShopSettings.load()
+        ShopSettings.objects.filter(pk=1).update(
+            enforce_customer_credit_limits=True,
+            default_customer_credit_limit=Decimal("10.00"),
+        )
+        client = authenticated_client(self.cashier)
+        data = self.create_repair_job(client=client)
+        self.open_register(self.cashier)
+
+        response = client.post(
+            reverse("job-invoice", args=[data["id"]]),
+            {
+                "labor_total": "30.00",
+                "sale_type": "credit",
+                "payments": [{"method": "cash", "amount": "25.00"}],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["order_balance_due"], "5.00")
+
     def test_invoice_requires_open_register_session(self):
         client = authenticated_client(self.cashier)
         data = self.create_repair_job(client=client)

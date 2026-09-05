@@ -30,6 +30,27 @@ enum ContactOrdering implements QueryOrdering {
   final String apiValue;
 }
 
+/// How much a customer is allowed to owe on آجل invoices. Mirrors the backend
+/// ``Customer.CreditLimitPolicy``. Three states because all three are things an
+/// owner says: follow the shop, never cap this one, or use this exact number
+/// (including 0 — "this one pays cash").
+enum CreditLimitPolicy {
+  shopDefault('shop_default'),
+  unlimited('unlimited'),
+  custom('custom');
+
+  const CreditLimitPolicy(this.apiValue);
+
+  final String apiValue;
+
+  static CreditLimitPolicy fromApi(String value) {
+    return CreditLimitPolicy.values.firstWhere(
+      (policy) => policy.apiValue == value,
+      orElse: () => CreditLimitPolicy.shopDefault,
+    );
+  }
+}
+
 /// RFM segment a customer falls into, assigned automatically by the backend
 /// nightly job. Ordered best → worst; [inactive] means "no recognized purchase
 /// yet". The [apiValue] mirrors the backend ``Customer.Rank`` slugs.
@@ -191,6 +212,9 @@ class Customer {
     this.lastPurchaseAt,
     this.marketingOptedOut = false,
     this.doNotContact = false,
+    this.creditLimitPolicy = CreditLimitPolicy.shopDefault,
+    this.creditLimit,
+    this.effectiveCreditLimit,
   });
 
   final int id;
@@ -235,6 +259,17 @@ class Customer {
   /// A hard do-not-contact flag (blocks marketing; transactional still allowed).
   final bool doNotContact;
 
+  /// Which credit ceiling applies to this customer. See [CreditLimitPolicy].
+  final CreditLimitPolicy creditLimitPolicy;
+
+  /// This customer's own ceiling. Only meaningful under
+  /// [CreditLimitPolicy.custom]; null otherwise.
+  final double? creditLimit;
+
+  /// The ceiling that actually applies once the policy and the shop default
+  /// have been resolved — computed by the server. Null = no limit.
+  final double? effectiveCreditLimit;
+
   factory Customer.fromJson(Map<String, Object?> json) {
     return Customer(
       id: _intFromJson(json['id']),
@@ -259,6 +294,15 @@ class Customer {
       lastPurchaseAt: _dateFromJson(json['rfm_last_purchase_at']),
       marketingOptedOut: json['marketing_opted_out'] == true,
       doNotContact: json['do_not_contact'] == true,
+      creditLimitPolicy: CreditLimitPolicy.fromApi(
+        json['credit_limit_policy']?.toString() ?? '',
+      ),
+      creditLimit: json['credit_limit'] == null
+          ? null
+          : _moneyFromJson(json['credit_limit']),
+      effectiveCreditLimit: json['effective_credit_limit'] == null
+          ? null
+          : _moneyFromJson(json['effective_credit_limit']),
     );
   }
 
@@ -277,6 +321,9 @@ class Customer {
       'notes': notes,
       'is_active': isActive,
       'is_auto_created': isAutoCreated,
+      'credit_limit_policy': creditLimitPolicy.apiValue,
+      'credit_limit': creditLimit,
+      'effective_credit_limit': effectiveCreditLimit,
     };
   }
 }
