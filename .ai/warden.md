@@ -1428,3 +1428,47 @@ title (`git grep -n '<new function>' origin/main`). If it is there, compare the
 two versions before assuming yours is the better one; the later implementation
 usually is, because it was written knowing more. Only then is it worth the
 merge-up, the test run and the PR.
+
+## 2026-08-21 - Pruning local branches disables the stranded-work sweep
+
+**Learning:** The stranded-work pass I added last run walks *local* branches
+(`git for-each-ref refs/heads`), because step 3 was already walking them to
+prune. This run that list was down to five entries, every one of them
+worktree-held, so the sweep returned **nothing** — a clean bill of health. It
+was wrong. `origin` still carried **101** `claude/*` branches, and four of them
+had unique commits with no PR. The detector had been silently switched off by a
+previous run doing its cleanup job *well*: `git branch -d` removes the local
+ref, the remote branch survives, and stranded work is by definition work whose
+worktree is gone. So the better the pruning, the blinder the sweep — and the
+failure mode is a confident "no stranded work found", which is exactly what a
+human skims past.
+
+**Action:** Run the sweep over `git branch -r`, never `refs/heads`. Pull every
+PR head name once (`gh pr list --state all --limit 400 --json headRefName`) into
+a file and grep against it, rather than one `gh` call per branch — 101 branches
+is one API call and a shell loop. Local branches remain the right list for
+*pruning*; they have not been the right list for *detection* since the fleet
+started deleting them.
+
+## 2026-08-21 - Three NO-PR branches, three different reasons none of them was stranded
+
+**Learning:** Every hit in this run's sweep was a false positive, and no two for
+the same reason — so a single "is this real?" heuristic would have passed one of
+them through. `claude/sweet-wiles-1ef591` is journal-only, and its 🔐 Sentinel
+entries are already on `main` under other commits (`git cherry` still marks it
+`+`, because it landed via a different commit object — cherry proves nothing
+here). `claude/oracle-api-checkout-coverage` is the superseded one the previous
+entry describes, still sitting there. The new shape is
+`copilot/debug-frontend-server-connection`: 47 unique commits, a real production
+diff, no PR — and every commit subject is `compat(win8): …`. It is the frozen
+Windows 8 lineage under a `copilot/` branch name, and merging it to `main` is
+the one thing `compat/win8` is explicitly forbidden to do.
+
+**Action:** Read the commit *subjects* before calling a NO-PR branch stranded,
+not just the count and the diffstat. `compat(win8):` anywhere in the log means
+leave it alone whatever the branch is called — the prefix is not the identity.
+For a journal-only branch, compare entry titles directionally
+(`diff <(git show origin/main:.ai/<r>.md | grep '^## ') <(git show
+origin/<b>:.ai/<r>.md | grep '^## ')`) and read which side the `<`/`>` markers
+fall on: no `>` lines means the branch is a strict subset of `main` and is
+retired, regardless of what `git cherry` says.
