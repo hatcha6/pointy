@@ -2,6 +2,43 @@
 
 These rules apply to AI agents working anywhere in this repository.
 
+## Branch scope: `compat/win8`
+
+`compat/win8` is a **frozen** Flutter 3.19 / Dart 3.3 build that exists for one
+reason: old Windows 7/8/8.1 cashier machines. Flutter 3.19 is the last release
+whose Windows apps run on them; `main` targets Flutter 3.38 and will not.
+
+**Every change to that branch is frontend only, and only what a till touches.**
+Those machines talk to a backend built from `main`, so a backend change on
+`compat/win8` is not merely unnecessary — it is wrong, because it diverges a
+tree nothing deploys. Some older commits on the branch did touch its backend;
+do not read them as precedent.
+
+- Never merge `compat/win8` into `main`. Its pinned pubspec and stubs would
+  break main's 3.38 build. If the branch ever needs re-syncing, rebase `main`
+  *into* it, never the reverse.
+- Port with `git cherry-pick -n <sha>`, then strip everything outside
+  `frontend/` and outside the POS path before resolving. Main's commits
+  routinely bundle unrelated work — expect to drop most of a commit.
+- Port in a dedicated `git worktree` for the branch rather than switching
+  branches in a main checkout: a stale `frontend/.dart_tool` from the other
+  branch makes `dart analyze` spew hundreds of phantom errors in files nobody
+  touched.
+- Before committing a port, check the added lines for Flutter APIs newer than
+  3.19 (`withValues`, `WidgetState*`, `*ThemeData` renames,
+  `surfaceContainerHighest`, `onPopInvokedWithResult`) and for Dart 3.4+ syntax
+  (wildcard `(_, _)`, null-aware elements `[?x]`). `dart analyze` proves the
+  language level via the pubspec floor even on a modern SDK. Leave
+  `frontend/pubspec.yaml` alone: a dependency bump there can fail to resolve
+  under 3.19 in ways only the compat CI catches.
+- A red test on that branch is more often a stale port than a real divergence.
+  Diff the test against `main` before concluding the code behaves differently.
+
+Branch detail and the full drift list live in `frontend/COMPAT_WIN8.md` on the
+branch itself.
+
+**You are on that branch now.**
+
 ## Product Language
 
 - The Pointy frontend is Arabic-first.
