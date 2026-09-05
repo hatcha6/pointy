@@ -60,7 +60,11 @@ def _time_a_get(location, options, *, give_up_after):
     worker = threading.Thread(target=run, daemon=True)
     worker.start()
     worker.join(timeout=give_up_after)
-    return result
+    # Snapshot while the black-hole listener is still open. Closing it RSTs the
+    # connection the kernel handshook on our behalf, which wakes a thread parked
+    # on an unbounded read: hand back the live dict and it grows an outcome a
+    # fraction of a second after the caller has already read it as empty.
+    return dict(result)
 
 
 class RedisSocketTimeoutTests(SimpleTestCase):
