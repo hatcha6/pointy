@@ -512,6 +512,7 @@ class EmployeePayrollApiTests(TestCase):
             salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED_PLUS_SALES_COMMISSION,
             amount=Decimal("900.00"),
             commission_percent=Decimal("10.00"),
+            effective_from=date(2026, 6, 1),
         )
         in_period = timezone.make_aware(datetime(2026, 6, 10, 12, 0))
         outside_period = timezone.make_aware(datetime(2026, 5, 31, 12, 0))
@@ -780,6 +781,7 @@ class EmployeePayrollApiTests(TestCase):
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
             salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED,
             amount=Decimal("500.00"),
+            effective_from=date(2026, 6, 1),
         )
         loan = EmployeeLoan.objects.create(
             employee=employee,
@@ -825,6 +827,7 @@ class EmployeePayrollApiTests(TestCase):
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
             salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED,
             amount=Decimal("500.00"),
+            effective_from=date(2026, 6, 1),
         )
         loan = EmployeeLoan.objects.create(
             employee=employee,
@@ -859,6 +862,7 @@ class EmployeePayrollApiTests(TestCase):
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
             salary_type=CompensationPlan.SalaryType.MONTHLY_FIXED,
             amount=Decimal("500.00"),
+            effective_from=date(2026, 6, 1),
         )
         loan = EmployeeLoan.objects.create(
             employee=employee,
