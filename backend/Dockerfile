@@ -66,6 +66,19 @@ FROM build AS test
 
 ENV PATH="/opt/pointy-venv/bin:${PATH}" \
     PYTHONUNBUFFERED=1
+
+# The same converter tools the runtime stage installs. The Access conversion
+# tests stand mdbtools in on PATH — what belongs to us is the pipe mechanics,
+# not whether mdbtools reads Jet — but they drive the *real* sqlite3, because
+# that is what parses the exported SQL. Without this the suite fails here on a
+# tool the shipped image has, which is precisely the image-versus-source
+# divergence this stage exists to catch.
+RUN set -eux; \
+    export DEBIAN_FRONTEND=noninteractive; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends mdbtools sqlite3; \
+    rm -rf /var/lib/apt/lists/*
+
 # COPY overlays, it does not replace: without this the build stage's .py files
 # survive alongside the .so and the suite silently tests a hybrid tree — every
 # source-reading guard (apps/core/test_money_definitions.py) would pass in CI and
