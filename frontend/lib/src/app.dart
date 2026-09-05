@@ -12,6 +12,8 @@ import 'core/analytics_interaction_tracker.dart';
 import 'data/models/analytics_event.dart';
 import 'data/services/connection_status_controller.dart';
 import 'data/services/pos_api_service.dart';
+import 'features/companion/companion_bridge.dart';
+import 'features/companion/companion_scope.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'features/auth/views/auth_gate.dart';
 import 'features/connection/views/connection_gate.dart';
@@ -164,7 +166,18 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                   isActive: false,
                   controller: _navigationRailController,
                   navigationBucket: _navigationScrollBucket,
-                  child: child ?? const SizedBox.shrink(),
+                  // Above the Navigator, not inside `home`: pushed routes are
+                  // siblings of the first route, so a scope installed there
+                  // would be invisible to every screen but the first.
+                  child: ValueListenableBuilder<CompanionBridge?>(
+                    valueListenable: _dependencies.companionBridgeListenable,
+                    builder: (context, bridge, railChild) => CompanionScope(
+                      bridge: bridge,
+                      repository: _dependencies.companionRepository,
+                      child: railChild ?? const SizedBox.shrink(),
+                    ),
+                    child: child ?? const SizedBox.shrink(),
+                  ),
                 ),
               ),
             ),

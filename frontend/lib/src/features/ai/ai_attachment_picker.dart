@@ -73,6 +73,14 @@ class AiAttachmentPicker {
     return attachments;
   }
 
+  /// Builds an image attachment from bytes the picker did not choose —
+  /// today, a photo taken on a paired phone. Same downscale, same encoding, so
+  /// the model sees no difference between a phone photo and a local one.
+  Future<AiAttachment> imageFromBytes(
+    Uint8List bytes, {
+    String name = 'photo.jpg',
+  }) => _imageAttachment(bytes, name);
+
   Future<AiAttachment> _imageAttachment(Uint8List bytes, String name) async {
     final jpeg = await compute(_encodeDownscaledJpeg, bytes) ?? bytes;
     return AiAttachment(

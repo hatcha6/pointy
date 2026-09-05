@@ -17,6 +17,8 @@ import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../shared/unit_options.dart';
+import '../../companion/companion_scan_listener.dart';
+import '../../companion/companion_scope.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_catalog_pane.dart';
 import 'purchase_draft_pane.dart';
@@ -145,38 +147,45 @@ class _PurchasingWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BarcodeScanListener(
+    return CompanionScanListener(
+      bridge: CompanionScope.bridgeOf(context),
       enabled: !viewModel.isSubmitting && !viewModel.isCreatingProduct,
-      onBarcodeScanned: (barcode) {
+      onScan: (barcode) {
         unawaited(_addBarcode(context, barcode));
       },
-      // A scan only ever adds its own product; it never touches a line's
-      // quantity. Arrow keys flip the last scanned/tapped line's unit of
-      // measure — the deliberate quantity edit lives behind a line tap.
-      onArrowKey: (key) => _cycleLastScannedUnit(context, key),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.hasBoundedWidth
-              ? constraints.maxWidth
-              : MediaQuery.sizeOf(context).width;
-          if (AppBreakpoints.usesTwoPane(width)) {
-            return TwoPaneLayout(
-              minPrimaryWidth: 390,
-              primaryPane: PurchaseCatalogPane(viewModel: viewModel),
-              secondaryPane: PurchaseDraftPane(
-                viewModel: viewModel,
-                contactRepository: contactRepository,
-                onSubmitSuccess: onSaved,
-              ),
-            );
-          }
-
-          return _CompactPurchasingWorkspace(
-            viewModel: viewModel,
-            contactRepository: contactRepository,
-            onSaved: onSaved,
-          );
+      child: BarcodeScanListener(
+        enabled: !viewModel.isSubmitting && !viewModel.isCreatingProduct,
+        onBarcodeScanned: (barcode) {
+          unawaited(_addBarcode(context, barcode));
         },
+        // A scan only ever adds its own product; it never touches a line's
+        // quantity. Arrow keys flip the last scanned/tapped line's unit of
+        // measure — the deliberate quantity edit lives behind a line tap.
+        onArrowKey: (key) => _cycleLastScannedUnit(context, key),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.hasBoundedWidth
+                ? constraints.maxWidth
+                : MediaQuery.sizeOf(context).width;
+            if (AppBreakpoints.usesTwoPane(width)) {
+              return TwoPaneLayout(
+                minPrimaryWidth: 390,
+                primaryPane: PurchaseCatalogPane(viewModel: viewModel),
+                secondaryPane: PurchaseDraftPane(
+                  viewModel: viewModel,
+                  contactRepository: contactRepository,
+                  onSubmitSuccess: onSaved,
+                ),
+              );
+            }
+
+            return _CompactPurchasingWorkspace(
+              viewModel: viewModel,
+              contactRepository: contactRepository,
+              onSaved: onSaved,
+            );
+          },
+        ),
       ),
     );
   }

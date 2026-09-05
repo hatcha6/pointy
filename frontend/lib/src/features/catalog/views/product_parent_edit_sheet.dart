@@ -178,6 +178,9 @@ class _ProductParentEditSheetState extends State<ProductParentEditSheet> {
                                   !widget.viewModel.isSavingProduct &&
                                   !widget.viewModel.isSavingImage,
                               isSaving: widget.viewModel.isSavingImage,
+                              productId: widget.viewModel.product.id,
+                              productName: widget.viewModel.product.name,
+                              onCompanionCaptured: widget.viewModel.loadProduct,
                             ),
                             const SizedBox(height: 12),
                             VariantOptionField(

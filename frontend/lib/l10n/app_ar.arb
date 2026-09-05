@@ -8118,5 +8118,55 @@
   "connectionManualSearchingHint": "ما زلنا نبحث تلقائيًا في الخلفية…",
   "@connectionManualSearchingHint": {
     "description": "Hint that background auto-discovery is still running on the manual connection screen."
-  }
+  },
+  "companionSheetTitle": "كاميرا الجوال",
+  "companionSheetSubtitle": "امسح الرمز بكاميرا هاتفك ليصبح ماسحًا للرموز وكاميرا للمنتجات.",
+  "companionScanQrInstruction": "افتح كاميرا الهاتف ووجّهها إلى الرمز، ثم افتح الرابط الذي يظهر.",
+  "companionCodeFallbackLabel": "أو أدخل هذا الرمز في صفحة الكاميرا",
+  "companionCodeExpiresIn": "ينتهي الرمز خلال {seconds} ثانية",
+  "@companionCodeExpiresIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "companionCodeExpired": "انتهت صلاحية الرمز",
+  "companionNewCode": "رمز جديد",
+  "companionPairingFailed": "تعذّر إنشاء رمز الاقتران",
+  "companionPairedDevicesTitle": "الهواتف المقترنة",
+  "companionNoPairedDevices": "لا يوجد هاتف مقترن بعد",
+  "companionDeviceLastSeen": "آخر نشاط: {time}",
+  "@companionDeviceLastSeen": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "companionUnpair": "إلغاء الاقتران",
+  "companionPause": "إيقاف مؤقت",
+  "companionResume": "استئناف",
+  "companionPausedNotice": "الهاتف موقوف مؤقتًا — لن تصل عمليات المسح.",
+  "companionStatusConnected": "الهاتف متصل",
+  "companionStatusConnecting": "جارٍ الاتصال بالهاتف…",
+  "companionStatusPolling": "الهاتف متصل (وضع بطيء)",
+  "companionStatusIdle": "لا يوجد هاتف مقترن",
+  "companionOpenSheetTooltip": "كاميرا الجوال",
+  "companionScanReceived": "وصل رمز من الهاتف",
+  "companionPhotoReceived": "وصلت صورة من الهاتف",
+  "companionUsePhoneCamera": "التقط بالهاتف",
+  "companionCaptureRequested": "اطلب الصورة من الهاتف المقترن",
+  "companionCaptureWaiting": "بانتظار الصورة من الهاتف…",
+  "companionCaptureCancel": "إلغاء الطلب",
+  "companionCaptureFailed": "تعذّر طلب الصورة من الهاتف",
+  "companionCapturePromptProduct": "صوّر: {name}",
+  "@companionCapturePromptProduct": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "companionPairFirst": "اقترن بهاتف أولًا لاستخدام الكاميرا"
 }

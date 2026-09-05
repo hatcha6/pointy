@@ -205,6 +205,23 @@ class AiChatViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Queues a photo taken on a paired phone. Subject to the same image limit
+  /// as any other attachment, so the phone cannot smuggle past it.
+  Future<void> addImageBytes(
+    Uint8List bytes, {
+    String name = 'photo.jpg',
+  }) async {
+    if (_isStreaming) {
+      return;
+    }
+    if (!canAddImage) {
+      _flagImageLimit();
+      return;
+    }
+    _pendingAttachments.add(await _picker.imageFromBytes(bytes, name: name));
+    notifyListeners();
+  }
+
   Future<void> addFiles() async {
     if (_isStreaming) {
       return;

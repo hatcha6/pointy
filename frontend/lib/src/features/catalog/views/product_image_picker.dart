@@ -13,6 +13,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_image_thumbnail.dart';
 import '../../../shared/components/pointy_progress.dart';
+import '../../companion/views/companion_capture_sheet.dart';
 
 const _productImageSearchPageSize = 30;
 
@@ -57,6 +58,9 @@ class ProductImageField extends StatelessWidget {
     this.enabled = true,
     this.isSaving = false,
     this.imagePicker,
+    this.productId,
+    this.productName = '',
+    this.onCompanionCaptured,
   });
 
   final CatalogRepository catalogRepository;
@@ -69,6 +73,17 @@ class ProductImageField extends StatelessWidget {
 
   /// Injectable for tests; defaults to a real [ImagePicker] at capture time.
   final ImagePicker? imagePicker;
+
+  /// Set for a product that already exists. Only then can a paired phone be
+  /// asked for a photo, because the picture files itself against the product on
+  /// arrival — there is nothing to attach it to before the product is saved.
+  final int? productId;
+  final String productName;
+
+  /// Called after a phone's photo has attached itself server-side, so the
+  /// parent reloads and shows it. The picker's own [selection] is untouched:
+  /// the image is already saved, not staged.
+  final Future<void> Function()? onCompanionCaptured;
 
   /// Camera capture is offered on mobile and the web; desktop image_picker has
   /// no camera source, so the button is hidden there rather than failing.
@@ -136,6 +151,14 @@ class ProductImageField extends StatelessWidget {
                           icon: const Icon(Icons.photo_camera_outlined),
                           label: Text(l10n.productImageCameraButton),
                         ),
+                      if (productId != null)
+                        OutlinedButton.icon(
+                          onPressed: enabled && !isSaving
+                              ? () => _captureWithPhone(context)
+                              : null,
+                          icon: const Icon(Icons.add_a_photo_outlined),
+                          label: Text(l10n.companionUsePhoneCamera),
+                        ),
                       OutlinedButton.icon(
                         onPressed: enabled && !isSaving
                             ? () => _searchInternet(context)
@@ -160,6 +183,26 @@ class ProductImageField extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Hands the job to the phone: the till says which product it wants a photo
+  /// of, and the picture arrives already attached to it.
+  Future<void> _captureWithPhone(BuildContext context) async {
+    final id = productId;
+    if (id == null) return;
+    final l10n = AppLocalizations.of(context)!;
+    final attachmentId = await showCompanionCaptureSheet(
+      context,
+      prompt: l10n.companionCapturePromptProduct(
+        productName.isEmpty ? l10n.productImageLabel : productName,
+      ),
+      ownerType: 'catalog.product',
+      ownerId: id,
+      role: 'product_image',
+      isPrimary: true,
+    );
+    if (attachmentId == null) return;
+    await onCompanionCaptured?.call();
   }
 
   Future<void> _pickLocalImage(BuildContext context) async {

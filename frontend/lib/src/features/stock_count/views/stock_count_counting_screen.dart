@@ -8,6 +8,8 @@ import '../../../data/models/stock_count.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/stock_count_repository.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
+import '../../companion/companion_scan_listener.dart';
+import '../../companion/companion_scope.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
@@ -207,25 +209,29 @@ class _StockCountCountingScreenState extends State<StockCountCountingScreen> {
                 ),
               ],
             ),
-            body: BarcodeScanListener(
-              onBarcodeScanned: _onScan,
-              child: StockCountCountingBody(
-                session: _viewModel.session,
-                counted: _viewModel.countedCount,
-                total: _viewModel.expectedCount,
-                progress: _viewModel.progress,
-                variant: _viewModel.currentVariant,
-                input: _viewModel.input,
-                onSearch: _openSearch,
-                onCamera: _openCamera,
-                onDigit: _viewModel.appendDigit,
-                onDecimal: _viewModel.appendDecimal,
-                onBackspace: _viewModel.backspace,
-                onClear: _viewModel.clearInput,
-                footer: _CountingControls(
-                  canSubmit: _viewModel.canSubmit,
-                  onSave: _onSave,
-                  onFinish: _finish,
+            body: CompanionScanListener(
+              bridge: CompanionScope.bridgeOf(context),
+              onScan: _onScan,
+              child: BarcodeScanListener(
+                onBarcodeScanned: _onScan,
+                child: StockCountCountingBody(
+                  session: _viewModel.session,
+                  counted: _viewModel.countedCount,
+                  total: _viewModel.expectedCount,
+                  progress: _viewModel.progress,
+                  variant: _viewModel.currentVariant,
+                  input: _viewModel.input,
+                  onSearch: _openSearch,
+                  onCamera: _openCamera,
+                  onDigit: _viewModel.appendDigit,
+                  onDecimal: _viewModel.appendDecimal,
+                  onBackspace: _viewModel.backspace,
+                  onClear: _viewModel.clearInput,
+                  footer: _CountingControls(
+                    canSubmit: _viewModel.canSubmit,
+                    onSave: _onSave,
+                    onFinish: _finish,
+                  ),
                 ),
               ),
             ),

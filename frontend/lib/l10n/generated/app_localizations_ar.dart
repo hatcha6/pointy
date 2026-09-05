@@ -318,7 +318,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String activityLogEventSubtitleWithSummary(
-      String date, String user, String summary) {
+    String date,
+    String user,
+    String summary,
+  ) {
     return '$date بواسطة $user - $summary';
   }
 
@@ -1562,7 +1565,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String dashboardStockItemSubtitle(
-      String sku, int reorderLevel, int expected) {
+    String sku,
+    int reorderLevel,
+    int expected,
+  ) {
     return '$sku، حد الطلب $reorderLevel، المتوقع $expected';
   }
 
@@ -1842,19 +1848,29 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String smartNotificationStockDetail(
-      String name, int quantity, int threshold) {
+    String name,
+    int quantity,
+    int threshold,
+  ) {
     return '$name: المتاح $quantity، حد الطلب $threshold';
   }
 
   @override
   String smartNotificationExpiringStockDetailBasic(
-      String name, int quantity, String date) {
+    String name,
+    int quantity,
+    String date,
+  ) {
     return '$name: المتبقي $quantity، تاريخ الانتهاء $date';
   }
 
   @override
   String smartNotificationExpiringStockDetail(
-      String name, int quantity, String date, String context) {
+    String name,
+    int quantity,
+    String date,
+    String context,
+  ) {
     return '$name: المتبقي $quantity، تاريخ الانتهاء $date، المرجع $context';
   }
 
@@ -1965,7 +1981,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String smartNotificationLowProfitMarginMessage(
-      String percent, String amount) {
+    String percent,
+    String amount,
+  ) {
     return 'الهامش سلبي بنسبة $percent%، والفرق التقريبي $amount.';
   }
 
@@ -2006,7 +2024,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String smartNotificationPayrollReadyDetail(
-      String runNumber, String start, String end) {
+    String runNumber,
+    String start,
+    String end,
+  ) {
     return '$runNumber: من $start إلى $end';
   }
 
@@ -2389,7 +2410,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String userSettingsLoanBalanceDetail(
-      String balance, String monthlyDeduction) {
+    String balance,
+    String monthlyDeduction,
+  ) {
     return 'المتبقي $balance، الخصم الشهري $monthlyDeduction';
   }
 
@@ -3845,13 +3868,21 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String inventorySettingsSummary(
-      int count, String oversellStatus, String lossStatus) {
+    int count,
+    String oversellStatus,
+    String lossStatus,
+  ) {
     return 'تنبيه عند $count قطع أو أقل، البيع فوق المخزون: $oversellStatus، منع الخسارة: $lossStatus';
   }
 
   @override
-  String paymentSettingsSummary(num count, String cardCommission,
-      String transferCommission, String receiptStatus, String terminalStatus) {
+  String paymentSettingsSummary(
+    num count,
+    String cardCommission,
+    String transferCommission,
+    String receiptStatus,
+    String terminalStatus,
+  ) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -3984,7 +4015,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String backupDestinationDetails(
-      String path, String freeSpace, String totalSpace) {
+    String path,
+    String freeSpace,
+    String totalSpace,
+  ) {
     return 'سيتم الحفظ في $path. المساحة المتاحة $freeSpace من $totalSpace.';
   }
 
@@ -4078,7 +4112,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String backupJobHistorySummary(
-      String status, String completedAt, String filename) {
+    String status,
+    String completedAt,
+    String filename,
+  ) {
     return '$status، $completedAt، $filename';
   }
 
@@ -6662,7 +6699,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String purchaseExchangeReplacementHistoryLine(
-      String product, String quantity, String unitCost) {
+    String product,
+    String quantity,
+    String unitCost,
+  ) {
     return 'بديل: $product × $quantity بتكلفة $unitCost';
   }
 
@@ -7657,7 +7697,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String cardReceiptAmountMismatch(
-      String receiptAmount, String expectedAmount) {
+    String receiptAmount,
+    String expectedAmount,
+  ) {
     return 'مبلغ الإيصال $receiptAmount لا يطابق مبلغ الدفعة $expectedAmount.';
   }
 
@@ -9636,7 +9678,10 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String discountDetailsChannelBreakdownValue(
-      int redemptions, int documents, String amount) {
+    int redemptions,
+    int documents,
+    String amount,
+  ) {
     return '$redemptions استخدام • $documents مستند • صافي $amount';
   }
 
@@ -10025,13 +10070,18 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String employeeMonthlyFixedPlusCommissionPlanLabel(
-      String amount, String percent) {
+    String amount,
+    String percent,
+  ) {
     return 'راتب شهري ثابت $amount + $percent% مبيعات';
   }
 
   @override
   String employeeUnitBasedPlanLabel(
-      String salaryType, String amount, String units) {
+    String salaryType,
+    String amount,
+    String units,
+  ) {
     return '$salaryType - $amount × $units';
   }
 
@@ -13445,4 +13495,100 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get connectionManualSearchingHint =>
       'ما زلنا نبحث تلقائيًا في الخلفية…';
+
+  @override
+  String get companionSheetTitle => 'كاميرا الجوال';
+
+  @override
+  String get companionSheetSubtitle =>
+      'امسح الرمز بكاميرا هاتفك ليصبح ماسحًا للرموز وكاميرا للمنتجات.';
+
+  @override
+  String get companionScanQrInstruction =>
+      'افتح كاميرا الهاتف ووجّهها إلى الرمز، ثم افتح الرابط الذي يظهر.';
+
+  @override
+  String get companionCodeFallbackLabel => 'أو أدخل هذا الرمز في صفحة الكاميرا';
+
+  @override
+  String companionCodeExpiresIn(int seconds) {
+    return 'ينتهي الرمز خلال $seconds ثانية';
+  }
+
+  @override
+  String get companionCodeExpired => 'انتهت صلاحية الرمز';
+
+  @override
+  String get companionNewCode => 'رمز جديد';
+
+  @override
+  String get companionPairingFailed => 'تعذّر إنشاء رمز الاقتران';
+
+  @override
+  String get companionPairedDevicesTitle => 'الهواتف المقترنة';
+
+  @override
+  String get companionNoPairedDevices => 'لا يوجد هاتف مقترن بعد';
+
+  @override
+  String companionDeviceLastSeen(String time) {
+    return 'آخر نشاط: $time';
+  }
+
+  @override
+  String get companionUnpair => 'إلغاء الاقتران';
+
+  @override
+  String get companionPause => 'إيقاف مؤقت';
+
+  @override
+  String get companionResume => 'استئناف';
+
+  @override
+  String get companionPausedNotice =>
+      'الهاتف موقوف مؤقتًا — لن تصل عمليات المسح.';
+
+  @override
+  String get companionStatusConnected => 'الهاتف متصل';
+
+  @override
+  String get companionStatusConnecting => 'جارٍ الاتصال بالهاتف…';
+
+  @override
+  String get companionStatusPolling => 'الهاتف متصل (وضع بطيء)';
+
+  @override
+  String get companionStatusIdle => 'لا يوجد هاتف مقترن';
+
+  @override
+  String get companionOpenSheetTooltip => 'كاميرا الجوال';
+
+  @override
+  String get companionScanReceived => 'وصل رمز من الهاتف';
+
+  @override
+  String get companionPhotoReceived => 'وصلت صورة من الهاتف';
+
+  @override
+  String get companionUsePhoneCamera => 'التقط بالهاتف';
+
+  @override
+  String get companionCaptureRequested => 'اطلب الصورة من الهاتف المقترن';
+
+  @override
+  String get companionCaptureWaiting => 'بانتظار الصورة من الهاتف…';
+
+  @override
+  String get companionCaptureCancel => 'إلغاء الطلب';
+
+  @override
+  String get companionCaptureFailed => 'تعذّر طلب الصورة من الهاتف';
+
+  @override
+  String companionCapturePromptProduct(String name) {
+    return 'صوّر: $name';
+  }
+
+  @override
+  String get companionPairFirst => 'اقترن بهاتف أولًا لاستخدام الكاميرا';
 }

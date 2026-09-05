@@ -46,6 +46,7 @@ import '../models/query.dart';
 import '../models/register_cash_movement.dart';
 import '../models/migration.dart';
 import '../models/register_cash_movement_page.dart';
+import '../models/companion.dart';
 import '../models/register_session.dart';
 import '../models/register_session_page.dart';
 import '../models/register_session_summary.dart';
@@ -78,6 +79,7 @@ import '../models/workflow.dart';
 import '../models/attendance.dart';
 import '../models/ai_chat.dart';
 import 'api_session.dart';
+import 'companion_api_client.dart';
 import 'ai_api_client.dart';
 import 'analytics_api_client.dart';
 import 'attendance_api_client.dart';
@@ -157,6 +159,7 @@ class PosApiService {
     _priceChecker = PriceCheckerApiClient(_session);
     _stockCounts = StockCountApiClient(_session);
     _ai = AiApiClient(_session);
+    _companion = CompanionApiClient(_session);
   }
 
   String get baseUrl => _session.baseUrl;
@@ -211,6 +214,7 @@ class PosApiService {
   late final PriceCheckerApiClient _priceChecker;
   late final StockCountApiClient _stockCounts;
   late final AiApiClient _ai;
+  late final CompanionApiClient _companion;
 
   set performanceRecorder(ApiPerformanceRecorder? recorder) {
     _session.performanceRecorder = recorder;
@@ -1859,6 +1863,70 @@ class PosApiService {
     required PrintAuditEventReportDraft report,
   }) {
     return _printing.reportPrintAuditEvent(eventId: eventId, report: report);
+  }
+
+  // --- Companion camera (a phone paired to this till) ---------------------
+
+  Future<CompanionPairing> createCompanionPairing({
+    required String tillKey,
+    String tillLabel = '',
+  }) {
+    return _companion.createPairing(tillKey: tillKey, tillLabel: tillLabel);
+  }
+
+  Future<List<CompanionDevice>> fetchCompanionDevices(String tillKey) {
+    return _companion.listDevices(tillKey);
+  }
+
+  Future<CompanionDevice> setCompanionDevicePaused(int deviceId, bool paused) {
+    return _companion.setPaused(deviceId, paused);
+  }
+
+  Future<void> unpairCompanionDevice(int deviceId) {
+    return _companion.unpair(deviceId);
+  }
+
+  Future<CompanionEventPage> fetchCompanionEvents({
+    required String tillKey,
+    int since = 0,
+    int limit = 100,
+  }) {
+    return _companion.events(tillKey: tillKey, since: since, limit: limit);
+  }
+
+  Stream<SseEvent> streamCompanionEvents({
+    required String tillKey,
+    int since = 0,
+  }) {
+    return _companion.openStream(tillKey: tillKey, since: since);
+  }
+
+  Future<CompanionCaptureRequest> requestCompanionCapture({
+    required String tillKey,
+    String prompt = '',
+    String ownerType = '',
+    int? ownerId,
+    String role = '',
+    bool isPrimary = false,
+    bool allowMultiple = false,
+  }) {
+    return _companion.requestCapture(
+      tillKey: tillKey,
+      prompt: prompt,
+      ownerType: ownerType,
+      ownerId: ownerId,
+      role: role,
+      isPrimary: isPrimary,
+      allowMultiple: allowMultiple,
+    );
+  }
+
+  Future<Uint8List> downloadCompanionCapture(int attachmentId) {
+    return _companion.downloadCapture(attachmentId);
+  }
+
+  Future<void> cancelCompanionCaptureRequest(int id) {
+    return _companion.cancelCaptureRequest(id);
   }
 
   Future<List<PriceCheckerDevice>> fetchPriceCheckerDevices({int page = 1}) {
