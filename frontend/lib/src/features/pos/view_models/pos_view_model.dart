@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/analytics_audit.dart';
 import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
+import '../../../data/models/currency.dart';
 import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/cart_line.dart';
 import '../../../data/models/modifier_group.dart';
@@ -27,6 +28,7 @@ import '../../../data/models/register_session.dart';
 import '../../../data/models/register_session_summary.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/models/shop_settings.dart';
+import '../../../data/repositories/fx_repository.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/register_session_repository.dart';
@@ -164,10 +166,14 @@ class PosViewModel extends ChangeNotifier {
     ),
     ScanFeedbackPlayer? scanFeedback,
     Duration checkoutPrintDeadline = const Duration(seconds: 20),
+    // Optional and named, not positional: a till with no foreign prices never
+    // needs it, and every existing construction site keeps working.
+    FxRepository? fxRepository,
     this.cartQuantityIdleTimeout = const Duration(milliseconds: 700),
   }) : _analyticsEngine = analyticsEngine,
        _sessionStorage = sessionStorage,
        _scanFeedback = scanFeedback,
+       _fxRepository = fxRepository,
        _checkoutPrintDeadline = checkoutPrintDeadline;
 
   /// How long a +/- run may pause before it counts as finished.
@@ -188,6 +194,7 @@ class PosViewModel extends ChangeNotifier {
   final RegisterSessionRepository _registerSessionRepository;
   final SaleRepository _saleRepository;
   final ShopSettingsRepository _shopSettingsRepository;
+  final FxRepository? _fxRepository;
   final PrintingRepository _printingRepository;
   final AnalyticsEngine? _analyticsEngine;
   final ScopedJsonStorage _sessionStorage;
@@ -499,6 +506,31 @@ class PosViewModel extends ChangeNotifier {
     return future;
   }
 
+  /// Teaches the formatters every currency symbol, so a product priced from a
+  /// foreign price sheet renders as "$12.00" beside its dinar shelf price
+  /// rather than as the bare code "USD".
+  ///
+  /// Gated on the shop's master switch and loaded once per session: the
+  /// currency registry is seeded on every install, so without the gate every
+  /// single-currency shop would fetch a list it has no use for. A failure is
+  /// silent on purpose — a missing symbol degrades to the ISO code, which is
+  /// still readable, and a till must never wait on this.
+  Future<void> _loadForeignCurrencySymbols(ShopSettings settings) async {
+    final repository = _fxRepository;
+    if (repository == null || !settings.fxEnabled || _hasLoadedCurrencies) {
+      return;
+    }
+    _hasLoadedCurrencies = true;
+    final result = await repository.loadCurrencies();
+    if (result case Ok<List<Currency>>(value: final currencies)) {
+      configureForeignCurrencySymbols(<String, String>{
+        for (final currency in currencies) currency.code: currency.symbol,
+      });
+    }
+  }
+
+  bool _hasLoadedCurrencies = false;
+
   Future<void> _loadCheckoutSettings() async {
     _isLoadingCheckoutSettings = true;
     _hasCheckoutSettingsError = false;
@@ -509,7 +541,11 @@ class PosViewModel extends ChangeNotifier {
       case Ok<ShopSettings>():
         _checkoutSettings = result.value;
         // Make every on-screen money display use the shop's currency symbol.
-        configureCurrencySymbol(result.value.currencySymbol);
+        configureCurrencySymbol(
+          result.value.currencySymbol,
+          code: result.value.currencyCode,
+        );
+        await _loadForeignCurrencySymbols(result.value);
         _checkoutShopLogoBytes = await _loadShopLogoBytes(result.value);
         if (result.value.autoPrintReceipts) {
           _clearManualInvoiceActionsForSaleSessions();

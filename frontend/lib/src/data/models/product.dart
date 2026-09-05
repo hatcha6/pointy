@@ -19,6 +19,7 @@ class Product {
     this.isService = false,
     this.isPrepared = false,
     this.unit = 'piece',
+    this.pricingCurrency = '',
     this.defaultSaleUnit = '',
     this.defaultPurchaseUnit = '',
     this.units = const [],
@@ -48,6 +49,11 @@ class Product {
 
   /// Base (stock) unit code. Stock, recipes, and totals are kept in this unit.
   final String unit;
+
+  /// The ISO code this product's price sheet is written in; blank means the
+  /// shop's own currency, which is what every existing product is. A pricing
+  /// attribute only — the sale is still rung up and reported in base currency.
+  final String pricingCurrency;
 
   /// Units pre-selected in POS / purchasing. Blank = the base [unit].
   final String defaultSaleUnit;
@@ -129,6 +135,7 @@ class Product {
       isService: (json['is_service'] as bool?) ?? false,
       isPrepared: (json['is_prepared'] as bool?) ?? false,
       unit: json['unit']?.toString() ?? 'piece',
+      pricingCurrency: json['pricing_currency']?.toString() ?? '',
       defaultSaleUnit: json['default_sale_unit']?.toString() ?? '',
       defaultPurchaseUnit: json['default_purchase_unit']?.toString() ?? '',
       units: _unitsFromJson(json),
@@ -154,6 +161,7 @@ class Product {
       isActive: variant.isSellable,
       tracksExpiry: detail?.tracksExpiry ?? variant.tracksExpiry,
       unit: variant.unit,
+      pricingCurrency: detail?.pricingCurrency ?? variant.pricingCurrency,
       defaultSaleUnit: detail?.defaultSaleUnit ?? '',
       defaultPurchaseUnit: detail?.defaultPurchaseUnit ?? '',
       units: detail?.units ?? const [],
@@ -180,6 +188,7 @@ class Product {
       'is_service': isService,
       'is_prepared': isPrepared,
       'unit': unit,
+      if (pricingCurrency.isNotEmpty) 'pricing_currency': pricingCurrency,
       'default_sale_unit': defaultSaleUnit,
       'default_purchase_unit': defaultPurchaseUnit,
       'units': units
@@ -213,6 +222,7 @@ class Product {
       isService: isService,
       isPrepared: isPrepared,
       unit: unit,
+      pricingCurrency: pricingCurrency,
       defaultSaleUnit: defaultSaleUnit,
       defaultPurchaseUnit: defaultPurchaseUnit,
       units: units,

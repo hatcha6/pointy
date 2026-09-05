@@ -31,6 +31,7 @@ class ShopSettings {
     this.enableJobTracking = false,
     this.posCashPurchaseLimit,
     this.enforceCustomerCreditLimits = false,
+    this.fxEnabled = false,
     this.defaultCustomerCreditLimit,
     this.currencyCode = 'LYD',
     this.currencySymbol = 'د.ل',
@@ -76,6 +77,11 @@ class ShopSettings {
   /// Master switch for credit ceilings. Off by default: a shop already trading
   /// on آجل keeps selling exactly as it did until an owner asks for the rule.
   final bool enforceCustomerCreditLimits;
+
+  /// Master switch for multi-currency. Off means the till never asks for the
+  /// currency list and a foreign price never renders — which is every shop that
+  /// has not turned it on, and an older backend that has never heard of it.
+  final bool fxEnabled;
 
   /// The credit (آجل) ceiling every customer inherits unless their own record
   /// overrides it. Null = no limit — which is what a shop that never sets this
@@ -172,6 +178,7 @@ class ShopSettings {
         json['enforce_customer_credit_limits'],
         false,
       ),
+      fxEnabled: _boolFromJson(json['fx_enabled'], false),
       defaultCustomerCreditLimit:
           json['default_customer_credit_limit'] == null
           ? null
@@ -226,10 +233,12 @@ class ShopSettingsDraft {
     this.enableJobTracking = false,
     this.posCashPurchaseLimit,
     this.enforceCustomerCreditLimits = false,
+    this.fxEnabled = false,
     this.defaultCustomerCreditLimit,
   });
 
   final bool enforceCustomerCreditLimits;
+  final bool fxEnabled;
   final double? defaultCustomerCreditLimit;
   final String shopName;
   final String receiptHeader;
@@ -289,6 +298,7 @@ class ShopSettingsDraft {
       'enable_job_tracking': enableJobTracking,
       'pos_cash_purchase_limit': posCashPurchaseLimit?.toStringAsFixed(2),
       'enforce_customer_credit_limits': enforceCustomerCreditLimits,
+      'fx_enabled': fxEnabled,
       'default_customer_credit_limit': defaultCustomerCreditLimit
           ?.toStringAsFixed(2),
     };

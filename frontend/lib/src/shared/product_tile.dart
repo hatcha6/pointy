@@ -86,6 +86,25 @@ class ProductTile extends StatelessWidget {
   final _ProductTilePresentation _presentation;
   final bool _tableLayout;
 
+  /// The price line on the card.
+  ///
+  /// For a product maintained in a foreign price sheet this shows BOTH numbers
+  /// — "12.00 $ ≈ 82.20 د.ل". Showing only the converted figure would hide the
+  /// number the owner actually maintains; showing only the foreign one would
+  /// hide what the customer pays. The dinar figure is the shelf price, not a
+  /// live conversion: it moves when somebody reprices, never on its own.
+  String _priceLabel() {
+    final variant = _product?.defaultVariant;
+    if (variant != null && variant.hasForeignPrice) {
+      return formatDualPrice(
+        variant.priceAmount!,
+        variant.pricingCurrency,
+        unitPrice,
+      );
+    }
+    return formatMoney(unitPrice);
+  }
+
   @override
   Widget build(BuildContext context) {
     final product = _product;
@@ -101,7 +120,7 @@ class ProductTile extends StatelessWidget {
     return PointyProductCard(
       title: title,
       sku: sku,
-      priceLabel: showPrice ? formatMoney(unitPrice) : '',
+      priceLabel: showPrice ? _priceLabel() : '',
       imageUrl: imageUrl,
       fallbackText: title,
       // The status pill is an exception flag, not decoration: an "available"

@@ -16,6 +16,7 @@ import 'data/repositories/attendance_repository.dart';
 import 'data/repositories/migration_repository.dart';
 import 'data/repositories/catalog_repository.dart';
 import 'data/repositories/companion_repository.dart';
+import 'data/repositories/fx_repository.dart';
 import 'data/repositories/contact_repository.dart';
 import 'data/repositories/dashboard_repository.dart';
 import 'data/repositories/device_settings_repository.dart';
@@ -107,6 +108,7 @@ class PointyAppDependencies {
     migrationRepository = MigrationRepository(service);
     authRepository = AuthRepository(service);
     catalogRepository = CatalogRepository(service);
+    fxRepository = FxRepository(service);
     contactRepository = ContactRepository(service);
     dashboardRepository = DashboardRepository(service);
     deviceSettingsRepository = const DeviceSettingsRepository();
@@ -167,6 +169,7 @@ class PointyAppDependencies {
       printingRepository,
       analyticsEngine: analyticsEngine,
       scanFeedback: ScanFeedbackSounds.instance.play,
+      fxRepository: fxRepository,
     );
   }
 
@@ -179,6 +182,7 @@ class PointyAppDependencies {
   late final MigrationRepository migrationRepository;
   late final AuthRepository authRepository;
   late final CatalogRepository catalogRepository;
+  late final FxRepository fxRepository;
   late final ContactRepository contactRepository;
   late final DashboardRepository dashboardRepository;
   late final DeviceSettingsRepository deviceSettingsRepository;

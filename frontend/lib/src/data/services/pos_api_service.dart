@@ -29,6 +29,7 @@ import '../models/product_variant.dart';
 import '../models/product_variant_draft.dart';
 import '../models/product_variant_page.dart';
 import '../models/contact.dart';
+import '../models/currency.dart';
 import '../models/customer_activity.dart';
 import '../models/customer_asset.dart';
 import '../models/operations_job.dart';
@@ -112,6 +113,7 @@ import 'modifier_group_api_client.dart';
 import 'prep_station_api_client.dart';
 import 'unit_of_measure_api_client.dart';
 import 'sales_channel_api_client.dart';
+import 'fx_api_client.dart';
 import 'shop_settings_api_client.dart';
 import 'stock_count_api_client.dart';
 import 'user_api_client.dart';
@@ -135,6 +137,7 @@ class PosApiService {
     _businessNotifications = BusinessNotificationApiClient(_session);
     _users = UserApiClient(_session);
     _shopSettings = ShopSettingsApiClient(_session);
+    _fx = FxApiClient(_session);
     _catalog = CatalogApiClient(_session);
     _customers = CustomerApiClient(_session);
     _dashboard = DashboardApiClient(_session);
@@ -183,6 +186,7 @@ class PosApiService {
     );
   }
 
+  late final FxApiClient _fx;
   late final AttendanceApiClient _attendance;
   late final MigrationApiClient _migration;
   late final AuthApiClient _auth;
@@ -563,6 +567,10 @@ class PosApiService {
 
   Future<ShopSettings> fetchShopSettings() {
     return _shopSettings.fetchShopSettings();
+  }
+
+  Future<List<Currency>> fetchCurrencies() {
+    return _fx.fetchCurrencies();
   }
 
   Future<Uint8List?> fetchShopLogoBytes(ShopSettings? settings) async {
