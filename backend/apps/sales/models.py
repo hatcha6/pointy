@@ -247,10 +247,12 @@ class OrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
         Everything else the rows read is here, and every one of these costs a
         query **per row** when a caller hand-rolls a shorter list instead:
         ``sales_channel_name``/``_slug`` traverse the FK,
-        ``can_void``/``can_return`` read ``adjustment_lines`` per line, and
-        ``applied_discounts``/``exchanges`` are a query each per order.
+        ``can_void``/``can_return`` read ``adjustment_lines`` per line,
+        ``applied_discounts``/``exchanges`` are a query each per order, and the
+        lifecycle's ``cancelled_by`` is a query per *voided* order — a page of
+        live sales looks flat and a page of voided ones does not.
         """
-        return self.select_related(
+        return self.with_lifecycle_relations().select_related(
             "customer",
             "register_session",
             "sales_channel",

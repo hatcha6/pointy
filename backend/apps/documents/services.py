@@ -72,15 +72,23 @@ def blocking_documents(document, *, doc_type=None):
         queryset = related.all()
         if "doc_status" in {f.name for f in related.model._meta.concrete_fields}:
             queryset = queryset.exclude(doc_status=DocumentStatus.CANCELLED)
-        rows = list(queryset[:_BLOCKER_SAMPLE])
+        # One more than the sample: a short read has counted itself, and only a
+        # full one needs the second query. This runs on every cancel, once per
+        # declared blocker, and the overwhelmingly common answer is "none" or
+        # "one".
+        rows = list(queryset[: _BLOCKER_SAMPLE + 1])
         if not rows:
             continue
         blockers.append(
             {
                 "accessor": accessor,
                 "label": label,
-                "count": queryset.count(),
-                "ids": [row.pk for row in rows],
+                "count": (
+                    len(rows)
+                    if len(rows) <= _BLOCKER_SAMPLE
+                    else queryset.count()
+                ),
+                "ids": [row.pk for row in rows[:_BLOCKER_SAMPLE]],
             }
         )
     return blockers

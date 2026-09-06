@@ -3,7 +3,7 @@ from datetime import timedelta
 from decimal import Decimal, ROUND_DOWN
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Prefetch, Sum, prefetch_related_objects
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -1653,10 +1653,21 @@ def lock_order_lines_for_update(order, *, line_ids=None):
         queryset = queryset.filter(pk__in=line_ids)
     lines = list(queryset)
     if lines:
-        list(
-            OrderAdjustmentLine.objects.select_for_update()
-            .filter(order_line_id__in=[line.pk for line in lines])
-            .order_by("pk")
+        # The same locking read either way — but landed in each line's prefetch
+        # cache instead of thrown away. Every caller then asks its lines for
+        # ``returnable_quantity``, which sums ``adjustment_lines``: unprefetched
+        # that is an aggregate per line (twice per line, in the comprehensions
+        # that filter and then keep it), on top of a row set already read and
+        # locked here. Fresh as of the lock is exactly the guarantee these
+        # callers want, since nothing may write these rows until they commit.
+        prefetch_related_objects(
+            lines,
+            Prefetch(
+                "adjustment_lines",
+                queryset=OrderAdjustmentLine.objects.select_for_update().order_by(
+                    "pk"
+                ),
+            ),
         )
     return lines
 

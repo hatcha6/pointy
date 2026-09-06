@@ -260,39 +260,43 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         "partial_update": ("purchasing.edit_draft_purchaseorder",),
         "destroy": ("purchasing.delete_purchaseorder",),
     }
-    queryset = PurchaseOrder.objects.select_related("supplier").prefetch_related(
-        # Must come FIRST: Django rejects a Prefetch that carries a queryset for
-        # a lookup an earlier `lines__...` string already claimed. Every line
-        # renders the previous purchase's cost, which is a query per line unless
-        # it rides along as an annotation here.
-        Prefetch("lines", queryset=PurchaseLine.objects.annotate(
-            **previous_purchase_line_annotations()
-        )),
-        "lines__variant__product",
-        "lines__receipt_lines",
-        # PurchaseLine.adjusted_quantity/adjustable_quantity sum this relation;
-        # unprefetched they cost 2 aggregate queries per line on every detail
-        # read (the return/refund/exchange affordances the details screen shows).
-        "lines__adjustment_lines",
-        # Every line, receipt line and adjustment line renders its variant's
-        # display_name, which falls back to option_values_label -> the
-        # option_values M2M. Prefetching it (with its `option` FK, which the
-        # label sorts on) turns 1-2 queries per line into 4 for the whole order.
-        "lines__variant__option_values__option",
-        "landed_cost_entries",
-        "receipts__lines__variant__product",
-        "receipts__lines__variant__option_values__option",
-        "receipts__created_by",
-        "adjustments__lines__variant__product",
-        "adjustments__lines__variant__option_values__option",
-        "adjustments__replacement_lines__variant__product",
-        "adjustments__replacement_lines__variant__option_values__option",
-        "adjustments__created_by",
-        "adjustments__supplier_credit",
-        "audit_events__created_by",
-        "supplier_payments",
-        "supplier_credits",
-        "attachments",
+    queryset = (
+        PurchaseOrder.objects.with_lifecycle_relations()
+        .select_related("supplier")
+        .prefetch_related(
+            # Must come FIRST: Django rejects a Prefetch that carries a queryset for
+            # a lookup an earlier `lines__...` string already claimed. Every line
+            # renders the previous purchase's cost, which is a query per line unless
+            # it rides along as an annotation here.
+            Prefetch("lines", queryset=PurchaseLine.objects.annotate(
+                **previous_purchase_line_annotations()
+            )),
+            "lines__variant__product",
+            "lines__receipt_lines",
+            # PurchaseLine.adjusted_quantity/adjustable_quantity sum this relation;
+            # unprefetched they cost 2 aggregate queries per line on every detail
+            # read (the return/refund/exchange affordances the details screen shows).
+            "lines__adjustment_lines",
+            # Every line, receipt line and adjustment line renders its variant's
+            # display_name, which falls back to option_values_label -> the
+            # option_values M2M. Prefetching it (with its `option` FK, which the
+            # label sorts on) turns 1-2 queries per line into 4 for the whole order.
+            "lines__variant__option_values__option",
+            "landed_cost_entries",
+            "receipts__lines__variant__product",
+            "receipts__lines__variant__option_values__option",
+            "receipts__created_by",
+            "adjustments__lines__variant__product",
+            "adjustments__lines__variant__option_values__option",
+            "adjustments__replacement_lines__variant__product",
+            "adjustments__replacement_lines__variant__option_values__option",
+            "adjustments__created_by",
+            "adjustments__supplier_credit",
+            "audit_events__created_by",
+            "supplier_payments",
+            "supplier_credits",
+            "attachments",
+        )
     )
     filterset_fields = {
         "status": ["exact"],

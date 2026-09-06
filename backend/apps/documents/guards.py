@@ -145,6 +145,18 @@ class DocumentQuerySetMixin:
         """
         return self.exclude(doc_status=DocumentStatus.CANCELLED)
 
+    def with_lifecycle_relations(self):
+        """Load what the lifecycle fields serialize, in a fixed query count.
+
+        ``cancelled_by`` is the one relation ``DocumentLifecycleFields``
+        traverses, and it costs a query *per cancelled row* when it is not
+        loaded — invisible on a page of live documents and linear on a page of
+        retracted ones, which is the shape a bug takes when it only appears
+        after something goes wrong. ``superseded_by`` needs no join: it goes
+        out as an id.
+        """
+        return self.select_related("cancelled_by")
+
     def update(self, **kwargs):
         doc_type = registry.for_model(self.model)
         if doc_type is not None and not is_system_write():

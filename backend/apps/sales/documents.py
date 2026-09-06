@@ -14,7 +14,14 @@ from apps.sales.models import Order, OrderAdjustment
 
 
 def _fully_returned(order) -> bool:
-    return all(line.returnable_quantity <= 0 for line in order.lines.all())
+    # ``returnable_quantity`` reads ``adjustment_lines``, so an unprefetched
+    # walk is an aggregate per line — and this runs at the end of every return,
+    # whose per-line cost is already the most expensive thing a sale can do.
+    # The relation is fetched fresh rather than off a prefetch cache on
+    # purpose: the caller is asking *after* the return has written the very
+    # rows that decide the answer.
+    lines = order.lines.prefetch_related("adjustment_lines")
+    return all(line.returnable_quantity <= 0 for line in lines)
 
 
 def progress_status(order) -> str:
