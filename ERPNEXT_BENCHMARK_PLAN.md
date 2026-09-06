@@ -194,7 +194,10 @@ extended to assert the new invariants.
   `PurchaseReceipt`, `Payment`, `SupplierPayment`, `Expense`, `PayrollRun`, `StockCount`.
   Immutability enforced at the model layer; cancel writes reversals; amend links to the amended doc.
   Retire the hand-rolled PO reopen/re-apply logic onto this primitive.
-- **1b** Naming series per document type (generalise `invoice_number` / `customer_number`).
+- **1b** Naming series per document type (generalise `invoice_number` / `customer_number`). Carries a
+  branch discriminator from the start — a *column*, the way ERPNext scopes a series to a company, not a
+  per-deployment constant (§10.6). Cheap to design in, and retrofitting one means renumbering documents a
+  shop has already printed and handed to customers.
 - **1c** ~~Valued stock ledger entries~~ **Done 2026-08-26.** `StockLedgerEntry` (append-only, valued),
   `StockValuationBin` (the live cache, rebuildable), and a minimal `Warehouse` whose default "Main" row
   every ledger entry carries from its first migration — so Phase 2 adds screens, not a second migration
@@ -231,12 +234,18 @@ a re-migration of history.
 **Exit:** a shop can run a back store and a shop floor, move stock between them, and the ledger still ties.
 
 **Note on branches vs. warehouses.** Multiple warehouses inside one shop is a schema problem and is solved
-here. Multiple *branches* is an architecture problem and is not: Pointy is deliberately one LAN-local
-backend per site, because offline sync between peers is precisely the bug class our competitors ship. A
-second branch means a second backend, so cross-branch stock, pricing and reporting have to be
-relay-mediated, and every cross-branch read must be allowed to be stale or unavailable without breaking
-the till. That decision (§10.6) should be made before Phase 2 designs its transfer document, so that an
-inter-warehouse transfer and a future inter-branch transfer are the same shape.
+here. Multiple *branches* was an architecture problem; §10.6 settled it on 2026-09-06 in favour of a hosted
+instance with branches as rows, which collapses it back into this one. An inter-branch transfer *is* an
+inter-warehouse transfer: one database, one transaction, nothing reconciled across a link that may be down.
+
+Build the transfer two-step through a transit location anyway — for a physical reason rather than an
+architectural one. Goods in a van are somewhere, and a transfer that debits the source and credits the
+destination in a single step values them in neither place while they are on the road. SAP, Oracle and Odoo
+all model a transit location inside a single instance for exactly that reason, and it is the shape the
+document lifecycle already knows how to hold: a dispatch is a submitted document, cancelling it reverses,
+and the receipt is a separate document that references it.
+
+Nothing in this phase is relay-mediated, and the on-prem single-shop deployment is untouched by any of it.
 
 ### Phase 3 — Money control (≈5 weeks)
 - Customer credit limit + configurable block/warn at POS; supplier equivalent.
@@ -278,7 +287,10 @@ invoices, customer portal, a `regional/` isolation layer before any second count
    until an accountant asks for it.
 2. **A metadata/doctype engine.** Frappe's whole product is that engine; rebuilding it would consume a
    year and give us a worse Django. Targeted custom fields only.
-3. **Multi-company / multi-currency** until a signed customer needs it.
+3. ~~**Multi-company / multi-currency**~~ **Split 2026-09-06.** Multi-currency shipped (Track A, from
+   2026-08-31): the `apps.fx` spine, relay-fed parallel-market rates, and a `pricing_currency` per
+   product. **Multi-company stays refused** until a signed customer needs it — and when it arrives it is
+   the branches-as-rows shape of §10.6, not a second instance.
 4. **Manufacturing planning (MRP, work orders, routings, workstations).** Our recipes plus operations
    jobs already cover kitchens and workshops.
 5. **Projects, fixed assets, quality inspection, subcontracting.** No demand.
@@ -329,11 +341,39 @@ invoices, customer portal, a `regional/` isolation layer before any second count
 
    Revisit the ledger when a named customer's accountant asks for a trial balance, or when
    multi-warehouse/multi-branch lands and money starts moving between locations.
-4. **Credit limits: block or warn by default?** Blocking is safer for the owner, riskier at the counter.
+4. ~~**Credit limits: block or warn by default?**~~ **Resolved 2026-09-05: neither, by default.** The
+   question dissolved once the ceiling became per-customer. `ShopSettings.enforce_customer_credit_limits`
+   is **off** out of the box, so nothing is capped until a shop asks for it; with it on, an over-limit
+   آجل sale is **blocked** — `credit_limit_exceeded`, carrying the limit, outstanding and projected
+   figures so the counter can see why. The safety-versus-friction tension moved into
+   `Customer.credit_limit_policy`: `SHOP_DEFAULT`, `UNLIMITED` for the wholesale buyer who must not be
+   capped by a default written for walk-ins, or `CUSTOM`. A shop can therefore tighten its appetite for
+   risk without editing every contact.
 5. **Self-service reports: build a query builder, or invest that budget in making the AI assistant the
    reporting surface?** The second is more differentiated and cheaper, but harder to make deterministic.
-6. **Branch topology (new, from §10.1):** when multi-branch arrives, is a branch its own LAN-local backend
-   that the relay federates, or do satellite branches run thin against a single backend? The first keeps
-   our generator-proof guarantee and matches the relay we already operate; the second is simpler but makes
-   a branch stop selling when its link drops. This shapes Phase 2's transfer document, so it wants an
-   answer before Phase 2 starts — not before Phase 1.
+6. ~~**Branch topology (new, from §10.1):**~~ **Resolved 2026-09-06: cloud.** When multi-branch arrives it
+   is one hosted instance with branches as rows — not federated LAN-local backends paired through the relay.
+
+   The federated design was worked through in full before it was declined, so that declining it was a
+   choice rather than an omission: business-scoped relay tickets extending the per-installation ones we
+   already issue, an owner keypair each branch verifies offline against a monotonic revocation epoch,
+   inter-branch transfers as two documents reconciled by reference rather than by transaction, and
+   consolidated dashboards built from cached per-branch summaries each carrying its own "as of". It is
+   sound. It is also months of work for zero current customers, and it puts a distributed-systems problem
+   at the centre of a product whose whole advantage is that it does not have one.
+
+   What decided it: every customer today is a single shop on-prem, so the offline promise holds for the
+   product actually being sold and nothing about their deployment changes. A chain that opts into the
+   cloud tier is buying a different product and can weigh its own uplink — availability there is the
+   chain's problem, not ours to engineer around. Multi-branch is a small minority and not near-term
+   (§10.1), so federation would have been building for a hypothetical.
+
+   The market was checked in both directions rather than assumed. Cloud is ~70% of ERP deployments and
+   ~79% of new ones, with on-premise growing ~2% a year against 13–20% — but retail runs the other way at
+   store level, where 65% of retail CIOs made edge computing a 2025 priority and every major POS vendor
+   ships an offline mode (Toast designates a local hub device on the store LAN; ours is a whole backend,
+   which is strictly stronger). So: keep the store-level edge architecture, which is the genuinely
+   contrarian and genuinely load-bearing part, and decline the federation layered on top of it.
+
+   Consequences are recorded against **1b** and **Phase 2**. Do not re-open without a named chain customer
+   and economics that have changed.
