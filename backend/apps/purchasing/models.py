@@ -9,6 +9,9 @@ from django.utils import timezone
 
 from apps.catalog.models import ProductVariant
 from apps.core.models import TimeStampedModel
+from apps.documents.guards import DocumentQuerySetMixin, is_live
+from apps.documents.models import DocumentMixin
+from apps.documents.statuses import DocumentStatus
 
 
 class Supplier(TimeStampedModel):
@@ -40,7 +43,12 @@ class Supplier(TimeStampedModel):
         # out into two queries per order.
         po_rows = (
             self.purchase_orders.exclude(status=PurchaseOrder.Status.CANCELLED)
-            .annotate(_paid=Sum("supplier_payments__amount"))
+            .annotate(
+                _paid=Sum(
+                    "supplier_payments__amount",
+                    filter=~Q(supplier_payments__doc_status=DocumentStatus.CANCELLED),
+                )
+            )
             .values_list("pk", "total", "cancelled_total", "_paid")
         )
         outstanding = sum(
@@ -56,7 +64,8 @@ class Supplier(TimeStampedModel):
             Decimal("0.00"),
         )
         unallocated = (
-            self.payments.filter(purchase_order__isnull=True)
+            self.payments.live()
+            .filter(purchase_order__isnull=True)
             .exclude(method=SupplierPayment.Method.SUPPLIER_CREDIT)
             .aggregate(total=Sum("amount"))["total"]
             or Decimal("0.00")
@@ -90,15 +99,31 @@ def _quantity_field(**kwargs):
     )
 
 
-class PurchaseOrder(TimeStampedModel):
+class PurchaseOrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
+    pass
+
+
+class PurchaseOrder(DocumentMixin, TimeStampedModel):
     MONEY_PLACES = Decimal("0.01")
 
     class Status(models.TextChoices):
+        """Where the *delivery* has got to — not whether the document is live.
+
+        Lifecycle moved to ``doc_status`` (draft / submitted / cancelled) when
+        the order became a document. This field stayed, demoted to what it was
+        always really describing: fulfilment progress. It is derived now,
+        recomputed by ``apps.purchasing.documents.recompute_progress`` and
+        written nowhere else, so it cannot drift the way ERPNext's hand-set
+        statuses do. Every existing query that filters on it keeps working.
+        """
+
         DRAFT = "draft", "Draft"
         SUBMITTED = "submitted", "Submitted"
         PARTIALLY_RECEIVED = "partially_received", "Partially received"
         RECEIVED = "received", "Received"
         CANCELLED = "cancelled", "Cancelled"
+
+    objects = PurchaseOrderQuerySet.as_manager()
 
     class LandedCostAllocationMethod(models.TextChoices):
         LINE_VALUE = "line_value", "By line value"
@@ -191,7 +216,8 @@ class PurchaseOrder(TimeStampedModel):
         validators=[MinValueValidator(Decimal("0.00"))],
     )
     due_date = models.DateField(blank=True, null=True)
-    submitted_at = models.DateTimeField(blank=True, null=True)
+    # ``submitted_at`` now comes from DocumentMixin, with the submitting user
+    # beside it — the same column, finally with the answer to "who".
     received_at = models.DateTimeField(blank=True, null=True)
     attachments = GenericRelation(
         "attachments.Attachment",
@@ -466,19 +492,51 @@ class PurchaseOrder(TimeStampedModel):
             return {line.pk: Decimal("1.00") for line in lines}
         return {line.pk: line.net_line_total for line in lines}
 
+    def _follow_progress_on_insert(self):
+        """Bridge for the migration window: an order created with a progress
+        status and no lifecycle gets the lifecycle that status implies.
+
+        Plenty of code — the POS cash purchase, the importer, the simulation,
+        a hundred tests — creates a purchase order already submitted or already
+        received. Until every one of those writers says so in the lifecycle's
+        own words, the two fields are kept in step here rather than left to
+        disagree. Only on insert, and only when the caller said nothing about
+        the lifecycle: an explicit ``doc_status`` always wins.
+        """
+        from apps.documents.statuses import DocumentStatus
+
+        if not self._state.adding or self.doc_status != DocumentStatus.DRAFT:
+            return
+        if self.status == PurchaseOrder.Status.DRAFT:
+            return
+        self.doc_status = (
+            DocumentStatus.CANCELLED
+            if self.status == PurchaseOrder.Status.CANCELLED
+            else DocumentStatus.SUBMITTED
+        )
+
     def save(self, *args, **kwargs):
         from apps.discounts.models import normalize_coupon_code
 
+        self._follow_progress_on_insert()
         self.discount_codes = [
             normalize_coupon_code(code)
             for code in (self.discount_codes or [])
             if normalize_coupon_code(code)
         ]
         if not self.order_number:
+            # The number is derived from the row's own id, so it can only be
+            # stamped once the insert has happened — two saves, one creation.
+            # An order created already submitted (the POS cash purchase, the
+            # importer) would otherwise have its second save refused as an edit
+            # to a submitted document, which it is not.
+            from apps.documents.guards import system_write
+
             with transaction.atomic():
                 super().save(*args, **kwargs)
                 self.order_number = f"P{self.created_at:%Y%m%d}{self.id:06d}"
-                return super().save(update_fields=["order_number"])
+                with system_write():
+                    return super().save(update_fields=["order_number"])
         return super().save(*args, **kwargs)
 
     def __str__(self) -> str:
@@ -488,11 +546,14 @@ class PurchaseOrder(TimeStampedModel):
     def paid_total(self):
         # Sum in Python so a prefetched ``supplier_payments`` is reused instead
         # of a per-order aggregate when serialising lists of purchase orders.
+        # A cancelled payment is money that came back, so it stops counting —
+        # the same effect deleting the row used to have, minus the amnesia.
         total = sum(
             (
                 payment.amount
                 for payment in self.supplier_payments.all()
                 if payment.method != SupplierPayment.Method.SUPPLIER_CREDIT
+                and is_live(payment)
             ),
             Decimal("0.00"),
         )
@@ -505,6 +566,7 @@ class PurchaseOrder(TimeStampedModel):
                 payment.amount
                 for payment in self.supplier_payments.all()
                 if payment.method == SupplierPayment.Method.SUPPLIER_CREDIT
+                and is_live(payment)
             ),
             Decimal("0.00"),
         )
@@ -840,7 +902,24 @@ class PurchaseOrderAuditEvent(TimeStampedModel):
         return f"{self.action} {self.order_number}"
 
 
-class PurchaseReceipt(TimeStampedModel):
+class PurchaseReceiptQuerySet(DocumentQuerySetMixin, models.QuerySet):
+    pass
+
+
+class PurchaseReceipt(DocumentMixin, TimeStampedModel):
+    """A delivery that arrived: what was accepted, damaged or refused.
+
+    A document from the moment it exists — goods either turned up or they did
+    not. It is retracted *with* its purchase order rather than on its own: the
+    line-level totals that say how much of an order has arrived still count a
+    cancelled receipt's rows, so an independently cancelled receipt would leave
+    its order reading "received" with the goods off the shelf. Teaching those
+    totals about cancellation is what a receipt-level undo needs, and it is not
+    what this phase set out to do.
+    """
+
+    objects = PurchaseReceiptQuerySet.as_manager()
+
     purchase_order = models.ForeignKey(
         PurchaseOrder,
         on_delete=models.PROTECT,
@@ -949,7 +1028,11 @@ class PurchaseOrderAdjustment(TimeStampedModel):
         return f"{self.adjustment_type} {self.amount} for {self.purchase_order_id}"
 
 
-class SupplierPayment(TimeStampedModel):
+class SupplierPaymentQuerySet(DocumentQuerySetMixin, models.QuerySet):
+    pass
+
+
+class SupplierPayment(DocumentMixin, TimeStampedModel):
     """Money paid to a supplier, optionally against a specific purchase order.
 
     When paid in cash from an open register (the POS cash-purchase flow), the
@@ -958,6 +1041,8 @@ class SupplierPayment(TimeStampedModel):
     ``expenses.Expense``. The unified expense ledger excludes such pay-outs from
     the register-pay-out source so a drawer-paid purchase is never counted twice.
     """
+
+    objects = SupplierPaymentQuerySet.as_manager()
 
     class Method(models.TextChoices):
         CASH = "cash", "Cash"
@@ -1153,7 +1238,12 @@ def prime_supplier_balances(suppliers):
     po_rows = (
         PurchaseOrder.objects.filter(supplier_id__in=ids)
         .exclude(status=PurchaseOrder.Status.CANCELLED)
-        .annotate(_paid=Sum("supplier_payments__amount"))
+        .annotate(
+            _paid=Sum(
+                "supplier_payments__amount",
+                filter=~Q(supplier_payments__doc_status=DocumentStatus.CANCELLED),
+            )
+        )
         .values_list("supplier_id", "pk", "total", "cancelled_total", "_paid")
     )
     for supplier_id, _po_id, po_total, cancelled, paid in po_rows:
@@ -1164,7 +1254,8 @@ def prime_supplier_balances(suppliers):
     unallocated = {
         row["supplier_id"]: row["total"] or zero
         for row in (
-            SupplierPayment.objects.filter(
+            SupplierPayment.objects.live()
+            .filter(
                 supplier_id__in=ids,
                 purchase_order__isnull=True,
             )

@@ -127,7 +127,7 @@ def _cash_components(*, start, end):
         )
     )
     expenses = _sum(
-        Expense.objects.filter(
+        Expense.objects.live().filter(
             payment_method=Expense.PaymentMethod.CASH,
             spent_at__gte=start,
             spent_at__lte=end,
@@ -160,7 +160,7 @@ def _bank_components(*, start, end):
     # Refund rows carry a negative commission, so this nets too.
     commission = _sum(card_and_transfer, "commission_amount")
     expenses = _sum(
-        Expense.objects.filter(
+        Expense.objects.live().filter(
             payment_method__in=[
                 Expense.PaymentMethod.CARD,
                 Expense.PaymentMethod.TRANSFER,
@@ -182,11 +182,13 @@ def _bank_components(*, start, end):
 def _supplier_outflow(methods, start_dt, end_dt):
     """Money paid to suppliers by the given methods."""
     return _sum(
-        SupplierPayment.objects.filter(
+        SupplierPayment.objects.live()
+        .filter(
             method__in=methods,
             paid_at__gte=start_dt,
             paid_at__lt=end_dt,
-        ).exclude(method__in=NON_CASH_SUPPLIER_METHODS)
+        )
+        .exclude(method__in=NON_CASH_SUPPLIER_METHODS)
     )
 
 

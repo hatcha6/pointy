@@ -77,6 +77,16 @@ class BusinessSimulationTests(TestCase):
         # factor 1 the pack↔base scaling in the reversal is the identity.
         self.assertGreaterEqual(sim.costed_refund_assertions, 1)
         self.assertGreaterEqual(sim.multi_unit_costed_refund_assertions, 1)
+        # And for the document lifecycle's round trip: retracting a document
+        # has to leave the shop exactly where it was before the document
+        # existed. The three are counted separately because they land on
+        # different figures — drawer cash, a payable that several separate
+        # queries compute, and stock quantity *and* value — and a sum that
+        # forgot to skip a retracted row reads identically to one that never
+        # learned to until a month is closed against it.
+        self.assertGreaterEqual(sim.expense_retraction_assertions, 1)
+        self.assertGreaterEqual(sim.supplier_payment_retraction_assertions, 1)
+        self.assertGreaterEqual(sim.stock_count_retraction_assertions, 1)
         # And for the cap that keeps a line's discount inside the line's own
         # rounding regime. The engine's cap and the order line's subtotal agree
         # everywhere except on a line the discounts consumed ENTIRELY whose

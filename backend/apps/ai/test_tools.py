@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
 
+from apps.sales.testing import issue
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 
 from .tool_registry import DENY_BASENAMES, get_registry
@@ -410,7 +411,9 @@ class AiAdviceToolTests(TestCase):
         from apps.payments.models import Payment
         from apps.sales.models import Order, OrderLine
 
-        order = Order.objects.create(status=status, sale_type=sale_type, customer=customer)
+        # Built the way a real one is: a draft, then its lines, then its
+        # figures — and issued last, because an issued sale is frozen.
+        order = Order.objects.create(sale_type=sale_type, customer=customer)
         for variant, qty, price, cost in lines:
             OrderLine.objects.create(
                 order=order,
@@ -421,6 +424,7 @@ class AiAdviceToolTests(TestCase):
             )
         order.recalculate()
         order.save()
+        issue(order, status=status)
         cash = order.total if paid is None else Decimal(paid)
         if cash > 0:
             Payment.objects.create(order=order, method=Payment.Method.CASH, amount=cash)
@@ -775,13 +779,14 @@ class AiReorderPlanTests(TestCase):
         from apps.payments.models import Payment
         from apps.sales.models import Order, OrderLine
 
-        order = Order.objects.create(status="paid", sale_type="standard")
+        order = Order.objects.create(sale_type="standard")
         OrderLine.objects.create(
             order=order, variant=variant, quantity=Decimal(qty),
             unit_price=variant.unit_price, unit_cost=Decimal("1.00"),
         )
         order.recalculate()
         order.save()
+        issue(order)
         if order.total > 0:
             Payment.objects.create(order=order, method=Payment.Method.CASH, amount=order.total)
         when = timezone.localdate() - timedelta(days=days_ago)

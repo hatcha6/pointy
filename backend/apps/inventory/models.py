@@ -4,6 +4,8 @@ from django.db.models import F, Q
 
 from apps.catalog.models import ProductVariant
 from apps.core.models import TimeStampedModel
+from apps.documents.guards import DocumentQuerySetMixin
+from apps.documents.models import DocumentMixin
 
 
 class StockItem(TimeStampedModel):
@@ -268,7 +270,11 @@ class StockLedgerEntry(TimeStampedModel):
         )
 
 
-class StockCount(TimeStampedModel):
+class StockCountQuerySet(DocumentQuerySetMixin, models.QuerySet):
+    pass
+
+
+class StockCount(DocumentMixin, TimeStampedModel):
     """A physical inventory count session.
 
     Mirrors the ``RegisterSession`` open->closed lifecycle: a session is opened
@@ -278,7 +284,13 @@ class StockCount(TimeStampedModel):
     "resume" path is unambiguous.
     """
 
+    objects = StockCountQuerySet.as_manager()
+
     class Status(models.TextChoices):
+        """Where the count has got to. Derived from ``doc_status`` by
+        ``apps.inventory.documents.recompute_progress`` and written nowhere
+        else: counting is the draft, applying is the submission."""
+
         IN_PROGRESS = "in_progress", "In progress"
         APPLIED = "applied", "Applied"
         CANCELLED = "cancelled", "Cancelled"
@@ -323,8 +335,11 @@ class StockCount(TimeStampedModel):
         blank=True,
         null=True,
     )
+    # The count's dialect of ``submitted_at``/``submitted_by``, kept because the
+    # API exposes them; mirrored from the lifecycle rather than written beside
+    # it. ``cancelled_at`` now comes from DocumentMixin — the same column, with
+    # the person who cancelled beside it.
     applied_at = models.DateTimeField(blank=True, null=True)
-    cancelled_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]

@@ -113,6 +113,10 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "rest_framework",
     "apps.core",
+    # The document lifecycle primitive: sits above core (it reads the period
+    # lock and the money-date registry) and below every domain that registers a
+    # document type with it.
+    "apps.documents",
     "apps.channels",
     "apps.operations",
     "apps.analytics",
@@ -143,6 +147,14 @@ INSTALLED_APPS = [
     "apps.clients",
     "apps.companion",
 ]
+
+# Documents that exist only to prove the lifecycle primitive, including the
+# routes no shipped document uses yet. A real app with real tables, so the
+# test database migrates and flushes them like any other; never installed in
+# production. See apps/documents/testkit/models.py for why it is an app rather
+# than a few tables conjured by a schema editor.
+if TESTING or os.environ.get("POINTY_ENABLE_TESTKIT"):
+    INSTALLED_APPS.append("apps.documents.testkit")
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",

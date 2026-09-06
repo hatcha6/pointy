@@ -1145,6 +1145,22 @@ class Simulation:
         self.discount_engine: OracleDiscountEngine | None = None
         self.coupon_codes = ["SAVE3", "HALF"]
         self.op_counts: dict = defaultdict(int)
+        # Documents this run has posted and not yet retracted, so the
+        # retraction operations have something real to undo.
+        self.live_expenses: list = []
+        self.live_supplier_payments: list = []
+        self.applied_stock_counts: list = []
+        # Vacuity guards for the round-trip assertions. Retracting a document
+        # has to leave the shop exactly where it was before the document
+        # existed — the drawer, the payable, the shelf — and a run that never
+        # retracted anything has proved none of that. Each of the three is
+        # counted because they land on different figures: an expense's
+        # reversal is drawer cash, a supplier payment's is a payable that
+        # several separate queries compute, and a stock count's is quantity
+        # *and* stock value.
+        self.expense_retraction_assertions = 0
+        self.supplier_payment_retraction_assertions = 0
+        self.stock_count_retraction_assertions = 0
         # How much the cost-basis assertions actually got to say. A sale of a
         # never-purchased variant costs 0.00, which every wrong implementation
         # also produces, so a run that only ever saw those has proved nothing
@@ -3481,12 +3497,15 @@ class Simulation:
         balance = rec.po_balance_due
         amount = (Decimal(self.rng.randint(1, int(balance / CENT))) * CENT).quantize(CENT)
         method = self.rng.choice(self.SUPPLIER_METHODS)
-        create_supplier_payment(
+        payment = create_supplier_payment(
             created_by=self.user,
             supplier=Supplier.objects.get(pk=rec.supplier_id),
             amount=amount,
             method=method,
             purchase_order=PurchaseOrder.objects.get(pk=rec.po_id),
+        )
+        self.live_supplier_payments.append(
+            (payment.pk, rec.po_id, rec.supplier_id, even2(amount))
         )
         rec.paid = even2(rec.paid + amount)
         self._assert_po(rec.po_id)
@@ -3652,7 +3671,7 @@ class Simulation:
 
     def op_expense_payout(self) -> bool:
         amount = (Decimal(self.rng.randint(100, 5000)) * CENT).quantize(CENT)
-        create_expense(
+        expense = create_expense(
             user=self.user,
             category=self.expense_category,
             amount=amount,
@@ -3660,6 +3679,7 @@ class Simulation:
             payment_method=Expense.PaymentMethod.CASH,
             pay_from_register=True,
         )
+        self.live_expenses.append((expense.pk, even2(amount)))
         self.oracle.cash_moves_log.append((self.current_session_id, "pay_out", even2(amount)))
         self._assert_session(self.current_session_id)
         return True
@@ -3719,6 +3739,7 @@ class Simulation:
         )
         if resp.status_code not in (200, 201):
             self.fail(f"stock-count apply failed: {resp.status_code} {resp.data}")
+        applied = []
         for vid, counted in planned:
             delta = q3(counted - self.oracle.on_hand[vid])
             self.oracle.on_hand[vid] = counted
@@ -3730,7 +3751,106 @@ class Simulation:
                 )
             elif delta < ZERO:
                 self.oracle.value_issue(vid, -delta)
+            if delta != ZERO:
+                applied.append((vid, delta))
             self._assert_variant(vid)
+        if applied:
+            self.applied_stock_counts.append((count_id, applied))
+        return True
+
+    # --- retractions ------------------------------------------------------
+    #
+    # A document that is undone has to leave the shop exactly where it was
+    # before it existed. That is the one property the lifecycle promises and
+    # the one an implementation can get wrong quietly: a sum that forgot to
+    # skip a retracted row reads the same as one that never learned to, and
+    # both look fine until a month is closed against them.
+
+    def op_cancel_expense(self) -> bool:
+        """Undo a drawer-paid expense. The cash comes back into the till that
+        is open *now* — not the one it left, which has already been counted."""
+        if not self.live_expenses:
+            return False
+        expense_id, amount = self.live_expenses.pop(
+            self.rng.randrange(len(self.live_expenses))
+        )
+        response = self.client.post(
+            f"/api/expenses/{expense_id}/cancel/",
+            {"reason": "sim retraction"},
+            format="json",
+        )
+        if response.status_code != 200:
+            self.fail(
+                f"expense cancel failed: {response.status_code} "
+                f"{response_body(response)}"
+            )
+        self.oracle.cash_moves_log.append(
+            (self.current_session_id, "pay_in", amount)
+        )
+        self.expense_retraction_assertions += 1
+        self._assert_session(self.current_session_id)
+        return True
+
+    def op_cancel_supplier_payment(self) -> bool:
+        """Undo a payment to a supplier: the order owes it again, and so does
+        the supplier's balance — which three separate queries compute."""
+        if not self.live_supplier_payments:
+            return False
+        payment_id, po_id, supplier_id, amount = self.live_supplier_payments.pop(
+            self.rng.randrange(len(self.live_supplier_payments))
+        )
+        response = self.client.post(
+            f"/api/supplier-payments/{payment_id}/cancel/",
+            {"reason": "sim retraction"},
+            format="json",
+        )
+        if response.status_code != 200:
+            self.fail(
+                f"supplier payment cancel failed: {response.status_code} "
+                f"{response_body(response)}"
+            )
+        rec = self.oracle.pos[po_id]
+        rec.paid = even2(rec.paid - amount)
+        self.supplier_payment_retraction_assertions += 1
+        self._assert_po(po_id)
+        self._assert_supplier_ap(supplier_id)
+        return True
+
+    def op_undo_stock_count(self) -> bool:
+        """Undo an applied count: every movement it made, put back.
+
+        Skipped rather than attempted when the stock a count added has since
+        left the shelf — the backend refuses that, and a refusal is not what
+        this operation is here to prove.
+        """
+        if not self.applied_stock_counts:
+            return False
+        index = self.rng.randrange(len(self.applied_stock_counts))
+        count_id, deltas = self.applied_stock_counts[index]
+        for vid, delta in deltas:
+            if delta > ZERO and self.oracle.on_hand[vid] - delta < self.oracle.committed[vid]:
+                return False
+        self.applied_stock_counts.pop(index)
+        response = self.client.post(
+            f"/api/stock-counts/{count_id}/cancel/",
+            {"reason": "sim retraction"},
+            format="json",
+        )
+        if response.status_code != 200:
+            self.fail(
+                f"stock count cancel failed: {response.status_code} "
+                f"{response_body(response)}"
+            )
+        for vid, delta in deltas:
+            self.oracle.on_hand[vid] = q3(self.oracle.on_hand[vid] - delta)
+            if delta > ZERO:
+                self.oracle.value_issue(vid, delta)
+            else:
+                self.oracle.value_receipt(
+                    vid, -delta, self.oracle._valuation_fallback(vid)
+                )
+            self._assert_variant(vid)
+        self.stock_count_retraction_assertions += 1
         return True
 
     def op_cycle_register(self) -> bool:
@@ -3861,6 +3981,9 @@ class Simulation:
             (self.op_expense_payout, 3),
             (self.op_cash_movement, 4),
             (self.op_stock_count, 3),
+            (self.op_cancel_expense, 3),
+            (self.op_cancel_supplier_payment, 3),
+            (self.op_undo_stock_count, 2),
             (self.op_cycle_register, 2),
             (self.op_attempt_oversell, 2),
             # The repair counter. Weighted so a run builds real jobs — parts

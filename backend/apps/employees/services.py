@@ -4,6 +4,9 @@ from decimal import Decimal
 from django.db import transaction
 
 from apps.core.period_lock import assert_period_open
+from apps.documents import services as document_services
+from apps.documents.statuses import DocumentStatus
+from apps.employees import documents as payroll_documents
 from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import serializers
@@ -481,12 +484,10 @@ def approve_payroll_run(payroll_run, *, request=None):
             {"lines": "Payroll run must include at least one employee."}
         )
     payroll_run.recalculate(save_lines=True)
-    payroll_run.status = PayrollRun.Status.APPROVED
     payroll_run.approved_at = timezone.now()
     payroll_run.approved_by = employee_created_by(request)
     payroll_run.save(
         update_fields=[
-            "status",
             "approved_at",
             "approved_by",
             "gross_total",
@@ -496,6 +497,10 @@ def approve_payroll_run(payroll_run, *, request=None):
             "updated_at",
         ]
     )
+    # Approval is a gate on paying, not a state of the document: the run is
+    # still a draft, and its progress field says "approved" because the stamp
+    # above is there.
+    payroll_documents.recompute_progress(payroll_run)
     record_employee_event(
         name="employees.payroll_run.approved",
         user=employee_created_by(request),
@@ -524,19 +529,20 @@ def mark_payroll_run_paid(payroll_run, *, payment_date=None, request=None):
         entity_id=payroll_run.pk,
         action="payroll.mark_paid",
     )
-    payroll_run.status = PayrollRun.Status.PAID
     payroll_run.payment_date = payment_date
     payroll_run.paid_at = timezone.now()
     payroll_run.paid_by = employee_created_by(request)
     payroll_run.save(
         update_fields=[
-            "status",
             "payment_date",
             "paid_at",
             "paid_by",
             "updated_at",
         ]
     )
+    # Paying is what submits a run: it is the moment the money leaves and the
+    # moment its figures stop being a proposal. From here it is frozen.
+    payroll_run = document_services.submit(payroll_run, request=request)
     _apply_payroll_loan_payments(payroll_run)
     record_employee_event(
         name="employees.payroll_run.paid",
@@ -599,18 +605,20 @@ def _apply_payroll_loan_payments(payroll_run):
 
 
 @transaction.atomic
-def void_payroll_run(payroll_run, *, request=None):
+def void_payroll_run(payroll_run, *, request=None, reason=""):
+    """Retract a run.
+
+    A paid one can be retracted now, where before it could not be: a run paid
+    by mistake was permanent, and the only way out was a second run correcting
+    it. What paying it collected — every loan instalment — comes back with it,
+    and the money position stops counting it because it is no longer a paid run.
+    """
     payroll_run = PayrollRun.objects.select_for_update().get(pk=payroll_run.pk)
-    if payroll_run.status == PayrollRun.Status.VOID:
+    if payroll_run.doc_status == DocumentStatus.CANCELLED:
         return payroll_run
-    if payroll_run.status == PayrollRun.Status.PAID:
-        raise serializers.ValidationError(
-            {"detail": "Paid payroll runs cannot be voided."}
-        )
-    payroll_run.status = PayrollRun.Status.VOID
-    payroll_run.voided_at = timezone.now()
-    payroll_run.voided_by = employee_created_by(request)
-    payroll_run.save(update_fields=["status", "voided_at", "voided_by", "updated_at"])
+    payroll_run = document_services.cancel(
+        payroll_run, reason=reason, request=request
+    )
     record_employee_event(
         name="employees.payroll_run.voided",
         user=employee_created_by(request),

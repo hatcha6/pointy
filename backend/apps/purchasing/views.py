@@ -53,6 +53,7 @@ from .serializers import (
 )
 from .services import (
     cancel_purchase_order,
+    cancel_supplier_payment,
     clear_purchase_order_applied_discounts,
     create_pos_cash_purchase,
     latest_purchase_line_for_variant,
@@ -160,6 +161,7 @@ class SupplierPaymentViewSet(
         "list": ("purchasing.view_supplierpayment",),
         "retrieve": ("purchasing.view_supplierpayment",),
         "create": ("purchasing.add_supplierpayment",),
+        "cancel": ("purchasing.delete_supplierpayment",),
     }
     queryset = SupplierPayment.objects.select_related(
         "supplier",
@@ -181,6 +183,23 @@ class SupplierPaymentViewSet(
         "notes",
     )
     ordering_fields = ("paid_at", "created_at", "amount")
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        """Undo a payment. Until now there was no way to: a mistyped payment
+        was permanent, and it locked its purchase order shut with it."""
+        return run_idempotent_request(request, lambda: self._cancel(request))
+
+    def _cancel(self, request):
+        payment = self.get_object()
+        cancel_supplier_payment(
+            payment,
+            reason=str(request.data.get("reason", "")).strip(),
+            request=request,
+        )
+        payment.refresh_from_db()
+        serializer = self.get_serializer(payment)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def create(self, request, *args, **kwargs):
         return run_idempotent_request(
@@ -677,7 +696,8 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         # A correlated subquery keeps that sum immune to row inflation from any
         # multi-valued joins (e.g. the product/variant line filters).
         paid = (
-            SupplierPayment.objects.filter(purchase_order=OuterRef("pk"))
+            SupplierPayment.objects.live()
+            .filter(purchase_order=OuterRef("pk"))
             .order_by()
             .values("purchase_order")
             .annotate(total=Sum("amount"))

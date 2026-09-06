@@ -17,6 +17,7 @@ from decimal import Decimal
 
 from django.utils import timezone
 
+from apps.documents.guards import system_write
 from apps.payments.models import Payment
 from apps.sales.models import Order, OrderLine
 
@@ -79,6 +80,26 @@ class SaleLoader(BaseLoader):
             order.payments.all().delete()
         else:
             order = Order()
+        # An import reconstructs sales that already happened, and a re-import
+        # replays the same source rows over them. That is a machine rewriting
+        # history, not a person editing an issued invoice — the same rule the
+        # period lock follows (apps.core.period_lock: guards govern people, not
+        # code). apps.documents.test_registered_types keeps the census of
+        # everywhere this is allowed.
+        with system_write():
+            return self._write(
+                order,
+                action=action,
+                record=record,
+                resolver=resolver,
+                customer_pk=customer_pk,
+                line_specs=line_specs,
+                issues=issues,
+            )
+
+    def _write(
+        self, order, *, action, record, resolver, customer_pk, line_specs, issues
+    ):
         order.customer_id = customer_pk
         order.status = Order.Status.PAID
         order.save()

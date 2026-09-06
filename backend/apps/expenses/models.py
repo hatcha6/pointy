@@ -6,6 +6,8 @@ from django.db import models
 from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
+from apps.documents.guards import DocumentQuerySetMixin
+from apps.documents.models import DocumentMixin
 
 
 class ExpenseCategory(TimeStampedModel):
@@ -27,7 +29,11 @@ class ExpenseCategory(TimeStampedModel):
         return self.name
 
 
-class Expense(TimeStampedModel):
+class ExpenseQuerySet(DocumentQuerySetMixin, models.QuerySet):
+    pass
+
+
+class Expense(DocumentMixin, TimeStampedModel):
     """A single shop expense that is not tied to an employee or a product —
     rent, utilities, maintenance, supplies, and the like.
 
@@ -36,6 +42,8 @@ class Expense(TimeStampedModel):
     reconciles. The unified expense ledger excludes such pay-outs from the
     register-pay-out source so a drawer-paid expense is never counted twice.
     """
+
+    objects = ExpenseQuerySet.as_manager()
 
     class PaymentMethod(models.TextChoices):
         CASH = "cash", "Cash"

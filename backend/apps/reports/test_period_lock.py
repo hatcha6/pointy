@@ -157,7 +157,7 @@ class BackdatedWriteTests(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_deleting_out_of_a_closed_month_is_refused(self):
+    def test_retracting_out_of_a_closed_month_is_refused(self):
         settings = ShopSettings.load()
         settings.books_locked_through = None
         settings.save(update_fields=["books_locked_through", "updated_at"])
@@ -171,9 +171,17 @@ class BackdatedWriteTests(TestCase):
         settings.books_locked_through = self.today - timedelta(days=10)
         settings.save(update_fields=["books_locked_through", "updated_at"])
 
-        response = self.client.delete(reverse("expense-detail", args=[expense.pk]))
+        # Deleting used to be the way to make an expense stop counting, and it
+        # was refused here. Cancelling is that way now, and it is refused for
+        # the same reason: the month it belongs to has been reported.
+        response = self.client.post(
+            reverse("expense-cancel", args=[expense.pk]),
+            {"reason": "متأخر"},
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertTrue(Expense.objects.filter(pk=expense.pk).exists())
+        expense.refresh_from_db()
+        self.assertEqual(expense.doc_status, "submitted")
 
 
 class PeriodLockApiTests(TestCase):

@@ -9,6 +9,8 @@ from django.db.models import Prefetch, Q, Sum
 
 from apps.catalog.models import ProductVariant, VariantOptionValue
 from apps.core.models import TimeStampedModel
+from apps.documents.guards import DocumentQuerySetMixin
+from apps.documents.models import DocumentMixin
 from apps.customers.models import Customer
 
 
@@ -199,7 +201,7 @@ class RegisterCashMovement(TimeStampedModel):
         return f"{self.get_movement_type_display()} {self.amount} for {self.register_session}"
 
 
-class OrderQuerySet(models.QuerySet):
+class OrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
     """Sale-type/status aware filters for sales orders.
 
     Quotations never count as sales; credit (debt) invoices count from the
@@ -281,8 +283,22 @@ class OrderQuerySet(models.QuerySet):
         )
 
 
-class Order(TimeStampedModel):
+class Order(DocumentMixin, TimeStampedModel):
     class Status(models.TextChoices):
+        """Where the money and the goods have got to — not whether the document
+        is live.
+
+        This field carried both meanings until the lifecycle arrived, and the
+        overlap was load-bearing: ``open`` means "still being rung up" for a
+        standard sale and "issued, delivered, unpaid" for a credit invoice,
+        which is why ``recognized_sale_q`` has to exist and why forty-one call
+        sites have to know about it. ``doc_status`` carries the first meaning
+        now; this is derived from payments and returns by
+        ``apps.sales.documents.progress_status`` and written from nowhere else,
+        so every existing query keeps working while the ambiguity stops being
+        the only thing holding the reports together.
+        """
+
         OPEN = "open", "Open"
         PAID = "paid", "Paid"
         VOID = "void", "Void"
@@ -447,17 +463,45 @@ class Order(TimeStampedModel):
             return "partial"
         return "unpaid"
 
+    def _follow_progress_on_insert(self):
+        """Bridge for the migration window: an order created already paid or
+        already void gets the lifecycle that says.
+
+        Only the two unambiguous cases. ``open`` deliberately stays a draft,
+        because it is the value that means two things — the transitions decide
+        it, and an explicit ``doc_status`` always wins.
+        """
+        from apps.documents.statuses import DocumentStatus
+
+        if not self._state.adding or self.doc_status != DocumentStatus.DRAFT:
+            return
+        if self.status == Order.Status.PAID:
+            self.doc_status = DocumentStatus.SUBMITTED
+        elif self.status == Order.Status.VOID:
+            self.doc_status = DocumentStatus.CANCELLED
+
     def save(self, *args, **kwargs):
+        from apps.documents.guards import system_write
+
+        self._follow_progress_on_insert()
         update_fields = kwargs.get("update_fields")
         if not self.public_token:
             self.public_token = self._generate_public_token()
             if update_fields is not None and "public_token" not in update_fields:
                 kwargs["update_fields"] = [*update_fields, "public_token"]
         if not self.receipt_number:
+            # The receipt number is derived from the row's own id, so it can
+            # only be stamped after the insert — two saves, one creation. An
+            # order created already paid (an import, a test fixture) would
+            # otherwise have its second save refused as an edit to a submitted
+            # document, which it is not.
             with transaction.atomic():
                 super().save(*args, **kwargs)
                 self.receipt_number = f"R{self.created_at:%Y%m%d}{self.id:06d}"
-                return super().save(update_fields=["receipt_number", "public_token"])
+                with system_write():
+                    return super().save(
+                        update_fields=["receipt_number", "public_token"]
+                    )
         return super().save(*args, **kwargs)
 
     def __str__(self) -> str:

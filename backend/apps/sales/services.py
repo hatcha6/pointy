@@ -14,6 +14,8 @@ from apps.analytics.services import record_domain_event
 from apps.channels.services import require_active_sales_channel
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
+from apps.documents import services as document_services
+from apps.documents.statuses import DocumentStatus
 from apps.holidays.services import special_day_keys_for
 from apps.discounts.models import DiscountRule, normalize_coupon_code
 from apps.discounts.services import (
@@ -37,6 +39,7 @@ from apps.inventory.services import (
     save_stock_item_quantities_bulk,
     stock_snapshot,
 )
+from . import documents as sales_documents
 from .models import (
     Order,
     OrderAdjustment,
@@ -721,6 +724,14 @@ def checkout_order(
         if order.status == Order.Status.OPEN and order.balance_due <= Decimal("0.00"):
             mark_order_paid(order, request=request, stock_already_recorded=True)
     order.refresh_from_db()
+    # The document is issued here, last, once its lines, stock, reservations
+    # and payments are all in place — so it can never be reached half-built.
+    # A standard sale that a payment already settled submitted itself through
+    # ``mark_order_paid``; a quotation or a part-paid credit invoice arrives
+    # here still a draft. Everything above ran inside this transaction, so from
+    # outside the order has never existed as anything but issued.
+    if order.doc_status == DocumentStatus.DRAFT:
+        order = document_services.submit(order, request=request)
     record_domain_event(
         name="sales.checkout.completed",
         event_type=AnalyticsEvent.EventType.AUDIT,
@@ -1299,9 +1310,17 @@ def convert_quotation_to_sale(
             {"payments": "A standard sale must be paid in full."}
         )
 
+    # Supersession, not amendment: the sale is its own document with its own
+    # number. ``converted_to`` is the older name for the same forward pointer
+    # and is kept in step until the column goes.
     locked.converted_to = new_order
-    locked.status = Order.Status.VOID
-    locked.save(update_fields=["converted_to", "status", "updated_at"])
+    locked.save(update_fields=["converted_to", "updated_at"])
+    locked = document_services.supersede(
+        locked,
+        new_order,
+        reason="تم تحويل عرض السعر إلى فاتورة",
+        request=request,
+    )
     record_domain_event(
         name="sales.quotation.converted",
         event_type=AnalyticsEvent.EventType.AUDIT,
@@ -1410,8 +1429,13 @@ def mark_order_paid(order, *, request=None, stock_already_recorded=False):
             request=request,
         )
 
-    locked_order.status = Order.Status.PAID
-    locked_order.save(update_fields=["status", "updated_at"])
+    # Paying is a money event, not a lifecycle one — but for an order that has
+    # not been submitted yet (one created through the API rather than at a
+    # till), this is the moment its stock leaves and it becomes real.
+    if locked_order.doc_status == DocumentStatus.DRAFT:
+        locked_order = document_services.submit(locked_order, request=request)
+    else:
+        sales_documents.recompute_progress(locked_order)
     create_receipt_print_job(locked_order.pk, request=request)
     record_domain_event(
         name="sales.order.paid",
@@ -1556,11 +1580,14 @@ def create_order_adjustment(
     reason,
     request=None,
     register_session=None,
+    created_by=None,
 ):
     from apps.payments.models import Payment
     from apps.payments.serializers import payment_commission_values
 
-    created_by = adjustment_created_by(request)
+    # The lifecycle hands the actor down directly; every other caller still
+    # reads it off the request.
+    created_by = created_by or adjustment_created_by(request)
     amount = adjustment_amount(lines)
     allocations = refund_tender_allocations(order, amount)
     cash_amount = sum(
@@ -1687,16 +1714,29 @@ def void_order(
     if not lines:
         raise serializers.ValidationError({"detail": "No remaining items can be voided."})
 
-    adjustment = create_order_adjustment(
-        order=locked_order,
-        adjustment_type=OrderAdjustment.AdjustmentType.VOID,
-        lines=lines,
+    # The reversal itself is ``apps.sales.documents.reverse``; the primitive
+    # owns everything around it — the period lock this path never had, the
+    # trail, and the status that follows from the lifecycle rather than being
+    # assigned beside it.
+    locked_order = document_services.cancel(
+        locked_order,
         reason=reason,
         request=request,
-        register_session=register_session,
+        actor=adjustment_created_by(request),
+        context={
+            "register_session": adjustment_register_session(
+                locked_order, register_session
+            ),
+            "lines": lines,
+        },
     )
-    locked_order.status = Order.Status.VOID
-    locked_order.save(update_fields=["status", "updated_at"])
+    adjustment = (
+        locked_order.adjustments.filter(
+            adjustment_type=OrderAdjustment.AdjustmentType.VOID
+        )
+        .order_by("-created_at", "-id")
+        .first()
+    )
     expired = cashier_window_expired(locked_order)
     record_domain_event(
         name="sales.order.voided",
@@ -1751,9 +1791,10 @@ def return_order_items(
         register_session=register_session,
     )
 
-    if all(line.returnable_quantity == 0 for line in locked_lines):
-        locked_order.status = Order.Status.VOID
-        locked_order.save(update_fields=["status", "updated_at"])
+    # A sale whose every line has come back is spent. That has always been the
+    # rule; it is now derived rather than assigned, so it cannot be applied in
+    # one place and forgotten in another.
+    sales_documents.recompute_progress(locked_order)
     expired = cashier_window_expired(locked_order)
     record_domain_event(
         name="sales.order.returned",

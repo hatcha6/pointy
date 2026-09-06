@@ -10,6 +10,8 @@ from rest_framework.exceptions import PermissionDenied
 
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
+from apps.documents import services as document_services
+from apps.documents.statuses import DocumentStatus
 from apps.holidays.services import special_day_keys_for
 from apps.discounts.models import (
     AppliedDiscount,
@@ -30,6 +32,7 @@ from apps.inventory.services import (
     save_stock_item_quantities_bulk,
     stock_snapshot,
 )
+from . import documents as purchase_documents
 from .models import (
     PurchaseLine,
     PurchaseOrder,
@@ -375,35 +378,18 @@ def decrement_expected(stock_item, quantity):
     return expected_reduction
 
 
-def _has_related_rows(purchase_order, relation) -> bool:
-    """Whether ``relation`` holds any row, reusing a prefetched list when the
-    caller has one. The editability gate is asked once per row on the orders
-    list, where three ``exists()`` queries an order would be three too many."""
-    prefetched = getattr(purchase_order, "_prefetched_objects_cache", None)
-    if prefetched is not None and relation in prefetched:
-        return bool(prefetched[relation])
-    return getattr(purchase_order, relation).exists()
-
-
 def purchase_order_is_editable(purchase_order) -> bool:
     """Whether the order can still be corrected.
 
-    Receiving is not what closes an order to edits — money is. An owner who
-    typed the wrong cost or miscounted a delivery keeps the right to fix it,
-    and the receipt is unwound and re-recorded around the fix. The first
-    supplier payment or credit ends that: from then on the order is what the
-    money was settled against. A return, refund or exchange ends it too, since
-    its lines hang off the very receipt an edit would replace.
+    A draft always can. A cancelled order never can. A submitted one can until
+    money settles against it — the condition the document type declares as its
+    in-place correction window, so this and the primitive cannot disagree.
     """
-    if purchase_order.status == PurchaseOrder.Status.DRAFT:
+    if purchase_order.doc_status == DocumentStatus.DRAFT:
         return True
-    if purchase_order.status == PurchaseOrder.Status.CANCELLED:
+    if purchase_order.doc_status == DocumentStatus.CANCELLED:
         return False
-    return not (
-        _has_related_rows(purchase_order, "supplier_payments")
-        or _has_related_rows(purchase_order, "supplier_credits")
-        or _has_related_rows(purchase_order, "adjustments")
-    )
+    return purchase_documents.in_place_allowed(purchase_order)
 
 
 def _require_receiving_permission(request):
@@ -446,6 +432,10 @@ def _receipt_totals_by_line(purchase_order):
             PurchaseReceiptLine.objects.filter(
                 purchase_line__purchase_order=purchase_order
             )
+            # A retracted delivery did not arrive. This is what lets an order's
+            # own reversal see its expectation as outstanding again once its
+            # receipts have given the goods back.
+            .exclude(receipt__doc_status=DocumentStatus.CANCELLED)
             .values("purchase_line_id")
             .annotate(
                 accepted=models.Sum("accepted_quantity"),
@@ -463,7 +453,19 @@ def _receiving_snapshots(purchase_order, *, lines):
     as it arrived, a changed one is re-received to its new quantity.
     """
     totals = _receipt_totals_by_line(purchase_order)
-    fully_received = purchase_order.status == PurchaseOrder.Status.RECEIVED
+    # "Received, with nothing written down about it" is a real state — an
+    # import, or a legacy one-shot receive — and it is the only case the
+    # fallback below is for. An order whose deliveries were *retracted* also
+    # has no live receipt totals, and must not be mistaken for one: its goods
+    # have already come off the shelf, and taking them off twice is how a
+    # cancellation ends up refusing itself for stock it just removed.
+    has_receipt_rows = PurchaseReceiptLine.objects.filter(
+        purchase_line__purchase_order=purchase_order
+    ).exists()
+    fully_received = (
+        purchase_order.status == PurchaseOrder.Status.RECEIVED
+        and not has_receipt_rows
+    )
     snapshots = []
     for line in lines:
         row = totals.get(line.pk)
@@ -743,6 +745,60 @@ def save_purchase_order_with_lines(
     request=None,
     **order_fields,
 ):
+    """Create a draft, or correct an order that is already out in the world.
+
+    The second half of that is the deliberate divergence from ERPNext, where a
+    submitted document can only be fixed by cancelling it. Here it is a
+    first-class route (``Correction.IN_PLACE``): the primitive checks that money
+    has not settled, that the period is open and that the user may, and records
+    the before/after of every field the rewrite touched — which is what the old
+    bare "updated" audit line could never say.
+    """
+    if (
+        purchase_order is not None
+        and purchase_order.doc_status == DocumentStatus.SUBMITTED
+    ):
+        # Keep the structured error the API already speaks; the primitive would
+        # otherwise refuse with its own generic "blocked" code.
+        if not purchase_order_is_editable(purchase_order):
+            raise serializers.ValidationError(
+                {
+                    "code": "purchase_order_settled",
+                    "detail": (
+                        "A purchase order cannot be changed once a payment "
+                        "or credit is recorded against it."
+                    ),
+                }
+            )
+        return document_services.correct_in_place(
+            purchase_order,
+            mutate=lambda locked: _write_purchase_order_with_lines(
+                purchase_order=locked,
+                lines_data=lines_data,
+                landed_cost_entries_data=landed_cost_entries_data,
+                request=request,
+                **order_fields,
+            ),
+            reason=order_fields.get("notes", "") or "تعديل أمر شراء",
+            request=request,
+        )
+    return _write_purchase_order_with_lines(
+        purchase_order=purchase_order,
+        lines_data=lines_data,
+        landed_cost_entries_data=landed_cost_entries_data,
+        request=request,
+        **order_fields,
+    )
+
+
+def _write_purchase_order_with_lines(
+    *,
+    purchase_order=None,
+    lines_data=None,
+    landed_cost_entries_data=None,
+    request=None,
+    **order_fields,
+):
     is_create = purchase_order is None
     rebuild_expected = False
     snapshots = None
@@ -999,9 +1055,10 @@ def submit_purchase_order(purchase_order, *, request=None):
             before=before,
         )
 
-    locked_order.status = PurchaseOrder.Status.SUBMITTED
-    locked_order.submitted_at = timezone.now()
-    locked_order.save(update_fields=["status", "submitted_at", "updated_at"])
+    # The lifecycle move itself belongs to the primitive: it stamps who and
+    # when, checks the permission and the period, recomputes the progress field
+    # and writes the document trail.
+    locked_order = document_services.submit(locked_order, request=request)
     record_purchase_order_audit_event(
         locked_order,
         PurchaseOrderAuditEvent.Action.SUBMITTED,
@@ -1359,6 +1416,10 @@ def purchase_order_cancelled_total(purchase_order, *, lines=None):
             PurchaseReceiptLine.objects.filter(
                 purchase_line__purchase_order=purchase_order
             )
+            # A retracted delivery did not arrive. This is what lets an order's
+            # own reversal see its expectation as outstanding again once its
+            # receipts have given the goods back.
+            .exclude(receipt__doc_status=DocumentStatus.CANCELLED)
             .values("purchase_line_id")
             .annotate(total=models.Sum("cancelled_quantity"))
         )
@@ -1490,11 +1551,6 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
     has_outstanding = any(
         line.outstanding_quantity > 0 for line in locked_lines
     )
-    locked_order.status = (
-        PurchaseOrder.Status.PARTIALLY_RECEIVED
-        if has_outstanding
-        else PurchaseOrder.Status.RECEIVED
-    )
     # Units the receipt cancelled will never arrive and can never be returned,
     # so the order must stop billing for them here — nothing downstream can
     # take them off the payable later.
@@ -1502,15 +1558,16 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
         locked_order,
         lines=locked_lines,
     )
-    if locked_order.status == PurchaseOrder.Status.RECEIVED:
+    if not has_outstanding:
         locked_order.received_at = timezone.now()
         locked_order.save(
-            update_fields=["status", "received_at", "cancelled_total", "updated_at"]
+            update_fields=["received_at", "cancelled_total", "updated_at"]
         )
     else:
-        locked_order.save(
-            update_fields=["status", "cancelled_total", "updated_at"]
-        )
+        locked_order.save(update_fields=["cancelled_total", "updated_at"])
+    # Progress is derived, never assigned: one function, called from here and
+    # from the lifecycle transitions, and from nowhere else.
+    purchase_documents.recompute_progress(locked_order, lines=locked_lines)
     record_purchase_order_audit_event(
         locked_order,
         PurchaseOrderAuditEvent.Action.RECEIVED,
@@ -1946,6 +2003,65 @@ def consume_supplier_credit(*, supplier, amount):
         remaining = (remaining - applied).quantize(Decimal("0.01"))
 
 
+def restore_supplier_credit(*, supplier, amount):
+    """Put back credit that a cancelled payment had consumed.
+
+    ``consume_supplier_credit`` draws down the oldest credits first and keeps no
+    record of which one paid for what, so this refills the newest first until
+    the whole amount is back. The supplier's *available* credit — the only
+    figure anything reads — ends up exactly where it started; which note holds
+    it can differ, and that is the honest limit of undoing a draw-down nobody
+    itemised.
+    """
+    remaining = amount
+    credits = (
+        supplier.credits.select_for_update()
+        .filter(remaining_amount__lt=models.F("amount"))
+        .order_by("-created_at", "-id")
+    )
+    for credit in credits:
+        if remaining <= 0:
+            break
+        headroom = (credit.amount - credit.remaining_amount).quantize(Decimal("0.01"))
+        restored = min(headroom, remaining)
+        credit.remaining_amount = (credit.remaining_amount + restored).quantize(
+            Decimal("0.01")
+        )
+        credit.status = SupplierCredit.Status.OPEN
+        credit.save(update_fields=["remaining_amount", "status", "updated_at"])
+        remaining = (remaining - restored).quantize(Decimal("0.01"))
+
+
+@transaction.atomic
+def cancel_supplier_payment(payment, *, reason, request=None, register_session=None):
+    """Undo a payment to a supplier.
+
+    There was no way to do this at all before: the endpoint offered create and
+    read, so a mistyped payment was permanent — and because a payment blocks its
+    purchase order from being cancelled, one typo could lock an order shut for
+    good.
+    """
+    from apps.sales.models import RegisterSession
+
+    if payment.cash_movement_id is not None and register_session is None:
+        register_session = RegisterSession.open_for(getattr(request, "user", None))
+        if register_session is None:
+            raise serializers.ValidationError(
+                {
+                    "detail": (
+                        "This payment left the drawer, so it has to come back "
+                        "into one. Open a register session first."
+                    )
+                }
+            )
+    return document_services.cancel(
+        payment,
+        reason=reason,
+        request=request,
+        context={"register_session": register_session},
+    )
+
+
 @transaction.atomic
 def create_supplier_payment(*, created_by=None, **payment_fields):
     supplier = Supplier.objects.select_for_update().get(pk=payment_fields["supplier"].pk)
@@ -2105,50 +2221,20 @@ def create_pos_cash_purchase(*, request, validated_data):
 
 
 @transaction.atomic
-def cancel_purchase_order(purchase_order, *, request=None):
-    locked_order = (
-        PurchaseOrder.objects.select_for_update()
-        .prefetch_related("lines__variant__product", "lines__receipt_lines")
-        .get(pk=purchase_order.pk)
-    )
-    if locked_order.status not in (
-        PurchaseOrder.Status.DRAFT,
-        PurchaseOrder.Status.SUBMITTED,
-    ):
-        raise serializers.ValidationError(
-            {"detail": "Only draft or submitted purchase orders can be cancelled."}
-        )
+def cancel_purchase_order(purchase_order, *, request=None, reason=""):
+    """Retract an order and give back everything it put into stock.
 
+    The unwinding itself is ``apps.purchasing.documents.reverse``; what happens
+    around it — the money that blocks a cancellation, the period lock, the
+    permission, the trail — belongs to the primitive. A received order can now
+    be cancelled where before it could not, provided its goods are still on the
+    shelf and the caller may receive; that is the case a shop hits when a
+    delivery was recorded against the wrong order.
+    """
     created_by = purchase_created_by(request)
-    if locked_order.status == PurchaseOrder.Status.SUBMITTED:
-        for line in locked_order.lines.select_related(
-            "variant",
-            "variant__product",
-        ).order_by("variant_id"):
-            outstanding_quantity = line.outstanding_quantity
-            if outstanding_quantity <= 0:
-                continue
-            stock_item = lock_stock_item(variant=line.variant)
-            before = stock_snapshot(stock_item)
-            # quantity_expected is in base units; convert the outstanding packs.
-            expected_reduction = decrement_expected(
-                stock_item, line.to_base_quantity(outstanding_quantity)
-            )
-            if expected_reduction <= 0:
-                continue
-            save_stock_item_quantities(stock_item)
-            create_stock_movement(
-                stock_item=stock_item,
-                variant=line.variant,
-                movement_type=StockMovement.Type.CANCEL_EXPECTED,
-                quantity=expected_reduction,
-                note=f"إلغاء أمر شراء {locked_order.order_number}",
-                created_by=created_by,
-                before=before,
-            )
-
-    locked_order.status = PurchaseOrder.Status.CANCELLED
-    locked_order.save(update_fields=["status", "updated_at"])
+    locked_order = document_services.cancel(
+        purchase_order, reason=reason, request=request
+    )
     record_purchase_order_audit_event(
         locked_order,
         PurchaseOrderAuditEvent.Action.CANCELLED,

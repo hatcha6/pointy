@@ -4,10 +4,27 @@ from django.core.validators import MinValueValidator
 from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
+from apps.documents.guards import DocumentQuerySetMixin
+from apps.documents.models import DocumentMixin
 from apps.sales.models import Order, RegisterSession
 
 
-class Payment(TimeStampedModel):
+class PaymentQuerySet(DocumentQuerySetMixin, models.QuerySet):
+    pass
+
+
+class Payment(DocumentMixin, TimeStampedModel):
+    """Money collected against an order — or given back, as a negative row.
+
+    A payment has no draft state: money either moved or it did not. It is a
+    document from the moment it exists, which is what stops a ``PATCH`` from
+    quietly rewriting what a customer paid, and a ``DELETE`` from making a
+    settled invoice unpaid again with nothing to show for it. Undoing one is a
+    *counter payment*, the same shape a refund already takes.
+    """
+
+    objects = PaymentQuerySet.as_manager()
+
     class Method(models.TextChoices):
         CASH = "cash", "Cash"
         CARD = "card", "Card"

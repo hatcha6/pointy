@@ -14,6 +14,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import SimpleTestCase, TestCase, override_settings
 
+from apps.documents.guards import system_write
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.models import RelayInstallation
 from apps.core.roles import CASHIER_GROUP, ensure_role_groups
@@ -357,11 +358,14 @@ class TaggingTests(TestCase):
             payments_data=[{"method": "cash", "amount": Decimal("2.00")}],
             request=None,
         )
-        # Simulate a historical, untagged sale rung up on New Year's Day.
-        Order.objects.filter(pk=order.pk).update(
-            created_at=datetime(2026, 1, 1, 9, 0, tzinfo=dt_timezone.utc),
-            special_day_keys=[],
-        )
+        # Simulate a historical, untagged sale rung up on New Year's Day. The
+        # tag is frozen on an issued sale, which is the point of the backfill
+        # existing at all, so the fixture says it is standing in for history.
+        with system_write():
+            Order.objects.filter(pk=order.pk).update(
+                created_at=datetime(2026, 1, 1, 9, 0, tzinfo=dt_timezone.utc),
+                special_day_keys=[],
+            )
         call_command("backfill_special_days", verbosity=0)
         order.refresh_from_db()
         self.assertEqual(order.special_day_keys, ["new_year"])

@@ -7,6 +7,7 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.utils import timezone
 
+from apps.sales.testing import issue
 from apps.analytics.models import AnalyticsEvent
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
@@ -323,7 +324,6 @@ class FraudDetectionTests(TestCase):
         )
         order = Order.objects.create(
             register_session=session,
-            status=Order.Status.PAID,
             subtotal=subtotal or total,
             discount_total=discount_total,
             total=total,
@@ -336,6 +336,9 @@ class FraudDetectionTests(TestCase):
         if receipt:
             order.receipt_number = receipt
             order.save(update_fields=["receipt_number"])
+        # Issued last: from here the sale is frozen, which is why the figures
+        # above are set before this line rather than after it.
+        issue(order)
         OrderLine.objects.create(
             order=order,
             variant=self.variant,

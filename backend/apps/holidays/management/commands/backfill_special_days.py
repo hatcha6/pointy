@@ -13,6 +13,7 @@ those years.
 
 from django.core.management.base import BaseCommand
 
+from apps.documents.guards import system_write
 from apps.core.timeutils import business_local_date
 from apps.holidays.rules import special_days_for_date
 from apps.holidays.services import get_active_definitions
@@ -49,6 +50,15 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Backfilled {total} row(s)."))
 
     def _backfill(self, model, label, definitions, force, batch_size):
+        # The tag is a frozen snapshot on an issued document — deliberately, so
+        # a later edit to the holiday calendar cannot rewrite what a sale was
+        # tagged with. Backfilling rows that predate the feature is the one
+        # exception, and it is a machine writing history rather than a person
+        # editing a document. See apps.documents.guards.
+        with system_write():
+            return self._write_tags(model, label, definitions, force, batch_size)
+
+    def _write_tags(self, model, label, definitions, force, batch_size):
         queryset = model.objects.all().only("id", "created_at", "special_day_keys")
         if not force:
             queryset = queryset.filter(special_day_keys=[])

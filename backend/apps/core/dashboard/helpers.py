@@ -463,7 +463,8 @@ def _top_supplier_balances(balances_by_supplier):
 
     unallocated_payments_by_supplier = {
         row["supplier_id"]: row["total"]
-        for row in SupplierPayment.objects.filter(
+        for row in SupplierPayment.objects.live()
+        .filter(
             supplier_id__in=supplier_ids,
             purchase_order__isnull=True,
         )

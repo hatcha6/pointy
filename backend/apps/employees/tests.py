@@ -959,7 +959,12 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(approve_response.data["net_total"], "250.00")
         self.assertEqual(paid_response.status_code, status.HTTP_200_OK)
         self.assertEqual(paid_response.data["status"], PayrollRun.Status.PAID)
-        self.assertEqual(void_response.status_code, status.HTTP_400_BAD_REQUEST)
+        # A paid run used to be permanent — the only way out of one paid by
+        # mistake was a second run correcting it. It can be retracted now, and
+        # what it collected on the way (loan instalments) comes back with it.
+        self.assertEqual(void_response.status_code, status.HTTP_200_OK)
+        payroll.refresh_from_db()
+        self.assertEqual(payroll.status, PayrollRun.Status.VOID)
 
     def test_dashboard_shows_payroll_to_manager_and_hides_from_cashier(self):
         employee = Employee.objects.create(full_name="منى سالم")

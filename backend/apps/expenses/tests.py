@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.documents.statuses import DocumentStatus
 from apps.core.roles import (
     CASHIER_GROUP,
     MANAGER_GROUP,
@@ -418,21 +419,40 @@ class DrawerPaidExpenseEditTests(ExpensesTestMixin, TestCase):
         self.assertEqual(expense.amount, Decimal("50.00"))
         self.assertEqual(RegisterCashMovement.objects.count(), 0)
 
-    def test_deleting_a_drawer_paid_expense_leaves_the_cash_accounted_for(self):
-        # The money really did leave the till, so the movement must survive the
-        # expense — and, no longer hidden behind an expense row, it resurfaces
-        # in the ledger as a standalone pay-out rather than vanishing.
+    def test_cancelling_a_drawer_paid_expense_puts_the_cash_back(self):
+        # This used to be a delete, and a delete left the pay-out behind with
+        # nothing to explain it: the drawer still expected 470 and the ledger
+        # showed an anonymous 30 leaving the till. Retracting the expense says
+        # what actually happened instead — the money is expected back in the
+        # drawer, and neither row is lost.
+        session, expense = self._drawer_paid_expense()
+
+        response = self.manager_client.post(
+            reverse("expense-cancel", args=[expense.pk]),
+            {"reason": "سُجّل مرتين"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+        session.refresh_from_db()
+        self.assertEqual(session.expected_cash, Decimal("500.00"))
+
+        data = self.manager_client.get(reverse("expense-ledger")).data
+        self.assertEqual(data["totals"]["expense"], "0.00")
+        self.assertEqual(data["totals"]["register_payout"], "0.00")
+        self.assertEqual(data["summary"]["total"], "0.00")
+
+    def test_the_old_delete_verb_now_retracts_instead_of_deleting(self):
+        """A till still running the previous build keeps working, and gets the
+        better behaviour: the row survives and the drawer gets its money back."""
         session, expense = self._drawer_paid_expense()
 
         response = self.manager_client.delete(
             reverse("expense-detail", args=[expense.pk])
         )
+
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-
+        expense.refresh_from_db()
         session.refresh_from_db()
-        self.assertEqual(session.expected_cash, Decimal("470.00"))
-
-        data = self.manager_client.get(reverse("expense-ledger")).data
-        self.assertEqual(data["totals"]["expense"], "0.00")
-        self.assertEqual(data["totals"]["register_payout"], "30.00")
-        self.assertEqual(data["summary"]["total"], "30.00")
+        self.assertEqual(expense.doc_status, DocumentStatus.CANCELLED)
+        self.assertEqual(session.expected_cash, Decimal("500.00"))

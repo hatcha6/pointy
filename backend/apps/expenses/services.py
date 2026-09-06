@@ -16,7 +16,10 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 
+from rest_framework import serializers
+
 from apps.analytics.services import record_domain_event
+from apps.documents import services as document_services
 from apps.sales.models import RegisterCashMovement, RegisterSession
 
 from .models import Expense
@@ -105,8 +108,13 @@ def create_expense(*, user, pay_from_register=False, **fields):
     return expense
 
 
+#: The two fields that decide what left the drawer. Changing either is a
+#: correction to a submitted document, not an edit to a note beside it.
+DRAWER_FIELDS = ("amount", "payment_method")
+
+
 @transaction.atomic
-def update_expense(expense, fields):
+def update_expense(expense, fields, *, request=None):
     """Apply an edit to an expense, keeping its linked drawer pay-out true.
 
     The pay-out is the record of cash that left the till *for this expense*, so
@@ -114,7 +122,26 @@ def update_expense(expense, fields):
     movement; switching the expense off cash means no cash left the drawer, so
     the movement is removed and the link cleared. Both are only reachable while
     the session is open — ``drawer_fields_locked`` refuses them once it closes.
+
+    An edit that moves money goes through the document lifecycle's in-place
+    correction route, which checks the same condition, checks the period, and
+    writes the before/after to the trail. An edit that only changes the words
+    is an allow-after-submit field and needs none of that.
     """
+    if any(
+        field in fields and fields[field] != getattr(expense, field)
+        for field in DRAWER_FIELDS
+    ):
+        return document_services.correct_in_place(
+            expense,
+            mutate=lambda locked: _write_expense(locked, fields),
+            reason=str(fields.get("description", "")) or "تعديل مصروف",
+            request=request,
+        )
+    return _write_expense(expense, fields)
+
+
+def _write_expense(expense, fields):
     for field, value in fields.items():
         setattr(expense, field, value)
     expense.save()
@@ -136,6 +163,35 @@ def update_expense(expense, fields):
         movement.reason = reason
         movement.save(update_fields=["amount", "reason", "updated_at"])
     return expense
+
+
+@transaction.atomic
+def cancel_expense(expense, *, reason, request=None, register_session=None):
+    """Retract an expense that should not have been recorded.
+
+    This replaces deleting one. The difference a shop sees: the money goes back
+    into the drawer it left rather than the pay-out being orphaned there, and
+    the row survives with a reason on it instead of vanishing from every report
+    with nothing to say it ever existed.
+    """
+    if expense.cash_movement_id is not None and register_session is None:
+        register_session = open_register_session(getattr(request, "user", None))
+        if register_session is None:
+            raise serializers.ValidationError(
+                {
+                    "detail": (
+                        "This expense was paid out of a drawer, so the money "
+                        "has to come back into one. Open a register session "
+                        "first."
+                    )
+                }
+            )
+    return document_services.cancel(
+        expense,
+        reason=reason,
+        request=request,
+        context={"register_session": register_session},
+    )
 
 
 def parse_ledger_period(params):
@@ -206,7 +262,8 @@ def build_expense_ledger(*, user, start, end, sources=None):
 
 def _expense_rows(start, end):
     queryset = (
-        Expense.objects.filter(spent_at__gte=start, spent_at__lte=end)
+        Expense.objects.live()
+        .filter(spent_at__gte=start, spent_at__lte=end)
         .select_related("category")
     )
     return [

@@ -61,14 +61,18 @@ class MonthEndSnapshotTests(TestCase):
             unit_price=Decimal("10.00"),
             unit_cost=Decimal("4.00"),
         )
-        Payment.objects.create(
-            order=order, method=Payment.Method.CASH, amount=Decimal("20.00")
-        )
         when = timezone.make_aware(
             timezone.datetime.combine(self.last_month_day, timezone.datetime.min.time())
         )
+        # Dated at creation: when the money moved is part of what a payment
+        # says, and it says it from the moment it exists.
+        Payment.objects.create(
+            order=order,
+            method=Payment.Method.CASH,
+            amount=Decimal("20.00"),
+            paid_at=when,
+        )
         Order.objects.filter(pk=order.pk).update(created_at=when)
-        Payment.objects.filter(order=order).update(paid_at=when)
 
     def _settings(self, **fields):
         settings = ShopSettings.load()

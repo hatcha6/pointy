@@ -123,7 +123,9 @@ class ExpenseSerializer(serializers.ModelSerializer):
         # books a new one. It does keep an existing one honest — see
         # ``update_expense``.
         validated_data.pop("pay_from_register", None)
-        return update_expense(instance, validated_data)
+        return update_expense(
+            instance, validated_data, request=self.context.get("request")
+        )
 
 
 def _spent_at(expense):

@@ -15,6 +15,8 @@ from apps.catalog.services import (
     variant_detail_queryset,
 )
 from apps.core.idempotency import run_idempotent_request
+from apps.documents import services as document_services
+from apps.documents.statuses import DocumentStatus
 from apps.core.models import ShopSettings
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_has_full_visibility
@@ -481,15 +483,24 @@ class StockCountViewSet(
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
+        """Abandon a count, or undo one that was applied.
+
+        Undoing an applied count was impossible before, so a miscount rewrote
+        the shelf for good. It puts every movement the count made back now —
+        and takes the permission that applying it took, rather than the one that
+        lets a member of staff drop their own half-walked shelf.
+        """
         stock_count = self.get_object()
-        if stock_count.status != StockCount.Status.IN_PROGRESS:
+        if stock_count.doc_status == DocumentStatus.CANCELLED:
             return Response(
                 {"detail": "Only an in-progress count can be cancelled."},
                 status=status.HTTP_409_CONFLICT,
             )
-        stock_count.status = StockCount.Status.CANCELLED
-        stock_count.cancelled_at = timezone.now()
-        stock_count.save(update_fields=["status", "cancelled_at", "updated_at"])
+        stock_count = document_services.cancel(
+            stock_count,
+            reason=str(request.data.get("reason", "")).strip(),
+            request=request,
+        )
         record_domain_event(
             name="inventory.stock_count.cancelled",
             event_type=AnalyticsEvent.EventType.AUDIT,
@@ -602,12 +613,10 @@ class StockCountViewSet(
                 )
                 applied_movements += 1
 
-            stock_count.status = StockCount.Status.APPLIED
-            stock_count.applied_by = stock_count_owner(request)
-            stock_count.applied_at = timezone.now()
-            stock_count.save(
-                update_fields=["status", "applied_by", "applied_at", "updated_at"]
-            )
+            # Applying is what submits a count: it is the moment the shelf
+            # actually changes. The lifecycle stamps who and when, recomputes
+            # the progress field, and writes the trail.
+            stock_count = document_services.submit(stock_count, request=request)
             record_domain_event(
                 name="inventory.stock_count.applied",
                 event_type=AnalyticsEvent.EventType.AUDIT,

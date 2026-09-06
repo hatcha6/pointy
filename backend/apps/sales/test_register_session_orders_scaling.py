@@ -24,6 +24,7 @@ from rest_framework.test import APIClient
 from apps.catalog.testing import create_product_with_default_variant
 from apps.channels.models import SalesChannel
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
+from apps.documents.guards import system_write
 from apps.inventory.models import StockItem
 
 from .models import Order, RegisterSession
@@ -76,10 +77,13 @@ class RegisterSessionOrdersQueryScalingTests(TestCase):
             )
         # The channel is derived from the authenticating credential, which the
         # service-level checkout above has no request for; set it here so the
-        # rows really do traverse the FK the serializer names.
-        Order.objects.filter(register_session=self.session).update(
-            sales_channel=self.channel
-        )
+        # rows really do traverse the FK the serializer names. A submitted sale
+        # is frozen, and this is a fixture standing in for what the request
+        # would have stamped, so it says so.
+        with system_write():
+            Order.objects.filter(register_session=self.session).update(
+                sales_channel=self.channel
+            )
 
     def _measure(self):
         url = reverse("register-session-orders", args=[self.session.pk])

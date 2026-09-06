@@ -104,9 +104,9 @@ class OpeningBalanceTests(TreasuryTestCase):
 
     def test_money_moved_before_the_opening_day_is_not_counted_twice(self):
         """The opening balance already contains it; replaying it would double."""
-        stale = self.pay("40.00")
-        stale.paid_at = timezone.now() - timedelta(days=60)
-        stale.save(update_fields=["paid_at"])
+        # Dated at creation: when a payment happened is part of what it says,
+        # and a payment says it the moment it exists.
+        stale = self.pay("40.00", paid_at=timezone.now() - timedelta(days=60))
 
         self.assertEqual(self.balance_of(self.cash), money("100.00"))
 

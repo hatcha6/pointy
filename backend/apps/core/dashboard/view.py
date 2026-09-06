@@ -692,7 +692,7 @@ def _profitability_section(request, period):
 
     ad_hoc_expenses = Decimal("0.00")
     if _can(request.user, "expenses.view_expense"):
-        ad_hoc_expenses = Expense.objects.filter(
+        ad_hoc_expenses = Expense.objects.live().filter(
             spent_at__gte=period["start"].date(),
             spent_at__lte=period["end"].date(),
         ).aggregate(

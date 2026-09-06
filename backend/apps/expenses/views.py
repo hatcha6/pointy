@@ -1,15 +1,15 @@
-from rest_framework import viewsets
+from rest_framework import mixins, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.idempotency import run_idempotent_request
-from apps.core.period_lock import assert_period_open
 from apps.core.permissions import HasPointyPermission
 
 from .models import Expense, ExpenseCategory
 from .serializers import ExpenseCategorySerializer, ExpenseSerializer
-from .services import build_expense_ledger, parse_ledger_period
+from .services import build_expense_ledger, cancel_expense, parse_ledger_period
 
 
 class ExpenseCategoryViewSet(viewsets.ModelViewSet):
@@ -29,7 +29,25 @@ class ExpenseCategoryViewSet(viewsets.ModelViewSet):
     ordering_fields = ("name", "display_order", "created_at")
 
 
-class ExpenseViewSet(viewsets.ModelViewSet):
+class ExpenseViewSet(
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.ListModelMixin,
+    viewsets.GenericViewSet,
+):
+    # Deleting an expense removed it from every report with nothing left to say
+    # it had been there, and orphaned the drawer pay-out it had paid for.
+    # ``cancel`` retracts it instead: the money goes back into the till it left,
+    # and the row keeps its reason.
+    #
+    # ``DELETE`` survives as a deprecated alias for that, because a shop's tills
+    # do not all update the moment its backend does — nothing gates an older app
+    # from talking to a newer server, so removing the verb outright would break
+    # the delete button on every till still running the previous build. It does
+    # the same thing the button always promised (make this expense stop
+    # counting) and rather more than it delivered. Retire it once the fleet has
+    # moved past the release that introduced ``cancel``.
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
     permission_map = {
@@ -38,6 +56,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         "create": ("expenses.add_expense",),
         "update": ("expenses.change_expense",),
         "partial_update": ("expenses.change_expense",),
+        "cancel": ("expenses.delete_expense",),
         "destroy": ("expenses.delete_expense",),
     }
     queryset = Expense.objects.select_related(
@@ -61,17 +80,34 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             lambda: super(ExpenseViewSet, self).create(request, *args, **kwargs),
         )
 
-    def perform_destroy(self, instance):
-        # Deleting an expense out of a closed month rewrites that month's
-        # reported total, so it is guarded exactly like an edit.
-        assert_period_open(
-            instance.spent_at,
-            user=self.request.user,
-            entity_type="expense",
-            entity_id=instance.pk,
-            action="expense.delete",
+    def destroy(self, request, *args, **kwargs):
+        """The old delete verb, kept for tills that have not updated yet.
+
+        Retracts rather than deletes — see the class comment. Answers 204 so an
+        older client, which expects nothing back, behaves exactly as it did.
+        """
+        expense = self.get_object()
+        cancel_expense(
+            expense,
+            reason=str(request.data.get("reason", "")).strip(),
+            request=request,
         )
-        super().perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        return run_idempotent_request(request, lambda: self._cancel(request))
+
+    def _cancel(self, request):
+        expense = self.get_object()
+        cancel_expense(
+            expense,
+            reason=str(request.data.get("reason", "")).strip(),
+            request=request,
+        )
+        expense.refresh_from_db()
+        serializer = self.get_serializer(expense)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class ExpenseLedgerView(APIView):

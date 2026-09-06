@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from django.utils import timezone
 
+from apps.documents.guards import system_write
 from apps.purchasing.models import (
     PurchaseLine,
     PurchaseOrder,
@@ -104,6 +105,35 @@ class PurchaseOrderLoader(BaseLoader):
             order.lines.all().delete()
         else:
             order = PurchaseOrder()
+        # An import reconstructs documents that were already delivered, and a
+        # re-import replays the same source rows over them. That is a machine
+        # rewriting history, not a person editing a submitted order, so it runs
+        # past the document freeze deliberately — the same rule the period lock
+        # already follows (apps.core.period_lock: guards govern people, not
+        # code). See apps.documents.test_registered_types for the census of
+        # everywhere this is allowed.
+        with system_write():
+            return self._write(
+                order,
+                action=action,
+                record=record,
+                resolver=resolver,
+                supplier_pk=supplier_pk,
+                line_specs=line_specs,
+                issues=issues,
+            )
+
+    def _write(
+        self,
+        order,
+        *,
+        action,
+        record,
+        resolver,
+        supplier_pk,
+        line_specs,
+        issues,
+    ):
         order.supplier_id = supplier_pk
         order.status = PurchaseOrder.Status.RECEIVED
         order.supplier_invoice_number = clean_str(record.supplier_invoice_number)[:120]

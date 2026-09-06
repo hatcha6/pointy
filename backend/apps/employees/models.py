@@ -9,6 +9,8 @@ from django.utils.crypto import get_random_string
 from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
+from apps.documents.guards import DocumentQuerySetMixin
+from apps.documents.models import DocumentMixin
 
 # Overtime is paid at the hourly wage times this multiplier unless an employee's
 # compensation plan overrides it (e.g. 1.50 for time-and-a-half).
@@ -386,10 +388,27 @@ class CompensationPlan(TimeStampedModel):
         return (self.amount * units).quantize(self.MONEY_PLACES)
 
 
-class PayrollRun(TimeStampedModel):
+class PayrollRunQuerySet(DocumentQuerySetMixin, models.QuerySet):
+    pass
+
+
+class PayrollRun(DocumentMixin, TimeStampedModel):
     MONEY_PLACES = Decimal("0.01")
 
+    objects = PayrollRunQuerySet.as_manager()
+
     class Status(models.TextChoices):
+        """Where the run has got to — approval and payment, not the document.
+
+        Three meanings used to share this field. ``doc_status`` carries the
+        document's own state now (a run is *submitted* when it is paid, because
+        that is when money leaves), and this is derived from that plus the
+        approval stamp beside it, by
+        ``apps.employees.documents.recompute_progress`` and nowhere else. Every
+        query that filters on ``paid`` keeps working, the money position
+        included.
+        """
+
         DRAFT = "draft", "Draft"
         APPROVED = "approved", "Approved"
         PAID = "paid", "Paid"
@@ -428,6 +447,9 @@ class PayrollRun(TimeStampedModel):
         blank=True,
         null=True,
     )
+    # The payroll dialect of ``cancelled_at``/``cancelled_by``, kept because
+    # the API exposes them. Mirrored from the lifecycle's own columns rather
+    # than written beside them, so the two cannot disagree.
     voided_at = models.DateTimeField(blank=True, null=True)
     voided_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

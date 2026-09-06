@@ -146,9 +146,9 @@ def _payment_rows(methods, *, start, end, with_commission):
 def _expense_rows(methods, *, start, end):
     expenses = _newest(
         money_period(
-            Expense.objects.filter(payment_method__in=methods).select_related(
-                "category"
-            ),
+            Expense.objects.live()
+            .filter(payment_method__in=methods)
+            .select_related("category"),
             start,
             end,
         )
@@ -167,7 +167,8 @@ def _expense_rows(methods, *, start, end):
 def _supplier_rows(methods, *, start, end):
     payments = _newest(
         money_period(
-            SupplierPayment.objects.filter(method__in=methods)
+            SupplierPayment.objects.live()
+            .filter(method__in=methods)
             .exclude(method__in=NON_CASH_SUPPLIER_METHODS)
             .select_related("supplier", "purchase_order"),
             start,

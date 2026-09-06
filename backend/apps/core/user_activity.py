@@ -46,7 +46,7 @@ def build_user_activity(user):
     purchase_orders = PurchaseOrder.objects.filter(pk__in=purchase_order_ids)
     purchase_receipts = PurchaseReceipt.objects.filter(created_by=user)
     purchase_adjustments = PurchaseOrderAdjustment.objects.filter(created_by=user)
-    supplier_payments = SupplierPayment.objects.filter(created_by=user)
+    supplier_payments = SupplierPayment.objects.live().filter(created_by=user)
     # The person's own actions — sales, receipts, edits — not the telemetry
     # their till emits about the software (a busy till writes millions of
     # request-timing rows a month under its cashier's name; counting those

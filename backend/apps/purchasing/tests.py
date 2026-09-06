@@ -23,6 +23,8 @@ from apps.inventory.models import (
     StockValuationBin,
 )
 from apps.inventory.services import consume_expiring_stock_batches
+from apps.documents.statuses import DocumentStatus
+
 from .models import (
     PurchaseLine,
     PurchaseOrder,
@@ -2769,7 +2771,11 @@ class PurchaseOrderApiTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.status, PurchaseOrder.Status.CANCELLED)
 
-    def test_cancel_rejects_received_purchase_order(self):
+    def test_cancel_retracts_a_received_purchase_order(self):
+        """This used to be refused outright. The lifecycle can reverse a
+        delivery, so the case a shop actually hits — goods booked against the
+        wrong order — stopped needing an edit to fix. See
+        ``test_document_lifecycle`` for the stock and permission edges."""
         order = PurchaseOrder.objects.create(
             supplier=self.supplier,
             status=PurchaseOrder.Status.RECEIVED,
@@ -2780,9 +2786,9 @@ class PurchaseOrderApiTests(TestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         order.refresh_from_db()
-        self.assertEqual(order.status, PurchaseOrder.Status.RECEIVED)
+        self.assertEqual(order.status, PurchaseOrder.Status.CANCELLED)
 
     def test_last_cost_returns_latest_non_cancelled_purchase_line_cost(self):
         cancelled = PurchaseOrder.objects.create(
@@ -3624,10 +3630,10 @@ class SupplierPaymentApiTests(TestCase):
         )
 
     def create_order(self, total=Decimal("7.50")):
-        order = PurchaseOrder.objects.create(
-            supplier=self.supplier,
-            status=PurchaseOrder.Status.RECEIVED,
-        )
+        # Priced as a draft, then delivered: a submitted order's figures are
+        # frozen, so a fixture cannot fill them in after the fact any more than
+        # the application can.
+        order = PurchaseOrder.objects.create(supplier=self.supplier)
         order.lines.create(
             variant=self.variant,
             quantity=3,
@@ -3635,6 +3641,9 @@ class SupplierPaymentApiTests(TestCase):
         )
         order.recalculate()
         order.save(update_fields=["subtotal", "total", "updated_at"])
+        order.doc_status = DocumentStatus.SUBMITTED
+        order.status = PurchaseOrder.Status.RECEIVED
+        order.save(update_fields=["doc_status", "status", "updated_at"])
         return order
 
     def test_partial_supplier_payment_leaves_purchase_order_balance(self):

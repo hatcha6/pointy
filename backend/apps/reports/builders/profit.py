@@ -62,7 +62,7 @@ def profit_costs(context):
     commissions = in_period(Payment.objects.all(), period).aggregate(
         total=money_sum("commission_amount")
     )["total"]
-    ad_hoc = in_period(Expense.objects.all(), period).aggregate(
+    ad_hoc = in_period(Expense.objects.live(), period).aggregate(
         total=money_sum("amount")
     )["total"]
     # Goods that left without being sold — a stock count's write-off, a manual
@@ -236,7 +236,7 @@ def expense_breakdown(context):
     in the data; nothing ever grouped by them.
     """
     category_rows, total = _expenses_by_category(context)
-    period_expenses = in_period(Expense.objects.all(), context.period)
+    period_expenses = in_period(Expense.objects.live(), context.period)
 
     limit = context.row_limit("expenses")
     detail = bounded_queryset(
@@ -305,7 +305,7 @@ def expense_breakdown(context):
 
 def _expenses_by_category(context):
     values = (
-        in_period(Expense.objects.all(), context.period)
+        in_period(Expense.objects.live(), context.period)
         .values("category_id", "category__name")
         .annotate(amount=money_sum("amount"), expense_count=Count("id"))
         .order_by("-amount")
