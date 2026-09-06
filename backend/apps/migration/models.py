@@ -43,36 +43,37 @@ class MigrationSource(TimeStampedModel):
 
     #: Display label. Defaults to the uploaded file's name.
     name = models.CharField(max_length=120)
-    original_filename = models.CharField(max_length=255, blank=True)
+    original_filename = models.CharField(max_length=255, blank=True, db_default="")
     #: Size the client declared up front, so progress has a denominator before
     #: the last chunk lands.
-    declared_size_bytes = models.PositiveBigIntegerField(default=0)
+    declared_size_bytes = models.PositiveBigIntegerField(default=0, db_default=0)
     #: Bytes durably written. The resume offset: a client that reconnects asks
     #: for this and continues from it rather than starting the GB again.
-    received_bytes = models.PositiveBigIntegerField(default=0)
-    checksum_sha256 = models.CharField(max_length=64, blank=True)
+    received_bytes = models.PositiveBigIntegerField(default=0, db_default=0)
+    checksum_sha256 = models.CharField(max_length=64, blank=True, db_default="")
 
     upload_state = models.CharField(
         max_length=16,
         choices=UploadState.choices,
         default=UploadState.UPLOADING,
+        db_default=UploadState.UPLOADING,
         db_index=True,
     )
     #: File names (not paths) inside the staging root — see `storage.py`. Keeping
     #: them relative means the volume can move without rewriting rows.
-    staged_filename = models.CharField(max_length=255, blank=True)
-    prepared_filename = models.CharField(max_length=255, blank=True)
+    staged_filename = models.CharField(max_length=255, blank=True, db_default="")
+    prepared_filename = models.CharField(max_length=255, blank=True, db_default="")
     #: Byte sizes kept after the files are gone, so the report can still say how
     #: much was uploaded and how much was freed.
-    staged_size_bytes = models.PositiveBigIntegerField(default=0)
-    prepared_size_bytes = models.PositiveBigIntegerField(default=0)
+    staged_size_bytes = models.PositiveBigIntegerField(default=0, db_default=0)
+    prepared_size_bytes = models.PositiveBigIntegerField(default=0, db_default=0)
 
     #: Preparation timeline: a list of stage dicts (see `preparation.stages`).
     #: The UI renders it as a checklist rather than one meaningless percentage,
     #: because converting a 1.5 GB Access file takes long enough that "62%" with
     #: no other information is indistinguishable from a hang.
-    stages = models.JSONField(default=list, blank=True)
-    error_message = models.TextField(blank=True)
+    stages = models.JSONField(default=list, blank=True, db_default=[])
+    error_message = models.TextField(blank=True, db_default="")
 
     #: Connector key, *detected* from the file's schema rather than chosen by the
     #: owner — who knows their POS by its splash screen, not its table names.
@@ -80,7 +81,7 @@ class MigrationSource(TimeStampedModel):
     detected_version = models.CharField(max_length=64, blank=True)
     #: Every connector's score against this file, best first. Kept so an
     #: unrecognised file can say what it looked closest to and what was missing.
-    detection = models.JSONField(default=dict, blank=True)
+    detection = models.JSONField(default=dict, blank=True, db_default={})
     last_compat_status = models.CharField(
         max_length=16,
         choices=CompatStatus.choices,
@@ -89,7 +90,7 @@ class MigrationSource(TimeStampedModel):
     last_compat_report = models.JSONField(default=dict, blank=True)
     #: What is inside: per-entity counts and the date range of the history.
     #: Shown before the owner commits to anything.
-    analysis = models.JSONField(default=dict, blank=True)
+    analysis = models.JSONField(default=dict, blank=True, db_default={})
 
     last_run_at = models.DateTimeField(blank=True, null=True)
     purged_at = models.DateTimeField(blank=True, null=True)
@@ -184,11 +185,11 @@ class MigrationRun(TimeStampedModel):
     #: Per-stage timeline (see `preparation.stages`) — one entry per entity plus
     #: the framing stages. An import that walks 900,000 sale lines needs to show
     #: *what* it is doing, not just how far along a single bar has crept.
-    stages = models.JSONField(default=list, blank=True)
+    stages = models.JSONField(default=list, blank=True, db_default=[])
     # Per-entity aggregate counts:
     # {"product": {"created": 10, "updated": 2, "skipped": 0, "failed": 1}, ...}
     summary = models.JSONField(default=dict, blank=True)
-    error_message = models.TextField(blank=True)
+    error_message = models.TextField(blank=True, db_default="")
     initiated_by_user_id = models.PositiveBigIntegerField(blank=True, null=True)
     initiated_by_username = models.CharField(max_length=150, blank=True)
     started_at = models.DateTimeField(blank=True, null=True)

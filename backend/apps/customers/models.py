@@ -81,10 +81,15 @@ class Customer(TimeStampedModel):
     # should reach for these two columns directly, because "no limit" is
     # expressed differently at each level and conflating the two spellings is
     # the way this feature would silently stop blocking anything.
+    # ``db_default`` as well as ``default``: a customer row is created on the
+    # checkout path (the card deduper makes one for an unrecognised card), so a
+    # column without a database default stops an older backend mid-sale during
+    # the minute a live update overlaps. See DOCUMENT_LIFECYCLE_PLAN.md §11.
     credit_limit_policy = models.CharField(
         max_length=16,
         choices=CreditLimitPolicy.choices,
         default=CreditLimitPolicy.SHOP_DEFAULT,
+        db_default=CreditLimitPolicy.SHOP_DEFAULT,
     )
     credit_limit = models.DecimalField(
         max_digits=12,

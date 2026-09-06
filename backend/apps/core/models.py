@@ -201,7 +201,13 @@ class ShopSettings(TimeStampedModel):
     # start refusing their regulars at the till with no warning. An owner turns
     # this on when they want the rule, and nothing below is consulted until
     # they do.
-    enforce_customer_credit_limits = models.BooleanField(default=False)
+    # ``db_default`` as well as ``default``: Django backfills a new column
+    # with the Python default and then drops the database default, and the
+    # *older* backend still serving during a live update writes an INSERT
+    # that names no such column. See DOCUMENT_LIFECYCLE_PLAN.md §11.
+    enforce_customer_credit_limits = models.BooleanField(
+        default=False, db_default=False
+    )
     # The credit ceiling every customer inherits unless their own record says
     # otherwise (آجل). Null = no limit, which is what every shop had before this
     # setting existed and therefore what an upgrade must keep. 0 is the

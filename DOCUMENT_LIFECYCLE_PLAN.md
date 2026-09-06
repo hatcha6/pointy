@@ -672,11 +672,29 @@ of deleting rather than disappearing: nothing gates an older app from talking to
 a newer server, so removing it would have broken the delete button on every till
 still running the previous build. It does what that button always promised.
 
-**Adjacent, not ours:** `core.0027` (customer credit limits, already on main)
-added `enforce_customer_credit_limits` as NOT NULL with no database default. It
-only bites where the `ShopSettings` singleton does not yet exist, which on an
-upgraded shop it always does — so it is not a blocker for this release, and the
-same `db_default` treatment would close it.
+**The same trap elsewhere in the release, since fixed.** Comparing the two
+schemas column by column found sixteen more, none of them ours: the customer
+credit-limit work added `enforce_customer_credit_limits` and — the one that
+mattered — `customers_customer.credit_limit_policy`, which sits on the checkout
+path, because the card deduper creates a customer row for an unrecognised card.
+A sale would have failed mid-flip. The file-based migration rewrite added
+fourteen more on its upload tables. All now carry `db_default`.
+
+`scripts/check_upgrade_compatibility.py` is that comparison, kept: it builds the
+schema at a given tag and at the working tree and reports both halves of the
+rule — columns an older backend cannot write, and columns it still writes that
+have been dropped. Neither is visible to the test suite, which only ever sees
+one schema at a time.
+
+**One thing it reports that is not fixed here.** The file-based migration
+rewrite *dropped* nine columns from `migration_migrationsource` — the contract
+half of expand/contract, done in the same release as the expand. Nothing on a
+till path touches that table; it is the "import from your old POS" screen, used
+once when a shop is onboarded. The exposure is a data import started inside the
+minute an update takes. Worth a decision at release time rather than a silent
+pass: either keep the columns for one release, or ship `UPDATE_STRATEGY.txt`
+containing `restart`, which every updater honours by falling back to a full
+restart.
 
 ## 12. Open decisions
 
