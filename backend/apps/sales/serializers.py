@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.db.models import Manager
 from rest_framework import serializers
 
+from apps.documents.serializers import DocumentLifecycleFields
 from apps.catalog.models import ModifierOption, ProductVariant
 from apps.catalog.services import MIN_LINES_TO_PRELOAD, load_line_variants
 from apps.catalog.units import (
@@ -412,7 +413,7 @@ class OrderExchangeSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class OrderSerializer(serializers.ModelSerializer):
+class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
     lines = OrderLineSerializer(many=True, allow_empty=False)
     payments = OrderPaymentSerializer(many=True, read_only=True)
     exchanges = OrderExchangeSerializer(many=True, read_only=True)
@@ -460,6 +461,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "id",
             "receipt_number",
             "status",
+            *DocumentLifecycleFields.LIFECYCLE_FIELDS,
             "sale_type",
             "valid_until",
             "amount_paid",

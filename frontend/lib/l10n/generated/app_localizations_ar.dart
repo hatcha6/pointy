@@ -10917,6 +10917,154 @@ class AppLocalizationsAr extends AppLocalizations {
   String get printAuditButton => 'سجل الطباعة والمشاركة';
 
   @override
+  String documentTrailSheetTitle(String documentNumber) {
+    return 'سجل المستند $documentNumber';
+  }
+
+  @override
+  String get documentTrailRefreshTooltip => 'تحديث السجل';
+
+  @override
+  String get documentTrailLoading => 'جارٍ تحميل السجل...';
+
+  @override
+  String get documentTrailLoadError => 'تعذّر تحميل سجل المستند.';
+
+  @override
+  String get documentTrailEmptyTitle => 'لا يوجد سجل بعد';
+
+  @override
+  String get documentTrailEmptyMessage =>
+      'كل إصدار أو تصحيح أو إلغاء لهذا المستند سيظهر هنا، مع من قام به ومتى.';
+
+  @override
+  String get documentTrailOpenAction => 'سجل المستند';
+
+  @override
+  String get documentTrailActionCreated => 'أُنشئ';
+
+  @override
+  String get documentTrailActionSubmitted => 'صدر';
+
+  @override
+  String get documentTrailActionEdited => 'عُدّلت بياناته';
+
+  @override
+  String get documentTrailActionCorrected => 'صُحِّح';
+
+  @override
+  String get documentTrailActionCancelled => 'أُلغي';
+
+  @override
+  String get documentTrailActionAmended => 'استُبدل بنسخة مصححة';
+
+  @override
+  String get documentTrailActionSuperseded => 'حلّ محلّه مستند آخر';
+
+  @override
+  String get documentTrailActionUnknown => 'إجراء';
+
+  @override
+  String documentTrailActorValue(String name) {
+    return 'بواسطة $name';
+  }
+
+  @override
+  String get documentTrailUnknownActor => 'غير معروف';
+
+  @override
+  String get documentTrailReasonLabel => 'السبب';
+
+  @override
+  String documentTrailChangeValue(String from, String to) {
+    return 'من $from إلى $to';
+  }
+
+  @override
+  String get documentTrailEmptyValue => '(فارغ)';
+
+  @override
+  String get documentTrailFieldAmount => 'المبلغ';
+
+  @override
+  String get documentTrailFieldTotal => 'الإجمالي';
+
+  @override
+  String get documentTrailFieldSubtotal => 'المجموع الفرعي';
+
+  @override
+  String get documentTrailFieldDiscountTotal => 'إجمالي الخصم';
+
+  @override
+  String get documentTrailFieldExtraDiscount => 'خصم إضافي';
+
+  @override
+  String get documentTrailFieldQuantity => 'الكمية';
+
+  @override
+  String get documentTrailFieldUnitCost => 'تكلفة الوحدة';
+
+  @override
+  String get documentTrailFieldDescription => 'الوصف';
+
+  @override
+  String get documentTrailFieldNotes => 'ملاحظات';
+
+  @override
+  String get documentTrailFieldReference => 'المرجع';
+
+  @override
+  String get documentTrailFieldCustomer => 'العميل';
+
+  @override
+  String get documentTrailFieldSupplier => 'المورد';
+
+  @override
+  String get documentTrailFieldCategory => 'التصنيف';
+
+  @override
+  String get documentTrailFieldPaymentMethod => 'طريقة الدفع';
+
+  @override
+  String get documentTrailFieldSpentAt => 'تاريخ الصرف';
+
+  @override
+  String get documentTrailFieldDueDate => 'تاريخ الاستحقاق';
+
+  @override
+  String get documentTrailFieldSupplierInvoiceNumber => 'رقم فاتورة المورد';
+
+  @override
+  String get documentTrailFieldCancelledTotal => 'قيمة ما لن يصل';
+
+  @override
+  String get documentRetractedTitle => 'هذا المستند ملغى';
+
+  @override
+  String get documentRetractedMessage =>
+      'لم يعد يُحتسب في أي تقرير أو رصيد. ما سجّله من حركة أُعيد.';
+
+  @override
+  String documentRetractedBy(String name, String when) {
+    return 'بواسطة $name — $when';
+  }
+
+  @override
+  String documentRetractedAt(String when) {
+    return 'بتاريخ $when';
+  }
+
+  @override
+  String documentRetractedReason(String reason) {
+    return 'السبب: $reason';
+  }
+
+  @override
+  String documentAmendmentBadge(int index) {
+    return 'نسخة $index';
+  }
+
+  @override
   String printAuditSheetTitle(String documentNumber) {
     return 'سجل الطباعة والمشاركة $documentNumber';
   }
@@ -12514,13 +12662,20 @@ class AppLocalizationsAr extends AppLocalizations {
   String get expenseSaveError => 'تعذّر حفظ المصروف.';
 
   @override
-  String get expenseDeleteTitle => 'حذف المصروف؟';
+  String get expenseCancelTitle => 'إلغاء المصروف؟';
 
   @override
-  String get expenseDeleteMessage => 'لا يمكن التراجع عن هذا الإجراء.';
+  String get expenseCancelMessage =>
+      'يبقى المصروف في السجل مع سبب الإلغاء، وإذا كان مدفوعًا من الدرج تعود قيمته إلى الدرج المفتوح.';
 
   @override
-  String get expenseDeleteError => 'تعذّر حذف المصروف.';
+  String get expenseCancelReasonLabel => 'سبب الإلغاء (اختياري)';
+
+  @override
+  String get expenseCancelConfirm => 'إلغاء المصروف';
+
+  @override
+  String get expenseCancelError => 'تعذّر إلغاء المصروف.';
 
   @override
   String get expenseEditTitle => 'تعديل المصروف';

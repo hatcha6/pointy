@@ -31,6 +31,8 @@ class _PurchaseOrderDocumentMenu extends StatelessWidget {
               viewModel,
               printingRepository,
             );
+          case _DocumentAction.trail:
+            _showPurchaseOrderTrail(context, viewModel);
         }
       },
       itemBuilder: (context) => [
@@ -62,12 +64,23 @@ class _PurchaseOrderDocumentMenu extends StatelessWidget {
             label: l10n.printAuditButton,
           ),
         ),
+        // Only where the scope is installed: previews and tests that do not
+        // wire it simply do not offer the item.
+        if (DocumentTrailScope.maybeOf(context) != null)
+          PopupMenuItem(
+            value: _DocumentAction.trail,
+            enabled: !busy,
+            child: _DocumentMenuRow(
+              icon: Icons.history_outlined,
+              label: l10n.documentTrailOpenAction,
+            ),
+          ),
       ],
     );
   }
 }
 
-enum _DocumentAction { print, share, audit }
+enum _DocumentAction { print, share, audit, trail }
 
 class _DocumentMenuRow extends StatelessWidget {
   const _DocumentMenuRow({required this.icon, required this.label});
@@ -701,6 +714,27 @@ Future<void> _showPurchaseOrderPrintAudit(
     documentType: PrintAuditDocumentType.purchaseOrder,
     documentId: order.id,
     documentNumber: documentNumber,
+  );
+}
+
+Future<void> _showPurchaseOrderTrail(
+  BuildContext context,
+  PurchaseOrderDetailsViewModel viewModel,
+) {
+  final repository = DocumentTrailScope.maybeOf(context);
+  if (repository == null) {
+    return Future<void>.value();
+  }
+  final l10n = AppLocalizations.of(context)!;
+  final order = viewModel.order;
+  return showDocumentTrailSheet(
+    context: context,
+    repository: repository,
+    documentType: 'purchase_order',
+    documentId: order.id,
+    documentNumber: order.orderNumber.isEmpty
+        ? l10n.purchaseOrderFallbackTitle(order.id)
+        : order.orderNumber,
   );
 }
 

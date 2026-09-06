@@ -151,20 +151,20 @@ class ExpensesViewModel extends ChangeNotifier {
     });
   }
 
-  Future<bool> deleteExpense(int expenseId) {
+  Future<bool> cancelExpense(int expenseId, {String reason = ''}) {
     return _mutate(() async {
-      final result = await _repository.deleteExpense(expenseId);
+      final result = await _repository.cancelExpense(expenseId, reason: reason);
       switch (result) {
-        case Ok<void>():
+        case Ok<Expense>():
           trackAuditEvent(
             _analyticsEngine,
-            name: 'expenses.expense.deleted',
+            name: 'expenses.expense.cancelled',
             entityType: 'expense',
             entityId: expenseId,
             attributes: const {'source': 'expenses'},
           );
           return true;
-        case Error<void>():
+        case Error<Expense>():
           return false;
       }
     });

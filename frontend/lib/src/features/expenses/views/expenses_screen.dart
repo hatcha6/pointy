@@ -266,12 +266,28 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     }
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
+    final reasonController = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        icon: const Icon(Icons.delete_outline),
-        title: Text(l10n.expenseDeleteTitle),
-        content: Text(l10n.expenseDeleteMessage),
+        icon: const Icon(Icons.undo),
+        title: Text(l10n.expenseCancelTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(l10n.expenseCancelMessage),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              autofocus: true,
+              textInputAction: TextInputAction.done,
+              decoration: InputDecoration(
+                labelText: l10n.expenseCancelReasonLabel,
+              ),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -279,17 +295,22 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(l10n.deleteButton),
+            child: Text(l10n.expenseCancelConfirm),
           ),
         ],
       ),
     );
+    final reason = reasonController.text.trim();
+    reasonController.dispose();
     if (confirmed != true) {
       return;
     }
-    final deleted = await widget.viewModel.deleteExpense(entry.relatedId!);
-    if (!deleted) {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.expenseDeleteError)));
+    final cancelled = await widget.viewModel.cancelExpense(
+      entry.relatedId!,
+      reason: reason,
+    );
+    if (!cancelled) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.expenseCancelError)));
     }
   }
 }

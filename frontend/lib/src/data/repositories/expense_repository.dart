@@ -62,7 +62,9 @@ class ExpenseRepository {
     return Result.guard(() => _service.updateExpense(expenseId, draft));
   }
 
-  Future<Result<void>> deleteExpense(int expenseId) {
-    return Result.guard(() => _service.deleteExpense(expenseId));
+  Future<Result<Expense>> cancelExpense(int expenseId, {String reason = ''}) {
+    return Result.guard(
+      () => _service.cancelExpense(expenseId, reason: reason),
+    );
   }
 }

@@ -373,6 +373,11 @@ class SaleOrder {
   const SaleOrder({
     required this.id,
     required this.status,
+    this.docStatus = '',
+    this.cancelledAt,
+    this.cancelledByUsername,
+    this.cancelReason,
+    this.amendmentIndex = 0,
     required this.lines,
     required this.payments,
     required this.subtotal,
@@ -411,6 +416,15 @@ class SaleOrder {
   final int id;
   final String? receiptNumber;
   final String status;
+
+  /// The document's own state — draft / submitted / cancelled — as against
+  /// [status], which says where the money and the goods have got to. The two
+  /// agree on the happy path and come apart exactly when something was undone.
+  final String docStatus;
+  final DateTime? cancelledAt;
+  final String? cancelledByUsername;
+  final String? cancelReason;
+  final int amendmentIndex;
   final int? registerSession;
   final String? registerSessionNumber;
   final int? customer;
@@ -468,6 +482,13 @@ class SaleOrder {
       id: _intFromJson(json['id']),
       receiptNumber: json['receipt_number']?.toString(),
       status: json['status']?.toString() ?? '',
+      docStatus: json['doc_status']?.toString() ?? '',
+      cancelledAt: DateTime.tryParse(
+        json['cancelled_at']?.toString() ?? '',
+      )?.toLocal(),
+      cancelledByUsername: json['cancelled_by_username']?.toString(),
+      cancelReason: json['cancel_reason']?.toString(),
+      amendmentIndex: (json['amendment_index'] as num?)?.toInt() ?? 0,
       registerSession: _nullableIntFromJson(json['register_session']),
       registerSessionNumber: json['register_session_number']?.toString(),
       customer: _nullableIntFromJson(json['customer']),

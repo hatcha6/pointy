@@ -30,6 +30,7 @@ from apps.catalog.views import (
     VariantOptionViewSet,
 )
 from apps.channels.views import SalesChannelViewSet
+from apps.documents.views import DocumentEventViewSet
 from apps.customers.views import CustomerViewSet, PaymentCardViewSet
 from apps.operations.views import (
     AssetTypeViewSet,
@@ -207,6 +208,7 @@ router.register("printer-profiles", PrinterProfileViewSet)
 router.register("prep-stations", PrepStationViewSet)
 router.register("print-agents", PrintAgentViewSet)
 router.register("print-audit-events", PrintAuditEventViewSet)
+router.register("document-events", DocumentEventViewSet, basename="document-event")
 router.register("print-jobs", PrintJobViewSet)
 router.register("reports", ReportRunViewSet, basename="report")
 router.register(

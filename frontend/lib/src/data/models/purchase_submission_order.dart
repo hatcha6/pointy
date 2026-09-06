@@ -5,6 +5,11 @@ class PurchaseOrder {
     required this.id,
     required this.orderNumber,
     required this.status,
+    this.docStatus = '',
+    this.cancelledAt,
+    this.cancelledByUsername,
+    this.cancelReason,
+    this.amendmentIndex = 0,
     required this.lineCount,
     required this.total,
     required this.lines,
@@ -76,6 +81,15 @@ class PurchaseOrder {
 
   bool get hasTypedRate => rateSource == 'manual';
   final String status;
+
+  /// The document's own state — draft / submitted / cancelled — as against
+  /// [status], which says where the delivery has got to. The two agree on the
+  /// happy path and come apart exactly when something was undone.
+  final String docStatus;
+  final DateTime? cancelledAt;
+  final String? cancelledByUsername;
+  final String? cancelReason;
+  final int amendmentIndex;
   final int lineCount;
   final List<PurchaseOrderLine> lines;
   final List<PurchaseOrderAdjustment> adjustments;
@@ -182,6 +196,11 @@ class PurchaseOrder {
       id: _intFromJson(json['id']),
       orderNumber: json['order_number']?.toString() ?? '',
       status: status,
+      docStatus: json['doc_status']?.toString() ?? '',
+      cancelledAt: _dateTimeFromJson(json['cancelled_at']),
+      cancelledByUsername: json['cancelled_by_username']?.toString(),
+      cancelReason: json['cancel_reason']?.toString(),
+      amendmentIndex: _intFromJson(json['amendment_index']),
       supplierId: _nullableIntFromJson(json['supplier']),
       supplierName: json['supplier_name']?.toString(),
       supplierContactName: json['supplier_contact_name']?.toString(),

@@ -6643,6 +6643,112 @@
     }
   },
   "printAuditButton": "سجل الطباعة والمشاركة",
+  "documentTrailSheetTitle": "سجل المستند {documentNumber}",
+  "@documentTrailSheetTitle": {
+    "description": "Document trail sheet title.",
+    "placeholders": {
+      "documentNumber": {
+        "type": "String"
+      }
+    }
+  },
+  "documentTrailRefreshTooltip": "تحديث السجل",
+  "documentTrailLoading": "جارٍ تحميل السجل...",
+  "documentTrailLoadError": "تعذّر تحميل سجل المستند.",
+  "documentTrailEmptyTitle": "لا يوجد سجل بعد",
+  "documentTrailEmptyMessage": "كل إصدار أو تصحيح أو إلغاء لهذا المستند سيظهر هنا، مع من قام به ومتى.",
+  "documentTrailOpenAction": "سجل المستند",
+  "documentTrailActionCreated": "أُنشئ",
+  "documentTrailActionSubmitted": "صدر",
+  "documentTrailActionEdited": "عُدّلت بياناته",
+  "documentTrailActionCorrected": "صُحِّح",
+  "documentTrailActionCancelled": "أُلغي",
+  "documentTrailActionAmended": "استُبدل بنسخة مصححة",
+  "documentTrailActionSuperseded": "حلّ محلّه مستند آخر",
+  "documentTrailActionUnknown": "إجراء",
+  "documentTrailActorValue": "بواسطة {name}",
+  "@documentTrailActorValue": {
+    "description": "Who performed a document trail action.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "documentTrailUnknownActor": "غير معروف",
+  "documentTrailReasonLabel": "السبب",
+  "documentTrailChangeValue": "من {from} إلى {to}",
+  "@documentTrailChangeValue": {
+    "description": "One field a correction moved, and where from and to.",
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "documentTrailEmptyValue": "(فارغ)",
+  "documentTrailFieldAmount": "المبلغ",
+  "documentTrailFieldTotal": "الإجمالي",
+  "documentTrailFieldSubtotal": "المجموع الفرعي",
+  "documentTrailFieldDiscountTotal": "إجمالي الخصم",
+  "documentTrailFieldExtraDiscount": "خصم إضافي",
+  "documentTrailFieldQuantity": "الكمية",
+  "documentTrailFieldUnitCost": "تكلفة الوحدة",
+  "documentTrailFieldDescription": "الوصف",
+  "documentTrailFieldNotes": "ملاحظات",
+  "documentTrailFieldReference": "المرجع",
+  "documentTrailFieldCustomer": "العميل",
+  "documentTrailFieldSupplier": "المورد",
+  "documentTrailFieldCategory": "التصنيف",
+  "documentTrailFieldPaymentMethod": "طريقة الدفع",
+  "documentTrailFieldSpentAt": "تاريخ الصرف",
+  "documentTrailFieldDueDate": "تاريخ الاستحقاق",
+  "documentTrailFieldSupplierInvoiceNumber": "رقم فاتورة المورد",
+  "documentTrailFieldCancelledTotal": "قيمة ما لن يصل",
+  "documentRetractedTitle": "هذا المستند ملغى",
+  "documentRetractedMessage": "لم يعد يُحتسب في أي تقرير أو رصيد. ما سجّله من حركة أُعيد.",
+  "documentRetractedBy": "بواسطة {name} — {when}",
+  "@documentRetractedBy": {
+    "description": "Who cancelled a document and when.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "documentRetractedAt": "بتاريخ {when}",
+  "@documentRetractedAt": {
+    "description": "When a document was cancelled, actor unknown.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "documentRetractedReason": "السبب: {reason}",
+  "@documentRetractedReason": {
+    "description": "The reason given for a cancellation.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "documentAmendmentBadge": "نسخة {index}",
+  "@documentAmendmentBadge": {
+    "description": "Which version of an amended document this is.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      }
+    }
+  },
   "printAuditSheetTitle": "سجل الطباعة والمشاركة {documentNumber}",
   "@printAuditSheetTitle": {
     "description": "Print/share audit sheet title.",
@@ -7673,9 +7779,11 @@
   "expenseLoadDetailsError": "تعذّر تحميل تفاصيل المصروف.",
   "expenseNeedsCategoryMessage": "أضِف فئة واحدة على الأقل قبل تسجيل مصروف.",
   "expenseSaveError": "تعذّر حفظ المصروف.",
-  "expenseDeleteTitle": "حذف المصروف؟",
-  "expenseDeleteMessage": "لا يمكن التراجع عن هذا الإجراء.",
-  "expenseDeleteError": "تعذّر حذف المصروف.",
+  "expenseCancelTitle": "إلغاء المصروف؟",
+  "expenseCancelMessage": "يبقى المصروف في السجل مع سبب الإلغاء، وإذا كان مدفوعًا من الدرج تعود قيمته إلى الدرج المفتوح.",
+  "expenseCancelReasonLabel": "سبب الإلغاء (اختياري)",
+  "expenseCancelConfirm": "إلغاء المصروف",
+  "expenseCancelError": "تعذّر إلغاء المصروف.",
   "expenseEditTitle": "تعديل المصروف",
   "expenseCategoryLabel": "الفئة",
   "expenseDescriptionLabel": "الوصف",

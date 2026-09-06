@@ -10,6 +10,9 @@ import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/services/order_document_service.dart';
 import '../../../shared/components/components.dart';
+import '../../../shared/documents/document_lifecycle.dart';
+import '../../../shared/documents/document_trail_sheet.dart';
+import '../../../shared/documents/document_trail_scope.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
@@ -240,7 +243,14 @@ class _PurchaseOrderStatusCallout extends StatelessWidget {
 
     if (status == 'cancelled') {
       title = l10n.purchaseOrderCalloutCancelledTitle;
-      message = l10n.purchaseOrderCalloutCancelledMessage;
+      // Who retracted it, when, and the reason they gave — the questions a
+      // bare "this order was cancelled" leaves the reader holding.
+      message = DocumentRetraction(
+        docStatus: order.docStatus,
+        cancelledAt: order.cancelledAt,
+        cancelledByUsername: order.cancelledByUsername,
+        cancelReason: order.cancelReason,
+      ).messageWith(l10n, l10n.purchaseOrderCalloutCancelledMessage);
       tone = PointyCalloutTone.neutral;
       icon = Icons.cancel_outlined;
     } else if (status == 'draft') {

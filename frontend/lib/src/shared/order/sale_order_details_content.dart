@@ -1,3 +1,7 @@
+import '../documents/document_trail_sheet.dart';
+import '../documents/document_trail_scope.dart';
+import '../documents/document_lifecycle.dart';
+import '../../data/repositories/document_trail_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -131,7 +135,7 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
             const SizedBox(height: 12),
           ],
           if (_isVoided) ...[
-            const _VoidedOrderCallout(),
+            _VoidedOrderCallout(order: order),
             const SizedBox(height: 12),
           ],
           if (_isCreditWithBalance) ...[
@@ -161,6 +165,9 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
               onReprint: widget.onReprint == null ? null : _requestReprint,
               onShare: widget.onShare == null ? null : _shareInvoice,
               onPrintAudit: widget.onPrintAudit,
+              onDocumentTrail: _trailRepository == null
+                  ? null
+                  : _openDocumentTrail,
               onReturn: _canReturn ? _showReturnDialog : null,
               onVoid: _canVoid ? _showVoidDialog : null,
               onExchange: _canExchange ? _showExchangeDialog : null,
@@ -179,6 +186,26 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
           _TotalsSection(order: order),
         ],
       ),
+    );
+  }
+
+  /// Null in previews and in tests that install no scope — the action simply
+  /// is not offered there, rather than being offered and failing.
+  DocumentTrailRepository? get _trailRepository =>
+      DocumentTrailScope.maybeOf(context);
+
+  Future<void> _openDocumentTrail() {
+    final l10n = AppLocalizations.of(context)!;
+    final repository = _trailRepository;
+    if (repository == null) {
+      return Future<void>.value();
+    }
+    return showDocumentTrailSheet(
+      context: context,
+      repository: repository,
+      documentType: 'sale',
+      documentId: widget.order.id,
+      documentNumber: _receiptNumber(l10n, widget.order),
     );
   }
 
@@ -458,6 +485,7 @@ class _ActionsSection extends StatelessWidget {
     this.onReprint,
     this.onShare,
     this.onPrintAudit,
+    this.onDocumentTrail,
     this.onReturn,
     this.onVoid,
     this.onExchange,
@@ -481,6 +509,7 @@ class _ActionsSection extends StatelessWidget {
   final VoidCallback? onReprint;
   final VoidCallback? onShare;
   final VoidCallback? onPrintAudit;
+  final VoidCallback? onDocumentTrail;
   final VoidCallback? onReturn;
   final VoidCallback? onVoid;
   final VoidCallback? onExchange;
@@ -577,6 +606,13 @@ class _ActionsSection extends StatelessWidget {
               onPressed: isBusy ? null : onPrintAudit,
               icon: const Icon(Icons.manage_search_outlined),
               label: Text(l10n.printAuditButton),
+            ),
+          if (onDocumentTrail != null)
+            OutlinedButton.icon(
+              key: const ValueKey('invoice_document_trail_button'),
+              onPressed: isBusy ? null : onDocumentTrail,
+              icon: const Icon(Icons.history_outlined),
+              label: Text(l10n.documentTrailOpenAction),
             ),
           if (canReturn)
             OutlinedButton.icon(
@@ -1153,18 +1189,28 @@ class _ExchangeNetSummary extends StatelessWidget {
 /// Names the reason the adjustment actions are missing on a voided invoice,
 /// the way the purchase-order details screen calls out a cancelled order.
 class _VoidedOrderCallout extends StatelessWidget {
-  const _VoidedOrderCallout();
+  const _VoidedOrderCallout({required this.order});
+
+  final SaleOrder order;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    // "This invoice is void" invites the next question and answers none of it.
+    // Every retraction records who, when and why; the callout says so.
+    final retraction = DocumentRetraction(
+      docStatus: order.docStatus,
+      cancelledAt: order.cancelledAt,
+      cancelledByUsername: order.cancelledByUsername,
+      cancelReason: order.cancelReason,
+    );
 
     return PointyDetailCallout(
       key: const ValueKey('voided_invoice_callout'),
       icon: Icons.block_outlined,
       tone: PointyCalloutTone.neutral,
       title: l10n.invoiceVoidedCalloutTitle,
-      message: l10n.invoiceVoidedCalloutBody,
+      message: retraction.messageWith(l10n, l10n.invoiceVoidedCalloutBody),
     );
   }
 }

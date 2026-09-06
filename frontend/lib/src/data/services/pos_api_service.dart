@@ -39,6 +39,7 @@ import '../models/dashboard.dart';
 import '../models/dashboard_ai_digest.dart';
 import '../models/discount_rule.dart';
 import '../models/employee.dart';
+import '../models/document_trail_event.dart';
 import '../models/expense.dart';
 import '../models/expense_category.dart';
 import '../models/expense_ledger_entry.dart';
@@ -96,6 +97,7 @@ import 'customer_api_client.dart';
 import 'dashboard_api_client.dart';
 import 'discount_api_client.dart';
 import 'employee_api_client.dart';
+import 'document_trail_api_client.dart';
 import 'expense_api_client.dart';
 import 'treasury_api_client.dart';
 import 'fraud_api_client.dart';
@@ -146,6 +148,7 @@ class PosApiService {
     _shopSettings = ShopSettingsApiClient(_session);
     _catalog = CatalogApiClient(_session);
     _customers = CustomerApiClient(_session);
+    _documentTrail = DocumentTrailApiClient(_session);
     _dashboard = DashboardApiClient(_session);
     _discounts = DiscountApiClient(_session);
     _employees = EmployeeApiClient(_session);
@@ -206,6 +209,7 @@ class PosApiService {
   late final DashboardApiClient _dashboard;
   late final DiscountApiClient _discounts;
   late final EmployeeApiClient _employees;
+  late final DocumentTrailApiClient _documentTrail;
   late final ExpenseApiClient _expenses;
   late final TreasuryApiClient _treasury;
   late final FraudApiClient _fraud;
@@ -1641,8 +1645,20 @@ class PosApiService {
     return _expenses.updateExpense(expenseId, draft);
   }
 
-  Future<void> deleteExpense(int expenseId) {
-    return _expenses.deleteExpense(expenseId);
+  /// A document's own history: every retraction, correction and issue, with
+  /// the reason the person gave. Same shape for every kind of document.
+  Future<List<DocumentTrailEvent>> fetchDocumentTrail({
+    required String documentType,
+    required int documentId,
+  }) {
+    return _documentTrail.fetchTrail(
+      documentType: documentType,
+      documentId: documentId,
+    );
+  }
+
+  Future<Expense> cancelExpense(int expenseId, {String reason = ''}) {
+    return _expenses.cancelExpense(expenseId, reason: reason);
   }
 
   Future<PrepStationPage> fetchPrepStations({int page = 1}) {

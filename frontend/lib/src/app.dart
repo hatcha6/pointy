@@ -14,6 +14,7 @@ import 'data/services/connection_status_controller.dart';
 import 'data/services/pos_api_service.dart';
 import 'features/companion/companion_bridge.dart';
 import 'features/companion/companion_scope.dart';
+import 'shared/documents/document_trail_scope.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'features/auth/views/auth_gate.dart';
 import 'features/connection/views/connection_gate.dart';
@@ -175,7 +176,13 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                     builder: (context, bridge, railChild) => CompanionScope(
                       bridge: bridge,
                       repository: _dependencies.companionRepository,
-                      child: railChild ?? const SizedBox.shrink(),
+                      // Same reasoning, one level in: every screen that shows a
+                      // document can offer its history without a constructor
+                      // parameter for it.
+                      child: DocumentTrailScope(
+                        repository: _dependencies.documentTrailRepository,
+                        child: railChild ?? const SizedBox.shrink(),
+                      ),
                     ),
                     child: child ?? const SizedBox.shrink(),
                   ),

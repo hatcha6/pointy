@@ -4,6 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models import Manager, Sum
 from rest_framework import serializers
 
+from apps.documents.serializers import DocumentLifecycleFields
 from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
 from apps.catalog.models import ProductVariant
@@ -1469,7 +1470,7 @@ class _CurrencyCarrier:
         self.exchange_rate = exchange_rate
 
 
-class PurchaseOrderSerializer(serializers.ModelSerializer):
+class PurchaseOrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
     lines = PurchaseLineSerializer(many=True, allow_empty=False)
     # What the supplier invoiced, summed. Derived rather than stored: it exists
     # so a buyer can check the screen against the paper invoice, and it never
@@ -1548,6 +1549,7 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "order_number",
+            *DocumentLifecycleFields.LIFECYCLE_FIELDS,
             "supplier",
             "supplier_name",
             "supplier_contact_name",

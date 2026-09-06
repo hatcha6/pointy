@@ -241,6 +241,14 @@
       ],
       "cwd": "frontend",
       "port": 8091
+    },
+    {
+      "name": "document-trail-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-document-trail-preview"
+      ],
+      "port": 8080
     }
   ]
 }

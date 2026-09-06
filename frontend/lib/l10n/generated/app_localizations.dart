@@ -19014,6 +19014,270 @@ abstract class AppLocalizations {
   /// **'سجل الطباعة والمشاركة'**
   String get printAuditButton;
 
+  /// Document trail sheet title.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل المستند {documentNumber}'**
+  String documentTrailSheetTitle(String documentNumber);
+
+  /// No description provided for @documentTrailRefreshTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث السجل'**
+  String get documentTrailRefreshTooltip;
+
+  /// No description provided for @documentTrailLoading.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ تحميل السجل...'**
+  String get documentTrailLoading;
+
+  /// No description provided for @documentTrailLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل سجل المستند.'**
+  String get documentTrailLoadError;
+
+  /// No description provided for @documentTrailEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد سجل بعد'**
+  String get documentTrailEmptyTitle;
+
+  /// No description provided for @documentTrailEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل إصدار أو تصحيح أو إلغاء لهذا المستند سيظهر هنا، مع من قام به ومتى.'**
+  String get documentTrailEmptyMessage;
+
+  /// No description provided for @documentTrailOpenAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل المستند'**
+  String get documentTrailOpenAction;
+
+  /// No description provided for @documentTrailActionCreated.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُنشئ'**
+  String get documentTrailActionCreated;
+
+  /// No description provided for @documentTrailActionSubmitted.
+  ///
+  /// In ar, this message translates to:
+  /// **'صدر'**
+  String get documentTrailActionSubmitted;
+
+  /// No description provided for @documentTrailActionEdited.
+  ///
+  /// In ar, this message translates to:
+  /// **'عُدّلت بياناته'**
+  String get documentTrailActionEdited;
+
+  /// No description provided for @documentTrailActionCorrected.
+  ///
+  /// In ar, this message translates to:
+  /// **'صُحِّح'**
+  String get documentTrailActionCorrected;
+
+  /// No description provided for @documentTrailActionCancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغي'**
+  String get documentTrailActionCancelled;
+
+  /// No description provided for @documentTrailActionAmended.
+  ///
+  /// In ar, this message translates to:
+  /// **'استُبدل بنسخة مصححة'**
+  String get documentTrailActionAmended;
+
+  /// No description provided for @documentTrailActionSuperseded.
+  ///
+  /// In ar, this message translates to:
+  /// **'حلّ محلّه مستند آخر'**
+  String get documentTrailActionSuperseded;
+
+  /// No description provided for @documentTrailActionUnknown.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجراء'**
+  String get documentTrailActionUnknown;
+
+  /// Who performed a document trail action.
+  ///
+  /// In ar, this message translates to:
+  /// **'بواسطة {name}'**
+  String documentTrailActorValue(String name);
+
+  /// No description provided for @documentTrailUnknownActor.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير معروف'**
+  String get documentTrailUnknownActor;
+
+  /// No description provided for @documentTrailReasonLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'السبب'**
+  String get documentTrailReasonLabel;
+
+  /// One field a correction moved, and where from and to.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {from} إلى {to}'**
+  String documentTrailChangeValue(String from, String to);
+
+  /// No description provided for @documentTrailEmptyValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'(فارغ)'**
+  String get documentTrailEmptyValue;
+
+  /// No description provided for @documentTrailFieldAmount.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get documentTrailFieldAmount;
+
+  /// No description provided for @documentTrailFieldTotal.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجمالي'**
+  String get documentTrailFieldTotal;
+
+  /// No description provided for @documentTrailFieldSubtotal.
+  ///
+  /// In ar, this message translates to:
+  /// **'المجموع الفرعي'**
+  String get documentTrailFieldSubtotal;
+
+  /// No description provided for @documentTrailFieldDiscountTotal.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الخصم'**
+  String get documentTrailFieldDiscountTotal;
+
+  /// No description provided for @documentTrailFieldExtraDiscount.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم إضافي'**
+  String get documentTrailFieldExtraDiscount;
+
+  /// No description provided for @documentTrailFieldQuantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية'**
+  String get documentTrailFieldQuantity;
+
+  /// No description provided for @documentTrailFieldUnitCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة الوحدة'**
+  String get documentTrailFieldUnitCost;
+
+  /// No description provided for @documentTrailFieldDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوصف'**
+  String get documentTrailFieldDescription;
+
+  /// No description provided for @documentTrailFieldNotes.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظات'**
+  String get documentTrailFieldNotes;
+
+  /// No description provided for @documentTrailFieldReference.
+  ///
+  /// In ar, this message translates to:
+  /// **'المرجع'**
+  String get documentTrailFieldReference;
+
+  /// No description provided for @documentTrailFieldCustomer.
+  ///
+  /// In ar, this message translates to:
+  /// **'العميل'**
+  String get documentTrailFieldCustomer;
+
+  /// No description provided for @documentTrailFieldSupplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'المورد'**
+  String get documentTrailFieldSupplier;
+
+  /// No description provided for @documentTrailFieldCategory.
+  ///
+  /// In ar, this message translates to:
+  /// **'التصنيف'**
+  String get documentTrailFieldCategory;
+
+  /// No description provided for @documentTrailFieldPaymentMethod.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقة الدفع'**
+  String get documentTrailFieldPaymentMethod;
+
+  /// No description provided for @documentTrailFieldSpentAt.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الصرف'**
+  String get documentTrailFieldSpentAt;
+
+  /// No description provided for @documentTrailFieldDueDate.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الاستحقاق'**
+  String get documentTrailFieldDueDate;
+
+  /// No description provided for @documentTrailFieldSupplierInvoiceNumber.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم فاتورة المورد'**
+  String get documentTrailFieldSupplierInvoiceNumber;
+
+  /// No description provided for @documentTrailFieldCancelledTotal.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيمة ما لن يصل'**
+  String get documentTrailFieldCancelledTotal;
+
+  /// No description provided for @documentRetractedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المستند ملغى'**
+  String get documentRetractedTitle;
+
+  /// No description provided for @documentRetractedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يعد يُحتسب في أي تقرير أو رصيد. ما سجّله من حركة أُعيد.'**
+  String get documentRetractedMessage;
+
+  /// Who cancelled a document and when.
+  ///
+  /// In ar, this message translates to:
+  /// **'بواسطة {name} — {when}'**
+  String documentRetractedBy(String name, String when);
+
+  /// When a document was cancelled, actor unknown.
+  ///
+  /// In ar, this message translates to:
+  /// **'بتاريخ {when}'**
+  String documentRetractedAt(String when);
+
+  /// The reason given for a cancellation.
+  ///
+  /// In ar, this message translates to:
+  /// **'السبب: {reason}'**
+  String documentRetractedReason(String reason);
+
+  /// Which version of an amended document this is.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخة {index}'**
+  String documentAmendmentBadge(int index);
+
   /// Print/share audit sheet title.
   ///
   /// In ar, this message translates to:
@@ -21665,23 +21929,35 @@ abstract class AppLocalizations {
   /// **'تعذّر حفظ المصروف.'**
   String get expenseSaveError;
 
-  /// No description provided for @expenseDeleteTitle.
+  /// No description provided for @expenseCancelTitle.
   ///
   /// In ar, this message translates to:
-  /// **'حذف المصروف؟'**
-  String get expenseDeleteTitle;
+  /// **'إلغاء المصروف؟'**
+  String get expenseCancelTitle;
 
-  /// No description provided for @expenseDeleteMessage.
+  /// No description provided for @expenseCancelMessage.
   ///
   /// In ar, this message translates to:
-  /// **'لا يمكن التراجع عن هذا الإجراء.'**
-  String get expenseDeleteMessage;
+  /// **'يبقى المصروف في السجل مع سبب الإلغاء، وإذا كان مدفوعًا من الدرج تعود قيمته إلى الدرج المفتوح.'**
+  String get expenseCancelMessage;
 
-  /// No description provided for @expenseDeleteError.
+  /// No description provided for @expenseCancelReasonLabel.
   ///
   /// In ar, this message translates to:
-  /// **'تعذّر حذف المصروف.'**
-  String get expenseDeleteError;
+  /// **'سبب الإلغاء (اختياري)'**
+  String get expenseCancelReasonLabel;
+
+  /// No description provided for @expenseCancelConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء المصروف'**
+  String get expenseCancelConfirm;
+
+  /// No description provided for @expenseCancelError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إلغاء المصروف.'**
+  String get expenseCancelError;
 
   /// No description provided for @expenseEditTitle.
   ///

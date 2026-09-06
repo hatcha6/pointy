@@ -92,9 +92,18 @@ class ExpenseApiClient {
     );
   }
 
-  Future<void> deleteExpense(int expenseId) async {
-    final response = await _session.delete('expenses/$expenseId/');
-    _session.ensureSuccess(response, 'Expense delete failed with status');
+  /// Retracts an expense. The row survives with its reason, and cash that came
+  /// out of a drawer goes back into the open one — which is why this is a POST
+  /// with a body rather than the DELETE it used to be.
+  Future<Expense> cancelExpense(int expenseId, {String reason = ''}) async {
+    final response = await _session.post(
+      'expenses/$expenseId/cancel/',
+      body: {'reason': reason},
+    );
+    _session.ensureSuccess(response, 'Expense cancel failed with status');
+    return Expense.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
   }
 
   // --- unified ledger --------------------------------------------------------
