@@ -67,6 +67,14 @@ class RegisteredTypeTests(TestCase):
         """``system_write`` is the one way past the freeze. It is only a
         guarantee while its callers can be counted on one hand, so they are
         counted here."""
+        if not (BACKEND_ROOT / "apps" / "documents" / "guards.py").exists():
+            # Compiled build: ``compile_backend.py`` deletes every ``.py`` it
+            # turns into a ``.so``, so there is no source to count. Left alone
+            # this reads as "nobody uses the escape hatch any more" and fails
+            # the whole allow-list. The guard is enforced by the source-suite
+            # job in .github/workflows/tests.yml, on the same commit.
+            self.skipTest("static source guard; enforced by the source test run")
+
         pattern = re.compile(r"\bsystem_write\s*\(")
         found = {}
         for path in sorted(BACKEND_ROOT.glob("apps/**/*.py")):
