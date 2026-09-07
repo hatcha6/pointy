@@ -12,6 +12,7 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/warehouse_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/catalog/catalog.dart';
@@ -32,6 +33,7 @@ class ProductList extends StatelessWidget {
     required this.inventoryRepository,
     required this.printingRepository,
     required this.purchaseRepository,
+    this.warehouseRepository,
     required this.saleRepository,
     required this.shopSettingsRepository,
     this.contactRepository,
@@ -47,6 +49,10 @@ class ProductList extends StatelessWidget {
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
+  /// Optional: without it the stock panel simply shows the total and no
+  /// per-place breakdown, which is the right answer for a shop with one
+  /// place anyway.
+  final WarehouseRepository? warehouseRepository;
   final SaleRepository saleRepository;
   final ShopSettingsRepository shopSettingsRepository;
   final ContactRepository? contactRepository;
@@ -275,6 +281,7 @@ class ProductList extends StatelessWidget {
       inventoryRepository: inventoryRepository,
       printingRepository: printingRepository,
       purchaseRepository: purchaseRepository,
+    warehouseRepository: warehouseRepository,
       saleRepository: saleRepository,
       shopSettingsRepository: shopSettingsRepository,
       capabilities: capabilities,
@@ -574,6 +581,7 @@ Future<void> openProductDetails(
   /// The catalog's already-loaded currency options. Omitted, the details
   /// screen's edit sheet simply shows no pricing-currency picker.
   PricingCurrencyOptions? pricingOptions,
+  WarehouseRepository? warehouseRepository,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -591,6 +599,7 @@ Future<void> openProductDetails(
         inventoryRepository: inventoryRepository,
         printingRepository: printingRepository,
         purchaseRepository: purchaseRepository,
+        warehouseRepository: warehouseRepository,
         shopSettingsRepository: shopSettingsRepository,
         capabilities: capabilities,
         analyticsEngine: analyticsEngine,

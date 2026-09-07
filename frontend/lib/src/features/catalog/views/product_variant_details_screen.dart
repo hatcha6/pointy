@@ -16,6 +16,7 @@ import '../../../shared/units.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_status_pill.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../data/models/warehouse.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'barcode_label_print_action.dart';
 import 'product_details_hero.dart';
@@ -488,6 +489,13 @@ class _StockSummarySection extends StatelessWidget {
               label: l10n.stockOnHandLabel,
               value: viewModel.quantityOnHand,
             ),
+          // Only when it would say something. A shop with one place already
+          // has its whole answer in the number above, and repeating it under a
+          // heading would be filling space rather than informing anyone.
+          if (viewModel.isSplitAcrossPlaces) ...[
+            const SizedBox(height: 14),
+            _StockByPlacePanel(rows: viewModel.byWarehouse),
+          ],
           const SizedBox(height: 14),
           Wrap(
             spacing: 8,
@@ -587,4 +595,122 @@ String _formatSignedPercent(double value, {bool includePositiveSign = true}) {
     return '-$amount';
   }
   return amount;
+}
+
+/// Where the units actually are.
+///
+/// Shown only when a product sits in more than one place, because that is the
+/// only time "forty-three on hand" is an incomplete answer: the cashier at the
+/// counter needs to know that three of them are within reach and forty are in
+/// the back.
+class _StockByPlacePanel extends StatelessWidget {
+  const _StockByPlacePanel({required this.rows});
+
+  final List<WarehouseStockRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+    final total = rows.fold<double>(0, (sum, row) => sum + row.quantityOnHand);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surfaceSunken,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.warehouseStockBreakdownTitle,
+            style: theme.textTheme.labelLarge?.copyWith(color: colors.mutedInk),
+          ),
+          const SizedBox(height: 10),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(
+                    _placeIcon(row.kind),
+                    size: 18,
+                    color: colors.mutedInk,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          row.warehouseName,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        if (row.quantityCommitted > 0 ||
+                            row.quantityExpected > 0)
+                          Text(
+                            [
+                              if (row.quantityCommitted > 0)
+                                l10n.warehouseCommittedShort(
+                                  _short(row.quantityCommitted),
+                                ),
+                              if (row.quantityExpected > 0)
+                                l10n.warehouseExpectedShort(
+                                  _short(row.quantityExpected),
+                                ),
+                            ].join(' · '),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colors.mutedInk,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // A bar rather than only a number: which room holds the bulk
+                  // of the stock is the thing an owner reads at a glance, and a
+                  // column of digits makes that a subtraction.
+                  SizedBox(
+                    width: 64,
+                    child: PointyProgressBar(
+                      value: total <= 0
+                          ? 0
+                          : (row.quantityOnHand / total).clamp(0.0, 1.0),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    _short(row.quantityOnHand),
+                    style: theme.textTheme.titleSmall,
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _short(double value) {
+    final rounded = value.roundToDouble();
+    return value == rounded
+        ? rounded.toInt().toString()
+        : value.toStringAsFixed(2);
+  }
+
+  IconData _placeIcon(WarehouseKind kind) {
+    switch (kind) {
+      case WarehouseKind.shopFloor:
+        return Icons.storefront_outlined;
+      case WarehouseKind.storeRoom:
+        return Icons.warehouse_outlined;
+      case WarehouseKind.van:
+        return Icons.local_shipping_outlined;
+      case WarehouseKind.transit:
+        return Icons.route_outlined;
+    }
+  }
 }

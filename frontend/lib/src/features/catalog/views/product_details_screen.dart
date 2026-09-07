@@ -10,6 +10,7 @@ import '../../../data/models/product_variant.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/warehouse_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
@@ -37,6 +38,7 @@ class ProductDetailsScreen extends StatelessWidget {
     required this.inventoryRepository,
     required this.printingRepository,
     required this.purchaseRepository,
+    this.warehouseRepository,
     required this.shopSettingsRepository,
     required this.capabilities,
     this.analyticsEngine,
@@ -47,6 +49,10 @@ class ProductDetailsScreen extends StatelessWidget {
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
+  /// Optional: without it the stock panel simply shows the total and no
+  /// per-place breakdown, which is the right answer for a shop with one
+  /// place anyway.
+  final WarehouseRepository? warehouseRepository;
   final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
@@ -77,6 +83,7 @@ class ProductDetailsScreen extends StatelessWidget {
           inventoryRepository: inventoryRepository,
           printingRepository: printingRepository,
           purchaseRepository: purchaseRepository,
+          warehouseRepository: warehouseRepository,
           shopSettingsRepository: shopSettingsRepository,
           capabilities: capabilities,
           analyticsEngine: analyticsEngine,
@@ -96,6 +103,7 @@ class ProductDetailsView extends StatelessWidget {
     required this.inventoryRepository,
     required this.printingRepository,
     required this.purchaseRepository,
+    this.warehouseRepository,
     required this.shopSettingsRepository,
     required this.capabilities,
     this.analyticsEngine,
@@ -106,6 +114,10 @@ class ProductDetailsView extends StatelessWidget {
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
+  /// Optional: without it the stock panel simply shows the total and no
+  /// per-place breakdown, which is the right answer for a shop with one
+  /// place anyway.
+  final WarehouseRepository? warehouseRepository;
   final ShopSettingsRepository shopSettingsRepository;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
@@ -312,6 +324,7 @@ class ProductDetailsView extends StatelessWidget {
             inventoryRepository,
             purchaseRepository,
             detailProduct,
+            warehouseRepository: warehouseRepository,
             analyticsEngine: analyticsEngine,
           ),
           printingRepository: printingRepository,
@@ -351,6 +364,7 @@ class ProductDetailsView extends StatelessWidget {
           inventoryRepository: inventoryRepository,
           printingRepository: printingRepository,
           purchaseRepository: purchaseRepository,
+          warehouseRepository: warehouseRepository,
           shopSettingsRepository: shopSettingsRepository,
           capabilities: capabilities,
           analyticsEngine: analyticsEngine,

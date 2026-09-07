@@ -9,25 +9,31 @@ import '../../../data/models/purchase_submission.dart';
 import '../../../data/models/stock_item.dart';
 import '../../../data/models/stock_movement.dart';
 import '../../../data/models/stock_movement_page.dart';
+import '../../../data/models/warehouse.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/warehouse_repository.dart';
 
 class ProductStockViewModel extends ChangeNotifier {
   ProductStockViewModel(
     this._inventoryRepository,
     this._purchaseRepository,
     this.product, {
+    WarehouseRepository? warehouseRepository,
     AnalyticsEngine? analyticsEngine,
-  }) : _analyticsEngine = analyticsEngine {
+  }) : _warehouseRepository = warehouseRepository,
+       _analyticsEngine = analyticsEngine {
     load();
   }
 
   final InventoryRepository _inventoryRepository;
   final PurchaseRepository _purchaseRepository;
+  final WarehouseRepository? _warehouseRepository;
   final Product product;
   final AnalyticsEngine? _analyticsEngine;
 
   StockItem? _stockItem;
+  List<WarehouseStockRow> _byWarehouse = const [];
   List<StockMovement> _movements = [];
   List<ProductCostHistoryEntry> _costHistory = [];
   ProductMarginImpact? _marginImpact;
@@ -62,7 +68,29 @@ class ProductStockViewModel extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get hasCostInsightsError => _hasCostInsightsError;
 
-  int get quantityOnHand => _stockItem?.quantityOnHand ?? 0;
+  /// Where every unit of this product is sitting. Empty for a shop that has
+  /// never opened a second place, which is what keeps the breakdown from
+  /// appearing at all until it would say something.
+  List<WarehouseStockRow> get byWarehouse => List.unmodifiable(_byWarehouse);
+
+  /// True only when the answer to "how many" needs a second sentence.
+  bool get isSplitAcrossPlaces => _byWarehouse.length > 1;
+
+  /// Everything on hand, wherever it is.
+  ///
+  /// Summed across places rather than read off one row. The stock endpoint
+  /// returns one row per (product, place), so taking the first — which is what
+  /// this did while a product had exactly one — would report the store room's
+  /// forty as the shop's total, or the showroom's three, depending on which
+  /// came back first.
+  int get quantityOnHand {
+    if (_byWarehouse.isEmpty) {
+      return _stockItem?.quantityOnHand ?? 0;
+    }
+    return _byWarehouse
+        .fold<double>(0, (total, row) => total + row.quantityOnHand)
+        .round();
+  }
 
   Future<void> load() async {
     await Future.wait([loadStock(), loadMovements(), loadCostInsights()]);
@@ -84,9 +112,26 @@ class ProductStockViewModel extends ChangeNotifier {
         _stockItem = null;
         _errorMessage = 'stock_load_error';
     }
+    await _loadPlaces(variantId);
 
     _isLoadingStock = false;
     notifyListeners();
+  }
+
+  /// Best effort, and deliberately so: a shop with one place gains nothing
+  /// from this call, and a failure here must not turn the stock panel into an
+  /// error when the total is already known.
+  Future<void> _loadPlaces(int? variantId) async {
+    final repository = _warehouseRepository;
+    if (repository == null || variantId == null) {
+      return;
+    }
+    final result = await repository.loadStockByWarehouse(variantId);
+    if (result case Ok<List<WarehouseStockRow>>()) {
+      _byWarehouse = result.value
+          .where((row) => row.quantityOnHand != 0 || row.quantityExpected != 0)
+          .toList(growable: false);
+    }
   }
 
   Future<void> loadMovements() async {

@@ -422,6 +422,7 @@ class _AuthenticatedRoutes implements AppNavigation {
     return _screen(
       'catalog',
       CatalogScreen(
+        warehouseRepository: dependencies.warehouseRepository,
         viewModel: CatalogViewModel(
           dependencies.catalogRepository,
           analyticsEngine: dependencies.analyticsEngine,
@@ -1816,6 +1817,7 @@ class _AuthenticatedRoutes implements AppNavigation {
             dependencies.inventoryRepository,
             dependencies.purchaseRepository,
             product,
+            warehouseRepository: dependencies.warehouseRepository,
             analyticsEngine: dependencies.analyticsEngine,
           ),
           printingRepository: dependencies.printingRepository,

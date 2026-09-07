@@ -9,6 +9,7 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/repositories/warehouse_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../shared/app_navigation_drawer.dart';
@@ -34,6 +35,7 @@ class CatalogScreen extends StatefulWidget {
     required this.inventoryRepository,
     required this.printingRepository,
     required this.purchaseRepository,
+    this.warehouseRepository,
     required this.saleRepository,
     required this.shopSettingsRepository,
     this.contactRepository,
@@ -46,6 +48,10 @@ class CatalogScreen extends StatefulWidget {
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
+  /// Optional: without it the stock panel simply shows the total and no
+  /// per-place breakdown, which is the right answer for a shop with one
+  /// place anyway.
+  final WarehouseRepository? warehouseRepository;
   final SaleRepository saleRepository;
   final ShopSettingsRepository shopSettingsRepository;
   final ContactRepository? contactRepository;
@@ -132,6 +138,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   inventoryRepository: inventoryRepository,
                   printingRepository: printingRepository,
                   purchaseRepository: purchaseRepository,
+                  warehouseRepository: widget.warehouseRepository,
                   saleRepository: saleRepository,
                   shopSettingsRepository: shopSettingsRepository,
                   contactRepository: contactRepository,
@@ -156,6 +163,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         inventoryRepository: inventoryRepository,
                         printingRepository: printingRepository,
                         purchaseRepository: purchaseRepository,
+                        warehouseRepository: widget.warehouseRepository,
                         shopSettingsRepository: shopSettingsRepository,
                         capabilities: capabilities,
                         analyticsEngine: analyticsEngine,
@@ -208,6 +216,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           context,
           product: outcome.product!,
           catalogRepository: viewModel.catalogRepository,
+          warehouseRepository: widget.warehouseRepository,
           inventoryRepository: inventoryRepository,
           printingRepository: printingRepository,
           purchaseRepository: purchaseRepository,
@@ -247,6 +256,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
       context,
       product: Product.fromVariant(entries.first.variant),
       catalogRepository: viewModel.catalogRepository,
+      warehouseRepository: widget.warehouseRepository,
       inventoryRepository: inventoryRepository,
       printingRepository: printingRepository,
       purchaseRepository: purchaseRepository,
