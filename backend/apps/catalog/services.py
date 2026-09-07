@@ -1,4 +1,7 @@
-from django.db.models import Count, Prefetch
+from decimal import Decimal
+
+from django.db.models import Count, DecimalField, Prefetch, Sum, Value
+from django.db.models.functions import Coalesce
 
 from apps.attachments.models import Attachment
 
@@ -67,17 +70,25 @@ def variant_detail_queryset():
 
     The prefetch shape belongs to the *serializer*, not to one viewset: any
     endpoint that embeds this serializer pays 15 queries per row without it
-    (the parent product tree, the image attachments' own FKs, the 1:1 stock
-    row behind ``quantity_on_hand``). Callers that nest it under a document
+    (the parent product tree, the image attachments' own FKs, the stock rows
+    summed behind ``quantity_on_hand``). Callers that nest it under a document
     line use it as ``Prefetch("variant", queryset=variant_detail_queryset())``
     so a new serializer field can never be fast in one endpoint and an N+1 in
     another.
     """
     return ProductVariant.objects.select_related(
         "product",
-        # quantity_on_hand reads the 1:1 stock row; without this it queried
-        # inventory once per variant.
-        "stock",
+    ).annotate(
+        # ``quantity_on_hand`` sums a variant's stock rows across warehouses.
+        # As an annotation that is a join and a GROUP BY — the same single
+        # statement the 1:1 ``select_related`` used to be, rather than a
+        # prefetch that would add a query per page or a property read that
+        # would add one per variant.
+        **{ProductVariant.ON_HAND_ANNOTATION: Coalesce(
+            Sum("stock_items__quantity_on_hand"),
+            Value(Decimal("0")),
+            output_field=DecimalField(max_digits=12, decimal_places=3),
+        )},
     ).prefetch_related(
         image_attachment_prefetch("attachments"),
         image_attachment_prefetch("product__attachments"),

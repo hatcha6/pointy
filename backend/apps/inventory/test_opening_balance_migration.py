@@ -40,6 +40,12 @@ class OpeningBalanceMigrationTests(TransactionTestCase):
         self._migrate([MIGRATE_TO])
         super().tearDown()
 
+    def _historical(self, app_label, model_name):
+        """The model as it stood at ``MIGRATE_FROM``, not as it stands today."""
+        executor = MigrationExecutor(connection)
+        state = executor.loader.project_state([MIGRATE_FROM])
+        return state.apps.get_model(app_label, model_name)
+
     def _migrate(self, targets):
         executor = MigrationExecutor(connection)
         executor.loader.build_graph()
@@ -51,7 +57,6 @@ class OpeningBalanceMigrationTests(TransactionTestCase):
         cancelled purchase at a wild price that must not become the opening rate.
         """
         from apps.catalog.testing import create_product_with_default_variant
-        from apps.inventory.models import StockItem
         from apps.purchasing.models import PurchaseLine, PurchaseOrder, Supplier
 
         product = create_product_with_default_variant(
@@ -85,8 +90,15 @@ class OpeningBalanceMigrationTests(TransactionTestCase):
             unit_factor=Decimal("1"),
         )
 
-        item, _ = StockItem.objects.get_or_create(variant=variant)
-        StockItem.objects.filter(pk=item.pk).update(quantity_on_hand=Decimal("7"))
+        # The live ``StockItem`` cannot be used here any more. It grew a
+        # ``warehouse`` column in 0018, and the schema this test is standing on
+        # was rewound to 0014 — so the live model's own SELECT names a column
+        # the database has not got yet. The historical model, rebuilt from the
+        # migration state we rewound to, has exactly the fields that existed
+        # then, which is the schema a real shop's upgrade actually starts from.
+        historical = self._historical("inventory", "StockItem")
+        item, _ = historical.objects.get_or_create(variant_id=variant.pk)
+        historical.objects.filter(pk=item.pk).update(quantity_on_hand=Decimal("7"))
         return variant
 
     def test_a_shop_with_stock_can_apply_the_opening_balance(self):

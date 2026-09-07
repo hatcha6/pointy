@@ -243,7 +243,7 @@ class Product(TimeStampedModel):
     def quantity_on_hand(self):
         return self.variants.aggregate(
             quantity=Coalesce(
-                Sum("stock__quantity_on_hand"),
+                Sum("stock_items__quantity_on_hand"),
                 Decimal("0"),
                 output_field=models.DecimalField(max_digits=12, decimal_places=3),
             ),
@@ -795,12 +795,62 @@ class ProductVariant(TimeStampedModel):
         ]
         return " / ".join(labels)
 
+    #: Annotate a variant queryset with this to make ``quantity_on_hand`` free.
+    #: A join and a GROUP BY, not a query per row — the sum has to come from
+    #: somewhere and a page of products must not pay for it one variant at a
+    #: time.
+    ON_HAND_ANNOTATION = "on_hand_total"
+
     @property
     def quantity_on_hand(self):
-        try:
-            return self.stock.quantity_on_hand
-        except ProductVariant.stock.RelatedObjectDoesNotExist:
-            return 0
+        """Everything on hand, wherever it is.
+
+        Was a one-to-one read while a variant had exactly one stock row; it is a
+        sum across warehouses now. For a shop with one warehouse — which is most
+        of them, and all of them until they open a second — it returns exactly
+        the number it always did.
+
+        Answered from an annotation if the caller made one, then from a
+        prefetch, and only then from the database. Reading it off a bare
+        instance in a loop is a query per row, which is the shape of every
+        stock-list bug this codebase has had.
+        """
+        annotated = getattr(self, self.ON_HAND_ANNOTATION, None)
+        if annotated is not None:
+            return annotated
+        cache = getattr(self, "_prefetched_objects_cache", None) or {}
+        if "stock_items" in cache:
+            return sum(
+                (row.quantity_on_hand for row in cache["stock_items"]),
+                Decimal("0.000"),
+            )
+        total = self.stock_items.aggregate(total=Sum("quantity_on_hand"))["total"]
+        return total if total is not None else 0
+
+    def quantity_on_hand_at(self, warehouse):
+        """What is on hand in one named place.
+
+        The question the till, the stock count and the transfer ask — never
+        ``quantity_on_hand``, which would answer about the store room's stock
+        when the customer is standing in the showroom.
+        """
+        warehouse_id = getattr(warehouse, "pk", warehouse)
+        cache = getattr(self, "_prefetched_objects_cache", None) or {}
+        if "stock_items" in cache:
+            return sum(
+                (
+                    row.quantity_on_hand
+                    for row in cache["stock_items"]
+                    if row.warehouse_id == warehouse_id
+                ),
+                Decimal("0.000"),
+            )
+        row = (
+            self.stock_items.filter(warehouse_id=warehouse_id)
+            .values_list("quantity_on_hand", flat=True)
+            .first()
+        )
+        return row if row is not None else 0
 
     def save(self, *args, **kwargs):
         self.name = self.name.strip()

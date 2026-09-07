@@ -15,7 +15,7 @@ Replaces DRF's stock ``SearchFilter``/``OrderingFilter`` on :class:`~apps.catalo
 
 Matching uses ``Exists()`` *subqueries*, never joins across the multi-valued
 ``variants`` / ``units__barcodes`` / ``aliases`` relations: a join would fan one
-product into many rows and inflate the ``Sum('variants__stock__...')`` rollups
+product into many rows and inflate the ``Sum('variants__stock_items__...')`` rollups
 the queryset already carries (corrupting the in-stock filter and the stock shown
 to the client). ``Exists`` is a scalar correlated subquery — no extra rows, no
 ``distinct()`` needed, and it all stays inside the single main SELECT (zero extra

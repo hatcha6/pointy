@@ -1,7 +1,7 @@
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import StockBatch, StockItem, StockLedgerEntry, StockMovement
+from .models import StockBatch, StockItem, StockLedgerEntry, StockMovement, Warehouse
 from .valuation_service import post_movement_valuations
 
 # The quantity columns a stock write touches, plus the timestamp that has to
@@ -15,16 +15,30 @@ STOCK_QUANTITY_FIELDS = [
 ]
 
 
-def lock_stock_item(*, variant):
+def resolve_warehouse_id(warehouse=None):
+    """The place a stock write lands, defaulting to the shop's only one.
+
+    Every caller that has not yet learned about warehouses passes nothing and
+    gets the default — which is the whole invisibility guarantee in one line: a
+    shop with a single location behaves exactly as it did before locations
+    existed.
+    """
+    if warehouse is None:
+        return Warehouse.default_id()
+    return getattr(warehouse, "pk", warehouse)
+
+
+def lock_stock_item(*, variant, warehouse=None):
     if variant is None:
         raise serializers.ValidationError({"variant": "Variant is required."})
     stock_item, _ = StockItem.objects.select_for_update().get_or_create(
         variant=variant,
+        warehouse_id=resolve_warehouse_id(warehouse),
     )
     return stock_item
 
 
-def lock_stock_items(variants):
+def lock_stock_items(variants, *, warehouse=None):
     """Lock a whole document's stock rows in one query, keyed by variant id.
 
     Locking row-by-row costs a ``SELECT ... FOR UPDATE`` per line on the busiest
@@ -39,20 +53,29 @@ def lock_stock_items(variants):
     * A variant that has never held stock has no row yet, so those fall back to
       ``lock_stock_item`` (which creates one) — still ascending, and normally
       not reached at all.
+
+    One call locks one warehouse: a sale leaves the till's location, a receipt
+    arrives at one. The sort is on ``(variant_id, warehouse_id)`` even though a
+    single-warehouse call cannot need the second column, because the transfer
+    document is the first caller that will span two places and the deadlock
+    guarantee has to already hold when it arrives.
     """
     variants_by_id = {variant.pk: variant for variant in variants if variant is not None}
     ordered_ids = sorted(variants_by_id)
     if not ordered_ids:
         return {}
+    warehouse_id = resolve_warehouse_id(warehouse)
     locked = {
         stock_item.variant_id: stock_item
         for stock_item in StockItem.objects.select_for_update()
-        .filter(variant_id__in=ordered_ids)
-        .order_by("variant_id")
+        .filter(variant_id__in=ordered_ids, warehouse_id=warehouse_id)
+        .order_by("variant_id", "warehouse_id")
     }
     for variant_id in ordered_ids:
         if variant_id not in locked:
-            locked[variant_id] = lock_stock_item(variant=variants_by_id[variant_id])
+            locked[variant_id] = lock_stock_item(
+                variant=variants_by_id[variant_id], warehouse=warehouse_id
+            )
     return locked
 
 

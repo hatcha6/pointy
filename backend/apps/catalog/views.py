@@ -290,13 +290,22 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         category_detail_prefetch("categories"),
         unit_detail_prefetch("units__unit"),
         "units__barcodes",
-        # Each variant serializes its on-hand quantity (variant.stock is a 1:1),
+        # Each variant serializes its on-hand quantity (summed over its stock rows),
         # joined into the variant rows rather than fetched as its own prefetch
         # query. A single product's retrieve is a dozen round trips of a few
         # rows each, and on the shop server each round trip costs more than
         # the rows do — so the 1:1 and FK hops below ride on their parent
         # prefetch instead of being queries of their own.
-        Prefetch("variants", queryset=ProductVariant.objects.select_related("stock")),
+        Prefetch(
+            "variants",
+            queryset=ProductVariant.objects.annotate(
+                **{ProductVariant.ON_HAND_ANNOTATION: Coalesce(
+                    Sum("stock_items__quantity_on_hand"),
+                    Value(Decimal("0")),
+                    output_field=DecimalField(max_digits=12, decimal_places=3),
+                )},
+            ),
+        ),
         image_attachment_prefetch("variants__attachments"),
         Prefetch(
             "variants__option_values",
@@ -534,12 +543,12 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     def _with_variant_rollups(self, queryset):
         return queryset.annotate(
             stock_quantity_on_hand=Coalesce(
-                Sum("variants__stock__quantity_on_hand"),
+                Sum("variants__stock_items__quantity_on_hand"),
                 Value(Decimal("0")),
                 output_field=DecimalField(max_digits=12, decimal_places=3),
             ),
             stock_quantity_committed=Coalesce(
-                Sum("variants__stock__quantity_committed"),
+                Sum("variants__stock_items__quantity_committed"),
                 Value(Decimal("0")),
                 output_field=DecimalField(max_digits=12, decimal_places=3),
             ),

@@ -10,6 +10,7 @@ from apps.channels.services import require_active_sales_channel
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
 from apps.inventory.models import StockLedgerEntry, StockMovement
+from apps.inventory.oversell import may_oversell
 from apps.inventory.services import (
     consume_expiring_stock_batches,
     create_stock_movement,
@@ -582,7 +583,7 @@ def _consume_material(material, *, request=None):
     variant = material.variant
     stock_item = lock_stock_item(variant=variant)
     if (
-        not settings.allow_overselling
+        not may_oversell(stock_item, settings=settings)
         and stock_item.quantity_on_hand < material.quantity
     ):
         raise serializers.ValidationError(

@@ -176,10 +176,8 @@ class StockCountApplyTests(StockCountTestBase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], StockCount.Status.APPLIED)
-        short.stock.refresh_from_db()
-        over.stock.refresh_from_db()
-        self.assertEqual(short.stock.quantity_on_hand, Decimal("44"))
-        self.assertEqual(over.stock.quantity_on_hand, Decimal("13"))
+        self.assertEqual(short.quantity_on_hand, Decimal("44"))
+        self.assertEqual(over.quantity_on_hand, Decimal("13"))
 
         decrease = StockMovement.objects.get(variant=short)
         increase = StockMovement.objects.get(variant=over)
@@ -222,14 +220,12 @@ class StockCountApplyTests(StockCountTestBase):
             },
             format="json",
         )
-        variant.stock.refresh_from_db()
-        self.assertEqual(variant.stock.quantity_on_hand, Decimal("45"))
+        self.assertEqual(variant.quantity_on_hand, Decimal("45"))
 
         self.apply(count_id)
 
-        variant.stock.refresh_from_db()
         # Delta (-2) applied to the now-45 on hand => 43, NOT set-to-48.
-        self.assertEqual(variant.stock.quantity_on_hand, Decimal("43"))
+        self.assertEqual(variant.quantity_on_hand, Decimal("43"))
         line = StockCountLine.objects.get(stock_count=count_id, variant=variant)
         self.assertTrue(line.stale_at_apply)
         self.assertEqual(line.on_hand_at_apply, Decimal("45"))
@@ -252,8 +248,7 @@ class StockCountApplyTests(StockCountTestBase):
         response = self.apply(count_id)
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        variant.stock.refresh_from_db()
-        self.assertEqual(variant.stock.quantity_on_hand, Decimal("2"))
+        self.assertEqual(variant.quantity_on_hand, Decimal("2"))
         self.assertEqual(
             StockCount.objects.get(pk=count_id).status, StockCount.Status.IN_PROGRESS
         )
@@ -299,8 +294,7 @@ class StockCountPermissionTests(StockCountTestBase):
         # A manager can apply the cashier's session.
         allowed = self.apply(count_id, client=self.manager_client)
         self.assertEqual(allowed.status_code, status.HTTP_200_OK)
-        variant.stock.refresh_from_db()
-        self.assertEqual(variant.stock.quantity_on_hand, Decimal("8"))
+        self.assertEqual(variant.quantity_on_hand, Decimal("8"))
 
 
 class StockCountReconciliationTests(StockCountTestBase):

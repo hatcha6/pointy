@@ -28,6 +28,7 @@ from apps.discounts.services import (
 from apps.catalog.services import preload_line_variants
 from apps.catalog.units import quantize_quantity
 from apps.inventory.models import StockLedgerEntry, StockMovement
+from apps.inventory.oversell import may_oversell
 from apps.inventory.services import (
     build_stock_movement,
     consume_expiring_stock_batches,
@@ -796,6 +797,12 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None):
     # cashier waits on this. ``lock_stock_items`` keeps the ascending-variant-id
     # lock order the loop below used to establish.
     locked_items = lock_stock_items(variants_by_id.values())
+    # Resolved once for the cart, not once per line: a cart sells out of one
+    # location and the answer cannot change mid-cart, so asking per line would
+    # put a query on the cashier's critical path for nothing.
+    overselling_allowed = may_oversell(
+        next(iter(locked_items.values()), None), settings=settings
+    )
     for variant_id in sorted(quantities_by_variant):
         variant = variants_by_id[variant_id]
         quantity = quantities_by_variant[variant_id]
@@ -804,7 +811,7 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None):
         # (quantity_committed). A reservation blocks others from dipping into the
         # held units even though those units are still physically on hand.
         available = stock_item.quantity_on_hand - stock_item.quantity_committed
-        if not settings.allow_overselling and available < quantity:
+        if not overselling_allowed and available < quantity:
             shortages.append(
                 {
                     "product": variant.product_id,
