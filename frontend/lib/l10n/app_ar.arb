@@ -10420,5 +10420,8 @@
         "type": "String"
       }
     }
-  }
+  },
+  "purchaseDestinationLabel": "مكان الاستلام",
+  "purchaseDestinationHint": "أين ستصل هذه البضاعة",
+  "purchaseDestinationSearchHint": "ابحث عن مكان"
 }

@@ -1406,6 +1406,7 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
     open. Shipping the fully-serialized line items just to render a count was the
     bulk of the list payload."""
 
+    warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
     line_count = serializers.IntegerField(read_only=True)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     supplier_reference = serializers.CharField(
@@ -1433,6 +1434,8 @@ class PurchaseOrderListSerializer(serializers.ModelSerializer):
             "id",
             "order_number",
             "supplier",
+            "warehouse",
+            "warehouse_name",
             "supplier_name",
             "supplier_invoice_number",
             "supplier_invoice_date",
@@ -1471,6 +1474,7 @@ class _CurrencyCarrier:
 
 
 class PurchaseOrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
+    warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
     lines = PurchaseLineSerializer(many=True, allow_empty=False)
     # What the supplier invoiced, summed. Derived rather than stored: it exists
     # so a buyer can check the screen against the paper invoice, and it never
@@ -1551,6 +1555,8 @@ class PurchaseOrderSerializer(DocumentLifecycleFields, serializers.ModelSerializ
             "order_number",
             *DocumentLifecycleFields.LIFECYCLE_FIELDS,
             "supplier",
+            "warehouse",
+            "warehouse_name",
             "supplier_name",
             "supplier_contact_name",
             "supplier_phone",

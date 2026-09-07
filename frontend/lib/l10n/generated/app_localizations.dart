@@ -27982,6 +27982,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أُلغي بواسطة {name}'**
   String transferCancelledByLabel(String name);
+
+  /// No description provided for @purchaseDestinationLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مكان الاستلام'**
+  String get purchaseDestinationLabel;
+
+  /// No description provided for @purchaseDestinationHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'أين ستصل هذه البضاعة'**
+  String get purchaseDestinationHint;
+
+  /// No description provided for @purchaseDestinationSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن مكان'**
+  String get purchaseDestinationSearchHint;
 }
 
 class _AppLocalizationsDelegate

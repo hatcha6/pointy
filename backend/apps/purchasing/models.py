@@ -131,6 +131,18 @@ class PurchaseOrder(DocumentMixin, TimeStampedModel):
         RETAIL_VALUE = "retail_value", "By retail value"
         EQUAL = "equal", "Equally by line"
 
+    # Where the goods land. A shop with one place never sees this asked and
+    # never has to answer it — the default is resolved in ``save``, which is
+    # also what keeps every existing purchase order and every older client
+    # working unchanged. Nullable for exactly one release, like every other
+    # column this phase adds, so an older backend's inserts survive a flip.
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="purchase_orders",
+        null=True,
+        blank=True,
+    )
     supplier = models.ForeignKey(
         Supplier,
         on_delete=models.PROTECT,
@@ -518,6 +530,15 @@ class PurchaseOrder(DocumentMixin, TimeStampedModel):
     def save(self, *args, **kwargs):
         from apps.discounts.models import normalize_coupon_code
 
+        if self.warehouse_id is None:
+            from apps.inventory.models import Warehouse
+
+            self.warehouse_id = Warehouse.default_id()
+            if (
+                self.warehouse_id is not None
+                and kwargs.get("update_fields") is not None
+            ):
+                kwargs["update_fields"] = [*kwargs["update_fields"], "warehouse"]
         self._follow_progress_on_insert()
         self.discount_codes = [
             normalize_coupon_code(code)

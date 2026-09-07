@@ -152,6 +152,11 @@ class PurchaseRepository {
     List<PurchaseDraftLine> lines, {
     required bool receiveImmediately,
     required int supplierId,
+
+    /// Where the goods will land. Null lets the server use the shop's own
+    /// place, which is the only one most shops have and the answer every
+    /// purchase order got before this existed.
+    int? warehouseId,
     String supplierInvoiceNumber = '',
     DateTime? supplierInvoiceDate,
     List<PurchaseLandedCostEntry> landedCostEntries = const [],
@@ -179,6 +184,7 @@ class PurchaseRepository {
       final draft = PurchaseOrderDraft.fromDraftLines(
         lines,
         supplierId: supplierId,
+        warehouseId: warehouseId,
         supplierInvoiceNumber: supplierInvoiceNumber,
         supplierInvoiceDate: supplierInvoiceDate,
         landedCostEntries: landedCostEntries,

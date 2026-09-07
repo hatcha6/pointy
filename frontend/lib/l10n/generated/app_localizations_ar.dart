@@ -16162,4 +16162,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String transferCancelledByLabel(String name) {
     return 'أُلغي بواسطة $name';
   }
+
+  @override
+  String get purchaseDestinationLabel => 'مكان الاستلام';
+
+  @override
+  String get purchaseDestinationHint => 'أين ستصل هذه البضاعة';
+
+  @override
+  String get purchaseDestinationSearchHint => 'ابحث عن مكان';
 }

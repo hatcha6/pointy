@@ -18,6 +18,8 @@ import '../../../data/models/purchase_suggestion.dart';
 import '../../../data/models/exchange_rate.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/fx_repository.dart';
+import '../../../data/models/warehouse.dart';
+import '../../../data/repositories/warehouse_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
 import '../../../shared/formatters.dart';
@@ -80,8 +82,10 @@ class PurchaseViewModel extends ChangeNotifier {
     ),
     String? persistScope,
     FxRepository? fxRepository,
+    WarehouseRepository? warehouseRepository,
     PurchaseSuggestionController? suggestionController,
   }) : _analyticsEngine = analyticsEngine,
+       _warehouseRepository = warehouseRepository,
        _fxRepository = fxRepository,
        _draftStorage = draftStorage,
        suggestions =
@@ -158,6 +162,15 @@ class PurchaseViewModel extends ChangeNotifier {
   /// the user knows the reopened draft is missing items.
   final List<String> _unresolvedEditLineNames = [];
   SupplierContact? _selectedSupplier;
+
+  /// Where this purchase will land. Null means the shop's own place, which is
+  /// what a shop with one warehouse always means and never has to say.
+  Warehouse? _selectedWarehouse;
+
+  /// The shop's places, loaded once. Empty or single means the picker is never
+  /// shown: there is nothing to choose between.
+  List<Warehouse> _warehouses = const [];
+  final WarehouseRepository? _warehouseRepository;
   bool _isLoading = false;
   bool _isLoadingMore = false;
   bool _isSubmitting = false;
@@ -235,6 +248,34 @@ class PurchaseViewModel extends ChangeNotifier {
   List<String> get unresolvedEditLineNames =>
       List.unmodifiable(_unresolvedEditLineNames);
   SupplierContact? get selectedSupplier => _selectedSupplier;
+  Warehouse? get selectedWarehouse => _selectedWarehouse;
+  List<Warehouse> get warehouses => _warehouses;
+
+  /// Whether the buyer is offered a choice at all.
+  bool get canChooseWarehouse => _warehouses.length > 1;
+
+  void selectWarehouse(Warehouse? warehouse) {
+    if (_selectedWarehouse?.id == warehouse?.id) {
+      return;
+    }
+    _selectedWarehouse = warehouse;
+    notifyListeners();
+  }
+
+  /// Best effort: a buyer who cannot load the shop's places still writes a
+  /// purchase order, it simply lands in the default one.
+  Future<void> loadWarehouses() async {
+    final repository = _warehouseRepository;
+    if (repository == null) {
+      return;
+    }
+    final result = await repository.loadWarehouses(activeOnly: true);
+    if (result case Ok<List<Warehouse>>()) {
+      _warehouses = result.value.where((place) => place.sellsFrom).toList();
+      _selectedWarehouse ??= _warehouses.where((p) => p.isDefault).firstOrNull;
+      notifyListeners();
+    }
+  }
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   bool get isSubmitting => _isSubmitting;
@@ -1300,6 +1341,7 @@ class PurchaseViewModel extends ChangeNotifier {
       List.of(_draft),
       receiveImmediately: _receiveImmediately,
       supplierId: supplier.id,
+      warehouseId: _selectedWarehouse?.id,
       supplierInvoiceNumber: _supplierInvoiceNumber,
       supplierInvoiceDate: supplierInvoiceDate,
       currencyCode: _currencyCode,

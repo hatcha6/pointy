@@ -485,6 +485,7 @@ class PurchaseOrderDraft {
   const PurchaseOrderDraft({
     required this.lines,
     required this.supplierId,
+    this.warehouseId,
     this.dueDate,
     this.supplierInvoiceNumber = '',
     this.supplierInvoiceDate,
@@ -498,6 +499,11 @@ class PurchaseOrderDraft {
 
   final List<PurchaseOrderLineDraft> lines;
   final int supplierId;
+
+  /// Where the goods will land. Null lets the server use the shop's own
+  /// place — the only one most shops have, and the answer every purchase
+  /// order got before this field existed.
+  final int? warehouseId;
   final DateTime? dueDate;
   final String supplierInvoiceNumber;
   final DateTime? supplierInvoiceDate;
@@ -518,6 +524,7 @@ class PurchaseOrderDraft {
   factory PurchaseOrderDraft.fromDraftLines(
     List<PurchaseDraftLine> lines, {
     required int supplierId,
+    int? warehouseId,
     String supplierInvoiceNumber = '',
     DateTime? supplierInvoiceDate,
     List<PurchaseLandedCostEntry> landedCostEntries = const [],
@@ -531,6 +538,7 @@ class PurchaseOrderDraft {
     final isForeign = currencyCode.trim().isNotEmpty;
     return PurchaseOrderDraft(
       supplierId: supplierId,
+      warehouseId: warehouseId,
       supplierInvoiceNumber: supplierInvoiceNumber,
       supplierInvoiceDate: supplierInvoiceDate,
       landedCostEntries: landedCostEntries,
@@ -578,6 +586,7 @@ class PurchaseOrderDraft {
     final invoiceDate = supplierInvoiceDate?.toIso8601String().split('T').first;
     return {
       'supplier': supplierId,
+      if (warehouseId != null) 'warehouse': warehouseId,
       if (dueDate != null)
         'due_date': dueDate!.toIso8601String().split('T').first,
       if (forUpdate || invoiceNumber.isNotEmpty)

@@ -1077,6 +1077,17 @@ class StockReservation(TimeStampedModel):
         RELEASED = "released", "Released"
         CONSUMED = "consumed", "Consumed"
 
+    # Where the hold was placed. A release that came off the shop's default
+    # while the hold went on the store room would leave committed quantity
+    # drifting upward in one place and downward in another, permanently and
+    # silently. Nullable for one release; defaulted in ``save``.
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="stock_reservations",
+        null=True,
+        blank=True,
+    )
     order = models.ForeignKey(
         Order,
         on_delete=models.CASCADE,
@@ -1103,6 +1114,18 @@ class StockReservation(TimeStampedModel):
         default=Status.ACTIVE,
     )
     expires_at = models.DateField(blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        if self.warehouse_id is None:
+            from apps.inventory.models import Warehouse
+
+            self.warehouse_id = Warehouse.default_id()
+            if (
+                self.warehouse_id is not None
+                and kwargs.get("update_fields") is not None
+            ):
+                kwargs["update_fields"] = [*kwargs["update_fields"], "warehouse"]
+        return super().save(*args, **kwargs)
 
     class Meta:
         ordering = ["-created_at", "-id"]

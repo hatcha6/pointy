@@ -203,13 +203,16 @@ def reverse_purchase_receipt(receipt, *, at, actor, reason="", context=None):
         for line in lines
         if line.accepted_quantity > Decimal("0")
     ]
+    # Un-receiving takes the goods back off the shelves they landed on, which
+    # is the order's own destination — not the shop's default.
+    warehouse_id = receipt.purchase_order.warehouse_id
     if accepted:
-        validate_purchase_stock_available(accepted)
+        validate_purchase_stock_available(accepted, warehouse=warehouse_id)
 
     variants = [line.purchase_line.variant for line in lines]
     if not variants:
         return None
-    stock_items = lock_stock_items(variants)
+    stock_items = lock_stock_items(variants, warehouse=warehouse_id)
     movements = []
     touched = {}
     for line in lines:

@@ -23,6 +23,7 @@ import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/unit_options.dart';
 import '../../../shared/units.dart';
+import '../../../data/models/warehouse.dart';
 import 'supplier_currency_field.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_pricing_sheet.dart';
@@ -97,6 +98,10 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
     if (controller == null) {
       return;
     }
+    // Loaded lazily and best-effort: the picker only appears if there is
+    // more than one place, and a buyer whose load fails still writes a
+    // purchase order that lands in the shop's own.
+    unawaited(widget.viewModel.loadWarehouses());
     controller.onOpenSettings = () {
       if (!mounted || viewModel.isSubmitting) {
         return;
@@ -1222,6 +1227,7 @@ class _PurchaseDraftSettingsDialog extends StatefulWidget {
 class _PurchaseDraftSettingsDialogState
     extends State<_PurchaseDraftSettingsDialog> {
   late var _selectedSupplier = widget.viewModel.selectedSupplier;
+  late var _selectedWarehouse = widget.viewModel.selectedWarehouse;
   late final List<_LandedCostEntryControllers> _landedCostControllers =
       (widget.viewModel.landedCostEntries.isEmpty
               ? const [PurchaseLandedCostEntry(name: '', cost: 0)]
@@ -1340,6 +1346,20 @@ class _PurchaseDraftSettingsDialogState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Only when the shop keeps stock in more than one place. One
+              // warehouse means there is nothing to choose and nothing to ask:
+              // the server uses the shop's own place, which is where every
+              // purchase order has always landed.
+              if (widget.viewModel.canChooseWarehouse) ...[
+                _DestinationField(
+                  places: widget.viewModel.warehouses,
+                  selected: _selectedWarehouse,
+                  enabled: !widget.viewModel.isSubmitting,
+                  onChanged: (place) =>
+                      setState(() => _selectedWarehouse = place),
+                ),
+                const SizedBox(height: 12),
+              ],
               ContactSelectionTile(
                 label: l10n.selectedSupplierLabel,
                 value: _selectedSupplier?.name ?? '',
@@ -1631,6 +1651,7 @@ class _PurchaseDraftSettingsDialogState
     final landedCostEntries = _currentLandedCostEntries(l10n);
     final refreshWillAlreadyRun =
         _selectedSupplier?.id != widget.viewModel.selectedSupplier?.id ||
+        _selectedWarehouse?.id != widget.viewModel.selectedWarehouse?.id ||
         _landedCostsChanged(landedCostEntries) ||
         _currentDiscountCode != widget.viewModel.discountCode.trim();
     _saveSettings(l10n, landedCostEntries: landedCostEntries);
@@ -1646,6 +1667,9 @@ class _PurchaseDraftSettingsDialogState
   }) {
     final currentLandedCostEntries =
         landedCostEntries ?? _currentLandedCostEntries(l10n);
+    if (_selectedWarehouse?.id != widget.viewModel.selectedWarehouse?.id) {
+      widget.viewModel.selectWarehouse(_selectedWarehouse);
+    }
     if (_selectedSupplier?.id != widget.viewModel.selectedSupplier?.id) {
       widget.viewModel.selectSupplier(_selectedSupplier);
     }
@@ -2373,5 +2397,59 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
 
   String _formatNullableDate(DateTime? date) {
     return date == null ? '' : _formatDateInputValue(date);
+  }
+}
+
+/// Where a purchase will land.
+///
+/// A searchable menu rather than a plain dropdown, because a shop with a van
+/// per driver can have more places than fit on a screen — and because typing
+/// two letters is faster than scrolling however many there are. It is not shown
+/// at all when the shop keeps one place: there is nothing to choose, and asking
+/// a buyer to confirm the only possible answer is a question that costs a tap
+/// and teaches nothing.
+class _DestinationField extends StatelessWidget {
+  const _DestinationField({
+    required this.places,
+    required this.selected,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final List<Warehouse> places;
+  final Warehouse? selected;
+  final bool enabled;
+  final ValueChanged<Warehouse?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Autocomplete<Warehouse>(
+      initialValue: TextEditingValue(text: selected?.name ?? ''),
+      displayStringForOption: (place) => place.name,
+      optionsBuilder: (value) {
+        final needle = value.text.trim().toLowerCase();
+        if (needle.isEmpty) return places;
+        return places.where(
+          (place) =>
+              place.name.toLowerCase().contains(needle) ||
+              place.code.toLowerCase().contains(needle),
+        );
+      },
+      onSelected: onChanged,
+      fieldViewBuilder: (context, controller, focusNode, onSubmit) {
+        return TextField(
+          controller: controller,
+          focusNode: focusNode,
+          enabled: enabled,
+          decoration: InputDecoration(
+            labelText: l10n.purchaseDestinationLabel,
+            helperText: l10n.purchaseDestinationHint,
+            prefixIcon: const Icon(Icons.warehouse_outlined),
+            hintText: l10n.purchaseDestinationSearchHint,
+          ),
+        );
+      },
+    );
   }
 }

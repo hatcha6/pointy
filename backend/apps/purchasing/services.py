@@ -20,6 +20,7 @@ from apps.discounts.models import (
 )
 from apps.discounts.services import DiscountUsageLimitExceeded, persist_applied_discounts
 from apps.inventory.models import StockBatch, StockLedgerEntry, StockMovement
+from apps.sales.registers import selling_warehouse_id
 from apps.inventory.services import (
     build_stock_movement,
     consume_expiring_stock_batches,
@@ -513,7 +514,10 @@ def _release_expected_stock(purchase_order, *, snapshots, created_by):
     )
     if not pending:
         return
-    stock_items = lock_stock_items([snapshot["line"].variant for snapshot in pending])
+    stock_items = lock_stock_items(
+        [snapshot["line"].variant for snapshot in pending],
+        warehouse=purchase_order.warehouse_id,
+    )
     movements = []
     touched = {}
     for snapshot in pending:
@@ -556,7 +560,9 @@ def _reverse_received_stock(purchase_order, *, snapshots, created_by):
         if snapshot["accepted"] > 0
     ]
     if received:
-        stock_items = validate_purchase_stock_available(received)
+        stock_items = validate_purchase_stock_available(
+            received, warehouse=purchase_order.warehouse_id
+        )
         movements = []
         touched = {}
         for line, quantity in received:
@@ -704,7 +710,9 @@ def _add_expected_stock(purchase_order, *, created_by):
     )
     if not lines:
         return
-    stock_items = lock_stock_items([line.variant for line in lines])
+    stock_items = lock_stock_items(
+        [line.variant for line in lines], warehouse=purchase_order.warehouse_id
+    )
     movements = []
     touched = {}
     for line in lines:
@@ -1039,7 +1047,9 @@ def submit_purchase_order(purchase_order, *, request=None):
         "variant",
         "variant__product",
     ).order_by("variant_id"):
-        stock_item = lock_stock_item(variant=line.variant)
+        stock_item = lock_stock_item(
+            variant=line.variant, warehouse=locked_order.warehouse_id
+        )
         before = stock_snapshot(stock_item)
         # Stock is kept in base units; a line bought in packs becomes base units.
         expected_base = line.to_base_quantity(line.quantity)
@@ -1297,6 +1307,7 @@ def apply_receipt_stock_changes(
     expected_quantities,
     created_by,
     stock_items=None,
+    warehouse=None,
 ):
     """Adjust one received line's stock and return its unsaved movements.
 
@@ -1308,7 +1319,7 @@ def apply_receipt_stock_changes(
     """
     movements = []
     if stock_items is None:
-        stock_item = lock_stock_item(variant=line.variant)
+        stock_item = lock_stock_item(variant=line.variant, warehouse=warehouse)
         save = save_stock_item_quantities
     else:
         # The caller locked the whole delivery's rows in one statement and
@@ -1479,7 +1490,10 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
     # one batch rather than once per line — and its stock rows locked and
     # written back the same way.
     stock_movements = []
-    stock_items = lock_stock_items([line_data["line"].variant for line_data in lines_data])
+    stock_items = lock_stock_items(
+        [line_data["line"].variant for line_data in lines_data],
+        warehouse=locked_order.warehouse_id,
+    )
 
     for line_data in lines_data:
         line = line_data["line"]
@@ -1514,6 +1528,7 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
                 expected_quantities=expected_quantities,
                 created_by=created_by,
                 stock_items=stock_items,
+                warehouse=locked_order.warehouse_id,
             )
         )
         receipt_line = PurchaseReceiptLine.objects.create(
@@ -1668,7 +1683,7 @@ def validate_purchase_order_adjustment_allowed(purchase_order, *, lines=None):
         )
 
 
-def validate_purchase_stock_available(lines):
+def validate_purchase_stock_available(lines, *, warehouse=None):
     # Compare against base-unit stock (a returned pack frees up base units), but
     # report the shortage in the unit the user actually entered (packs).
     requested_base_by_variant = {}
@@ -1683,7 +1698,7 @@ def validate_purchase_stock_available(lines):
             requested_display_by_variant.get(line.variant_id, 0) + quantity
         )
 
-    stock_items = lock_stock_items(variants_by_id.values())
+    stock_items = lock_stock_items(variants_by_id.values(), warehouse=warehouse)
     shortages = []
     for variant_id in sorted(requested_base_by_variant):
         variant = variants_by_id[variant_id]
@@ -1759,14 +1774,14 @@ def record_purchase_adjustment_stock_movements(
         )
 
 
-def lock_replacement_stock_items(lines, stock_items=None):
+def lock_replacement_stock_items(lines, stock_items=None, *, warehouse=None):
     stock_items = {} if stock_items is None else dict(stock_items)
     variants_by_id = {variant.pk: variant for variant, _, _ in lines}
     for variant_id in sorted(variants_by_id):
         if variant_id in stock_items:
             continue
         variant = variants_by_id[variant_id]
-        stock_item = lock_stock_item(variant=variant)
+        stock_item = lock_stock_item(variant=variant, warehouse=warehouse)
         stock_items[variant_id] = stock_item
     return stock_items
 
@@ -1810,9 +1825,16 @@ def create_purchase_order_adjustment(
     settlement_method="",
 ):
     created_by = purchase_created_by(request)
-    stock_items = validate_purchase_stock_available(lines)
+    # A return goes back from where the delivery landed, and a replacement
+    # arrives in the same place. Both read the order's own destination rather
+    # than the shop's default, or a store-room purchase would be returned off
+    # the showroom's shelves.
+    warehouse_id = purchase_order.warehouse_id
+    stock_items = validate_purchase_stock_available(lines, warehouse=warehouse_id)
     replacement_lines = replacement_lines or []
-    stock_items = lock_replacement_stock_items(replacement_lines, stock_items)
+    stock_items = lock_replacement_stock_items(
+        replacement_lines, stock_items, warehouse=warehouse_id
+    )
     outbound_amount = purchase_adjustment_amount(lines)
     replacement_amount = purchase_replacement_amount(replacement_lines)
     net_amount = (replacement_amount - outbound_amount).quantize(Decimal("0.01"))
@@ -2166,6 +2188,12 @@ def create_pos_cash_purchase(*, request, validated_data):
         blocking=True,
     )
 
+    # The goods are being carried in through the door of the place this till
+    # stands in, so that is where they land. A cashier is never asked and never
+    # told: for the shop with one location this is the only warehouse there is,
+    # and for a shop with a store room a till on the shop floor buying bread is
+    # buying it for the shop floor.
+    validated_data.setdefault("warehouse_id", selling_warehouse_id(request))
     purchase_order = save_purchase_order_with_lines(
         lines_data=lines_data,
         landed_cost_entries_data=landed_cost_entries_data,

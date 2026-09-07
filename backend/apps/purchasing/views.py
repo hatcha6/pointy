@@ -262,7 +262,7 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
     }
     queryset = (
         PurchaseOrder.objects.with_lifecycle_relations()
-        .select_related("supplier")
+        .select_related("supplier", "warehouse")
         .prefetch_related(
             # Must come FIRST: Django rejects a Prefetch that carries a queryset for
             # a lookup an earlier `lines__...` string already claimed. Every line

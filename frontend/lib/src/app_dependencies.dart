@@ -407,6 +407,7 @@ class PointyAppDependencies {
         analyticsEngine: analyticsEngine,
         persistScope: authViewModel.currentUser?.id.toString(),
         fxRepository: fxRepository,
+        warehouseRepository: warehouseRepository,
       );
 
   PurchaseOrderListViewModel get purchaseOrderListViewModel =>

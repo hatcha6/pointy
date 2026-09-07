@@ -702,7 +702,9 @@ def checkout_order(
         # A quote is a price offer, not a sale: no stock movement, no payment.
         # Optionally hold the quoted quantities until valid_until.
         if reserve_stock:
-            reserve_stock_for_quote(order, settings=settings)
+            reserve_stock_for_quote(
+                order, settings=settings, warehouse=warehouse_id
+            )
     else:
         # Standard and credit sales deduct stock at issue. A credit invoice may
         # carry a partial (or zero) down-payment; PaymentSerializer only flips
@@ -938,7 +940,7 @@ def _stamp_ledger_cost_on_lines(order, movements):
         OrderLine.objects.bulk_update(updated, ["unit_cost", "updated_at"])
 
 
-def reserve_stock_for_quote(order, *, settings=None):
+def reserve_stock_for_quote(order, *, settings=None, warehouse=None):
     """Place an ACTIVE hold on each stockable line of a quotation: bump the
     variant's ``quantity_committed`` and create a ``StockReservation``. Validates
     availability (on-hand minus existing commitments) unless overselling is on.
@@ -955,6 +957,7 @@ def reserve_stock_for_quote(order, *, settings=None):
             for line in lines
         ],
         settings=settings,
+        warehouse=warehouse,
     )
     for variant, stock_item, quantity in adjustments:
         stock_item.quantity_committed += quantity
@@ -963,6 +966,9 @@ def reserve_stock_for_quote(order, *, settings=None):
             order=order,
             variant=variant,
             stock_item=stock_item,
+            # The row the hold was actually placed on, so releasing it later
+            # cannot come off a different shelf.
+            warehouse_id=stock_item.warehouse_id,
             base_quantity=quantity,
             expires_at=order.valid_until,
         )
@@ -973,7 +979,10 @@ def _settle_reservation(reservation, status):
     terminal status. ACTIVE-only; a no-op for already-settled rows."""
     if reservation.status != StockReservation.Status.ACTIVE:
         return
-    stock_item = lock_stock_item(variant=reservation.variant)
+    # Released from the place it was held in, not from the shop's default.
+    stock_item = lock_stock_item(
+        variant=reservation.variant, warehouse=reservation.warehouse_id
+    )
     stock_item.quantity_committed = max(
         stock_item.quantity_committed - reservation.base_quantity,
         Decimal("0.000"),
@@ -1972,8 +1981,13 @@ def exchange_order_items(
     return exchange
 
 
-def record_return_stock_movement(*, order, variant, quantity, created_by):
-    stock_item = lock_stock_item(variant=variant)
+def record_return_stock_movement(
+    *, order, variant, quantity, created_by, warehouse=None
+):
+    # Goods come back to the shelves the till that took them back serves.
+    # Defaults to the shop's one place, which is where they left from for every
+    # shop that has never opened a second.
+    stock_item = lock_stock_item(variant=variant, warehouse=warehouse)
     before = stock_snapshot(stock_item)
     stock_item.quantity_on_hand += quantity
     save_stock_item_quantities(stock_item)

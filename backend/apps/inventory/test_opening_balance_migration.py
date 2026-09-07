@@ -23,6 +23,9 @@ from django.test import TransactionTestCase
 
 MIGRATE_FROM = ("inventory", "0014_warehouse_stockvaluationbin_stockledgerentry")
 MIGRATE_TO = ("inventory", "0015_seed_valuation_opening_balances")
+#: The last purchasing migration that does not depend on warehouses, and so
+#: the furthest the database is rewound on that side.
+PURCHASING_AT = ("purchasing", "0031_backfill_purchase_receipt_lifecycle")
 
 
 class OpeningBalanceMigrationTests(TransactionTestCase):
@@ -41,9 +44,18 @@ class OpeningBalanceMigrationTests(TransactionTestCase):
         super().tearDown()
 
     def _historical(self, app_label, model_name):
-        """The model as it stood at ``MIGRATE_FROM``, not as it stands today."""
+        """The model as the *database* currently has it, not as the code does.
+
+        Both apps are pinned. Rewinding ``inventory`` to 0014 also unapplies
+        the purchasing migration that put a ``warehouse`` FK on a purchase
+        order — a migration cannot survive its dependency going away — so the
+        table has purchasing's columns up to 0031 and no further. Asking for
+        state at the inventory target alone would rewind purchasing much
+        further than the database actually did, and the model would be missing
+        columns the table still requires.
+        """
         executor = MigrationExecutor(connection)
-        state = executor.loader.project_state([MIGRATE_FROM])
+        state = executor.loader.project_state([MIGRATE_FROM, PURCHASING_AT])
         return state.apps.get_model(app_label, model_name)
 
     def _migrate(self, targets):
@@ -67,24 +79,41 @@ class OpeningBalanceMigrationTests(TransactionTestCase):
         variant = product.default_variant
         supplier = Supplier.objects.create(name="مورد")
 
-        received = PurchaseOrder.objects.create(
-            supplier=supplier,
+        # Built on the schema this test rewound to, not on today's.
+        # ``PurchaseOrder`` gained a ``warehouse`` FK into ``inventory``, so
+        # rewinding *inventory* to 0014 necessarily unapplies that purchasing
+        # migration too — the column is genuinely gone, and the live model
+        # cannot write this table. Only the *enum* comes from the live class,
+        # which is exactly what this file exists to protect: historical models
+        # carry fields and never nested ``TextChoices``.
+        historical_order = self._historical("purchasing", "PurchaseOrder")
+        historical_line = self._historical("purchasing", "PurchaseLine")
+
+        # Numbered by hand: the historical model has no ``save()`` to stamp
+        # one, and two orders sharing a blank number collide on the unique
+        # index.
+        received = historical_order.objects.create(
+            supplier_id=supplier.pk,
             status=PurchaseOrder.Status.RECEIVED,
+            order_number="P-OPEN-RECEIVED",
+            special_day_keys=[],
         )
-        PurchaseLine.objects.create(
-            purchase_order=received,
-            variant=variant,
+        historical_line.objects.create(
+            purchase_order_id=received.pk,
+            variant_id=variant.pk,
             quantity=Decimal("10"),
             unit_cost=Decimal("3.00"),
             unit_factor=Decimal("1"),
         )
-        cancelled = PurchaseOrder.objects.create(
-            supplier=supplier,
+        cancelled = historical_order.objects.create(
+            supplier_id=supplier.pk,
             status=PurchaseOrder.Status.CANCELLED,
+            order_number="P-OPEN-CANCELLED",
+            special_day_keys=[],
         )
-        PurchaseLine.objects.create(
-            purchase_order=cancelled,
-            variant=variant,
+        historical_line.objects.create(
+            purchase_order_id=cancelled.pk,
+            variant_id=variant.pk,
             quantity=Decimal("10"),
             unit_cost=Decimal("99.00"),
             unit_factor=Decimal("1"),

@@ -11,6 +11,7 @@ from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
 from apps.inventory.models import StockLedgerEntry, StockMovement
 from apps.inventory.oversell import may_oversell
+from apps.sales.registers import selling_warehouse_id
 from apps.inventory.services import (
     consume_expiring_stock_batches,
     create_stock_movement,
@@ -581,7 +582,9 @@ def consume_pending_materials(job, *, request=None):
 def _consume_material(material, *, request=None):
     settings = ShopSettings.load()
     variant = material.variant
-    stock_item = lock_stock_item(variant=variant)
+    stock_item = lock_stock_item(
+        variant=variant, warehouse=selling_warehouse_id(request)
+    )
     if (
         not may_oversell(stock_item, settings=settings)
         and stock_item.quantity_on_hand < material.quantity
@@ -634,7 +637,9 @@ def reverse_job_material(*, job, material, request=None):
 
     if material.consumed_at is not None:
         variant = material.variant
-        stock_item = lock_stock_item(variant=variant)
+        stock_item = lock_stock_item(
+        variant=variant, warehouse=selling_warehouse_id(request)
+    )
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand += material.quantity
         save_stock_item_quantities(stock_item)
@@ -744,7 +749,9 @@ def receive_finished_goods(job, *, request=None):
         else Decimal("0.00")
     )
 
-    stock_item = lock_stock_item(variant=job.output_variant)
+    stock_item = lock_stock_item(
+        variant=job.output_variant, warehouse=selling_warehouse_id(request)
+    )
     before = stock_snapshot(stock_item)
     stock_item.quantity_on_hand += job.output_quantity
     save_stock_item_quantities(stock_item)
