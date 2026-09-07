@@ -39,6 +39,9 @@ import 'operations_settings_page.dart';
 import 'app_updates_page.dart';
 import 'price_checkers_page.dart';
 import 'sales_channels_page.dart';
+import '../../inventory/views/transfers_screen.dart';
+import '../../inventory/view_models/transfers_view_model.dart';
+import '../../../data/repositories/warehouse_repository.dart';
 import 'warehouses_page.dart';
 import 'messaging_settings_page.dart';
 import 'exchange_rates_page.dart';
@@ -53,6 +56,8 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.viewModel,
     required this.salesChannelsViewModel,
     required this.warehousesViewModel,
+    required this.transfersViewModel,
+    required this.warehouseRepository,
     required this.priceCheckersViewModel,
     required this.workflowsViewModel,
     required this.assetTypesViewModel,
@@ -71,6 +76,8 @@ class ShopSettingsScreen extends StatelessWidget {
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
   final WarehousesViewModel warehousesViewModel;
+  final TransfersViewModel transfersViewModel;
+  final WarehouseRepository warehouseRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final AssetTypesViewModel assetTypesViewModel;
@@ -120,6 +127,8 @@ class ShopSettingsScreen extends StatelessWidget {
               viewModel: viewModel,
               salesChannelsViewModel: salesChannelsViewModel,
               warehousesViewModel: warehousesViewModel,
+              transfersViewModel: transfersViewModel,
+              warehouseRepository: warehouseRepository,
               priceCheckersViewModel: priceCheckersViewModel,
               workflowsViewModel: workflowsViewModel,
               assetTypesViewModel: assetTypesViewModel,
@@ -149,6 +158,8 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.viewModel,
     required this.salesChannelsViewModel,
     required this.warehousesViewModel,
+    required this.transfersViewModel,
+    required this.warehouseRepository,
     required this.priceCheckersViewModel,
     required this.workflowsViewModel,
     required this.assetTypesViewModel,
@@ -170,6 +181,8 @@ class _ShopSettingsBody extends StatelessWidget {
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
   final WarehousesViewModel warehousesViewModel;
+  final TransfersViewModel transfersViewModel;
+  final WarehouseRepository warehouseRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final AssetTypesViewModel assetTypesViewModel;
@@ -216,6 +229,8 @@ class _ShopSettingsBody extends StatelessWidget {
       viewModel: viewModel,
       salesChannelsViewModel: salesChannelsViewModel,
       warehousesViewModel: warehousesViewModel,
+      transfersViewModel: transfersViewModel,
+      warehouseRepository: warehouseRepository,
       priceCheckersViewModel: priceCheckersViewModel,
       workflowsViewModel: workflowsViewModel,
       assetTypesViewModel: assetTypesViewModel,
@@ -242,6 +257,8 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.viewModel,
     required this.salesChannelsViewModel,
     required this.warehousesViewModel,
+    required this.transfersViewModel,
+    required this.warehouseRepository,
     required this.priceCheckersViewModel,
     required this.workflowsViewModel,
     required this.assetTypesViewModel,
@@ -264,6 +281,8 @@ class _ShopSettingsForm extends StatefulWidget {
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
   final WarehousesViewModel warehousesViewModel;
+  final TransfersViewModel transfersViewModel;
+  final WarehouseRepository warehouseRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final AssetTypesViewModel assetTypesViewModel;
@@ -657,6 +676,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                             onTap: widget.viewModel.isSaving
                                 ? null
                                 : () => _openWarehouses(context),
+                          ),
+                        if (widget.canManageSalesChannels)
+                          PointySettingsTile(
+                            icon: Icons.swap_horiz,
+                            title: l10n.transfersSectionTitle,
+                            subtitle: l10n.transfersSectionSubtitle,
+                            onTap: widget.viewModel.isSaving
+                                ? null
+                                : () => _openTransfers(context),
                           ),
                         if (widget.canManagePriceCheckers)
                           PointySettingsTile(
@@ -1440,6 +1468,17 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       MaterialPageRoute<void>(
         builder: (routeContext) =>
             WarehousesPage(viewModel: widget.warehousesViewModel),
+      ),
+    );
+  }
+
+  Future<void> _openTransfers(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) => TransfersScreen(
+          viewModel: widget.transfersViewModel,
+          repository: widget.warehouseRepository,
+        ),
       ),
     );
   }

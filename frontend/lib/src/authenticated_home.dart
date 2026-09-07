@@ -76,6 +76,7 @@ import 'features/settings/view_models/modifier_groups_view_model.dart';
 import 'features/settings/view_models/prep_stations_view_model.dart';
 import 'features/settings/view_models/price_checkers_view_model.dart';
 import 'features/settings/view_models/sales_channels_view_model.dart';
+import 'features/inventory/view_models/transfers_view_model.dart';
 import 'features/settings/view_models/warehouses_view_model.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
 import 'features/settings/view_models/messaging_settings_view_model.dart';
@@ -726,6 +727,10 @@ class _AuthenticatedRoutes implements AppNavigation {
         warehousesViewModel: WarehousesViewModel(
           dependencies.warehouseRepository,
         ),
+        transfersViewModel: TransfersViewModel(
+          dependencies.warehouseRepository,
+        ),
+        warehouseRepository: dependencies.warehouseRepository,
         priceCheckersViewModel: PriceCheckersViewModel(
           dependencies.priceCheckerRepository,
         ),

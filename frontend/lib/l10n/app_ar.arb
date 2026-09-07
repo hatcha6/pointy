@@ -10309,5 +10309,116 @@
   },
   "registerWarehouseManagerOnly": "تغيير مكان الصندوق يحتاج صلاحية مدير.",
   "warehousesSectionTitle": "المخازن والأماكن",
-  "warehousesSectionSubtitle": "أين يوجد مخزونك، ومن أين يبيع كل صندوق"
+  "warehousesSectionSubtitle": "أين يوجد مخزونك، ومن أين يبيع كل صندوق",
+  "transfersTitle": "التحويلات",
+  "transfersSectionTitle": "تحويل بضاعة",
+  "transfersSectionSubtitle": "نقل مخزون بين أماكن المحل",
+  "transfersNewAction": "تحويل جديد",
+  "transfersEmptyTitle": "لا توجد تحويلات",
+  "transfersEmptyBody": "عندما تنقل بضاعة من مكان لآخر، ستظهر الرحلة هنا.",
+  "transfersNeedsAttention": "في الطريق",
+  "transfersDrafts": "مسودات",
+  "transfersSettled": "منتهية",
+  "transferStatusDraft": "مسودة",
+  "transferStatusInTransit": "في الطريق",
+  "transferStatusPartial": "وصل جزء",
+  "transferStatusReceived": "وصلت",
+  "transferStatusCancelled": "ملغاة",
+  "transferItemsCount": "{count} صنف",
+  "@transferItemsCount": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "transferArrivedOf": "وصل {received} من {total}",
+  "@transferArrivedOf": {
+    "placeholders": {
+      "received": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "transferSendAction": "إرسال",
+  "transferReceiveAction": "استلام",
+  "transferCancelAction": "إلغاء التحويل",
+  "transferCancelReasonLabel": "سبب الإلغاء",
+  "transferCancelReasonRequired": "اكتب سبباً حتى يُعرف لاحقاً لماذا رجعت البضاعة.",
+  "transferSent": "البضاعة في الطريق إلى {name}",
+  "@transferSent": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "transferReceived": "تم استلام البضاعة في {name}",
+  "@transferReceived": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "transferCancelled": "أُلغي التحويل ورجعت البضاعة",
+  "transferComposerTitle": "تحويل جديد",
+  "transferFromLabel": "من",
+  "transferToLabel": "إلى",
+  "transferSwapTooltip": "عكس الاتجاه",
+  "transferAddProduct": "إضافة صنف",
+  "transferNoLinesYet": "أضف الأصناف التي ستُنقل.",
+  "transferAvailableAtSource": "متوفر: {value}",
+  "@transferAvailableAtSource": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "transferExceedsSource": "أكثر مما هو موجود في {name}",
+  "@transferExceedsSource": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "transferNoteLabel": "ملاحظة (اختياري)",
+  "transferSaveDraftAction": "حفظ كمسودة",
+  "transferSendNowAction": "إرسال الآن",
+  "transferReceiveTitle": "استلام {number}",
+  "@transferReceiveTitle": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "transferReceiveAllAction": "وصل كل شيء",
+  "transferReceiveSomeHint": "عدّل الكميات إذا وصل جزء فقط.",
+  "transferReceiveConfirm": "تأكيد الاستلام",
+  "transferOnTheRoadLabel": "على الطريق",
+  "transferJourneyLabel": "{source} ← {destination}",
+  "@transferJourneyLabel": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      },
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
+  "transferCancelledByLabel": "أُلغي بواسطة {name}",
+  "@transferCancelledByLabel": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  }
 }

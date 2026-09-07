@@ -27730,6 +27730,258 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أين يوجد مخزونك، ومن أين يبيع كل صندوق'**
   String get warehousesSectionSubtitle;
+
+  /// No description provided for @transfersTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التحويلات'**
+  String get transfersTitle;
+
+  /// No description provided for @transfersSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل بضاعة'**
+  String get transfersSectionTitle;
+
+  /// No description provided for @transfersSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقل مخزون بين أماكن المحل'**
+  String get transfersSectionSubtitle;
+
+  /// No description provided for @transfersNewAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل جديد'**
+  String get transfersNewAction;
+
+  /// No description provided for @transfersEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تحويلات'**
+  String get transfersEmptyTitle;
+
+  /// No description provided for @transfersEmptyBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'عندما تنقل بضاعة من مكان لآخر، ستظهر الرحلة هنا.'**
+  String get transfersEmptyBody;
+
+  /// No description provided for @transfersNeedsAttention.
+  ///
+  /// In ar, this message translates to:
+  /// **'في الطريق'**
+  String get transfersNeedsAttention;
+
+  /// No description provided for @transfersDrafts.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسودات'**
+  String get transfersDrafts;
+
+  /// No description provided for @transfersSettled.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتهية'**
+  String get transfersSettled;
+
+  /// No description provided for @transferStatusDraft.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسودة'**
+  String get transferStatusDraft;
+
+  /// No description provided for @transferStatusInTransit.
+  ///
+  /// In ar, this message translates to:
+  /// **'في الطريق'**
+  String get transferStatusInTransit;
+
+  /// No description provided for @transferStatusPartial.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصل جزء'**
+  String get transferStatusPartial;
+
+  /// No description provided for @transferStatusReceived.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصلت'**
+  String get transferStatusReceived;
+
+  /// No description provided for @transferStatusCancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملغاة'**
+  String get transferStatusCancelled;
+
+  /// No description provided for @transferItemsCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} صنف'**
+  String transferItemsCount(String count);
+
+  /// No description provided for @transferArrivedOf.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصل {received} من {total}'**
+  String transferArrivedOf(String received, String total);
+
+  /// No description provided for @transferSendAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال'**
+  String get transferSendAction;
+
+  /// No description provided for @transferReceiveAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام'**
+  String get transferReceiveAction;
+
+  /// No description provided for @transferCancelAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء التحويل'**
+  String get transferCancelAction;
+
+  /// No description provided for @transferCancelReasonLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبب الإلغاء'**
+  String get transferCancelReasonLabel;
+
+  /// No description provided for @transferCancelReasonRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب سبباً حتى يُعرف لاحقاً لماذا رجعت البضاعة.'**
+  String get transferCancelReasonRequired;
+
+  /// No description provided for @transferSent.
+  ///
+  /// In ar, this message translates to:
+  /// **'البضاعة في الطريق إلى {name}'**
+  String transferSent(String name);
+
+  /// No description provided for @transferReceived.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم استلام البضاعة في {name}'**
+  String transferReceived(String name);
+
+  /// No description provided for @transferCancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغي التحويل ورجعت البضاعة'**
+  String get transferCancelled;
+
+  /// No description provided for @transferComposerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل جديد'**
+  String get transferComposerTitle;
+
+  /// No description provided for @transferFromLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'من'**
+  String get transferFromLabel;
+
+  /// No description provided for @transferToLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى'**
+  String get transferToLabel;
+
+  /// No description provided for @transferSwapTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'عكس الاتجاه'**
+  String get transferSwapTooltip;
+
+  /// No description provided for @transferAddProduct.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة صنف'**
+  String get transferAddProduct;
+
+  /// No description provided for @transferNoLinesYet.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف الأصناف التي ستُنقل.'**
+  String get transferNoLinesYet;
+
+  /// No description provided for @transferAvailableAtSource.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوفر: {value}'**
+  String transferAvailableAtSource(String value);
+
+  /// No description provided for @transferExceedsSource.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكثر مما هو موجود في {name}'**
+  String transferExceedsSource(String name);
+
+  /// No description provided for @transferNoteLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملاحظة (اختياري)'**
+  String get transferNoteLabel;
+
+  /// No description provided for @transferSaveDraftAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ كمسودة'**
+  String get transferSaveDraftAction;
+
+  /// No description provided for @transferSendNowAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال الآن'**
+  String get transferSendNowAction;
+
+  /// No description provided for @transferReceiveTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام {number}'**
+  String transferReceiveTitle(String number);
+
+  /// No description provided for @transferReceiveAllAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصل كل شيء'**
+  String get transferReceiveAllAction;
+
+  /// No description provided for @transferReceiveSomeHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدّل الكميات إذا وصل جزء فقط.'**
+  String get transferReceiveSomeHint;
+
+  /// No description provided for @transferReceiveConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الاستلام'**
+  String get transferReceiveConfirm;
+
+  /// No description provided for @transferOnTheRoadLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'على الطريق'**
+  String get transferOnTheRoadLabel;
+
+  /// No description provided for @transferJourneyLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'{source} ← {destination}'**
+  String transferJourneyLabel(String source, String destination);
+
+  /// No description provided for @transferCancelledByLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغي بواسطة {name}'**
+  String transferCancelledByLabel(String name);
 }
 
 class _AppLocalizationsDelegate

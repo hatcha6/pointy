@@ -16016,4 +16016,150 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get warehousesSectionSubtitle =>
       'أين يوجد مخزونك، ومن أين يبيع كل صندوق';
+
+  @override
+  String get transfersTitle => 'التحويلات';
+
+  @override
+  String get transfersSectionTitle => 'تحويل بضاعة';
+
+  @override
+  String get transfersSectionSubtitle => 'نقل مخزون بين أماكن المحل';
+
+  @override
+  String get transfersNewAction => 'تحويل جديد';
+
+  @override
+  String get transfersEmptyTitle => 'لا توجد تحويلات';
+
+  @override
+  String get transfersEmptyBody =>
+      'عندما تنقل بضاعة من مكان لآخر، ستظهر الرحلة هنا.';
+
+  @override
+  String get transfersNeedsAttention => 'في الطريق';
+
+  @override
+  String get transfersDrafts => 'مسودات';
+
+  @override
+  String get transfersSettled => 'منتهية';
+
+  @override
+  String get transferStatusDraft => 'مسودة';
+
+  @override
+  String get transferStatusInTransit => 'في الطريق';
+
+  @override
+  String get transferStatusPartial => 'وصل جزء';
+
+  @override
+  String get transferStatusReceived => 'وصلت';
+
+  @override
+  String get transferStatusCancelled => 'ملغاة';
+
+  @override
+  String transferItemsCount(String count) {
+    return '$count صنف';
+  }
+
+  @override
+  String transferArrivedOf(String received, String total) {
+    return 'وصل $received من $total';
+  }
+
+  @override
+  String get transferSendAction => 'إرسال';
+
+  @override
+  String get transferReceiveAction => 'استلام';
+
+  @override
+  String get transferCancelAction => 'إلغاء التحويل';
+
+  @override
+  String get transferCancelReasonLabel => 'سبب الإلغاء';
+
+  @override
+  String get transferCancelReasonRequired =>
+      'اكتب سبباً حتى يُعرف لاحقاً لماذا رجعت البضاعة.';
+
+  @override
+  String transferSent(String name) {
+    return 'البضاعة في الطريق إلى $name';
+  }
+
+  @override
+  String transferReceived(String name) {
+    return 'تم استلام البضاعة في $name';
+  }
+
+  @override
+  String get transferCancelled => 'أُلغي التحويل ورجعت البضاعة';
+
+  @override
+  String get transferComposerTitle => 'تحويل جديد';
+
+  @override
+  String get transferFromLabel => 'من';
+
+  @override
+  String get transferToLabel => 'إلى';
+
+  @override
+  String get transferSwapTooltip => 'عكس الاتجاه';
+
+  @override
+  String get transferAddProduct => 'إضافة صنف';
+
+  @override
+  String get transferNoLinesYet => 'أضف الأصناف التي ستُنقل.';
+
+  @override
+  String transferAvailableAtSource(String value) {
+    return 'متوفر: $value';
+  }
+
+  @override
+  String transferExceedsSource(String name) {
+    return 'أكثر مما هو موجود في $name';
+  }
+
+  @override
+  String get transferNoteLabel => 'ملاحظة (اختياري)';
+
+  @override
+  String get transferSaveDraftAction => 'حفظ كمسودة';
+
+  @override
+  String get transferSendNowAction => 'إرسال الآن';
+
+  @override
+  String transferReceiveTitle(String number) {
+    return 'استلام $number';
+  }
+
+  @override
+  String get transferReceiveAllAction => 'وصل كل شيء';
+
+  @override
+  String get transferReceiveSomeHint => 'عدّل الكميات إذا وصل جزء فقط.';
+
+  @override
+  String get transferReceiveConfirm => 'تأكيد الاستلام';
+
+  @override
+  String get transferOnTheRoadLabel => 'على الطريق';
+
+  @override
+  String transferJourneyLabel(String source, String destination) {
+    return '$source ← $destination';
+  }
+
+  @override
+  String transferCancelledByLabel(String name) {
+    return 'أُلغي بواسطة $name';
+  }
 }

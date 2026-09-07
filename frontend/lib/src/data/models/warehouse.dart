@@ -142,6 +142,9 @@ class WarehouseStockRow {
     required this.quantityOnHand,
     this.quantityCommitted = 0,
     this.quantityExpected = 0,
+    this.variantId = 0,
+    this.variantName = '',
+    this.variantSku = '',
   });
 
   final int warehouseId;
@@ -150,6 +153,12 @@ class WarehouseStockRow {
   final double quantityOnHand;
   final double quantityCommitted;
   final double quantityExpected;
+
+  /// Which product this row is about. Present when the row came from a stock
+  /// search rather than from one product's own breakdown.
+  final int variantId;
+  final String variantName;
+  final String variantSku;
 
   factory WarehouseStockRow.fromJson(Map<String, Object?> json) {
     double number(Object? value) =>
@@ -161,6 +170,11 @@ class WarehouseStockRow {
       quantityOnHand: number(json['quantity_on_hand']),
       quantityCommitted: number(json['quantity_committed']),
       quantityExpected: number(json['quantity_expected']),
+      variantId: (json['variant'] as num?)?.toInt() ?? 0,
+      variantName: json['variant_full_name']?.toString() ??
+          json['variant_name']?.toString() ??
+          '',
+      variantSku: json['variant_sku']?.toString() ?? '',
     );
   }
 }

@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../models/stock_transfer.dart';
 import '../models/warehouse.dart';
 import '../services/pos_api_service.dart';
 
@@ -47,6 +48,39 @@ class WarehouseRepository {
         warehouseId: warehouseId,
         name: name,
       ),
+    );
+  }
+
+  Future<Result<List<StockTransfer>>> loadTransfers({String? status}) {
+    return Result.guard(() => _service.fetchTransfers(status: status));
+  }
+
+  Future<Result<StockTransfer>> createTransfer(StockTransferDraft draft) {
+    return Result.guard(() => _service.createTransfer(draft));
+  }
+
+  Future<Result<StockTransfer>> dispatchTransfer(int id) {
+    return Result.guard(() => _service.dispatchTransfer(id));
+  }
+
+  Future<Result<StockTransfer>> receiveTransfer(
+    int id,
+    Map<int, double> lines, {
+    String note = '',
+  }) {
+    return Result.guard(() => _service.receiveTransfer(id, lines, note: note));
+  }
+
+  Future<Result<StockTransfer>> cancelTransfer(int id, String reason) {
+    return Result.guard(() => _service.cancelTransfer(id, reason));
+  }
+
+  Future<Result<List<WarehouseStockRow>>> searchStockAt({
+    required int warehouseId,
+    String search = '',
+  }) {
+    return Result.guard(
+      () => _service.searchStockAt(warehouseId: warehouseId, search: search),
     );
   }
 }

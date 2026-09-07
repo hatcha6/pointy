@@ -97,6 +97,7 @@ import 'customer_api_client.dart';
 import 'dashboard_api_client.dart';
 import 'discount_api_client.dart';
 import 'employee_api_client.dart';
+import '../models/stock_transfer.dart';
 import '../models/warehouse.dart';
 import 'document_trail_api_client.dart';
 import 'warehouse_api_client.dart';
@@ -2295,6 +2296,31 @@ class PosApiService {
     warehouseId: warehouseId,
     name: name,
   );
+
+  // -- stock transfers -------------------------------------------------
+
+  Future<List<StockTransfer>> fetchTransfers({String? status}) =>
+      _warehouses.fetchTransfers(status: status);
+
+  Future<StockTransfer> createTransfer(StockTransferDraft draft) =>
+      _warehouses.createTransfer(draft);
+
+  Future<StockTransfer> dispatchTransfer(int id) =>
+      _warehouses.dispatchTransfer(id);
+
+  Future<StockTransfer> receiveTransfer(
+    int id,
+    Map<int, double> lines, {
+    String note = '',
+  }) => _warehouses.receiveTransfer(id, lines, note: note);
+
+  Future<StockTransfer> cancelTransfer(int id, String reason) =>
+      _warehouses.cancelTransfer(id, reason);
+
+  Future<List<WarehouseStockRow>> searchStockAt({
+    required int warehouseId,
+    String search = '',
+  }) => _warehouses.searchStockAt(warehouseId: warehouseId, search: search);
 }
 
 const _shopLogoPdfContentTypes = {'image/jpeg', 'image/jpg', 'image/png'};
