@@ -255,6 +255,19 @@ class CatalogViewModel extends ChangeNotifier {
     return outcome;
   }
 
+  /// Narrow every stock figure on the list to one place, or back to the whole
+  /// shop. Reloads, because the sums come from the server.
+  Future<void> setWarehouseFilter(int? warehouseId) async {
+    if (_query.warehouseId == warehouseId) {
+      return;
+    }
+    _query = _query.withWarehouse(warehouseId);
+    notifyListeners();
+    await loadProducts();
+  }
+
+  int? get warehouseFilter => _query.warehouseId;
+
   Future<void> loadProducts() async {
     _isLoading = true;
     _errorMessage = null;

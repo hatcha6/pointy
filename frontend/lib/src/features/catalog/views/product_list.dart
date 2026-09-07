@@ -12,6 +12,7 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../data/models/warehouse.dart';
 import '../../../data/repositories/warehouse_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
@@ -34,6 +35,7 @@ class ProductList extends StatelessWidget {
     required this.printingRepository,
     required this.purchaseRepository,
     this.warehouseRepository,
+    this.places = const <Warehouse>[],
     required this.saleRepository,
     required this.shopSettingsRepository,
     this.contactRepository,
@@ -53,6 +55,9 @@ class ProductList extends StatelessWidget {
   /// per-place breakdown, which is the right answer for a shop with one
   /// place anyway.
   final WarehouseRepository? warehouseRepository;
+
+  /// The shop's places, for the filter bar. Empty for a shop with one.
+  final List<Warehouse> places;
   final SaleRepository saleRepository;
   final ShopSettingsRepository shopSettingsRepository;
   final ContactRepository? contactRepository;
@@ -124,6 +129,18 @@ class ProductList extends StatelessWidget {
               canCreateProduct: capabilities.canCreateProduct,
               onCreateProduct: onCreateProduct,
             ),
+            // Only when the shop keeps stock in more than one place. A single
+            // showroom has nothing to narrow to, and a filter whose only
+            // option is "everywhere" is a control that costs a tap to learn
+            // nothing.
+            if (places.length > 1) ...[
+              SizedBox(height: spacing.sm),
+              _PlaceFilterBar(
+                places: places,
+                selectedId: viewModel.warehouseFilter,
+                onChanged: viewModel.setWarehouseFilter,
+              ),
+            ],
             if (capabilities.canChangeProduct &&
                 viewModel.isViewingArchived) ...[
               SizedBox(height: spacing.sm),
@@ -607,4 +624,66 @@ Future<void> openProductDetails(
       ),
     ),
   );
+}
+
+/// Narrow the whole catalog's stock figures to one place.
+///
+/// A row of chips rather than a dropdown: with two or three places every option
+/// is visible at once and switching is one tap, which is what a shop owner
+/// standing between the counter and the back room actually does. "Everywhere"
+/// leads, because it is both the default and the answer people want most.
+class _PlaceFilterBar extends StatelessWidget {
+  const _PlaceFilterBar({
+    required this.places,
+    required this.selectedId,
+    required this.onChanged,
+  });
+
+  final List<Warehouse> places;
+  final int? selectedId;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return SizedBox(
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: 8),
+            child: ChoiceChip(
+              label: Text(l10n.warehouseFilterAll),
+              selected: selectedId == null,
+              onSelected: (_) => onChanged(null),
+            ),
+          ),
+          for (final place in places)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 8),
+              child: ChoiceChip(
+                avatar: Icon(_placeIcon(place.kind), size: 18),
+                label: Text(place.name),
+                selected: selectedId == place.id,
+                onSelected: (_) => onChanged(place.id),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  IconData _placeIcon(WarehouseKind kind) {
+    switch (kind) {
+      case WarehouseKind.shopFloor:
+        return Icons.storefront_outlined;
+      case WarehouseKind.storeRoom:
+        return Icons.warehouse_outlined;
+      case WarehouseKind.van:
+        return Icons.local_shipping_outlined;
+      case WarehouseKind.transit:
+        return Icons.route_outlined;
+    }
+  }
 }

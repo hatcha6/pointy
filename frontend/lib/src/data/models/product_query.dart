@@ -80,6 +80,7 @@ class ProductQuery extends ModelQuery {
     this.supplierId,
     this.supplierName,
     this.preferredSupplierId,
+    this.warehouseId,
     this.ordering = ProductOrdering.name,
   });
 
@@ -100,6 +101,14 @@ class ProductQuery extends ModelQuery {
   // rest searchable, so a buyer can still add a product the supplier hasn't
   // stocked before. Maps to the server's ?preferred_supplier=.
   final int? preferredSupplierId;
+
+  /// Narrow every stock figure to one place.
+  ///
+  /// Null means the whole shop, which is the question a catalog normally
+  /// answers and the only one a single-place shop can ask. With a store room,
+  /// "what is on the shop floor" is the same list with its sums narrowed — not
+  /// a different screen that could drift from this one.
+  final int? warehouseId;
   @override
   final ProductOrdering ordering;
 
@@ -117,6 +126,8 @@ class ProductQuery extends ModelQuery {
       ),
     if (supplierId != null)
       QueryFilter(parameter: 'supplier', value: '$supplierId'),
+    if (warehouseId != null)
+      QueryFilter(parameter: 'warehouse', value: '$warehouseId'),
     if (preferredSupplierId != null)
       QueryFilter(
         parameter: 'preferred_supplier',
@@ -141,9 +152,28 @@ class ProductQuery extends ModelQuery {
       archived: archived ?? this.archived,
       stock: stock ?? this.stock,
       supplierId: supplierId,
+      warehouseId: warehouseId,
       supplierName: supplierName,
       preferredSupplierId: preferredSupplierId,
       ordering: ordering ?? this.ordering,
+    );
+  }
+
+  /// Set or clear the place filter. Passing null means the whole shop, which
+  /// [copyWith] cannot express because it preserves the current value.
+  ProductQuery withWarehouse(int? warehouseId) {
+    return ProductQuery(
+      search: search,
+      barcode: barcode,
+      categories: categories,
+      availability: availability,
+      archived: archived,
+      stock: stock,
+      supplierId: supplierId,
+      warehouseId: warehouseId,
+      supplierName: supplierName,
+      preferredSupplierId: preferredSupplierId,
+      ordering: ordering,
     );
   }
 
@@ -158,6 +188,7 @@ class ProductQuery extends ModelQuery {
       archived: archived,
       stock: stock,
       supplierId: supplierId,
+      warehouseId: warehouseId,
       supplierName: supplierName,
       preferredSupplierId: preferredSupplierId,
       ordering: ordering,
@@ -175,6 +206,7 @@ class ProductQuery extends ModelQuery {
       archived: archived,
       stock: stock,
       supplierId: supplierId,
+      warehouseId: warehouseId,
       supplierName: supplierName,
       preferredSupplierId: preferredSupplierId,
       ordering: ordering,

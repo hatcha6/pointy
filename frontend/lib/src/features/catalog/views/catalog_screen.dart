@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -9,6 +11,8 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/inventory_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
+import '../../../core/result.dart';
+import '../../../data/models/warehouse.dart';
 import '../../../data/repositories/warehouse_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
@@ -78,6 +82,16 @@ class _CatalogScreenState extends State<CatalogScreen> {
   Product? _selectedProduct;
   ProductDetailsViewModel? _selectedProductViewModel;
 
+  /// The shop's places. Empty until loaded, and empty forever for a shop that
+  /// keeps one — which is what stops the filter bar from appearing at all.
+  List<Warehouse> _places = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadPlaces());
+  }
+
   void _selectProduct(Product product) {
     setState(() {
       _selectedProduct = product;
@@ -91,6 +105,25 @@ class _CatalogScreenState extends State<CatalogScreen> {
         shouldLoadSaleHistory: capabilities.canViewRegisterSessionOrders,
         shouldLoadPurchaseHistory: capabilities.canAccessPurchasing,
       );
+    });
+  }
+
+  /// Best effort and fire-and-forget: the catalog is fully usable without
+  /// knowing the shop's places, so a failure here costs a filter bar, not a
+  /// screen.
+  Future<void> _loadPlaces() async {
+    final repository = widget.warehouseRepository;
+    if (repository == null) {
+      return;
+    }
+    final result = await repository.loadWarehouses(activeOnly: true);
+    if (!mounted || result is! Ok<List<Warehouse>>) {
+      return;
+    }
+    setState(() {
+      _places = result.value
+          .where((place) => place.sellsFrom)
+          .toList(growable: false);
     });
   }
 
@@ -135,6 +168,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
               child: MasterDetailLayout(
                 listPaneBuilder: (paneContext, isDualPane) => ProductList(
                   viewModel: viewModel,
+                  places: _places,
                   inventoryRepository: inventoryRepository,
                   printingRepository: printingRepository,
                   purchaseRepository: purchaseRepository,

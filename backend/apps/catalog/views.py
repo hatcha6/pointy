@@ -540,15 +540,36 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     def _category_ids_with_descendants(self, category_ids):
         return category_ids_with_descendants(category_ids)
 
+    def _rollup_place(self):
+        """The one place a caller asked about, or ``None`` for the whole shop.
+
+        A catalog list is normally "what does the shop have", summed across
+        every place. A shop with a store room also wants to ask "what is on the
+        shop floor" — which is the same list with the sums narrowed, not a
+        different endpoint. An unparseable value is treated as "no filter"
+        rather than as an error: a stale bookmark should show the shop, not a
+        400.
+        """
+        raw = str(self.request.query_params.get("warehouse", "") or "").strip()
+        if not raw.isdigit():
+            return None
+        return int(raw)
+
     def _with_variant_rollups(self, queryset):
+        place = self._rollup_place()
+        here = (
+            Q(variants__stock_items__warehouse_id=place)
+            if place is not None
+            else Q()
+        )
         return queryset.annotate(
             stock_quantity_on_hand=Coalesce(
-                Sum("variants__stock_items__quantity_on_hand"),
+                Sum("variants__stock_items__quantity_on_hand", filter=here),
                 Value(Decimal("0")),
                 output_field=DecimalField(max_digits=12, decimal_places=3),
             ),
             stock_quantity_committed=Coalesce(
-                Sum("variants__stock_items__quantity_committed"),
+                Sum("variants__stock_items__quantity_committed", filter=here),
                 Value(Decimal("0")),
                 output_field=DecimalField(max_digits=12, decimal_places=3),
             ),
