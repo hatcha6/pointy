@@ -148,6 +148,23 @@ List<NavCatalogGroup> appNavigationCatalog(AppLocalizations l10n) {
           keywords: const ['register', 'sessions', 'shifts', 'صندوق', 'ورديات'],
         ),
         NavCatalogEntry(
+          destination: AppNavigationDestination.cameras,
+          icon: Icons.videocam_outlined,
+          selectedIcon: Icons.videocam,
+          label: l10n.camerasDrawerLabel,
+          keywords: const [
+            'cameras',
+            'cctv',
+            'dvr',
+            'nvr',
+            'video',
+            'surveillance',
+            'كاميرات',
+            'مراقبة',
+            'تسجيل',
+          ],
+        ),
+        NavCatalogEntry(
           destination: AppNavigationDestination.discounts,
           icon: Icons.local_offer_outlined,
           selectedIcon: Icons.local_offer,

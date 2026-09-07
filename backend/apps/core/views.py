@@ -132,6 +132,10 @@ def login_view(request):
             "allow_cashier_customer_access": (
                 ShopSettings.load().allow_cashier_customer_access
             ),
+            # Shop-level feature flag, delivered with the session so the client
+            # can hide every camera surface without a second round trip on a
+            # shop that has no DVR at all.
+            "surveillance_enabled": ShopSettings.load().enable_surveillance,
         }
     )
 
@@ -184,6 +188,10 @@ def me_view(request):
             "allow_cashier_customer_access": (
                 ShopSettings.load().allow_cashier_customer_access
             ),
+            # Shop-level feature flag, delivered with the session so the client
+            # can hide every camera surface without a second round trip on a
+            # shop that has no DVR at all.
+            "surveillance_enabled": ShopSettings.load().enable_surveillance,
         }
     )
 

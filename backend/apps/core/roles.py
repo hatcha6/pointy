@@ -78,6 +78,7 @@ MANAGER_PERMISSION_DOMAINS = (
     "payments",
     "printing",
     "price_checker",
+    "surveillance",
     "reports",
     "notifications",
     "attachments",
@@ -309,6 +310,11 @@ SUPERVISOR_PERMISSION_CODES = (
     "operations.assign_job",
     "operations.reopen_job",
     "expenses.view_expense",
+    # Cameras: a floor supervisor watches and reviews, but exporting footage is
+    # a manager act — it leaves the building.
+    "surveillance.view_camera",
+    "surveillance.view_live",
+    "surveillance.view_playback",
     "analytics.add_analyticsevent",
 )
 # أمين المخزن / storekeeper: catalog visibility, the full stock-count loop

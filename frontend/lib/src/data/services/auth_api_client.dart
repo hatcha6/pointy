@@ -118,6 +118,11 @@ class AuthApiClient {
       userJson['allow_cashier_customer_access'] =
           decoded['allow_cashier_customer_access'];
     }
+    // And the camera feature flag, so a shop with no DVR never renders a
+    // camera surface — not even to discover it is empty.
+    if (decoded.containsKey('surveillance_enabled')) {
+      userJson['surveillance_enabled'] = decoded['surveillance_enabled'];
+    }
     return PosUser.fromJson(userJson);
   }
 }

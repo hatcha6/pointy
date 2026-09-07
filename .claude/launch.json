@@ -26,6 +26,14 @@
       "port": 8080
     },
     {
+      "name": "cameras-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-cameras-preview"
+      ],
+      "port": 8080
+    },
+    {
       "name": "operations-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [

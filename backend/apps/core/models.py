@@ -244,6 +244,28 @@ class ShopSettings(TimeStampedModel):
     # because a shop with no purchase history simply never sees one. Off means
     # the surfaces disappear AND the client stops asking for them.
     enable_purchase_suggestions = models.BooleanField(default=True)
+    # --- Surveillance (DVR/NVR cameras) -----------------------------------
+    # Master switch for the camera wall and invoice playback. Off until a
+    # recorder actually connects, at which point the backend turns it on (see
+    # apps.surveillance.services.enable_surveillance_feature) — a shop that has
+    # just wired up its DVR and then finds no cameras anywhere concludes the
+    # integration is broken. A manager can turn it off again, and nothing turns
+    # it back on after that.
+    #
+    # ``db_default`` as well as ``default``: an older backend still serving
+    # during a live update writes INSERTs that name no such column.
+    enable_surveillance = models.BooleanField(default=False, db_default=False)
+    # How much footage either side of a sale the invoice player opens on. The
+    # defaults put the customer walking up to the counter at the start and the
+    # goods bagged by the end; a shop with a slow till lengthens them.
+    surveillance_pre_roll_seconds = models.PositiveSmallIntegerField(
+        default=20,
+        validators=[MaxValueValidator(600)],
+    )
+    surveillance_post_roll_seconds = models.PositiveSmallIntegerField(
+        default=40,
+        validators=[MaxValueValidator(600)],
+    )
     # --- Multi-currency ---------------------------------------------------
     # ``currency_code`` above IS the base currency: the currency every total,
     # balance, report and stored money column in this product is denominated

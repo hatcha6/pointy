@@ -54,6 +54,11 @@ enum AppCapability {
   manageShopSettings,
   manageSalesChannels,
   managePriceCheckers,
+  viewCameras,
+  watchCamerasLive,
+  reviewCameraPlayback,
+  exportCameraFootage,
+  manageCameras,
   manageMessaging,
   viewConversations,
   manageConversations,
@@ -90,6 +95,18 @@ enum AppCapability {
 class AuthorizationCapabilities {
   const AuthorizationCapabilities._(this._capabilities);
 
+  /// Camera surfaces that a shop without a recorder must not show at all.
+  ///
+  /// [AppCapability.manageCameras] is deliberately absent: reaching the camera
+  /// settings page is how a shop turns the feature on in the first place, so
+  /// gating it on the feature being on would lock the door from the inside.
+  static const _surveillanceCapabilities = {
+    AppCapability.viewCameras,
+    AppCapability.watchCamerasLive,
+    AppCapability.reviewCameraPlayback,
+    AppCapability.exportCameraFootage,
+  };
+
   factory AuthorizationCapabilities.forUser(PosUser user) {
     if (user.role.isManager) {
       final all = Set.of(AppCapability.values);
@@ -97,6 +114,9 @@ class AuthorizationCapabilities {
       // when the shop's subscription has it active.
       if (!user.aiAvailable) {
         all.remove(AppCapability.useAiAssistant);
+      }
+      if (!user.surveillanceEnabled) {
+        all.removeAll(_surveillanceCapabilities);
       }
       return AuthorizationCapabilities._(all);
     }
@@ -466,6 +486,39 @@ class AuthorizationCapabilities {
       ])) {
         capabilities.add(AppCapability.manageMessaging);
       }
+      // Cameras. Watching, reviewing recordings and exporting a copy are three
+      // different levels of trust, so they are three permissions — a floor
+      // supervisor typically holds the first two and not the third.
+      if (_hasAny(user, const ['view_camera', 'surveillance.view_camera'])) {
+        capabilities.add(AppCapability.viewCameras);
+      }
+      if (_hasAny(user, const ['view_live', 'surveillance.view_live'])) {
+        capabilities
+          ..add(AppCapability.viewCameras)
+          ..add(AppCapability.watchCamerasLive);
+      }
+      if (_hasAny(user, const [
+        'view_playback',
+        'surveillance.view_playback',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewCameras)
+          ..add(AppCapability.reviewCameraPlayback);
+      }
+      if (_hasAny(user, const [
+        'export_footage',
+        'surveillance.export_footage',
+      ])) {
+        capabilities.add(AppCapability.exportCameraFootage);
+      }
+      if (_hasAny(user, const [
+        'change_recorder',
+        'surveillance.change_recorder',
+      ])) {
+        capabilities
+          ..add(AppCapability.viewCameras)
+          ..add(AppCapability.manageCameras);
+      }
       if (_hasAny(user, const [
         'view_conversations',
         'crm.view_conversations',
@@ -677,6 +730,13 @@ class AuthorizationCapabilities {
       capabilities.add(AppCapability.useAiAssistant);
     }
 
+    // Held permissions do not conjure cameras: a shop with no recorder shows no
+    // camera surface to anyone, whatever they are allowed to do once there is
+    // one. Applied last so it wins over every grant above.
+    if (!user.surveillanceEnabled) {
+      capabilities.removeAll(_surveillanceCapabilities);
+    }
+
     return AuthorizationCapabilities._(capabilities);
   }
 
@@ -757,6 +817,12 @@ class AuthorizationCapabilities {
   bool get canManageShopSettings => allows(AppCapability.manageShopSettings);
   bool get canManageSalesChannels => allows(AppCapability.manageSalesChannels);
   bool get canManagePriceCheckers => allows(AppCapability.managePriceCheckers);
+  bool get canViewCameras => allows(AppCapability.viewCameras);
+  bool get canWatchCamerasLive => allows(AppCapability.watchCamerasLive);
+  bool get canReviewCameraPlayback =>
+      allows(AppCapability.reviewCameraPlayback);
+  bool get canExportCameraFootage => allows(AppCapability.exportCameraFootage);
+  bool get canManageCameras => allows(AppCapability.manageCameras);
   bool get canManageMessaging => allows(AppCapability.manageMessaging);
   bool get canViewConversations => allows(AppCapability.viewConversations);
   bool get canManageConversations => allows(AppCapability.manageConversations);

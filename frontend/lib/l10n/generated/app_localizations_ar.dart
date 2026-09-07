@@ -16171,4 +16171,461 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchaseDestinationSearchHint => 'ابحث عن مكان';
+
+  @override
+  String get camerasDrawerLabel => 'الكاميرات';
+
+  @override
+  String get camerasTitle => 'كاميرات المراقبة';
+
+  @override
+  String get camerasEmptyTitle => 'لا توجد كاميرات بعد';
+
+  @override
+  String get camerasEmptyBody =>
+      'أضف جهاز التسجيل (DVR/NVR) من إعدادات المتجر لتظهر كاميرات المحل هنا.';
+
+  @override
+  String get camerasOpenSettingsButton => 'إعداد جهاز التسجيل';
+
+  @override
+  String get camerasLoadErrorTitle => 'تعذّر تحميل الكاميرات';
+
+  @override
+  String get camerasLayoutTooltip => 'توزيع الشاشة';
+
+  @override
+  String get camerasLayoutSingle => 'كاميرا واحدة';
+
+  @override
+  String get camerasLayoutFour => 'أربع كاميرات';
+
+  @override
+  String get camerasLayoutNine => 'تسع كاميرات';
+
+  @override
+  String get camerasRefreshTooltip => 'تحديث';
+
+  @override
+  String get camerasPauseAllTooltip => 'إيقاف البث';
+
+  @override
+  String get camerasResumeAllTooltip => 'استئناف البث';
+
+  @override
+  String get camerasPausedBanner =>
+      'البث متوقف — لا يتم سحب أي فيديو من جهاز التسجيل.';
+
+  @override
+  String get cameraRenameTitle => 'تسمية الكاميرا';
+
+  @override
+  String get cameraRenameHint => 'مثال: الصندوق، الباب الأمامي، المخزن';
+
+  @override
+  String get cameraRenameAction => 'إعادة التسمية';
+
+  @override
+  String get cameraOfflineLabel => 'غير متصلة';
+
+  @override
+  String get cameraConnectingLabel => 'جارٍ الاتصال…';
+
+  @override
+  String get cameraStreamFailedLabel => 'تعذّر عرض البث';
+
+  @override
+  String get cameraRetryAction => 'إعادة المحاولة';
+
+  @override
+  String get cameraFullScreenTooltip => 'ملء الشاشة';
+
+  @override
+  String get cameraExitFullScreenTooltip => 'إنهاء ملء الشاشة';
+
+  @override
+  String get cameraSmoothModeTooltip => 'جودة أعلى (إطارات أكثر)';
+
+  @override
+  String get cameraOpenPlaybackTooltip => 'مراجعة التسجيلات';
+
+  @override
+  String get cameraSaveFrameTooltip => 'حفظ اللقطة';
+
+  @override
+  String get cameraFrameSavedMessage => 'تم حفظ اللقطة';
+
+  @override
+  String get cameraFrameSaveFailedMessage => 'تعذّر حفظ اللقطة';
+
+  @override
+  String get cameraPlaybackTitle => 'مراجعة التسجيلات';
+
+  @override
+  String get cameraPlaybackPickDateAction => 'اختيار التاريخ والوقت';
+
+  @override
+  String get cameraPlaybackJumpBack => 'رجوع';
+
+  @override
+  String get cameraPlaybackJumpForward => 'تقدّم';
+
+  @override
+  String get cameraPlaybackPlayTooltip => 'تشغيل';
+
+  @override
+  String get cameraPlaybackPauseTooltip => 'إيقاف مؤقت';
+
+  @override
+  String get cameraPlaybackSpeedLabel => 'السرعة';
+
+  @override
+  String get cameraPlaybackEndedMessage => 'انتهى المقطع';
+
+  @override
+  String get cameraPlaybackUnavailableTitle => 'المراجعة غير متاحة';
+
+  @override
+  String get cameraPlaybackUnavailableBody =>
+      'خادم المتجر لا يملك أداة معالجة الفيديو المطلوبة (ffmpeg). المشاهدة المباشرة تعمل كالمعتاد.';
+
+  @override
+  String get cameraPlaybackNoFootageBody =>
+      'لا يوجد تسجيل محفوظ في هذا الوقت على هذه الكاميرا.';
+
+  @override
+  String get cameraExportAction => 'تصدير المقطع';
+
+  @override
+  String get cameraExportRunningMessage => 'جارٍ تجهيز المقطع…';
+
+  @override
+  String get cameraExportSavedMessage => 'تم حفظ المقطع';
+
+  @override
+  String get cameraExportFailedMessage => 'تعذّر تصدير المقطع';
+
+  @override
+  String get cameraExportSelectionLabel => 'المقطع المحدد';
+
+  @override
+  String get cameraSelectionStartAction => 'بداية التحديد';
+
+  @override
+  String get cameraSelectionEndAction => 'نهاية التحديد';
+
+  @override
+  String get cameraSelectionClearAction => 'مسح التحديد';
+
+  @override
+  String get cameraSettingsTitle => 'الكاميرات وجهاز التسجيل';
+
+  @override
+  String get cameraSettingsSubtitle => 'ربط جهاز DVR/NVR وتسمية الكاميرات';
+
+  @override
+  String get cameraSettingsEnableTitle => 'تفعيل الكاميرات';
+
+  @override
+  String get cameraSettingsEnableSubtitle =>
+      'إظهار شاشة الكاميرات ولقطة الفاتورة في التطبيق.';
+
+  @override
+  String get cameraSettingsRecordersSection => 'أجهزة التسجيل';
+
+  @override
+  String get cameraSettingsAddRecorder => 'إضافة جهاز تسجيل';
+
+  @override
+  String get cameraSettingsCamerasSection => 'الكاميرات';
+
+  @override
+  String get cameraSettingsPlaybackSection => 'لقطة الفاتورة';
+
+  @override
+  String get cameraSettingsPreRollLabel => 'ثوانٍ قبل البيع';
+
+  @override
+  String get cameraSettingsPostRollLabel => 'ثوانٍ بعد البيع';
+
+  @override
+  String get cameraSettingsCoversCheckoutLabel => 'تظهر مع الفواتير';
+
+  @override
+  String get cameraSettingsCoversCheckoutHint =>
+      'اختر الكاميرات التي تصوّر الصندوق حتى تظهر في صفحة الفاتورة.';
+
+  @override
+  String get cameraSettingsCameraEnabledLabel => 'مفعّلة';
+
+  @override
+  String get cameraSettingsLiveQualityLabel => 'جودة البث المباشر';
+
+  @override
+  String get cameraSettingsPlaybackQualityLabel => 'جودة التسجيلات';
+
+  @override
+  String get cameraQualityMain => 'عالية';
+
+  @override
+  String get cameraQualitySub => 'خفيفة';
+
+  @override
+  String get cameraQualityMainHint =>
+      'أوضح صورة، وحمل أكبر على الجهاز والشبكة.';
+
+  @override
+  String get cameraQualitySubHint => 'الخيار المناسب لعرض عدة كاميرات معاً.';
+
+  @override
+  String get recorderFormTitle => 'جهاز التسجيل';
+
+  @override
+  String get recorderNameLabel => 'اسم الجهاز';
+
+  @override
+  String get recorderNameHint => 'مثال: جهاز المحل';
+
+  @override
+  String get recorderBrandLabel => 'النوع';
+
+  @override
+  String get recorderBrandAuto => 'تحديد تلقائي';
+
+  @override
+  String get recorderBrandHikvision => 'Hikvision';
+
+  @override
+  String get recorderBrandDahua => 'Dahua';
+
+  @override
+  String get recorderHostLabel => 'عنوان الجهاز على الشبكة';
+
+  @override
+  String get recorderHostHint => 'مثال: 192.168.1.64';
+
+  @override
+  String get recorderPortLabel => 'منفذ الويب';
+
+  @override
+  String get recorderRtspPortLabel => 'منفذ الفيديو (RTSP)';
+
+  @override
+  String get recorderUsernameLabel => 'اسم المستخدم';
+
+  @override
+  String get recorderPasswordLabel => 'كلمة المرور';
+
+  @override
+  String get recorderPasswordKeptHint =>
+      'اتركها فارغة للإبقاء على كلمة المرور المحفوظة.';
+
+  @override
+  String get recorderUseHttpsLabel => 'اتصال آمن (HTTPS)';
+
+  @override
+  String get recorderEnabledLabel => 'مفعّل';
+
+  @override
+  String get recorderTestAction => 'اختبار الاتصال';
+
+  @override
+  String get recorderTestRunningMessage => 'جارٍ الاتصال بالجهاز…';
+
+  @override
+  String get recorderTestFailedTitle => 'تعذّر الاتصال';
+
+  @override
+  String get recorderSyncAction => 'تحديث قائمة الكاميرات';
+
+  @override
+  String get recorderDeleteAction => 'حذف الجهاز';
+
+  @override
+  String get recorderDeleteConfirmTitle => 'حذف جهاز التسجيل؟';
+
+  @override
+  String get recorderDeleteConfirmBody =>
+      'ستختفي كاميراته وأسماؤها من التطبيق. لن يتأثر الجهاز نفسه ولا تسجيلاته.';
+
+  @override
+  String get recorderStatusOk => 'متصل';
+
+  @override
+  String get recorderStatusError => 'فشل الاتصال';
+
+  @override
+  String get recorderStatusNever => 'لم يتم الاتصال بعد';
+
+  @override
+  String get invoiceFootageSectionTitle => 'لقطة الكاميرا';
+
+  @override
+  String get invoiceFootageSubtitle =>
+      'ما سجّلته الكاميرا وقت إصدار هذه الفاتورة';
+
+  @override
+  String get invoiceFootageNoCamerasBody =>
+      'لم يتم تحديد أي كاميرا تصوّر الصندوق. حدّدها من إعدادات الكاميرات.';
+
+  @override
+  String get invoiceFootageOpenAction => 'فتح المراجعة الكاملة';
+
+  @override
+  String get invoiceFootageWatchAction => 'تشغيل اللقطة';
+
+  @override
+  String cameraChannelCountLabel(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count كاميرات',
+      two: 'كاميرتان',
+      one: 'كاميرا واحدة',
+      zero: 'لا توجد كاميرات',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String cameraChannelLabel(String channel) {
+    return 'القناة $channel';
+  }
+
+  @override
+  String get cameraLiveBadge => 'مباشر';
+
+  @override
+  String get cameraWindow15Minutes => 'نافذة ١٥ دقيقة';
+
+  @override
+  String get cameraWindow1Hour => 'نافذة ساعة';
+
+  @override
+  String get cameraWindow6Hours => 'نافذة ٦ ساعات';
+
+  @override
+  String get cameraSelectionHint =>
+      'اسحب طرفي الشريط لتحديد بداية المقطع ونهايته.';
+
+  @override
+  String get cameraSelectionLoopHint =>
+      'يُعاد تشغيل ما بين الطرفين لتراه قبل الحفظ.';
+
+  @override
+  String get cameraExportConfirmAction => 'حفظ المقطع';
+
+  @override
+  String get cameraJumpLastHour => 'آخر ساعة';
+
+  @override
+  String get cameraJumpThreeHoursAgo => 'قبل ٣ ساعات';
+
+  @override
+  String get cameraJumpThisMorning => 'صباح اليوم';
+
+  @override
+  String get cameraJumpYesterdayEvening => 'مساء أمس';
+
+  @override
+  String get camerasLayoutLarge => 'بلاطات كبيرة';
+
+  @override
+  String get camerasLayoutMedium => 'بلاطات متوسطة';
+
+  @override
+  String get camerasLayoutSmall => 'بلاطات صغيرة';
+
+  @override
+  String get camerasTileSizeTooltip => 'حجم البلاطات';
+
+  @override
+  String get cameraOpenLiveTooltip => 'فتح الكاميرا';
+
+  @override
+  String cameraSelectionRangeLabel(String start, String end, String duration) {
+    return 'من $start إلى $end · $duration';
+  }
+
+  @override
+  String get recorderClockMatchesShop => 'ساعة الجهاز مطابقة لتوقيت المحل';
+
+  @override
+  String get recorderClockDiffersTitle => 'ساعة الجهاز لا تطابق توقيت المحل';
+
+  @override
+  String recorderClockDiffersBody(String minutes) {
+    return 'فرق $minutes دقيقة. لقطة الفاتورة تعتمد على هذا الفرق، ونحن نطبّقه تلقائياً — لكن ضبط ساعة الجهاز على توقيت ليبيا يجعل الأمر أوضح لمن يراجع التسجيلات على شاشة الجهاز نفسه.';
+  }
+
+  @override
+  String get recorderActionsMenuTooltip => 'إجراءات الجهاز';
+
+  @override
+  String get recorderScanTitle => 'البحث عن جهاز التسجيل';
+
+  @override
+  String get recorderScanRunning => 'جارٍ البحث في الشبكة…';
+
+  @override
+  String get recorderScanRetryAction => 'بحث مرة أخرى';
+
+  @override
+  String get recorderScanEmptyTitle => 'لم يُعثر على جهاز';
+
+  @override
+  String get recorderScanEmptyBody =>
+      'تأكد أن جهاز التسجيل موصول بنفس الشبكة ومشغّل، أو أدخل عنوانه يدوياً بالأسفل.';
+
+  @override
+  String get recorderScanFoundHint =>
+      'اختر جهازك من القائمة، وسنملأ العنوان نيابة عنك.';
+
+  @override
+  String get recorderManualSectionTitle => 'الإعداد اليدوي';
+
+  @override
+  String recorderScanFoundCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count أجهزة في الشبكة',
+      two: 'جهازان في الشبكة',
+      one: 'جهاز واحد في الشبكة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get recorderScanIdlePrompt =>
+      'اضغط «بحث مرة أخرى» للبحث عن جهاز تسجيل في الشبكة.';
+
+  @override
+  String get dashboardCamerasTitle => 'الكاميرات مباشرة';
+
+  @override
+  String get dashboardCamerasChooseTooltip => 'اختيار الكاميرات المعروضة';
+
+  @override
+  String get dashboardCamerasPickerTitle => 'كاميرات لوحة المعلومات';
+
+  @override
+  String get dashboardCamerasPickerBody =>
+      'اختر ما تريد رؤيته على اللوحة في هذا الجهاز.';
+
+  @override
+  String get dashboardCamerasAutoLabel => 'اختيار تلقائي';
+
+  @override
+  String get dashboardCamerasAutoDescription =>
+      'نعرض كاميرات الصندوق أولاً، وهذا ما يحدث إن لم تختر شيئاً.';
+
+  @override
+  String get dashboardCamerasResetAction => 'العودة للاختيار التلقائي';
+
+  @override
+  String get dashboardCamerasNoneSelected => 'لن تظهر أي كاميرا على اللوحة.';
+
+  @override
+  String get dashboardCamerasOpenWallAction => 'كل الكاميرات';
 }

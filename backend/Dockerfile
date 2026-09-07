@@ -113,11 +113,21 @@ WORKDIR /app
 # more, and the legacy TDS handshakes that stack existed to negotiate were the
 # single largest source of failed migrations in the field.
 #
+# ffmpeg is the camera integration's playback and export engine: it turns a
+# DVR's RTSP playback stream into the MJPEG the app plays, and remuxes a
+# selected window into a downloadable MP4 with `-c copy`. Live view does not
+# need it (it polls JPEG snapshots straight off the recorder), so the backend
+# detects it at runtime and hides what it cannot do — a source install without
+# ffmpeg degrades to live-only rather than breaking. It is installed here
+# because it is worth its ~150MB on an appliance image: without it the feature
+# that sells this product is half a feature. POINTY_FFMPEG_PATH overrides the
+# lookup for hosts that ship their own build.
+#
 # Must run before the hardening step below removes apt/dpkg.
 RUN set -eux; \
     export DEBIAN_FRONTEND=noninteractive; \
     apt-get update; \
-    apt-get install -y --no-install-recommends mdbtools sqlite3; \
+    apt-get install -y --no-install-recommends mdbtools sqlite3 ffmpeg; \
     apt-get autoremove -y; \
     rm -rf /var/lib/apt/lists/*
 

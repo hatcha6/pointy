@@ -30,6 +30,13 @@ import 'features/contacts/views/contact_management_screen.dart';
 import 'features/crm/views/campaigns_screen.dart';
 import 'features/crm/views/conversations_screen.dart';
 import 'features/dashboard/views/dashboard_screen.dart';
+import 'data/repositories/surveillance_repository.dart';
+import 'features/cameras/view_models/camera_settings_view_model.dart';
+import 'features/cameras/view_models/camera_wall_view_model.dart';
+import 'data/models/camera.dart';
+import 'features/cameras/view_models/camera_player_view_model.dart';
+import 'features/cameras/views/camera_player_screen.dart';
+import 'features/cameras/views/cameras_screen.dart';
 import 'features/fraud/view_models/integrity_monitor_view_model.dart';
 import 'features/fraud/views/integrity_monitor_screen.dart';
 import 'features/device_settings/views/device_settings_screen.dart';
@@ -272,6 +279,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.categories => categoryRouteBuilder,
       AppNavigationDestination.stockCount => stockCountRouteBuilder,
       AppNavigationDestination.registerSessions => registerSessionsRouteBuilder,
+      AppNavigationDestination.cameras => camerasRouteBuilder,
       AppNavigationDestination.employees => employeePayrollRouteBuilder,
       AppNavigationDestination.expenses => expensesRouteBuilder,
       AppNavigationDestination.payments => paymentsRouteBuilder,
@@ -309,6 +317,12 @@ class _AuthenticatedRoutes implements AppNavigation {
   }
 
   Widget dashboardRouteBuilder(BuildContext routeContext) {
+    // Null unless this user may actually watch a live camera, which is what
+    // keeps every other shop's dashboard from asking the backend about cameras
+    // it does not have on every load.
+    final camerasViewModel = capabilities.canWatchCamerasLive
+        ? dependencies.dashboardCamerasViewModel
+        : null;
     return _screen(
       'dashboard',
       DashboardScreen(
@@ -318,6 +332,37 @@ class _AuthenticatedRoutes implements AppNavigation {
         onOpenIntegrityMonitor: capabilities.actionFor(
           AppCapability.viewFraudFindings,
           () => openIntegrityMonitor(routeContext),
+        ),
+        camerasViewModel: camerasViewModel,
+        onOpenCamera: camerasViewModel == null
+            ? null
+            : (camera) => openCameraPlayer(routeContext, camera),
+        onOpenCameraWall:
+            isDestinationAvailable(AppNavigationDestination.cameras)
+            ? () => navigateTo(
+                routeContext,
+                AppNavigationDestination.cameras,
+                from: AppNavigationDestination.dashboard,
+              )
+            : null,
+      ),
+    );
+  }
+
+  /// Opens one camera full screen, live.
+  ///
+  /// The dashboard shows stills; this is where watching actually happens, so
+  /// the strip stays cheap and the player is one tap away.
+  void openCameraPlayer(BuildContext routeContext, Camera camera) {
+    Navigator.of(routeContext).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CameraPlayerScreen(
+          viewModel: CameraPlayerViewModel(
+            dependencies.surveillanceRepository,
+            camera: camera,
+            mode: CameraPlayerMode.live,
+            status: dependencies.dashboardCamerasViewModel.status,
+          ),
         ),
       ),
     );
@@ -455,6 +500,33 @@ class _AuthenticatedRoutes implements AppNavigation {
     );
   }
 
+  /// Null in a shop with no cameras, which is what keeps the invoice screen
+  /// from asking the backend about footage fifty times a shift for nothing.
+  SurveillanceRepository? get _surveillanceRepositoryOrNull {
+    return capabilities.canReviewCameraPlayback
+        ? dependencies.surveillanceRepository
+        : null;
+  }
+
+  Widget camerasRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'cameras',
+      CamerasScreen(
+        viewModel: CameraWallViewModel(dependencies.surveillanceRepository),
+        repository: dependencies.surveillanceRepository,
+        capabilities: capabilities,
+        navigation: this,
+        onOpenSettings: capabilities.canManageShopSettings
+            ? () => navigateTo(
+                routeContext,
+                AppNavigationDestination.settings,
+                from: AppNavigationDestination.cameras,
+              )
+            : null,
+      ),
+    );
+  }
+
   Widget registerSessionsRouteBuilder(BuildContext routeContext) {
     return _screen(
       'register_sessions',
@@ -492,6 +564,7 @@ class _AuthenticatedRoutes implements AppNavigation {
                 saleRepository: dependencies.saleRepository,
                 printingRepository: dependencies.printingRepository,
                 shopSettingsRepository: dependencies.shopSettingsRepository,
+                surveillanceRepository: _surveillanceRepositoryOrNull,
                 catalogRepository: dependencies.catalogRepository,
                 contactRepository: dependencies.contactRepository,
                 initialOrder: order,
@@ -506,6 +579,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           saleRepository: dependencies.saleRepository,
           printingRepository: dependencies.printingRepository,
           shopSettingsRepository: dependencies.shopSettingsRepository,
+          surveillanceRepository: _surveillanceRepositoryOrNull,
           catalogRepository: dependencies.catalogRepository,
           contactRepository: dependencies.contactRepository,
           initialOrder: order,
@@ -733,6 +807,9 @@ class _AuthenticatedRoutes implements AppNavigation {
         warehouseRepository: dependencies.warehouseRepository,
         priceCheckersViewModel: PriceCheckersViewModel(
           dependencies.priceCheckerRepository,
+        ),
+        cameraSettingsViewModel: CameraSettingsViewModel(
+          dependencies.surveillanceRepository,
         ),
         workflowsViewModel: WorkflowsViewModel(
           dependencies.operationsRepository,
@@ -1022,6 +1099,7 @@ class _AuthenticatedRoutes implements AppNavigation {
                   saleRepository: dependencies.saleRepository,
                   printingRepository: dependencies.printingRepository,
                   shopSettingsRepository: dependencies.shopSettingsRepository,
+                  surveillanceRepository: _surveillanceRepositoryOrNull,
                   catalogRepository: dependencies.catalogRepository,
                   contactRepository: dependencies.contactRepository,
                   initialOrder: result.value,
@@ -1874,6 +1952,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           saleRepository: dependencies.saleRepository,
           printingRepository: dependencies.printingRepository,
           shopSettingsRepository: dependencies.shopSettingsRepository,
+          surveillanceRepository: _surveillanceRepositoryOrNull,
           catalogRepository: dependencies.catalogRepository,
           contactRepository: dependencies.contactRepository,
           initialOrder: order,

@@ -74,6 +74,7 @@ class PosUser {
     this.hasPermissionSnapshot = false,
     this.aiAvailable = false,
     this.allowCashierCustomerAccess = false,
+    this.surveillanceEnabled = false,
   });
 
   final int id;
@@ -113,6 +114,11 @@ class PosUser {
   /// [aiAvailable].
   final bool allowCashierCustomerAccess;
 
+  /// Whether this shop has cameras configured. Another top-level auth-response
+  /// flag, and the one that keeps every camera surface — the drawer entry, the
+  /// command palette, the invoice panel — out of a shop with no DVR.
+  final bool surveillanceEnabled;
+
   String get label => displayName.trim().isEmpty ? username : displayName;
 
   factory PosUser.fromJson(Map<String, Object?> json) {
@@ -142,6 +148,7 @@ class PosUser {
       hasPermissionSnapshot: _permissionPayload(json) != null,
       aiAvailable: json['ai_available'] == true,
       allowCashierCustomerAccess: json['allow_cashier_customer_access'] == true,
+      surveillanceEnabled: json['surveillance_enabled'] == true,
     );
   }
 

@@ -28000,6 +28000,834 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'ابحث عن مكان'**
   String get purchaseDestinationSearchHint;
+
+  /// No description provided for @camerasDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاميرات'**
+  String get camerasDrawerLabel;
+
+  /// No description provided for @camerasTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كاميرات المراقبة'**
+  String get camerasTitle;
+
+  /// No description provided for @camerasEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد كاميرات بعد'**
+  String get camerasEmptyTitle;
+
+  /// No description provided for @camerasEmptyBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف جهاز التسجيل (DVR/NVR) من إعدادات المتجر لتظهر كاميرات المحل هنا.'**
+  String get camerasEmptyBody;
+
+  /// No description provided for @camerasOpenSettingsButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعداد جهاز التسجيل'**
+  String get camerasOpenSettingsButton;
+
+  /// No description provided for @camerasLoadErrorTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الكاميرات'**
+  String get camerasLoadErrorTitle;
+
+  /// No description provided for @camerasLayoutTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'توزيع الشاشة'**
+  String get camerasLayoutTooltip;
+
+  /// No description provided for @camerasLayoutSingle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كاميرا واحدة'**
+  String get camerasLayoutSingle;
+
+  /// No description provided for @camerasLayoutFour.
+  ///
+  /// In ar, this message translates to:
+  /// **'أربع كاميرات'**
+  String get camerasLayoutFour;
+
+  /// No description provided for @camerasLayoutNine.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسع كاميرات'**
+  String get camerasLayoutNine;
+
+  /// No description provided for @camerasRefreshTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث'**
+  String get camerasRefreshTooltip;
+
+  /// No description provided for @camerasPauseAllTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف البث'**
+  String get camerasPauseAllTooltip;
+
+  /// No description provided for @camerasResumeAllTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'استئناف البث'**
+  String get camerasResumeAllTooltip;
+
+  /// No description provided for @camerasPausedBanner.
+  ///
+  /// In ar, this message translates to:
+  /// **'البث متوقف — لا يتم سحب أي فيديو من جهاز التسجيل.'**
+  String get camerasPausedBanner;
+
+  /// No description provided for @cameraRenameTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسمية الكاميرا'**
+  String get cameraRenameTitle;
+
+  /// No description provided for @cameraRenameHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: الصندوق، الباب الأمامي، المخزن'**
+  String get cameraRenameHint;
+
+  /// No description provided for @cameraRenameAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة التسمية'**
+  String get cameraRenameAction;
+
+  /// No description provided for @cameraOfflineLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير متصلة'**
+  String get cameraOfflineLabel;
+
+  /// No description provided for @cameraConnectingLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ الاتصال…'**
+  String get cameraConnectingLabel;
+
+  /// No description provided for @cameraStreamFailedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر عرض البث'**
+  String get cameraStreamFailedLabel;
+
+  /// No description provided for @cameraRetryAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة'**
+  String get cameraRetryAction;
+
+  /// No description provided for @cameraFullScreenTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملء الشاشة'**
+  String get cameraFullScreenTooltip;
+
+  /// No description provided for @cameraExitFullScreenTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء ملء الشاشة'**
+  String get cameraExitFullScreenTooltip;
+
+  /// No description provided for @cameraSmoothModeTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'جودة أعلى (إطارات أكثر)'**
+  String get cameraSmoothModeTooltip;
+
+  /// No description provided for @cameraOpenPlaybackTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'مراجعة التسجيلات'**
+  String get cameraOpenPlaybackTooltip;
+
+  /// No description provided for @cameraSaveFrameTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ اللقطة'**
+  String get cameraSaveFrameTooltip;
+
+  /// No description provided for @cameraFrameSavedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ اللقطة'**
+  String get cameraFrameSavedMessage;
+
+  /// No description provided for @cameraFrameSaveFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ اللقطة'**
+  String get cameraFrameSaveFailedMessage;
+
+  /// No description provided for @cameraPlaybackTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مراجعة التسجيلات'**
+  String get cameraPlaybackTitle;
+
+  /// No description provided for @cameraPlaybackPickDateAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار التاريخ والوقت'**
+  String get cameraPlaybackPickDateAction;
+
+  /// No description provided for @cameraPlaybackJumpBack.
+  ///
+  /// In ar, this message translates to:
+  /// **'رجوع'**
+  String get cameraPlaybackJumpBack;
+
+  /// No description provided for @cameraPlaybackJumpForward.
+  ///
+  /// In ar, this message translates to:
+  /// **'تقدّم'**
+  String get cameraPlaybackJumpForward;
+
+  /// No description provided for @cameraPlaybackPlayTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل'**
+  String get cameraPlaybackPlayTooltip;
+
+  /// No description provided for @cameraPlaybackPauseTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف مؤقت'**
+  String get cameraPlaybackPauseTooltip;
+
+  /// No description provided for @cameraPlaybackSpeedLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'السرعة'**
+  String get cameraPlaybackSpeedLabel;
+
+  /// No description provided for @cameraPlaybackEndedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهى المقطع'**
+  String get cameraPlaybackEndedMessage;
+
+  /// No description provided for @cameraPlaybackUnavailableTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المراجعة غير متاحة'**
+  String get cameraPlaybackUnavailableTitle;
+
+  /// No description provided for @cameraPlaybackUnavailableBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'خادم المتجر لا يملك أداة معالجة الفيديو المطلوبة (ffmpeg). المشاهدة المباشرة تعمل كالمعتاد.'**
+  String get cameraPlaybackUnavailableBody;
+
+  /// No description provided for @cameraPlaybackNoFootageBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد تسجيل محفوظ في هذا الوقت على هذه الكاميرا.'**
+  String get cameraPlaybackNoFootageBody;
+
+  /// No description provided for @cameraExportAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصدير المقطع'**
+  String get cameraExportAction;
+
+  /// No description provided for @cameraExportRunningMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ تجهيز المقطع…'**
+  String get cameraExportRunningMessage;
+
+  /// No description provided for @cameraExportSavedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ المقطع'**
+  String get cameraExportSavedMessage;
+
+  /// No description provided for @cameraExportFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تصدير المقطع'**
+  String get cameraExportFailedMessage;
+
+  /// No description provided for @cameraExportSelectionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المقطع المحدد'**
+  String get cameraExportSelectionLabel;
+
+  /// No description provided for @cameraSelectionStartAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'بداية التحديد'**
+  String get cameraSelectionStartAction;
+
+  /// No description provided for @cameraSelectionEndAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'نهاية التحديد'**
+  String get cameraSelectionEndAction;
+
+  /// No description provided for @cameraSelectionClearAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح التحديد'**
+  String get cameraSelectionClearAction;
+
+  /// No description provided for @cameraSettingsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاميرات وجهاز التسجيل'**
+  String get cameraSettingsTitle;
+
+  /// No description provided for @cameraSettingsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربط جهاز DVR/NVR وتسمية الكاميرات'**
+  String get cameraSettingsSubtitle;
+
+  /// No description provided for @cameraSettingsEnableTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل الكاميرات'**
+  String get cameraSettingsEnableTitle;
+
+  /// No description provided for @cameraSettingsEnableSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار شاشة الكاميرات ولقطة الفاتورة في التطبيق.'**
+  String get cameraSettingsEnableSubtitle;
+
+  /// No description provided for @cameraSettingsRecordersSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجهزة التسجيل'**
+  String get cameraSettingsRecordersSection;
+
+  /// No description provided for @cameraSettingsAddRecorder.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة جهاز تسجيل'**
+  String get cameraSettingsAddRecorder;
+
+  /// No description provided for @cameraSettingsCamerasSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاميرات'**
+  String get cameraSettingsCamerasSection;
+
+  /// No description provided for @cameraSettingsPlaybackSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'لقطة الفاتورة'**
+  String get cameraSettingsPlaybackSection;
+
+  /// No description provided for @cameraSettingsPreRollLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ثوانٍ قبل البيع'**
+  String get cameraSettingsPreRollLabel;
+
+  /// No description provided for @cameraSettingsPostRollLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ثوانٍ بعد البيع'**
+  String get cameraSettingsPostRollLabel;
+
+  /// No description provided for @cameraSettingsCoversCheckoutLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تظهر مع الفواتير'**
+  String get cameraSettingsCoversCheckoutLabel;
+
+  /// No description provided for @cameraSettingsCoversCheckoutHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الكاميرات التي تصوّر الصندوق حتى تظهر في صفحة الفاتورة.'**
+  String get cameraSettingsCoversCheckoutHint;
+
+  /// No description provided for @cameraSettingsCameraEnabledLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفعّلة'**
+  String get cameraSettingsCameraEnabledLabel;
+
+  /// No description provided for @cameraSettingsLiveQualityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جودة البث المباشر'**
+  String get cameraSettingsLiveQualityLabel;
+
+  /// No description provided for @cameraSettingsPlaybackQualityLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جودة التسجيلات'**
+  String get cameraSettingsPlaybackQualityLabel;
+
+  /// No description provided for @cameraQualityMain.
+  ///
+  /// In ar, this message translates to:
+  /// **'عالية'**
+  String get cameraQualityMain;
+
+  /// No description provided for @cameraQualitySub.
+  ///
+  /// In ar, this message translates to:
+  /// **'خفيفة'**
+  String get cameraQualitySub;
+
+  /// No description provided for @cameraQualityMainHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوضح صورة، وحمل أكبر على الجهاز والشبكة.'**
+  String get cameraQualityMainHint;
+
+  /// No description provided for @cameraQualitySubHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخيار المناسب لعرض عدة كاميرات معاً.'**
+  String get cameraQualitySubHint;
+
+  /// No description provided for @recorderFormTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهاز التسجيل'**
+  String get recorderFormTitle;
+
+  /// No description provided for @recorderNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الجهاز'**
+  String get recorderNameLabel;
+
+  /// No description provided for @recorderNameHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: جهاز المحل'**
+  String get recorderNameHint;
+
+  /// No description provided for @recorderBrandLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'النوع'**
+  String get recorderBrandLabel;
+
+  /// No description provided for @recorderBrandAuto.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد تلقائي'**
+  String get recorderBrandAuto;
+
+  /// No description provided for @recorderBrandHikvision.
+  ///
+  /// In ar, this message translates to:
+  /// **'Hikvision'**
+  String get recorderBrandHikvision;
+
+  /// No description provided for @recorderBrandDahua.
+  ///
+  /// In ar, this message translates to:
+  /// **'Dahua'**
+  String get recorderBrandDahua;
+
+  /// No description provided for @recorderHostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عنوان الجهاز على الشبكة'**
+  String get recorderHostLabel;
+
+  /// No description provided for @recorderHostHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: 192.168.1.64'**
+  String get recorderHostHint;
+
+  /// No description provided for @recorderPortLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'منفذ الويب'**
+  String get recorderPortLabel;
+
+  /// No description provided for @recorderRtspPortLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'منفذ الفيديو (RTSP)'**
+  String get recorderRtspPortLabel;
+
+  /// No description provided for @recorderUsernameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم'**
+  String get recorderUsernameLabel;
+
+  /// No description provided for @recorderPasswordLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور'**
+  String get recorderPasswordLabel;
+
+  /// No description provided for @recorderPasswordKeptHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتركها فارغة للإبقاء على كلمة المرور المحفوظة.'**
+  String get recorderPasswordKeptHint;
+
+  /// No description provided for @recorderUseHttpsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتصال آمن (HTTPS)'**
+  String get recorderUseHttpsLabel;
+
+  /// No description provided for @recorderEnabledLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفعّل'**
+  String get recorderEnabledLabel;
+
+  /// No description provided for @recorderTestAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختبار الاتصال'**
+  String get recorderTestAction;
+
+  /// No description provided for @recorderTestRunningMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ الاتصال بالجهاز…'**
+  String get recorderTestRunningMessage;
+
+  /// No description provided for @recorderTestFailedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الاتصال'**
+  String get recorderTestFailedTitle;
+
+  /// No description provided for @recorderSyncAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث قائمة الكاميرات'**
+  String get recorderSyncAction;
+
+  /// No description provided for @recorderDeleteAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الجهاز'**
+  String get recorderDeleteAction;
+
+  /// No description provided for @recorderDeleteConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف جهاز التسجيل؟'**
+  String get recorderDeleteConfirmTitle;
+
+  /// No description provided for @recorderDeleteConfirmBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستختفي كاميراته وأسماؤها من التطبيق. لن يتأثر الجهاز نفسه ولا تسجيلاته.'**
+  String get recorderDeleteConfirmBody;
+
+  /// No description provided for @recorderStatusOk.
+  ///
+  /// In ar, this message translates to:
+  /// **'متصل'**
+  String get recorderStatusOk;
+
+  /// No description provided for @recorderStatusError.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل الاتصال'**
+  String get recorderStatusError;
+
+  /// No description provided for @recorderStatusNever.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم الاتصال بعد'**
+  String get recorderStatusNever;
+
+  /// No description provided for @invoiceFootageSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لقطة الكاميرا'**
+  String get invoiceFootageSectionTitle;
+
+  /// No description provided for @invoiceFootageSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما سجّلته الكاميرا وقت إصدار هذه الفاتورة'**
+  String get invoiceFootageSubtitle;
+
+  /// No description provided for @invoiceFootageNoCamerasBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم تحديد أي كاميرا تصوّر الصندوق. حدّدها من إعدادات الكاميرات.'**
+  String get invoiceFootageNoCamerasBody;
+
+  /// No description provided for @invoiceFootageOpenAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح المراجعة الكاملة'**
+  String get invoiceFootageOpenAction;
+
+  /// No description provided for @invoiceFootageWatchAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل اللقطة'**
+  String get invoiceFootageWatchAction;
+
+  /// How many channels a recorder reported.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد كاميرات} =1{كاميرا واحدة} =2{كاميرتان} other{{count} كاميرات}}'**
+  String cameraChannelCountLabel(num count);
+
+  /// A camera's channel number on its recorder.
+  ///
+  /// In ar, this message translates to:
+  /// **'القناة {channel}'**
+  String cameraChannelLabel(String channel);
+
+  /// No description provided for @cameraLiveBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'مباشر'**
+  String get cameraLiveBadge;
+
+  /// No description provided for @cameraWindow15Minutes.
+  ///
+  /// In ar, this message translates to:
+  /// **'نافذة ١٥ دقيقة'**
+  String get cameraWindow15Minutes;
+
+  /// No description provided for @cameraWindow1Hour.
+  ///
+  /// In ar, this message translates to:
+  /// **'نافذة ساعة'**
+  String get cameraWindow1Hour;
+
+  /// No description provided for @cameraWindow6Hours.
+  ///
+  /// In ar, this message translates to:
+  /// **'نافذة ٦ ساعات'**
+  String get cameraWindow6Hours;
+
+  /// No description provided for @cameraSelectionHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسحب طرفي الشريط لتحديد بداية المقطع ونهايته.'**
+  String get cameraSelectionHint;
+
+  /// No description provided for @cameraSelectionLoopHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُعاد تشغيل ما بين الطرفين لتراه قبل الحفظ.'**
+  String get cameraSelectionLoopHint;
+
+  /// No description provided for @cameraExportConfirmAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ المقطع'**
+  String get cameraExportConfirmAction;
+
+  /// No description provided for @cameraJumpLastHour.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر ساعة'**
+  String get cameraJumpLastHour;
+
+  /// No description provided for @cameraJumpThreeHoursAgo.
+  ///
+  /// In ar, this message translates to:
+  /// **'قبل ٣ ساعات'**
+  String get cameraJumpThreeHoursAgo;
+
+  /// No description provided for @cameraJumpThisMorning.
+  ///
+  /// In ar, this message translates to:
+  /// **'صباح اليوم'**
+  String get cameraJumpThisMorning;
+
+  /// No description provided for @cameraJumpYesterdayEvening.
+  ///
+  /// In ar, this message translates to:
+  /// **'مساء أمس'**
+  String get cameraJumpYesterdayEvening;
+
+  /// No description provided for @camerasLayoutLarge.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلاطات كبيرة'**
+  String get camerasLayoutLarge;
+
+  /// No description provided for @camerasLayoutMedium.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلاطات متوسطة'**
+  String get camerasLayoutMedium;
+
+  /// No description provided for @camerasLayoutSmall.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلاطات صغيرة'**
+  String get camerasLayoutSmall;
+
+  /// No description provided for @camerasTileSizeTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حجم البلاطات'**
+  String get camerasTileSizeTooltip;
+
+  /// No description provided for @cameraOpenLiveTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح الكاميرا'**
+  String get cameraOpenLiveTooltip;
+
+  /// The clip currently selected for export.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {start} إلى {end} · {duration}'**
+  String cameraSelectionRangeLabel(String start, String end, String duration);
+
+  /// No description provided for @recorderClockMatchesShop.
+  ///
+  /// In ar, this message translates to:
+  /// **'ساعة الجهاز مطابقة لتوقيت المحل'**
+  String get recorderClockMatchesShop;
+
+  /// No description provided for @recorderClockDiffersTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ساعة الجهاز لا تطابق توقيت المحل'**
+  String get recorderClockDiffersTitle;
+
+  /// Shown when the recorder's clock is not on the shop's own local time.
+  ///
+  /// In ar, this message translates to:
+  /// **'فرق {minutes} دقيقة. لقطة الفاتورة تعتمد على هذا الفرق، ونحن نطبّقه تلقائياً — لكن ضبط ساعة الجهاز على توقيت ليبيا يجعل الأمر أوضح لمن يراجع التسجيلات على شاشة الجهاز نفسه.'**
+  String recorderClockDiffersBody(String minutes);
+
+  /// No description provided for @recorderActionsMenuTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجراءات الجهاز'**
+  String get recorderActionsMenuTooltip;
+
+  /// No description provided for @recorderScanTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'البحث عن جهاز التسجيل'**
+  String get recorderScanTitle;
+
+  /// No description provided for @recorderScanRunning.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ البحث في الشبكة…'**
+  String get recorderScanRunning;
+
+  /// No description provided for @recorderScanRetryAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'بحث مرة أخرى'**
+  String get recorderScanRetryAction;
+
+  /// No description provided for @recorderScanEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُعثر على جهاز'**
+  String get recorderScanEmptyTitle;
+
+  /// No description provided for @recorderScanEmptyBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكد أن جهاز التسجيل موصول بنفس الشبكة ومشغّل، أو أدخل عنوانه يدوياً بالأسفل.'**
+  String get recorderScanEmptyBody;
+
+  /// No description provided for @recorderScanFoundHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر جهازك من القائمة، وسنملأ العنوان نيابة عنك.'**
+  String get recorderScanFoundHint;
+
+  /// No description provided for @recorderManualSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإعداد اليدوي'**
+  String get recorderManualSectionTitle;
+
+  /// How many recorders the LAN sweep found.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{جهاز واحد في الشبكة} =2{جهازان في الشبكة} other{{count} أجهزة في الشبكة}}'**
+  String recorderScanFoundCount(num count);
+
+  /// No description provided for @recorderScanIdlePrompt.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط «بحث مرة أخرى» للبحث عن جهاز تسجيل في الشبكة.'**
+  String get recorderScanIdlePrompt;
+
+  /// No description provided for @dashboardCamerasTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاميرات مباشرة'**
+  String get dashboardCamerasTitle;
+
+  /// No description provided for @dashboardCamerasChooseTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار الكاميرات المعروضة'**
+  String get dashboardCamerasChooseTooltip;
+
+  /// No description provided for @dashboardCamerasPickerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كاميرات لوحة المعلومات'**
+  String get dashboardCamerasPickerTitle;
+
+  /// No description provided for @dashboardCamerasPickerBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر ما تريد رؤيته على اللوحة في هذا الجهاز.'**
+  String get dashboardCamerasPickerBody;
+
+  /// No description provided for @dashboardCamerasAutoLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار تلقائي'**
+  String get dashboardCamerasAutoLabel;
+
+  /// No description provided for @dashboardCamerasAutoDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'نعرض كاميرات الصندوق أولاً، وهذا ما يحدث إن لم تختر شيئاً.'**
+  String get dashboardCamerasAutoDescription;
+
+  /// No description provided for @dashboardCamerasResetAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'العودة للاختيار التلقائي'**
+  String get dashboardCamerasResetAction;
+
+  /// No description provided for @dashboardCamerasNoneSelected.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن تظهر أي كاميرا على اللوحة.'**
+  String get dashboardCamerasNoneSelected;
+
+  /// No description provided for @dashboardCamerasOpenWallAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الكاميرات'**
+  String get dashboardCamerasOpenWallAction;
 }
 
 class _AppLocalizationsDelegate

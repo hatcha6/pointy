@@ -6,6 +6,9 @@ wrong for two of ours:
 - ``text/event-stream`` — the AI chat SSE stream must reach the client token
   by token; a compression layer invites buffering at every hop (the exact
   class of bug the ASGI streaming bridge exists to prevent).
+- ``multipart/x-mixed-replace`` — the camera MJPEG streams, for both reasons at
+  once: every part is an already-compressed JPEG, and a live video that
+  buffers is a video that does not play.
 - already-compressed binaries (product images, audio) — re-gzipping a JPEG
   costs CPU per request for ~0 gain.
 
@@ -20,6 +23,7 @@ from django.middleware.gzip import GZipMiddleware
 
 _UNCOMPRESSIBLE_PREFIXES = (
     "text/event-stream",
+    "multipart/x-mixed-replace",
     "image/",
     "video/",
     "audio/",

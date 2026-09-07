@@ -10,6 +10,8 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/repositories/surveillance_repository.dart';
+import '../../cameras/widgets/invoice_footage_section.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/sale_order_details_content.dart';
@@ -25,6 +27,7 @@ class InvoiceDetailsScreen extends StatefulWidget {
     required this.saleRepository,
     required this.printingRepository,
     required this.shopSettingsRepository,
+    this.surveillanceRepository,
     required this.catalogRepository,
     required this.contactRepository,
     required this.initialOrder,
@@ -35,6 +38,11 @@ class InvoiceDetailsScreen extends StatefulWidget {
   final SaleRepository saleRepository;
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
+
+  /// When given (and the shop has checkout cameras), the invoice grows a panel
+  /// that plays what the camera saw as this sale was rung up. Null in previews
+  /// and in shops with no DVR — the panel then does not exist at all.
+  final SurveillanceRepository? surveillanceRepository;
   final CatalogRepository catalogRepository;
   final ContactRepository contactRepository;
   final SaleOrder initialOrder;
@@ -110,6 +118,7 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
               saleRepository: widget.saleRepository,
               printingRepository: widget.printingRepository,
               shopSettingsRepository: widget.shopSettingsRepository,
+              surveillanceRepository: widget.surveillanceRepository,
               catalogRepository: widget.catalogRepository,
               contactRepository: widget.contactRepository,
               initialOrder: widget.initialOrder,
@@ -132,6 +141,7 @@ class InvoiceDetailsView extends StatefulWidget {
     required this.saleRepository,
     required this.printingRepository,
     required this.shopSettingsRepository,
+    this.surveillanceRepository,
     required this.catalogRepository,
     required this.contactRepository,
     required this.initialOrder,
@@ -144,6 +154,11 @@ class InvoiceDetailsView extends StatefulWidget {
   final SaleRepository saleRepository;
   final PrintingRepository printingRepository;
   final ShopSettingsRepository shopSettingsRepository;
+
+  /// When given (and the shop has checkout cameras), the invoice grows a panel
+  /// that plays what the camera saw as this sale was rung up. Null in previews
+  /// and in shops with no DVR — the panel then does not exist at all.
+  final SurveillanceRepository? surveillanceRepository;
   final CatalogRepository catalogRepository;
   final ContactRepository contactRepository;
   final SaleOrder initialOrder;
@@ -224,6 +239,14 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
                   onConvert: widget.capabilities.canCheckoutSale
                       ? _convertQuotation
                       : null,
+                  footer: widget.surveillanceRepository == null
+                      ? null
+                      : InvoiceFootageSection(
+                          key: ValueKey('footage-${order.id}'),
+                          repository: widget.surveillanceRepository!,
+                          orderId: order.id,
+                          capabilities: widget.capabilities,
+                        ),
                 ),
               );
 

@@ -10423,5 +10423,189 @@
   },
   "purchaseDestinationLabel": "مكان الاستلام",
   "purchaseDestinationHint": "أين ستصل هذه البضاعة",
-  "purchaseDestinationSearchHint": "ابحث عن مكان"
+  "purchaseDestinationSearchHint": "ابحث عن مكان",
+  "camerasDrawerLabel": "الكاميرات",
+  "camerasTitle": "كاميرات المراقبة",
+  "camerasEmptyTitle": "لا توجد كاميرات بعد",
+  "camerasEmptyBody": "أضف جهاز التسجيل (DVR/NVR) من إعدادات المتجر لتظهر كاميرات المحل هنا.",
+  "camerasOpenSettingsButton": "إعداد جهاز التسجيل",
+  "camerasLoadErrorTitle": "تعذّر تحميل الكاميرات",
+  "camerasLayoutTooltip": "توزيع الشاشة",
+  "camerasLayoutSingle": "كاميرا واحدة",
+  "camerasLayoutFour": "أربع كاميرات",
+  "camerasLayoutNine": "تسع كاميرات",
+  "camerasRefreshTooltip": "تحديث",
+  "camerasPauseAllTooltip": "إيقاف البث",
+  "camerasResumeAllTooltip": "استئناف البث",
+  "camerasPausedBanner": "البث متوقف — لا يتم سحب أي فيديو من جهاز التسجيل.",
+  "cameraRenameTitle": "تسمية الكاميرا",
+  "cameraRenameHint": "مثال: الصندوق، الباب الأمامي، المخزن",
+  "cameraRenameAction": "إعادة التسمية",
+  "cameraOfflineLabel": "غير متصلة",
+  "cameraConnectingLabel": "جارٍ الاتصال…",
+  "cameraStreamFailedLabel": "تعذّر عرض البث",
+  "cameraRetryAction": "إعادة المحاولة",
+  "cameraFullScreenTooltip": "ملء الشاشة",
+  "cameraExitFullScreenTooltip": "إنهاء ملء الشاشة",
+  "cameraSmoothModeTooltip": "جودة أعلى (إطارات أكثر)",
+  "cameraOpenPlaybackTooltip": "مراجعة التسجيلات",
+  "cameraSaveFrameTooltip": "حفظ اللقطة",
+  "cameraFrameSavedMessage": "تم حفظ اللقطة",
+  "cameraFrameSaveFailedMessage": "تعذّر حفظ اللقطة",
+  "cameraPlaybackTitle": "مراجعة التسجيلات",
+  "cameraPlaybackPickDateAction": "اختيار التاريخ والوقت",
+  "cameraPlaybackJumpBack": "رجوع",
+  "cameraPlaybackJumpForward": "تقدّم",
+  "cameraPlaybackPlayTooltip": "تشغيل",
+  "cameraPlaybackPauseTooltip": "إيقاف مؤقت",
+  "cameraPlaybackSpeedLabel": "السرعة",
+  "cameraPlaybackEndedMessage": "انتهى المقطع",
+  "cameraPlaybackUnavailableTitle": "المراجعة غير متاحة",
+  "cameraPlaybackUnavailableBody": "خادم المتجر لا يملك أداة معالجة الفيديو المطلوبة (ffmpeg). المشاهدة المباشرة تعمل كالمعتاد.",
+  "cameraPlaybackNoFootageBody": "لا يوجد تسجيل محفوظ في هذا الوقت على هذه الكاميرا.",
+  "cameraExportAction": "تصدير المقطع",
+  "cameraExportRunningMessage": "جارٍ تجهيز المقطع…",
+  "cameraExportSavedMessage": "تم حفظ المقطع",
+  "cameraExportFailedMessage": "تعذّر تصدير المقطع",
+  "cameraExportSelectionLabel": "المقطع المحدد",
+  "cameraSelectionStartAction": "بداية التحديد",
+  "cameraSelectionEndAction": "نهاية التحديد",
+  "cameraSelectionClearAction": "مسح التحديد",
+  "cameraSettingsTitle": "الكاميرات وجهاز التسجيل",
+  "cameraSettingsSubtitle": "ربط جهاز DVR/NVR وتسمية الكاميرات",
+  "cameraSettingsEnableTitle": "تفعيل الكاميرات",
+  "cameraSettingsEnableSubtitle": "إظهار شاشة الكاميرات ولقطة الفاتورة في التطبيق.",
+  "cameraSettingsRecordersSection": "أجهزة التسجيل",
+  "cameraSettingsAddRecorder": "إضافة جهاز تسجيل",
+  "cameraSettingsCamerasSection": "الكاميرات",
+  "cameraSettingsPlaybackSection": "لقطة الفاتورة",
+  "cameraSettingsPreRollLabel": "ثوانٍ قبل البيع",
+  "cameraSettingsPostRollLabel": "ثوانٍ بعد البيع",
+  "cameraSettingsCoversCheckoutLabel": "تظهر مع الفواتير",
+  "cameraSettingsCoversCheckoutHint": "اختر الكاميرات التي تصوّر الصندوق حتى تظهر في صفحة الفاتورة.",
+  "cameraSettingsCameraEnabledLabel": "مفعّلة",
+  "cameraSettingsLiveQualityLabel": "جودة البث المباشر",
+  "cameraSettingsPlaybackQualityLabel": "جودة التسجيلات",
+  "cameraQualityMain": "عالية",
+  "cameraQualitySub": "خفيفة",
+  "cameraQualityMainHint": "أوضح صورة، وحمل أكبر على الجهاز والشبكة.",
+  "cameraQualitySubHint": "الخيار المناسب لعرض عدة كاميرات معاً.",
+  "recorderFormTitle": "جهاز التسجيل",
+  "recorderNameLabel": "اسم الجهاز",
+  "recorderNameHint": "مثال: جهاز المحل",
+  "recorderBrandLabel": "النوع",
+  "recorderBrandAuto": "تحديد تلقائي",
+  "recorderBrandHikvision": "Hikvision",
+  "recorderBrandDahua": "Dahua",
+  "recorderHostLabel": "عنوان الجهاز على الشبكة",
+  "recorderHostHint": "مثال: 192.168.1.64",
+  "recorderPortLabel": "منفذ الويب",
+  "recorderRtspPortLabel": "منفذ الفيديو (RTSP)",
+  "recorderUsernameLabel": "اسم المستخدم",
+  "recorderPasswordLabel": "كلمة المرور",
+  "recorderPasswordKeptHint": "اتركها فارغة للإبقاء على كلمة المرور المحفوظة.",
+  "recorderUseHttpsLabel": "اتصال آمن (HTTPS)",
+  "recorderEnabledLabel": "مفعّل",
+  "recorderTestAction": "اختبار الاتصال",
+  "recorderTestRunningMessage": "جارٍ الاتصال بالجهاز…",
+  "recorderTestFailedTitle": "تعذّر الاتصال",
+  "recorderSyncAction": "تحديث قائمة الكاميرات",
+  "recorderDeleteAction": "حذف الجهاز",
+  "recorderDeleteConfirmTitle": "حذف جهاز التسجيل؟",
+  "recorderDeleteConfirmBody": "ستختفي كاميراته وأسماؤها من التطبيق. لن يتأثر الجهاز نفسه ولا تسجيلاته.",
+  "recorderStatusOk": "متصل",
+  "recorderStatusError": "فشل الاتصال",
+  "recorderStatusNever": "لم يتم الاتصال بعد",
+  "invoiceFootageSectionTitle": "لقطة الكاميرا",
+  "invoiceFootageSubtitle": "ما سجّلته الكاميرا وقت إصدار هذه الفاتورة",
+  "invoiceFootageNoCamerasBody": "لم يتم تحديد أي كاميرا تصوّر الصندوق. حدّدها من إعدادات الكاميرات.",
+  "invoiceFootageOpenAction": "فتح المراجعة الكاملة",
+  "invoiceFootageWatchAction": "تشغيل اللقطة",
+  "cameraChannelCountLabel": "{count, plural, =0{لا توجد كاميرات} =1{كاميرا واحدة} =2{كاميرتان} other{{count} كاميرات}}",
+  "@cameraChannelCountLabel": {
+    "description": "How many channels a recorder reported.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "cameraChannelLabel": "القناة {channel}",
+  "@cameraChannelLabel": {
+    "description": "A camera's channel number on its recorder.",
+    "placeholders": {
+      "channel": {
+        "type": "String"
+      }
+    }
+  },
+  "cameraLiveBadge": "مباشر",
+  "cameraWindow15Minutes": "نافذة ١٥ دقيقة",
+  "cameraWindow1Hour": "نافذة ساعة",
+  "cameraWindow6Hours": "نافذة ٦ ساعات",
+  "cameraSelectionHint": "اسحب طرفي الشريط لتحديد بداية المقطع ونهايته.",
+  "cameraSelectionLoopHint": "يُعاد تشغيل ما بين الطرفين لتراه قبل الحفظ.",
+  "cameraExportConfirmAction": "حفظ المقطع",
+  "cameraJumpLastHour": "آخر ساعة",
+  "cameraJumpThreeHoursAgo": "قبل ٣ ساعات",
+  "cameraJumpThisMorning": "صباح اليوم",
+  "cameraJumpYesterdayEvening": "مساء أمس",
+  "camerasLayoutLarge": "بلاطات كبيرة",
+  "camerasLayoutMedium": "بلاطات متوسطة",
+  "camerasLayoutSmall": "بلاطات صغيرة",
+  "camerasTileSizeTooltip": "حجم البلاطات",
+  "cameraOpenLiveTooltip": "فتح الكاميرا",
+  "cameraSelectionRangeLabel": "من {start} إلى {end} · {duration}",
+  "@cameraSelectionRangeLabel": {
+    "description": "The clip currently selected for export.",
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "recorderClockMatchesShop": "ساعة الجهاز مطابقة لتوقيت المحل",
+  "recorderClockDiffersTitle": "ساعة الجهاز لا تطابق توقيت المحل",
+  "recorderClockDiffersBody": "فرق {minutes} دقيقة. لقطة الفاتورة تعتمد على هذا الفرق، ونحن نطبّقه تلقائياً — لكن ضبط ساعة الجهاز على توقيت ليبيا يجعل الأمر أوضح لمن يراجع التسجيلات على شاشة الجهاز نفسه.",
+  "@recorderClockDiffersBody": {
+    "description": "Shown when the recorder's clock is not on the shop's own local time.",
+    "placeholders": {
+      "minutes": {
+        "type": "String"
+      }
+    }
+  },
+  "recorderActionsMenuTooltip": "إجراءات الجهاز",
+  "recorderScanTitle": "البحث عن جهاز التسجيل",
+  "recorderScanRunning": "جارٍ البحث في الشبكة…",
+  "recorderScanRetryAction": "بحث مرة أخرى",
+  "recorderScanEmptyTitle": "لم يُعثر على جهاز",
+  "recorderScanEmptyBody": "تأكد أن جهاز التسجيل موصول بنفس الشبكة ومشغّل، أو أدخل عنوانه يدوياً بالأسفل.",
+  "recorderScanFoundHint": "اختر جهازك من القائمة، وسنملأ العنوان نيابة عنك.",
+  "recorderManualSectionTitle": "الإعداد اليدوي",
+  "recorderScanFoundCount": "{count, plural, =1{جهاز واحد في الشبكة} =2{جهازان في الشبكة} other{{count} أجهزة في الشبكة}}",
+  "@recorderScanFoundCount": {
+    "description": "How many recorders the LAN sweep found.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "recorderScanIdlePrompt": "اضغط «بحث مرة أخرى» للبحث عن جهاز تسجيل في الشبكة.",
+  "dashboardCamerasTitle": "الكاميرات مباشرة",
+  "dashboardCamerasChooseTooltip": "اختيار الكاميرات المعروضة",
+  "dashboardCamerasPickerTitle": "كاميرات لوحة المعلومات",
+  "dashboardCamerasPickerBody": "اختر ما تريد رؤيته على اللوحة في هذا الجهاز.",
+  "dashboardCamerasAutoLabel": "اختيار تلقائي",
+  "dashboardCamerasAutoDescription": "نعرض كاميرات الصندوق أولاً، وهذا ما يحدث إن لم تختر شيئاً.",
+  "dashboardCamerasResetAction": "العودة للاختيار التلقائي",
+  "dashboardCamerasNoneSelected": "لن تظهر أي كاميرا على اللوحة.",
+  "dashboardCamerasOpenWallAction": "كل الكاميرات"
 }

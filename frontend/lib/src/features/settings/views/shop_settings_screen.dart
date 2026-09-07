@@ -37,6 +37,8 @@ import '../view_models/exchange_rates_view_model.dart';
 import '../view_models/subscription_status_view_model.dart';
 import 'operations_settings_page.dart';
 import 'app_updates_page.dart';
+import '../../cameras/view_models/camera_settings_view_model.dart';
+import '../../cameras/views/camera_settings_page.dart';
 import 'price_checkers_page.dart';
 import 'sales_channels_page.dart';
 import '../../inventory/views/transfers_screen.dart';
@@ -59,6 +61,7 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.transfersViewModel,
     required this.warehouseRepository,
     required this.priceCheckersViewModel,
+    required this.cameraSettingsViewModel,
     required this.workflowsViewModel,
     required this.assetTypesViewModel,
     required this.prepStationsViewModel,
@@ -79,6 +82,7 @@ class ShopSettingsScreen extends StatelessWidget {
   final TransfersViewModel transfersViewModel;
   final WarehouseRepository warehouseRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
+  final CameraSettingsViewModel cameraSettingsViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final AssetTypesViewModel assetTypesViewModel;
   final PrepStationsViewModel prepStationsViewModel;
@@ -130,6 +134,7 @@ class ShopSettingsScreen extends StatelessWidget {
               transfersViewModel: transfersViewModel,
               warehouseRepository: warehouseRepository,
               priceCheckersViewModel: priceCheckersViewModel,
+              cameraSettingsViewModel: cameraSettingsViewModel,
               workflowsViewModel: workflowsViewModel,
               assetTypesViewModel: assetTypesViewModel,
               prepStationsViewModel: prepStationsViewModel,
@@ -142,6 +147,7 @@ class ShopSettingsScreen extends StatelessWidget {
               clientUpdateService: clientUpdateService,
               canManageSalesChannels: capabilities.canManageSalesChannels,
               canManagePriceCheckers: capabilities.canManagePriceCheckers,
+              canManageCameras: capabilities.canManageCameras,
               canManageWorkflows: capabilities.canManageWorkflows,
               canManageAttendance: capabilities.canManageAttendance,
               canManageMessaging: capabilities.canManageMessaging,
@@ -161,6 +167,7 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.transfersViewModel,
     required this.warehouseRepository,
     required this.priceCheckersViewModel,
+    required this.cameraSettingsViewModel,
     required this.workflowsViewModel,
     required this.assetTypesViewModel,
     required this.prepStationsViewModel,
@@ -173,6 +180,7 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.clientUpdateService,
     required this.canManageSalesChannels,
     required this.canManagePriceCheckers,
+    required this.canManageCameras,
     required this.canManageWorkflows,
     required this.canManageAttendance,
     required this.canManageMessaging,
@@ -184,6 +192,7 @@ class _ShopSettingsBody extends StatelessWidget {
   final TransfersViewModel transfersViewModel;
   final WarehouseRepository warehouseRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
+  final CameraSettingsViewModel cameraSettingsViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final AssetTypesViewModel assetTypesViewModel;
   final PrepStationsViewModel prepStationsViewModel;
@@ -196,6 +205,7 @@ class _ShopSettingsBody extends StatelessWidget {
   final ClientUpdateService clientUpdateService;
   final bool canManageSalesChannels;
   final bool canManagePriceCheckers;
+  final bool canManageCameras;
   final bool canManageWorkflows;
   final bool canManageAttendance;
   final bool canManageMessaging;
@@ -232,6 +242,7 @@ class _ShopSettingsBody extends StatelessWidget {
       transfersViewModel: transfersViewModel,
       warehouseRepository: warehouseRepository,
       priceCheckersViewModel: priceCheckersViewModel,
+      cameraSettingsViewModel: cameraSettingsViewModel,
       workflowsViewModel: workflowsViewModel,
       assetTypesViewModel: assetTypesViewModel,
       prepStationsViewModel: prepStationsViewModel,
@@ -244,6 +255,7 @@ class _ShopSettingsBody extends StatelessWidget {
       clientUpdateService: clientUpdateService,
       canManageSalesChannels: canManageSalesChannels,
       canManagePriceCheckers: canManagePriceCheckers,
+      canManageCameras: canManageCameras,
       canManageWorkflows: canManageWorkflows,
       canManageAttendance: canManageAttendance,
       canManageMessaging: canManageMessaging,
@@ -260,6 +272,7 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.transfersViewModel,
     required this.warehouseRepository,
     required this.priceCheckersViewModel,
+    required this.cameraSettingsViewModel,
     required this.workflowsViewModel,
     required this.assetTypesViewModel,
     required this.prepStationsViewModel,
@@ -272,6 +285,7 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.clientUpdateService,
     required this.canManageSalesChannels,
     required this.canManagePriceCheckers,
+    required this.canManageCameras,
     required this.canManageWorkflows,
     required this.canManageAttendance,
     required this.canManageMessaging,
@@ -284,6 +298,7 @@ class _ShopSettingsForm extends StatefulWidget {
   final TransfersViewModel transfersViewModel;
   final WarehouseRepository warehouseRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
+  final CameraSettingsViewModel cameraSettingsViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final AssetTypesViewModel assetTypesViewModel;
   final PrepStationsViewModel prepStationsViewModel;
@@ -296,6 +311,7 @@ class _ShopSettingsForm extends StatefulWidget {
   final ClientUpdateService clientUpdateService;
   final bool canManageSalesChannels;
   final bool canManagePriceCheckers;
+  final bool canManageCameras;
   final bool canManageWorkflows;
   final bool canManageAttendance;
   final bool canManageMessaging;
@@ -694,6 +710,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                             onTap: widget.viewModel.isSaving
                                 ? null
                                 : () => _openPriceCheckers(context),
+                          ),
+                        if (widget.canManageCameras)
+                          PointySettingsTile(
+                            icon: Icons.videocam_outlined,
+                            title: l10n.cameraSettingsTitle,
+                            subtitle: l10n.cameraSettingsSubtitle,
+                            onTap: widget.viewModel.isSaving
+                                ? null
+                                : () => _openCameraSettings(context),
                           ),
                         if (widget.canManageAttendance)
                           PointySettingsTile(
@@ -1492,6 +1517,20 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     );
   }
 
+  Future<void> _openCameraSettings(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) => CameraSettingsPage(
+          viewModel: widget.cameraSettingsViewModel,
+          enableSurveillance:
+              widget.viewModel.settings?.enableSurveillance ?? false,
+          onToggleEnabled: (enabled) =>
+              widget.viewModel.setSurveillanceEnabled(enabled),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openAttendanceSettings(BuildContext context) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -1687,9 +1726,18 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       );
   }
 
+  /// The payload this form sends: the stored settings, with this form's own
+  /// controls applied over them.
+  ///
+  /// It starts from [ShopSettingsDraft.fromSettings] rather than listing every
+  /// field, because a draft goes out as the whole payload. Assembling one from
+  /// the controls means every setting that lives on another page — the
+  /// operations modes, the kitchen-ticket switch, the camera settings — is sent
+  /// as its *default* and quietly reset. Starting from the stored settings makes
+  /// carrying them the default behaviour, including for fields added later.
   ShopSettingsDraft _buildDraft() {
     final currentSettings = widget.viewModel.settings ?? widget.settings;
-    return ShopSettingsDraft(
+    return ShopSettingsDraft.fromSettings(currentSettings).copyWith(
       shopName: _shopNameController.text.trim(),
       receiptHeader: _receiptHeaderController.text.trim(),
       receiptFooter: _receiptFooterController.text.trim(),
@@ -1714,13 +1762,11 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       ),
       requireCustomerForCredit: _requireCustomerForCredit,
       enforceCustomerCreditLimits: _enforceCustomerCreditLimits,
+      // Both money fields are cleared by emptying the box, so they are passed
+      // even when null — that is a value here, not an omission.
       defaultCustomerCreditLimit: _parseDefaultCustomerCreditLimit(),
       allowCashierCustomerAccess: _allowCashierCustomerAccess,
       posCashPurchaseLimit: _parsePosCashPurchaseLimit(),
-      enableRepairOperations: currentSettings.enableRepairOperations,
-      enableProductionOperations: currentSettings.enableProductionOperations,
-      enableKitchenOperations: currentSettings.enableKitchenOperations,
-      enableJobTracking: currentSettings.enableJobTracking,
       inventoryValuationMethod: _inventoryValuationMethod,
     );
   }

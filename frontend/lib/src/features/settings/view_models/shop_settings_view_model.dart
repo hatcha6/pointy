@@ -113,6 +113,23 @@ class ShopSettingsViewModel extends ChangeNotifier {
     }
   }
 
+  /// Turns the camera surfaces on or off shop-wide.
+  ///
+  /// Built from the loaded settings rather than from a form, because this is a
+  /// one-switch page: a draft assembled from just the switch would send the
+  /// default for every other field and quietly undo them.
+  Future<bool> setSurveillanceEnabled(bool enabled) async {
+    final current = _settings;
+    if (current == null) {
+      return false;
+    }
+    return updateSettings(
+      ShopSettingsDraft.fromSettings(
+        current,
+      ).copyWith(enableSurveillance: enabled),
+    );
+  }
+
   /// True when the last save was held back because the user changed how stock
   /// is costed and has not yet confirmed it. The screen answers by showing the
   /// warning dialog and re-saving with an acknowledgement.

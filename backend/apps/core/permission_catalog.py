@@ -274,6 +274,21 @@ PERMISSION_CATALOG = [
             _perm("crm.send_campaigns", "اعتماد وإرسال الحملات", "الموافقة على الحملات وبدء إرسالها للعملاء."),
         ],
     },
+    {
+        "key": "surveillance",
+        "label": "كاميرات المراقبة",
+        "description": "مشاهدة الكاميرات المباشرة والتسجيلات وتصدير المقاطع.",
+        "permissions": [
+            # Three levels, not one: shops routinely want a supervisor who can
+            # watch the wall but cannot walk out with a copy of the footage.
+            _perm("surveillance.view_camera", "عرض قائمة الكاميرات", "الاطلاع على الكاميرات المعرّفة وحالتها."),
+            _perm("surveillance.view_live", "المشاهدة المباشرة", "مشاهدة البث المباشر للكاميرات."),
+            _perm("surveillance.view_playback", "مراجعة التسجيلات", "استعراض التسجيلات السابقة ومشاهدة لقطة الفاتورة."),
+            _perm("surveillance.export_footage", "تصدير المقاطع", "حفظ مقاطع الفيديو وتنزيلها من الجهاز."),
+            _perm("surveillance.change_camera", "تسمية الكاميرات", "تعديل أسماء الكاميرات وترتيبها وإعداداتها."),
+            _perm("surveillance.change_recorder", "إعداد جهاز التسجيل", "ضبط عنوان جهاز DVR/NVR وبيانات الدخول."),
+        ],
+    },
 ]
 
 

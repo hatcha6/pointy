@@ -352,6 +352,66 @@ Remote relay access is denied when an installation's relay entitlement is
 disabled, the subscription flag is inactive, or its subscription end time has
 passed. Local LAN access to the on-prem backend is unaffected.
 
+## Cameras (DVR/NVR)
+
+Pointy talks to the shop's own Hikvision or Dahua recorder on the LAN and puts
+two things in the app that no DVR ships: a live camera wall, and **the footage
+from the moment an invoice was rung up, on that invoice's page** — no channel
+number, no time to type, no proprietary Windows client.
+
+The backend holds the recorder's credentials and every byte of video passes
+through it (`apps/surveillance`). Tills never learn the DVR password, and the
+same endpoints work over the relay tunnel when the owner is not in the shop.
+Live and playback share one wire format — `multipart/x-mixed-replace` carrying
+JPEG frames — so the app has a single player and needs no video codec.
+
+- **Live** streams the recorder's sub-stream through ffmpeg at up to 60fps, so a
+  camera that shoots 30 arrives at 30 — nine at a time. Where ffmpeg is absent
+  it falls back to JPEG snapshot polling, capped at 8fps because that path costs
+  an HTTP round trip per frame.
+- **Playback, export and stills** run ffmpeg (`-c copy` for exports, so a clip
+  is a byte-for-byte copy of what the recorder stored). ffmpeg is detected at
+  runtime and reported to the app, which hides what it cannot do; the shipped
+  image installs it.
+- **One upstream pull per camera**, whatever the number of viewers: a frame
+  broker fans out to every subscriber so four tills watching the wall do not
+  hit the recorder four times.
+- **The wall scrolls and only what is on screen streams.** Tile size is a
+  setting; the column count falls out of the viewport, so it is one column on a
+  phone and four on a monitor without a breakpoint anywhere.
+- **A live band on the dashboard.** Up to three cameras under the headline
+  numbers, chosen automatically (checkout cameras first) until someone picks
+  their own per device. It refreshes stills at 2fps off the recorder's snapshot
+  endpoint rather than streaming — a dashboard left open all day must not hold a
+  transcode per camera open — and a tap opens the full player.
+- **One full-screen player** for live and playback, with auto-hiding controls, a
+  timeline that paints the recorder's own recorded segments, and export as a
+  *mode*: the bar becomes a range selector, playback loops inside the selection,
+  and what you are watching is exactly the clip you will save.
+
+Set it up in **Shop settings → الكاميرات وجهاز التسجيل**. The form opens by
+**sweeping the network for recorders** and listing what it found — most people
+configuring this have never typed an IP address, so picking their DVR off a list
+fills the address, port, brand and username for them, leaving only the password.
+The sweep runs on the client (the backend's container has no route onto the
+shop's broadcast domain) and needs no credentials: both brands answer their
+identity endpoint with an authentication challenge, and which endpoint
+challenges is what names the brand. Manual fields sit below for installers who
+already know the address. A successful connection turns the feature on, and
+every camera surface stays hidden until then. Camera names are the shop's own and are stored here, not
+pushed to the DVR. Mark the cameras that watch the counter as *covering
+checkout* to have them offered on invoices.
+
+Permissions are three, because shops ask for the distinction: watching live
+(`surveillance.view_live`), reviewing recordings (`surveillance.view_playback`),
+and taking a copy away (`surveillance.export_footage`). Managers hold all three;
+supervisors get the first two.
+
+Preview the screens with `make frontend-cameras-preview`
+(`?screen=board|wall|playback|live-player|settings|recorder-form|dashboard-band|invoice`) — the
+harness synthesises frames, so no recorder is needed. Design notes and the
+protocol details live in `SURVEILLANCE_PLAN.md`.
+
 ## AI Assistant
 
 The relay also hosts a streaming, multi-model AI assistant. The Flutter app

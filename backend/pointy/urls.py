@@ -149,6 +149,7 @@ from apps.purchasing.views import (
     SupplierViewSet,
 )
 from apps.reports.views import PeriodLockView, ReportRunViewSet
+from apps.surveillance.views import CameraViewSet, RecorderViewSet
 from apps.sales.views import (
     OrderViewSet,
     PublicInvoiceView,
@@ -278,6 +279,16 @@ router.register(
     "ai/conversations",
     AiConversationViewSet,
     basename="ai-conversation",
+)
+router.register(
+    "surveillance/recorders",
+    RecorderViewSet,
+    basename="surveillance-recorder",
+)
+router.register(
+    "surveillance/cameras",
+    CameraViewSet,
+    basename="surveillance-camera",
 )
 
 urlpatterns = [
@@ -437,6 +448,10 @@ urlpatterns = [
     # Its own router (see apps.invoice_intake.urls) — mounted at
     # api/invoice-intakes/ alongside the project router below.
     path("api/companion/", include("apps.companion.urls")),
+    # Camera streaming lives outside the router: these return
+    # StreamingHttpResponse (MJPEG / MP4), which DRF's renderers would try to
+    # negotiate. See apps.surveillance.urls.
+    path("api/", include("apps.surveillance.urls")),
     path("api/", include("apps.invoice_intake.urls")),
     path("api/", include(router.urls)),
     # The companion camera page, served on the LAN at /c/ (top-level so the web

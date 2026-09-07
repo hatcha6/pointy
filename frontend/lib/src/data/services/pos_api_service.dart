@@ -85,6 +85,7 @@ import '../models/user_activity.dart';
 import '../models/workflow.dart';
 import '../models/attendance.dart';
 import '../models/ai_chat.dart';
+import '../models/camera.dart';
 import 'api_session.dart';
 import 'companion_api_client.dart';
 import 'ai_api_client.dart';
@@ -113,6 +114,7 @@ import '../models/messaging_gateway.dart';
 import 'crm_api_client.dart';
 import 'messaging_api_client.dart';
 import 'price_checker_api_client.dart';
+import 'surveillance_api_client.dart';
 import 'printing_api_client.dart';
 import 'migration_api_client.dart';
 import 'migration_uploader.dart';
@@ -178,6 +180,7 @@ class PosApiService {
     _stockCounts = StockCountApiClient(_session);
     _ai = AiApiClient(_session);
     _companion = CompanionApiClient(_session);
+    _surveillance = SurveillanceApiClient(_session);
   }
 
   String get baseUrl => _session.baseUrl;
@@ -237,6 +240,7 @@ class PosApiService {
   late final StockCountApiClient _stockCounts;
   late final AiApiClient _ai;
   late final CompanionApiClient _companion;
+  late final SurveillanceApiClient _surveillance;
 
   set performanceRecorder(ApiPerformanceRecorder? recorder) {
     _session.performanceRecorder = recorder;
@@ -2177,6 +2181,121 @@ class PosApiService {
 
   Future<void> cancelCompanionCaptureRequest(int id) {
     return _companion.cancelCaptureRequest(id);
+  }
+
+  // --- Surveillance (DVR/NVR cameras) -----------------------------------
+  Future<SurveillanceStatus> fetchSurveillanceStatus() {
+    return _surveillance.fetchStatus();
+  }
+
+  Future<List<Recorder>> fetchRecorders() => _surveillance.fetchRecorders();
+
+  Future<Recorder> saveRecorder(RecorderDraft draft) {
+    return _surveillance.saveRecorder(draft);
+  }
+
+  Future<void> deleteRecorder(int id) => _surveillance.deleteRecorder(id);
+
+  Future<RecorderTestResult> testRecorder(RecorderDraft draft) {
+    return _surveillance.testRecorder(draft);
+  }
+
+  Future<Recorder> syncRecorder(int id) => _surveillance.syncRecorder(id);
+
+  Future<List<Camera>> fetchCameras({bool enabledOnly = false}) {
+    return _surveillance.fetchCameras(enabledOnly: enabledOnly);
+  }
+
+  Future<Camera> updateCamera(
+    int id, {
+    String? name,
+    bool? isEnabled,
+    int? displayOrder,
+    bool? coversCheckout,
+    CameraQuality? liveQuality,
+    CameraQuality? playbackQuality,
+  }) {
+    return _surveillance.updateCamera(
+      id,
+      name: name,
+      isEnabled: isEnabled,
+      displayOrder: displayOrder,
+      coversCheckout: coversCheckout,
+      liveQuality: liveQuality,
+      playbackQuality: playbackQuality,
+    );
+  }
+
+  Future<Uint8List> fetchCameraSnapshot(int cameraId) {
+    return _surveillance.fetchSnapshot(cameraId);
+  }
+
+  Future<RecordingIndex> fetchCameraRecordings(
+    int cameraId, {
+    required DateTime start,
+    required DateTime end,
+  }) {
+    return _surveillance.fetchRecordings(cameraId, start: start, end: end);
+  }
+
+  Future<InvoiceFootage> fetchInvoiceFootage(int orderId) {
+    return _surveillance.fetchInvoiceFootage(orderId);
+  }
+
+  Stream<CameraFrame> liveCameraFrames(
+    int cameraId, {
+    int fps = 4,
+    CameraQuality? quality,
+    bool smooth = false,
+    int width = 0,
+  }) {
+    return _surveillance.liveFrames(
+      cameraId,
+      fps: fps,
+      quality: quality,
+      smooth: smooth,
+      width: width,
+    );
+  }
+
+  Stream<CameraFrame> playbackCameraFrames(
+    int cameraId, {
+    required DateTime start,
+    required DateTime end,
+    double speed = 1.0,
+    int fps = 10,
+    CameraQuality? quality,
+    int width = 0,
+  }) {
+    return _surveillance.playbackFrames(
+      cameraId,
+      start: start,
+      end: end,
+      speed: speed,
+      fps: fps,
+      quality: quality,
+      width: width,
+    );
+  }
+
+  Future<Uint8List> fetchCameraStill(int cameraId, {required DateTime at}) {
+    return _surveillance.fetchStill(cameraId, at: at);
+  }
+
+  Future<void> exportCameraClip(
+    int cameraId, {
+    required DateTime start,
+    required DateTime end,
+    CameraQuality? quality,
+    required Future<void> Function(Stream<List<int>> bytes) onBytes,
+  }) {
+    return _surveillance.exportClip(
+      cameraId,
+      start: start,
+      end: end,
+      quality: quality,
+      onBytes: onBytes,
+    );
   }
 
   Future<List<PriceCheckerDevice>> fetchPriceCheckerDevices({int page = 1}) {

@@ -14,7 +14,10 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../data/models/dashboard_ai_digest.dart';
+import '../../../data/models/camera.dart';
+import '../view_models/dashboard_cameras_view_model.dart';
 import '../view_models/dashboard_view_model.dart';
+import 'dashboard_cameras_band.dart';
 
 part 'dashboard_screen_hero.dart';
 part 'dashboard_screen_widgets.dart';
@@ -29,12 +32,22 @@ class DashboardScreen extends StatelessWidget {
     required this.capabilities,
     required this.navigation,
     this.onOpenIntegrityMonitor,
+    this.camerasViewModel,
+    this.onOpenCamera,
+    this.onOpenCameraWall,
   });
 
   final DashboardViewModel viewModel;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
   final VoidCallback? onOpenIntegrityMonitor;
+
+  /// Null in a shop with no cameras, or for a user who may not watch them —
+  /// which is what stops the dashboard asking the backend about cameras on
+  /// every load in the overwhelming majority of shops that have none.
+  final DashboardCamerasViewModel? camerasViewModel;
+  final ValueChanged<Camera>? onOpenCamera;
+  final VoidCallback? onOpenCameraWall;
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +83,9 @@ class DashboardScreen extends StatelessWidget {
             child: _DashboardBody(
               viewModel: viewModel,
               capabilities: capabilities,
+              camerasViewModel: camerasViewModel,
+              onOpenCamera: onOpenCamera,
+              onOpenCameraWall: onOpenCameraWall,
               navigation: _DashboardNavigation(
                 openCatalog: _destinationAction(
                   context,
@@ -183,11 +199,17 @@ class _DashboardBody extends StatelessWidget {
     required this.viewModel,
     required this.capabilities,
     required this.navigation,
+    this.camerasViewModel,
+    this.onOpenCamera,
+    this.onOpenCameraWall,
   });
 
   final DashboardViewModel viewModel;
   final AuthorizationCapabilities capabilities;
   final _DashboardNavigation navigation;
+  final DashboardCamerasViewModel? camerasViewModel;
+  final ValueChanged<Camera>? onOpenCamera;
+  final VoidCallback? onOpenCameraWall;
 
   @override
   Widget build(BuildContext context) {
@@ -246,6 +268,9 @@ class _DashboardBody extends StatelessWidget {
                 navigation: navigation,
                 digest: viewModel.aiDigest,
                 digestLoading: viewModel.isDigestLoading,
+                camerasViewModel: camerasViewModel,
+                onOpenCamera: onOpenCamera,
+                onOpenCameraWall: onOpenCameraWall,
               ),
             ],
           ),
@@ -302,6 +327,9 @@ class _DashboardSections extends StatelessWidget {
     required this.navigation,
     required this.digest,
     required this.digestLoading,
+    this.camerasViewModel,
+    this.onOpenCamera,
+    this.onOpenCameraWall,
   });
 
   final DashboardSnapshot snapshot;
@@ -309,6 +337,9 @@ class _DashboardSections extends StatelessWidget {
   final _DashboardNavigation navigation;
   final DashboardAiDigest digest;
   final bool digestLoading;
+  final DashboardCamerasViewModel? camerasViewModel;
+  final ValueChanged<Camera>? onOpenCamera;
+  final VoidCallback? onOpenCameraWall;
 
   @override
   Widget build(BuildContext context) {
@@ -613,6 +644,17 @@ class _DashboardSections extends StatelessWidget {
             navigation: navigation,
           ),
         ),
+        // Directly under the headline numbers: "how is the shop doing" is
+        // naturally followed by "and what does it look like right now". The
+        // band takes up no space at all when there is nothing to show.
+        if (camerasViewModel != null) ...[
+          SizedBox(height: spacing.lg),
+          DashboardCamerasBand(
+            viewModel: camerasViewModel!,
+            onOpenCamera: onOpenCamera,
+            onOpenWall: onOpenCameraWall,
+          ),
+        ],
         if (cards.isNotEmpty) ...[
           SizedBox(height: spacing.lg),
           PointyMasonryGrid(children: cards),

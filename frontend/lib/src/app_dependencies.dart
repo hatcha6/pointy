@@ -30,6 +30,8 @@ import 'data/repositories/modifier_group_repository.dart';
 import 'data/repositories/payments_repository.dart';
 import 'data/repositories/treasury_repository.dart';
 import 'data/repositories/price_checker_repository.dart';
+import 'data/repositories/surveillance_repository.dart';
+import 'features/dashboard/view_models/dashboard_cameras_view_model.dart';
 import 'data/repositories/printing_repository.dart';
 import 'data/repositories/purchase_repository.dart';
 import 'data/repositories/register_session_repository.dart';
@@ -136,6 +138,10 @@ class PointyAppDependencies {
     shopSettingsRepository = ShopSettingsRepository(service);
     printingRepository = PrintingRepository(service);
     priceCheckerRepository = PriceCheckerRepository(service);
+    surveillanceRepository = SurveillanceRepository(service);
+    dashboardCamerasViewModel = DashboardCamerasViewModel(
+      surveillanceRepository,
+    );
     aiChatRepository = AiChatRepository(service);
     purchaseRepository = PurchaseRepository(service);
     paymentsRepository = PaymentsRepository(service);
@@ -224,6 +230,12 @@ class PointyAppDependencies {
   late final DocumentTrailRepository documentTrailRepository;
   late final PrintingRepository printingRepository;
   late final PriceCheckerRepository priceCheckerRepository;
+  late final SurveillanceRepository surveillanceRepository;
+
+  /// The dashboard's camera strip. Long-lived so the per-device selection and
+  /// the snapshot thumbnails survive navigating away and back, rather than
+  /// re-reading storage and re-fetching stills on every visit to the dashboard.
+  late final DashboardCamerasViewModel dashboardCamerasViewModel;
   late final AiChatRepository aiChatRepository;
   late final PurchaseRepository purchaseRepository;
   late final PaymentsRepository paymentsRepository;

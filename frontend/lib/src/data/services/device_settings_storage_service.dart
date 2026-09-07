@@ -16,6 +16,7 @@ class DeviceSettingsStorageService {
   static const _printerRoleConfigsKey = 'printer_role_configs';
   static const _kitchenStationConfigsKey = 'kitchen_station_configs';
   static const _priceCheckerConfigKey = 'price_checker_config';
+  static const _dashboardCameraIdsKey = 'dashboard_camera_ids';
 
   Future<DeviceUsageMode?> loadDeviceUsageMode() async {
     final store = await AppKeyValueStore.instance();
@@ -53,6 +54,46 @@ class DeviceSettingsStorageService {
       ThemeMode.dark => 'dark',
       ThemeMode.system => 'system',
     });
+  }
+
+  /// Which cameras this device shows on its dashboard.
+  ///
+  /// Three states, and the difference matters: `null` means nobody has chosen,
+  /// so the dashboard picks sensible ones itself; an empty list means somebody
+  /// chose *none* and the band stays hidden; a list is exactly what to show.
+  ///
+  /// Per device, like the printer and theme settings, because which cameras you
+  /// want in front of you depends on which machine you are standing at — the
+  /// office PC wants the till, the till wants the back door.
+  Future<List<int>?> loadDashboardCameraIds() async {
+    final store = await AppKeyValueStore.instance();
+    final encoded = await store.getString(_dashboardCameraIdsKey);
+    if (encoded == null) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is! List) {
+        return null;
+      }
+      return [
+        for (final value in decoded)
+          if (value is num) value.toInt(),
+      ];
+    } on FormatException {
+      return null;
+    }
+  }
+
+  Future<void> saveDashboardCameraIds(List<int> cameraIds) async {
+    final store = await AppKeyValueStore.instance();
+    await store.setString(_dashboardCameraIdsKey, jsonEncode(cameraIds));
+  }
+
+  /// Forgets the choice, putting the dashboard back on automatic.
+  Future<void> clearDashboardCameraIds() async {
+    final store = await AppKeyValueStore.instance();
+    await store.remove(_dashboardCameraIdsKey);
   }
 
   /// The per-device price-checker (kiosk) configuration. Returns an empty

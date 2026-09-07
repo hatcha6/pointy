@@ -70,6 +70,7 @@ class SaleOrderDetailsContent extends StatefulWidget {
     this.useInvoiceLabels = true,
     this.popOnSuccessfulAdjustment = true,
     this.padding = const EdgeInsets.fromLTRB(16, 0, 16, 16),
+    this.footer,
   });
 
   final SaleOrder order;
@@ -104,6 +105,11 @@ class SaleOrderDetailsContent extends StatefulWidget {
   final bool useInvoiceLabels;
   final bool popOnSuccessfulAdjustment;
   final EdgeInsetsGeometry padding;
+
+  /// Rendered at the end of the scroll, below the totals. The extension point
+  /// for content that belongs to this invoice but not to the sale itself —
+  /// today, the camera footage from the moment it was rung up.
+  final Widget? footer;
 
   @override
   State<SaleOrderDetailsContent> createState() =>
@@ -184,6 +190,10 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
           _PaymentsSection(order: order),
           const SizedBox(height: 16),
           _TotalsSection(order: order),
+          if (widget.footer != null) ...[
+            const SizedBox(height: 16),
+            widget.footer!,
+          ],
         ],
       ),
     );

@@ -541,6 +541,11 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "allow_cashier_customer_access",
             "pos_cash_purchase_limit",
             "enable_purchase_suggestions",
+            # Cameras. Gates every surveillance surface in the client; the
+            # backend turns it on the first time a recorder connects.
+            "enable_surveillance",
+            "surveillance_pre_roll_seconds",
+            "surveillance_post_roll_seconds",
             # Multi-currency. Off by default: a shop with no foreign exposure
             # never sees a currency picker anywhere in the app.
             "fx_enabled",

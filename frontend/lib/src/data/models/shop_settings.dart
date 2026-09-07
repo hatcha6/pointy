@@ -62,6 +62,9 @@ class ShopSettings {
     this.enforceCustomerCreditLimits = false,
     this.defaultCustomerCreditLimit,
     this.enablePurchaseSuggestions = true,
+    this.enableSurveillance = false,
+    this.surveillancePreRollSeconds = 20,
+    this.surveillancePostRollSeconds = 40,
     this.inventoryValuationMethod = InventoryValuationMethod.movingAverage,
     this.currencyCode = 'LYD',
     this.currencySymbol = 'د.ل',
@@ -122,6 +125,16 @@ class ShopSettings {
   /// habitually buys from the chosen supplier. Off hides all three surfaces and
   /// stops the client asking for them at all.
   final bool enablePurchaseSuggestions;
+
+  /// Whether this shop has cameras wired up. Gates the camera wall, the
+  /// command-palette entry and the invoice playback panel — a shop with no DVR
+  /// never sees a surface it cannot use. Turned on by the backend the first
+  /// time a recorder connects.
+  final bool enableSurveillance;
+
+  /// How much footage the invoice player opens either side of the sale.
+  final int surveillancePreRollSeconds;
+  final int surveillancePostRollSeconds;
 
   /// How stock is costed. See [InventoryValuationMethod].
   final InventoryValuationMethod inventoryValuationMethod;
@@ -217,13 +230,21 @@ class ShopSettings {
         json['enforce_customer_credit_limits'],
         false,
       ),
-      defaultCustomerCreditLimit:
-          json['default_customer_credit_limit'] == null
+      defaultCustomerCreditLimit: json['default_customer_credit_limit'] == null
           ? null
           : _moneyFromJson(json['default_customer_credit_limit'], 0),
       enablePurchaseSuggestions: _boolFromJson(
         json['enable_purchase_suggestions'],
         true,
+      ),
+      enableSurveillance: _boolFromJson(json['enable_surveillance'], false),
+      surveillancePreRollSeconds: _intFromJson(
+        json['surveillance_pre_roll_seconds'],
+        20,
+      ),
+      surveillancePostRollSeconds: _intFromJson(
+        json['surveillance_post_roll_seconds'],
+        40,
       ),
       inventoryValuationMethod: InventoryValuationMethod.fromWire(
         json['inventory_valuation_method'],
@@ -248,6 +269,12 @@ class ShopLogoUpload {
   final Uint8List bytes;
   final String contentType;
 }
+
+/// Marks a [ShopSettingsDraft.copyWith] argument as "not supplied".
+///
+/// Needed only for the nullable money fields, where `null` is a real value
+/// ("no limit") and so cannot double as "leave it alone".
+const Object _keep = Object();
 
 class ShopSettingsDraft {
   const ShopSettingsDraft({
@@ -280,6 +307,9 @@ class ShopSettingsDraft {
     this.enforceCustomerCreditLimits = false,
     this.defaultCustomerCreditLimit,
     this.enablePurchaseSuggestions = true,
+    this.enableSurveillance = false,
+    this.surveillancePreRollSeconds = 20,
+    this.surveillancePostRollSeconds = 40,
     this.inventoryValuationMethod = InventoryValuationMethod.movingAverage,
     this.valuationMethodChangeAcknowledged = false,
   });
@@ -313,7 +343,53 @@ class ShopSettingsDraft {
   final bool enableJobTracking;
   final double? posCashPurchaseLimit;
   final bool enablePurchaseSuggestions;
+  final bool enableSurveillance;
+  final int surveillancePreRollSeconds;
+  final int surveillancePostRollSeconds;
   final InventoryValuationMethod inventoryValuationMethod;
+
+  /// Every editable field, copied from a loaded [ShopSettings].
+  ///
+  /// A draft is sent whole, so a page that builds one from a handful of its own
+  /// controls silently resets every field it forgot to a default. Start from
+  /// here and override what the page actually edits.
+  factory ShopSettingsDraft.fromSettings(ShopSettings settings) {
+    return ShopSettingsDraft(
+      shopName: settings.shopName,
+      receiptHeader: settings.receiptHeader,
+      receiptFooter: settings.receiptFooter,
+      enableOnlineInvoices: settings.enableOnlineInvoices,
+      requireOpeningCash: settings.requireOpeningCash,
+      autoPrintReceipts: settings.autoPrintReceipts,
+      autoPrintKitchenTickets: settings.autoPrintKitchenTickets,
+      allowOverselling: settings.allowOverselling,
+      warnLowStockBeforeSale: settings.warnLowStockBeforeSale,
+      preventSellingAtLoss: settings.preventSellingAtLoss,
+      lowStockThreshold: settings.lowStockThreshold,
+      cashierReturnWindowHours: settings.cashierReturnWindowHours,
+      enableCashPayments: settings.enableCashPayments,
+      enableCardPayments: settings.enableCardPayments,
+      enableTransferPayments: settings.enableTransferPayments,
+      requireCardPaymentReceipt: settings.requireCardPaymentReceipt,
+      trustedCardTerminalIds: settings.trustedCardTerminalIds,
+      cardCommissionPercent: settings.cardCommissionPercent,
+      transferCommissionPercent: settings.transferCommissionPercent,
+      requireCustomerForCredit: settings.requireCustomerForCredit,
+      enforceCustomerCreditLimits: settings.enforceCustomerCreditLimits,
+      defaultCustomerCreditLimit: settings.defaultCustomerCreditLimit,
+      allowCashierCustomerAccess: settings.allowCashierCustomerAccess,
+      posCashPurchaseLimit: settings.posCashPurchaseLimit,
+      enableRepairOperations: settings.enableRepairOperations,
+      enableProductionOperations: settings.enableProductionOperations,
+      enableKitchenOperations: settings.enableKitchenOperations,
+      enableJobTracking: settings.enableJobTracking,
+      enablePurchaseSuggestions: settings.enablePurchaseSuggestions,
+      enableSurveillance: settings.enableSurveillance,
+      surveillancePreRollSeconds: settings.surveillancePreRollSeconds,
+      surveillancePostRollSeconds: settings.surveillancePostRollSeconds,
+      inventoryValuationMethod: settings.inventoryValuationMethod,
+    );
+  }
 
   /// One-shot confirmation that the user has read the warning about changing
   /// the valuation method. Never stored — the backend refuses the change
@@ -324,38 +400,108 @@ class ShopSettingsDraft {
     return copyWith(valuationMethodChangeAcknowledged: true);
   }
 
+  /// A copy with some fields replaced and **every other field carried**.
+  ///
+  /// Total on purpose. A draft goes out as the whole payload (see [toJson]), so
+  /// a copy that quietly drops a field resets it on the shop, and a screen that
+  /// hand-assembles a draft from its own controls resets everything it forgot.
+  /// The safe pattern for any screen that edits a subset is therefore
+  /// `ShopSettingsDraft.fromSettings(stored).copyWith(...)`, and this method is
+  /// what makes it safe: the fields a caller does not name cannot go missing.
+  ///
+  /// The two money fields are nullable and null is a real value there — "no
+  /// limit" — so they take a sentinel rather than a plain null default. Pass
+  /// `posCashPurchaseLimit: null` to clear one; omit it to keep it.
   ShopSettingsDraft copyWith({
+    String? shopName,
+    String? receiptHeader,
+    String? receiptFooter,
+    bool? enableOnlineInvoices,
+    bool? requireOpeningCash,
+    bool? autoPrintReceipts,
+    bool? autoPrintKitchenTickets,
+    bool? allowOverselling,
+    bool? warnLowStockBeforeSale,
+    bool? preventSellingAtLoss,
+    int? lowStockThreshold,
+    int? cashierReturnWindowHours,
+    bool? enableCashPayments,
+    bool? enableCardPayments,
+    bool? enableTransferPayments,
+    bool? requireCardPaymentReceipt,
+    List<String>? trustedCardTerminalIds,
+    double? cardCommissionPercent,
+    double? transferCommissionPercent,
+    bool? requireCustomerForCredit,
+    bool? enforceCustomerCreditLimits,
+    Object? defaultCustomerCreditLimit = _keep,
+    bool? allowCashierCustomerAccess,
+    Object? posCashPurchaseLimit = _keep,
+    bool? enableRepairOperations,
+    bool? enableProductionOperations,
+    bool? enableKitchenOperations,
+    bool? enableJobTracking,
+    bool? enablePurchaseSuggestions,
+    bool? enableSurveillance,
+    int? surveillancePreRollSeconds,
+    int? surveillancePostRollSeconds,
     InventoryValuationMethod? inventoryValuationMethod,
     bool? valuationMethodChangeAcknowledged,
   }) {
     return ShopSettingsDraft(
-      shopName: shopName,
-      receiptHeader: receiptHeader,
-      receiptFooter: receiptFooter,
-      enableOnlineInvoices: enableOnlineInvoices,
-      requireOpeningCash: requireOpeningCash,
-      autoPrintReceipts: autoPrintReceipts,
-      allowOverselling: allowOverselling,
-      preventSellingAtLoss: preventSellingAtLoss,
-      lowStockThreshold: lowStockThreshold,
-      cashierReturnWindowHours: cashierReturnWindowHours,
-      enableCashPayments: enableCashPayments,
-      enableCardPayments: enableCardPayments,
-      enableTransferPayments: enableTransferPayments,
-      requireCardPaymentReceipt: requireCardPaymentReceipt,
-      trustedCardTerminalIds: trustedCardTerminalIds,
-      cardCommissionPercent: cardCommissionPercent,
-      transferCommissionPercent: transferCommissionPercent,
-      requireCustomerForCredit: requireCustomerForCredit,
-      allowCashierCustomerAccess: allowCashierCustomerAccess,
-      warnLowStockBeforeSale: warnLowStockBeforeSale,
-      autoPrintKitchenTickets: autoPrintKitchenTickets,
-      enableRepairOperations: enableRepairOperations,
-      enableProductionOperations: enableProductionOperations,
-      enableKitchenOperations: enableKitchenOperations,
-      enableJobTracking: enableJobTracking,
-      posCashPurchaseLimit: posCashPurchaseLimit,
-      enablePurchaseSuggestions: enablePurchaseSuggestions,
+      shopName: shopName ?? this.shopName,
+      receiptHeader: receiptHeader ?? this.receiptHeader,
+      receiptFooter: receiptFooter ?? this.receiptFooter,
+      enableOnlineInvoices: enableOnlineInvoices ?? this.enableOnlineInvoices,
+      requireOpeningCash: requireOpeningCash ?? this.requireOpeningCash,
+      autoPrintReceipts: autoPrintReceipts ?? this.autoPrintReceipts,
+      autoPrintKitchenTickets:
+          autoPrintKitchenTickets ?? this.autoPrintKitchenTickets,
+      allowOverselling: allowOverselling ?? this.allowOverselling,
+      warnLowStockBeforeSale:
+          warnLowStockBeforeSale ?? this.warnLowStockBeforeSale,
+      preventSellingAtLoss: preventSellingAtLoss ?? this.preventSellingAtLoss,
+      lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
+      cashierReturnWindowHours:
+          cashierReturnWindowHours ?? this.cashierReturnWindowHours,
+      enableCashPayments: enableCashPayments ?? this.enableCashPayments,
+      enableCardPayments: enableCardPayments ?? this.enableCardPayments,
+      enableTransferPayments:
+          enableTransferPayments ?? this.enableTransferPayments,
+      requireCardPaymentReceipt:
+          requireCardPaymentReceipt ?? this.requireCardPaymentReceipt,
+      trustedCardTerminalIds:
+          trustedCardTerminalIds ?? this.trustedCardTerminalIds,
+      cardCommissionPercent:
+          cardCommissionPercent ?? this.cardCommissionPercent,
+      transferCommissionPercent:
+          transferCommissionPercent ?? this.transferCommissionPercent,
+      requireCustomerForCredit:
+          requireCustomerForCredit ?? this.requireCustomerForCredit,
+      enforceCustomerCreditLimits:
+          enforceCustomerCreditLimits ?? this.enforceCustomerCreditLimits,
+      defaultCustomerCreditLimit: identical(defaultCustomerCreditLimit, _keep)
+          ? this.defaultCustomerCreditLimit
+          : defaultCustomerCreditLimit as double?,
+      allowCashierCustomerAccess:
+          allowCashierCustomerAccess ?? this.allowCashierCustomerAccess,
+      posCashPurchaseLimit: identical(posCashPurchaseLimit, _keep)
+          ? this.posCashPurchaseLimit
+          : posCashPurchaseLimit as double?,
+      enableRepairOperations:
+          enableRepairOperations ?? this.enableRepairOperations,
+      enableProductionOperations:
+          enableProductionOperations ?? this.enableProductionOperations,
+      enableKitchenOperations:
+          enableKitchenOperations ?? this.enableKitchenOperations,
+      enableJobTracking: enableJobTracking ?? this.enableJobTracking,
+      enablePurchaseSuggestions:
+          enablePurchaseSuggestions ?? this.enablePurchaseSuggestions,
+      enableSurveillance: enableSurveillance ?? this.enableSurveillance,
+      surveillancePreRollSeconds:
+          surveillancePreRollSeconds ?? this.surveillancePreRollSeconds,
+      surveillancePostRollSeconds:
+          surveillancePostRollSeconds ?? this.surveillancePostRollSeconds,
       inventoryValuationMethod:
           inventoryValuationMethod ?? this.inventoryValuationMethod,
       valuationMethodChangeAcknowledged:
@@ -398,6 +544,9 @@ class ShopSettingsDraft {
       'default_customer_credit_limit': defaultCustomerCreditLimit
           ?.toStringAsFixed(2),
       'enable_purchase_suggestions': enablePurchaseSuggestions,
+      'enable_surveillance': enableSurveillance,
+      'surveillance_pre_roll_seconds': surveillancePreRollSeconds,
+      'surveillance_post_roll_seconds': surveillancePostRollSeconds,
       'inventory_valuation_method': inventoryValuationMethod.wireValue,
       // Only sent when the user has actually confirmed, so an ordinary save
       // can never carry a stale acknowledgement.
@@ -415,6 +564,13 @@ bool _boolFromJson(Object? value, bool fallback) {
     return fallback;
   }
   return value.toString() == 'true';
+}
+
+int _intFromJson(Object? value, int fallback) {
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
 }
 
 double _moneyFromJson(Object? value, double fallback) {

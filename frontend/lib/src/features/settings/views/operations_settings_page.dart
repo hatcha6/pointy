@@ -18,6 +18,30 @@ import '../view_models/shop_settings_view_model.dart';
 import 'modifier_groups_page.dart';
 import 'prep_stations_page.dart';
 
+/// The settings payload this page sends when one of its switches moves.
+///
+/// Built from the stored [settings] rather than from the switches, because a
+/// draft is sent as the whole payload: every field this page does not show —
+/// credit limits, the valuation method, the camera settings — would otherwise
+/// go out as its default and be silently reset by a shop turning kitchen mode
+/// on. Public so that property is a test, not a convention.
+ShopSettingsDraft operationsSettingsDraft(
+  ShopSettings settings, {
+  bool? enableRepairOperations,
+  bool? enableProductionOperations,
+  bool? enableKitchenOperations,
+  bool? enableJobTracking,
+  bool? autoPrintKitchenTickets,
+}) {
+  return ShopSettingsDraft.fromSettings(settings).copyWith(
+    enableRepairOperations: enableRepairOperations,
+    enableProductionOperations: enableProductionOperations,
+    enableKitchenOperations: enableKitchenOperations,
+    enableJobTracking: enableJobTracking,
+    autoPrintKitchenTickets: autoPrintKitchenTickets,
+  );
+}
+
 class OperationsSettingsPage extends StatefulWidget {
   const OperationsSettingsPage({
     super.key,
@@ -294,35 +318,13 @@ class _OperationsSettingsPageState extends State<OperationsSettingsPage> {
     bool? autoPrintKitchenTickets,
   }) async {
     final saved = await widget.shopSettingsViewModel.updateSettings(
-      ShopSettingsDraft(
-        shopName: settings.shopName,
-        receiptHeader: settings.receiptHeader,
-        receiptFooter: settings.receiptFooter,
-        enableOnlineInvoices: settings.enableOnlineInvoices,
-        requireOpeningCash: settings.requireOpeningCash,
-        autoPrintReceipts: settings.autoPrintReceipts,
-        autoPrintKitchenTickets:
-            autoPrintKitchenTickets ?? settings.autoPrintKitchenTickets,
-        allowOverselling: settings.allowOverselling,
-        warnLowStockBeforeSale: settings.warnLowStockBeforeSale,
-        preventSellingAtLoss: settings.preventSellingAtLoss,
-        lowStockThreshold: settings.lowStockThreshold,
-        cashierReturnWindowHours: settings.cashierReturnWindowHours,
-        enableCashPayments: settings.enableCashPayments,
-        enableCardPayments: settings.enableCardPayments,
-        enableTransferPayments: settings.enableTransferPayments,
-        requireCardPaymentReceipt: settings.requireCardPaymentReceipt,
-        trustedCardTerminalIds: settings.trustedCardTerminalIds,
-        cardCommissionPercent: settings.cardCommissionPercent,
-        transferCommissionPercent: settings.transferCommissionPercent,
-        posCashPurchaseLimit: settings.posCashPurchaseLimit,
-        enableRepairOperations:
-            enableRepairOperations ?? settings.enableRepairOperations,
-        enableProductionOperations:
-            enableProductionOperations ?? settings.enableProductionOperations,
-        enableKitchenOperations:
-            enableKitchenOperations ?? settings.enableKitchenOperations,
-        enableJobTracking: enableJobTracking ?? settings.enableJobTracking,
+      operationsSettingsDraft(
+        settings,
+        enableRepairOperations: enableRepairOperations,
+        enableProductionOperations: enableProductionOperations,
+        enableKitchenOperations: enableKitchenOperations,
+        enableJobTracking: enableJobTracking,
+        autoPrintKitchenTickets: autoPrintKitchenTickets,
       ),
     );
     if (!saved && mounted) {
