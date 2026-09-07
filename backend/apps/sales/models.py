@@ -1189,3 +1189,38 @@ def prime_register_session_cash_totals(sessions):
             Decimal("0.01")
         )
     return sessions
+
+
+class RegisterProfile(TimeStampedModel):
+    """What one till is set up to do — ERPNext's POS Profile, at our scale.
+
+    Today it answers one question: **which place does this till sell out of?**
+    A shop with a showroom and a store room puts a register on the shop floor
+    and expects it to sell the shop floor's stock, not the sum of both.
+
+    Keyed on the device rather than the cashier, because the warehouse is a
+    property of where the till is standing, not of who is standing at it — the
+    same till sells the same shelves whoever is on shift. The client already
+    keeps a stable ``device_id`` and already sends it as ``X-Pointy-Device-Id``.
+
+    **A shop that never opens a second warehouse never gets one of these rows.**
+    No profile means the shop's default warehouse, which is what every till has
+    always sold from — so an app that has never heard of warehouses keeps
+    working unchanged, and a shop mid-upgrade does not need anyone to configure
+    anything before the next customer is served.
+    """
+
+    device_id = models.CharField(max_length=120, unique=True)
+    name = models.CharField(max_length=120, blank=True)
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="register_profiles",
+    )
+    last_seen_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["name", "device_id"]
+
+    def __str__(self) -> str:
+        return self.name or self.device_id

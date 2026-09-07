@@ -3038,22 +3038,38 @@
   "creditLimitBlockedOutstanding": "الدين الحالي: {amount}",
   "@creditLimitBlockedOutstanding": {
     "description": "Customer's current outstanding debt in the credit-limit refusal dialog.",
-    "placeholders": {"amount": {"type": "String"}}
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
   },
   "creditLimitBlockedLimit": "السقف: {amount}",
   "@creditLimitBlockedLimit": {
     "description": "The applicable credit ceiling in the refusal dialog.",
-    "placeholders": {"amount": {"type": "String"}}
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
   },
   "creditLimitBlockedAvailable": "المتاح: {amount}",
   "@creditLimitBlockedAvailable": {
     "description": "Remaining head-room under the ceiling in the refusal dialog.",
-    "placeholders": {"amount": {"type": "String"}}
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
   },
   "creditLimitBlockedNewDebt": "هذه الفاتورة تضيف: {amount}",
   "@creditLimitBlockedNewDebt": {
     "description": "What this sale would add to the receivable.",
-    "placeholders": {"amount": {"type": "String"}}
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
   },
   "customerCreditLimitTitle": "سقف الدين (آجل)",
   "customerCreditLimitPolicyShopDefault": "افتراضي المتجر",
@@ -3064,18 +3080,30 @@
   "customerCreditLimitEffective": "السقف المطبَّق: {amount}",
   "@customerCreditLimitEffective": {
     "description": "The resolved ceiling shown on the customer details screen.",
-    "placeholders": {"amount": {"type": "String"}}
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
   },
   "customerCreditLimitNone": "بلا سقف",
   "customerCreditLimitShopDefaultHint": "افتراضي المتجر: {amount}",
   "@customerCreditLimitShopDefaultHint": {
     "description": "Hint showing the shop-wide default a customer inherits.",
-    "placeholders": {"amount": {"type": "String"}}
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
   },
   "customerCreditLimitAvailable": "المتاح للشراء الآجل: {amount}",
   "@customerCreditLimitAvailable": {
     "description": "Remaining credit head-room on the customer details screen.",
-    "placeholders": {"amount": {"type": "String"}}
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
   },
   "customerCreditLimitSaveError": "تعذّر حفظ سقف الدين. حاول مرة أخرى.",
   "customerCreditLimitSaved": "تم حفظ سقف الدين.",
@@ -10196,5 +10224,88 @@
         "type": "String"
       }
     }
-  }
+  },
+  "warehousesTitle": "المخازن",
+  "warehousesDrawerLabel": "المخازن",
+  "warehousesEmptyTitle": "لديك مكان واحد",
+  "warehousesEmptyBody": "كل المخزون في {name}. أضف مخزناً أو مستودعاً إذا كنت تحتفظ ببضاعة في مكان آخر.",
+  "@warehousesEmptyBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "warehousesAddAction": "إضافة مكان",
+  "warehouseEditTitle": "تعديل المكان",
+  "warehouseCreateTitle": "مكان جديد",
+  "warehouseNameLabel": "الاسم",
+  "warehouseCodeLabel": "الرمز",
+  "warehouseCodeHelp": "رمز قصير بالإنجليزية، يُستخدم في التقارير ولا يتغير.",
+  "warehouseKindLabel": "النوع",
+  "warehouseKindShopFloor": "معرض",
+  "warehouseKindStoreRoom": "مخزن",
+  "warehouseKindVan": "سيارة",
+  "warehouseKindTransit": "في الطريق",
+  "warehouseDefaultBadge": "الافتراضي",
+  "warehouseInactiveBadge": "غير مفعّل",
+  "warehouseActiveLabel": "مفعّل",
+  "warehouseOversellLabel": "البيع بدون رصيد",
+  "warehouseOversellShopDefault": "حسب إعداد المحل",
+  "warehouseOversellAllow": "مسموح هنا",
+  "warehouseOversellRefuse": "ممنوع هنا",
+  "warehouseProductsHeld": "{count} صنف بها رصيد هنا",
+  "@warehouseProductsHeld": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "warehouseDeleteAction": "حذف",
+  "warehouseDeleteConfirmTitle": "حذف {name}؟",
+  "@warehouseDeleteConfirmTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "warehouseDeleteConfirmBody": "لا يمكن التراجع عن هذا.",
+  "warehouseDeleteBlockedTitle": "لا يمكن حذف هذا المكان",
+  "warehouseSaved": "تم الحفظ",
+  "warehouseDeleted": "تم حذف المكان",
+  "warehouseFilterAll": "كل الأماكن",
+  "warehouseFilterLabel": "المكان",
+  "warehouseStockBreakdownTitle": "أين يوجد هذا الصنف",
+  "warehouseStockBreakdownEmpty": "لا يوجد رصيد لهذا الصنف في أي مكان.",
+  "warehouseCommittedShort": "محجوز {value}",
+  "@warehouseCommittedShort": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "warehouseExpectedShort": "متوقع {value}",
+  "@warehouseExpectedShort": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "registerWarehouseTitle": "المكان الذي يبيع منه هذا الصندوق",
+  "registerWarehouseBody": "المبيعات تُخصم من رصيد هذا المكان، والجرد والتقارير تتبعه.",
+  "registerWarehouseUnassigned": "هذا الجهاز يبيع من المكان الافتراضي للمحل.",
+  "registerWarehouseChangeAction": "تغيير المكان",
+  "registerWarehouseSaved": "هذا الصندوق يبيع الآن من {name}",
+  "@registerWarehouseSaved": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "registerWarehouseManagerOnly": "تغيير مكان الصندوق يحتاج صلاحية مدير."
 }

@@ -27,6 +27,7 @@ from .models import (
     OrderExchange,
     OrderLine,
     RegisterCashMovement,
+    RegisterProfile,
     RegisterSession,
     prime_register_session_cash_totals,
 )
@@ -1526,3 +1527,37 @@ class OrderExchangeInputSerializer(serializers.Serializer):
             register_session=self.context.get("adjustment_register_session"),
             allow_window_override=self.validated_data["allow_window_override"],
         )
+
+
+class RegisterProfileSerializer(serializers.ModelSerializer):
+    """What one till is set up to do."""
+
+    warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
+    warehouse_kind = serializers.CharField(source="warehouse.kind", read_only=True)
+
+    class Meta:
+        model = RegisterProfile
+        fields = [
+            "id",
+            "device_id",
+            "name",
+            "warehouse",
+            "warehouse_name",
+            "warehouse_kind",
+            "last_seen_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ("device_id", "last_seen_at", "created_at", "updated_at")
+
+    def validate_warehouse(self, value):
+        """A till cannot be pointed at the road, or at a place that is shut."""
+        from apps.inventory.models import Warehouse
+
+        if value.kind == Warehouse.Kind.TRANSIT:
+            raise serializers.ValidationError(
+                "لا يمكن للصندوق أن يبيع من المخزن العابر."
+            )
+        if not value.is_active:
+            raise serializers.ValidationError("هذا المخزن غير مفعّل.")
+        return value

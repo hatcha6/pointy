@@ -15869,4 +15869,144 @@ class AppLocalizationsAr extends AppLocalizations {
   String migrationRecordsImported(String count) {
     return '$count سجل';
   }
+
+  @override
+  String get warehousesTitle => 'المخازن';
+
+  @override
+  String get warehousesDrawerLabel => 'المخازن';
+
+  @override
+  String get warehousesEmptyTitle => 'لديك مكان واحد';
+
+  @override
+  String warehousesEmptyBody(String name) {
+    return 'كل المخزون في $name. أضف مخزناً أو مستودعاً إذا كنت تحتفظ ببضاعة في مكان آخر.';
+  }
+
+  @override
+  String get warehousesAddAction => 'إضافة مكان';
+
+  @override
+  String get warehouseEditTitle => 'تعديل المكان';
+
+  @override
+  String get warehouseCreateTitle => 'مكان جديد';
+
+  @override
+  String get warehouseNameLabel => 'الاسم';
+
+  @override
+  String get warehouseCodeLabel => 'الرمز';
+
+  @override
+  String get warehouseCodeHelp =>
+      'رمز قصير بالإنجليزية، يُستخدم في التقارير ولا يتغير.';
+
+  @override
+  String get warehouseKindLabel => 'النوع';
+
+  @override
+  String get warehouseKindShopFloor => 'معرض';
+
+  @override
+  String get warehouseKindStoreRoom => 'مخزن';
+
+  @override
+  String get warehouseKindVan => 'سيارة';
+
+  @override
+  String get warehouseKindTransit => 'في الطريق';
+
+  @override
+  String get warehouseDefaultBadge => 'الافتراضي';
+
+  @override
+  String get warehouseInactiveBadge => 'غير مفعّل';
+
+  @override
+  String get warehouseActiveLabel => 'مفعّل';
+
+  @override
+  String get warehouseOversellLabel => 'البيع بدون رصيد';
+
+  @override
+  String get warehouseOversellShopDefault => 'حسب إعداد المحل';
+
+  @override
+  String get warehouseOversellAllow => 'مسموح هنا';
+
+  @override
+  String get warehouseOversellRefuse => 'ممنوع هنا';
+
+  @override
+  String warehouseProductsHeld(String count) {
+    return '$count صنف بها رصيد هنا';
+  }
+
+  @override
+  String get warehouseDeleteAction => 'حذف';
+
+  @override
+  String warehouseDeleteConfirmTitle(String name) {
+    return 'حذف $name؟';
+  }
+
+  @override
+  String get warehouseDeleteConfirmBody => 'لا يمكن التراجع عن هذا.';
+
+  @override
+  String get warehouseDeleteBlockedTitle => 'لا يمكن حذف هذا المكان';
+
+  @override
+  String get warehouseSaved => 'تم الحفظ';
+
+  @override
+  String get warehouseDeleted => 'تم حذف المكان';
+
+  @override
+  String get warehouseFilterAll => 'كل الأماكن';
+
+  @override
+  String get warehouseFilterLabel => 'المكان';
+
+  @override
+  String get warehouseStockBreakdownTitle => 'أين يوجد هذا الصنف';
+
+  @override
+  String get warehouseStockBreakdownEmpty =>
+      'لا يوجد رصيد لهذا الصنف في أي مكان.';
+
+  @override
+  String warehouseCommittedShort(String value) {
+    return 'محجوز $value';
+  }
+
+  @override
+  String warehouseExpectedShort(String value) {
+    return 'متوقع $value';
+  }
+
+  @override
+  String get registerWarehouseTitle => 'المكان الذي يبيع منه هذا الصندوق';
+
+  @override
+  String get registerWarehouseBody =>
+      'المبيعات تُخصم من رصيد هذا المكان، والجرد والتقارير تتبعه.';
+
+  @override
+  String get registerWarehouseUnassigned =>
+      'هذا الجهاز يبيع من المكان الافتراضي للمحل.';
+
+  @override
+  String get registerWarehouseChangeAction => 'تغيير المكان';
+
+  @override
+  String registerWarehouseSaved(String name) {
+    return 'هذا الصندوق يبيع الآن من $name';
+  }
+
+  @override
+  String get registerWarehouseManagerOnly =>
+      'تغيير مكان الصندوق يحتاج صلاحية مدير.';
 }

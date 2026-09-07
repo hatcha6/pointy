@@ -27472,6 +27472,252 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{count} سجل'**
   String migrationRecordsImported(String count);
+
+  /// No description provided for @warehousesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المخازن'**
+  String get warehousesTitle;
+
+  /// No description provided for @warehousesDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المخازن'**
+  String get warehousesDrawerLabel;
+
+  /// No description provided for @warehousesEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لديك مكان واحد'**
+  String get warehousesEmptyTitle;
+
+  /// No description provided for @warehousesEmptyBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل المخزون في {name}. أضف مخزناً أو مستودعاً إذا كنت تحتفظ ببضاعة في مكان آخر.'**
+  String warehousesEmptyBody(String name);
+
+  /// No description provided for @warehousesAddAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة مكان'**
+  String get warehousesAddAction;
+
+  /// No description provided for @warehouseEditTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل المكان'**
+  String get warehouseEditTitle;
+
+  /// No description provided for @warehouseCreateTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مكان جديد'**
+  String get warehouseCreateTitle;
+
+  /// No description provided for @warehouseNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم'**
+  String get warehouseNameLabel;
+
+  /// No description provided for @warehouseCodeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرمز'**
+  String get warehouseCodeLabel;
+
+  /// No description provided for @warehouseCodeHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز قصير بالإنجليزية، يُستخدم في التقارير ولا يتغير.'**
+  String get warehouseCodeHelp;
+
+  /// No description provided for @warehouseKindLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'النوع'**
+  String get warehouseKindLabel;
+
+  /// No description provided for @warehouseKindShopFloor.
+  ///
+  /// In ar, this message translates to:
+  /// **'معرض'**
+  String get warehouseKindShopFloor;
+
+  /// No description provided for @warehouseKindStoreRoom.
+  ///
+  /// In ar, this message translates to:
+  /// **'مخزن'**
+  String get warehouseKindStoreRoom;
+
+  /// No description provided for @warehouseKindVan.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيارة'**
+  String get warehouseKindVan;
+
+  /// No description provided for @warehouseKindTransit.
+  ///
+  /// In ar, this message translates to:
+  /// **'في الطريق'**
+  String get warehouseKindTransit;
+
+  /// No description provided for @warehouseDefaultBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'الافتراضي'**
+  String get warehouseDefaultBadge;
+
+  /// No description provided for @warehouseInactiveBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مفعّل'**
+  String get warehouseInactiveBadge;
+
+  /// No description provided for @warehouseActiveLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفعّل'**
+  String get warehouseActiveLabel;
+
+  /// No description provided for @warehouseOversellLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'البيع بدون رصيد'**
+  String get warehouseOversellLabel;
+
+  /// No description provided for @warehouseOversellShopDefault.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسب إعداد المحل'**
+  String get warehouseOversellShopDefault;
+
+  /// No description provided for @warehouseOversellAllow.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسموح هنا'**
+  String get warehouseOversellAllow;
+
+  /// No description provided for @warehouseOversellRefuse.
+  ///
+  /// In ar, this message translates to:
+  /// **'ممنوع هنا'**
+  String get warehouseOversellRefuse;
+
+  /// No description provided for @warehouseProductsHeld.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} صنف بها رصيد هنا'**
+  String warehouseProductsHeld(String count);
+
+  /// No description provided for @warehouseDeleteAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف'**
+  String get warehouseDeleteAction;
+
+  /// No description provided for @warehouseDeleteConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف {name}؟'**
+  String warehouseDeleteConfirmTitle(String name);
+
+  /// No description provided for @warehouseDeleteConfirmBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن التراجع عن هذا.'**
+  String get warehouseDeleteConfirmBody;
+
+  /// No description provided for @warehouseDeleteBlockedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن حذف هذا المكان'**
+  String get warehouseDeleteBlockedTitle;
+
+  /// No description provided for @warehouseSaved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الحفظ'**
+  String get warehouseSaved;
+
+  /// No description provided for @warehouseDeleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حذف المكان'**
+  String get warehouseDeleted;
+
+  /// No description provided for @warehouseFilterAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الأماكن'**
+  String get warehouseFilterAll;
+
+  /// No description provided for @warehouseFilterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المكان'**
+  String get warehouseFilterLabel;
+
+  /// No description provided for @warehouseStockBreakdownTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أين يوجد هذا الصنف'**
+  String get warehouseStockBreakdownTitle;
+
+  /// No description provided for @warehouseStockBreakdownEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد رصيد لهذا الصنف في أي مكان.'**
+  String get warehouseStockBreakdownEmpty;
+
+  /// No description provided for @warehouseCommittedShort.
+  ///
+  /// In ar, this message translates to:
+  /// **'محجوز {value}'**
+  String warehouseCommittedShort(String value);
+
+  /// No description provided for @warehouseExpectedShort.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقع {value}'**
+  String warehouseExpectedShort(String value);
+
+  /// No description provided for @registerWarehouseTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المكان الذي يبيع منه هذا الصندوق'**
+  String get registerWarehouseTitle;
+
+  /// No description provided for @registerWarehouseBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبيعات تُخصم من رصيد هذا المكان، والجرد والتقارير تتبعه.'**
+  String get registerWarehouseBody;
+
+  /// No description provided for @registerWarehouseUnassigned.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الجهاز يبيع من المكان الافتراضي للمحل.'**
+  String get registerWarehouseUnassigned;
+
+  /// No description provided for @registerWarehouseChangeAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير المكان'**
+  String get registerWarehouseChangeAction;
+
+  /// No description provided for @registerWarehouseSaved.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الصندوق يبيع الآن من {name}'**
+  String registerWarehouseSaved(String name);
+
+  /// No description provided for @registerWarehouseManagerOnly.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير مكان الصندوق يحتاج صلاحية مدير.'**
+  String get registerWarehouseManagerOnly;
 }
 
 class _AppLocalizationsDelegate

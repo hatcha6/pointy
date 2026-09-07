@@ -149,7 +149,12 @@ from apps.purchasing.views import (
     SupplierViewSet,
 )
 from apps.reports.views import PeriodLockView, ReportRunViewSet
-from apps.sales.views import OrderViewSet, PublicInvoiceView, RegisterSessionViewSet
+from apps.sales.views import (
+    OrderViewSet,
+    PublicInvoiceView,
+    RegisterProfileViewSet,
+    RegisterSessionViewSet,
+)
 
 router = DefaultRouter()
 router.register("analytics-events", AnalyticsEventViewSet, basename="analytics-event")
@@ -195,6 +200,7 @@ router.register("suppliers", SupplierViewSet)
 router.register("supplier-payments", SupplierPaymentViewSet)
 router.register("purchase-orders", PurchaseOrderViewSet)
 router.register("register-sessions", RegisterSessionViewSet, basename="register-session")
+router.register("register-profiles", RegisterProfileViewSet, basename="register-profile")
 router.register("sales-channels", SalesChannelViewSet, basename="sales-channel")
 router.register("jobs", JobViewSet, basename="job")
 router.register("assets", AssetViewSet, basename="asset")

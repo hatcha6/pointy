@@ -29,6 +29,7 @@ from apps.catalog.services import preload_line_variants
 from apps.catalog.units import quantize_quantity
 from apps.inventory.models import StockLedgerEntry, StockMovement
 from apps.inventory.oversell import may_oversell
+from apps.sales.registers import selling_warehouse_id
 from apps.inventory.services import (
     build_stock_movement,
     consume_expiring_stock_batches,
@@ -97,6 +98,7 @@ def create_order_with_lines(
     lines_data,
     coupon_codes=(),
     discount_result=None,
+    warehouse=None,
     **order_fields,
 ):
     customer = order_fields.get("customer")
@@ -122,7 +124,7 @@ def create_order_with_lines(
     # (see _stamp_ledger_cost_on_lines). A cart that never takes payment keeps
     # this figure, which is the right answer for a quotation.
     cost_by_variant = sale_cost_basis(
-        [line_data["variant"] for line_data in lines_data]
+        [line_data["variant"] for line_data in lines_data], warehouse=warehouse
     )
     line_objects_by_key = {}
     for line_data in lines_data:
@@ -408,7 +410,7 @@ def latest_sale_unit_costs(variants):
     return costs
 
 
-def sale_cost_basis(variants):
+def sale_cost_basis(variants, *, warehouse=None):
     """Cost per base unit for a cart, read from the valuation ledger.
 
     Replaces the old last-purchase-cost lookup as the everyday answer. That
@@ -417,10 +419,12 @@ def sale_cost_basis(variants):
     """
     from apps.inventory.valuation_service import valuation_unit_costs
 
-    return valuation_unit_costs([variant.pk for variant in variants])
+    return valuation_unit_costs(
+        [variant.pk for variant in variants], warehouse=warehouse
+    )
 
 
-def checkout_loss_lines(lines_data, discount_result=None):
+def checkout_loss_lines(lines_data, discount_result=None, *, warehouse=None):
     discount_by_line_key = (
         discount_allocations_by_line_key(discount_result)
         if discount_result is not None
@@ -429,7 +433,7 @@ def checkout_loss_lines(lines_data, discount_result=None):
     # Batch the cost lookup across every cart line (was one query per line, on the
     # preview that fires on every keystroke).
     cost_by_variant = sale_cost_basis(
-        [line_data["variant"] for line_data in lines_data]
+        [line_data["variant"] for line_data in lines_data], warehouse=warehouse
     )
     loss_lines = []
     for line_data in lines_data:
@@ -520,10 +524,12 @@ def sale_loss_line_payload(
     }
 
 
-def validate_checkout_loss_sales_allowed(*, settings, lines_data, discount_result):
+def validate_checkout_loss_sales_allowed(
+    *, settings, lines_data, discount_result, warehouse=None
+):
     if not settings.prevent_selling_at_loss:
         return
-    loss_lines = checkout_loss_lines(lines_data, discount_result)
+    loss_lines = checkout_loss_lines(lines_data, discount_result, warehouse=warehouse)
     if loss_lines:
         raise serializers.ValidationError(sale_loss_blocked_payload(loss_lines))
 
@@ -637,6 +643,10 @@ def checkout_order(
     from apps.payments.serializers import PaymentSerializer
 
     settings = ShopSettings.load()
+    # Where this till stands. A shop with one location — which is every shop
+    # until it opens a second — resolves to the same warehouse it has always
+    # sold from, with nothing configured and nothing to configure.
+    warehouse_id = selling_warehouse_id(request)
     is_quotation = sale_type == Order.SaleType.QUOTATION
     # Checkout is the busiest write path in the shop, run thousands of times
     # a day: bulk-load the lines' variants so the per-line product /
@@ -647,6 +657,7 @@ def checkout_order(
         settings=settings,
         lines_data=lines_data,
         discount_result=discount_result,
+        warehouse=warehouse_id,
     )
     # Quotations (عرض سعر) never move stock; standard and credit (آجل) sales
     # deduct on-hand at issue. A quotation may instead hold stock via a
@@ -654,7 +665,9 @@ def checkout_order(
     stock_adjustments = (
         []
         if is_quotation
-        else prepare_sale_stock_adjustments(lines_data, settings=settings)
+        else prepare_sale_stock_adjustments(
+            lines_data, settings=settings, warehouse=warehouse_id
+        )
     )
     # The channel comes from the request's credentials only; direct service
     # calls without a request (scripts, tests) leave it unset.
@@ -669,6 +682,7 @@ def checkout_order(
         lines_data=lines_data,
         coupon_codes=coupon_codes,
         discount_result=discount_result,
+        warehouse=warehouse_id,
     )
     # The credit ceiling is judged on what the sale leaves owed — the total less
     # whatever is tendered now — so it waits until the order has a total. Raising
@@ -771,7 +785,7 @@ def checkout_order(
     return order
 
 
-def prepare_sale_stock_adjustments(lines_data, *, settings=None):
+def prepare_sale_stock_adjustments(lines_data, *, settings=None, warehouse=None):
     settings = settings or ShopSettings.load()
     quantities_by_variant = {}
     variants_by_id = {}
@@ -796,12 +810,12 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None):
     # One locking statement for the whole cart instead of one per line — the
     # cashier waits on this. ``lock_stock_items`` keeps the ascending-variant-id
     # lock order the loop below used to establish.
-    locked_items = lock_stock_items(variants_by_id.values())
+    locked_items = lock_stock_items(variants_by_id.values(), warehouse=warehouse)
     # Resolved once for the cart, not once per line: a cart sells out of one
     # location and the answer cannot change mid-cart, so asking per line would
     # put a query on the cashier's critical path for nothing.
     overselling_allowed = may_oversell(
-        next(iter(locked_items.values()), None), settings=settings
+        warehouse or next(iter(locked_items.values()), None), settings=settings
     )
     for variant_id in sorted(quantities_by_variant):
         variant = variants_by_id[variant_id]

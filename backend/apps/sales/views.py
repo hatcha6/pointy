@@ -5,6 +5,7 @@ from django.db.models import Prefetch
 from django.utils import timezone
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
@@ -19,7 +20,13 @@ from apps.core.pagination import CreatedAtCursorPagination
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_has_full_visibility
 from apps.fraud.services import schedule_targeted_sweep
-from .models import Order, OrderLine, RegisterCashMovement, RegisterSession
+from .models import (
+    Order,
+    OrderLine,
+    RegisterCashMovement,
+    RegisterProfile,
+    RegisterSession,
+)
 from .register_summary import cached_register_session_summary
 from .serializers import (
     CheckoutSerializer,
@@ -31,6 +38,7 @@ from .serializers import (
     OrderListSerializer,
     OrderSerializer,
     OrderSessionSerializer,
+    RegisterProfileSerializer,
     PublicInvoiceSerializer,
     OrderReturnSerializer,
     OrderVoidSerializer,
@@ -897,3 +905,76 @@ class RegisterSessionViewSet(
         schedule_targeted_sweep()
 
         return Response(self.get_serializer(session).data)
+
+
+class RegisterProfileViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.UpdateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Which place each till sells out of.
+
+    There is no create verb: a profile comes into existence the first time a
+    till asks about itself, so a shop never has to enrol its own hardware.
+    """
+
+    serializer_class = RegisterProfileSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("sales.view_registerprofile",),
+        "retrieve": ("sales.view_registerprofile",),
+        "update": ("sales.change_registerprofile",),
+        "partial_update": ("sales.change_registerprofile",),
+        # Reading your own till's setting is not a management act — every
+        # cashier's app asks it on start-up so it can show where it is selling
+        # from. Writing it is.
+        "me": (),
+    }
+    queryset = RegisterProfile.objects.select_related("warehouse")
+    ordering_fields = ("name", "device_id", "last_seen_at")
+
+    @action(detail=False, methods=["get", "patch"], url_path="me")
+    def me(self, request):
+        """This device's own profile, created on first ask.
+
+        A till with no device header — an old client, a script — gets the
+        shop's default warehouse and no row: there is nothing to remember about
+        a device that will not say who it is, and nothing should stop it
+        selling.
+        """
+        from apps.inventory.models import Warehouse
+        from apps.sales.registers import device_id_of
+
+        device_id = device_id_of(request)
+        if not device_id:
+            warehouse = Warehouse.objects.get(pk=Warehouse.default_id())
+            return Response(
+                {
+                    "device_id": "",
+                    "warehouse": warehouse.pk,
+                    "warehouse_name": warehouse.name,
+                    "warehouse_kind": warehouse.kind,
+                    "assigned": False,
+                }
+            )
+
+        profile, _ = RegisterProfile.objects.get_or_create(
+            device_id=device_id,
+            defaults={"warehouse_id": Warehouse.default_id()},
+        )
+        if request.method.lower() == "patch":
+            if not request.user.has_perm("sales.change_registerprofile"):
+                raise PermissionDenied(
+                    "تغيير مخزن الصندوق يحتاج صلاحية إدارة الصناديق."
+                )
+            serializer = self.get_serializer(profile, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            profile = serializer.save()
+        else:
+            RegisterProfile.objects.filter(pk=profile.pk).update(
+                last_seen_at=timezone.now()
+            )
+        data = self.get_serializer(profile).data
+        data["assigned"] = True
+        return Response(data)
