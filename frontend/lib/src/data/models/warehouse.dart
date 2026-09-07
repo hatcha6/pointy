@@ -1,4 +1,4 @@
-import '../../core/localization/app_localizations.dart';
+import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 /// A place the shop keeps stock.
 ///

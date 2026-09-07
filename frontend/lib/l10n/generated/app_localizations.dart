@@ -27718,6 +27718,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تغيير مكان الصندوق يحتاج صلاحية مدير.'**
   String get registerWarehouseManagerOnly;
+
+  /// No description provided for @warehousesSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المخازن والأماكن'**
+  String get warehousesSectionTitle;
+
+  /// No description provided for @warehousesSectionSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أين يوجد مخزونك، ومن أين يبيع كل صندوق'**
+  String get warehousesSectionSubtitle;
 }
 
 class _AppLocalizationsDelegate

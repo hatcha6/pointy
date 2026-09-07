@@ -97,7 +97,9 @@ import 'customer_api_client.dart';
 import 'dashboard_api_client.dart';
 import 'discount_api_client.dart';
 import 'employee_api_client.dart';
+import '../models/warehouse.dart';
 import 'document_trail_api_client.dart';
+import 'warehouse_api_client.dart';
 import 'expense_api_client.dart';
 import 'treasury_api_client.dart';
 import 'fraud_api_client.dart';
@@ -149,6 +151,7 @@ class PosApiService {
     _catalog = CatalogApiClient(_session);
     _customers = CustomerApiClient(_session);
     _documentTrail = DocumentTrailApiClient(_session);
+    _warehouses = WarehouseApiClient(_session);
     _dashboard = DashboardApiClient(_session);
     _discounts = DiscountApiClient(_session);
     _employees = EmployeeApiClient(_session);
@@ -210,6 +213,7 @@ class PosApiService {
   late final DiscountApiClient _discounts;
   late final EmployeeApiClient _employees;
   late final DocumentTrailApiClient _documentTrail;
+  late final WarehouseApiClient _warehouses;
   late final ExpenseApiClient _expenses;
   late final TreasuryApiClient _treasury;
   late final FraudApiClient _fraud;
@@ -2264,6 +2268,33 @@ class PosApiService {
   Future<Map<String, Object?>> applyInvoiceIntake(int intakeId) {
     return _ai.applyInvoiceIntake(intakeId);
   }
+
+  // -- warehouses ------------------------------------------------------
+
+  Future<List<Warehouse>> fetchWarehouses({bool activeOnly = false}) =>
+      _warehouses.fetchWarehouses(activeOnly: activeOnly);
+
+  Future<Warehouse> createWarehouse(Warehouse warehouse) =>
+      _warehouses.createWarehouse(warehouse);
+
+  Future<Warehouse> updateWarehouse(Warehouse warehouse) =>
+      _warehouses.updateWarehouse(warehouse);
+
+  Future<void> deleteWarehouse(int id) => _warehouses.deleteWarehouse(id);
+
+  Future<List<WarehouseStockRow>> fetchStockByWarehouse(int variantId) =>
+      _warehouses.fetchStockByWarehouse(variantId);
+
+  Future<RegisterProfile> fetchMyRegisterProfile() =>
+      _warehouses.fetchMyRegisterProfile();
+
+  Future<RegisterProfile> assignMyRegisterWarehouse({
+    required int warehouseId,
+    String? name,
+  }) => _warehouses.assignMyRegisterWarehouse(
+    warehouseId: warehouseId,
+    name: name,
+  );
 }
 
 const _shopLogoPdfContentTypes = {'image/jpeg', 'image/jpg', 'image/png'};

@@ -10307,5 +10307,7 @@
       }
     }
   },
-  "registerWarehouseManagerOnly": "تغيير مكان الصندوق يحتاج صلاحية مدير."
+  "registerWarehouseManagerOnly": "تغيير مكان الصندوق يحتاج صلاحية مدير.",
+  "warehousesSectionTitle": "المخازن والأماكن",
+  "warehousesSectionSubtitle": "أين يوجد مخزونك، ومن أين يبيع كل صندوق"
 }

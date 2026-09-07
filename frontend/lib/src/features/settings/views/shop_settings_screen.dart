@@ -30,6 +30,7 @@ import '../view_models/modifier_groups_view_model.dart';
 import '../view_models/prep_stations_view_model.dart';
 import '../view_models/price_checkers_view_model.dart';
 import '../view_models/sales_channels_view_model.dart';
+import '../view_models/warehouses_view_model.dart';
 import '../view_models/shop_settings_view_model.dart';
 import '../view_models/messaging_settings_view_model.dart';
 import '../view_models/exchange_rates_view_model.dart';
@@ -38,6 +39,7 @@ import 'operations_settings_page.dart';
 import 'app_updates_page.dart';
 import 'price_checkers_page.dart';
 import 'sales_channels_page.dart';
+import 'warehouses_page.dart';
 import 'messaging_settings_page.dart';
 import 'exchange_rates_page.dart';
 import 'subscription_status_page.dart';
@@ -50,6 +52,7 @@ class ShopSettingsScreen extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.salesChannelsViewModel,
+    required this.warehousesViewModel,
     required this.priceCheckersViewModel,
     required this.workflowsViewModel,
     required this.assetTypesViewModel,
@@ -67,6 +70,7 @@ class ShopSettingsScreen extends StatelessWidget {
 
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
+  final WarehousesViewModel warehousesViewModel;
   final PriceCheckersViewModel priceCheckersViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final AssetTypesViewModel assetTypesViewModel;
@@ -115,6 +119,7 @@ class ShopSettingsScreen extends StatelessWidget {
             child: _ShopSettingsBody(
               viewModel: viewModel,
               salesChannelsViewModel: salesChannelsViewModel,
+              warehousesViewModel: warehousesViewModel,
               priceCheckersViewModel: priceCheckersViewModel,
               workflowsViewModel: workflowsViewModel,
               assetTypesViewModel: assetTypesViewModel,
@@ -143,6 +148,7 @@ class _ShopSettingsBody extends StatelessWidget {
   const _ShopSettingsBody({
     required this.viewModel,
     required this.salesChannelsViewModel,
+    required this.warehousesViewModel,
     required this.priceCheckersViewModel,
     required this.workflowsViewModel,
     required this.assetTypesViewModel,
@@ -163,6 +169,7 @@ class _ShopSettingsBody extends StatelessWidget {
 
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
+  final WarehousesViewModel warehousesViewModel;
   final PriceCheckersViewModel priceCheckersViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final AssetTypesViewModel assetTypesViewModel;
@@ -208,6 +215,7 @@ class _ShopSettingsBody extends StatelessWidget {
     return _ShopSettingsForm(
       viewModel: viewModel,
       salesChannelsViewModel: salesChannelsViewModel,
+      warehousesViewModel: warehousesViewModel,
       priceCheckersViewModel: priceCheckersViewModel,
       workflowsViewModel: workflowsViewModel,
       assetTypesViewModel: assetTypesViewModel,
@@ -233,6 +241,7 @@ class _ShopSettingsForm extends StatefulWidget {
   const _ShopSettingsForm({
     required this.viewModel,
     required this.salesChannelsViewModel,
+    required this.warehousesViewModel,
     required this.priceCheckersViewModel,
     required this.workflowsViewModel,
     required this.assetTypesViewModel,
@@ -254,6 +263,7 @@ class _ShopSettingsForm extends StatefulWidget {
 
   final ShopSettingsViewModel viewModel;
   final SalesChannelsViewModel salesChannelsViewModel;
+  final WarehousesViewModel warehousesViewModel;
   final PriceCheckersViewModel priceCheckersViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final AssetTypesViewModel assetTypesViewModel;
@@ -638,6 +648,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                             onTap: widget.viewModel.isSaving
                                 ? null
                                 : () => _openSalesChannels(context),
+                          ),
+                        if (widget.canManageSalesChannels)
+                          PointySettingsTile(
+                            icon: Icons.warehouse_outlined,
+                            title: l10n.warehousesSectionTitle,
+                            subtitle: l10n.warehousesSectionSubtitle,
+                            onTap: widget.viewModel.isSaving
+                                ? null
+                                : () => _openWarehouses(context),
                           ),
                         if (widget.canManagePriceCheckers)
                           PointySettingsTile(
@@ -1412,6 +1431,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       MaterialPageRoute<void>(
         builder: (routeContext) =>
             SalesChannelsPage(viewModel: widget.salesChannelsViewModel),
+      ),
+    );
+  }
+
+  Future<void> _openWarehouses(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) =>
+            WarehousesPage(viewModel: widget.warehousesViewModel),
       ),
     );
   }

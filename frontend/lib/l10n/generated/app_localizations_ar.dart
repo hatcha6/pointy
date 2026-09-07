@@ -16009,4 +16009,11 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get registerWarehouseManagerOnly =>
       'تغيير مكان الصندوق يحتاج صلاحية مدير.';
+
+  @override
+  String get warehousesSectionTitle => 'المخازن والأماكن';
+
+  @override
+  String get warehousesSectionSubtitle =>
+      'أين يوجد مخزونك، ومن أين يبيع كل صندوق';
 }
