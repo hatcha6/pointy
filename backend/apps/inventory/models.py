@@ -294,14 +294,45 @@ class Warehouse(TimeStampedModel):
         blockers = []
         if self.is_default:
             blockers.append("the default warehouse cannot be deleted")
-        held = self.stock_items.exclude(
-            quantity_on_hand=0, quantity_committed=0, quantity_expected=0
-        ).count()
+
+        # Answered from annotations when the caller made them. This is asked
+        # once per row on the warehouse list — the ``blockers`` field is what
+        # lets the UI grey out a delete button instead of offering one that
+        # fails — and unannotated it is two queries per warehouse.
+        held = getattr(self, "blocking_stock_count", None)
+        if held is None:
+            held = self.stock_items.exclude(
+                quantity_on_hand=0, quantity_committed=0, quantity_expected=0
+            ).count()
         if held:
             blockers.append(f"{held} product(s) still hold stock here")
-        if self.ledger_entries.exists():
+
+        has_history = getattr(self, "has_stock_history", None)
+        if has_history is None:
+            has_history = self.ledger_entries.exists()
+        if has_history:
             blockers.append("stock history was recorded here")
         return blockers
+
+    #: Everything ``deletion_blockers`` needs, in one statement.
+    @staticmethod
+    def blocker_annotations():
+        from django.db.models import Count, Exists, OuterRef, Q
+
+        return {
+            "blocking_stock_count": Count(
+                "stock_items",
+                filter=~Q(
+                    stock_items__quantity_on_hand=0,
+                    stock_items__quantity_committed=0,
+                    stock_items__quantity_expected=0,
+                ),
+                distinct=True,
+            ),
+            "has_stock_history": Exists(
+                StockLedgerEntry.objects.filter(warehouse=OuterRef("pk"))
+            ),
+        }
 
 
 class StockValuationBin(TimeStampedModel):
@@ -465,6 +496,18 @@ class StockCount(DocumentMixin, TimeStampedModel):
         null=True,
     )
     owner_key = models.CharField(max_length=64, db_index=True)
+    # A count is of one place. Counting "the shop" while stock sits in a store
+    # room out the back is how a variance report becomes fiction: every unit in
+    # the back reads as missing from the front. Nullable for one release so an
+    # older backend's inserts survive a live update, and defaulted in ``save``
+    # so no path of ours writes the null.
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="stock_counts",
+        null=True,
+        blank=True,
+    )
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
@@ -498,6 +541,20 @@ class StockCount(DocumentMixin, TimeStampedModel):
     # it. ``cancelled_at`` now comes from DocumentMixin — the same column, with
     # the person who cancelled beside it.
     applied_at = models.DateTimeField(blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        """A count always names the place it counted.
+
+        Same reasoning as ``StockItem.save``: the column stays nullable for one
+        release so an older backend can still write during a flip, but nothing
+        of ours may leave it unset — a count with no location cannot be
+        reconciled against anything.
+        """
+        if self.warehouse_id is None:
+            self.warehouse_id = Warehouse.default_id()
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = [*kwargs["update_fields"], "warehouse"]
+        return super().save(*args, **kwargs)
 
     class Meta:
         ordering = ["-created_at", "-id"]

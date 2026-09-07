@@ -118,6 +118,7 @@ from apps.inventory.views import (
     StockCountViewSet,
     StockItemViewSet,
     StockMovementViewSet,
+    WarehouseViewSet,
 )
 from apps.crm.views import (
     CampaignViewSet,
@@ -174,6 +175,7 @@ router.register("units-of-measure", UnitOfMeasureViewSet)
 router.register("stock", StockItemViewSet)
 router.register("stock-movements", StockMovementViewSet)
 router.register("stock-counts", StockCountViewSet, basename="stock-count")
+router.register("warehouses", WarehouseViewSet, basename="warehouse")
 router.register("orders", OrderViewSet)
 router.register("fraud-findings", FraudFindingViewSet, basename="fraud-finding")
 router.register("customers", CustomerViewSet)

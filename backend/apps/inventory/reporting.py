@@ -78,13 +78,19 @@ def stock_position_by_variant(as_of=None):
     a schedule: nobody can test a total they cannot add up.
     """
     if as_of is None:
+        # Summed across warehouses, not read row by row. A valuation bin is per
+        # (variant, warehouse), so keying a dict on the variant alone made the
+        # second warehouse's row *replace* the first's rather than add to it —
+        # a schedule that silently reported one location's stock as the shop's.
+        # Invisible while every shop had one warehouse, which is exactly when it
+        # had to be fixed. The ``as_of`` branch below already accumulates.
         return {
             row["variant_id"]: (
                 Decimal(row["quantity"]).quantize(QUANTITY_PLACES),
                 Decimal(row["stock_value"]).quantize(MONEY_PLACES),
             )
-            for row in StockValuationBin.objects.values(
-                "variant_id", "quantity", "stock_value"
+            for row in StockValuationBin.objects.values("variant_id").annotate(
+                quantity=Sum("quantity"), stock_value=Sum("stock_value")
             )
         }
 

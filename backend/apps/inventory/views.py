@@ -26,8 +26,13 @@ from .models import (
     StockItem,
     StockLedgerEntry,
     StockMovement,
+    Warehouse,
 )
-from .serializers import StockItemSerializer, StockMovementSerializer
+from .serializers import (
+    StockItemSerializer,
+    StockMovementSerializer,
+    WarehouseSerializer,
+)
 from .services import (
     consume_expiring_stock_batches,
     create_stock_movement,
@@ -51,7 +56,7 @@ class StockItemFilter(django_filters.FilterSet):
 
     class Meta:
         model = StockItem
-        fields = ("product", "variant")
+        fields = ("product", "variant", "warehouse")
 
 
 class StockItemViewSet(viewsets.ModelViewSet):
@@ -69,6 +74,9 @@ class StockItemViewSet(viewsets.ModelViewSet):
         "variant",
         # display_name/full_name read the parent product's name.
         "variant__product",
+        # Every row names the place it is in; without this that is a query per
+        # row the moment a shop opens a second warehouse.
+        "warehouse",
     ).prefetch_related(
         # display_name falls back to option_values_label, which queries
         # option_values once per variant unless it is prefetched.
@@ -260,7 +268,14 @@ class StockCountViewSet(
         "cancel": ("inventory.change_stockcount",),
         "apply": ("inventory.apply_stockcount",),
     }
-    queryset = StockCount.objects.select_related("owner", "applied_by", "category")
+    queryset = StockCount.objects.select_related(
+        "owner",
+        "applied_by",
+        "category",
+        # Every row names the place it counted; unjoined that is a query per row
+        # on a list whose whole point is being read at a glance.
+        "warehouse",
+    )
     filterset_class = StockCountFilter
     search_fields = ("note", "category__name")
     ordering_fields = ("created_at", "applied_at", "status")
@@ -416,7 +431,9 @@ class StockCountViewSet(
 
         shop_settings = ShopSettings.load()
         with transaction.atomic():
-            stock_item = lock_stock_item(variant=variant)
+            stock_item = lock_stock_item(
+                variant=variant, warehouse=stock_count.warehouse_id
+            )
             expected = stock_item.quantity_on_hand
             existing = (
                 StockCountLine.objects.select_for_update()
@@ -543,7 +560,9 @@ class StockCountViewSet(
                 "variant__product",
             )
             for line in lines:
-                stock_item = lock_stock_item(variant=line.variant)
+                stock_item = lock_stock_item(
+                    variant=line.variant, warehouse=stock_count.warehouse_id
+                )
                 current_on_hand = stock_item.quantity_on_hand
                 line.on_hand_at_apply = current_on_hand
                 # Flag (never freeze) lines whose stock moved since counting.
@@ -639,3 +658,56 @@ class StockCountViewSet(
                 },
             )
         return Response(self._detail_data(stock_count))
+
+
+class WarehouseViewSet(viewsets.ModelViewSet):
+    """Where a shop keeps its stock.
+
+    Flat by design (``WAREHOUSES_PLAN.md`` §3.1): no parent, no groups, no tree
+    to convert between. A shop has a showroom, perhaps a store room, perhaps a
+    van, and ERPNext's nested set would buy it nothing but the conversion bugs
+    that come with one.
+    """
+
+    serializer_class = WarehouseSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("inventory.view_warehouse",),
+        "retrieve": ("inventory.view_warehouse",),
+        "create": ("inventory.add_warehouse",),
+        "update": ("inventory.change_warehouse",),
+        "partial_update": ("inventory.change_warehouse",),
+        "destroy": ("inventory.delete_warehouse",),
+    }
+    queryset = Warehouse.objects.annotate(
+        # The row shows how much is kept here, and why it cannot be deleted;
+        # both are per-row questions, and asking them per row would be four
+        # queries per warehouse on a list that exists to be read at a glance.
+        stock_item_count=Count(
+            "stock_items",
+            filter=Q(stock_items__quantity_on_hand__gt=0),
+            distinct=True,
+        ),
+        **Warehouse.blocker_annotations(),
+    )
+    filterset_fields = ("kind", "is_active", "is_default")
+    search_fields = ("name", "code")
+    ordering_fields = ("name", "code", "created_at")
+
+    def perform_destroy(self, instance):
+        """Refuse rather than cascade.
+
+        ERPNext's ``Warehouse.on_trash`` blocks on quantity and on ledger
+        entries, and then *unlinks* the warehouse from anything naming it as a
+        default. We refuse that last part too: silently detaching a reference is
+        how a shop finds out later that a number moved.
+        """
+        blockers = instance.deletion_blockers()
+        if blockers:
+            raise serializers.ValidationError(
+                {
+                    "detail": "لا يمكن حذف هذا المخزن.",
+                    "blockers": blockers,
+                }
+            )
+        instance.delete()

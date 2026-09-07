@@ -218,6 +218,7 @@ ACCOUNTANT_PERMISSION_CODES = (
     # this list carried no inventory permission at all. Read-only — an
     # accountant reports on stock, they do not adjust it.
     "inventory.view_stockitem",
+    "inventory.view_warehouse",
     "inventory.view_stockmovement",
     "inventory.view_stockcount",
     "catalog.view_product",
@@ -276,6 +277,7 @@ SUPERVISOR_PERMISSION_CODES = (
     "catalog.view_productcategory",
     "catalog.view_unitofmeasure",
     "inventory.view_stockitem",
+    "inventory.view_warehouse",
     "inventory.view_stockmovement",
     "inventory.add_stockmovement",
     "inventory.view_stockcount",
@@ -313,6 +315,7 @@ INVENTORY_CLERK_PERMISSION_CODES = (
     "catalog.view_productcategory",
     "catalog.view_unitofmeasure",
     "inventory.view_stockitem",
+    "inventory.view_warehouse",
     "inventory.view_stockmovement",
     "inventory.add_stockmovement",
     "inventory.view_stockcount",
@@ -342,6 +345,7 @@ PURCHASING_AGENT_PERMISSION_CODES = (
     "purchasing.add_pos_cash_purchase",
     "purchasing.view_supplierpayment",
     "inventory.view_stockitem",
+    "inventory.view_warehouse",
     "inventory.view_stockmovement",
     "analytics.add_analyticsevent",
 )
@@ -358,6 +362,7 @@ AUDITOR_PERMISSION_CODES = (
     "sales.view_registercashmovement",
     "payments.view_payment",
     "inventory.view_stockitem",
+    "inventory.view_warehouse",
     "inventory.view_stockmovement",
     "inventory.view_stockcount",
     "purchasing.view_purchaseorder",

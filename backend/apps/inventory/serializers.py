@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from apps.catalog.models import ProductVariant
-from .models import StockItem, StockMovement
+from .models import StockItem, StockMovement, Warehouse
 
 
 class StockItemSerializer(serializers.ModelSerializer):
@@ -17,6 +17,8 @@ class StockItemSerializer(serializers.ModelSerializer):
     variant_sku = serializers.CharField(source="variant.sku", read_only=True)
     variant_name = serializers.CharField(source="variant.display_name", read_only=True)
     variant_full_name = serializers.CharField(source="variant.full_name", read_only=True)
+    warehouse_code = serializers.CharField(source="warehouse.code", read_only=True)
+    warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
 
     quantity_on_hand = serializers.DecimalField(
         max_digits=12,
@@ -46,6 +48,9 @@ class StockItemSerializer(serializers.ModelSerializer):
             "variant_sku",
             "variant_name",
             "variant_full_name",
+            "warehouse",
+            "warehouse_code",
+            "warehouse_name",
             "quantity_on_hand",
             "quantity_committed",
             "quantity_expected",
@@ -151,3 +156,54 @@ class StockMovementSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"variant": "Variant is required."})
         attrs["variant"] = variant
         return attrs
+
+
+class WarehouseSerializer(serializers.ModelSerializer):
+    """A place stock sits.
+
+    ``blockers`` is the honest half of the delete affordance: rather than
+    offering a delete button that fails, the row says up front what stands in
+    the way. ERPNext raises the same conditions from ``on_trash`` — after the
+    user has already asked.
+    """
+
+    blockers = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
+    stock_item_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Warehouse
+        fields = [
+            "id",
+            "name",
+            "code",
+            "kind",
+            "allow_overselling",
+            "is_default",
+            "is_active",
+            "stock_item_count",
+            "blockers",
+            "can_delete",
+            "created_at",
+            "updated_at",
+        ]
+        # A shop does not *choose* its default warehouse into existence here.
+        # There is exactly one from the first migration, and moving the flag is
+        # a separate act with its own consequences for every till.
+        read_only_fields = ("is_default", "created_at", "updated_at")
+
+    def get_blockers(self, warehouse) -> list:
+        return warehouse.deletion_blockers()
+
+    def get_can_delete(self, warehouse) -> bool:
+        return not warehouse.deletion_blockers()
+
+    def validate_kind(self, value):
+        """Transit is a state the transfer document puts stock into, not a
+        place a shop opens. Letting one be created by hand would give a till
+        somewhere to sell from that nothing is ever meant to sell from."""
+        if value == Warehouse.Kind.TRANSIT:
+            raise serializers.ValidationError(
+                "المخزن العابر يُنشأ تلقائياً مع التحويلات."
+            )
+        return value

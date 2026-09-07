@@ -67,6 +67,7 @@ class StockCountReconciliationLineSerializer(StockCountLineSerializer):
 class StockCountSerializer(serializers.ModelSerializer):
     count_number = serializers.CharField(read_only=True)
     category_name = serializers.CharField(source="category.name", read_only=True)
+    warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
     owner_name = serializers.CharField(source="owner.username", read_only=True)
     applied_by_name = serializers.CharField(
         source="applied_by.username", read_only=True
@@ -81,6 +82,8 @@ class StockCountSerializer(serializers.ModelSerializer):
             "count_number",
             "status",
             "scope",
+            "warehouse",
+            "warehouse_name",
             "category",
             "category_name",
             "note",

@@ -254,6 +254,9 @@ class OversellPolicyTests(TestCase):
             "apps/core/views.py",
             # Declares the per-warehouse policy.
             "apps/inventory/models.py",
+            # Puts it on the wire so an owner can set it, and offers it as a
+            # list filter. Exposing a stored preference is not deciding with it.
+            "apps/inventory/serializers.py",
             # The one place that decides.
             "apps/inventory/oversell.py",
             # Tells the assistant what the shop's posture is; never gates a write.
@@ -417,3 +420,206 @@ class InvisibilityTests(TestCase):
             name="آخر", code="other", is_default=True
         )
         self.assertEqual(Warehouse.default_id(), replacement.pk)
+
+
+class WarehouseApiTests(TestCase):
+    """The CRUD surface a shop uses to open its second location."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from rest_framework.test import APIClient
+
+        from apps.core.roles import INVENTORY_CLERK_GROUP, MANAGER_GROUP
+
+        ensure_role_groups()
+        self.manager = get_user_model().objects.create_user(username="m", password="p")
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.clerk = get_user_model().objects.create_user(username="c", password="p")
+        self.clerk.groups.add(Group.objects.get(name=INVENTORY_CLERK_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.manager)
+
+    def _url(self, pk=None):
+        from django.urls import reverse
+
+        return (
+            reverse("warehouse-detail", args=[pk])
+            if pk
+            else reverse("warehouse-list")
+        )
+
+    def test_a_new_shop_lists_exactly_its_showroom(self):
+        response = self.client.get(self._url())
+        self.assertEqual(response.status_code, 200)
+        rows = response.data["results"] if "results" in response.data else response.data
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], DEFAULT_WAREHOUSE_NAME)
+        self.assertTrue(rows[0]["is_default"])
+        self.assertFalse(rows[0]["can_delete"])
+
+    def test_a_manager_can_open_a_store_room(self):
+        response = self.client.post(
+            self._url(),
+            {"name": "المخزن", "code": "store", "kind": Warehouse.Kind.STORE_ROOM},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertFalse(response.data["is_default"])
+        self.assertTrue(response.data["can_delete"])
+
+    def test_a_transit_location_cannot_be_opened_by_hand(self):
+        """Transit is a state the transfer document puts stock into. A shop that
+        could create one would have somewhere to sell from that nothing is ever
+        meant to sell from."""
+        response = self.client.post(
+            self._url(),
+            {"name": "عابر", "code": "t1", "kind": Warehouse.Kind.TRANSIT},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+
+    def test_deleting_a_warehouse_holding_stock_is_refused_with_its_reasons(self):
+        store = Warehouse.objects.create(name="المخزن", code="store")
+        product = create_product_with_default_variant(
+            name="زيت", sku="API-1", barcode="", unit_price=Decimal("9.00")
+        )
+        StockItem.objects.create(
+            variant=product.default_variant,
+            warehouse=store,
+            quantity_on_hand=Decimal("2"),
+        )
+        response = self.client.delete(self._url(store.pk))
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertTrue(response.data["blockers"])
+
+    def test_an_empty_warehouse_can_be_closed(self):
+        store = Warehouse.objects.create(name="المخزن", code="store")
+        self.assertEqual(self.client.delete(self._url(store.pk)).status_code, 204)
+        self.assertFalse(Warehouse.objects.filter(pk=store.pk).exists())
+
+    def test_the_default_warehouse_cannot_be_deleted_through_the_api(self):
+        default = Warehouse.objects.get(pk=Warehouse.default_id())
+        self.assertEqual(self.client.delete(self._url(default.pk)).status_code, 400)
+
+    def test_a_clerk_may_look_but_not_open_or_close(self):
+        from rest_framework.test import APIClient
+
+        client = APIClient()
+        client.force_authenticate(user=self.clerk)
+        self.assertEqual(client.get(self._url()).status_code, 200)
+        self.assertEqual(
+            client.post(
+                self._url(), {"name": "x", "code": "x"}, format="json"
+            ).status_code,
+            403,
+        )
+
+    def test_the_list_costs_the_same_however_many_places_a_shop_keeps(self):
+        from django.urls import reverse  # noqa: F401
+
+        self.client.get(self._url())  # warm
+        with CaptureQueriesContext(connection) as one:
+            self.client.get(self._url())
+        for index in range(5):
+            Warehouse.objects.create(name=f"مخزن {index}", code=f"w{index}")
+        with CaptureQueriesContext(connection) as many:
+            self.client.get(self._url())
+        self.assertEqual(
+            len(one),
+            len(many),
+            "the warehouse list scales with the number of warehouses",
+        )
+
+
+class StockCountScopeTests(TestCase):
+    """A count is of one place.
+
+    Counting "the shop" while stock sits in a store room out the back is how a
+    variance report becomes fiction: every unit in the back reads as missing
+    from the front.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+        self.user = get_user_model().objects.create_user(username="m", password="p")
+        product = create_product_with_default_variant(
+            name="طحين", sku="SC-1", barcode="", unit_price=Decimal("4.00")
+        )
+        self.variant = product.default_variant
+        self.showroom = Warehouse.objects.get(pk=Warehouse.default_id())
+        self.store = Warehouse.objects.create(name="المخزن", code="store")
+        StockItem.objects.create(
+            variant=self.variant, warehouse=self.showroom, quantity_on_hand=Decimal("2")
+        )
+        StockItem.objects.create(
+            variant=self.variant, warehouse=self.store, quantity_on_hand=Decimal("90")
+        )
+
+    def test_a_count_records_the_place_it_counted(self):
+        from apps.inventory.models import StockCount
+
+        count = StockCount.objects.create(owner=self.user, owner_key="k")
+        self.assertEqual(count.warehouse_id, self.showroom.pk)
+
+    def test_a_count_of_the_store_room_does_not_see_the_showroom(self):
+        from apps.inventory.models import StockCount
+        from apps.inventory.services import lock_stock_item
+
+        count = StockCount.objects.create(
+            owner=self.user, owner_key="k2", warehouse=self.store
+        )
+        row = lock_stock_item(variant=self.variant, warehouse=count.warehouse_id)
+        self.assertEqual(row.quantity_on_hand, Decimal("90.000"))
+
+
+class SumEqualsPartsTests(TestCase):
+    """Whatever a report says the shop holds must equal what the places hold.
+
+    This is the invariant that catches the bug class 2a creates: anything that
+    was keyed on a variant while a variant had exactly one stock row, and now
+    silently keeps the last warehouse it saw instead of adding them up.
+    """
+
+    def setUp(self):
+        product = create_product_with_default_variant(
+            name="عدس", sku="SUM-1", barcode="", unit_price=Decimal("6.00")
+        )
+        self.variant = product.default_variant
+        self.showroom = Warehouse.objects.get(pk=Warehouse.default_id())
+        self.store = Warehouse.objects.create(name="المخزن", code="store")
+
+    def _bin(self, warehouse, quantity, value):
+        from apps.inventory.models import StockValuationBin
+
+        StockValuationBin.objects.create(
+            variant=self.variant,
+            warehouse=warehouse,
+            quantity=Decimal(quantity),
+            stock_value=Decimal(value),
+            valuation_rate=Decimal(value) / Decimal(quantity),
+        )
+
+    def test_the_stock_schedule_adds_up_the_places_rather_than_the_last_one(self):
+        from apps.inventory.reporting import (
+            stock_cost_value,
+            stock_position_by_variant,
+        )
+
+        self._bin(self.showroom, "3", "30.00")
+        self._bin(self.store, "40", "400.00")
+
+        quantity, value = stock_position_by_variant()[self.variant.pk]
+        self.assertEqual(quantity, Decimal("43.000"))
+        self.assertEqual(value, Decimal("430.00"))
+        # And the per-line figures still add up to the headline total, which is
+        # the whole point of a schedule.
+        self.assertEqual(value, stock_cost_value())
+
+    def test_one_warehouse_reads_exactly_as_it_always_did(self):
+        from apps.inventory.reporting import stock_position_by_variant
+
+        self._bin(self.showroom, "7", "70.00")
+        self.assertEqual(
+            stock_position_by_variant()[self.variant.pk],
+            (Decimal("7.000"), Decimal("70.00")),
+        )
