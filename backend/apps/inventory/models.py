@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 from django.db.models import F, Q
@@ -11,6 +13,9 @@ from apps.documents.models import DocumentMixin
 #: showroom, not the store room: naming a single-location shop's floor "the main
 #: warehouse" describes a back room they have not got.
 DEFAULT_WAREHOUSE_NAME = "المعرض"
+
+#: Where goods sit while they are on the road between two of a shop's places.
+TRANSIT_WAREHOUSE_NAME = "في الطريق"
 
 #: The default warehouse's ``(id, oversell policy)``, per database alias.
 #: Invalidated by ``apps.inventory.signals`` on any warehouse write and on
@@ -105,6 +110,8 @@ class StockMovement(TimeStampedModel):
         RECEIVE_EXPECTED = "receive_expected", "Receive expected stock"
         RECEIVE_DAMAGED = "receive_damaged", "Receive damaged expected stock"
         CANCEL_EXPECTED = "cancel_expected", "Cancel expected stock"
+        TRANSFER_OUT = "transfer_out", "Sent to another warehouse"
+        TRANSFER_IN = "transfer_in", "Received from another warehouse"
 
     variant = models.ForeignKey(
         ProductVariant,
@@ -115,6 +122,18 @@ class StockMovement(TimeStampedModel):
         StockItem,
         on_delete=models.CASCADE,
         related_name="movements",
+    )
+    # Denormalised from ``stock_item`` so a movement says where it happened
+    # without a join. The valuation engine groups by it, and it is read once per
+    # movement on the busiest write path in the shop — reaching through the
+    # stock row for it would be a query per line. Nullable for one release, like
+    # every other column this phase adds.
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="stock_movements",
+        null=True,
+        blank=True,
     )
     movement_type = models.CharField(max_length=32, choices=Type.choices)
     quantity = models.DecimalField(max_digits=12, decimal_places=3)
@@ -132,6 +151,11 @@ class StockMovement(TimeStampedModel):
     committed_after = models.DecimalField(max_digits=12, decimal_places=3)
     expected_before = models.DecimalField(max_digits=12, decimal_places=3)
     expected_after = models.DecimalField(max_digits=12, decimal_places=3)
+
+    def save(self, *args, **kwargs):
+        if self.warehouse_id is None and self.stock_item_id is not None:
+            self.warehouse_id = self.stock_item.warehouse_id
+        return super().save(*args, **kwargs)
 
     class Meta:
         ordering = ["-created_at", "-id"]
@@ -257,6 +281,30 @@ class Warehouse(TimeStampedModel):
         request, and ``caching.get_shop_settings`` already carries that scar.
         """
         return cls._default_row()[0]
+
+    @classmethod
+    def transit_id(cls):
+        """The one place goods live between leaving here and arriving there.
+
+        Created on demand rather than seeded, because a shop that never
+        transfers anything should never see a location it did not open. One per
+        shop rather than one per transfer: what is on the road is attributable
+        to a transfer through its own lines, and a warehouse per transfer would
+        be a table of empty rooms.
+        """
+        row = (
+            cls.objects.filter(kind=cls.Kind.TRANSIT)
+            .order_by("id")
+            .values_list("id", flat=True)
+            .first()
+        )
+        if row is not None:
+            return row
+        warehouse, _ = cls.objects.get_or_create(
+            code="transit",
+            defaults={"name": TRANSIT_WAREHOUSE_NAME, "kind": cls.Kind.TRANSIT},
+        )
+        return warehouse.pk
 
     @classmethod
     def default_oversell_policy(cls):
@@ -400,6 +448,8 @@ class StockLedgerEntry(TimeStampedModel):
         STOCK_COUNT = "stock_count", "Stock count"
         ADJUSTMENT = "adjustment", "Manual adjustment"
         OPENING = "opening", "Opening balance"
+        TRANSFER = "transfer", "Warehouse transfer"
+        TRANSFER_RECEIPT = "transfer_receipt", "Warehouse transfer receipt"
 
     variant = models.ForeignKey(
         ProductVariant,
@@ -642,3 +692,181 @@ class StockCountLine(TimeStampedModel):
     @property
     def variance(self):
         return self.counted_quantity - self.expected_quantity
+
+
+class StockTransferQuerySet(DocumentQuerySetMixin, models.QuerySet):
+    pass
+
+
+class StockTransfer(DocumentMixin, TimeStampedModel):
+    """Goods moving from one of a shop's places to another.
+
+    **Two documents and a transit location, not one atomic move.** SAP, Oracle
+    and Odoo all converged on this shape, and the reason is physical rather than
+    architectural: goods in a van are somewhere. A transfer that debits the
+    source and credits the destination in a single step values them in neither
+    place while they are on the road, so the shop's stock value dips for as long
+    as the driver is out.
+
+    So: this document is the **dispatch**. Submitting it takes stock out of the
+    source and puts it in transit. A ``StockTransferReceipt`` referencing it
+    takes stock out of transit and puts it at the destination. Cancelling the
+    dispatch brings it back from transit, and is refused while any receipt still
+    stands — you undo the arrival first, deliberately, rather than having a
+    cascade quietly reach into the destination's shelves.
+
+    Where ERPNext models all of this as one ``Stock Entry`` doctype with a
+    seven-valued ``purpose`` and validation dispatched at runtime, five of those
+    purposes are manufacturing and subcontracting we refuse outright. One
+    document that does one thing.
+    """
+
+    objects = StockTransferQuerySet.as_manager()
+
+    class Status(models.TextChoices):
+        """Where the goods have got to. Derived from ``doc_status`` and the
+        receipts by ``apps.inventory.documents``, and written nowhere else."""
+
+        DRAFT = "draft", "Draft"
+        IN_TRANSIT = "in_transit", "In transit"
+        PARTIALLY_RECEIVED = "partially_received", "Partially received"
+        RECEIVED = "received", "Received"
+        CANCELLED = "cancelled", "Cancelled"
+
+    transfer_number = models.CharField(max_length=32, unique=True, blank=True)
+    source = models.ForeignKey(
+        Warehouse, on_delete=models.PROTECT, related_name="transfers_out"
+    )
+    destination = models.ForeignKey(
+        Warehouse, on_delete=models.PROTECT, related_name="transfers_in"
+    )
+    status = models.CharField(
+        max_length=24, choices=Status.choices, default=Status.DRAFT
+    )
+    note = models.CharField(max_length=240, blank=True)
+    # The transfer's dialect of ``submitted_at``/``submitted_by``, mirrored from
+    # the lifecycle rather than written beside it — the same arrangement
+    # ``StockCount.applied_at`` uses.
+    dispatched_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        permissions = [
+            ("dispatch_stocktransfer", "Can send stock between warehouses"),
+            ("receive_stocktransfer", "Can receive transferred stock"),
+        ]
+        indexes = [
+            models.Index(fields=["status", "-created_at"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~Q(source=F("destination")),
+                name="stock_transfer_source_is_not_destination",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.transfer_number:
+            # Derived from the row's own id, so it can only be stamped once the
+            # insert has happened — two saves, one creation. Exactly what
+            # ``PurchaseOrder`` does, and for the same reason: a blank number is
+            # not a number, and two blanks collide on the unique index.
+            from django.db import transaction
+
+            from apps.documents.guards import system_write
+
+            with transaction.atomic():
+                super().save(*args, **kwargs)
+                self.transfer_number = f"T{self.created_at:%Y%m%d}{self.id:06d}"
+                with system_write():
+                    return super().save(update_fields=["transfer_number"])
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.transfer_number or self.pk}: {self.source_id}->{self.destination_id}"
+
+    @property
+    def outstanding_lines(self):
+        return [line for line in self.lines.all() if line.outstanding_quantity > 0]
+
+
+class StockTransferLine(TimeStampedModel):
+    transfer = models.ForeignKey(
+        StockTransfer, on_delete=models.CASCADE, related_name="lines"
+    )
+    variant = models.ForeignKey(
+        ProductVariant, on_delete=models.PROTECT, related_name="transfer_lines"
+    )
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    # The unit this line is moved in (a UnitOfMeasure.code); blank = the
+    # product's base unit. ``unit_factor`` snapshots how many base units one of
+    # them is worth, exactly as ``PurchaseLine`` does, and the conversion
+    # happens only at the stock boundary.
+    unit = models.CharField(max_length=32, blank=True, default="")
+    unit_factor = models.DecimalField(
+        max_digits=12, decimal_places=3, default=Decimal("1")
+    )
+    #: Base units already taken out of transit by a receipt.
+    received_quantity = models.DecimalField(
+        max_digits=12, decimal_places=3, default=0
+    )
+
+    class Meta:
+        ordering = ["id"]
+
+    def to_base_quantity(self, quantity) -> Decimal:
+        """A quantity in this line's unit → the product's base unit."""
+        return (Decimal(quantity) * self.unit_factor).quantize(Decimal("0.001"))
+
+    @property
+    def base_quantity(self) -> Decimal:
+        return self.to_base_quantity(self.quantity)
+
+    @property
+    def outstanding_quantity(self) -> Decimal:
+        """Base units still on the road."""
+        return max(self.base_quantity - self.received_quantity, Decimal("0.000"))
+
+
+class StockTransferReceiptQuerySet(DocumentQuerySetMixin, models.QuerySet):
+    pass
+
+
+class StockTransferReceipt(DocumentMixin, TimeStampedModel):
+    """Goods arriving at the far end of a transfer.
+
+    Its own document rather than a flag on the transfer, for the same reason
+    ``PurchaseReceipt`` is its own document: a delivery that arrives in two
+    loads is two events, each with its own date, its own person and its own
+    reversal. Born submitted — there is no draft arrival.
+    """
+
+    objects = StockTransferReceiptQuerySet.as_manager()
+
+    transfer = models.ForeignKey(
+        StockTransfer, on_delete=models.PROTECT, related_name="receipts"
+    )
+    note = models.CharField(max_length=240, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"receipt for {self.transfer_id}"
+
+
+class StockTransferReceiptLine(TimeStampedModel):
+    receipt = models.ForeignKey(
+        StockTransferReceipt, on_delete=models.CASCADE, related_name="lines"
+    )
+    transfer_line = models.ForeignKey(
+        StockTransferLine, on_delete=models.PROTECT, related_name="receipt_lines"
+    )
+    variant = models.ForeignKey(
+        ProductVariant, on_delete=models.PROTECT, related_name="transfer_receipt_lines"
+    )
+    #: Base units. Receipts speak base units because transit does.
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
+
+    class Meta:
+        ordering = ["id"]

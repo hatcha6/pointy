@@ -30,6 +30,9 @@ SYSTEM_WRITE_CALLERS = {
         "tags rows that predate the snapshot the tag is"
     ),
     "apps/sales/models.py": "stamps a receipt number, which needs the row's id",
+    "apps/inventory/models.py": (
+        "stamps a transfer number, which needs the row's id"
+    ),
 }
 
 

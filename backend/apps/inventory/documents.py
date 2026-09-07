@@ -112,3 +112,42 @@ def reverse(stock_count, *, at, actor, reason="", context=None):
 
 
 __all__ = ["progress_status", "recompute_progress", "reverse"]
+
+
+# -- warehouse transfers -----------------------------------------------------
+
+
+def transfer_progress_status(transfer, *, lines=None) -> str:
+    """Where the goods have got to — not whether the document is live.
+
+    The same separation the sale and the purchase order make: ``doc_status``
+    says whether this transfer still counts, and this says how much of it has
+    arrived. Derived from the lines, written by ``recompute_transfer_progress``
+    and nowhere else.
+    """
+    from apps.documents.statuses import DocumentStatus
+    from apps.inventory.models import StockTransfer
+
+    if transfer.doc_status == DocumentStatus.DRAFT:
+        return StockTransfer.Status.DRAFT
+    if transfer.doc_status == DocumentStatus.CANCELLED:
+        return StockTransfer.Status.CANCELLED
+
+    if lines is None:
+        lines = transfer.lines.all()
+    lines = list(lines)
+    outstanding = sum((line.outstanding_quantity for line in lines), Decimal("0.000"))
+    received = sum((line.received_quantity for line in lines), Decimal("0.000"))
+    if outstanding <= 0:
+        return StockTransfer.Status.RECEIVED
+    if received > 0:
+        return StockTransfer.Status.PARTIALLY_RECEIVED
+    return StockTransfer.Status.IN_TRANSIT
+
+
+def recompute_transfer_progress(transfer, *, lines=None) -> None:
+    status = transfer_progress_status(transfer, lines=lines)
+    if transfer.status == status:
+        return
+    transfer.status = status
+    transfer.save(update_fields=["status", "updated_at"])

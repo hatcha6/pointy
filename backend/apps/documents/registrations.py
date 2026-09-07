@@ -351,3 +351,83 @@ _register_sale()
 _register_payment()
 _register_supplier_payment()
 _register_expense()
+
+
+def _register_stock_transfer():
+    from apps.inventory import documents as inventory_documents
+    from apps.inventory import transfers as inventory_transfers
+    from apps.inventory.models import StockTransfer
+
+    registry.register(
+        key="stock_transfer",
+        label="تحويل مخزني",
+        model=StockTransfer,
+        number_field="transfer_number",
+        # Stock, not money: moving a box across the room settles nothing, so
+        # nothing dates it in the money registry.
+        money_date_field=None,
+        has_draft_state=True,
+        # A draft transfer holds nothing. The goods only leave the source when
+        # it is dispatched, which is what submitting it means.
+        draft_effects=(),
+        submit_effects=("stock_ledger", "valuation"),
+        # Corrected by cancelling and re-sending. There is no half-measure worth
+        # building: the goods are either on the road or they are not, and a
+        # transfer that has begun arriving is answered with a receipt, not an
+        # edit.
+        corrections=(Correction.COUNTER,),
+        mutable_after_submit=("note",),
+        derived_fields=("status", "dispatched_at"),
+        # An arrival that still stands blocks the dispatch being undone. The
+        # alternative — cascading into the receipts — would reach into the far
+        # end's shelves without anyone asking for that.
+        blocks_cancel=(("receipts", "استلامات"),),
+        cascades=(),
+        progress=inventory_documents.recompute_transfer_progress,
+        permissions={
+            Transition.SUBMIT: "inventory.dispatch_stocktransfer",
+            Transition.CANCEL: "inventory.dispatch_stocktransfer",
+        },
+        correction_window=None,
+        reverse=inventory_transfers.reverse_transfer,
+        amend_copy=None,
+        in_place_allowed=None,
+        release_draft=None,
+    )
+
+
+def _register_stock_transfer_receipt():
+    from apps.inventory import transfers as inventory_transfers
+    from apps.inventory.models import StockTransferReceipt
+
+    registry.register(
+        key="stock_transfer_receipt",
+        label="استلام تحويل",
+        model=StockTransferReceipt,
+        number_field=None,
+        money_date_field=None,
+        # Born submitted: there is no draft arrival, the same way there is no
+        # draft ``PurchaseReceipt``.
+        has_draft_state=False,
+        draft_effects=(),
+        submit_effects=("stock_ledger", "valuation"),
+        corrections=(Correction.COUNTER,),
+        mutable_after_submit=("note",),
+        derived_fields=(),
+        blocks_cancel=(),
+        cascades=(),
+        progress=None,
+        permissions={
+            Transition.SUBMIT: "inventory.receive_stocktransfer",
+            Transition.CANCEL: "inventory.receive_stocktransfer",
+        },
+        correction_window=None,
+        reverse=inventory_transfers.reverse_transfer_receipt,
+        amend_copy=None,
+        in_place_allowed=None,
+        release_draft=None,
+    )
+
+
+_register_stock_transfer()
+_register_stock_transfer_receipt()

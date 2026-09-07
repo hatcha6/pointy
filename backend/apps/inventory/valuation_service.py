@@ -145,6 +145,34 @@ def _write_bin(bin_row, engine, previous_rate):
 
 
 @transaction.atomic
+def _one_warehouse(rows, warehouse=None):
+    """The single place this posting values, or an error.
+
+    A valuation run consumes and rebuilds one bin per variant, and a bin belongs
+    to one warehouse — so a single call must not straddle two. Every existing
+    caller does one place at a time already (a sale leaves the till's location,
+    a receipt arrives at one), and the transfer document posts its two legs
+    separately on purpose: issuing from the source *decides* the rate that the
+    receiving leg is then told to use, which is what makes an internal move book
+    no profit.
+    """
+    if warehouse is not None:
+        return getattr(warehouse, "pk", warehouse)
+    seen = {
+        movement.warehouse_id
+        for movement in rows
+        if getattr(movement, "warehouse_id", None) is not None
+    }
+    if len(seen) > 1:
+        raise ValueError(
+            "post_movement_valuations values one warehouse at a time; got "
+            f"{sorted(seen)}. Post each leg of the move separately."
+        )
+    if seen:
+        return seen.pop()
+    return Warehouse.default_id()
+
+
 def post_movement_valuations(
     movements,
     *,
@@ -152,6 +180,7 @@ def post_movement_valuations(
     voucher_id=None,
     posting_at=None,
     unit_costs=None,
+    warehouse=None,
 ):
     """Value a document's saved stock movements.
 
@@ -173,7 +202,7 @@ def post_movement_valuations(
         return {}
 
     method = current_method()
-    warehouse_id = Warehouse.default_id()
+    warehouse_id = _one_warehouse(rows, warehouse)
     posting_at = posting_at or timezone.now()
     unit_costs = dict(unit_costs or {})
 
@@ -257,7 +286,7 @@ def post_movement_valuations(
     return rates
 
 
-def valuation_unit_costs(variant_ids):
+def valuation_unit_costs(variant_ids, *, warehouse=None):
     """Cost per base unit for these variants, without moving any stock.
 
     The read side of the ledger: what the loss guard and a cart preview need.
@@ -266,7 +295,11 @@ def valuation_unit_costs(variant_ids):
     ids = {variant_id for variant_id in variant_ids if variant_id}
     if not ids:
         return {}
-    warehouse_id = Warehouse.default_id()
+    warehouse_id = (
+        Warehouse.default_id()
+        if warehouse is None
+        else getattr(warehouse, "pk", warehouse)
+    )
     costs = {}
     rows = StockValuationBin.objects.filter(
         variant_id__in=ids,

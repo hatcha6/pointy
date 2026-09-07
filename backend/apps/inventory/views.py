@@ -26,11 +26,16 @@ from .models import (
     StockItem,
     StockLedgerEntry,
     StockMovement,
+    StockTransfer,
+    StockTransferLine,
     Warehouse,
 )
+from . import transfers as transfer_services
 from .serializers import (
     StockItemSerializer,
     StockMovementSerializer,
+    StockTransferReceiptLineInputSerializer,
+    StockTransferSerializer,
     WarehouseSerializer,
 )
 from .services import (
@@ -711,3 +716,87 @@ class WarehouseViewSet(viewsets.ModelViewSet):
                 }
             )
         instance.delete()
+
+
+class StockTransferViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Moving stock between a shop's own places.
+
+    No update verb, deliberately. A draft transfer is edited by rebuilding it;
+    a dispatched one is a submitted document and is corrected by cancelling and
+    re-sending, which is what ``Correction.COUNTER`` on its registration says.
+    """
+
+    serializer_class = StockTransferSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("inventory.view_stocktransfer",),
+        "retrieve": ("inventory.view_stocktransfer",),
+        "create": ("inventory.add_stocktransfer",),
+        "send_off": ("inventory.dispatch_stocktransfer",),
+        "receive": ("inventory.receive_stocktransfer",),
+        "cancel": ("inventory.dispatch_stocktransfer",),
+    }
+    queryset = StockTransfer.objects.select_related(
+        "source", "destination"
+    ).with_lifecycle_relations().prefetch_related(
+        Prefetch(
+            "lines",
+            queryset=StockTransferLine.objects.select_related(
+                "variant", "variant__product"
+            ),
+        ),
+        # Every line renders its variant's ``full_name``, which falls back to
+        # ``option_values_label`` -> the option_values M2M. Unprefetched that is
+        # a query per line, which on a list of transfers is a query per row.
+        "lines__variant__option_values__option",
+    )
+    filterset_fields = ("status", "source", "destination")
+    ordering_fields = ("created_at", "dispatched_at")
+
+    # NOT named ``dispatch``: that is ``View.dispatch``, the entry point every
+    # request goes through, and shadowing it breaks the whole viewset silently.
+    @action(detail=True, methods=["post"], url_path="dispatch")
+    def send_off(self, request, pk=None):
+        transfer = transfer_services.dispatch_transfer(
+            self.get_object(), request=request
+        )
+        return Response(self.get_serializer(transfer).data)
+
+    @action(detail=True, methods=["post"])
+    def receive(self, request, pk=None):
+        transfer = self.get_object()
+        serializer = StockTransferReceiptLineInputSerializer(
+            data=request.data.get("lines", []), many=True
+        )
+        serializer.is_valid(raise_exception=True)
+        rows = [
+            (row["line"], row["quantity"]) for row in serializer.validated_data
+        ]
+        for line, _ in rows:
+            if line.transfer_id != transfer.pk:
+                raise serializers.ValidationError(
+                    {"lines": "هذا السطر لا ينتمي إلى هذا التحويل."}
+                )
+        transfer_services.receive_transfer(
+            transfer,
+            lines=rows,
+            request=request,
+            note=request.data.get("note", ""),
+        )
+        transfer.refresh_from_db()
+        return Response(self.get_serializer(transfer).data)
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        reason = (request.data.get("reason") or "").strip()
+        if not reason:
+            raise serializers.ValidationError({"reason": "السبب مطلوب."})
+        transfer = document_services.cancel(
+            self.get_object(), reason=reason, request=request
+        )
+        return Response(self.get_serializer(transfer).data)

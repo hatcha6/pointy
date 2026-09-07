@@ -1,7 +1,15 @@
 from rest_framework import serializers
 
 from apps.catalog.models import ProductVariant
-from .models import StockItem, StockMovement, Warehouse
+from apps.documents.serializers import DocumentLifecycleFields
+
+from .models import (
+    StockItem,
+    StockMovement,
+    StockTransfer,
+    StockTransferLine,
+    Warehouse,
+)
 
 
 class StockItemSerializer(serializers.ModelSerializer):
@@ -207,3 +215,98 @@ class WarehouseSerializer(serializers.ModelSerializer):
                 "المخزن العابر يُنشأ تلقائياً مع التحويلات."
             )
         return value
+
+
+class StockTransferLineSerializer(serializers.ModelSerializer):
+    variant_sku = serializers.CharField(source="variant.sku", read_only=True)
+    variant_name = serializers.CharField(source="variant.full_name", read_only=True)
+    base_quantity = serializers.DecimalField(
+        max_digits=12, decimal_places=3, read_only=True, coerce_to_string=False
+    )
+    outstanding_quantity = serializers.DecimalField(
+        max_digits=12, decimal_places=3, read_only=True, coerce_to_string=False
+    )
+
+    class Meta:
+        model = StockTransferLine
+        fields = [
+            "id",
+            "variant",
+            "variant_sku",
+            "variant_name",
+            "quantity",
+            "unit",
+            "unit_factor",
+            "base_quantity",
+            "received_quantity",
+            "outstanding_quantity",
+        ]
+        read_only_fields = ("received_quantity",)
+
+
+class StockTransferSerializer(serializers.ModelSerializer, DocumentLifecycleFields):
+    lines = StockTransferLineSerializer(many=True)
+    source_name = serializers.CharField(source="source.name", read_only=True)
+    destination_name = serializers.CharField(source="destination.name", read_only=True)
+
+    class Meta:
+        model = StockTransfer
+        fields = [
+            "id",
+            "transfer_number",
+            "source",
+            "source_name",
+            "destination",
+            "destination_name",
+            "status",
+            "note",
+            "dispatched_at",
+            "lines",
+            *DocumentLifecycleFields.LIFECYCLE_FIELDS,
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = (
+            "transfer_number",
+            "status",
+            "dispatched_at",
+            "created_at",
+            "updated_at",
+        )
+
+    def validate(self, attrs):
+        source = attrs.get("source") or getattr(self.instance, "source", None)
+        destination = attrs.get("destination") or getattr(
+            self.instance, "destination", None
+        )
+        if source and destination and source.pk == destination.pk:
+            raise serializers.ValidationError(
+                {"destination": "التحويل يجب أن يكون إلى مكان آخر."}
+            )
+        for place, label in ((source, "source"), (destination, "destination")):
+            # Transit is where goods sit *between* two places; it is never an
+            # end of a transfer, or the goods would have nowhere to arrive.
+            if place is not None and place.kind == Warehouse.Kind.TRANSIT:
+                raise serializers.ValidationError(
+                    {label: "لا يمكن التحويل من أو إلى المخزن العابر."}
+                )
+        return attrs
+
+    def create(self, validated_data):
+        lines = validated_data.pop("lines", [])
+        if not lines:
+            raise serializers.ValidationError(
+                {"lines": "التحويل يجب أن يحتوي على صنف واحد على الأقل."}
+            )
+        transfer = StockTransfer.objects.create(**validated_data)
+        StockTransferLine.objects.bulk_create(
+            [StockTransferLine(transfer=transfer, **line) for line in lines]
+        )
+        return transfer
+
+
+class StockTransferReceiptLineInputSerializer(serializers.Serializer):
+    line = serializers.PrimaryKeyRelatedField(queryset=StockTransferLine.objects.all())
+    quantity = serializers.DecimalField(
+        max_digits=12, decimal_places=3, coerce_to_string=False
+    )

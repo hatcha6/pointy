@@ -1,6 +1,8 @@
 from django.utils import timezone
 from rest_framework import serializers
 
+from apps.catalog.models import ProductVariant
+
 from .models import StockBatch, StockItem, StockLedgerEntry, StockMovement, Warehouse
 from .valuation_service import post_movement_valuations
 
@@ -79,6 +81,46 @@ def lock_stock_items(variants, *, warehouse=None):
     return locked
 
 
+def lock_stock_rows(pairs):
+    """Lock a set of ``(variant, warehouse)`` rows in one statement.
+
+    The two-warehouse cousin of ``lock_stock_items``, and the reason its sort
+    key grew a second column. A transfer touches the source and the transit
+    location in the same transaction, so two transfers running in opposite
+    directions between the same pair of places would deadlock if each locked
+    "its own" warehouse first. Taking every row a document needs in one
+    ascending ``(variant_id, warehouse_id)`` pass makes that impossible.
+
+    Returns ``{(variant_id, warehouse_id): StockItem}``.
+    """
+    wanted = sorted(
+        {
+            (getattr(variant, "pk", variant), getattr(warehouse, "pk", warehouse))
+            for variant, warehouse in pairs
+        }
+    )
+    if not wanted:
+        return {}
+    variant_ids = {variant_id for variant_id, _ in wanted}
+    warehouse_ids = {warehouse_id for _, warehouse_id in wanted}
+    locked = {
+        (row.variant_id, row.warehouse_id): row
+        for row in StockItem.objects.select_for_update()
+        .filter(variant_id__in=variant_ids, warehouse_id__in=warehouse_ids)
+        .order_by("variant_id", "warehouse_id")
+    }
+    # Pairs that have never held stock have no row yet. Created in the same
+    # ascending order, so the lock sequence is unchanged.
+    for key in wanted:
+        if key not in locked:
+            variant_id, warehouse_id = key
+            locked[key] = lock_stock_item(
+                variant=ProductVariant.objects.get(pk=variant_id),
+                warehouse=warehouse_id,
+            )
+    return {key: locked[key] for key in wanted}
+
+
 def stock_snapshot(stock_item):
     return {
         "on_hand": stock_item.quantity_on_hand,
@@ -137,6 +179,10 @@ def build_stock_movement(
     movement = StockMovement(
         variant=variant,
         stock_item=stock_item,
+        # Set here rather than in ``save`` because a multi-line document builds
+        # its movements unsaved and inserts them with ``bulk_create``, which
+        # never calls ``save``.
+        warehouse_id=stock_item.warehouse_id,
         movement_type=movement_type,
         quantity=quantity,
         note=note,
