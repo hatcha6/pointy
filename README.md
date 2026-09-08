@@ -609,15 +609,16 @@ make redis-ping    # Check Redis connectivity
 `.github/workflows/release.yml` builds and publishes the customer-facing
 artifacts. It runs automatically when a **GitHub Release is published** (tag like
 `v1.2.3`), and can also be run from the Actions tab (**Run workflow**) to produce
-test artifacts without cutting a release. Four build jobs run in parallel and
+test artifacts without cutting a release. The build jobs run in parallel and
 attach their output to the release:
 
 | Job             | Artifact                                  | Notes |
 | --------------- | ----------------------------------------- | ----- |
-| `build-android` | `pointy-<ver>-android-universal.apk`      | One universal APK (all ABIs, `minSdk 23` / Android 6.0) for sideloading to till devices. |
+| `build-android` | `pointy-<ver>-android-universal.apk`      | One APK for every till device (`minSdk 23` / Android 6.0), carrying both ARM ABIs. x86_64 is deliberately excluded — no shipping cashier tablet uses it, and its AOT compile was a third of the longest job in the workflow. |
 | `build-windows` | `pointy-<ver>-windows-x64-setup.exe` (+ portable `.zip`) | **Inno Setup installer** (Start Menu + desktop shortcuts, uninstaller) for easy one-click setup — recommended. A portable extract-and-run `.zip` ships alongside for locked-down deployments. The Visual C++ runtime is bundled in both, so the app runs on old/minimal Windows 10+ PCs with no extra install. |
-| `build-linux`   | `pointy-<ver>-linux-x64.tar.gz`           | Portable extract-and-run bundle for Linux till PCs (needs GTK 3, preinstalled on desktop distros): `tar xzf`, then run `./pointy_frontend`. Not part of the LAN client self-update system (Android + Windows only). |
-| `build-onprem`  | `pointy-onprem-<ver>.zip`                 | Fully offline server bundle: backend + relay + **web (Flutter web + nginx)** + Postgres + Redis images saved as `docker load` tarballs, the Compose file (`restart: always`), `.env.example`, installers, and a boot/crash **watchdog** that self-heals the stack so the till has no outages. Browser users open `http://<server-ip>/`. See [`deploy/onprem/INSTALL.md`](deploy/onprem/INSTALL.md). |
+| `build-linux`   | `pointy-<ver>-linux-x64.deb` (+ portable `.tar.gz`) | **Debian package** (Ubuntu/Mint) — the Linux counterpart of the Windows installer: installs to `/opt/pointy`, registers the menu entry and the hicolor icons, and puts a `pointy` launcher on `PATH`. That is what makes the app show its own icon in the menu and the task list, which an extracted folder and a hand-made shortcut cannot do. The portable `.tar.gz` ships alongside for non-Debian distros, and is what the app's own self-update swaps in (a package under `/opt` cannot replace itself). Both need GTK 3, preinstalled on desktop distros. |
+| `build-onprem-images` | _(intermediate)_                    | The server half of the bundle — images, WSL rootfs, Compose — built alongside the client jobs rather than after them, which is what keeps the release wall-clock near the longest client build instead of the sum. |
+| `build-onprem`  | `pointy-onprem-<ver>.zip`                 | Fully offline server bundle: backend + relay + **web (Flutter web + nginx)** + Postgres + Redis images saved as `docker load` tarballs, the Compose file (`restart: always`), `.env.example`, installers, and a boot/crash **watchdog** that self-heals the stack so the till has no outages. Browser users open `http://<server-ip>/`. It also carries every client installer under `clients/` — including the **Windows 7/8/8.1 build** pulled from the newest `-compat` release — so a site installs both kinds of till from this one zip, with no second download. See [`deploy/onprem/INSTALL.md`](deploy/onprem/INSTALL.md). |
 
 Toolchain versions are pinned in the workflow `env:` to match local development
 (Flutter 3.38.6 / Dart 3.10.7, JDK 17; Go 1.25 + Python 3.12 come from the Docker

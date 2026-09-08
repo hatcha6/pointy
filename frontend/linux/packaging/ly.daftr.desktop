@@ -1,0 +1,23 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+# Arabic is the app's only locale, so it is the default name here too — the
+# same string Android shows (android:label in AndroidManifest.xml). A desktop
+# running an English locale gets the transliteration instead.
+Name=دفتر
+Name[en]=Daftar
+GenericName=نقطة بيع
+GenericName[en]=Point of Sale
+Comment=نقطة البيع والمخزون
+Comment[en]=Point of sale and inventory
+Exec=/usr/bin/pointy
+Icon=ly.daftr
+Terminal=false
+Categories=Office;Finance;
+Keywords=pos;pointy;daftar;نقطة بيع;كاشير;
+StartupNotify=true
+# How Cinnamon/GNOME tie the running window back to this entry (icon in the
+# task list, pinning to the panel). The runner calls g_set_prgname(APPLICATION_ID)
+# (linux/runner/my_application.cc), so WM_CLASS is the application id and not the
+# binary name — and it stays that way however the app was launched.
+StartupWMClass=ly.daftr

@@ -7,6 +7,11 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
+// What the window is called in the title bar and the task list: the app's
+// own name, the same string android:label carries, not the binary name the
+// Flutter template puts here.
+static constexpr const char* kWindowTitle = "دفتر";
+
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
@@ -22,6 +27,14 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+
+  // Draw the app's own icon in the task list, the alt-tab switcher and the
+  // window's own decorations. GTK resolves the name through the icon theme,
+  // which the .deb populates (/usr/share/icons/hicolor/*/apps/ly.daftr.png);
+  // run from the portable tarball there is nothing to find and the window is
+  // drawn exactly as it was before.
+  gtk_window_set_default_icon_name(APPLICATION_ID);
+
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
@@ -45,11 +58,11 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "pointy_frontend");
+    gtk_header_bar_set_title(header_bar, kWindowTitle);
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "pointy_frontend");
+    gtk_window_set_title(window, kWindowTitle);
   }
 
   gtk_window_set_default_size(window, 1280, 720);

@@ -1,9 +1,14 @@
 # Builds and publishes the Pointy release artifacts when a GitHub Release is
 # published:
-#   * build-android  — universal release APK for cashier tablets/phones
-#   * build-windows  — portable x64 Windows app (VC++ runtime bundled) for till PCs
-#   * build-linux    — portable x64 Linux app (.tar.gz) for Linux till PCs
-#   * build-onprem   — fully offline Docker bundle (.zip) for the on-prem server
+#   * build-android        — release APK (arm + arm64) for cashier tablets/phones
+#   * build-windows        — Windows installer + portable zip for till PCs
+#   * build-linux          — Linux .deb installer + portable .tar.gz for Linux till PCs
+#   * build-onprem-images  — the Docker images, WSL rootfs and Compose the server runs
+#   * build-onprem         — those plus the client installers, zipped: the offline bundle
+#
+# build-onprem-images deliberately depends on nothing but `version`, so the
+# server side builds while the client apps are still compiling. Only the final
+# assembly (which needs the installers) waits for them.
 #
 # Toolchain versions are pinned to what the repo is developed against
 # (Flutter 3.38.6 / Dart 3.10.7, JDK 17, Go 1.25 + Python 3.12 via the Docker
@@ -20,6 +25,10 @@ on:
         description: "Version for a manual test build (artifacts only, no release upload), e.g. 1.2.3"
         required: false
         default: "0.0.0-dev"
+      compat_tag:
+        description: "Windows 8 build to bundle, e.g. v0.4.6-compat (blank = the newest published -compat release)"
+        required: false
+        default: ""
 
 # Required so the build jobs can attach assets to the triggering GitHub Release.
 permissions:
@@ -86,7 +95,11 @@ jobs:
           echo "Resolved: tag=${TAG} version=${VERSION} build=${{ github.run_number }} is_release=${IS_RELEASE}"
 
   # ---------------------------------------------------------------------------
-  # Android — universal release APK (one file that runs on every ABI, minSdk 23).
+  # Android — one release APK for every Android till we sell to (minSdk 23),
+  # carrying both ARM ABIs. x86_64 is deliberately excluded: no shipping
+  # cashier tablet or phone uses it (it means Chromebooks, Android-x86 mini PCs
+  # and Intel-host emulators), and its AOT compile was a third of the longest
+  # job in this workflow — three gen_snapshot processes on a 2-vCPU runner.
   # ---------------------------------------------------------------------------
   build-android:
     name: Build Android APK
@@ -150,6 +163,7 @@ jobs:
         working-directory: frontend
         run: >
           flutter build apk --release
+          --target-platform android-arm,android-arm64
           --obfuscate
           --split-debug-info=build/symbols
           --build-name=${{ needs.version.outputs.version }}
@@ -475,7 +489,23 @@ jobs:
           cp -r frontend/build/linux/x64/release/bundle "${NAME}"
           # tar (not zip) so the executable bit on pointy_frontend survives.
           tar -czf "dist/${NAME}.tar.gz" "${NAME}"
-          ( cd dist && sha256sum "${NAME}.tar.gz" > SHA256SUMS-linux.txt )
+          ls -lh dist
+
+      # The installable counterpart of the Windows setup.exe: menu entry, icon
+      # theme, /usr/bin launcher — the things an extracted folder and a
+      # hand-made shortcut cannot give a Linux Mint till. The tar.gz stays
+      # alongside it: it is what the app's own self-update swaps in, and what a
+      # non-Debian distro gets.
+      - name: Package .deb installer
+        shell: bash
+        run: bash frontend/linux/packaging/build-deb.sh "${{ needs.version.outputs.version }}"
+
+      - name: Checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          ( cd dist && sha256sum ./*.tar.gz ./*.deb > SHA256SUMS-linux.txt )
+          cat dist/SHA256SUMS-linux.txt
           ls -lh dist
 
       # Short retention — see the note on the Android upload. Consumed by
@@ -494,14 +524,20 @@ jobs:
         run: gh release upload "${{ needs.version.outputs.tag }}" dist/* --clobber
 
   # ---------------------------------------------------------------------------
-  # On-prem server — build the backend + relay images, pull Postgres + Redis,
-  # docker-save all four, and zip them together with the Compose file, env
-  # template, installer scripts and docs. The result is a self-contained,
-  # registry-free installation the customer site loads and runs.
+  # On-prem server, part 1 — build the backend/relay/web/edge images, pull
+  # Postgres + Redis + PgBouncer, build the WSL distro, and zip all of it with
+  # the Compose file, env template, installer scripts and docs.
+  #
+  # This is everything the server side of a shop needs and nothing that depends
+  # on a client build, so it hangs off `version` alone and runs ALONGSIDE the
+  # Android/Windows/Linux jobs instead of after them. That is what keeps the
+  # release wall-clock near the longest client build rather than the sum of the
+  # two halves. What it uploads is the finished bundle minus clients/;
+  # build-onprem drops those in and signs the result.
   # ---------------------------------------------------------------------------
-  build-onprem:
-    name: Build on-prem bundle
-    needs: [version, build-android, build-windows, build-linux]
+  build-onprem-images:
+    name: Build on-prem images
+    needs: version
     runs-on: ubuntu-latest
     env:
       # The backend Dockerfile uses a `# syntax=` directive, which requires
@@ -510,62 +546,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The client builds from the android/windows/linux jobs are bundled so a
-      # new shop's backend can serve them on the LAN and the client apps can
-      # self-update from it.
-      - name: Download Android client
-        uses: actions/download-artifact@v4
-        with:
-          name: pointy-android
-          path: client-artifacts
-      - name: Download Windows client
-        uses: actions/download-artifact@v4
-        with:
-          name: pointy-windows
-          path: client-artifacts
-      - name: Download Linux client
-        uses: actions/download-artifact@v4
-        with:
-          name: pointy-linux
-          path: client-artifacts
-
-      - name: Build backend image
-        run: >
-          docker build -f backend/Dockerfile
-          --build-arg POINTY_VERSION=${{ needs.version.outputs.version }}
-          -t "pointy-backend:${{ needs.version.outputs.version }}" .
-
-      - name: Build relay image
-        run: >
-          docker build -f relay/Dockerfile
-          --build-arg POINTY_VERSION=${{ needs.version.outputs.version }}
-          -t "pointy-relay:${{ needs.version.outputs.version }}" .
-
-      - name: Build LAN front-door image (nginx + flip config)
-        run: >
-          docker build -f deploy/onprem/edge/Dockerfile
-          -t "${EDGE_IMAGE}" .
-
-      - name: Build web image (Flutter web + nginx)
-        run: >
-          docker build -f deploy/onprem/web/Dockerfile
-          --build-arg FLUTTER_VERSION=${{ env.FLUTTER_VERSION }}
-          -t "pointy-web:${{ needs.version.outputs.version }}" .
-
-      - name: Pull database + cache images
+      # Two of these dominate the job and neither is CPU-bound for most of its
+      # life — the web image downloads a Flutter SDK, the WSL rootfs
+      # apt-installs a Docker engine — so they run in the background while the
+      # small images build in front of them. Their output is captured and
+      # printed after the wait, so a failure is still readable instead of
+      # interleaved with three other builds.
+      - name: Build images, pull bases, build the WSL rootfs
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          docker pull "${POSTGRES_IMAGE}"
-          docker pull "${REDIS_IMAGE}"
-          docker pull "${PGBOUNCER_IMAGE}"
+          set -euo pipefail
+          mkdir -p logs wsl-rootfs
 
-      # The Windows install path is "WSL2 + this pre-baked distro". Building it
-      # here rather than on the shop's PC is what keeps an on-prem install fully
-      # offline: install.sh's Docker bootstrap fetches get.docker.com, which a
-      # shop behind a dead line can never reach.
-      - name: Build the WSL distro rootfs
-        run: |
-          mkdir -p wsl-rootfs
-          bash deploy/onprem/wsl/build-rootfs.sh wsl-rootfs/pointy-wsl-rootfs.tar.gz
+          docker build -f deploy/onprem/web/Dockerfile \
+            --build-arg FLUTTER_VERSION="${FLUTTER_VERSION}" \
+            -t "pointy-web:${VERSION}" . > logs/web.log 2>&1 &
+          web_pid=$!
+
+          # The Windows install path is "WSL2 + this pre-baked distro". Building
+          # it here rather than on the shop's PC is what keeps an on-prem
+          # install fully offline: install.sh's Docker bootstrap fetches
+          # get.docker.com, which a shop behind a dead line can never reach.
+          bash deploy/onprem/wsl/build-rootfs.sh wsl-rootfs/pointy-wsl-rootfs.tar.gz \
+            > logs/wsl.log 2>&1 &
+          wsl_pid=$!
+
+          docker pull -q "${POSTGRES_IMAGE}"
+          docker pull -q "${REDIS_IMAGE}"
+          docker pull -q "${PGBOUNCER_IMAGE}"
+
+          docker build -f backend/Dockerfile \
+            --build-arg POINTY_VERSION="${VERSION}" \
+            -t "pointy-backend:${VERSION}" .
+          docker build -f relay/Dockerfile \
+            --build-arg POINTY_VERSION="${VERSION}" \
+            -t "pointy-relay:${VERSION}" .
+          docker build -f deploy/onprem/edge/Dockerfile -t "${EDGE_IMAGE}" .
+
+          failed=0
+          wait "${web_pid}" || failed=1
+          echo "::group::web image (built in the background)"; cat logs/web.log; echo "::endgroup::"
+          wait "${wsl_pid}" || failed=1
+          echo "::group::WSL rootfs (built in the background)"; cat logs/wsl.log; echo "::endgroup::"
+          [ "${failed}" -eq 0 ] || { echo "a background build failed — open the groups above" >&2; exit 1; }
 
       # Bundling the WSL MSI lets bootstrap-wsl.ps1 install WSL on a machine with
       # no internet and no Microsoft Store (routinely stripped from POS images).
@@ -580,7 +605,7 @@ jobs:
             "https://github.com/microsoft/WSL/releases/download/${WSL_MSI_TAG}/${WSL_MSI_ASSET}"
           ls -lh wsl-msi
 
-      - name: Stage on-prem bundle
+      - name: Stage the server half of the bundle
         shell: bash
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -599,33 +624,6 @@ jobs:
           # Named pointy-edge*.tar so the live updater recognises it as
           # infrastructure and does NOT load it under a trading shop.
           docker save "${EDGE_IMAGE}"              -o "${BUNDLE}/images/pointy-edge.tar"
-
-          echo "==> Staging client installers (Android APK + Windows installer + Linux tar.gz)…"
-          mkdir -p "${BUNDLE}/clients"
-          apk="$(ls client-artifacts/pointy-*-android-universal.apk 2>/dev/null | head -1 || true)"
-          win="$(ls client-artifacts/pointy-*-windows-x64-setup.exe 2>/dev/null | head -1 || true)"
-          lin="$(ls client-artifacts/pointy-*-linux-x64.tar.gz 2>/dev/null | head -1 || true)"
-          android_json="null"
-          windows_json="null"
-          linux_json="null"
-          if [ -n "${apk}" ]; then
-            cp "${apk}" "${BUNDLE}/clients/"
-            f="$(basename "${apk}")"
-            android_json="{\"file\":\"${f}\",\"sha256\":\"$(sha256sum "${apk}" | awk '{print $1}')\",\"size\":$(stat -c%s "${apk}")}"
-          fi
-          if [ -n "${win}" ]; then
-            cp "${win}" "${BUNDLE}/clients/"
-            f="$(basename "${win}")"
-            windows_json="{\"file\":\"${f}\",\"sha256\":\"$(sha256sum "${win}" | awk '{print $1}')\",\"size\":$(stat -c%s "${win}")}"
-          fi
-          if [ -n "${lin}" ]; then
-            cp "${lin}" "${BUNDLE}/clients/"
-            f="$(basename "${lin}")"
-            linux_json="{\"file\":\"${f}\",\"sha256\":\"$(sha256sum "${lin}" | awk '{print $1}')\",\"size\":$(stat -c%s "${lin}")}"
-          fi
-          printf '{"version":"%s","android":%s,"windows":%s,"linux":%s}\n' \
-            "${VERSION}" "${android_json}" "${windows_json}" "${linux_json}" > "${BUNDLE}/clients/manifest.json"
-          echo "Client manifest:"; cat "${BUNDLE}/clients/manifest.json"
 
           echo "==> Rendering offline Compose (drop source 'build:' sections, keep anchors)…"
           yq eval 'del(.services.backend.build) | del(.services.connector.build) | del(.services.web.build) | del(.services.edge.build)' \
@@ -692,10 +690,154 @@ jobs:
             exit 1
           fi
 
-          echo "==> Zipping bundle…"
+          echo "==> Zipping the server half…"
           zip -r -q "dist/${BUNDLE}.zip" "${BUNDLE}"
-          ( cd dist && sha256sum "${BUNDLE}.zip" > SHA256SUMS-onprem.txt )
           ls -lh dist "${BUNDLE}/images"
+
+      # Handed straight to build-onprem, which appends clients/ to this same
+      # zip. compression-level 0 because the payload is already a zip —
+      # re-deflating a gigabyte of it would cost a minute and save nothing.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pointy-onprem-partial
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  # ---------------------------------------------------------------------------
+  # On-prem server, part 2 — take the server half, add every client installer a
+  # site could need (Android, Windows, the Windows 7/8/8.1 compat build, Linux
+  # .deb and .tar.gz) plus the manifest the apps self-update from, then sign and
+  # publish. One zip, one deployment, no second download at the shop.
+  # ---------------------------------------------------------------------------
+  build-onprem:
+    name: Build on-prem bundle
+    needs: [version, build-android, build-windows, build-linux, build-onprem-images]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The client builds from the android/windows/linux jobs are bundled so a
+      # new shop's backend can serve them on the LAN and the client apps can
+      # self-update from it.
+      - name: Download Android client
+        uses: actions/download-artifact@v4
+        with:
+          name: pointy-android
+          path: client-artifacts
+      - name: Download Windows client
+        uses: actions/download-artifact@v4
+        with:
+          name: pointy-windows
+          path: client-artifacts
+      - name: Download Linux client
+        uses: actions/download-artifact@v4
+        with:
+          name: pointy-linux
+          path: client-artifacts
+      - name: Download the server half of the bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: pointy-onprem-partial
+          path: dist
+
+      # The Windows 7/8/8.1 till build. It lives on a frozen branch with its own
+      # toolchain and its own release (release-compat.yml), so it cannot be built
+      # here — it is fetched from the newest published "-compat" release, or from
+      # the tag a manual run names. Best-effort, like the WSL MSI: a bundle
+      # without it is still a complete bundle for Windows 10+ tills.
+      - name: Fetch the Windows 8 (compat) installer
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMPAT_TAG: ${{ github.event.inputs.compat_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p compat-client
+          tag="${COMPAT_TAG:-}"
+          if [ -z "${tag}" ]; then
+            tag="$(gh release list --limit 100 --json tagName,isDraft \
+                     --jq '[.[] | select(.isDraft | not) | .tagName | select(endswith("-compat"))] | first')"
+          fi
+          [ -n "${tag}" ] && [ "${tag}" != "null" ] || {
+            echo "no published -compat release to bundle" >&2; exit 1; }
+          echo "==> Bundling the Windows 8 client from ${tag}"
+          gh release download "${tag}" --pattern '*-windows-x64-setup.exe' --dir compat-client
+          ls -lh compat-client
+
+      - name: Add the client installers and the manifest
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          BUNDLE="pointy-onprem-${VERSION}"
+          ZIP="dist/${BUNDLE}.zip"
+          [ -f "${ZIP}" ] || { echo "ERROR: ${ZIP} missing — did build-onprem-images run?" >&2; exit 1; }
+          mkdir -p "${BUNDLE}/clients"
+
+          # manifest.json is two things at once: the list the apps poll to
+          # self-update (android/windows/linux, keyed by ClientPlatform enum
+          # name) and, under "downloads", the installers a person picks off the
+          # LAN page. A download is not an update target — the Linux .deb cannot
+          # replace a running app, and the compat build is for machines the
+          # modern installer refuses.
+          manifest="$(jq -n --arg v "${VERSION}" '{version:$v, downloads:{}}')"
+
+          add() { # add <update|download> <key> <path> [version]
+            local where="$1" key="$2" path="$3" ver="${4:-}"
+            if [ -z "${path}" ] || [ ! -f "${path}" ]; then
+              echo "    ${key}: MISSING"
+              return 0
+            fi
+            cp "${path}" "${BUNDLE}/clients/"
+            local file sha size
+            file="$(basename "${path}")"
+            sha="$(sha256sum "${path}" | awk '{print $1}')"
+            size="$(stat -c%s "${path}")"
+            manifest="$(printf '%s' "${manifest}" | jq \
+              --arg where "${where}" --arg k "${key}" --arg f "${file}" \
+              --arg s "${sha}" --argjson z "${size}" --arg v "${ver}" \
+              'def entry: {file:$f, sha256:$s, size:$z}
+                 + (if $v == "" then {} else {version:$v} end);
+               if $where == "update" then .[$k] = entry else .downloads[$k] = entry end')"
+            echo "    ${key}: ${file} (${size} bytes)"
+          }
+
+          # The argument is a glob and has to stay unquoted so it expands here;
+          # each pattern matches at most one artifact.
+          # shellcheck disable=SC2012,SC2086
+          first() { ls $1 2>/dev/null | head -1 || true; }
+
+          echo "==> Staging client installers…"
+          add update   android        "$(first 'client-artifacts/pointy-*-android-universal.apk')"
+          add update   windows        "$(first 'client-artifacts/pointy-*-windows-x64-setup.exe')"
+          add update   linux          "$(first 'client-artifacts/pointy-*-linux-x64.tar.gz')"
+          add download linux_deb      "$(first 'client-artifacts/pointy-*-linux-x64.deb')"
+
+          # Its version is its own — the compat branch releases on its own tags —
+          # so it is carried on the entry rather than inherited from the bundle.
+          compat="$(first 'compat-client/pointy-*-windows-x64-setup.exe')"
+          compat_version=""
+          if [ -n "${compat}" ]; then
+            compat_version="$(basename "${compat}")"
+            compat_version="${compat_version#pointy-}"
+            compat_version="${compat_version%-windows-x64-setup.exe}"
+          else
+            echo "::warning title=No Windows 8 client::This bundle carries no compat installer. A Windows 7/8/8.1 till will have to be installed from its own -compat release."
+          fi
+          add download windows_compat "${compat}" "${compat_version}"
+
+          printf '%s\n' "${manifest}" > "${BUNDLE}/clients/manifest.json"
+          echo "==> Client manifest:"; cat "${BUNDLE}/clients/manifest.json"
+
+          # -0: every one of these is already a compressed container (apk, deb,
+          # tar.gz, lzma'd installer). Deflating them again buys nothing and
+          # costs minutes on the critical path.
+          zip -g -0 -r -q "${ZIP}" "${BUNDLE}/clients"
+          ( cd dist && sha256sum "${BUNDLE}.zip" > SHA256SUMS-onprem.txt )
+          ls -lh dist
 
       # Authenticity, separate from integrity. The sha256 above proves the
       # download was not corrupted; it proves nothing about who produced it,
@@ -725,7 +867,7 @@ jobs:
           echo "signed sha256=${digest}"
           echo "  -> ${zip_path}.sig"
 
-      # Short retention: this is by far the largest artifact (it packs all six
+      # Short retention: this is by far the largest artifact (it packs all seven
       # docker image tars, several GB) and is the main quota consumer. For real
       # releases the zip is attached to the GitHub Release (separate storage, no
       # Actions-quota cost); for manual test builds this artifact is the only
@@ -736,6 +878,7 @@ jobs:
           path: dist/*
           if-no-files-found: error
           retention-days: 1
+          compression-level: 0
 
       - name: Attach to release
         if: ${{ needs.version.outputs.is_release == 'true' }}

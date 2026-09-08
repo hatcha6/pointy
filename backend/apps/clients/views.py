@@ -1,4 +1,4 @@
-"""Serve the bundled Android/Windows/Linux client installers on the shop LAN.
+"""Serve the bundled client installers on the shop LAN.
 
 A new shop's on-prem build ships the client installers; the local backend serves
 them (plus a version manifest the apps poll for self-update) so onboarding a device
@@ -6,6 +6,18 @@ is just scanning a QR. Everything here is LAN-only: it reuses
 ``request_discovery_allowed`` (same gate as service discovery), which rejects
 relayed requests and non-private callers, so installers are never exposed over the
 relay/internet.
+
+The bundle carries two kinds of installer and the difference matters:
+
+* **clients** — android/windows/linux, keyed by the ``ClientPlatform`` enum name
+  the apps use. These are self-update targets: an app polls the manifest, finds a
+  newer version for its own platform, and installs it.
+* **downloads** — installers a *person* picks off the landing page and installs by
+  hand. The Linux ``.deb`` is one (a package cannot replace a running app that
+  lives under ``/opt``), and the Windows 7/8/8.1 compat build is another (it comes
+  from its own frozen release, at its own version, for machines the modern
+  installer refuses to run on). Keeping them out of ``clients`` is what stops a
+  till offering itself an update it cannot apply.
 """
 
 import json
@@ -24,14 +36,28 @@ from rest_framework.response import Response
 from apps.core.discovery import request_discovery_allowed
 from apps.core.streaming import aiter_file
 
+#: Keys the apps self-update from. Enum names in ``ClientPlatform`` (Dart).
 _PLATFORMS = ("android", "windows", "linux")
+#: Keys served and listed, but never offered to an app as an update.
+_DOWNLOADS = ("linux_deb", "windows_compat")
 _CONTENT_TYPES = {
     ".apk": "application/vnd.android.package-archive",
     ".exe": "application/octet-stream",
+    ".deb": "application/vnd.debian.binary-package",
     # Path.suffix of the Linux .tar.gz archive.
     ".gz": "application/gzip",
 }
-_PLATFORM_LABELS = {"android": "Android", "windows": "Windows", "linux": "Linux"}
+
+#: Landing-page order and wording. The second half of each pair says *which
+#: machine* — the whole point of the page is that someone standing at a till
+#: picks the right file without being told which one.
+_LANDING_ORDER = (
+    ("android", "أندرويد", "هاتف أو جهاز لوحي"),
+    ("windows", "ويندوز", "ويندوز 10 أو 11"),
+    ("windows_compat", "ويندوز القديم", "ويندوز 7 أو 8 أو 8.1"),
+    ("linux_deb", "لينكس", "أوبونتو أو منت — ملف تثبيت"),
+    ("linux", "لينكس — نسخة محمولة", "توزيعات أخرى"),
+)
 
 
 def _clients_root() -> Path:
@@ -47,36 +73,47 @@ def _load_manifest():
     return data if isinstance(data, dict) else {}
 
 
+def _raw_entries(data):
+    """Yield ``(section, key, entry)`` for every installer the bundle carries."""
+    for key in _PLATFORMS:
+        entry = data.get(key)
+        if isinstance(entry, dict) and entry.get("file"):
+            yield "clients", key, entry
+    downloads = data.get("downloads")
+    if isinstance(downloads, dict):
+        for key in _DOWNLOADS:
+            entry = downloads.get(key)
+            if isinstance(entry, dict) and entry.get("file"):
+                yield "downloads", key, entry
+
+
 def public_manifest():
     """The manifest the clients poll: per-platform file, hash, size, download URL."""
     data = _load_manifest()
     version = str(data.get("version") or "").strip()
-    clients = {}
-    for platform in _PLATFORMS:
-        entry = data.get(platform)
-        if not isinstance(entry, dict):
-            continue
-        filename = str(entry.get("file") or "").strip()
+    manifest = {"version": version, "clients": {}, "downloads": {}}
+    for section, key, entry in _raw_entries(data):
+        filename = str(entry["file"]).strip()
         if not filename:
             continue
-        clients[platform] = {
-            "version": version,
+        manifest[section][key] = {
+            # An entry may carry its own version — the compat build releases on
+            # its own tags and is not the bundle's version.
+            "version": str(entry.get("version") or version),
             "file": filename,
             "sha256": str(entry.get("sha256") or ""),
             "size": entry.get("size"),
             "url": f"/clients/files/{filename}",
         }
-    return {"version": version, "clients": clients}
+    return manifest
 
 
 def _manifest_filenames():
-    data = _load_manifest()
-    names = set()
-    for platform in _PLATFORMS:
-        entry = data.get(platform)
-        if isinstance(entry, dict) and entry.get("file"):
-            names.add(str(entry["file"]))
-    return names
+    return {
+        str(entry["file"]).strip()
+        for _section, _key, entry in _raw_entries(_load_manifest())
+        if str(entry["file"]).strip()
+    }
 
 
 class ClientManifestView(views.APIView):
@@ -135,6 +172,39 @@ class ClientFileView(views.APIView):
         )
 
 
+def _size_label(size):
+    if not isinstance(size, (int, float)) or size <= 0:
+        return ""
+    return f"{size / (1024 * 1024):.0f} MB"
+
+
+def _landing_buttons(manifest):
+    """One button per installer the bundle actually carries, in a fixed order."""
+    buttons = []
+    for key, title, machine in _LANDING_ORDER:
+        entry = manifest["clients"].get(key) or manifest["downloads"].get(key)
+        if not entry:
+            continue
+        # Each Latin fragment gets its OWN <bdi>. Isolating the whole line
+        # instead auto-detects it as Arabic and then reorders the Latin pieces
+        # inside it: "85 MB" comes out "MB 85", and "0.4.6-compat" splits in
+        # half with the size wedged into the gap.
+        meta = [escape(machine)]
+        if entry["version"] and entry["version"] != manifest["version"]:
+            meta.append(f"<bdi>{escape(entry['version'])}</bdi>")
+        size = _size_label(entry.get("size"))
+        if size:
+            meta.append(f"<bdi>{escape(size)}</bdi>")
+        details = " · ".join(meta)
+        buttons.append(
+            f'<a class="btn" href="{escape(entry["url"])}">'
+            f'<span class="name">{escape(title)}</span>'
+            f'<span class="meta">{details}</span>'
+            "</a>"
+        )
+    return buttons
+
+
 class ClientLandingView(views.APIView):
     """A tiny download page — the target a fresh device opens from the QR/link."""
 
@@ -145,40 +215,37 @@ class ClientLandingView(views.APIView):
         if not request_discovery_allowed(request):
             raise Http404("client downloads are only available on the shop network")
         manifest = public_manifest()
-        buttons = []
-        for platform in _PLATFORMS:
-            entry = manifest["clients"].get(platform)
-            if not entry:
-                continue
-            buttons.append(
-                f'<a class="btn" href="{escape(entry["url"])}">'
-                f'Download for {escape(_PLATFORM_LABELS[platform])}</a>'
-            )
-        if not buttons:
-            body = "<p>No client installers are available on this server yet.</p>"
-        else:
-            body = "".join(buttons)
+        buttons = _landing_buttons(manifest)
+        body = (
+            "".join(buttons)
+            if buttons
+            else '<p class="empty">لا توجد ملفات تثبيت على هذا الخادم بعد.</p>'
+        )
         version = escape(manifest["version"]) or "—"
         html = f"""<!doctype html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>تطبيقات دفتر</title>
 <style>
-  body {{ font-family: system-ui, sans-serif; margin: 0; padding: 2rem;
-         display: flex; flex-direction: column; align-items: center; gap: 1rem;
+  body {{ font-family: system-ui, sans-serif; margin: 0; padding: 2rem 1.25rem;
+         display: flex; flex-direction: column; align-items: center; gap: 0.75rem;
          background: #0b6b64; color: #fff; min-height: 100vh; box-sizing: border-box; }}
   h1 {{ margin: 0.5rem 0 0; font-size: 1.5rem; }}
-  p {{ opacity: 0.85; margin: 0; }}
-  .btn {{ display: block; width: 100%; max-width: 360px; text-align: center;
-          background: #fff; color: #0b6b64; text-decoration: none; font-weight: 600;
-          padding: 1rem 1.25rem; border-radius: 12px; }}
+  p {{ opacity: 0.85; margin: 0 0 0.5rem; }}
+  .btn {{ display: flex; flex-direction: column; gap: 0.15rem;
+          width: 100%; max-width: 360px; text-align: center;
+          background: #fff; color: #0b6b64; text-decoration: none;
+          padding: 0.9rem 1.25rem; border-radius: 12px; }}
+  .btn .name {{ font-weight: 600; }}
+  .btn .meta {{ font-size: 0.8rem; opacity: 0.7; }}
+  .empty {{ max-width: 360px; text-align: center; }}
 </style>
 </head>
 <body>
   <h1>دفتر</h1>
-  <p>Version {version}</p>
+  <p>الإصدار <bdi>{version}</bdi></p>
   {body}
 </body>
 </html>"""
