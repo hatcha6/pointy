@@ -258,12 +258,18 @@ class ShopSettings(TimeStampedModel):
     # How much footage either side of a sale the invoice player opens on. The
     # defaults put the customer walking up to the counter at the start and the
     # goods bagged by the end; a shop with a slow till lengthens them.
+    # ``db_default`` for the same reason as the flag above, which these two were
+    # added alongside and which got it: without one, Django drops the database
+    # default after backfilling, and an INSERT from the older backend during a
+    # live update names no such column and fails NOT NULL.
     surveillance_pre_roll_seconds = models.PositiveSmallIntegerField(
         default=20,
+        db_default=20,
         validators=[MaxValueValidator(600)],
     )
     surveillance_post_roll_seconds = models.PositiveSmallIntegerField(
         default=40,
+        db_default=40,
         validators=[MaxValueValidator(600)],
     )
     # --- Multi-currency ---------------------------------------------------

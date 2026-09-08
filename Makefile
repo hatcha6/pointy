@@ -132,7 +132,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-shell backend-superuser backend-test backend-test-pg backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
-	onprem-test onprem-rehearsal onprem-rehearsal-clean \
+	onprem-test onprem-rehearsal onprem-rehearsal-clean upgrade-rehearsal upgrade-check \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable postgres-ready clean
 
 help: ## Show available commands.
@@ -572,6 +572,12 @@ onprem-rehearsal: docker-check ## Rehearse real updates against real Docker (ins
 
 onprem-rehearsal-clean: ## Reclaim the rehearsal's cached images, bundles and any leftover shops.
 	bash deploy/onprem/tests/rehearsal/run-rehearsal.sh clean
+
+upgrade-rehearsal: postgres-ready ## Upgrade a POPULATED shop from the last release to this one (UPGRADE_FROM/UPGRADE_TO).
+	$(VENV)/bin/python scripts/rehearse_upgrade.py $(UPGRADE_FROM) $(UPGRADE_TO)
+
+upgrade-check: postgres-ready ## Could the last release's backend write to this release's schema? (live-update safety)
+	$(VENV)/bin/python scripts/check_upgrade_compatibility.py $(UPGRADE_FROM)
 
 format: frontend-l10n frontend-format relay-format ## Format all currently scaffolded code.
 
