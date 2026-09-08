@@ -15,14 +15,13 @@ import 'recorder_identity.dart';
 const String _hikvisionProbePath = '/ISAPI/System/deviceInfo';
 const String _dahuaProbePath = '/cgi-bin/magicBox.cgi?action=getDeviceType';
 
-/// What each endpoint's *unauthenticated* success body looks like, for the
-/// minority of devices with authentication turned off.
+/// Whether an unauthenticated `200` body really came from the endpoint asked.
 ///
-/// Needed because plenty of embedded web servers — routers especially — answer
-/// `200` with their own login page for every path on the box. Without checking
-/// the body, every router on the network would be suggested as a recorder.
-const List<String> _hikvisionBodyMarkers = ['<DeviceInfo', '<ResponseStatus'];
-const List<String> _dahuaBodyMarkers = ['type=', 'deviceType='];
+/// Needed because plenty of embedded web servers — routers especially, and
+/// Pointy's own web app — answer `200` with their own page for every path on
+/// the box. The decision lives in `recorder_identity.dart` so it can be tested
+/// against real captured bodies without a socket; see [bodyIsFromDevice].
+typedef _BodyCheck = bool Function(String body);
 
 /// Enough to see the marker, not enough for a hostile responder to matter.
 const int _maxBodySample = 4096;
@@ -178,14 +177,14 @@ Future<DiscoveredRecorder?> _identify(
     client,
     endpoint,
     _hikvisionProbePath,
-    _hikvisionBodyMarkers,
+    hikvisionBodyIsFromDevice,
     timeout,
   );
   final dahua = await _probe(
     client,
     endpoint,
     _dahuaProbePath,
-    _dahuaBodyMarkers,
+    dahuaBodyIsFromDevice,
     timeout,
   );
   if (hikvision == null && dahua == null) {
@@ -217,7 +216,7 @@ Future<_ProbeResult?> _probe(
   HttpClient client,
   _Endpoint endpoint,
   String path,
-  List<String> bodyMarkers,
+  _BodyCheck bodyIsGenuine,
   Duration timeout,
 ) async {
   try {
@@ -242,7 +241,7 @@ Future<_ProbeResult?> _probe(
     // where a router's catch-all login page would otherwise pass for a
     // recorder. So the body has to be what this endpoint actually returns.
     final body = await _sample(response, timeout);
-    return bodyMarkers.any(body.contains) ? const _ProbeResult('') : null;
+    return bodyIsGenuine(body) ? const _ProbeResult('') : null;
   } on Object {
     return null;
   }

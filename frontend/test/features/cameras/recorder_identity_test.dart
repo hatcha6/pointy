@@ -139,4 +139,79 @@ void main() {
       expect(ranked, hasLength(2));
     });
   });
+
+  group('bodyIsFromDevice', () {
+    // The exact shell Pointy's own web app serves. Its SPA catch-all
+    // (`try_files $uri $uri/ /index.html`) answers 200 for EVERY path, so the
+    // sweep asked it for the Dahua CGI and got this back. The `type=` inside
+    // the favicon link made it a Dahua, and every address that reached the
+    // backend — both NICs and both Docker bridge gateways — was listed as a
+    // recorder while the real DVR was never found. Sufian's shop, 2026-09-08.
+    const pointyAppShell = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <title>دفتر</title>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
+''';
+
+    test('our own web app is never mistaken for a Dahua', () {
+      expect(dahuaBodyIsFromDevice(pointyAppShell), isFalse);
+    });
+
+    test('our own web app is never mistaken for a Hikvision', () {
+      expect(hikvisionBodyIsFromDevice(pointyAppShell), isFalse);
+    });
+
+    test('a router login page is not a recorder either', () {
+      expect(
+        dahuaBodyIsFromDevice(
+          '<html><body><form><input type="password"></form></body></html>',
+        ),
+        isFalse,
+      );
+    });
+
+    test('the real Dahua CGI answer is still recognised', () {
+      // What /cgi-bin/magicBox.cgi?action=getDeviceType actually returns.
+      expect(dahuaBodyIsFromDevice('type=DHI-NVR4108HS-4KS2\r\n'), isTrue);
+    });
+
+    test('a Dahua answering with several keys is recognised', () {
+      expect(
+        dahuaBodyIsFromDevice('deviceType=NVR4116\nserialNumber=7K03A1B\n'),
+        isTrue,
+      );
+    });
+
+    test('the real Hikvision ISAPI answer is still recognised', () {
+      expect(
+        hikvisionBodyIsFromDevice(
+          '<?xml version="1.0" encoding="UTF-8"?>'
+          '<DeviceInfo><model>DS-7208HQHI</model></DeviceInfo>',
+        ),
+        isTrue,
+      );
+    });
+
+    test('a key=value marker only counts at the start of a line', () {
+      // The whole point: `type=` buried in an attribute is markup, not a key.
+      expect(
+        dahuaBodyIsFromDevice('<input type="text"> and more type= text'),
+        isFalse,
+      );
+    });
+
+    test('an empty body claims nothing', () {
+      expect(dahuaBodyIsFromDevice(''), isFalse);
+      expect(hikvisionBodyIsFromDevice(''), isFalse);
+    });
+  });
+
 }

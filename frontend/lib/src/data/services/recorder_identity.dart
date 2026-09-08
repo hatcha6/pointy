@@ -8,6 +8,73 @@ library;
 
 import '../models/camera.dart';
 
+/// What each endpoint's *unauthenticated* success body looks like, for the
+/// minority of devices with authentication turned off.
+///
+/// Dahua's magicBox CGI answers in flat `key=value` lines; Hikvision's ISAPI
+/// answers in XML. Neither ever answers in HTML — see [bodyIsFromDevice].
+const List<String> dahuaBodyMarkers = ['type=', 'deviceType='];
+const List<String> hikvisionBodyMarkers = ['<DeviceInfo', '<ResponseStatus'];
+
+/// Tells that a body is a web page rather than a device's control response.
+///
+/// Deliberately generous: a *missed* recorder can still be typed in by hand,
+/// while a false one sends an installer to configure a machine that was never
+/// a camera.
+const List<String> _webPageTells = [
+  '<!doctype html',
+  '<html',
+  '<head>',
+  '<body',
+  '<script',
+  '<link ',
+  '<meta ',
+];
+
+/// Whether an unauthenticated `200` really came from the endpoint we asked.
+///
+/// This is the guard that stops the sweep offering the shop its own server.
+/// Pointy's own web app is served on port 80 behind an SPA catch-all
+/// (`try_files $uri $uri/ /index.html`), so *every* path on it answers `200`
+/// with the app shell — and that shell contains
+/// `<link rel="icon" type="image/png" …>`, which a bare `contains('type=')`
+/// read as a Dahua. Every address that reached the backend — both its NICs and
+/// both Docker bridge gateways — was then listed as a recorder.
+///
+/// Two rules, either of which alone would have been enough:
+///
+/// * a body carrying the tells of a web page is never a device response;
+/// * a `key=value` marker only counts at the *start of a line*, which is where
+///   a CGI response puts its keys and where markup never puts them.
+bool bodyIsFromDevice(
+  String body,
+  List<String> markers, {
+  required bool keyValue,
+}) {
+  final lowered = body.toLowerCase();
+  if (_webPageTells.any(lowered.contains)) {
+    return false;
+  }
+  if (!keyValue) {
+    return markers.any(body.contains);
+  }
+  for (final line in body.split('\n')) {
+    final start = line.trimLeft();
+    if (markers.any(start.startsWith)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// [bodyIsFromDevice] for the Dahua CGI, whose answer is `key=value` lines.
+bool dahuaBodyIsFromDevice(String body) =>
+    bodyIsFromDevice(body, dahuaBodyMarkers, keyValue: true);
+
+/// [bodyIsFromDevice] for the Hikvision ISAPI, whose answer is XML.
+bool hikvisionBodyIsFromDevice(String body) =>
+    bodyIsFromDevice(body, hikvisionBodyMarkers, keyValue: false);
+
 /// Which endpoint answered, if any. Both brands guard exactly one path that the
 /// other returns 404 for, so *which* one challenges is the fingerprint.
 class RecorderProbeOutcome {
