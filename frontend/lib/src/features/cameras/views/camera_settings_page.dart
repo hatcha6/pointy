@@ -603,6 +603,12 @@ class _RecorderFormPageState extends State<RecorderFormPage> {
     text: widget.initial.username,
   );
   final TextEditingController _password = TextEditingController();
+  late final TextEditingController _rtspTemplate = TextEditingController(
+    text: widget.initial.rtspPathTemplate,
+  );
+  late final TextEditingController _channelCount = TextEditingController(
+    text: widget.initial.channelCount > 0 ? '${widget.initial.channelCount}' : '',
+  );
 
   @override
   void initState() {
@@ -622,6 +628,8 @@ class _RecorderFormPageState extends State<RecorderFormPage> {
   @override
   void dispose() {
     for (final controller in [
+      _rtspTemplate,
+      _channelCount,
       _name,
       _host,
       _port,
@@ -634,6 +642,16 @@ class _RecorderFormPageState extends State<RecorderFormPage> {
     super.dispose();
   }
 
+  /// The stream shapes these boxes actually serve, offered by name because an
+  /// installer knows what brand is on the sticker and never the URL. Mirrors
+  /// ``TEMPLATE_PRESETS`` in apps.surveillance.drivers.generic_rtsp.
+  static const Map<String, String> _rtspPresets = {
+    'XMEye': '/user={username}&password={password}&channel={channel}&stream={stream}.sdp?',
+    'Uniview': '/unicast/c{channel}/s{stream}/live',
+    'ch/stream': '/ch{channel}/{stream}',
+    'live': '/live/ch{channel0}_{stream}',
+  };
+
   RecorderDraft get _current => _draft.copyWith(
     name: _name.text.trim(),
     host: _host.text.trim(),
@@ -641,6 +659,8 @@ class _RecorderFormPageState extends State<RecorderFormPage> {
     rtspPort: int.tryParse(_rtspPort.text.trim()) ?? 554,
     username: _username.text.trim(),
     password: _password.text,
+    rtspPathTemplate: _rtspTemplate.text.trim(),
+    channelCount: int.tryParse(_channelCount.text.trim()) ?? 0,
   );
 
   @override
@@ -704,11 +724,70 @@ class _RecorderFormPageState extends State<RecorderFormPage> {
                           value: RecorderBrand.dahua,
                           child: Text(l10n.recorderBrandDahua),
                         ),
+                        DropdownMenuItem(
+                          value: RecorderBrand.xiongmai,
+                          child: Text(l10n.recorderBrandXiongmai),
+                        ),
+                        DropdownMenuItem(
+                          value: RecorderBrand.onvif,
+                          child: Text(l10n.recorderBrandOnvif),
+                        ),
+                        DropdownMenuItem(
+                          value: RecorderBrand.genericRtsp,
+                          child: Text(l10n.recorderBrandGenericRtsp),
+                        ),
                       ],
                       onChanged: (value) => setState(() {
                         _draft = _draft.copyWith(brand: value);
                       }),
                     ),
+                    if (_draft.brand == RecorderBrand.genericRtsp ||
+                        _draft.brand == RecorderBrand.xiongmai) ...[
+                      const SizedBox(height: PointyDimensions.denseGap),
+                      TextField(
+                        controller: _rtspTemplate,
+                        // A stream path is Latin however the screen reads.
+                        textDirection: TextDirection.ltr,
+                        onChanged: (_) => setState(() {}),
+                        decoration: InputDecoration(
+                          labelText: l10n.recorderRtspTemplateLabel,
+                          helperText: l10n.recorderRtspTemplateHelp,
+                          helperMaxLines: 2,
+                        ),
+                      ),
+                      // Nobody knows their DVR's URL shape, so the shapes we
+                      // know are offered by name and fill the field in.
+                      const SizedBox(height: PointyDimensions.denseGap),
+                      Wrap(
+                        spacing: PointyDimensions.denseGap,
+                        children: [
+                          for (final preset in _rtspPresets.entries)
+                            ActionChip(
+                              label: Text(preset.key),
+                              onPressed: () => setState(() {
+                                _rtspTemplate.text = preset.value;
+                              }),
+                            ),
+                        ],
+                      ),
+                    ],
+                    if (_draft.brand == RecorderBrand.genericRtsp) ...[
+                      const SizedBox(height: PointyDimensions.denseGap),
+                      TextField(
+                        controller: _channelCount,
+                        keyboardType: TextInputType.number,
+                        onChanged: (_) => setState(() {}),
+                        decoration: InputDecoration(
+                          labelText: l10n.recorderChannelCountLabel,
+                          helperText: l10n.recorderChannelCountHelp,
+                          helperMaxLines: 2,
+                        ),
+                      ),
+                      const SizedBox(height: PointyDimensions.denseGap),
+                      PointyInlineMessage.warning(
+                        message: l10n.recorderLiveOnlyNotice,
+                      ),
+                    ],
                     const SizedBox(height: PointyDimensions.denseGap),
                     TextField(
                       controller: _host,
@@ -973,6 +1052,9 @@ class _DiscoveredTile extends StatelessWidget {
     final brand = switch (recorder.brand) {
       RecorderBrand.hikvision => l10n.recorderBrandHikvision,
       RecorderBrand.dahua => l10n.recorderBrandDahua,
+      RecorderBrand.xiongmai => l10n.recorderBrandXiongmai,
+      RecorderBrand.onvif => l10n.recorderBrandOnvif,
+      RecorderBrand.genericRtsp => l10n.recorderBrandGenericRtsp,
       RecorderBrand.auto => l10n.recorderFormTitle,
     };
     if (recorder.model.isEmpty) {

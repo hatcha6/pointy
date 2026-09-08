@@ -27,6 +27,16 @@ class Recorder(TimeStampedModel):
         AUTO = "auto", "Detect automatically"
         HIKVISION = "hikvision", "Hikvision"
         DAHUA = "dahua", "Dahua"
+        # Everything else. ONVIF covers the boxes that answer a standard rather
+        # than a vendor dialect; DIRECT_RTSP covers the ones that answer no
+        # control protocol at all and only have a stream. Between them they are
+        # most of what is actually installed in Libyan shops.
+        # Spoken natively rather than through ONVIF: it is the only way to
+        # get channel names and recording search out of this hardware, and
+        # recording search is what invoice-linked footage is built on.
+        XIONGMAI = "xiongmai", "Xiongmai / XMEye"
+        ONVIF = "onvif", "ONVIF (other brands)"
+        DIRECT_RTSP = "generic_rtsp", "Direct RTSP (live view only)"
 
     class Status(models.TextChoices):
         NEVER = "never", "Never connected"
@@ -58,6 +68,16 @@ class Recorder(TimeStampedModel):
     password = models.CharField(max_length=255, blank=True)
     use_https = models.BooleanField(default=False)
     is_enabled = models.BooleanField(default=True)
+    # Only for ``DIRECT_RTSP``: the stream path, with ``{channel}`` and
+    # ``{stream}`` placeholders. See apps.surveillance.drivers.generic_rtsp.
+    # ``db_default`` so a live update stays safe: the previous release keeps
+    # serving for about a minute against the new schema, and its INSERTs name
+    # no such column. Same reason as core.ShopSettings.enable_surveillance.
+    rtsp_path_template = models.CharField(max_length=255, blank=True, db_default="")
+    # Only for ``ONVIF``, and only when autodetection fails: OEM firmwares put
+    # the device service on a handful of different paths and the driver tries
+    # them all, so this stays empty on nearly every install.
+    onvif_service_path = models.CharField(max_length=120, blank=True, db_default="")
 
     # Identity, from the last successful probe.
     model_name = models.CharField(max_length=120, blank=True)
@@ -109,6 +129,26 @@ class Recorder(TimeStampedModel):
             return self.detected_brand
         return self.brand
 
+    @property
+    def driver_capabilities(self) -> dict:
+        """What this recorder's brand can do, without opening a connection.
+
+        The client asks before it draws: a Direct-RTSP box gets live tiles and
+        no playback control, rather than a control that fails when pressed.
+        ONVIF is the one brand whose answer here is a floor rather than the
+        truth — Profile G is discovered per device, so a probe may widen it.
+        """
+        from .drivers.registry import driver_class_for_brand
+
+        driver_class = driver_class_for_brand(self.effective_brand)
+        if driver_class is None:
+            return {"playback": False, "search": False, "snapshot": False}
+        return {
+            "playback": driver_class.supports_playback,
+            "search": driver_class.supports_search,
+            "snapshot": driver_class.supports_snapshot,
+        }
+
     def as_target(self) -> RecorderTarget:
         return RecorderTarget(
             host=self.host,
@@ -118,6 +158,14 @@ class Recorder(TimeStampedModel):
             password=self.password,
             use_https=self.use_https,
             clock_offset_minutes=self.clock_offset_minutes,
+            # Per-brand configuration the shipped two never need. Carried in
+            # ``extra`` so ``RecorderTarget`` stays a connection description
+            # rather than growing a column per brand.
+            extra={
+                "rtsp_path_template": self.rtsp_path_template,
+                "onvif_service_path": self.onvif_service_path,
+                "channel_count": self.channel_count,
+            },
         )
 
 

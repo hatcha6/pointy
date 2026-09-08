@@ -180,6 +180,15 @@ class RecorderDriver(ABC):
     brand = ""
     label = ""
 
+    # What this brand can actually do. Both shipped brands do everything, so
+    # these default to true and only the newer drivers narrow them — a driver
+    # that cannot play back says so here instead of raising from a button the
+    # client should never have drawn. ONVIF sets ``supports_playback`` per
+    # device, because Profile G is discovered rather than known in advance.
+    supports_playback = True
+    supports_search = True
+    supports_snapshot = True
+
     def __init__(self, target: RecorderTarget):
         self.target = target
         self._session = requests.Session()

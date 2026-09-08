@@ -53,6 +53,9 @@ class RecorderSerializer(serializers.ModelSerializer):
     has_password = serializers.SerializerMethodField()
     camera_count = serializers.IntegerField(read_only=True)
     cameras = CameraSerializer(many=True, read_only=True)
+    capabilities = serializers.DictField(
+        source="driver_capabilities", read_only=True
+    )
 
     class Meta:
         model = Recorder
@@ -69,6 +72,8 @@ class RecorderSerializer(serializers.ModelSerializer):
             "has_password",
             "use_https",
             "is_enabled",
+            "rtsp_path_template",
+            "onvif_service_path",
             "model_name",
             "firmware",
             "serial_number",
@@ -80,6 +85,7 @@ class RecorderSerializer(serializers.ModelSerializer):
             "last_seen_at",
             "camera_count",
             "cameras",
+            "capabilities",
         ]
         read_only_fields = [
             "id",
@@ -87,7 +93,6 @@ class RecorderSerializer(serializers.ModelSerializer):
             "model_name",
             "firmware",
             "serial_number",
-            "channel_count",
             "clock_offset_minutes",
             "clock_offset_is_measured",
             "status",
@@ -95,10 +100,41 @@ class RecorderSerializer(serializers.ModelSerializer):
             "last_seen_at",
             "camera_count",
             "cameras",
+            "capabilities",
         ]
 
     def get_has_password(self, recorder):
         return bool(recorder.password)
+
+    def validate(self, attrs):
+        """A Direct-RTSP recorder is unusable without the two things only a
+        person can supply, so it is refused at the form rather than at the
+        stream — where the failure would read as a broken camera.
+
+        Both fields fall back to the stored row so a PATCH that touches neither
+        still validates against what is actually configured.
+        """
+
+        def current(name):
+            if name in attrs:
+                return attrs[name]
+            return getattr(self.instance, name, None)
+
+        if current("brand") != Recorder.Brand.DIRECT_RTSP:
+            return attrs
+        errors = {}
+        if not str(current("rtsp_path_template") or "").strip():
+            errors["rtsp_path_template"] = (
+                "A Direct-RTSP recorder needs the stream address template, "
+                "because it has no API to be asked for one."
+            )
+        if not (current("channel_count") or 0):
+            errors["channel_count"] = (
+                "Set how many cameras this recorder has — it cannot be asked."
+            )
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
 
     def update(self, instance, validated_data):
         # A blank password on update means "unchanged". Without this, opening
@@ -122,6 +158,12 @@ class RecorderTestSerializer(serializers.Serializer):
         choices=Recorder.Brand.choices,
         required=False,
     )
+    # Brand-specific settings the test has to honour too: testing a Direct-RTSP
+    # box without its template would report "unreachable" for a recorder that is
+    # answering perfectly well.
+    rtsp_path_template = serializers.CharField(required=False, allow_blank=True)
+    onvif_service_path = serializers.CharField(required=False, allow_blank=True)
+    channel_count = serializers.IntegerField(required=False, min_value=0, max_value=256)
 
 
 class DetectedChannelSerializer(serializers.Serializer):

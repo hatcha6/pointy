@@ -16399,6 +16399,36 @@ class AppLocalizationsAr extends AppLocalizations {
   String get recorderBrandDahua => 'Dahua';
 
   @override
+  String get recorderBrandXiongmai => 'Xiongmai / XMEye';
+
+  @override
+  String get recorderBrandOnvif => 'ONVIF (أنواع أخرى)';
+
+  @override
+  String get recorderBrandGenericRtsp => 'بث مباشر RTSP (مشاهدة حية فقط)';
+
+  @override
+  String get recorderRtspTemplateLabel => 'عنوان البث (RTSP)';
+
+  @override
+  String get recorderRtspTemplateHelp =>
+      'اختر قالبًا جاهزًا من الأسفل، أو اكتب العنوان بنفسك.';
+
+  @override
+  String get recorderChannelCountLabel => 'عدد الكاميرات';
+
+  @override
+  String get recorderChannelCountHelp =>
+      'هذا الجهاز لا يمكن سؤاله، لذا أدخل العدد يدويًا.';
+
+  @override
+  String get recorderPresetLabel => 'قالب جاهز';
+
+  @override
+  String get recorderLiveOnlyNotice =>
+      'هذا الجهاز يعرض البث الحي فقط — لا يمكن ربط الفواتير بالتسجيلات.';
+
+  @override
   String get recorderHostLabel => 'عنوان الجهاز على الشبكة';
 
   @override

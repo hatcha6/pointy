@@ -5,9 +5,18 @@ name. So ``auto`` is a first-class brand value and detection is a real code
 path, not a convenience — it tries each dialect's identity endpoint and takes
 the first that answers as itself.
 
-Order matters only for speed: Hikvision's ISAPI is by far the more common of the
-two in this market, and a Dahua answers its ``/ISAPI/`` probe with a 404 in
-milliseconds, so leading with Hikvision costs a Dahua nothing.
+Order matters for speed and, once ONVIF is in the list, for correctness.
+Hikvision's ISAPI is the more common of the two named brands in this market and
+a Dahua answers its ``/ISAPI/`` probe with a 404 in milliseconds, so leading
+with Hikvision costs a Dahua nothing. Xiongmai comes next: it is only probed
+on its own port 34567, so a box that is not one refuses the connection in
+milliseconds. ONVIF goes last because it is the generic answer — a Hikvision and
+a Xiongmai both also speak it, and detecting either as "ONVIF" would trade their
+recording search away for nothing.
+
+``generic_rtsp`` is deliberately **not** in the detection order. It has no
+identity endpoint — it cannot be detected, only chosen — and putting a driver
+that always succeeds into an ordered search would make every box a generic one.
 """
 
 from __future__ import annotations
@@ -22,14 +31,28 @@ from .base import (
     RecorderTarget,
 )
 from .dahua import DahuaDriver
+from .generic_rtsp import GenericRtspDriver
 from .hikvision import HikvisionDriver
+from .onvif import OnvifDriver
+from .xiongmai import XiongmaiDriver
 
 logger = logging.getLogger(__name__)
 
 BRAND_AUTO = "auto"
 
-DRIVER_CLASSES: tuple[type[RecorderDriver], ...] = (HikvisionDriver, DahuaDriver)
-DRIVERS_BY_BRAND = {cls.brand: cls for cls in DRIVER_CLASSES}
+#: Tried in order by :func:`detect_driver`. See the module docstring for why
+#: ONVIF is last and why ``generic_rtsp`` is absent.
+DRIVER_CLASSES: tuple[type[RecorderDriver], ...] = (
+    HikvisionDriver,
+    DahuaDriver,
+    XiongmaiDriver,
+    OnvifDriver,
+)
+
+#: Everything that can be *chosen*, which is a superset of what can be detected.
+DRIVERS_BY_BRAND = {
+    cls.brand: cls for cls in (*DRIVER_CLASSES, GenericRtspDriver)
+}
 
 
 def driver_class_for_brand(brand: str):

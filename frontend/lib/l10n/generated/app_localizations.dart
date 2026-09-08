@@ -28439,6 +28439,60 @@ abstract class AppLocalizations {
   /// **'Dahua'**
   String get recorderBrandDahua;
 
+  /// No description provided for @recorderBrandXiongmai.
+  ///
+  /// In ar, this message translates to:
+  /// **'Xiongmai / XMEye'**
+  String get recorderBrandXiongmai;
+
+  /// No description provided for @recorderBrandOnvif.
+  ///
+  /// In ar, this message translates to:
+  /// **'ONVIF (أنواع أخرى)'**
+  String get recorderBrandOnvif;
+
+  /// No description provided for @recorderBrandGenericRtsp.
+  ///
+  /// In ar, this message translates to:
+  /// **'بث مباشر RTSP (مشاهدة حية فقط)'**
+  String get recorderBrandGenericRtsp;
+
+  /// No description provided for @recorderRtspTemplateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عنوان البث (RTSP)'**
+  String get recorderRtspTemplateLabel;
+
+  /// No description provided for @recorderRtspTemplateHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر قالبًا جاهزًا من الأسفل، أو اكتب العنوان بنفسك.'**
+  String get recorderRtspTemplateHelp;
+
+  /// No description provided for @recorderChannelCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الكاميرات'**
+  String get recorderChannelCountLabel;
+
+  /// No description provided for @recorderChannelCountHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الجهاز لا يمكن سؤاله، لذا أدخل العدد يدويًا.'**
+  String get recorderChannelCountHelp;
+
+  /// No description provided for @recorderPresetLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'قالب جاهز'**
+  String get recorderPresetLabel;
+
+  /// No description provided for @recorderLiveOnlyNotice.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الجهاز يعرض البث الحي فقط — لا يمكن ربط الفواتير بالتسجيلات.'**
+  String get recorderLiveOnlyNotice;
+
   /// No description provided for @recorderHostLabel.
   ///
   /// In ar, this message translates to:

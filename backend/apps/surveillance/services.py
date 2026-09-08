@@ -82,6 +82,26 @@ def target_from_payload(payload: dict, *, fallback: Recorder | None = None):
             else (fallback.use_https if fallback else False)
         ),
         clock_offset_minutes=(fallback.clock_offset_minutes if fallback else 0),
+        # Brand-specific settings, resolved the same way: what the form holds,
+        # falling back to what is stored. A Direct-RTSP recorder tested without
+        # its template would be reported unreachable while answering fine.
+        extra={
+            "rtsp_path_template": str(
+                payload.get("rtsp_path_template")
+                if payload.get("rtsp_path_template") is not None
+                else (fallback.rtsp_path_template if fallback else "")
+            ),
+            "onvif_service_path": str(
+                payload.get("onvif_service_path")
+                if payload.get("onvif_service_path") is not None
+                else (fallback.onvif_service_path if fallback else "")
+            ),
+            "channel_count": int(
+                payload.get("channel_count")
+                if payload.get("channel_count") is not None
+                else (fallback.channel_count if fallback else 0)
+            ),
+        },
     )
 
 

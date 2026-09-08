@@ -50,7 +50,14 @@ enum CameraStatus {
 enum RecorderBrand {
   auto('auto'),
   hikvision('hikvision'),
-  dahua('dahua');
+  dahua('dahua'),
+  // The boxes nobody chose on purpose, which in this market is most of them.
+  // `xiongmai` speaks its own protocol on port 34567 and is what gives that
+  // hardware channel names and recording search; `onvif` is the standard the
+  // rest answer; `genericRtsp` is a stream address and nothing else.
+  xiongmai('xiongmai'),
+  onvif('onvif'),
+  genericRtsp('generic_rtsp');
 
   const RecorderBrand(this.wireValue);
 
@@ -193,6 +200,7 @@ class Recorder {
     this.firmware = '',
     this.serialNumber = '',
     this.channelCount = 0,
+    this.rtspPathTemplate = '',
     this.clockOffsetMinutes = 0,
     this.clockOffsetIsMeasured = false,
     this.lastError = '',
@@ -218,6 +226,9 @@ class Recorder {
   final String firmware;
   final String serialNumber;
   final int channelCount;
+
+  /// The stream address template, for the brands that need one typed in.
+  final String rtspPathTemplate;
 
   /// How far the recorder's clock is from UTC, measured at the last probe.
   final int clockOffsetMinutes;
@@ -247,6 +258,7 @@ class Recorder {
       firmware: json['firmware']?.toString() ?? '',
       serialNumber: json['serial_number']?.toString() ?? '',
       channelCount: (json['channel_count'] as num?)?.toInt() ?? 0,
+      rtspPathTemplate: json['rtsp_path_template']?.toString() ?? '',
       clockOffsetMinutes: (json['clock_offset_minutes'] as num?)?.toInt() ?? 0,
       clockOffsetIsMeasured: json['clock_offset_is_measured'] == true,
       lastError: json['last_error']?.toString() ?? '',
@@ -275,6 +287,8 @@ class RecorderDraft {
     this.password = '',
     this.useHttps = false,
     this.isEnabled = true,
+    this.rtspPathTemplate = '',
+    this.channelCount = 0,
   });
 
   final int? id;
@@ -291,6 +305,18 @@ class RecorderDraft {
   final bool useHttps;
   final bool isEnabled;
 
+  /// Only for [RecorderBrand.genericRtsp], and as an optional override for
+  /// [RecorderBrand.xiongmai] whose OEMs vary the stream path. Carries
+  /// `{channel}` and `{stream}` placeholders.
+  final String rtspPathTemplate;
+
+  /// Only for [RecorderBrand.genericRtsp]: a box with no control API cannot be
+  /// asked how many cameras it has, so somebody has to say.
+  final int channelCount;
+
+  /// Whether this brand needs a stream address typed in rather than discovered.
+  bool get needsRtspTemplate => brand == RecorderBrand.genericRtsp;
+
   factory RecorderDraft.fromRecorder(Recorder recorder) {
     return RecorderDraft(
       id: recorder.id,
@@ -302,6 +328,8 @@ class RecorderDraft {
       username: recorder.username,
       useHttps: recorder.useHttps,
       isEnabled: recorder.isEnabled,
+      rtspPathTemplate: recorder.rtspPathTemplate,
+      channelCount: recorder.channelCount,
     );
   }
 
@@ -315,6 +343,8 @@ class RecorderDraft {
     String? password,
     bool? useHttps,
     bool? isEnabled,
+    String? rtspPathTemplate,
+    int? channelCount,
   }) {
     return RecorderDraft(
       id: id,
@@ -327,6 +357,8 @@ class RecorderDraft {
       password: password ?? this.password,
       useHttps: useHttps ?? this.useHttps,
       isEnabled: isEnabled ?? this.isEnabled,
+      rtspPathTemplate: rtspPathTemplate ?? this.rtspPathTemplate,
+      channelCount: channelCount ?? this.channelCount,
     );
   }
 
@@ -341,6 +373,11 @@ class RecorderDraft {
       if (password.isNotEmpty) 'password': password,
       'use_https': useHttps,
       'is_enabled': isEnabled,
+      'rtsp_path_template': rtspPathTemplate,
+      // Only meaningful for Direct RTSP; every other brand has it overwritten
+      // by the probe, so sending it costs nothing and sending it conditionally
+      // would mean a blank form could not clear it.
+      'channel_count': channelCount,
     };
   }
 }
