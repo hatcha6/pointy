@@ -153,7 +153,14 @@ chmod 0755 "${root}/DEBIAN/postinst" "${root}/DEBIAN/postrm"
 mkdir -p "${OUTDIR}"
 deb="${OUTDIR}/${PKG_NAME}-${VERSION}-linux-x64.deb"
 # --root-owner-group so the files land as root:root without needing fakeroot.
-dpkg-deb --build --root-owner-group "${root}" "${deb}" >/dev/null
+# -Zxz because the DEFAULT is not portable: dpkg-deb on the Ubuntu 24.04 CI
+# runner writes zstd members, which dpkg only learned to read in 1.21.18 — so a
+# package built there installs on Mint 22 and fails on an older Debian-based
+# till with "unsupported compression". xz is understood by every dpkg in
+# circulation and compresses this payload better anyway. Do not drop this flag
+# on the grounds that it works on your machine; the compressor is chosen by the
+# BUILDER's dpkg version, not the target's.
+dpkg-deb --build --root-owner-group -Zxz "${root}" "${deb}" >/dev/null
 
 echo "==> ${deb}"
 dpkg-deb --info "${deb}" | sed 's/^/    /'
