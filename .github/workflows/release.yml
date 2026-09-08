@@ -96,10 +96,13 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Android — one release APK for every Android till we sell to (minSdk 23),
-  # carrying both ARM ABIs. x86_64 is deliberately excluded: no shipping
-  # cashier tablet or phone uses it (it means Chromebooks, Android-x86 mini PCs
-  # and Intel-host emulators), and its AOT compile was a third of the longest
-  # job in this workflow — three gen_snapshot processes on a 2-vCPU runner.
+  # carrying both ARM ABIs. x86_64 is deliberately excluded: no shipping cashier
+  # tablet or phone uses it (it means Chromebooks, Android-x86 mini PCs and
+  # Intel-host emulators). What that actually bought, measured on v0.5.0: the
+  # APK went 120.4 MB -> 79.5 MB, which is what every till pulls over the shop's
+  # own line on first install and on each self-update. It bought almost NO build
+  # time (15.5 -> 14.9 min): whatever this job spends 15 minutes on, it is not
+  # the third ABI's AOT compile. Do not cite speed as the reason.
   # ---------------------------------------------------------------------------
   build-android:
     name: Build Android APK
@@ -546,51 +549,51 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Two of these dominate the job and neither is CPU-bound for most of its
-      # life — the web image downloads a Flutter SDK, the WSL rootfs
-      # apt-installs a Docker engine — so they run in the background while the
-      # small images build in front of them. Their output is captured and
-      # printed after the wait, so a failure is still readable instead of
-      # interleaved with three other builds.
-      - name: Build images, pull bases, build the WSL rootfs
-        shell: bash
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
+      # SEQUENTIAL ON PURPOSE, and the measurement is the reason. Backgrounding
+      # the web image and the WSL rootfs behind the small builds looked free —
+      # both spend much of their life downloading — but a GitHub runner has 2
+      # vCPUs and every one of these saturates them: a Flutter web compile, a
+      # Cython backend compile, and gzip -9 over a 1.5 GB rootfs. Run together
+      # they took 27.7 min on v0.5.0; run in series they take about 8. The
+      # parallelism that pays here is the JOB split, not this. Separate steps
+      # also keep the per-step timings that made the regression visible.
+      - name: Build backend image
+        run: >
+          docker build -f backend/Dockerfile
+          --build-arg POINTY_VERSION=${{ needs.version.outputs.version }}
+          -t "pointy-backend:${{ needs.version.outputs.version }}" .
+
+      - name: Build relay image
+        run: >
+          docker build -f relay/Dockerfile
+          --build-arg POINTY_VERSION=${{ needs.version.outputs.version }}
+          -t "pointy-relay:${{ needs.version.outputs.version }}" .
+
+      - name: Build LAN front-door image (nginx + flip config)
+        run: >
+          docker build -f deploy/onprem/edge/Dockerfile
+          -t "${EDGE_IMAGE}" .
+
+      - name: Build web image (Flutter web + nginx)
+        run: >
+          docker build -f deploy/onprem/web/Dockerfile
+          --build-arg FLUTTER_VERSION=${{ env.FLUTTER_VERSION }}
+          -t "pointy-web:${{ needs.version.outputs.version }}" .
+
+      - name: Pull database + cache images
         run: |
-          set -euo pipefail
-          mkdir -p logs wsl-rootfs
+          docker pull "${POSTGRES_IMAGE}"
+          docker pull "${REDIS_IMAGE}"
+          docker pull "${PGBOUNCER_IMAGE}"
 
-          docker build -f deploy/onprem/web/Dockerfile \
-            --build-arg FLUTTER_VERSION="${FLUTTER_VERSION}" \
-            -t "pointy-web:${VERSION}" . > logs/web.log 2>&1 &
-          web_pid=$!
-
-          # The Windows install path is "WSL2 + this pre-baked distro". Building
-          # it here rather than on the shop's PC is what keeps an on-prem
-          # install fully offline: install.sh's Docker bootstrap fetches
-          # get.docker.com, which a shop behind a dead line can never reach.
-          bash deploy/onprem/wsl/build-rootfs.sh wsl-rootfs/pointy-wsl-rootfs.tar.gz \
-            > logs/wsl.log 2>&1 &
-          wsl_pid=$!
-
-          docker pull -q "${POSTGRES_IMAGE}"
-          docker pull -q "${REDIS_IMAGE}"
-          docker pull -q "${PGBOUNCER_IMAGE}"
-
-          docker build -f backend/Dockerfile \
-            --build-arg POINTY_VERSION="${VERSION}" \
-            -t "pointy-backend:${VERSION}" .
-          docker build -f relay/Dockerfile \
-            --build-arg POINTY_VERSION="${VERSION}" \
-            -t "pointy-relay:${VERSION}" .
-          docker build -f deploy/onprem/edge/Dockerfile -t "${EDGE_IMAGE}" .
-
-          failed=0
-          wait "${web_pid}" || failed=1
-          echo "::group::web image (built in the background)"; cat logs/web.log; echo "::endgroup::"
-          wait "${wsl_pid}" || failed=1
-          echo "::group::WSL rootfs (built in the background)"; cat logs/wsl.log; echo "::endgroup::"
-          [ "${failed}" -eq 0 ] || { echo "a background build failed — open the groups above" >&2; exit 1; }
+      # The Windows install path is "WSL2 + this pre-baked distro". Building it
+      # here rather than on the shop's PC is what keeps an on-prem install fully
+      # offline: install.sh's Docker bootstrap fetches get.docker.com, which a
+      # shop behind a dead line can never reach.
+      - name: Build the WSL distro rootfs
+        run: |
+          mkdir -p wsl-rootfs
+          bash deploy/onprem/wsl/build-rootfs.sh wsl-rootfs/pointy-wsl-rootfs.tar.gz
 
       # Bundling the WSL MSI lets bootstrap-wsl.ps1 install WSL on a machine with
       # no internet and no Microsoft Store (routinely stripped from POS images).
