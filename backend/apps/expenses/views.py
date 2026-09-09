@@ -41,13 +41,14 @@ class ExpenseViewSet(
     # ``cancel`` retracts it instead: the money goes back into the till it left,
     # and the row keeps its reason.
     #
-    # ``DELETE`` survives as a deprecated alias for that, because a shop's tills
-    # do not all update the moment its backend does — nothing gates an older app
-    # from talking to a newer server, so removing the verb outright would break
-    # the delete button on every till still running the previous build. It does
-    # the same thing the button always promised (make this expense stop
-    # counting) and rather more than it delivered. Retire it once the fleet has
-    # moved past the release that introduced ``cancel``.
+    # ``DELETE`` used to survive here as a deprecated alias, so tills still on
+    # the build before ``cancel`` kept a working delete button. It was retired
+    # in 0.5.2: every till on ``main`` has called ``cancel`` since 0.5.0, and
+    # the Windows 7/8 compat build — which does still send ``DELETE``, and whose
+    # expenses screen is gated on ``expenses.delete_expense`` rather than
+    # stripped at build time — is only signed into for POS work, by staff who do
+    # not hold it. The verb is simply unmapped now, which the permission
+    # layer refuses by default; retraction happens one way.
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
     permission_map = {
@@ -57,7 +58,6 @@ class ExpenseViewSet(
         "update": ("expenses.change_expense",),
         "partial_update": ("expenses.change_expense",),
         "cancel": ("expenses.delete_expense",),
-        "destroy": ("expenses.delete_expense",),
     }
     queryset = Expense.objects.select_related(
         "category",
@@ -79,20 +79,6 @@ class ExpenseViewSet(
             request,
             lambda: super(ExpenseViewSet, self).create(request, *args, **kwargs),
         )
-
-    def destroy(self, request, *args, **kwargs):
-        """The old delete verb, kept for tills that have not updated yet.
-
-        Retracts rather than deletes — see the class comment. Answers 204 so an
-        older client, which expects nothing back, behaves exactly as it did.
-        """
-        expense = self.get_object()
-        cancel_expense(
-            expense,
-            reason=str(request.data.get("reason", "")).strip(),
-            request=request,
-        )
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):

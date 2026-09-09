@@ -442,17 +442,24 @@ class DrawerPaidExpenseEditTests(ExpensesTestMixin, TestCase):
         self.assertEqual(data["totals"]["register_payout"], "0.00")
         self.assertEqual(data["summary"]["total"], "0.00")
 
-    def test_the_old_delete_verb_now_retracts_instead_of_deleting(self):
-        """A till still running the previous build keeps working, and gets the
-        better behaviour: the row survives and the drawer gets its money back."""
+    def test_the_old_delete_verb_is_gone_and_changes_nothing(self):
+        """0.5.2 retired the deprecated alias.
+
+        The refusal is 403 rather than 405 because DRF runs permissions before
+        it resolves the verb, and ``HasPointyPermission`` denies any action it
+        has no entry for. That deny-by-default is what actually closes the door
+        here, so it is asserted rather than tidied into a 405: an expense a
+        client tried to DELETE is left exactly as it was, still counting, with
+        the drawer untouched.
+        """
         session, expense = self._drawer_paid_expense()
 
         response = self.manager_client.delete(
             reverse("expense-detail", args=[expense.pk])
         )
 
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         expense.refresh_from_db()
         session.refresh_from_db()
-        self.assertEqual(expense.doc_status, DocumentStatus.CANCELLED)
-        self.assertEqual(session.expected_cash, Decimal("500.00"))
+        self.assertEqual(expense.doc_status, DocumentStatus.SUBMITTED)
+        self.assertEqual(session.expected_cash, Decimal("470.00"))
