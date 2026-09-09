@@ -217,12 +217,26 @@ class _Wall extends StatelessWidget {
         final tileWidth = (available - _gap * (columns - 1)) / columns;
         final ratio = MediaQuery.devicePixelRatioOf(context);
 
+        final tileHeight = tileWidth * 9 / 16;
+
         return GridView.builder(
           padding: padding,
-          // Zero cache extent is the point, not a tuning knob: a tile Flutter
-          // keeps alive off-screen is a camera still being pulled off the
-          // recorder for a picture nobody can see.
-          cacheExtent: 0,
+          // One row of headroom, and no more.
+          //
+          // This was zero, on the reasoning that a tile kept alive off-screen
+          // is a camera still being pulled for a picture nobody can see. True,
+          // but at zero Flutter destroys a tile the instant it is one pixel
+          // past the edge — so nudging the wall tore down the stream and
+          // scrolling back paid a full ffmpeg cold start against the DVR. In
+          // the field that read as the feature being broken (2026-09-08).
+          //
+          // A single row is the smallest thing that makes ordinary scrolling
+          // free: it holds the tiles a person is *about* to look at and the one
+          // they just glanced away from, while a wall scrolled properly away
+          // still stops pulling. The rest of the fix is on the server — the
+          // producer lingers, and a reattach paints the last frame it held
+          // rather than a blank square.
+          cacheExtent: tileHeight + _gap,
           physics: const AlwaysScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,

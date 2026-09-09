@@ -151,7 +151,9 @@ def active_process_count() -> int:
     return _process_count
 
 
-def _base_input_args(url: str, *, readrate: float | None) -> list[str]:
+def _base_input_args(
+    url: str, *, readrate: float | None, low_latency: bool = False
+) -> list[str]:
     args = [
         "-hide_banner",
         "-loglevel",
@@ -163,6 +165,27 @@ def _base_input_args(url: str, *, readrate: float | None) -> list[str]:
         "-rtsp_transport",
         "tcp",
     ]
+    if low_latency:
+        # ffmpeg's defaults buy stream-detection accuracy with time: it reads up
+        # to 5 MB or 5 seconds of input before it will emit anything. For a live
+        # tile that is the entire wait — the shop sees a blank square while
+        # ffmpeg makes up its mind about a stream we already know is H.264 over
+        # RTSP. Half a second and 512 KB is ample to find the parameter sets on
+        # every box we have seen, and cuts the cold start by several seconds.
+        #
+        # Deliberately NOT applied to the export/playback path: there a wrong
+        # guess about the stream corrupts a file somebody keeps, and the extra
+        # seconds cost nobody anything.
+        args += [
+            "-fflags",
+            "nobuffer",
+            "-flags",
+            "low_delay",
+            "-probesize",
+            "524288",
+            "-analyzeduration",
+            "500000",
+        ]
     if readrate is not None and probe()["supports_readrate"]:
         args += ["-readrate", f"{readrate:g}"]
     elif readrate is not None:
@@ -192,7 +215,9 @@ def open_mjpeg_stream(
             "Video playback needs ffmpeg, which is not installed on this server."
         )
     slot = reserve_slot()
-    args = [path] + _base_input_args(url, readrate=readrate)
+    args = [path] + _base_input_args(
+        url, readrate=readrate, low_latency=readrate is None
+    )
     args += ["-an", "-f", "mjpeg", "-q:v", str(int(quality)), "-r", str(int(fps))]
     if width:
         # -2 keeps the aspect ratio and an even height, which the JPEG encoder

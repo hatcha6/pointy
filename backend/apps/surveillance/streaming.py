@@ -37,10 +37,29 @@ logger = logging.getLogger(__name__)
 JPEG_SOI = b"\xff\xd8"
 JPEG_EOI = b"\xff\xd9"
 
-# Seconds a producer keeps running with nobody watching. Long enough to cover a
-# screen change or a page reload, short enough that a shop that closed the wall
-# stops loading its DVR almost immediately.
-DEFAULT_LINGER_SECONDS = 6.0
+# Seconds a producer keeps running with nobody watching.
+#
+# Raised from 6s after the first field install (2026-09-08): six seconds covers
+# a page reload but *not* a person scrolling a camera out of view, glancing at
+# another, and scrolling back — which is the single most common thing anyone
+# does with a wall of tiles. Every one of those cost a full ffmpeg cold start
+# against the DVR, and the owner reads that as the feature being broken.
+#
+# The cost of holding it open is one ffmpeg per camera someone was recently
+# watching, which is why this is a linger and not a keep-warm: a shop that
+# navigates away from the wall entirely still stops loading its recorder inside
+# a minute.
+DEFAULT_LINGER_SECONDS = 30.0
+
+# How long a retired stream's final frame stays worth showing.
+#
+# A cold start cannot produce a frame until the recorder has accepted an RTSP
+# session and sent a keyframe — seconds, on the boxes in this market. Painting
+# the last frame we held immediately turns that wait from a blank tile into a
+# still image that starts moving, which is the difference between "slow" and
+# "broken". Past this, a stale frame would be a lie about what the camera can
+# see, so it is dropped and the tile waits honestly.
+DEFAULT_LAST_FRAME_TTL_SECONDS = 300.0
 
 # A producer that has published nothing for this long is dead upstream: a
 # recorder that accepted the connection and went quiet. Subscribers are released
@@ -323,12 +342,93 @@ class FrameBroker:
     def __init__(self):
         self._lock = threading.Lock()
         self._producers: dict[str, _Producer] = {}
+        # The last frame each stream produced, kept past the producer's death so
+        # a reattach paints instantly. Bounded by the same ceiling as producers,
+        # so this is a few MB of JPEG at worst, and every entry is one a person
+        # was recently looking at.
+        self._last_frames: dict[str, Frame] = {}
 
     @property
     def linger_seconds(self):
         return float(
             _setting("POINTY_SURVEILLANCE_LINGER_SECONDS", DEFAULT_LINGER_SECONDS)
         )
+
+    @property
+    def last_frame_ttl_seconds(self):
+        return float(
+            _setting(
+                "POINTY_SURVEILLANCE_LAST_FRAME_TTL_SECONDS",
+                DEFAULT_LAST_FRAME_TTL_SECONDS,
+            )
+        )
+
+    def remember(self, key: str, frame: Frame):
+        with self._lock:
+            self._last_frames[key] = frame
+            # Evict in insertion order rather than by age: the oldest inserted
+            # is the one nobody has watched for longest, and a dict preserves
+            # that ordering for free.
+            while len(self._last_frames) > self.max_producers:
+                self._last_frames.pop(next(iter(self._last_frames)))
+
+    def last_frame(self, key: str) -> Frame | None:
+        """The newest frame this stream produced, if it is still worth showing."""
+        ttl = self.last_frame_ttl_seconds
+        if ttl <= 0:
+            return None
+        with self._lock:
+            frame = self._last_frames.get(key)
+        if frame is None:
+            return None
+        now = datetime.now(dt_timezone.utc)
+        age = (now - frame.captured_at).total_seconds()
+        if age > ttl or age < -60:
+            # Negative means a playback frame from the future of this window —
+            # not a live still, and not something to paint as one.
+            return None
+        return frame
+
+    def forget(self, key: str):
+        with self._lock:
+            self._last_frames.pop(key, None)
+
+    def _evict_idle_locked(self):
+        """Reclaim the longest-idle unwatched producer. Caller holds ``_lock``.
+
+        Lingering is what makes scrolling a wall cheap, but it also means a
+        person who scrolls past sixteen cameras can leave every slot held by a
+        stream nobody is watching — and then the camera they actually stopped
+        on is refused with "too many streams", which is a worse bug than the
+        one the linger fixed.
+
+        So a viewer always wins against a linger: the least recently watched
+        idle producer is told to stop. Producers with a live subscriber are
+        never touched, which is why this can still refuse — a genuine wall of
+        real viewers is the case the ceiling exists for.
+        """
+        idle = [
+            (producer.idle_since, key, producer)
+            for key, producer in self._producers.items()
+            if producer.subscribers == 0 and not producer.finished
+        ]
+        if not idle:
+            return
+        _, key, producer = min(idle, key=lambda item: item[0])
+        with producer.lock:
+            if producer.subscribers or producer.finished:
+                # Someone attached while we were choosing. Leave it alone and
+                # let the ceiling refuse instead of killing a live viewer's
+                # picture to make room for another.
+                return
+            producer.finished = True
+            producer.lock.notify_all()
+        # Drop it from the registry now rather than waiting for the thread to
+        # notice: the caller is about to check the ceiling again, and the
+        # producer's own ``_retire`` is idempotent about a key already gone.
+        if self._producers.get(key) is producer:
+            del self._producers[key]
+        logger.debug("camera stream %s evicted to make room", key)
 
     @property
     def stall_seconds(self):
@@ -346,6 +446,11 @@ class FrameBroker:
         with self._lock:
             if self._producers.get(key) is producer:
                 del self._producers[key]
+        # Hold on to what it last showed, so the next viewer of this camera
+        # sees that instead of a blank tile while ffmpeg starts again.
+        final = producer.latest
+        if final is not None:
+            self.remember(key, final)
 
     @contextmanager
     def subscribe(self, key: str, build_source):
@@ -355,11 +460,14 @@ class FrameBroker:
         the common case — a second viewer of a camera someone is already
         watching — never opens a connection to the recorder at all.
         """
+        started_cold = False
         with self._lock:
             producer = self._producers.get(key)
             if producer is not None and producer.finished:
                 producer = None
             if producer is None:
+                if len(self._producers) >= self.max_producers:
+                    self._evict_idle_locked()
                 if len(self._producers) >= self.max_producers:
                     raise StreamError(
                         "Too many camera streams are open on this server."
@@ -368,12 +476,33 @@ class FrameBroker:
                 self._producers[key] = producer
                 producer.attach()
                 producer.thread.start()
+                started_cold = True
             else:
                 producer.attach()
+        # Only a cold start needs the warm frame. Joining a producer that is
+        # already running yields its current frame immediately anyway, and
+        # prepending a stale one there would show a viewer a step backwards.
+        warm = self.last_frame(key) if started_cold else None
         try:
-            yield producer.stream(self.stall_seconds)
+            yield self._with_warm_frame(warm, producer.stream(self.stall_seconds))
         finally:
             producer.detach()
+
+    @staticmethod
+    def _with_warm_frame(warm: Frame | None, live):
+        """Paint the last known frame first, then hand over to the live stream.
+
+        The sequence is rewritten to 0 so it cannot collide with the new
+        producer's numbering, which restarts at 1 — without that, a cached
+        sequence of 500 would make ``stream()`` discard every real frame until
+        the producer caught up, and the tile would sit on a still image
+        forever.
+        """
+        if warm is not None:
+            yield Frame(
+                data=warm.data, sequence=0, captured_at=warm.captured_at
+            )
+        yield from live
 
     def shutdown(self):
         """Test seam: stop every producer and wait for the threads to unwind."""

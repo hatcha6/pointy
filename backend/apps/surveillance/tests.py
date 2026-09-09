@@ -304,6 +304,110 @@ class FrameBrokerTests(TestCase):
                 list(stream)
         self.assertIn("recorder said no", str(caught.exception))
 
+
+    def test_a_reattach_paints_the_last_frame_before_the_stream_warms_up(self):
+        """The scroll-away-and-back case, which is what a wall of tiles is for.
+
+        A cold start cannot produce anything until the recorder has accepted an
+        RTSP session and sent a keyframe. Without this the tile is blank for
+        those seconds and the owner reads the feature as broken.
+        """
+        with self.broker.subscribe("cam1", lambda: _CountingSource(limit=2)) as stream:
+            first = list(stream)
+        self.assertTrue(first)
+
+        with self.broker.subscribe("cam1", lambda: _CountingSource(limit=2)) as stream:
+            second = list(stream)
+        # The very first thing the second viewer got is the frame the first
+        # viewer last saw, not a wait.
+        self.assertEqual(second[0].data, first[-1].data)
+
+    def test_the_warm_frame_never_swallows_the_live_ones(self):
+        """The cached frame carries a high sequence from its old producer; a new
+        producer restarts at 1. Handed through unchanged, ``stream()`` would
+        discard every real frame as older than the warm one and the tile would
+        freeze on a still image."""
+        with self.broker.subscribe("cam1", lambda: _CountingSource(limit=6)) as stream:
+            list(stream)
+        with self.broker.subscribe("cam1", lambda: _CountingSource(limit=6)) as stream:
+            received = list(stream)
+        self.assertGreater(len(received), 1, "live frames were swallowed by the warm one")
+        self.assertEqual(received[0].sequence, 0)
+
+    def test_joining_a_running_producer_is_not_sent_a_stale_frame(self):
+        """It would be a step backwards: the live producer's current frame is
+        already newer than anything cached."""
+        self.broker.remember(
+            "cam1",
+            Frame(
+                data=b"\xff\xd8STALE\xff\xd9",
+                sequence=99,
+                captured_at=datetime.now(dt_timezone.utc),
+            ),
+        )
+        with self.broker.subscribe("cam1", lambda: _CountingSource()):
+            with self.broker.subscribe("cam1", lambda: _CountingSource()) as second:
+                frame = next(iter(second))
+        self.assertNotIn(b"STALE", frame.data)
+
+    @override_settings(POINTY_SURVEILLANCE_LAST_FRAME_TTL_SECONDS=0)
+    def test_the_warm_frame_can_be_turned_off(self):
+        with self.broker.subscribe("cam1", lambda: _CountingSource(limit=2)) as stream:
+            list(stream)
+        self.assertIsNone(self.broker.last_frame("cam1"))
+
+    def test_a_frame_older_than_the_ttl_is_not_shown_as_live(self):
+        """Painting a ten-minute-old still as if it were the camera now is worse
+        than an honest wait."""
+        self.broker.remember(
+            "cam1",
+            Frame(
+                data=b"\xff\xd8OLD\xff\xd9",
+                sequence=1,
+                captured_at=datetime.now(dt_timezone.utc) - timedelta(hours=1),
+            ),
+        )
+        self.assertIsNone(self.broker.last_frame("cam1"))
+
+    def test_remembered_frames_are_bounded(self):
+        with override_settings(POINTY_SURVEILLANCE_MAX_PRODUCERS=3):
+            for index in range(10):
+                self.broker.remember(
+                    f"cam{index}",
+                    Frame(
+                        data=b"\xff\xd8x\xff\xd9",
+                        sequence=1,
+                        captured_at=datetime.now(dt_timezone.utc),
+                    ),
+                )
+            self.assertLessEqual(len(self.broker._last_frames), 3)
+
+
+    @override_settings(POINTY_SURVEILLANCE_MAX_PRODUCERS=2)
+    def test_a_viewer_beats_a_lingering_stream_for_the_last_slot(self):
+        """Scrolling a wall leaves streams lingering with nobody watching. Those
+        must not hold the ceiling against the camera the person actually stopped
+        on — refusing that is a worse bug than the cold start lingering fixes."""
+        with self.broker.subscribe("cam1", lambda: _CountingSource()):
+            pass  # detaches, but lingers
+        with self.broker.subscribe("cam2", lambda: _CountingSource()):
+            pass  # so does this one — both slots are now held by idle streams
+        self.assertEqual(len(self.broker.active_keys()), 2)
+
+        with self.broker.subscribe("cam3", lambda: _CountingSource()) as stream:
+            self.assertIsNotNone(next(iter(stream)))
+        self.assertIn("cam3", self.broker.active_keys())
+
+    @override_settings(POINTY_SURVEILLANCE_MAX_PRODUCERS=1)
+    def test_a_watched_stream_is_never_evicted_for_a_new_one(self):
+        """Eviction may only reclaim streams nobody is looking at. Killing a
+        live picture to draw another is not a trade worth making."""
+        with self.broker.subscribe("watched", lambda: _CountingSource()):
+            with self.assertRaises(StreamError):
+                with self.broker.subscribe("newcomer", lambda: _CountingSource()):
+                    pass
+            self.assertIn("watched", self.broker.active_keys())
+
     @override_settings(POINTY_SURVEILLANCE_MAX_PRODUCERS=1)
     def test_producer_ceiling_is_enforced(self):
         with self.broker.subscribe("a", lambda: _CountingSource()):
