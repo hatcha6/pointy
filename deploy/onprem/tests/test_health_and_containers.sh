@@ -153,8 +153,21 @@ test_upstream_ready_probes_from_inside_the_front_door() {
   # It must go through `edge`, not curl from the host: a container name the
   # host can reach but nginx cannot resolve would otherwise pass here and fail
   # immediately after the flip.
-  assert_called docker "$COMPOSE exec -T edge wget -q -O /dev/null http://pointy-backend-standby:8000/readyz/"
+  assert_called docker "$COMPOSE exec -T edge wget -q -O /dev/null --header=Host: localhost http://pointy-backend-standby:8000/readyz/"
   assert_eq '0' "$(count_calls curl)"
+}
+
+test_upstream_ready_sends_a_host_django_will_accept() {
+  # The regression that cost Sufian's shop two update attempts on 2026-09-08.
+  # The URL must name the container (nginx has to resolve it) but Django checks
+  # the Host header against ALLOWED_HOSTS, which lists `backend` and never the
+  # standby's name — so every probe came back 400 DisallowedHost, the flip never
+  # happened, and the update burned its whole 30-minute budget before aborting.
+  #
+  # The rehearsal rig could not catch this: it answers probes with a Go stub
+  # that does not validate Host headers at all.
+  assert_ok pu_upstream_ready pointy-backend-standby
+  assert_contains "$(all_calls)" 'Host: localhost'
 }
 
 test_upstream_ready_fails_when_the_probe_fails() {

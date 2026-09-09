@@ -122,8 +122,22 @@ pu_edge_available() {
 # Ask the front door itself whether a backend container is ready. This probes
 # the exact path traffic will take after the flip — container DNS included — so
 # a name that nginx cannot resolve fails here instead of after the switch.
+# Readiness, asked in a way the backend will actually answer.
+#
+# The URL has to name the container, because that is the only address the front
+# door can reach it on — but Django validates the Host header against
+# ALLOWED_HOSTS, which lists `backend` and never the standby's name. So every
+# probe of the standby came back 400 DisallowedHost, the flip never happened,
+# and a live update sat for its full 30-minute budget before aborting. It cost
+# Sufian's shop two attempts on 2026-09-08 to find that.
+#
+# Sending `Host: localhost` decouples the check from what the container is
+# called and from anything an operator has edited into .env, so this works on
+# deployments already in the field with no change on their side.
 pu_upstream_ready() {
-  pu_compose exec -T edge wget -q -O /dev/null "http://$1:8000/readyz/" >/dev/null 2>&1
+  pu_compose exec -T edge \
+    wget -q -O /dev/null --header="Host: localhost" "http://$1:8000/readyz/" \
+    >/dev/null 2>&1
 }
 
 # Wait for a backend container to serve, giving up early if it dies.

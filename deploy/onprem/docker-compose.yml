@@ -7,7 +7,9 @@ x-pointy-logging: &pointy-logging
 x-backend-environment: &backend-environment
   DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in deploy/onprem/.env}"
   DJANGO_DEBUG: "${DJANGO_DEBUG:-false}"
-  DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}"
+  # `pointy-backend-standby` is the one-off container a live update starts
+  # beside the running one; the readiness probe reaches it by that name.
+  DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend,pointy-backend-standby}"
   # On-prem LAN appliance: accept any private LAN IP as a Host (DHCP-friendly)
   # while still rejecting public hosts. Lets cashier tills connect to whatever
   # IP discovery hands them with no per-site configuration.
