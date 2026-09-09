@@ -71,6 +71,9 @@ env = environ.Env(
     POINTY_PASSWORD_MIN_LENGTH=(int, 4),
     POINTY_BACKUP_RETENTION_COUNT=(int, 7),
     POINTY_BACKUP_RESTORE_MAX_BYTES=(int, 5 * 1024 * 1024 * 1024),
+    POINTY_SURVEILLANCE_TELEMETRY=(bool, True),
+    POINTY_SURVEILLANCE_LINGER_SECONDS=(float, 30.0),
+    POINTY_SURVEILLANCE_MAX_FFMPEG=(int, 12),
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -778,6 +781,25 @@ POINTY_ANALYTICS_BUFFER_MAX_AGE_SECONDS = env("POINTY_ANALYTICS_BUFFER_MAX_AGE_S
 POINTY_ANALYTICS_EXPORT_PARALLEL_WORKERS = env(
     "POINTY_ANALYTICS_EXPORT_PARALLEL_WORKERS"
 )
+# --- Cameras -----------------------------------------------------------------
+# Three knobs that were module constants until 0.5.2, which meant changing any of
+# them needed a release. Each is something a shop might genuinely have to change
+# from the outside, so each is now readable from .env.
+#
+# The kill switch first, and it is the reason this section exists: camera
+# telemetry writes one row per viewing session, but telemetry has taken this
+# product down twice — 5.1M rejected ingest calls, and a self-inflicted outage
+# from worker starvation — so being able to switch it off on a shop's box at
+# 2am, without cutting a release, is worth more than the tidiness of a constant.
+POINTY_SURVEILLANCE_TELEMETRY = env("POINTY_SURVEILLANCE_TELEMETRY")
+# How long a camera stream keeps running with nobody watching. Raising it makes
+# scrolling a wall cheaper; lowering it is the pressure valve on a weak box,
+# where every lingering stream is an ffmpeg still burning CPU.
+POINTY_SURVEILLANCE_LINGER_SECONDS = env("POINTY_SURVEILLANCE_LINGER_SECONDS")
+# Concurrent ffmpeg pipelines. The comment on the constant always described this
+# as "a setting rather than a constant"; until now it was not actually settable.
+POINTY_SURVEILLANCE_MAX_FFMPEG = env("POINTY_SURVEILLANCE_MAX_FFMPEG")
+
 POINTY_ATTACHMENT_STORAGE_ROOT = env(
     "POINTY_ATTACHMENT_STORAGE_ROOT",
     default=str(MEDIA_ROOT),
