@@ -262,8 +262,29 @@ def main() -> int:
              "SELECT count(*) FROM payments_payment WHERE doc_status = 'draft'", 0),
             ("paid orders still marked draft",
              "SELECT count(*) FROM sales_order WHERE status = 'paid' AND doc_status = 'draft'", 0),
-            ("void orders not cancelled",
-             "SELECT count(*) FROM sales_order WHERE status = 'void' AND doc_status <> 'cancelled'", 0),
+            # ``status`` is a derived field, and there are two ways an order
+            # reaches ``void``. Only one of them is a cancellation.
+            ("voided orders not cancelled",
+             "SELECT count(*) FROM sales_order o WHERE o.status = 'void' "
+             "AND EXISTS (SELECT 1 FROM sales_orderadjustment a "
+             "WHERE a.order_id = o.id AND a.adjustment_type = 'void') "
+             "AND o.doc_status <> 'cancelled'", 0),
+            # The subtler half, and the one worth guarding: a sale returned
+            # line by line until nothing stands is still a sale that happened.
+            # Its counter-documents undo it; the document itself stays
+            # submitted. A future release that "tidies" these to cancelled
+            # would be rewriting history the customer was handed a receipt for.
+            #
+            # Identified by what it has rather than what it lacks — the third
+            # road to ``void`` is a quotation superseded by the order it became,
+            # which carries no adjustment at all and is rightly cancelled.
+            ("fully-returned sales wrongly cancelled",
+             "SELECT count(*) FROM sales_order o WHERE o.status = 'void' "
+             "AND EXISTS (SELECT 1 FROM sales_orderadjustment a "
+             "WHERE a.order_id = o.id AND a.adjustment_type = 'return') "
+             "AND NOT EXISTS (SELECT 1 FROM sales_orderadjustment a "
+             "WHERE a.order_id = o.id AND a.adjustment_type = 'void') "
+             "AND o.doc_status <> 'submitted'", 0),
             ("converted quotations that lost their pointer",
              "SELECT count(*) FROM sales_order WHERE converted_to_id IS NOT NULL "
              "AND superseded_by_id IS DISTINCT FROM converted_to_id", 0),
