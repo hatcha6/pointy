@@ -250,6 +250,8 @@ class _Wall extends StatelessWidget {
             return CameraTile(
               key: ValueKey('camera-${camera.id}'),
               camera: camera,
+              onFirstPaint: (waited) =>
+                  viewModel.reportFirstPaint(camera, waited),
               isActive: !viewModel.isPaused,
               // Phones get no per-tile buttons: they would cover the picture,
               // and a tap already opens the camera where they fit properly.

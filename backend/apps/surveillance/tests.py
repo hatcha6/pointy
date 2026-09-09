@@ -7,6 +7,9 @@ parts that break in the field (URL shapes, clock offsets, fan-out, gating)
 without needing a camera on the LAN.
 """
 
+import io
+import subprocess
+import sys
 import time
 from datetime import datetime, timedelta, timezone as dt_timezone
 from unittest.mock import patch
@@ -22,7 +25,7 @@ from apps.core.models import ShopSettings
 from apps.core.roles import MANAGER_GROUP, SUPERVISOR_GROUP, ensure_role_groups
 from apps.sales.models import Order
 
-from . import services, transcode
+from . import services, telemetry, transcode
 from . import views as views_module
 from .drivers.base import (
     RecorderTarget,
@@ -34,7 +37,14 @@ from .drivers.dahua import DahuaDriver, parse_key_values
 from .drivers.hikvision import HikvisionDriver, stream_id
 from .drivers.registry import detect_driver
 from .models import Camera, Recorder
-from .streaming import FfmpegSource, Frame, FrameBroker, StreamError
+from .drivers.base import RecorderError
+from .streaming import (
+    FfmpegSource,
+    Frame,
+    FrameBroker,
+    PipedSource,
+    StreamError,
+)
 
 HIKVISION_DEVICE_INFO = """<?xml version="1.0" encoding="UTF-8"?>
 <DeviceInfo version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
@@ -758,3 +768,259 @@ class FeatureGateTests(TestCase):
         )
         # Nothing re-enables it without a fresh successful connection.
         self.assertFalse(ShopSettings.load().enable_surveillance)
+
+
+class PipedSourceTests(TestCase):
+    """Playback for recorders that hand back bytes instead of a URL.
+
+    The two things worth pinning are ownership and blame: this source owns the
+    driver (its protocol session has to outlive the response, unlike the URL
+    path where the driver is closed before streaming starts), and when nothing
+    comes out it must report the *recorder's* reason rather than ffmpeg's, which
+    only ever describes the symptom.
+    """
+
+    class _FakeProcess:
+        def __init__(self, output=b""):
+            self.stdin = io.BytesIO()
+            self.stdout = io.BytesIO(output)
+            self.written = b""
+
+        def poll(self):
+            return 0
+
+    class _Driver:
+        supports_playback = True
+        playback_is_streamed = True
+
+        def __init__(self, chunks=(), error=None):
+            self.chunks = list(chunks)
+            self.error = error
+            self.closed = False
+            self.stopped = False
+
+        def playback_stream(self, channel, start, end, *, quality="main"):
+            try:
+                if self.error:
+                    raise self.error
+                yield from self.chunks
+            finally:
+                self.stopped = True
+
+        def close(self):
+            self.closed = True
+
+    def _run(self, driver, output=b""):
+        process = self._FakeProcess(output)
+        slot = object()
+        with patch.object(
+            transcode, "open_mjpeg_from_h264", return_value=(process, slot)
+        ), patch.object(transcode, "stop"), patch.object(
+            transcode, "drain_error", return_value=""
+        ):
+            source = PipedSource(
+                driver,
+                1,
+                timezone.now(),
+                timezone.now(),
+                label="cam",
+            )
+            frames = list(source.frames(lambda: False))
+        return frames, process
+
+    def test_the_recorders_reason_beats_ffmpegs(self):
+        """'no footage stored for that time' is actionable; 'invalid data found'
+        is not, and it is what ffmpeg would say about the same situation."""
+        driver = self._Driver(error=RecorderError("The recorder has no footage stored."))
+        with self.assertRaises(StreamError) as caught:
+            self._run(driver)
+        self.assertIn("no footage", str(caught.exception).lower())
+
+    def test_the_driver_is_closed_when_the_stream_ends(self):
+        """It is the source of the bytes, so nothing else can close it — and a
+        leaked protocol session is one the recorder will not grant again."""
+        driver = self._Driver(chunks=[b"\x00\x00\x01\x65IDR"])
+        self._run(driver, output=b"\xff\xd8jpeg\xff\xd9")
+        self.assertTrue(driver.closed)
+        self.assertTrue(driver.stopped)
+
+    def test_frames_reach_the_consumer(self):
+        driver = self._Driver(chunks=[b"\x00\x00\x01\x65IDR"])
+        frames, _process = self._run(driver, output=b"\xff\xd8one\xff\xd9\xff\xd8two\xff\xd9")
+        self.assertEqual(len(frames), 2)
+        self.assertTrue(all(frame.data.startswith(b"\xff\xd8") for frame in frames))
+
+
+class FfmpegStderrTests(TestCase):
+    """ffmpeg's diagnostics have to be read, not just captured.
+
+    stderr is a pipe with a buffer of a few dozen KB and nothing read it until a
+    stream had already failed. A pipeline that complains steadily — which is
+    exactly what a decoder chewing through a damaged stream does — fills it, and
+    ffmpeg then blocks writing to it. The video stops, and the error that
+    explains why is the thing that stopped it.
+    """
+
+    def test_a_chatty_pipeline_cannot_block_on_its_own_error_pipe(self):
+        chatty = " ".join(["[h264] non-existing PPS 0 referenced"] * 4000)
+        process = self._spawn_echoing_stderr(chatty)
+        try:
+            # Far more than a pipe buffer holds. If nothing drained it the
+            # process would still be alive and stuck on write().
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:  # pragma: no cover - the bug this pins
+            process.kill()
+            self.fail("ffmpeg blocked writing to stderr: nobody was reading it")
+        self.assertEqual(process.returncode, 0)
+
+    def test_the_last_complaints_are_kept_for_the_error_message(self):
+        process = self._spawn_echoing_stderr("Invalid data found when processing input")
+        process.wait(timeout=10)
+        for _ in range(50):
+            if transcode.drain_error(process):
+                break
+            time.sleep(0.05)
+        self.assertIn("Invalid data", transcode.drain_error(process))
+
+    def _spawn_echoing_stderr(self, text):
+        slot = transcode.reserve_slot()
+        self.addCleanup(slot.release)
+        script = (
+            "import sys; sys.stderr.write(%r); sys.stderr.flush()" % (text + "\n")
+        )
+        process, _slot = transcode._spawn([sys.executable, "-c", script], slot)
+        self.addCleanup(lambda: transcode.stop(process))
+        return process
+
+
+class CameraTelemetryTests(TestCase):
+    """Telemetry has taken this product down before, so these are guards, not
+    coverage: one row per session, failures folded, and nothing that can raise
+    into the video path."""
+
+    def setUp(self):
+        telemetry.reset()
+        self.addCleanup(telemetry.reset)
+
+    def _report(self, **overrides):
+        values = {
+            "camera_id": 7,
+            "brand": "xiongmai",
+            "mode": "live-rtsp",
+            "quality": "sub",
+        }
+        values.update(overrides)
+        return telemetry.StreamReport(**values)
+
+    def test_a_session_writes_one_row_however_many_frames_it_carried(self):
+        """A nine-tile wall at 8fps is 72 frames a second. A row each would be a
+        write storm on the machine the till runs on."""
+        report = self._report()
+        for _ in range(5000):
+            report.frames += 1
+            report.first_frame()
+        with patch("apps.analytics.services.record_event_buffered") as recorded:
+            telemetry.record(report)
+        self.assertEqual(recorded.call_count, 1)
+        self.assertEqual(recorded.call_args.kwargs["metrics"]["frames"], 5000)
+
+    def test_repeated_failures_for_one_camera_are_folded_into_a_count(self):
+        """A camera unplugged on a Friday would otherwise write rows until
+        Monday, once per retry, from every tile."""
+        with patch("apps.analytics.services.record_event_buffered") as recorded:
+            for _ in range(20):
+                telemetry.record(self._report(outcome=telemetry.UNREACHABLE))
+        self.assertEqual(recorded.call_count, 1)
+
+        # The next one past the window carries what it stood in for. Only the
+        # window is overridden: patching the settings reader wholesale would
+        # also answer `enabled()` and switch telemetry off entirely.
+        with override_settings(POINTY_SURVEILLANCE_TELEMETRY_FAILURE_WINDOW=0), patch(
+            "apps.analytics.services.record_event_buffered"
+        ) as recorded:
+            telemetry.record(self._report(outcome=telemetry.UNREACHABLE))
+        self.assertEqual(recorded.call_args.kwargs["metrics"]["suppressed_repeats"], 19)
+
+    def test_a_different_camera_is_not_folded_into_the_first(self):
+        with patch("apps.analytics.services.record_event_buffered") as recorded:
+            telemetry.record(self._report(camera_id=1, outcome=telemetry.UNREACHABLE))
+            telemetry.record(self._report(camera_id=2, outcome=telemetry.UNREACHABLE))
+        self.assertEqual(recorded.call_count, 2)
+
+    def test_successes_are_never_throttled(self):
+        """They are bounded by human behaviour: a session ends when someone
+        navigates away."""
+        with patch("apps.analytics.services.record_event_buffered") as recorded:
+            for _ in range(6):
+                telemetry.record(self._report())
+        self.assertEqual(recorded.call_count, 6)
+
+    def test_a_telemetry_failure_never_reaches_the_caller(self):
+        """The video path calls this. A bug here must not be the reason a shop
+        cannot see its cameras."""
+        with patch(
+            "apps.analytics.services.record_event_buffered",
+            side_effect=RuntimeError("analytics is down"),
+        ):
+            telemetry.record(self._report())  # must not raise
+
+    @override_settings(POINTY_SURVEILLANCE_TELEMETRY=False)
+    def test_it_can_be_switched_off_entirely(self):
+        with patch("apps.analytics.services.record_event_buffered") as recorded:
+            telemetry.record(self._report())
+        self.assertEqual(recorded.call_count, 0)
+
+    def test_it_reports_whether_the_warm_cache_spared_a_cold_start(self):
+        """The question the last-frame work exists to answer."""
+        report = self._report()
+        report.warm_start = True
+        report.shared = False
+        with patch("apps.analytics.services.record_event_buffered") as recorded:
+            telemetry.record(report)
+        attributes = recorded.call_args.kwargs["attributes"]
+        self.assertTrue(attributes["warm_start"])
+        self.assertFalse(attributes["shared"])
+
+    def test_time_to_first_frame_is_measured_once_and_not_reset(self):
+        report = self._report()
+        report.first_frame()
+        first = report.first_frame_at
+        report.first_frame()
+        self.assertEqual(report.first_frame_at, first)
+        self.assertIsNotNone(report.first_frame_ms)
+
+    def test_the_broker_reports_a_shared_producer_as_shared(self):
+        broker = FrameBroker()
+        self.addCleanup(broker.shutdown)
+        cold = self._report()
+        with broker.subscribe("cam1", lambda: _CountingSource(), report=cold):
+            warm = self._report()
+            with broker.subscribe("cam1", lambda: _CountingSource(), report=warm):
+                pass
+        self.assertFalse(cold.shared)
+        self.assertTrue(warm.shared)
+
+
+class JpegDimensionTests(TestCase):
+    """What the tile actually received — the one measurement available on every
+    driver, whatever protocol the video arrived by."""
+
+    def _jpeg(self, width, height):
+        # A minimal JPEG: SOI, a segment to skip over, then SOF0.
+        return (
+            b"\xff\xd8"
+            + b"\xff\xe0\x00\x04ab"
+            + b"\xff\xc0\x00\x11\x08"
+            + bytes([height >> 8, height & 0xFF, width >> 8, width & 0xFF])
+            + b"\x03\x01\x22\x00"
+        )
+
+    def test_it_reads_the_frame_header(self):
+        self.assertEqual(telemetry.jpeg_dimensions(self._jpeg(704, 576)), (704, 576))
+
+    def test_it_skips_segments_before_the_frame_header(self):
+        self.assertEqual(telemetry.jpeg_dimensions(self._jpeg(1920, 1080)), (1920, 1080))
+
+    def test_junk_yields_nothing_rather_than_raising(self):
+        for payload in (b"", b"\xff\xd8", b"not a jpeg at all", b"\xff\xd8\xff\xc0\x00"):
+            self.assertEqual(telemetry.jpeg_dimensions(payload), (0, 0))

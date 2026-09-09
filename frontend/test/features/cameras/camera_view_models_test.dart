@@ -1,7 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pointy_frontend/src/core/analytics_engine.dart';
 import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/analytics_event.dart';
+import 'package:pointy_frontend/src/data/repositories/analytics_repository.dart';
 import 'package:pointy_frontend/src/data/models/camera.dart';
 import 'package:pointy_frontend/src/data/repositories/surveillance_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
@@ -93,6 +96,7 @@ Camera _camera(int id) {
 }
 
 void main() {
+  firstPaintTelemetryTests();
   group('CameraWallViewModel', () {
     test('tile size decides the columns, and the viewport decides how many', () {
       // The wall scrolls, so a layout choice can only mean tile size — and the
@@ -351,6 +355,81 @@ void main() {
       viewModel.cancelSelection();
       expect(viewModel.isSelecting, isFalse);
       expect(viewModel.hasSelection, isFalse);
+    });
+  });
+}
+
+
+/// A sink that never ships. The engine's own batching, backoff and persistence
+/// are tested elsewhere; here the only question is how many events the wall
+/// hands it.
+class _NullSink implements AnalyticsEventSink {
+  @override
+  Future<Result<AnalyticsIngestResult>> ingestEvents(
+    List<AnalyticsEventDraft> events,
+  ) async => Ok(const AnalyticsIngestResult(accepted: 0, duplicates: 0));
+}
+
+class _RecordingEngine extends AnalyticsEngine {
+  _RecordingEngine() : super(_NullSink());
+
+  final List<AnalyticsEventDraft> tracked = [];
+
+  @override
+  Future<void> track(
+    AnalyticsEventDraft event, {
+    bool flushImmediately = false,
+  }) async {
+    tracked.add(event);
+  }
+}
+
+/// Time-to-first-painted-picture: the wait a person actually experiences, which
+/// the server cannot measure. The guard that matters here is volume — telemetry
+/// has taken this product down before — so: one row per tile per visit, never
+/// per reconnect and never per frame.
+void firstPaintTelemetryTests() {
+  group('first-paint telemetry', () {
+    test('reports once per camera, however often the tile reconnects', () {
+      final engine = _RecordingEngine();
+      final viewModel = CameraWallViewModel(
+        _FakeRepository(),
+        analyticsEngine: engine,
+      );
+
+      viewModel.reportFirstPaint(_camera(3), const Duration(milliseconds: 800));
+      viewModel.reportFirstPaint(_camera(3), const Duration(milliseconds: 120));
+      viewModel.reportFirstPaint(_camera(3), const Duration(milliseconds: 90));
+
+      expect(engine.tracked, hasLength(1));
+      // The first wait is the one the person experienced; a later reconnect is
+      // cheap precisely because the first one warmed everything.
+      expect(engine.tracked.single.metrics['painted_ms'], 800);
+    });
+
+    test('each camera on the wall is counted separately', () {
+      final engine = _RecordingEngine();
+      final viewModel = CameraWallViewModel(
+        _FakeRepository(),
+        analyticsEngine: engine,
+      );
+      for (var id = 1; id <= 4; id++) {
+        viewModel.reportFirstPaint(_camera(id), const Duration(seconds: 1));
+      }
+      expect(engine.tracked, hasLength(4));
+    });
+
+    test('a wall with no analytics engine still works', () {
+      // A preview or a test should not have to supply one, and the wall must
+      // not care whether anybody is listening.
+      final viewModel = CameraWallViewModel(_FakeRepository());
+      expect(
+        () => viewModel.reportFirstPaint(
+          _camera(1),
+          const Duration(milliseconds: 10),
+        ),
+        returnsNormally,
+      );
     });
   });
 }

@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
+import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
+import '../../../data/models/analytics_event.dart';
 import '../../../data/models/camera.dart';
 import '../../../data/repositories/surveillance_repository.dart';
 import '../../../data/services/surveillance_api_client.dart';
@@ -27,9 +31,39 @@ enum CameraWallLayout {
 }
 
 class CameraWallViewModel extends ChangeNotifier {
-  CameraWallViewModel(this._repository);
+  CameraWallViewModel(this._repository, {AnalyticsEngine? analyticsEngine})
+    : _analyticsEngine = analyticsEngine;
 
   final SurveillanceRepository _repository;
+
+  /// Optional on purpose: the wall works without telemetry, and a preview or a
+  /// test should not have to supply one.
+  final AnalyticsEngine? _analyticsEngine;
+
+  /// Cameras already counted this session. One row per tile per visit to the
+  /// wall — not per reconnect, and never per frame.
+  final Set<int> _paintReported = <int>{};
+
+  /// How long a tile took to show a real picture: connect, decode and paint.
+  /// The server can time its own first frame but not this, and this is the
+  /// number the shop actually experiences.
+  void reportFirstPaint(Camera camera, Duration waited) {
+    final engine = _analyticsEngine;
+    if (engine == null || !_paintReported.add(camera.id)) {
+      return;
+    }
+    unawaited(
+      engine.track(
+        AnalyticsEventDraft.usage(
+          AnalyticsEventName.cameraFirstPaint,
+          entityType: 'camera',
+          entityId: camera.id.toString(),
+          attributes: {'recorder': camera.recorderName},
+          metrics: {'painted_ms': waited.inMilliseconds},
+        ),
+      ),
+    );
+  }
 
   List<Camera> _cameras = const [];
   SurveillanceStatus _status = const SurveillanceStatus();

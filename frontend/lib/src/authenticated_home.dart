@@ -512,7 +512,10 @@ class _AuthenticatedRoutes implements AppNavigation {
     return _screen(
       'cameras',
       CamerasScreen(
-        viewModel: CameraWallViewModel(dependencies.surveillanceRepository),
+        viewModel: CameraWallViewModel(
+          dependencies.surveillanceRepository,
+          analyticsEngine: dependencies.analyticsEngine,
+        ),
         repository: dependencies.surveillanceRepository,
         capabilities: capabilities,
         navigation: this,

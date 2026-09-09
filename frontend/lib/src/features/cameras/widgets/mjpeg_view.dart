@@ -70,7 +70,12 @@ class MjpegView extends StatefulWidget {
 
   /// The stream completed normally: playback reached the end of its window.
   final VoidCallback? onEnded;
-  final VoidCallback? onFirstFrame;
+  /// Fired once per view, with how long the first real picture took to
+  /// arrive AND decode AND paint. Measured from the first connection
+  /// attempt, so a stream that had to retry reports the whole wait — which
+  /// is the number the person in the shop actually experienced, and the one
+  /// the server cannot see.
+  final ValueChanged<Duration>? onFirstFrame;
   final Widget? placeholder;
   final Widget Function(BuildContext context, Object error)? errorBuilder;
   final Duration reconnectDelay;
@@ -91,6 +96,7 @@ class _MjpegViewState extends State<MjpegView> with WidgetsBindingObserver {
 
   Object? _error;
   bool _hasPainted = false;
+  DateTime? _waitingSince;
   bool _decoding = false;
   CameraFrame? _queued;
   bool _appIsForeground = true;
@@ -148,6 +154,9 @@ class _MjpegViewState extends State<MjpegView> with WidgetsBindingObserver {
   }
 
   void _connect() {
+    // Set once per view, never on reconnect: the wait being measured is the
+    // person's, and it does not restart because we retried.
+    _waitingSince ??= DateTime.now();
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
     _error = null;
@@ -211,7 +220,9 @@ class _MjpegViewState extends State<MjpegView> with WidgetsBindingObserver {
       previous?.dispose();
       if (!_hasPainted) {
         _hasPainted = true;
-        widget.onFirstFrame?.call();
+        widget.onFirstFrame?.call(
+          DateTime.now().difference(_waitingSince ?? DateTime.now()),
+        );
         // One rebuild, on the transition out of the placeholder. Not per frame.
         setState(() => _error = null);
       } else if (_error != null) {

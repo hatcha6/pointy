@@ -44,6 +44,7 @@ enum AnalyticsEventName {
   posCheckoutCompleted,
   posCheckoutFailed,
   posCheckoutStockRejected,
+  cameraFirstPaint,
 }
 
 class AnalyticsEventDraft {
@@ -977,6 +978,7 @@ String analyticsEventNameToJson(AnalyticsEventName name) {
     AnalyticsEventName.posCheckoutFailed => 'pos.checkout.failed',
     AnalyticsEventName.posCheckoutStockRejected =>
       'pos.checkout.stock_rejected',
+    AnalyticsEventName.cameraFirstPaint => 'camera.first_paint',
   };
 }
 

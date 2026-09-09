@@ -29,6 +29,7 @@ class CameraTile extends StatefulWidget {
     this.onOpenPlayback,
     this.onToggleFocus,
     this.compact = false,
+    this.onFirstPaint,
   });
 
   final Camera camera;
@@ -43,6 +44,10 @@ class CameraTile extends StatefulWidget {
   final VoidCallback? onRename;
   final VoidCallback? onOpenPlayback;
   final VoidCallback? onToggleFocus;
+
+  /// How long this tile took to show a real picture. Reported upward rather
+  /// than recorded here: a tile should not know what telemetry is.
+  final ValueChanged<Duration>? onFirstPaint;
 
   /// Drops the per-tile action buttons. Set on phones, where they would cover
   /// most of the picture and [onOpen] leads somewhere they fit.
@@ -111,7 +116,8 @@ class _CameraTileState extends State<CameraTile> {
                   frames: widget.frames,
                   isActive: widget.isActive,
                   frameTime: _frameTime,
-                  onFirstFrame: () {
+                  onFirstFrame: (waited) {
+                    widget.onFirstPaint?.call(waited);
                     if (mounted && !_live) {
                       setState(() => _live = true);
                     }
