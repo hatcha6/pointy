@@ -149,6 +149,20 @@ def main() -> int:
         and default is None
     )
     dropped = sorted(set(old_columns) - set(new_columns))
+    # Columns that were nullable and are not any more. Invisible to the check
+    # above, which only inspects columns that are *new* — and yet it is the same
+    # hazard: the older backend omits the column from its INSERT, and now the
+    # database refuses it. Found the hard way in 0.5.2, where making the
+    # warehouse columns required passed this script and then deadlocked against
+    # a trading till on a 1.6M-row table.
+    tightened = sorted(
+        name
+        for name, (nullable, default) in new_columns.items()
+        if name in old_columns
+        and old_columns[name][0] == "YES"
+        and nullable == "NO"
+        and default is None
+    )
 
     print(f"\n== Writable by a {ref} backend during the flip ==")
     if undefaulted:
@@ -160,6 +174,22 @@ def main() -> int:
             f"  {GREEN}PASS{OFF}  every added column is nullable or has a "
             f"database default"
         )
+
+    print("\n== Columns that became required ==")
+    if tightened:
+        print(
+            f"  {YELLOW}WARN{OFF}  nullable in {ref}, NOT NULL now — an older "
+            f"backend that omits these will fail its INSERT:"
+        )
+        for name in tightened:
+            print(f"          {name}")
+        print(f"        Safe only if {ref} always writes them. If it does not,")
+        print("        ship UPDATE_STRATEGY.txt containing 'restart'.")
+        print("        Either way, prefer the non-blocking form: a plain")
+        print("        SET NOT NULL takes ACCESS EXCLUSIVE and will queue every")
+        print("        checkout behind it. See inventory/0023_warehouse_required.")
+    else:
+        print(f"  {GREEN}PASS{OFF}  no column became required in this release")
 
     print(f"\n== Columns a {ref} backend still writes ==")
     if dropped:
