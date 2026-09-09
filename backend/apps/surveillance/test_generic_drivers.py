@@ -400,3 +400,18 @@ class CapabilityTests(TestCase):
         extra = recorder.as_target().extra
         self.assertEqual(extra["rtsp_path_template"], "/ch{channel}/{stream}")
         self.assertEqual(extra["channel_count"], 6)
+
+
+class InvoiceFootageCapabilityTests(TestCase):
+    """Whether a sale can be watched back is a question about the recorder, not
+    only about the server."""
+
+    def test_a_live_only_recorder_does_not_advertise_invoice_playback(self):
+        recorder = Recorder(brand=Recorder.Brand.DIRECT_RTSP, host="10.0.0.9")
+        self.assertFalse(recorder.driver_capabilities["playback"])
+
+    def test_a_xiongmai_does_advertise_it(self):
+        """Its recordings are not reachable over RTSP, but they are reachable —
+        the driver streams them over the native protocol."""
+        recorder = Recorder(brand=Recorder.Brand.XIONGMAI, host="10.0.0.9")
+        self.assertTrue(recorder.driver_capabilities["playback"])

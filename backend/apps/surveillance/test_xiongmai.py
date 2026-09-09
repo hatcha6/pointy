@@ -31,8 +31,10 @@ from .drivers.xiongmai import (
     DVRIP_PORT,
     FILE_SEARCH,
     LOGIN,
+    PLAYBACK,
     SYSINFO,
     TAIL,
+    MediaDeframer,
     XiongmaiDriver,
     sofia_hash,
 )
@@ -357,15 +359,9 @@ class XiongmaiUrlTests(TestCase):
         self.assertIn("stream=0", driver.live_rtsp_url(1, quality=StreamQuality.MAIN))
         self.assertIn("stream=1", driver.live_rtsp_url(1, quality=StreamQuality.SUB))
 
-    def test_playback_is_addressed_in_the_recorders_own_clock(self):
-        driver = XiongmaiDriver(target(clock_offset_minutes=120))
-        url = driver.playback_rtsp_url(
-            1,
-            datetime(2026, 9, 8, 11, 0, tzinfo=dt_timezone.utc),
-            datetime(2026, 9, 8, 11, 5, tzinfo=dt_timezone.utc),
-        )
-        self.assertIn("starttime=2026_09_08_13_00_00", url)
-        self.assertIn("endtime=2026_09_08_13_05_00", url)
+    def test_a_url_is_refused_with_an_explanation(self):
+        with self.assertRaises(RecorderError):
+            XiongmaiDriver(target()).playback_rtsp_url(1, None, None)
 
     def test_an_oem_variant_can_override_the_stream_path(self):
         """OEMs vary the suffix and the port. Control still comes from the
@@ -384,11 +380,14 @@ class XiongmaiUrlTests(TestCase):
             "/user=admin&password=secret&channel=2&stream=0.sdp?real_stream",
         )
 
-    def test_playback_is_not_advertised_because_it_is_unverified(self):
-        """No public source documents RTSP playback-by-time for this firmware.
-        Claiming it would put a button in the client that can only fail."""
-        self.assertFalse(XiongmaiDriver.supports_playback)
-        self.assertTrue(XiongmaiDriver.supports_search)
+    def test_playback_is_advertised_but_not_as_a_url(self):
+        """Recordings come over the native protocol, so the driver produces
+        bytes and the frame path pipes them into ffmpeg. Anything reaching for a
+        URL gets a sentence rather than an AttributeError."""
+        self.assertTrue(XiongmaiDriver.supports_playback)
+        self.assertTrue(XiongmaiDriver.playback_is_streamed)
+        with self.assertRaises(RecorderError):
+            XiongmaiDriver(target()).playback_rtsp_url(1, None, None)
 
     def test_snapshot_is_refused_rather_than_returning_a_broken_image(self):
         with self.assertRaises(RecorderError):
@@ -406,12 +405,298 @@ class XiongmaiRegistrationTests(TestCase):
         names = [cls.brand for cls in DRIVER_CLASSES]
         self.assertLess(names.index("xiongmai"), names.index("onvif"))
 
-    def test_it_advertises_search_but_not_snapshots_or_playback(self):
+    def test_it_advertises_search_and_playback_but_not_snapshots(self):
         recorder = Recorder(brand=Recorder.Brand.XIONGMAI, host="192.168.1.100")
         capabilities = recorder.driver_capabilities
         self.assertTrue(capabilities["search"])
+        self.assertTrue(capabilities["playback"])
         self.assertFalse(capabilities["snapshot"])
-        self.assertFalse(capabilities["playback"])
 
     def test_the_default_port_is_the_xmeye_one(self):
         self.assertEqual(DVRIP_PORT, 34567)
+
+
+# ---------------------------------------------------------------------------
+# Playback: the de-framer and the download sequence.
+#
+# This is the part with no hardware behind it. The login and the recording
+# search have both been confirmed against a real box; playback has not, so the
+# byte layouts below are written out literally from the reference implementation
+# and asserted rather than exercised. If firmware disagrees, these tests are the
+# record of what we believed and where to look.
+# ---------------------------------------------------------------------------
+def i_frame(payload: bytes, *, fps=25, width=704, height=576) -> bytes:
+    """0x1FC: a 16-byte header, then the H.264 payload."""
+    return (
+        b"\x00\x00\x01\xfc"
+        + struct.pack("<BBBBII", 2, fps, width // 8, height // 8, 0, len(payload))
+        + payload
+    )
+
+
+def p_frame(payload: bytes) -> bytes:
+    """0x1FD: an 8-byte header, then the payload."""
+    return b"\x00\x00\x01\xfd" + struct.pack("<I", len(payload)) + payload
+
+
+def audio_frame(payload: bytes) -> bytes:
+    """0x1FA: 8 bytes, and the payload must be skipped, not emitted."""
+    return b"\x00\x00\x01\xfa" + struct.pack("<BBH", 0xE, 8, len(payload)) + payload
+
+
+def info_frame(payload: bytes) -> bytes:
+    return b"\x00\x00\x01\xf9" + struct.pack("<BBH", 1, 0, len(payload)) + payload
+
+
+class MediaDeframerTests(TestCase):
+    def test_video_payloads_come_out_and_headers_do_not(self):
+        deframer = MediaDeframer()
+        out = deframer.feed(i_frame(b"KEYFRAME") + p_frame(b"DELTA"))
+        self.assertEqual(out, b"KEYFRAMEDELTA")
+
+    def test_audio_and_metadata_are_skipped_without_desynchronising(self):
+        """Their payloads must be consumed exactly, or every following frame
+        header is read at the wrong offset and the stream turns to noise."""
+        deframer = MediaDeframer()
+        out = deframer.feed(
+            i_frame(b"AAAA") + audio_frame(b"soundsound") + info_frame(b"meta") + p_frame(b"BBBB")
+        )
+        self.assertEqual(out, b"AAAABBBB")
+
+    def test_a_frame_split_across_reads_is_reassembled(self):
+        """A frame's payload spans several DVRIP packets, so the parser has to
+        carry the remaining length across feeds."""
+        blob = i_frame(b"0123456789")
+        deframer = MediaDeframer()
+        collected = b"".join(deframer.feed(blob[i : i + 3]) for i in range(0, len(blob), 3))
+        self.assertEqual(collected + deframer.flush(), b"0123456789")
+
+    def test_a_header_split_across_reads_is_reassembled(self):
+        deframer = MediaDeframer()
+        blob = p_frame(b"PAYLOAD")
+        first = deframer.feed(blob[:6])
+        self.assertEqual(first, b"")
+        self.assertEqual(first + deframer.feed(blob[6:]), b"PAYLOAD")
+
+    def test_an_unframed_stream_is_passed_straight_through(self):
+        """The reference reads downloads with a raw chunk loop, which suggests
+        they arrive already unwrapped — but nobody has confirmed that against
+        this firmware, so the first bytes decide instead of an assumption."""
+        deframer = MediaDeframer()
+        annexb = b"\x00\x00\x00\x01\x67SPS\x00\x00\x00\x01\x65IDR"
+        self.assertEqual(deframer.feed(annexb), annexb)
+        self.assertFalse(deframer.framed)
+
+    def test_a_framed_stream_is_recognised_as_framed(self):
+        deframer = MediaDeframer()
+        deframer.feed(i_frame(b"X"))
+        self.assertTrue(deframer.framed)
+
+    def test_a_marker_cannot_be_confused_with_the_video_inside_it(self):
+        """Markers are 0xF9-0xFE; an H.264 NAL header always has its top bit
+        clear. That non-overlap is what makes this framing separable at all."""
+        payload = b"\x00\x00\x01\x65IDR\x00\x00\x01\x41SLICE"
+        deframer = MediaDeframer()
+        self.assertEqual(deframer.feed(i_frame(payload)), payload)
+
+    def test_garbage_where_a_header_belongs_stops_rather_than_guesses(self):
+        deframer = MediaDeframer()
+        deframer.feed(i_frame(b"AA"))
+        with self.assertRaises(RecorderError):
+            deframer.feed(b"\x00\x00\x01\x11nonsense")
+
+    def test_a_recording_that_ends_mid_frame_still_yields_what_arrived(self):
+        """Bytes are emitted as they arrive, so a truncated final NAL passes
+        through; ffmpeg decodes what it can. Withholding it would mean buffering
+        every frame whole, which defeats streaming."""
+        deframer = MediaDeframer()
+        self.assertEqual(deframer.feed(i_frame(b"COMPLETE")), b"COMPLETE")
+        # The header promises 99 bytes and the recording stops after 5. Those 5
+        # leave on the feed that carried them, not on the flush — holding them
+        # back until the frame completed would be buffering, not streaming.
+        truncated = b"\x00\x00\x01\xfd" + struct.pack("<I", 99) + b"short"
+        self.assertEqual(deframer.feed(truncated), b"short")
+        self.assertEqual(deframer.flush(), b"")
+
+    def test_nothing_is_emitted_before_the_type_is_known(self):
+        deframer = MediaDeframer()
+        self.assertEqual(deframer.feed(b"\x00\x00"), b"")
+        self.assertIsNone(deframer.framed)
+
+
+ONE_RECORDING = {"Ret": 100, "OPFileQuery": [FILE_QUERY["OPFileQuery"][0]]}
+
+
+class _DownloadSocket(_FakeSocket):
+    """A box that answers a download: JSON for control, binary for video.
+
+    ``DownloadStart`` is deliberately given no JSON reply, because the driver
+    does not read one — from that point the socket carries video, and a JSON
+    read there would swallow the first frames.
+    """
+
+    def __init__(self, replies, *, videos=(), packets=1, session=SESSION):
+        super().__init__(replies, session=session)
+        # One entry per download, so a window spanning two recordings can be
+        # told apart from one recording served twice.
+        self.videos = list(videos)
+        self.packets = packets
+        self.actions = []
+        self.downloads = 0
+
+    def sendall(self, data):
+        header, body = data[:20], data[20:]
+        message_id = HEADER.unpack(header)[6]
+        payload = json.loads(body[: -len(TAIL)].decode("utf-8"))
+        self.sent.append({"id": message_id, "payload": payload})
+        if message_id == PLAYBACK:
+            action = payload["OPPlayBack"]["Action"]
+            self.actions.append(action)
+            if action == "Claim":
+                self._queue(message_id + 1, {"Ret": 100})
+            elif action == "DownloadStart":
+                self._queue_video()
+            return
+        reply = self.replies.get(message_id, {"Ret": 100})
+        self._queue(message_id + 1, reply)
+
+    def _queue_video(self):
+        video = self.videos[min(self.downloads, len(self.videos) - 1)]
+        self.downloads += 1
+        step = max(len(video) // self.packets, 1)
+        for index in range(0, len(video), step):
+            chunk = video[index : index + step]
+            self._inbox += HEADER.pack(
+                0xFF, 0x00, self.session, 0, 0, 0, PLAYBACK + 1, len(chunk)
+            ) + chunk
+        # A header declaring zero bytes is how this protocol says "that is all".
+        self._inbox += HEADER.pack(0xFF, 0x00, self.session, 0, 0, 0, PLAYBACK + 1, 0)
+
+
+class XiongmaiPlaybackTests(TestCase):
+    def setUp(self):
+        self.start = datetime(2026, 9, 8, 11, 0, tzinfo=dt_timezone.utc)
+        self.end = self.start + timedelta(minutes=30)
+
+    def driver_for(self, *videos, packets=1, search=None, **target_kwargs):
+        fake = _DownloadSocket(
+            {
+                LOGIN: {"Ret": 100, "SessionID": f"0x{SESSION:08x}"},
+                FILE_SEARCH: search or ONE_RECORDING,
+            },
+            videos=videos,
+            packets=packets,
+        )
+        driver = XiongmaiDriver(target(**target_kwargs))
+        patcher = patch(
+            "apps.surveillance.drivers.xiongmai.socket.create_connection",
+            return_value=fake,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return driver, fake
+
+    def test_a_window_plays_back_as_a_plain_h264_stream(self):
+        video = i_frame(b"KEY") + audio_frame(b"noise") + p_frame(b"DELTA")
+        driver, _fake = self.driver_for(video)  # one recording in the window
+        out = b"".join(driver.playback_stream(1, self.start, self.end))
+        self.assertEqual(out, b"KEYDELTA")
+
+    def test_the_recording_is_claimed_before_it_is_started_and_stopped_after(self):
+        driver, fake = self.driver_for(i_frame(b"X"))
+        list(driver.playback_stream(1, self.start, self.end))
+        # Two recordings overlap the window in the fixture, so the sequence
+        # repeats; what matters is the order within each.
+        self.assertEqual(fake.actions[:3], ["Claim", "DownloadStart", "DownloadStop"])
+
+    def test_it_asks_for_the_file_the_search_named(self):
+        """This is why playback rests on the search: ByName wants exactly the
+        filename OPFileQuery returns."""
+        driver, fake = self.driver_for(i_frame(b"X"))
+        list(driver.playback_stream(1, self.start, self.end))
+        claim = next(c for c in fake.sent if c["id"] == PLAYBACK)
+        parameter = claim["payload"]["OPPlayBack"]["Parameter"]
+        self.assertEqual(parameter["PlayMode"], "ByName")
+        self.assertEqual(parameter["FileName"], FILE_QUERY["OPFileQuery"][0]["FileName"])
+
+    def test_the_window_is_expressed_in_the_recorders_own_clock(self):
+        """A DVR left on the factory timezone would otherwise be asked for the
+        wrong hour and answer, wrongly, that it has nothing."""
+        driver, fake = self.driver_for(i_frame(b"X"), clock_offset_minutes=120)
+        list(driver.playback_stream(1, self.start, self.end))
+        claim = next(c for c in fake.sent if c["id"] == PLAYBACK)
+        self.assertEqual(claim["payload"]["OPPlayBack"]["StartTime"], "2026-09-08 13:00:00")
+
+    def test_video_split_across_packets_is_reassembled(self):
+        video = i_frame(b"ABCDEFGHIJKLMNOP")
+        driver, _fake = self.driver_for(video, packets=7)
+        out = b"".join(driver.playback_stream(1, self.start, self.end))
+        self.assertEqual(out, b"ABCDEFGHIJKLMNOP")
+
+    def test_a_window_spanning_two_recordings_plays_both_in_order(self):
+        """A sale near the boundary of the DVR's file rotation must not lose the
+        half of its window that lives in the next file."""
+        driver, fake = self.driver_for(
+            i_frame(b"FIRST"), i_frame(b"SECOND"), search=FILE_QUERY
+        )
+        out = b"".join(driver.playback_stream(1, self.start, self.end))
+        self.assertEqual(out, b"FIRSTSECOND")
+        self.assertEqual(fake.downloads, 2)
+
+    def test_walking_away_mid_recording_still_stops_the_download(self):
+        """A download the recorder believes is running holds one of the handful
+        of sessions it will grant. Leaking those is how a DVR stops answering."""
+        driver, fake = self.driver_for(i_frame(b"A" * 64), packets=8)
+        stream = driver.playback_stream(1, self.start, self.end)
+        next(stream)
+        stream.close()
+        self.assertIn("DownloadStop", fake.actions)
+
+    def test_a_window_with_no_footage_says_so(self):
+        fake = _DownloadSocket(
+            {
+                LOGIN: {"Ret": 100, "SessionID": f"0x{SESSION:08x}"},
+                FILE_SEARCH: {"Ret": 100, "OPFileQuery": []},
+            }
+        )
+        driver = XiongmaiDriver(target())
+        with patch(
+            "apps.surveillance.drivers.xiongmai.socket.create_connection",
+            return_value=fake,
+        ):
+            with self.assertRaises(RecorderError) as caught:
+                list(driver.playback_stream(1, self.start, self.end))
+        self.assertIn("no footage", str(caught.exception).lower())
+
+
+class MediaDeframerStatsTests(TestCase):
+    """The codec and geometry a recorder is really sending.
+
+    Free to collect — the I-frame header has to be parsed to skip it anyway —
+    and invisible everywhere else, because nothing downstream of the driver ever
+    sees the source stream. A box quietly sending H.265 to a pipeline expecting
+    H.264 shows up as "the picture looks wrong" and nothing more.
+    """
+
+    def test_the_first_keyframe_reveals_codec_and_geometry(self):
+        deframer = MediaDeframer()
+        deframer.feed(i_frame(b"KEY", fps=12, width=704, height=576))
+        self.assertEqual(deframer.stats["codec"], "h264")
+        self.assertEqual(deframer.stats["source_fps"], 12.0)
+        self.assertEqual(deframer.stats["source_width"], 704)
+        self.assertEqual(deframer.stats["source_height"], 576)
+
+    def test_the_stats_dict_is_never_rebound(self):
+        """The driver hands this dict to the streaming layer before a single
+        frame has been read. Rebinding it would leave that holding an empty one
+        for the life of the stream."""
+        deframer = MediaDeframer()
+        captured = deframer.stats
+        deframer.feed(i_frame(b"KEY"))
+        self.assertIs(captured, deframer.stats)
+        self.assertEqual(captured["codec"], "h264")
+
+    def test_an_unframed_stream_reveals_nothing_and_claims_nothing(self):
+        deframer = MediaDeframer()
+        deframer.feed(b"\x00\x00\x00\x01\x67SPS")
+        self.assertEqual(deframer.stats, {})

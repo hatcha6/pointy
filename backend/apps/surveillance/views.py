@@ -37,6 +37,7 @@ from apps.core.streaming import aiter_in_thread
 from apps.sales.models import Order
 
 from . import services, transcode
+from . import telemetry
 from .drivers import RecorderError, StreamQuality
 from .models import Camera, Recorder
 from .permissions import HasSurveillancePermission
@@ -48,7 +49,14 @@ from .serializers import (
     RecorderTestSerializer,
     RecordingSegmentSerializer,
 )
-from .streaming import FfmpegSource, Frame, SnapshotSource, StreamError, broker
+from .streaming import (
+    FfmpegSource,
+    Frame,
+    PipedSource,
+    SnapshotSource,
+    StreamError,
+    broker,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -149,26 +157,71 @@ class _StreamStart:
 
     Held open across the response so the generator resumes where the probe left
     off — the first frame is delivered, not re-fetched.
+
+    It is also where one viewing session is measured. Per frame that costs an
+    integer increment and one ``is None`` check; everything else happens once,
+    at the end, so a wall of tiles writes one row each rather than one row per
+    frame per tile.
     """
 
-    def __init__(self, subscription, iterator, first: Frame):
+    def __init__(self, subscription, iterator, first: Frame, report=None, source=None):
         self.subscription = subscription
         self.iterator = iterator
         self.first = first
+        self.report = report
+        self.source = source
 
     def frames(self):
+        report = self.report
         try:
+            if report is not None:
+                report.first_frame()
+                width, height = telemetry.jpeg_dimensions(self.first.data)
+                if width and height and not report.source_width:
+                    # What the tile actually received, whatever the driver and
+                    # however the video reached it — the one measurement
+                    # available on every path.
+                    report.source_width, report.source_height = width, height
             yield self.first
-            yield from self.iterator
+            if report is None:
+                yield from self.iterator
+            else:
+                report.frames = 1
+                for frame in self.iterator:
+                    report.frames += 1
+                    yield frame
         except StreamError as exc:
             logger.info("camera stream ended mid-response: %s", exc)
+            if report is not None:
+                report.outcome = telemetry.FAILED
+                report.error_kind = exc.__class__.__name__
         finally:
             self.subscription.__exit__(None, None, None)
+            self._finish()
+
+    def _finish(self):
+        if self.report is None:
+            return
+        # Only the viewer that started the producer holds the source; a viewer
+        # who joined an existing one has nothing extra to tell us, and inventing
+        # something would be worse than an absent field.
+        stats = getattr(self.source, "stats", None) or {}
+        for key, value in stats.items():
+            if value and not getattr(self.report, key, None):
+                setattr(self.report, key, value)
+        telemetry.record(self.report)
 
 
-def _start_stream(key, build_source):
+def _start_stream(key, build_source, report=None):
     """Subscribe and pull one frame, so failures are HTTP failures."""
-    subscription = broker.subscribe(key, build_source)
+    made = []
+
+    def build_and_keep():
+        source = build_source()
+        made.append(source)
+        return source
+
+    subscription = broker.subscribe(key, build_and_keep, report=report)
     iterator = subscription.__enter__()
     try:
         first = next(iterator)
@@ -178,7 +231,30 @@ def _start_stream(key, build_source):
     except BaseException:
         subscription.__exit__(None, None, None)
         raise
-    return _StreamStart(subscription, iterator, first)
+    return _StreamStart(
+        subscription, iterator, first, report=report, source=made[0] if made else None
+    )
+
+
+#: Exception classes to the outcome an installer would act on. Anything else is
+#: a generic failure, which is still worth a row: an outcome we cannot name is
+#: the most interesting kind.
+_OUTCOMES = {
+    "RecorderUnreachable": telemetry.UNREACHABLE,
+    "RecorderAuthError": telemetry.AUTH,
+    "TranscodeUnavailable": telemetry.NO_FFMPEG,
+}
+
+
+def _record_failure(report, exc):
+    if report is None:
+        return
+    name = exc.__class__.__name__
+    report.outcome = _OUTCOMES.get(name, telemetry.FAILED)
+    if report.outcome == telemetry.FAILED and "Too many" in str(exc):
+        report.outcome = telemetry.BUSY
+    report.error_kind = name
+    telemetry.record(report)
 
 
 def _stream_error_response(exc, *, code=status.HTTP_502_BAD_GATEWAY):
@@ -403,13 +479,25 @@ class CameraLiveStreamView(_CameraViewMixin, APIView):
             driver.close()
             return FfmpegSource(url, fps=fps, width=width, label=str(camera))
 
+        report = telemetry.StreamReport(
+            camera_id=camera.pk,
+            recorder_id=camera.recorder_id,
+            brand=camera.recorder.effective_brand,
+            mode=mode,
+            quality=quality,
+            requested_fps=fps,
+        )
+
         try:
-            started = _start_stream(key, build_source)
+            started = _start_stream(key, build_source, report=report)
         except RecorderError as exc:
+            _record_failure(report, exc)
             return _stream_error_response(exc)
         except transcode.TranscodeUnavailable as exc:
+            _record_failure(report, exc)
             return _stream_error_response(exc, code=status.HTTP_503_SERVICE_UNAVAILABLE)
         except StreamError as exc:
+            _record_failure(report, exc)
             return _stream_error_response(exc)
 
         Camera.objects.filter(pk=camera.pk).update(
@@ -464,6 +552,21 @@ class CameraPlaybackStreamView(_CameraViewMixin, APIView):
 
         def build_source():
             driver = services.open_driver(camera.recorder)
+            if getattr(driver, "playback_is_streamed", False):
+                # This recorder's stored video is not reachable over RTSP, so
+                # the driver produces the bytes itself. It stays open — the
+                # source owns it and closes it when the response ends.
+                return PipedSource(
+                    driver,
+                    camera.channel,
+                    start,
+                    end,
+                    quality=quality,
+                    fps=fps,
+                    width=width,
+                    speed=speed,
+                    label=str(camera),
+                )
             try:
                 url = driver.playback_rtsp_url(
                     camera.channel, start, end, quality=quality
@@ -479,9 +582,19 @@ class CameraPlaybackStreamView(_CameraViewMixin, APIView):
                 label=str(camera),
             )
 
+        report = telemetry.StreamReport(
+            camera_id=camera.pk,
+            recorder_id=camera.recorder_id,
+            brand=camera.recorder.effective_brand,
+            mode="playback",
+            quality=quality,
+            requested_fps=fps,
+        )
+
         try:
-            started = _start_stream(key, build_source)
+            started = _start_stream(key, build_source, report=report)
         except RecorderError as exc:
+            _record_failure(report, exc)
             return _stream_error_response(exc)
         except transcode.TranscodeUnavailable as exc:
             return _stream_error_response(exc, code=status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -704,6 +817,13 @@ class InvoiceFootageView(APIView):
         )
         start, end = services.invoice_window(order)
         cameras = list(services.checkout_cameras())
+        # ffmpeg is necessary but not sufficient: a recorder can be perfectly
+        # reachable and still have no way to hand back stored video (a
+        # Direct-RTSP box has no control protocol at all). Answering on ffmpeg
+        # alone offered a player that could only fail.
+        playback_available = transcode.ffmpeg_available() and any(
+            camera.recorder.driver_capabilities["playback"] for camera in cameras
+        )
         return Response(
             {
                 "order_id": order.pk,
@@ -711,7 +831,7 @@ class InvoiceFootageView(APIView):
                 "occurred_at": order.created_at,
                 "start": start,
                 "end": end,
-                "playback_available": transcode.ffmpeg_available(),
+                "playback_available": playback_available,
                 "cameras": InvoiceFootageCameraSerializer(cameras, many=True).data,
             }
         )

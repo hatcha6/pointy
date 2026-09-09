@@ -189,6 +189,13 @@ class RecorderDriver(ABC):
     supports_search = True
     supports_snapshot = True
 
+    #: How recorded video is obtained. False (the default) means the driver
+    #: hands back an RTSP URL and ffmpeg opens it; True means the driver
+    #: produces the bytes itself over its own protocol and ffmpeg is fed through
+    #: a pipe. Xiongmai is the second kind — its recordings are not reachable
+    #: over RTSP at all.
+    playback_is_streamed = False
+
     def __init__(self, target: RecorderTarget):
         self.target = target
         self._session = requests.Session()
@@ -299,6 +306,22 @@ class RecorderDriver(ABC):
         quality: str = StreamQuality.MAIN,
     ) -> str:
         ...
+
+    def playback_stream(
+        self,
+        channel: int,
+        start: datetime,
+        end: datetime,
+        *,
+        quality: str = StreamQuality.MAIN,
+    ):
+        """Recorded video as raw H.264 bytes, for ``playback_is_streamed`` drivers.
+
+        Only meaningful when that flag is set; the URL-based drivers never
+        implement it and callers check the flag rather than probing for the
+        method.
+        """
+        raise RecorderError("This recorder does not stream recordings directly.")
 
     def search_recordings(
         self, channel: int, start: datetime, end: datetime

@@ -17,6 +17,7 @@ shell string — the RTSP URL carries the recorder password, and a password with
 
 from __future__ import annotations
 
+import collections
 import logging
 import os
 import re
@@ -177,14 +178,24 @@ def _base_input_args(
         # guess about the stream corrupts a file somebody keeps, and the extra
         # seconds cost nobody anything.
         args += [
+            # `discardcorrupt` is the one that matters for picture quality: a
+            # damaged packet fed to the decoder is decoded anyway, onto whatever
+            # the reference frame holds, and the result is a still image with
+            # colour only where something moved. Dropping the packet costs a
+            # frame; decoding it costs the picture.
             "-fflags",
-            "nobuffer",
+            "nobuffer+discardcorrupt",
             "-flags",
             "low_delay",
+            # Deliberately not as small as they could be. Cutting these buys
+            # start-up time, but cut too far and ffmpeg begins before it has the
+            # parameter sets and the first keyframe — which produces exactly the
+            # grey-with-moving-colour picture this file is trying to avoid. Half
+            # a megabyte and a second still saves most of the default 5s wait.
             "-probesize",
-            "524288",
+            "1048576",
             "-analyzeduration",
-            "500000",
+            "1000000",
         ]
     if readrate is not None and probe()["supports_readrate"]:
         args += ["-readrate", f"{readrate:g}"]
@@ -227,6 +238,51 @@ def open_mjpeg_stream(
     return _spawn(args, slot)
 
 
+def open_mjpeg_from_h264(
+    *, fps: int = 8, quality: int = 6, width: int = 0
+) -> tuple[subprocess.Popen, _Slot]:
+    """Same JPEG pipe as :func:`open_mjpeg_stream`, fed from stdin.
+
+    For recorders whose stored video is not reachable over RTSP: the driver
+    speaks its own protocol, hands us an H.264 elementary stream, and we push it
+    in rather than giving ffmpeg an address. ``-f h264`` is required — a bare
+    elementary stream has no container for ffmpeg to recognise, and without the
+    hint it probes forever and gives up.
+
+    The caller owns the process, MUST feed ``stdin`` and MUST call
+    ``stop``/release the slot; :class:`apps.surveillance.streaming.PipedSource`
+    does all three.
+    """
+    path = ffmpeg_path()
+    if not path:
+        raise TranscodeUnavailable(
+            "Video playback needs ffmpeg, which is not installed on this server."
+        )
+    slot = reserve_slot()
+    args = [
+        path,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        # No -nostdin here, unlike every other invocation: stdin is the input.
+        "-f",
+        "h264",
+        "-i",
+        "pipe:0",
+        "-an",
+        "-f",
+        "mjpeg",
+        "-q:v",
+        str(int(quality)),
+        "-r",
+        str(int(fps)),
+    ]
+    if width:
+        args += ["-vf", f"scale={int(width)}:-2"]
+    args += ["pipe:1"]
+    return _spawn(args, slot, stdin=subprocess.PIPE)
+
+
 def open_mp4_stream(url: str) -> tuple[subprocess.Popen, _Slot]:
     """Remux an RTSP playback stream into a downloadable MP4, without re-encoding.
 
@@ -262,18 +318,54 @@ def open_mp4_stream(url: str) -> tuple[subprocess.Popen, _Slot]:
     return _spawn(args, slot)
 
 
-def _spawn(args: list[str], slot: _Slot) -> tuple[subprocess.Popen, _Slot]:
+#: How many of ffmpeg's last complaints to keep per pipeline.
+ERROR_LINES_KEPT = 40
+
+
+def _drain_stderr(process: subprocess.Popen):
+    """Read ffmpeg's diagnostics continuously, keeping the last few.
+
+    Two reasons, and the first is a bug rather than an improvement. stderr is a
+    pipe with a buffer of a few dozen KB; nothing read it until a stream had
+    already failed, so a pipeline that complains steadily — a decoder chewing
+    through a damaged stream does exactly that — eventually fills it and
+    **ffmpeg blocks writing to it**. The video stops with no error anywhere,
+    because the error is what stopped it.
+
+    The second is that those complaints are the only account of what a recorder
+    is really sending. Discarding them unread meant a picture problem in a shop
+    could only be guessed at from a description of the picture.
+    """
+    lines = process._pointy_errors
+    try:
+        for raw in iter(process.stderr.readline, b""):
+            line = raw.decode("utf-8", "replace").strip()
+            if not line:
+                continue
+            lines.append(line)
+            logger.info("ffmpeg: %s", line)
+    except Exception:  # pragma: no cover - the pipe closing is a normal end
+        pass
+
+
+def _spawn(
+    args: list[str], slot: _Slot, *, stdin=subprocess.DEVNULL
+) -> tuple[subprocess.Popen, _Slot]:
     try:
         process = subprocess.Popen(  # noqa: S603 - fixed argv, never a shell
             args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
+            stdin=stdin,
             bufsize=0,
         )
     except OSError as exc:
         slot.release()
         raise TranscodeUnavailable(f"Could not start ffmpeg: {exc}") from exc
+    process._pointy_errors = collections.deque(maxlen=ERROR_LINES_KEPT)
+    threading.Thread(
+        target=_drain_stderr, args=(process,), name="ffmpeg-stderr", daemon=True
+    ).start()
     return process, slot
 
 
@@ -306,10 +398,12 @@ def stop(process: subprocess.Popen, slot: _Slot | None = None):
 
 
 def drain_error(process: subprocess.Popen, limit: int = 2000) -> str:
-    """ffmpeg's last words, for the log line that explains a dead stream."""
-    try:
-        if process.stderr is None:
-            return ""
-        return process.stderr.read(limit).decode("utf-8", "replace").strip()
-    except Exception:  # pragma: no cover - defensive
+    """ffmpeg's last words, for the log line that explains a dead stream.
+
+    Read from what the drainer already collected rather than from the pipe: by
+    the time anyone asks, the process is usually gone and the pipe with it.
+    """
+    lines = getattr(process, "_pointy_errors", None)
+    if not lines:
         return ""
+    return "\n".join(lines)[-limit:].strip()

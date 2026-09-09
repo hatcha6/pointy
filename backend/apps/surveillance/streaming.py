@@ -179,6 +179,10 @@ class FfmpegSource:
         self.speed = speed
         self.anchor = anchor
         self.label = label
+        #: Read by the viewer that started this producer, for telemetry. A
+        #: complaining decoder is the signal behind a picture that looks wrong
+        #: rather than absent, and it is invisible anywhere else.
+        self.stats: dict = {}
 
     def frames(self, should_stop):
         process, slot = transcode.open_mjpeg_stream(
@@ -188,48 +192,177 @@ class FfmpegSource:
             width=self.width,
             readrate=self.speed,
         )
-        seconds_per_frame = (self.speed or 1.0) / self.fps
-        buffer = bytearray()
-        sequence = 0
         try:
-            stdout = process.stdout
-            while not should_stop():
-                chunk = stdout.read(65536)
-                if not chunk:
-                    error = transcode.drain_error(process)
-                    if sequence == 0:
-                        raise StreamError(
-                            _humanize_ffmpeg_error(error)
-                            or "The recorder did not return any video."
-                        )
-                    # Ran to the end of the requested window: a normal finish.
-                    return
-                buffer += chunk
-                if len(buffer) > MAX_FRAME_BYTES:
-                    raise StreamError("The video stream sent an unreadable frame.")
-                while True:
-                    end = buffer.find(JPEG_EOI)
-                    if end == -1:
-                        break
-                    payload = bytes(buffer[: end + 2])
-                    del buffer[: end + 2]
-                    start = payload.find(JPEG_SOI)
-                    if start == -1:
-                        continue
-                    sequence += 1
-                    captured_at = (
-                        self.anchor
-                        + timedelta(seconds=(sequence - 1) * seconds_per_frame)
-                        if self.anchor is not None
-                        else datetime.now(dt_timezone.utc)
-                    )
-                    yield Frame(
-                        data=payload[start:],
-                        sequence=sequence,
-                        captured_at=captured_at,
-                    )
+            yield from _jpeg_frames(
+                process,
+                should_stop,
+                seconds_per_frame=(self.speed or 1.0) / self.fps,
+                anchor=self.anchor,
+            )
         finally:
+            self.stats["decoder_complaints"] = len(
+                getattr(process, "_pointy_errors", ()) or ()
+            )
             transcode.stop(process, slot)
+
+
+class PipedSource:
+    """Playback for recorders whose stored video is not reachable over RTSP.
+
+    The driver speaks its own protocol, produces an H.264 elementary stream, and
+    a writer thread pushes it into ffmpeg's stdin; from ffmpeg onwards this is
+    the same MJPEG pipe as everything else, so the broker, the views and the
+    client cannot tell the difference.
+
+    The thread exists because the driver's byte generator blocks on the DVR's
+    socket while the consumer blocks on ffmpeg's stdout. Driving both from one
+    thread would deadlock the moment ffmpeg's input buffer filled — which for a
+    quarter-hour recording is immediately.
+
+    This source owns the driver, unlike the URL path where the driver is closed
+    before streaming starts: here it *is* the source of the bytes, and its DVRIP
+    session has to outlive the response.
+    """
+
+    def __init__(
+        self,
+        driver,
+        channel,
+        start,
+        end,
+        *,
+        quality=StreamQuality.MAIN,
+        fps=8,
+        quality_scale=6,
+        width=0,
+        speed=None,
+        label="",
+    ):
+        self.driver = driver
+        self.channel = channel
+        self.start = start
+        self.end = end
+        self.quality = quality
+        self.fps = max(int(fps), 1)
+        self.quality_scale = quality_scale
+        self.width = width
+        self.speed = speed
+        self.label = label
+        self._upstream_error = ""
+        self.stats: dict = {}
+
+    def frames(self, should_stop):
+        process, slot = transcode.open_mjpeg_from_h264(
+            fps=self.fps, quality=self.quality_scale, width=self.width
+        )
+        stop_writing = threading.Event()
+        writer = threading.Thread(
+            target=self._pump,
+            args=(process, stop_writing),
+            name=f"surveillance-feed-{self.label[:30]}",
+            daemon=True,
+        )
+        writer.start()
+        try:
+            yield from _jpeg_frames(
+                process,
+                should_stop,
+                seconds_per_frame=(self.speed or 1.0) / self.fps,
+                anchor=self.start,
+                # The recorder's complaint beats ffmpeg's: "no footage stored
+                # for that time" is actionable, "invalid data found" is not.
+                on_empty=lambda: self._upstream_error,
+            )
+        finally:
+            stop_writing.set()
+            self.stats["decoder_complaints"] = len(
+                getattr(process, "_pointy_errors", ()) or ()
+            )
+            # Whatever the driver read off the wire on the way past — the codec
+            # and geometry a recorder is really sending, which no probe of ours
+            # would otherwise see.
+            self.stats.update(getattr(self.driver, "stream_stats", None) or {})
+            transcode.stop(process, slot)
+            writer.join(timeout=5)
+            self.driver.close()
+
+    def _pump(self, process, stop_writing):
+        stdin = process.stdin
+        try:
+            stream = self.driver.playback_stream(
+                self.channel, self.start, self.end, quality=self.quality
+            )
+            try:
+                for chunk in stream:
+                    if stop_writing.is_set():
+                        break
+                    stdin.write(chunk)
+            finally:
+                # Closing the generator runs the driver's own cleanup, which is
+                # what tells the recorder to stop the download. Without it the
+                # box keeps a session open for a viewer who has walked away, and
+                # it only holds a handful.
+                stream.close()
+        except RecorderError as exc:
+            self._upstream_error = str(exc)
+        except (BrokenPipeError, OSError):
+            # ffmpeg exited first — normal when the viewer navigates away.
+            pass
+        except Exception as exc:  # noqa: BLE001 - surfaced through _upstream_error
+            self._upstream_error = str(exc) or exc.__class__.__name__
+            logger.info("playback feed for %s failed: %s", self.label, exc)
+        finally:
+            try:
+                stdin.close()
+            except OSError:
+                pass
+
+
+def _jpeg_frames(process, should_stop, *, seconds_per_frame, anchor, on_empty=None):
+    """Demux ffmpeg's MJPEG pipe into frames, whatever fed it.
+
+    Shared by the URL-driven source and the piped one so the two cannot drift:
+    the frame clock, the size ceiling and the "no video at all" diagnosis are
+    the same question regardless of how the video reached ffmpeg.
+
+    ``on_empty`` lets the caller supply a better explanation when nothing was
+    produced — for a piped source the real cause is usually upstream of ffmpeg,
+    and ffmpeg's own complaint would only describe the symptom.
+    """
+    buffer = bytearray()
+    sequence = 0
+    stdout = process.stdout
+    while not should_stop():
+        chunk = stdout.read(65536)
+        if not chunk:
+            if sequence == 0:
+                upstream = on_empty() if on_empty else None
+                raise StreamError(
+                    upstream
+                    or _humanize_ffmpeg_error(transcode.drain_error(process))
+                    or "The recorder did not return any video."
+                )
+            # Ran to the end of the requested window: a normal finish.
+            return
+        buffer += chunk
+        if len(buffer) > MAX_FRAME_BYTES:
+            raise StreamError("The video stream sent an unreadable frame.")
+        while True:
+            end = buffer.find(JPEG_EOI)
+            if end == -1:
+                break
+            payload = bytes(buffer[: end + 2])
+            del buffer[: end + 2]
+            start = payload.find(JPEG_SOI)
+            if start == -1:
+                continue
+            sequence += 1
+            captured_at = (
+                anchor + timedelta(seconds=(sequence - 1) * seconds_per_frame)
+                if anchor is not None
+                else datetime.now(dt_timezone.utc)
+            )
+            yield Frame(data=payload[start:], sequence=sequence, captured_at=captured_at)
 
 
 def _humanize_ffmpeg_error(raw: str) -> str:
@@ -453,7 +586,7 @@ class FrameBroker:
             self.remember(key, final)
 
     @contextmanager
-    def subscribe(self, key: str, build_source):
+    def subscribe(self, key: str, build_source, report=None):
         """Join (or start) the producer for ``key`` and iterate its frames.
 
         ``build_source`` is called only when a producer has to be created, so
@@ -483,6 +616,12 @@ class FrameBroker:
         # already running yields its current frame immediately anyway, and
         # prepending a stale one there would show a viewer a step backwards.
         warm = self.last_frame(key) if started_cold else None
+        if report is not None:
+            # Whether this viewer paid for a cold start, and whether the warm
+            # cache spared them the wait, are the two questions the linger and
+            # last-frame work exists to answer.
+            report.shared = not started_cold
+            report.warm_start = warm is not None
         try:
             yield self._with_warm_frame(warm, producer.stream(self.stall_seconds))
         finally:

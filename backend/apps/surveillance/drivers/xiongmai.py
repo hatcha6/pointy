@@ -63,6 +63,36 @@ SYSINFO = 1020
 CHANNEL_TITLE = 1048
 FILE_SEARCH = 1440
 TIME_QUERY = 1452
+#: Playback and download share one command; the ``Action`` in the body decides.
+PLAYBACK = 1420
+
+#: Media-frame markers. On the wire each is a four-byte big-endian value whose
+#: low byte follows an H.264 start code — ``00 00 01 FC`` and friends. That is
+#: not a coincidence and it is load-bearing: a real H.264 NAL header has its top
+#: bit clear (the forbidden_zero_bit), so a marker in 0xF9-0xFE can never be
+#: mistaken for one, which is what makes this framing separable from the video
+#: inside it.
+FRAME_VIDEO_I = 0x1FC
+FRAME_VIDEO_P = 0x1FD
+FRAME_JPEG = 0x1FE
+FRAME_AUDIO = 0x1FA
+FRAME_INFO = 0x1F9
+#: Header length in bytes, marker included, per marker.
+FRAME_HEADER_BYTES = {
+    FRAME_VIDEO_I: 16,
+    FRAME_JPEG: 16,
+    FRAME_VIDEO_P: 8,
+    FRAME_AUDIO: 8,
+    FRAME_INFO: 8,
+}
+#: The markers whose payload is the video we want. Audio and metadata frames are
+#: parsed only so their bytes can be skipped without desynchronising the stream.
+VIDEO_FRAMES = (FRAME_VIDEO_I, FRAME_VIDEO_P)
+
+#: What the ``media`` byte in a video frame header means. Read for telemetry: a
+#: recorder quietly sending H.265 to a pipeline expecting H.264 is the kind of
+#: thing that shows up as "the picture looks wrong" and nothing else.
+CODECS = {1: "mpeg4", 2: "h264", 3: "h265"}
 
 #: ``Ret`` values that mean the credentials were refused rather than the request
 #: being wrong. Reported apart because they send the installer to a different
@@ -203,6 +233,38 @@ class _Session:
             # is not a Xiongmai, and saying so is what lets detection move on.
             raise RecorderError(f"Not a Xiongmai recorder: {exc}") from exc
 
+    def send_only(self, message_id: int, payload: dict):
+        """Send a command without consuming a reply.
+
+        The download path needs this: once ``DownloadStart`` is acknowledged the
+        socket carries video, and a JSON read there would eat the first frames.
+        """
+        self.connect()
+        body = dict(payload)
+        if self.session_id:
+            body.setdefault("SessionID", self._session_hex)
+        self._send(message_id, body)
+
+    def read_payloads(self):
+        """Yield raw payload bodies until the recorder signals the end.
+
+        The terminator is a header declaring zero bytes, which is how this
+        protocol says "that is the whole file". Yielding rather than
+        accumulating is deliberate: a quarter-hour of H.264 is tens of
+        megabytes and the reference implementation buffers all of it before
+        writing, which on a two-core till would be felt.
+        """
+        while True:
+            header = self._read_exactly(_HEADER_SIZE)
+            length = _HEADER.unpack(header)[7]
+            if length == 0:
+                return
+            if length > MAX_PAYLOAD:
+                raise RecorderError(
+                    "The recorder sent an implausibly large video packet."
+                )
+            yield self._read_exactly(length)
+
     def call(self, message_id: int, payload: dict) -> dict:
         self.connect()
         body = dict(payload)
@@ -247,6 +309,139 @@ class _Session:
             raise RecorderError("The recorder did not open a session.")
 
 
+class MediaDeframer:
+    """Xiongmai's framed media stream in, a plain H.264 elementary stream out.
+
+    A download arrives as a run of media frames, each prefixed by a marker and a
+    small header, with audio and metadata frames interleaved among the video.
+    ffmpeg wants none of that — it wants the H.264 the headers wrap.
+
+    Two properties make this safe to do on a byte stream rather than on whole
+    packets. A frame's payload may be split across several DVRIP packets, so the
+    parser carries ``remaining`` across feeds. And a marker cannot be confused
+    with the video it contains: markers are 0xF9-0xFE, while an H.264 NAL header
+    always has its top bit clear, so the two ranges do not overlap.
+
+    **It also decides whether de-framing is wanted at all.** The reference
+    implementation reads a download with a raw chunk loop and a live stream with
+    a de-framer, which reads as though downloads arrive already unwrapped — but
+    that is an inference from someone else's code, not something anyone has
+    confirmed against this firmware. So the first bytes decide: a marker means
+    framed, anything else is passed through untouched. Being wrong in either
+    direction would hand ffmpeg noise, and there is no box here to ask.
+    """
+
+    #: Enough to see a marker. Nothing is emitted before this much has arrived.
+    _SNIFF_BYTES = 4
+
+    def __init__(self):
+        self._buffer = bytearray()
+        self._remaining = 0
+        self._emit = False
+        self._framed: bool | None = None
+        #: Learned from the first I-frame header and never updated after: the
+        #: codec and geometry the recorder is actually sending. Free — the
+        #: header has to be parsed to skip it anyway — and otherwise invisible,
+        #: since nothing else in the pipeline ever sees the source stream.
+        self.stats: dict = {}
+
+    @property
+    def framed(self) -> bool | None:
+        """``True``/``False`` once decided, ``None`` while still sniffing."""
+        return self._framed
+
+    def feed(self, chunk: bytes) -> bytes:
+        self._buffer += chunk
+        if self._framed is None:
+            if len(self._buffer) < self._SNIFF_BYTES:
+                return b""
+            self._framed = self._looks_framed(self._buffer)
+        if not self._framed:
+            out = bytes(self._buffer)
+            self._buffer.clear()
+            return out
+        return self._deframe()
+
+    def flush(self) -> bytes:
+        """Whatever is left once the download ends.
+
+        Payload bytes are emitted as they arrive rather than held until a frame
+        is complete — buffering per frame would defeat the point of streaming —
+        so a recording that ends mid-frame passes its final partial NAL through.
+        ffmpeg tolerates that: it decodes what it can and stops. What is *not*
+        passed through is a partial header, which carries no video at all.
+        """
+        if not self._framed:
+            out = bytes(self._buffer)
+            self._buffer.clear()
+            return out
+        return self._deframe()
+
+    @staticmethod
+    def _looks_framed(prefix) -> bool:
+        return (
+            len(prefix) >= 4
+            and bytes(prefix[:3]) == b"\x00\x00\x01"
+            and prefix[3] in (0xF9, 0xFA, 0xFC, 0xFD, 0xFE)
+        )
+
+    def _deframe(self) -> bytes:
+        out = bytearray()
+        while True:
+            if self._remaining:
+                take = min(self._remaining, len(self._buffer))
+                if not take:
+                    break
+                if self._emit:
+                    out += self._buffer[:take]
+                del self._buffer[:take]
+                self._remaining -= take
+                continue
+            if not self._read_header():
+                break
+        return bytes(out)
+
+    def _read_header(self) -> bool:
+        """Start the next frame. ``False`` means wait for more bytes."""
+        if len(self._buffer) < 4:
+            return False
+        (marker,) = struct.unpack(">I", bytes(self._buffer[:4]))
+        header_bytes = FRAME_HEADER_BYTES.get(marker)
+        if header_bytes is None:
+            # Not a marker where one must be. Resynchronising by guessing would
+            # invent video; stopping says plainly that the stream is not what we
+            # were told it is.
+            raise RecorderError(
+                f"Unexpected data in the recording stream (0x{marker:08X})."
+            )
+        if len(self._buffer) < header_bytes:
+            return False
+        body = bytes(self._buffer[4:header_bytes])
+        if marker in (FRAME_VIDEO_I, FRAME_JPEG):
+            # media, fps, width/8, height/8, packed datetime, payload length
+            media, fps, width, height, _dt, self._remaining = struct.unpack(
+                "<BBBBII", body
+            )
+            if not self.stats:
+                # Updated in place, never rebound: the driver hands this same
+                # dict to the streaming layer before any frame has been read,
+                # and rebinding would leave that holding an empty one forever.
+                self.stats.update(
+                    codec=CODECS.get(media, ""),
+                    source_fps=float(fps),
+                    # The header stores both in units of 8 pixels.
+                    source_width=width * 8,
+                    source_height=height * 8,
+                )
+        elif marker == FRAME_VIDEO_P:
+            (self._remaining,) = struct.unpack("<I", body)
+        else:
+            self._remaining = struct.unpack("<BBH", body)[2]
+        self._emit = marker in VIDEO_FRAMES
+        del self._buffer[:header_bytes]
+        return True
+
+
 class XiongmaiDriver(RecorderDriver):
     brand = "xiongmai"
     label = "Xiongmai / XMEye"
@@ -256,15 +451,14 @@ class XiongmaiDriver(RecorderDriver):
     #: that invoice-linked footage actually needs: knowing whether a sale's
     #: minute was recorded at all.
     supports_search = True
-    #: Playback is NOT claimed. Xiongmai streams recorded video over its own
-    #: protocol as length-prefixed binary, and the RTSP-by-time URL built below
-    #: — while it is the shape several OEM firmwares accept — is documented
-    #: nowhere and could not be confirmed against real hardware. Claiming it
-    #: would put a button in the client whose only outcome might be an error,
-    #: which is the exact thing this flag exists to prevent. Prove it with
-    #: ``manage.py probe_recorder --stream`` against a real box and this becomes
-    #: a one-line change.
-    supports_playback = False
+    #: Playback goes over the native protocol, not RTSP: ``OPPlayBack`` with
+    #: ``PlayMode: "ByName"`` streams a recording the search already named. That
+    #: is the documented path in the reference implementation, and it composes
+    #: with :meth:`search_recordings`, which the field has confirmed works.
+    supports_playback = True
+    #: ...but not as a URL. This driver hands back *bytes*, so the frame path
+    #: feeds ffmpeg through a pipe rather than pointing it at an address.
+    playback_is_streamed = True
     #: No JPEG endpoint. Live tiles come from ffmpeg over RTSP, like Direct RTSP.
     supports_snapshot = False
 
@@ -273,6 +467,8 @@ class XiongmaiDriver(RecorderDriver):
         self._port = int(target.extra.get("dvrip_port") or DVRIP_PORT)
         self._session = _Session(target, self._port)
         self._channel_names: dict[int, str] | None = None
+        #: Whatever the last playback read off the wire, for telemetry.
+        self.stream_stats: dict = {}
 
     def close(self):
         self._session.close()
@@ -405,29 +601,103 @@ class XiongmaiDriver(RecorderDriver):
         *,
         quality: str = StreamQuality.MAIN,
     ) -> str:
-        """Playback by time, in the recorder's own wall clock.
+        """Not how this recorder plays back. See :meth:`playback_stream`.
 
-        The times are converted through the measured clock offset for the same
-        reason Dahua's are: the box serves whatever hour its own RTC believes,
-        and a DVR left on the factory timezone will happily return footage from
-        the wrong hour without erroring.
-
-        **This is unverified and the driver does not advertise it** — see
-        ``supports_playback``. No public source documents playback-by-time over
-        RTSP for this firmware family; the shape below is inferred from the
-        live URL and from what neighbouring OEMs accept. It is built rather than
-        omitted so that a shop which turns out to support it needs one flag
-        flipped instead of a driver written, and so
-        ``manage.py probe_recorder --stream`` has something to test.
+        Kept so the abstract contract is satisfied and so anything that reaches
+        for a URL fails with a sentence rather than an AttributeError.
         """
-        stream = STREAM_BY_QUALITY.get(StreamQuality.normalize(quality), 0)
-        started = self.to_device_local(start).strftime("%Y_%m_%d_%H_%M_%S")
-        ended = self.to_device_local(end).strftime("%Y_%m_%d_%H_%M_%S")
-        return self._rtsp(
-            f"/user={self.target.username}&password={self.target.password}"
-            f"&channel={int(channel)}&stream={stream}"
-            f"&starttime={started}&endtime={ended}.sdp?"
+        raise RecorderError(
+            "This recorder streams recordings over its own protocol, not RTSP."
         )
+
+    def playback_stream(
+        self,
+        channel: int,
+        start: datetime,
+        end: datetime,
+        *,
+        quality: str = StreamQuality.MAIN,
+    ):
+        """The window's footage, as a plain H.264 elementary stream.
+
+        Recordings are fetched by *name*, which is why this rests on
+        :meth:`search_recordings` rather than asking for a time range directly:
+        the search is the documented, confirmed-in-the-field call, and the
+        filenames it returns are exactly what ``PlayMode: "ByName"`` wants.
+        Asking by time is the same command with a different parameter and would
+        avoid pulling a whole quarter-hour file to show a minute of it — but
+        nobody has been able to try it against real firmware, and a playback
+        that silently returns nothing is worse than one that fetches too much.
+
+        A window spanning several recordings yields them in order, so the
+        consumer sees one continuous stream. Each file is claimed, streamed and
+        then explicitly stopped, including when the consumer walks away
+        mid-file: a download the recorder still believes is running is one of
+        the handful of sessions it will hold, and leaking those is how a DVR
+        stops answering anybody.
+        """
+        segments = self.search_recordings(channel, start, end)
+        if not segments:
+            raise RecorderError(
+                "The recorder has no footage stored for that time."
+            )
+        for segment in segments:
+            if not segment.handle:
+                continue
+            yield from self._download(segment.handle, start, end)
+
+    def _download(self, filename: str, start: datetime, end: datetime):
+        window = {
+            "StartTime": self.to_device_local(start).strftime("%Y-%m-%d %H:%M:%S"),
+            "EndTime": self.to_device_local(end).strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+        def body(action: str) -> dict:
+            return {
+                "Name": "OPPlayBack",
+                "OPPlayBack": {
+                    "Action": action,
+                    "Parameter": {
+                        "PlayMode": "ByName",
+                        "FileName": filename,
+                        "StreamType": 0,
+                        "Value": 0,
+                        # TCP for the same reason RTSP uses it: a smeared frame
+                        # reads as a broken camera, and the box is on the LAN.
+                        "TransMode": "TCP",
+                    },
+                    **window,
+                },
+            }
+
+        self._session.login()
+        self._session.call(PLAYBACK, body("Claim"))
+        deframer = MediaDeframer()
+        started = False
+        self.stream_stats = deframer.stats
+        try:
+            # No reply is consumed here: from this point the socket carries
+            # video, and a JSON read would swallow the first frames.
+            self._session.send_only(PLAYBACK, body("DownloadStart"))
+            for payload in self._session.read_payloads():
+                # Some firmwares acknowledge the start in JSON before the video.
+                if not started and payload[:1] == b"{":
+                    continue
+                started = True
+                chunk = deframer.feed(payload)
+                if chunk:
+                    yield chunk
+            tail = deframer.flush()
+            if tail:
+                yield tail
+        finally:
+            # Best effort, and deliberately not raising: this runs when the
+            # viewer scrolls away mid-file, and the session is about to be
+            # closed regardless.
+            try:
+                self._session.send_only(PLAYBACK, body("DownloadStop"))
+            except RecorderError:
+                pass
 
     # -- recordings --------------------------------------------------------
     def search_recordings(
