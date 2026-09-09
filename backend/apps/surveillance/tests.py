@@ -862,8 +862,9 @@ class FfmpegStderrTests(TestCase):
     """
 
     def test_a_chatty_pipeline_cannot_block_on_its_own_error_pipe(self):
-        chatty = " ".join(["[h264] non-existing PPS 0 referenced"] * 4000)
-        process = self._spawn_echoing_stderr(chatty)
+        process = self._spawn_echoing_stderr(
+            "[h264] non-existing PPS 0 referenced ", repeat=4000
+        )
         try:
             # Far more than a pipe buffer holds. If nothing drained it the
             # process would still be alive and stuck on write().
@@ -882,11 +883,18 @@ class FfmpegStderrTests(TestCase):
             time.sleep(0.05)
         self.assertIn("Invalid data", transcode.drain_error(process))
 
-    def _spawn_echoing_stderr(self, text):
+    def _spawn_echoing_stderr(self, text, repeat=1):
         slot = transcode.reserve_slot()
         self.addCleanup(slot.release)
+        # The child multiplies the line itself rather than being handed the
+        # finished blob. Linux caps a single argv entry at 128 KB
+        # (MAX_ARG_STRLEN) and refuses the exec outright above it, which is a
+        # problem for a test whose whole point is writing more than a pipe
+        # holds. macOS has no such per-argument cap, so passing it in argv
+        # worked here and failed only on CI.
         script = (
-            "import sys; sys.stderr.write(%r); sys.stderr.flush()" % (text + "\n")
+            "import sys; sys.stderr.write(%r * %d + '\\n'); sys.stderr.flush()"
+            % (text, repeat)
         )
         process, _slot = transcode._spawn([sys.executable, "-c", script], slot)
         self.addCleanup(lambda: transcode.stop(process))
