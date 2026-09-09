@@ -214,4 +214,81 @@ void main() {
     });
   });
 
+
+  group('Xiongmai and ONVIF', () {
+    test('its own protocol port names a Xiongmai', () {
+      expect(
+        brandFromProbe(const RecorderProbeOutcome(speaksDvrip: true)),
+        RecorderBrand.xiongmai,
+      );
+    });
+
+    test('the native protocol beats the standard one on the same box', () {
+      // A Xiongmai answers ONVIF too. Naming it "ONVIF" would trade away the
+      // channel names and recording search only its own protocol gives.
+      expect(
+        brandFromProbe(
+          const RecorderProbeOutcome(speaksDvrip: true, speaksOnvif: true),
+        ),
+        RecorderBrand.xiongmai,
+      );
+    });
+
+    test('a vendor dialect also beats the standard one', () {
+      expect(
+        brandFromProbe(
+          const RecorderProbeOutcome(hikvisionRealm: '', speaksOnvif: true),
+        ),
+        RecorderBrand.hikvision,
+      );
+    });
+
+    test('ONVIF alone is a real identification, just a lesser one', () {
+      expect(
+        brandFromProbe(const RecorderProbeOutcome(speaksOnvif: true)),
+        RecorderBrand.onvif,
+      );
+      expect(const RecorderProbeOutcome(speaksOnvif: true).isRecorder, isTrue);
+    });
+
+    test('a box that answers nothing is still not a recorder', () {
+      expect(const RecorderProbeOutcome().isRecorder, isFalse);
+      expect(brandFromProbe(const RecorderProbeOutcome()), RecorderBrand.auto);
+    });
+
+    test('the ONVIF marker is the response element, not the request', () {
+      // Echoing our own request back must not count as an answer.
+      expect(onvifBodyIsFromDevice('<tds:GetSystemDateAndTime/>'), isFalse);
+      expect(
+        onvifBodyIsFromDevice(
+          '<s:Body><tds:GetSystemDateAndTimeResponse>'
+          '</tds:GetSystemDateAndTimeResponse></s:Body>',
+        ),
+        isTrue,
+      );
+    });
+
+    test('our own web app is not ONVIF either', () {
+      expect(
+        onvifBodyIsFromDevice('<!DOCTYPE html><html><body>hi</body></html>'),
+        isFalse,
+      );
+    });
+
+    test('specificity orders the answers a single box can give', () {
+      expect(
+        brandSpecificity(RecorderBrand.xiongmai),
+        greaterThan(brandSpecificity(RecorderBrand.hikvision)),
+      );
+      expect(
+        brandSpecificity(RecorderBrand.hikvision),
+        greaterThan(brandSpecificity(RecorderBrand.onvif)),
+      );
+      expect(
+        brandSpecificity(RecorderBrand.onvif),
+        greaterThan(brandSpecificity(RecorderBrand.auto)),
+      );
+    });
+  });
+
 }

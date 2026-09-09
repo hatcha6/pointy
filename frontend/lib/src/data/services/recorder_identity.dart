@@ -75,10 +75,34 @@ bool dahuaBodyIsFromDevice(String body) =>
 bool hikvisionBodyIsFromDevice(String body) =>
     bodyIsFromDevice(body, hikvisionBodyMarkers, keyValue: false);
 
-/// Which endpoint answered, if any. Both brands guard exactly one path that the
-/// other returns 404 for, so *which* one challenges is the fingerprint.
+/// The marker that identifies an ONVIF device without credentials.
+///
+/// `GetSystemDateAndTime` is the one call the ONVIF spec requires a device to
+/// answer *unauthenticated*, which makes it the same kind of fingerprint as the
+/// two vendor challenges: something only the real thing can produce, obtainable
+/// before anyone has typed a password.
+const String onvifResponseMarker = 'GetSystemDateAndTimeResponse';
+
+/// Whether a SOAP reply really came from an ONVIF device.
+bool onvifBodyIsFromDevice(String body) => body.contains(onvifResponseMarker);
+
+/// Which endpoint answered, if any. Both vendor brands guard exactly one path
+/// that the other returns 404 for, so *which* one challenges is the
+/// fingerprint. Xiongmai and ONVIF are identified differently — see
+/// [brandFromProbe].
 class RecorderProbeOutcome {
-  const RecorderProbeOutcome({this.hikvisionRealm, this.dahuaRealm});
+  const RecorderProbeOutcome({
+    this.hikvisionRealm,
+    this.dahuaRealm,
+    this.speaksDvrip = false,
+    this.speaksOnvif = false,
+  });
+
+  /// Its own protocol port answered. Not an HTTP fingerprint at all.
+  final bool speaksDvrip;
+
+  /// It answered the one ONVIF call that needs no credentials.
+  final bool speaksOnvif;
 
   /// Non-null when the Hikvision ISAPI path answered as a device (a digest
   /// challenge, or a body only that endpoint returns). Empty string = answered
@@ -86,7 +110,11 @@ class RecorderProbeOutcome {
   final String? hikvisionRealm;
   final String? dahuaRealm;
 
-  bool get isRecorder => hikvisionRealm != null || dahuaRealm != null;
+  bool get isRecorder =>
+      hikvisionRealm != null ||
+      dahuaRealm != null ||
+      speaksDvrip ||
+      speaksOnvif;
 }
 
 /// The brand a probe result implies.
@@ -99,17 +127,43 @@ class RecorderProbeOutcome {
 RecorderBrand brandFromProbe(RecorderProbeOutcome outcome) {
   final hikvision = outcome.hikvisionRealm;
   final dahua = outcome.dahuaRealm;
+  // Most specific evidence first, which is also most useful first. A Xiongmai
+  // answers ONVIF too, and a Hikvision very often does; naming either of them
+  // "ONVIF" would trade away the channel names and recording search only their
+  // own protocol gives, for nothing.
+  if (outcome.speaksDvrip) {
+    return RecorderBrand.xiongmai;
+  }
   if (hikvision != null && dahua == null) {
     return RecorderBrand.hikvision;
   }
   if (dahua != null && hikvision == null) {
     return RecorderBrand.dahua;
   }
-  if (hikvision == null && dahua == null) {
-    return RecorderBrand.auto;
+  if (hikvision != null && dahua != null) {
+    return brandFromRealm(dahua.isNotEmpty ? dahua : hikvision);
   }
-  return brandFromRealm(dahua!.isNotEmpty ? dahua : hikvision!);
+  // Nothing vendor-specific answered, but the standard did. That is a real
+  // identification — it is what most of the boxes in this market are — just a
+  // less capable one.
+  if (outcome.speaksOnvif) {
+    return RecorderBrand.onvif;
+  }
+  return RecorderBrand.auto;
 }
+
+/// How much a brand tells us, for choosing between two answers about one box.
+///
+/// A recorder can now match more than once — a Xiongmai answers on its own port
+/// *and* usually speaks ONVIF on 80 — and offering the same machine twice, once
+/// under a name that gives less, is how an installer picks the worse one.
+int brandSpecificity(RecorderBrand brand) => switch (brand) {
+  RecorderBrand.xiongmai => 4,
+  RecorderBrand.hikvision || RecorderBrand.dahua => 3,
+  RecorderBrand.onvif => 2,
+  RecorderBrand.genericRtsp => 1,
+  RecorderBrand.auto => 0,
+};
 
 /// Dahua writes its realm as `Login to <serial>`; Hikvision writes the product
 /// (`IP Camera(…)`, `DS-7216…`). Only ever used to break a tie.

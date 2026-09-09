@@ -26,9 +26,33 @@ typedef _BodyCheck = bool Function(String body);
 /// Enough to see the marker, not enough for a hostile responder to matter.
 const int _maxBodySample = 4096;
 
-/// HTTP ports worth trying. 80 is what both brands ship on; 8080 is where an
-/// installer moves it when something else already had 80.
-const List<int> _probePorts = [80, 8080];
+/// The ONVIF device service, and the one call the spec requires a device to
+/// answer without credentials.
+const String _onvifProbePath = '/onvif/device_service';
+const String _onvifProbeBody =
+    '<?xml version="1.0" encoding="UTF-8"?>'
+    '<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope">'
+    '<s:Body xmlns:tds="http://www.onvif.org/ver10/device/wsdl">'
+    '<tds:GetSystemDateAndTime/></s:Body></s:Envelope>';
+
+/// Xiongmai's own protocol port, and the whole of its fingerprint.
+///
+/// Unlike every other check here this is not HTTP: the port is simply open, and
+/// on a shop LAN essentially nothing else uses it. That is much stronger
+/// evidence than the port-80 content marker that once made every address of our
+/// own server look like a Dahua — 34567 is unassigned and specific, where 80 is
+/// shared with everything.
+///
+/// We deliberately do **not** complete a DVRIP handshake to be certain. That
+/// would mean sending a login, and this firmware locks an account after a few
+/// failed attempts: a sweep of a /24 could lock the shop out of its own
+/// recorder. An open port is enough for a suggestion the installer confirms.
+const int _dvripPort = 34567;
+
+/// Ports worth trying. 80 is what both vendor brands ship on; 8080 is where an
+/// installer moves it when something else already had 80; 8899 is where OEM
+/// firmware usually puts ONVIF; 34567 is Xiongmai's own.
+const List<int> _probePorts = [80, 8080, 8899, _dvripPort];
 
 Future<List<DiscoveredRecorder>> discoverRecordersPlatform({
   Duration perProbeTimeout = const Duration(milliseconds: 400),
@@ -113,7 +137,7 @@ Future<List<DiscoveredRecorder>> _discoverEntrypoint(
       rank['${b.host}:${b.port}'] ?? 0,
     ),
   );
-  return found;
+  return _foldByHost(found);
 }
 
 class _Endpoint {
@@ -173,6 +197,16 @@ Future<DiscoveredRecorder?> _identify(
   _Endpoint endpoint,
   Duration timeout,
 ) async {
+  if (endpoint.port == _dvripPort) {
+    // Nothing to ask: the open port is the identification. See [_dvripPort]
+    // for why we do not try to confirm it with a login.
+    return DiscoveredRecorder(
+      host: endpoint.host,
+      port: 80,
+      brand: brandFromProbe(const RecorderProbeOutcome(speaksDvrip: true)),
+      model: '',
+    );
+  }
   final hikvision = await _probe(
     client,
     endpoint,
@@ -187,13 +221,20 @@ Future<DiscoveredRecorder?> _identify(
     dahuaBodyIsFromDevice,
     timeout,
   );
-  if (hikvision == null && dahua == null) {
+  // Only asked when neither vendor answered: it is the fallback identity, and
+  // a box that named itself has already told us something better.
+  final onvif =
+      hikvision == null && dahua == null
+      ? await _probeOnvif(client, endpoint, timeout)
+      : false;
+  if (hikvision == null && dahua == null && !onvif) {
     return null;
   }
 
   final outcome = RecorderProbeOutcome(
     hikvisionRealm: hikvision?.realm,
     dahuaRealm: dahua?.realm,
+    speaksOnvif: onvif,
   );
   final realm = hikvision?.realm.isNotEmpty == true
       ? hikvision!.realm
@@ -210,6 +251,61 @@ class _ProbeResult {
   const _ProbeResult(this.realm);
 
   final String realm;
+}
+
+/// Ask the one ONVIF call that needs no credentials.
+///
+/// A POST rather than a GET, so it cannot be answered by a web server serving
+/// its index page to everything — which is the failure this whole file learned
+/// the hard way. Either the reply carries the response element or the box is
+/// not ONVIF.
+Future<bool> _probeOnvif(
+  HttpClient client,
+  _Endpoint endpoint,
+  Duration timeout,
+) async {
+  try {
+    final uri = Uri.parse(
+      'http://${endpoint.host}:${endpoint.port}$_onvifProbePath',
+    );
+    final request = await client.postUrl(uri).timeout(timeout);
+    request.followRedirects = false;
+    request.headers.set(
+      HttpHeaders.contentTypeHeader,
+      'application/soap+xml; charset=utf-8',
+    );
+    request.write(_onvifProbeBody);
+    final response = await request.close().timeout(timeout);
+    if (response.statusCode != HttpStatus.ok) {
+      await response.drain<void>().timeout(timeout);
+      return false;
+    }
+    return onvifBodyIsFromDevice(await _sample(response, timeout));
+  } on Object {
+    return false;
+  }
+}
+
+/// One row per machine, keeping the answer that tells us most.
+List<DiscoveredRecorder> _foldByHost(List<DiscoveredRecorder> found) {
+  final best = <String, DiscoveredRecorder>{};
+  for (final recorder in found) {
+    final existing = best[recorder.host];
+    if (existing == null ||
+        brandSpecificity(recorder.brand) > brandSpecificity(existing.brand) ||
+        // Same brand, but one of them managed to read a serial off the realm.
+        (recorder.brand == existing.brand &&
+            existing.model.isEmpty &&
+            recorder.model.isNotEmpty)) {
+      best[recorder.host] = recorder;
+    }
+  }
+  // Rebuild in the order they were found, which is nearest-first.
+  final seen = <String>{};
+  return [
+    for (final recorder in found)
+      if (seen.add(recorder.host)) best[recorder.host]!,
+  ];
 }
 
 Future<_ProbeResult?> _probe(
