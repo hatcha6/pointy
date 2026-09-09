@@ -140,7 +140,6 @@ class PurchaseOrder(DocumentMixin, TimeStampedModel):
         "inventory.Warehouse",
         on_delete=models.PROTECT,
         related_name="purchase_orders",
-        null=True,
         blank=True,
     )
     supplier = models.ForeignKey(

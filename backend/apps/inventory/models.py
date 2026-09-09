@@ -54,18 +54,21 @@ class StockItem(TimeStampedModel):
     # other end, in ``Warehouse.on_trash``, and so do we — see
     # ``Warehouse.deletion_blockers``.
     # Nullable for exactly one release, and not because null means anything.
-    # A live update runs the old backend against the new schema for about a
-    # minute (deploy/onprem/README.md), and the old backend inserts stock rows
-    # knowing nothing about warehouses. A NOT NULL column with no database
-    # default would fail those inserts — which on this table means a till that
-    # cannot sell. So: expand now, adopt the strays on ``post_migrate`` the way
-    # ``apps.documents.reconciliation`` already does for ``doc_status``, and
-    # contract to NOT NULL in the release after.
+    # Expanded nullable in ``0018`` because a live update runs the old backend
+    # against the new schema for about a minute, and that backend inserted stock
+    # rows knowing nothing about warehouses — on this table, a NOT NULL column
+    # would have meant a till that cannot sell. ``0023`` contracted it once a
+    # release had shipped in between.
+    #
+    # ``blank=True`` stays, and is not an oversight: it is the *serializer*
+    # saying callers need not supply a location, while the database says a row
+    # may not lack one. ``save`` bridges the two. Dropping it turned a schema
+    # contract into a breaking API change — 111 tests, every caller that had
+    # never named a warehouse suddenly getting a 400.
     warehouse = models.ForeignKey(
         "inventory.Warehouse",
         on_delete=models.PROTECT,
         related_name="stock_items",
-        null=True,
         blank=True,
     )
     quantity_on_hand = models.DecimalField(max_digits=12, decimal_places=3, default=0)
@@ -85,11 +88,12 @@ class StockItem(TimeStampedModel):
     def save(self, *args, **kwargs):
         """A stock row always lands somewhere.
 
-        The column is nullable for one release so an older backend's inserts
-        survive a live update (see the field), but *our* code must never be the
-        thing that writes a null. Defaulting here rather than at each call site
-        is what lets every existing caller — and every existing test fixture —
-        keep creating stock rows exactly as it did before locations existed.
+        The column was nullable for one release so an older backend's inserts
+        could survive a live update; ``0023`` filled the gaps and made it
+        required, so a null is now a database error rather than a silent hole.
+        This default stays regardless: it is what lets every existing caller —
+        and every existing test fixture — keep creating stock rows exactly as it
+        did before locations existed.
         """
         if self.warehouse_id is None:
             self.warehouse_id = Warehouse.default_id()
@@ -129,13 +133,13 @@ class StockMovement(TimeStampedModel):
     # Denormalised from ``stock_item`` so a movement says where it happened
     # without a join. The valuation engine groups by it, and it is read once per
     # movement on the busiest write path in the shop — reaching through the
-    # stock row for it would be a query per line. Nullable for one release, like
-    # every other column this phase adds.
+    # stock row for it would be a query per line. Required since ``0023``,
+    # which backfilled every movement from the stock row it moved; ``save``
+    # still fills it so no caller has to.
     warehouse = models.ForeignKey(
         "inventory.Warehouse",
         on_delete=models.PROTECT,
         related_name="stock_movements",
-        null=True,
         blank=True,
     )
     movement_type = models.CharField(max_length=32, choices=Type.choices)
@@ -566,14 +570,13 @@ class StockCount(DocumentMixin, TimeStampedModel):
     owner_key = models.CharField(max_length=64, db_index=True)
     # A count is of one place. Counting "the shop" while stock sits in a store
     # room out the back is how a variance report becomes fiction: every unit in
-    # the back reads as missing from the front. Nullable for one release so an
-    # older backend's inserts survive a live update, and defaulted in ``save``
-    # so no path of ours writes the null.
+    # the back reads as missing from the front. Required since ``0023``;
+    # ``save`` still defaults it so no path of ours has to name a location it
+    # does not care about.
     warehouse = models.ForeignKey(
         "inventory.Warehouse",
         on_delete=models.PROTECT,
         related_name="stock_counts",
-        null=True,
         blank=True,
     )
     status = models.CharField(

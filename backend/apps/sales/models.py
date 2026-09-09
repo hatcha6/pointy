@@ -1080,12 +1080,11 @@ class StockReservation(TimeStampedModel):
     # Where the hold was placed. A release that came off the shop's default
     # while the hold went on the store room would leave committed quantity
     # drifting upward in one place and downward in another, permanently and
-    # silently. Nullable for one release; defaulted in ``save``.
+    # silently. Required since ``0030``; defaulted in ``save``.
     warehouse = models.ForeignKey(
         "inventory.Warehouse",
         on_delete=models.PROTECT,
         related_name="stock_reservations",
-        null=True,
         blank=True,
     )
     order = models.ForeignKey(
