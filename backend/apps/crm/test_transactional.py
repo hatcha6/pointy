@@ -28,12 +28,12 @@ def make_gateway():
     )
 
 
-def make_credit_order(customer, total="100", valid_until=None):
+def make_credit_order(customer, total="100", due_date=None):
     order = Order.objects.create(
         customer=customer,
         sale_type=Order.SaleType.CREDIT,
         status=Order.Status.OPEN,
-        valid_until=valid_until,
+        due_date=due_date,
     )
     # Pin the total directly so Order.save() can't recompute it from (absent) lines.
     Order.objects.filter(pk=order.pk).update(total=Decimal(total))
@@ -95,7 +95,7 @@ class DebtReminderTests(TestCase):
         due = business_local_date()
         customer = Customer.objects.create(full_name="علي", phone="+218912345678")
         message = send_debt_reminder(
-            make_credit_order(customer, valid_until=due)
+            make_credit_order(customer, due_date=due)
         )
         self.assertIn(due.strftime("%Y-%m-%d"), message.body)
         self.assertIn("تاريخ الاستحقاق", message.body)
@@ -137,9 +137,9 @@ class DebtSweepTests(TestCase):
         overdue = Customer.objects.create(full_name="Overdue", phone="+218912345671")
         future = Customer.objects.create(full_name="Future", phone="+218912345672")
         undated = Customer.objects.create(full_name="Undated", phone="+218912345673")
-        make_credit_order(due, valid_until=today)
-        make_credit_order(overdue, valid_until=today - timedelta(days=3))
-        make_credit_order(future, valid_until=today + timedelta(days=3))
+        make_credit_order(due, due_date=today)
+        make_credit_order(overdue, due_date=today - timedelta(days=3))
+        make_credit_order(future, due_date=today + timedelta(days=3))
         make_credit_order(undated)  # no due date → due now
 
         result = debt_reminder_sweep_task()

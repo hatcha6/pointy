@@ -46,6 +46,7 @@ class SaleCheckoutDraft {
     this.couponCode = '',
     this.saleType = SaleType.standard,
     this.validUntil,
+    this.dueDate,
     this.reserveStock = false,
     this.receiptDelivery,
   });
@@ -57,8 +58,14 @@ class SaleCheckoutDraft {
   final String couponCode;
   final SaleType saleType;
 
-  /// Quotation/credit expiry (also bounds a quotation's stock hold).
+  /// Quotation-only: how long the offer stands, and the bound on any stock hold.
   final DateTime? validUntil;
+
+  /// Credit-only (آجل): when the debt is to be settled. Null on a credit sale
+  /// is an instruction, not an omission — it leaves the tab open with no date,
+  /// and is sent as an explicit null so the backend does not fill it in from
+  /// the customer's standing terms.
+  final DateTime? dueDate;
 
   /// Quotation-only: hold the quoted quantities until [validUntil].
   final bool reserveStock;
@@ -75,6 +82,7 @@ class SaleCheckoutDraft {
     String couponCode = '',
     SaleType saleType = SaleType.standard,
     DateTime? validUntil,
+    DateTime? dueDate,
     bool reserveStock = false,
     ReceiptDelivery? receiptDelivery,
   }) {
@@ -96,6 +104,7 @@ class SaleCheckoutDraft {
       couponCode: couponCode,
       saleType: saleType,
       validUntil: validUntil,
+      dueDate: dueDate,
       reserveStock: reserveStock,
       receiptDelivery: receiptDelivery,
     );
@@ -109,11 +118,13 @@ class SaleCheckoutDraft {
       if (normalizedCouponCode.isNotEmpty) 'coupon_code': normalizedCouponCode,
       'payments': payments.map((payment) => payment.toJson()).toList(),
       if (saleType != SaleType.standard) 'sale_type': saleType.apiValue,
-      if (validUntil != null)
-        'valid_until':
-            '${validUntil!.year.toString().padLeft(4, '0')}-'
-            '${validUntil!.month.toString().padLeft(2, '0')}-'
-            '${validUntil!.day.toString().padLeft(2, '0')}',
+      if (saleType == SaleType.quotation && validUntil != null)
+        'valid_until': _apiDate(validUntil!),
+      // Always sent for a credit sale, null included: the backend reads a
+      // missing key as "apply the customer's terms" and a null one as "no due
+      // date", and the till has already decided which it means.
+      if (saleType == SaleType.credit)
+        'due_date': dueDate == null ? null : _apiDate(dueDate!),
       if (reserveStock) 'reserve_stock': true,
       if (invoicePrinterConfig != null)
         'print_invoice': {
@@ -409,6 +420,9 @@ class SaleOrder {
     this.balanceDue = 0,
     this.paymentStatus = '',
     this.validUntil,
+    this.dueDate,
+    this.isOverdue = false,
+    this.daysOverdue = 0,
     this.createdAt,
     this.updatedAt,
   });
@@ -466,6 +480,15 @@ class SaleOrder {
   /// Server-computed: `paid` | `partial` | `unpaid` | `quotation`.
   final String paymentStatus;
   final DateTime? validUntil;
+
+  /// Credit-only: when this debt is to be settled, and whether it is past that.
+  /// [isOverdue] is derived server-side against the shop's local date and is
+  /// never recomputed here — a till whose clock has drifted must not disagree
+  /// with the reports about who is late.
+  final DateTime? dueDate;
+  final bool isOverdue;
+  final int daysOverdue;
+
   final List<AppliedDiscountInfo> appliedDiscounts;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -538,6 +561,9 @@ class SaleOrder {
       balanceDue: _moneyFromJson(json['balance_due']),
       paymentStatus: json['payment_status']?.toString() ?? '',
       validUntil: _dateTimeFromJson(json['valid_until']),
+      dueDate: _dateTimeFromJson(json['due_date']),
+      isOverdue: json['is_overdue'] == true,
+      daysOverdue: (json['days_overdue'] as num?)?.toInt() ?? 0,
       appliedDiscounts: _listFromJson(json['applied_discounts'])
           .whereType<Map<String, Object?>>()
           .map(AppliedDiscountInfo.fromJson)
@@ -945,6 +971,14 @@ int? _nullableIntFromJson(Object? value) {
   }
   return int.tryParse(value.toString());
 }
+
+/// A calendar date as the API spells it. Dates crossing this boundary are
+/// date-only on purpose: a due date is a day the shop agreed on, not an
+/// instant, and sending a timestamp would let a timezone move it.
+String _apiDate(DateTime value) =>
+    '${value.year.toString().padLeft(4, '0')}-'
+    '${value.month.toString().padLeft(2, '0')}-'
+    '${value.day.toString().padLeft(2, '0')}';
 
 double _moneyFromJson(Object? value) {
   return double.parse((value ?? 0).toString());

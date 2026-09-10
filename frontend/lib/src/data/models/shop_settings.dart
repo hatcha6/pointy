@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'attachment_summary.dart';
+import 'contact.dart' show PaymentTermsBasis, ResolvedPaymentTerms;
 
 /// How the cost of goods sold is decided when the same product was bought at
 /// more than one price.
@@ -61,6 +62,9 @@ class ShopSettings {
     this.posCashPurchaseLimit,
     this.enforceCustomerCreditLimits = false,
     this.defaultCustomerCreditLimit,
+    this.defaultPaymentTermsDays = 0,
+    this.defaultPaymentTermsBasis = PaymentTermsBasis.netDays,
+    this.defaultPaymentTerms,
     this.enablePurchaseSuggestions = true,
     this.enableSurveillance = false,
     this.surveillancePreRollSeconds = 20,
@@ -120,6 +124,15 @@ class ShopSettings {
   /// overrides it. Null = no limit — which is what a shop that never sets this
   /// keeps. 0 is the opposite and deliberate: nobody buys on credit by default.
   final double? defaultCustomerCreditLimit;
+
+  /// The shop's default credit (آجل) terms: how many days, counted from what.
+  final int defaultPaymentTermsDays;
+  final PaymentTermsBasis defaultPaymentTermsBasis;
+
+  /// Those terms resolved by the server, including the due date they produce
+  /// for a sale rung up today. The till proposes that date for a walk-in آجل
+  /// sale; a named customer's own terms ride on the customer instead.
+  final ResolvedPaymentTerms? defaultPaymentTerms;
 
   /// Whether the purchasing screen offers the products and quantities this shop
   /// habitually buys from the chosen supplier. Off hides all three surfaces and
@@ -230,6 +243,14 @@ class ShopSettings {
         json['enforce_customer_credit_limits'],
         false,
       ),
+      defaultPaymentTermsDays:
+          (json['default_payment_terms_days'] as num?)?.toInt() ?? 0,
+      defaultPaymentTermsBasis: PaymentTermsBasis.fromApi(
+        json['default_payment_terms_basis']?.toString(),
+      ),
+      defaultPaymentTerms: ResolvedPaymentTerms.fromJson(
+        json['default_payment_terms'],
+      ),
       defaultCustomerCreditLimit: json['default_customer_credit_limit'] == null
           ? null
           : _moneyFromJson(json['default_customer_credit_limit'], 0),
@@ -306,6 +327,8 @@ class ShopSettingsDraft {
     this.posCashPurchaseLimit,
     this.enforceCustomerCreditLimits = false,
     this.defaultCustomerCreditLimit,
+    this.defaultPaymentTermsDays = 0,
+    this.defaultPaymentTermsBasis = PaymentTermsBasis.netDays,
     this.enablePurchaseSuggestions = true,
     this.enableSurveillance = false,
     this.surveillancePreRollSeconds = 20,
@@ -316,6 +339,11 @@ class ShopSettingsDraft {
 
   final bool enforceCustomerCreditLimits;
   final double? defaultCustomerCreditLimit;
+
+  /// The shop's default credit (آجل) terms — the two columns the form edits.
+  /// The resolved answer they produce lives on [ShopSettings], not here.
+  final int defaultPaymentTermsDays;
+  final PaymentTermsBasis defaultPaymentTermsBasis;
   final String shopName;
   final String receiptHeader;
   final String receiptFooter;
@@ -377,6 +405,8 @@ class ShopSettingsDraft {
       requireCustomerForCredit: settings.requireCustomerForCredit,
       enforceCustomerCreditLimits: settings.enforceCustomerCreditLimits,
       defaultCustomerCreditLimit: settings.defaultCustomerCreditLimit,
+      defaultPaymentTermsDays: settings.defaultPaymentTermsDays,
+      defaultPaymentTermsBasis: settings.defaultPaymentTermsBasis,
       allowCashierCustomerAccess: settings.allowCashierCustomerAccess,
       posCashPurchaseLimit: settings.posCashPurchaseLimit,
       enableRepairOperations: settings.enableRepairOperations,
@@ -435,6 +465,8 @@ class ShopSettingsDraft {
     bool? requireCustomerForCredit,
     bool? enforceCustomerCreditLimits,
     Object? defaultCustomerCreditLimit = _keep,
+    int? defaultPaymentTermsDays,
+    PaymentTermsBasis? defaultPaymentTermsBasis,
     bool? allowCashierCustomerAccess,
     Object? posCashPurchaseLimit = _keep,
     bool? enableRepairOperations,
@@ -483,6 +515,10 @@ class ShopSettingsDraft {
       defaultCustomerCreditLimit: identical(defaultCustomerCreditLimit, _keep)
           ? this.defaultCustomerCreditLimit
           : defaultCustomerCreditLimit as double?,
+      defaultPaymentTermsDays:
+          defaultPaymentTermsDays ?? this.defaultPaymentTermsDays,
+      defaultPaymentTermsBasis:
+          defaultPaymentTermsBasis ?? this.defaultPaymentTermsBasis,
       allowCashierCustomerAccess:
           allowCashierCustomerAccess ?? this.allowCashierCustomerAccess,
       posCashPurchaseLimit: identical(posCashPurchaseLimit, _keep)
@@ -541,6 +577,8 @@ class ShopSettingsDraft {
       'enable_job_tracking': enableJobTracking,
       'pos_cash_purchase_limit': posCashPurchaseLimit?.toStringAsFixed(2),
       'enforce_customer_credit_limits': enforceCustomerCreditLimits,
+      'default_payment_terms_days': defaultPaymentTermsDays,
+      'default_payment_terms_basis': defaultPaymentTermsBasis.apiValue,
       'default_customer_credit_limit': defaultCustomerCreditLimit
           ?.toStringAsFixed(2),
       'enable_purchase_suggestions': enablePurchaseSuggestions,

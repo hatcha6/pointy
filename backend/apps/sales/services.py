@@ -550,6 +550,40 @@ def sale_loss_blocked_payload(loss_lines):
     }
 
 
+def resolve_credit_due_date(
+    *, sale_type, customer, supplied=None, was_supplied=False, settings=None
+):
+    """The due date to stamp on a sale, or ``None``.
+
+    Three rules, in order:
+
+    **Only credit invoices get one.** A cash sale is settled at the counter and
+    a quotation has an expiry rather than a debt, so neither grows a due date
+    even if a client sends one. ERPNext draws the same line, returning early
+    from its payment-schedule pass for POS invoices — and it is what keeps the
+    busiest write path in the shop untouched by this feature: no lookup, no
+    settings read, no extra query on a cash checkout.
+
+    **An explicit answer wins.** A cashier who picked a date, or who cleared the
+    field to leave the tab open, has said something more specific than the
+    customer's standing terms. ``was_supplied`` is what separates "they sent
+    null" from "they sent nothing" — collapsing the two would make it impossible
+    to record an open-ended debt for a customer who has terms.
+
+    **Otherwise the terms decide.** Which, for a shop that has never configured
+    any, is the invoice date itself — the same "due now" that a null has always
+    meant.
+    """
+    if sale_type != Order.SaleType.CREDIT:
+        return None
+    if was_supplied:
+        return supplied
+    from apps.core.timeutils import business_local_date
+    from apps.customers.payment_terms import resolve_due_date
+
+    return resolve_due_date(customer, business_local_date(), settings=settings)
+
+
 def validate_customer_credit_limit(
     *, customer, new_debt, settings=None, exclude_order_id=None
 ):
@@ -637,6 +671,8 @@ def checkout_order(
     discount_result=None,
     sale_type=Order.SaleType.STANDARD,
     valid_until=None,
+    due_date=None,
+    due_date_supplied=False,
     reserve_stock=False,
     request=None,
 ):
@@ -677,7 +713,14 @@ def checkout_order(
         sales_channel=sales_channel,
         customer=customer,
         sale_type=sale_type,
-        valid_until=valid_until,
+        valid_until=valid_until if is_quotation else None,
+        due_date=resolve_credit_due_date(
+            sale_type=sale_type,
+            customer=customer,
+            supplied=due_date,
+            was_supplied=due_date_supplied,
+            settings=settings,
+        ),
         reserves_stock=bool(reserve_stock) and is_quotation,
         lines_data=lines_data,
         coupon_codes=coupon_codes,
@@ -1259,6 +1302,54 @@ def assign_credit_invoice_customer(order, *, customer, request=None):
             "receipt_number": locked.receipt_number,
             "previous_customer_id": previous_customer_id,
             "customer_id": customer.pk,
+        },
+    )
+    return locked
+
+
+@transaction.atomic
+def reschedule_credit_invoice_due_date(order, *, due_date, request=None):
+    """Move (or clear) the due date on an outstanding credit invoice.
+
+    A due date is the one term on an آجل invoice that a shop genuinely
+    renegotiates — the customer asks for another week, or the cashier fat-fingers
+    the year on the date picker. Without this the only remedies were voiding a
+    real sale or living with a wrong reminder forever.
+
+    It is deliberately narrow. It moves *when* the debt is settled and never how
+    much: lines, totals and discounts are the terms agreed at issue and are not
+    touched. A settled invoice is left alone — rescheduling a debt nobody owes
+    is meaningless, and permitting it would let a closed invoice reappear in the
+    aging report.
+
+    ``due_date=None`` clears the date, returning the invoice to an open tab. It
+    is a real instruction, not a missing argument, which is why the caller has
+    to pass it explicitly.
+    """
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if locked.sale_type != Order.SaleType.CREDIT:
+        raise serializers.ValidationError(
+            {"order": "Only a credit (debt) invoice has a due date."}
+        )
+    if locked.status != Order.Status.OPEN:
+        raise serializers.ValidationError(
+            {"order": "Only an outstanding invoice can be rescheduled."}
+        )
+    previous = locked.due_date
+    if previous == due_date:
+        return locked
+    locked.due_date = due_date
+    locked.save(update_fields=["due_date", "updated_at"])
+    record_domain_event(
+        name="sales.credit.rescheduled",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        user=getattr(request, "user", None),
+        entity_type="sale_order",
+        entity_id=locked.pk,
+        attributes={
+            "receipt_number": locked.receipt_number,
+            "previous_due_date": previous.isoformat() if previous else None,
+            "due_date": due_date.isoformat() if due_date else None,
         },
     )
     return locked

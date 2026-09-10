@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/contact.dart';
@@ -152,6 +153,14 @@ class CustomerDetailsView extends StatelessWidget {
                   child: _CustomerCreditLimit(viewModel: viewModel),
                 ),
               ],
+              // Not gated on the ceiling switch: a shop that caps nobody can
+              // still expect a given customer to settle by the month end.
+              SizedBox(height: spacing.md),
+              PointyDetailSection(
+                title: l10n.paymentTermsPolicyLabel,
+                icon: Icons.event_available_outlined,
+                child: _CustomerPaymentTerms(viewModel: viewModel),
+              ),
               SizedBox(height: spacing.md),
               PointyDetailSection(
                 title: l10n.customerConsentTitle,
@@ -262,8 +271,7 @@ class _CustomerCreditLimitState extends State<_CustomerCreditLimit> {
   Future<void> _save() async {
     final l10n = AppLocalizations.of(context)!;
     final amount = _parsedAmount();
-    if (_policy == CreditLimitPolicy.custom &&
-        (amount == null || amount < 0)) {
+    if (_policy == CreditLimitPolicy.custom && (amount == null || amount < 0)) {
       setState(() => _amountError = l10n.customerCreditLimitAmountRequired);
       return;
     }
@@ -359,6 +367,185 @@ class _CustomerCreditLimitState extends State<_CustomerCreditLimit> {
           alignment: AlignmentDirectional.centerEnd,
           child: FilledButton(
             key: const ValueKey('customer_credit_limit_save'),
+            onPressed: viewModel.isSaving || !_isDirty ? null : _save,
+            child: Text(l10n.saveButton),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// When this customer's آجل invoices fall due. The sibling of
+/// [_CustomerCreditLimit] — how much, and by when — and shaped the same way so
+/// an owner who has learned one already knows this one.
+class _CustomerPaymentTerms extends StatefulWidget {
+  const _CustomerPaymentTerms({required this.viewModel});
+
+  final CustomerDetailsViewModel viewModel;
+
+  @override
+  State<_CustomerPaymentTerms> createState() => _CustomerPaymentTermsState();
+}
+
+class _CustomerPaymentTermsState extends State<_CustomerPaymentTerms> {
+  late PaymentTermsPolicy _policy;
+  late PaymentTermsBasis _basis;
+  late final TextEditingController _daysController;
+  String? _daysError;
+
+  @override
+  void initState() {
+    super.initState();
+    final customer = widget.viewModel.customer;
+    _policy = customer.paymentTermsPolicy;
+    _basis = customer.paymentTermsBasis ?? PaymentTermsBasis.netDays;
+    _daysController = TextEditingController(
+      text: customer.paymentTermsDays?.toString() ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _daysController.dispose();
+    super.dispose();
+  }
+
+  bool get _isDirty {
+    final customer = widget.viewModel.customer;
+    if (_policy != customer.paymentTermsPolicy) {
+      return true;
+    }
+    if (_policy != PaymentTermsPolicy.custom) {
+      return false;
+    }
+    return _parsedDays() != customer.paymentTermsDays ||
+        _basis != (customer.paymentTermsBasis ?? PaymentTermsBasis.netDays);
+  }
+
+  int? _parsedDays() {
+    final text = _daysController.text.trim();
+    if (text.isEmpty) {
+      return null;
+    }
+    return int.tryParse(text);
+  }
+
+  Future<void> _save() async {
+    final l10n = AppLocalizations.of(context)!;
+    final days = _parsedDays();
+    if (_policy == PaymentTermsPolicy.custom && (days == null || days < 0)) {
+      setState(() => _daysError = l10n.paymentTermsDaysRequired);
+      return;
+    }
+    setState(() => _daysError = null);
+    final ok = await widget.viewModel.setPaymentTerms(
+      policy: _policy,
+      days: days,
+      basis: _basis,
+    );
+    if (!mounted) {
+      return;
+    }
+    _showSnack(
+      context,
+      ok ? l10n.customerCreditLimitSaved : l10n.customerCreditLimitSaveError,
+    );
+  }
+
+  String _effectiveSentence(AppLocalizations l10n) {
+    final terms = widget.viewModel.effectivePaymentTerms;
+    if (terms == null || terms.isImmediate) {
+      return l10n.effectivePaymentTermsImmediate;
+    }
+    return switch (terms.basis) {
+      PaymentTermsBasis.endOfMonth => l10n.effectivePaymentTermsEndOfMonth(
+        terms.days,
+      ),
+      PaymentTermsBasis.netDays => l10n.effectivePaymentTermsNetDays(
+        terms.days,
+      ),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final viewModel = widget.viewModel;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SegmentedButton<PaymentTermsPolicy>(
+          key: const ValueKey('customer_payment_terms_policy'),
+          segments: [
+            ButtonSegment(
+              value: PaymentTermsPolicy.shopDefault,
+              label: Text(l10n.paymentTermsPolicyShopDefault),
+            ),
+            ButtonSegment(
+              value: PaymentTermsPolicy.immediate,
+              label: Text(l10n.paymentTermsPolicyImmediate),
+            ),
+            ButtonSegment(
+              value: PaymentTermsPolicy.custom,
+              label: Text(l10n.paymentTermsPolicyCustom),
+            ),
+          ],
+          selected: {_policy},
+          onSelectionChanged: viewModel.isSaving
+              ? null
+              : (selection) => setState(() => _policy = selection.first),
+        ),
+        if (_policy == PaymentTermsPolicy.custom) ...[
+          SizedBox(height: spacing.sm),
+          TextField(
+            key: const ValueKey('customer_payment_terms_days'),
+            controller: _daysController,
+            enabled: !viewModel.isSaving,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: l10n.paymentTermsDaysLabel,
+              errorText: _daysError,
+              prefixIcon: const Icon(Icons.timelapse_outlined),
+            ),
+          ),
+          SizedBox(height: spacing.sm),
+          DropdownButtonFormField<PaymentTermsBasis>(
+            key: const ValueKey('customer_payment_terms_basis'),
+            initialValue: _basis,
+            decoration: InputDecoration(
+              labelText: l10n.paymentTermsBasisLabel,
+              prefixIcon: const Icon(Icons.calendar_month_outlined),
+            ),
+            items: [
+              DropdownMenuItem(
+                value: PaymentTermsBasis.netDays,
+                child: Text(l10n.paymentTermsBasisNetDays),
+              ),
+              DropdownMenuItem(
+                value: PaymentTermsBasis.endOfMonth,
+                child: Text(l10n.paymentTermsBasisEndOfMonth),
+              ),
+            ],
+            onChanged: viewModel.isSaving
+                ? null
+                : (basis) => setState(() => _basis = basis ?? _basis),
+          ),
+        ],
+        SizedBox(height: spacing.sm),
+        Text(
+          _effectiveSentence(l10n),
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        SizedBox(height: spacing.sm),
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: FilledButton(
+            key: const ValueKey('customer_payment_terms_save'),
             onPressed: viewModel.isSaving || !_isDirty ? null : _save,
             child: Text(l10n.saveButton),
           ),

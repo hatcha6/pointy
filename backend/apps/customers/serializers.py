@@ -19,6 +19,13 @@ class CustomerSerializer(serializers.ModelSerializer):
     # have been resolved. Null means no limit. Read-only: it is an answer, not
     # a setting — the two columns below are what an owner edits.
     effective_credit_limit = serializers.SerializerMethodField()
+    # The terms that actually apply once the policy and the shop default have
+    # been resolved, *including the date they produce for an invoice issued
+    # today*. The date is computed here rather than in the client for the same
+    # reason every other money figure is: month ends and leap years are exactly
+    # the arithmetic two implementations drift on, and the till must propose the
+    # date the reports will later age against.
+    effective_payment_terms = serializers.SerializerMethodField()
 
     class Meta:
         model = Customer
@@ -41,6 +48,11 @@ class CustomerSerializer(serializers.ModelSerializer):
             "credit_limit_policy",
             "credit_limit",
             "effective_credit_limit",
+            # Credit (آجل) terms.
+            "payment_terms_policy",
+            "payment_terms_days",
+            "payment_terms_basis",
+            "effective_payment_terms",
             # RFM segmentation (read-only; set by the nightly task).
             "rfm_segment",
             "rfm_segment_display",
@@ -62,6 +74,7 @@ class CustomerSerializer(serializers.ModelSerializer):
             "marketing_opted_out",
             "do_not_contact",
             "effective_credit_limit",
+            "effective_payment_terms",
             "rfm_segment",
             "rfm_segment_display",
             "rfm_score",
@@ -86,6 +99,19 @@ class CustomerSerializer(serializers.ModelSerializer):
         limit = effective_credit_limit(obj)
         return None if limit is None else f"{limit:.2f}"
 
+    def get_effective_payment_terms(self, obj) -> dict:
+        from apps.core.timeutils import business_local_date
+        from apps.customers.payment_terms import resolve_payment_terms
+
+        terms = resolve_payment_terms(obj)
+        return {
+            "days": terms.days,
+            "basis": terms.basis,
+            "source": terms.source,
+            "is_immediate": terms.is_immediate,
+            "due_date_for_today": terms.due_date_for(business_local_date()).isoformat(),
+        }
+
     def validate(self, attrs):
         # Mirrors ``Customer.clean``. The model would catch it anyway (``save``
         # calls ``full_clean``), but a DRF-shaped field error is what the form
@@ -98,6 +124,17 @@ class CustomerSerializer(serializers.ModelSerializer):
         if policy == Customer.CreditLimitPolicy.CUSTOM and limit is None:
             raise serializers.ValidationError(
                 {"credit_limit": "A custom credit limit needs an amount."}
+            )
+        terms_policy = attrs.get(
+            "payment_terms_policy",
+            getattr(self.instance, "payment_terms_policy", None),
+        )
+        days = attrs.get(
+            "payment_terms_days", getattr(self.instance, "payment_terms_days", None)
+        )
+        if terms_policy == Customer.PaymentTermsPolicy.CUSTOM and days is None:
+            raise serializers.ValidationError(
+                {"payment_terms_days": "Custom payment terms need a number of days."}
             )
         return attrs
 

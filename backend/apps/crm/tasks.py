@@ -79,22 +79,20 @@ def debt_reminder_sweep_task():
     if not getattr(django_settings, "POINTY_SMS_DEBT_REMINDERS_ENABLED", False):
         return {"skipped": "disabled"}
 
-    from django.db.models import Q
-
     from apps.core.timeutils import business_local_date
     from apps.sales.models import Order
 
     today = business_local_date()
     orders = (
-        Order.objects.open_credit()
+        # Only invoices that are actually due: due-on-or-before today, or with
+        # no due date recorded (an open tab, payable now). A future due date
+        # defers the nudge until the term the shop agreed to.
+        Order.objects.due_on_or_before(today)
         .select_related("customer")
         # Prefetch payments so each order's balance_due (which sums payments in
         # Python) doesn't fire its own query — avoids an N+1 across the sweep.
         .prefetch_related("payments")
         .filter(customer__isnull=False)
-        # Only invoices that are actually due: due-on-or-before today, or with no
-        # due date set (treated as due now). A future due date defers the nudge.
-        .filter(Q(valid_until__isnull=True) | Q(valid_until__lte=today))
         .exclude(customer__phone="")
         .exclude(customer__do_not_contact=True)
     )

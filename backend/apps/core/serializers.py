@@ -411,6 +411,23 @@ class PosUserSerializer(serializers.ModelSerializer):
 
 class ShopSettingsSerializer(serializers.ModelSerializer):
     logo_attachment = serializers.SerializerMethodField()
+    # The shop's default credit terms, resolved — including the due date they
+    # produce for an invoice issued today. The till proposes that date for a
+    # walk-in آجل sale (a customer's own terms come back on the customer), so
+    # the calendar arithmetic stays on one side of the wire.
+    default_payment_terms = serializers.SerializerMethodField()
+
+    def get_default_payment_terms(self, settings) -> dict:
+        from apps.core.timeutils import business_local_date
+        from apps.customers.payment_terms import shop_payment_terms
+
+        terms = shop_payment_terms(settings)
+        return {
+            "days": terms.days,
+            "basis": terms.basis,
+            "is_immediate": terms.is_immediate,
+            "due_date_for_today": terms.due_date_for(business_local_date()).isoformat(),
+        }
 
     def get_logo_attachment(self, settings):
         attachment = (
@@ -538,6 +555,9 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "require_customer_for_credit",
             "enforce_customer_credit_limits",
             "default_customer_credit_limit",
+            "default_payment_terms_days",
+            "default_payment_terms_basis",
+            "default_payment_terms",
             "allow_cashier_customer_access",
             "pos_cash_purchase_limit",
             "enable_purchase_suggestions",
@@ -577,6 +597,7 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "month_end_snapshot_day",
             "month_end_report_phone",
             "logo_attachment",
+            "default_payment_terms",
             "updated_at",
         ]
 

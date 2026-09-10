@@ -23,6 +23,8 @@ const POSTERS = [
   ['PosterAiInvoice', '13-ai-invoice'],
   ['PosterAiCapabilities', '14-ai-capabilities'],
   ['PosterKiosk', '15-kiosk'],
+  ['PosterCameras', '16-cameras'],
+  ['PosterCameraInvoice', '17-camera-invoice'],
 ];
 
 mkdirSync('out/posters', {recursive: true});

@@ -5,6 +5,10 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
+# Terms vocabulary only — that module imports no models at import time, so the
+# settings model can name the basis without a cycle back through customers.
+from apps.customers.payment_terms import MAX_CREDIT_DAYS, PaymentTermsBasis
+
 # Pure reference data (no Django imports, and no import of this module), so
 # core can read the settlement-instrument vocabulary without a circular
 # dependency on the fx app's models.
@@ -220,6 +224,23 @@ class ShopSettings(TimeStampedModel):
         blank=True,
         null=True,
         validators=[MinValueValidator(0)],
+    )
+    # When a credit (آجل) invoice falls due, for every customer who does not
+    # carry their own terms. Zero days on NET_DAYS — due the day it is issued —
+    # is the deliberate default: it is what an invoice with no due date already
+    # means to the reminder sweep and the aging report, so an upgrade changes
+    # nothing until an owner sets a term. Resolved through
+    # ``apps.customers.payment_terms.resolve_payment_terms``, never read raw.
+    default_payment_terms_days = models.PositiveIntegerField(
+        default=0,
+        db_default=0,
+        validators=[MaxValueValidator(MAX_CREDIT_DAYS)],
+    )
+    default_payment_terms_basis = models.CharField(
+        max_length=16,
+        choices=PaymentTermsBasis.choices,
+        default=PaymentTermsBasis.NET_DAYS,
+        db_default=PaymentTermsBasis.NET_DAYS,
     )
     # Lets cashiers look up customers — to attach one to an آجل/quote sale and to
     # collect a customer's debt via the focused collect-debt flow. They still

@@ -41,7 +41,9 @@ class ReceivablesAgingTests(TestCase):
         self.customer = Customer.objects.create(full_name="زبون آجل")
         self.other = Customer.objects.create(full_name="زبون آخر")
 
-    def _invoice(self, customer, *, days_ago, total, paid=None, status=None):
+    def _invoice(
+        self, customer, *, days_ago, total, paid=None, status=None, due_in_days=None
+    ):
         order = Order.objects.create(
             register_session=self.session,
             customer=customer,
@@ -49,6 +51,11 @@ class ReceivablesAgingTests(TestCase):
             status=status or Order.Status.OPEN,
             subtotal=Decimal(total),
             total=Decimal(total),
+            due_date=(
+                None
+                if due_in_days is None
+                else self.today + timedelta(days=due_in_days)
+            ),
         )
         when = timezone.now() - timedelta(days=days_ago)
         Order.objects.filter(pk=order.pk).update(created_at=when)
@@ -314,3 +321,64 @@ class PayablesAgingTests(TestCase):
     def test_without_a_due_date_it_ages_from_the_order(self):
         self._order(days_ago=100, total="100.00")
         self.assertEqual(self._report()["summary"]["d90_plus"], "100.00")
+
+
+class ReceivablesDueDateAgingTests(ReceivablesAgingTests):
+    """Aging once a credit invoice can record when it was actually due.
+
+    Inherits the fixture, because the point of every case here is what changes
+    — and what pointedly does not — relative to the invoice-date basis above.
+    """
+
+    def test_an_invoice_inside_its_terms_is_not_aged(self):
+        # 40 days old, sold on 60-day terms. On the invoice-date basis this read
+        # as more than a month overdue; it is not late at all.
+        self._invoice(self.customer, days_ago=40, total="100.00", due_in_days=20)
+        summary = self._report()["summary"]
+        self.assertEqual(summary["not_yet_due"], "100.00")
+        self.assertEqual(summary["d31_60"], "0.00")
+        self.assertEqual(summary["receivable_total"], "100.00")
+        self.assertEqual(summary["oldest_days"], 0)
+
+    def test_a_passed_due_date_ages_from_the_due_date_not_the_invoice(self):
+        # 90 days old, was due 10 days ago: 10 days of age, not 90.
+        self._invoice(self.customer, days_ago=90, total="100.00", due_in_days=-10)
+        summary = self._report()["summary"]
+        self.assertEqual(summary["d0_30"], "100.00")
+        self.assertEqual(summary["d90_plus"], "0.00")
+        self.assertEqual(summary["oldest_days"], 10)
+
+    def test_an_undated_invoice_still_ages_from_its_invoice_date(self):
+        # The guarantee that matters for an upgrade: history with no recorded
+        # due date lands exactly where it always did.
+        self._invoice(self.customer, days_ago=45, total="100.00")
+        summary = self._report()["summary"]
+        self.assertEqual(summary["d31_60"], "100.00")
+        self.assertEqual(summary["not_yet_due"], "0.00")
+        self.assertEqual(summary["oldest_days"], 45)
+
+    def test_not_yet_due_is_outstanding_but_never_overdue(self):
+        self._invoice(self.customer, days_ago=1, total="250.00", due_in_days=30)
+        summary = self._report()["summary"]
+        self.assertEqual(summary["receivable_total"], "250.00")
+        self.assertEqual(summary["overdue_total"], "0.00")
+
+    def test_due_today_is_aged_at_zero_days_not_held_back(self):
+        self._invoice(self.customer, days_ago=10, total="100.00", due_in_days=0)
+        summary = self._report()["summary"]
+        self.assertEqual(summary["not_yet_due"], "0.00")
+        self.assertEqual(summary["d0_30"], "100.00")
+
+    def test_the_customer_row_carries_the_not_yet_due_column(self):
+        self._invoice(self.customer, days_ago=5, total="100.00", due_in_days=20)
+        self._invoice(self.customer, days_ago=80, total="40.00", due_in_days=-70)
+        row = self._section(self._report())["rows"][0]
+        self.assertEqual(row["not_yet_due"], "100.00")
+        self.assertEqual(row["d61_90"], "40.00")
+        self.assertEqual(row["total"], "140.00")
+
+    def test_the_report_says_which_basis_it_used(self):
+        self._invoice(self.customer, days_ago=5, total="100.00", due_in_days=20)
+        codes = {note["code"] for note in self._report()["notes"]}
+        self.assertIn("aged_from_due_or_invoice_date", codes)
+        self.assertIn("not_yet_due_excluded_from_ages", codes)

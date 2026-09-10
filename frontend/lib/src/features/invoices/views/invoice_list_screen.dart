@@ -281,6 +281,20 @@ class InvoiceTile extends StatelessWidget {
           label: saleOrderStatusLabel(l10n, invoice.status),
           icon: saleOrderStatusIcon(invoice.status),
         ),
+        // Late first, because that is the one an owner scanning this list is
+        // looking for. Falls back to the agreed date when the invoice is still
+        // inside its terms, so a credit sale always says where it stands.
+        if (invoice.isOverdue)
+          PointyStatusPill(
+            label: l10n.invoiceOverdueBadge(invoice.daysOverdue),
+            icon: Icons.warning_amber_rounded,
+            color: colors.danger,
+          )
+        else if (invoice.dueDate != null)
+          PointyStatusPill(
+            label: l10n.invoiceDueOnLabel(formatDate(invoice.dueDate!)),
+            icon: Icons.event_available_outlined,
+          ),
       ],
       actions: [
         if (onPrint != null || onShare != null)

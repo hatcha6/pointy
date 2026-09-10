@@ -76,10 +76,14 @@ class CustomerDetailsViewModel extends ChangeNotifier {
       _shopSettings?.enforceCustomerCreditLimits ?? false;
 
   /// The ceiling an inheriting customer picks up. Null = the shop sets none.
-  double? get shopDefaultCreditLimit => _shopSettings?.defaultCustomerCreditLimit;
+  double? get shopDefaultCreditLimit =>
+      _shopSettings?.defaultCustomerCreditLimit;
 
   /// The ceiling that actually applies to this customer; null = no limit.
   double? get effectiveCreditLimit => _customer.effectiveCreditLimit;
+
+  ResolvedPaymentTerms? get effectivePaymentTerms =>
+      _customer.effectivePaymentTerms;
 
   /// Head-room left under the ceiling; null when there is no limit.
   double? get availableCredit => _summary.availableCredit;
@@ -208,6 +212,37 @@ class CustomerDetailsViewModel extends ChangeNotifier {
   /// Sets this customer's credit ceiling. [amount] is only read under
   /// [CreditLimitPolicy.custom]; the server refuses that policy without one.
   /// Reloads the summary too, because the head-room it reports has just moved.
+  Future<bool> setPaymentTerms({
+    required PaymentTermsPolicy policy,
+    int? days,
+    PaymentTermsBasis? basis,
+  }) async {
+    if (_isSaving) {
+      return false;
+    }
+    _isSaving = true;
+    notifyListeners();
+
+    final isCustom = policy == PaymentTermsPolicy.custom;
+    final result = await _contactRepository.patchCustomer(_customer.id, {
+      'payment_terms_policy': policy.apiValue,
+      // Both cleared unless the policy is custom: a day count left behind on a
+      // customer who has gone back to the shop default is dead data the next
+      // reader has to decide whether to trust.
+      'payment_terms_days': isCustom ? days : null,
+      'payment_terms_basis': isCustom
+          ? (basis ?? PaymentTermsBasis.netDays).apiValue
+          : '',
+    });
+    final ok = result is Ok<Customer>;
+    if (ok) {
+      _customer = result.value;
+    }
+    _isSaving = false;
+    notifyListeners();
+    return ok;
+  }
+
   Future<bool> setCreditLimit({
     required CreditLimitPolicy policy,
     double? amount,

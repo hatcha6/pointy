@@ -1,9 +1,10 @@
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
 from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
+from apps.customers.payment_terms import MAX_CREDIT_DAYS, PaymentTermsBasis
 
 
 class Customer(TimeStampedModel):
@@ -48,6 +49,20 @@ class Customer(TimeStampedModel):
         SHOP_DEFAULT = "shop_default", "Shop default"
         UNLIMITED = "unlimited", "No limit"
         CUSTOM = "custom", "Custom limit"
+
+    class PaymentTermsPolicy(models.TextChoices):
+        """When this customer's آجل invoices fall due.
+
+        Shaped after ``CreditLimitPolicy`` on purpose — the two answer the same
+        shopkeeper question from opposite ends ("how much, and by when"), and a
+        shop that has learned one of them should not have to learn the other.
+        ``IMMEDIATE`` is the customer who is allowed to owe but is expected to
+        settle the same day; ``CUSTOM`` carries its own count of days and basis.
+        """
+
+        SHOP_DEFAULT = "shop_default", "Shop default"
+        IMMEDIATE = "immediate", "Due immediately"
+        CUSTOM = "custom", "Custom terms"
 
     customer_number = models.CharField(max_length=32, unique=True, blank=True)
     full_name = models.CharField(max_length=255)
@@ -99,6 +114,29 @@ class Customer(TimeStampedModel):
         validators=[MinValueValidator(0)],
     )
 
+    # When this customer's آجل invoices fall due. Same shape and the same
+    # warning as the ceiling above: the policy decides whether the other two
+    # columns are read at all, and the only supported reader is
+    # ``apps.customers.payment_terms.resolve_payment_terms``.
+    payment_terms_policy = models.CharField(
+        max_length=16,
+        choices=PaymentTermsPolicy.choices,
+        default=PaymentTermsPolicy.SHOP_DEFAULT,
+        db_default=PaymentTermsPolicy.SHOP_DEFAULT,
+    )
+    payment_terms_days = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        validators=[MaxValueValidator(MAX_CREDIT_DAYS)],
+    )
+    payment_terms_basis = models.CharField(
+        max_length=16,
+        choices=PaymentTermsBasis.choices,
+        blank=True,
+        default="",
+        db_default="",
+    )
+
     # --- RFM segmentation (recomputed nightly, never edited by hand) ----------
     # The named segment a customer falls into, used for targeting and the
     # contacts-list rank filter. ``INACTIVE`` until the customer has a
@@ -139,6 +177,23 @@ class Customer(TimeStampedModel):
             raise ValidationError(
                 {"credit_limit": "A custom credit limit needs an amount."}
             )
+        # Same reading for the other half of the credit policy: custom terms
+        # with no day count is a half-filled form, not "due immediately".
+        if (
+            self.payment_terms_policy == self.PaymentTermsPolicy.CUSTOM
+            and self.payment_terms_days is None
+        ):
+            raise ValidationError(
+                {"payment_terms_days": "Custom payment terms need a number of days."}
+            )
+        # A basis only means something alongside a day count. Left set on a
+        # customer who has moved back to the shop default it is dead data that
+        # the next reader has to decide whether to trust.
+        if (
+            self.payment_terms_policy != self.PaymentTermsPolicy.CUSTOM
+            and self.payment_terms_basis
+        ):
+            self.payment_terms_basis = ""
 
     def save(self, *args, **kwargs):
         self.full_clean()

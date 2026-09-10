@@ -294,7 +294,79 @@ void main() {
       now.month,
       now.day,
     ).add(const Duration(days: 7));
-    expect(submitted?.validUntil, expected);
+    // A credit invoice's due date rides in its own field now; `validUntil`
+    // means only a quotation's expiry.
+    expect(submitted?.dueDate, expected);
+    expect(submitted?.validUntil, isNull);
+  });
+
+  testWidgets('credit sale proposes the agreed term without a tap', (
+    tester,
+  ) async {
+    final proposed = DateTime(2026, 10, 10);
+    PaymentSheetResult? submitted;
+    await _pumpPaymentSheet(
+      tester,
+      total: 10,
+      width: 1366,
+      height: 900,
+      proposedDueDate: proposed,
+      onSubmit: (result) => submitted = result,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('sale_type_credit')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
+    await tester.pump();
+
+    expect(submitted?.dueDate, proposed);
+  });
+
+  testWidgets('clearing the proposed term leaves an open tab', (tester) async {
+    // The distinction the API depends on: a cleared field is an instruction to
+    // record no due date, not a request to fall back to the customer's terms.
+    PaymentSheetResult? submitted;
+    await _pumpPaymentSheet(
+      tester,
+      total: 10,
+      width: 1366,
+      height: 900,
+      proposedDueDate: DateTime(2026, 10, 10),
+      onSubmit: (result) => submitted = result,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('sale_type_credit')));
+    await tester.pump();
+    await _tapKey(tester, 'credit_due_date_clear');
+    await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
+    await tester.pump();
+
+    expect(submitted?.saleType, SaleType.credit);
+    expect(submitted?.dueDate, isNull);
+  });
+
+  testWidgets('switching away from credit drops the proposed term', (
+    tester,
+  ) async {
+    PaymentSheetResult? submitted;
+    await _pumpPaymentSheet(
+      tester,
+      total: 10,
+      width: 1366,
+      height: 900,
+      proposedDueDate: DateTime(2026, 10, 10),
+      onSubmit: (result) => submitted = result,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('sale_type_credit')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('sale_type_standard')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
+    await tester.pump();
+
+    expect(submitted?.saleType, SaleType.standard);
+    expect(submitted?.dueDate, isNull);
   });
 
   testWidgets('the due-date picker is credit-only', (tester) async {
@@ -490,6 +562,7 @@ Future<void> _pumpPaymentSheet(
   bool requireCustomerForCredit = false,
   bool enableQuotations = true,
   bool enableCredit = true,
+  DateTime? proposedDueDate,
   double height = 844,
 }) async {
   tester.view.physicalSize = Size(width, height);
@@ -529,6 +602,7 @@ Future<void> _pumpPaymentSheet(
               requireCustomerForCredit: requireCustomerForCredit,
               enableQuotations: enableQuotations,
               enableCredit: enableCredit,
+              proposedDueDate: proposedDueDate,
               onSubmit: onSubmit ?? (_) {},
               onCancel: () {},
             ),

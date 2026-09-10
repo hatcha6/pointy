@@ -51,6 +51,82 @@ enum CreditLimitPolicy {
   }
 }
 
+/// When a customer's آجل invoices fall due. Mirrors the backend
+/// ``Customer.PaymentTermsPolicy``; shaped like [CreditLimitPolicy] because the
+/// two answer the same question from opposite ends — how much, and by when.
+enum PaymentTermsPolicy {
+  shopDefault('shop_default'),
+  immediate('immediate'),
+  custom('custom');
+
+  const PaymentTermsPolicy(this.apiValue);
+
+  final String apiValue;
+
+  static PaymentTermsPolicy fromApi(String value) {
+    return PaymentTermsPolicy.values.firstWhere(
+      (policy) => policy.apiValue == value,
+      orElse: () => PaymentTermsPolicy.shopDefault,
+    );
+  }
+}
+
+/// What the credit days are counted from.
+enum PaymentTermsBasis {
+  netDays('net_days'),
+  endOfMonth('end_of_month');
+
+  const PaymentTermsBasis(this.apiValue);
+
+  final String apiValue;
+
+  static PaymentTermsBasis fromApi(String? value) {
+    return PaymentTermsBasis.values.firstWhere(
+      (basis) => basis.apiValue == value,
+      orElse: () => PaymentTermsBasis.netDays,
+    );
+  }
+}
+
+/// The terms that actually apply, resolved by the server.
+///
+/// [dueDateForToday] is the whole point of carrying this to the client: the
+/// till proposes a due date without doing any calendar arithmetic of its own,
+/// so a month end or a leap year cannot be answered one way at the counter and
+/// another way in the aging report.
+class ResolvedPaymentTerms {
+  const ResolvedPaymentTerms({
+    required this.days,
+    required this.basis,
+    required this.dueDateForToday,
+    this.source = '',
+    this.isImmediate = false,
+  });
+
+  final int days;
+  final PaymentTermsBasis basis;
+  final DateTime? dueDateForToday;
+
+  /// `customer` or `shop` — which level the terms came from, so the UI can say
+  /// why a date was proposed.
+  final String source;
+  final bool isImmediate;
+
+  static ResolvedPaymentTerms? fromJson(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    final json = value.cast<String, Object?>();
+    return ResolvedPaymentTerms(
+      days: (json['days'] as num?)?.toInt() ?? 0,
+      basis: PaymentTermsBasis.fromApi(json['basis']?.toString()),
+      dueDateForToday: _dateFromJson(json['due_date_for_today']),
+      source: json['source']?.toString() ?? '',
+      isImmediate: json['is_immediate'] == true,
+    );
+  }
+}
+
 /// RFM segment a customer falls into, assigned automatically by the backend
 /// nightly job. Ordered best → worst; [inactive] means "no recognized purchase
 /// yet". The [apiValue] mirrors the backend ``Customer.Rank`` slugs.
@@ -215,6 +291,10 @@ class Customer {
     this.creditLimitPolicy = CreditLimitPolicy.shopDefault,
     this.creditLimit,
     this.effectiveCreditLimit,
+    this.paymentTermsPolicy = PaymentTermsPolicy.shopDefault,
+    this.paymentTermsDays,
+    this.paymentTermsBasis,
+    this.effectivePaymentTerms,
   });
 
   final int id;
@@ -270,6 +350,17 @@ class Customer {
   /// have been resolved — computed by the server. Null = no limit.
   final double? effectiveCreditLimit;
 
+  /// When this customer's آجل invoices fall due. See [PaymentTermsPolicy].
+  final PaymentTermsPolicy paymentTermsPolicy;
+
+  /// This customer's own terms. Only meaningful under
+  /// [PaymentTermsPolicy.custom]; null otherwise.
+  final int? paymentTermsDays;
+  final PaymentTermsBasis? paymentTermsBasis;
+
+  /// The terms that actually apply, resolved by the server.
+  final ResolvedPaymentTerms? effectivePaymentTerms;
+
   factory Customer.fromJson(Map<String, Object?> json) {
     return Customer(
       id: _intFromJson(json['id']),
@@ -300,6 +391,18 @@ class Customer {
       creditLimit: json['credit_limit'] == null
           ? null
           : _moneyFromJson(json['credit_limit']),
+      paymentTermsPolicy: PaymentTermsPolicy.fromApi(
+        json['payment_terms_policy']?.toString() ?? '',
+      ),
+      paymentTermsDays: (json['payment_terms_days'] as num?)?.toInt(),
+      paymentTermsBasis:
+          json['payment_terms_basis'] == null ||
+              json['payment_terms_basis'].toString().isEmpty
+          ? null
+          : PaymentTermsBasis.fromApi(json['payment_terms_basis'].toString()),
+      effectivePaymentTerms: ResolvedPaymentTerms.fromJson(
+        json['effective_payment_terms'],
+      ),
       effectiveCreditLimit: json['effective_credit_limit'] == null
           ? null
           : _moneyFromJson(json['effective_credit_limit']),
@@ -324,6 +427,9 @@ class Customer {
       'credit_limit_policy': creditLimitPolicy.apiValue,
       'credit_limit': creditLimit,
       'effective_credit_limit': effectiveCreditLimit,
+      'payment_terms_policy': paymentTermsPolicy.apiValue,
+      'payment_terms_days': paymentTermsDays,
+      'payment_terms_basis': paymentTermsBasis?.apiValue ?? '',
     };
   }
 }

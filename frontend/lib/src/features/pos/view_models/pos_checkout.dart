@@ -122,6 +122,7 @@ extension PosCheckoutActions on PosViewModel {
     required List<SaleCheckoutPaymentDraft> payments,
     SaleType saleType = SaleType.standard,
     DateTime? validUntil,
+    DateTime? dueDate,
     bool reserveStock = false,
     bool printProof = false,
   }) async {
@@ -199,6 +200,7 @@ extension PosCheckoutActions on PosViewModel {
         couponCode: _couponCode,
         saleType: saleType,
         validUntil: validUntil,
+        dueDate: dueDate,
         reserveStock: reserveStock,
         // Derived from the config being sent, not from whatever resolves right
         // now, so a retry carries the first attempt's routing like the rest of

@@ -26,6 +26,7 @@ class PaymentSheetResult {
     required this.shareInvoiceAfterPayment,
     this.saleType = SaleType.standard,
     this.validUntil,
+    this.dueDate,
     this.reserveStock = false,
     this.printProof = false,
   });
@@ -38,6 +39,10 @@ class PaymentSheetResult {
 
   /// Quotation expiry / stock-hold deadline; null when not a held quotation.
   final DateTime? validUntil;
+
+  /// Credit-only: when the debt falls due. Null means the cashier cleared it —
+  /// an open tab — and is passed through as such rather than as "unset".
+  final DateTime? dueDate;
 
   /// Quotation-only: hold the quoted quantities until [validUntil].
   final bool reserveStock;
@@ -64,6 +69,7 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
   bool requireCustomerForCredit = false,
   bool enableQuotations = true,
   bool enableCredit = true,
+  DateTime? proposedDueDate,
 }) {
   final width = MediaQuery.sizeOf(context).width;
   Widget childBuilder(BuildContext modalContext) {
@@ -84,6 +90,7 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
       requireCustomerForCredit: requireCustomerForCredit,
       enableQuotations: enableQuotations,
       enableCredit: enableCredit,
+      proposedDueDate: proposedDueDate,
       onCancel: () => Navigator.of(modalContext).pop(),
       onSubmit: (result) => Navigator.of(modalContext).pop(result),
     );
@@ -120,6 +127,7 @@ class PaymentSheet extends StatefulWidget {
     this.requireCustomerForCredit = false,
     this.enableQuotations = true,
     this.enableCredit = true,
+    this.proposedDueDate,
   });
 
   final double total;
@@ -150,6 +158,12 @@ class PaymentSheet extends StatefulWidget {
   /// Whether the آجل (credit) sale type is offered.
   final bool enableCredit;
 
+  /// The due date the customer's (or the shop's) agreed terms produce for a
+  /// sale rung up today, resolved server-side. Seeds the credit picker so the
+  /// common case is one tap, and stays overridable. Null means no terms are
+  /// configured, which is the same as an open tab.
+  final DateTime? proposedDueDate;
+
   @override
   State<PaymentSheet> createState() => _PaymentSheetState();
 }
@@ -165,6 +179,10 @@ class _PaymentSheetState extends State<PaymentSheet> {
   var _reserveStock = false;
   var _printProof = false;
   DateTime? _validUntil;
+  // Seeded from the customer's (or the shop's) terms the first time the credit
+  // type is chosen, then owned by the cashier. Kept apart from _validUntil
+  // because a quotation's expiry and a debt's due date are different promises.
+  DateTime? _dueDate;
   late var _printInvoiceAfterPayment = widget.printInvoiceAfterPayment;
   late var _shareInvoiceAfterPayment = widget.shareInvoiceAfterPayment;
 
@@ -340,10 +358,10 @@ class _PaymentSheetState extends State<PaymentSheet> {
       _saleType = saleType;
       _showPaymentError = false;
       _reserveStock = saleType == SaleType.quotation && _reserveStock;
-      // Drop any picked date when the sale type changes: a quotation's stock-hold
-      // deadline and a credit invoice's due date are distinct meanings, and each
-      // type should start clean rather than inherit the other's date.
       _validUntil = null;
+      // Propose the agreed term the moment آجل is chosen, so the cashier sees
+      // the date the shop will actually chase — and can still overrule it.
+      _dueDate = saleType == SaleType.credit ? widget.proposedDueDate : null;
       if (saleType == SaleType.standard) {
         // Paid-in-full sale: a single tender covering the whole total.
         _resetToFullPaymentTender();
@@ -740,6 +758,27 @@ class _PaymentSheetState extends State<PaymentSheet> {
     );
   }
 
+  Future<void> _pickDueDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    // Falls back to the proposed term, then to today: opening the picker on a
+    // date the shop would not have chosen is a worse default than opening it
+    // on the one it did.
+    final initial = _dueDate ?? widget.proposedDueDate ?? today;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isBefore(today) ? today : initial,
+      // The backend refuses a due date before the invoice date, so the picker
+      // must not offer one.
+      firstDate: today,
+      lastDate: DateTime(now.year + 2),
+    );
+    if (picked == null || !mounted) {
+      return;
+    }
+    setState(() => _dueDate = DateTime(picked.year, picked.month, picked.day));
+  }
+
   String _formatDate(DateTime date) {
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
@@ -751,14 +790,14 @@ class _PaymentSheetState extends State<PaymentSheet> {
   /// Quick chips make the common terms one tap; the field opens a full calendar.
   Widget _buildCreditDueDatePicker(AppLocalizations l10n) {
     final spacing = AdaptiveSpacing.of(context);
-    final hasDate = _validUntil != null;
+    final hasDate = _dueDate != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
         InkWell(
           key: const ValueKey('credit_due_date_picker'),
-          onTap: _pickValidUntil,
+          onTap: _pickDueDate,
           borderRadius: BorderRadius.circular(8),
           child: InputDecorator(
             decoration: InputDecoration(
@@ -769,12 +808,12 @@ class _PaymentSheetState extends State<PaymentSheet> {
                       key: const ValueKey('credit_due_date_clear'),
                       tooltip: l10n.creditDueDateClearTooltip,
                       icon: const Icon(Icons.close),
-                      onPressed: () => setState(() => _validUntil = null),
+                      onPressed: () => setState(() => _dueDate = null),
                     )
                   : const Icon(Icons.expand_more),
             ),
             child: Text(
-              hasDate ? _formatDate(_validUntil!) : l10n.creditDueDateUnset,
+              hasDate ? _formatDate(_dueDate!) : l10n.creditDueDateUnset,
               style: Theme.of(context).textTheme.bodyLarge,
             ),
           ),
@@ -800,13 +839,12 @@ class _PaymentSheetState extends State<PaymentSheet> {
       now.month,
       now.day,
     ).add(Duration(days: days));
-    final selected =
-        _validUntil != null && DateUtils.isSameDay(_validUntil, target);
+    final selected = _dueDate != null && DateUtils.isSameDay(_dueDate, target);
     return ChoiceChip(
       key: ValueKey('credit_due_date_preset_$days'),
       label: Text(label),
       selected: selected,
-      onSelected: (_) => setState(() => _validUntil = target),
+      onSelected: (_) => setState(() => _dueDate = target),
     );
   }
 
@@ -823,11 +861,10 @@ class _PaymentSheetState extends State<PaymentSheet> {
         payments: payments,
         shareInvoiceAfterPayment: _shareInvoiceAfterPayment,
         saleType: _saleType,
-        // A credit invoice carries an optional due date; a quotation carries a
-        // stock-hold deadline only when it actually holds stock.
-        validUntil: _isCredit
-            ? _validUntil
-            : (_isQuotation && _reserveStock ? _validUntil : null),
+        // A quotation carries a stock-hold deadline only when it actually
+        // holds stock; a credit invoice carries its own, separate due date.
+        validUntil: _isQuotation && _reserveStock ? _validUntil : null,
+        dueDate: _isCredit ? _dueDate : null,
         reserveStock: _isQuotation && _reserveStock,
         printProof: _isCredit && _printProof,
       ),

@@ -442,6 +442,20 @@ class PosViewModel extends ChangeNotifier {
   /// Whether a credit (آجل) or quotation (عرض سعر) sale must name a customer.
   bool get requireCustomerForCredit =>
       _checkoutSettings?.requireCustomerForCredit ?? true;
+
+  /// The due date an آجل sale rung up now would fall due on, under the agreed
+  /// terms — the attached customer's if they carry their own, otherwise the
+  /// shop's. Both come pre-resolved from the server, so no calendar arithmetic
+  /// happens here and the till proposes exactly the date the reports will age
+  /// against. Null when no terms are configured, which means an open tab.
+  DateTime? get proposedCreditDueDate {
+    final customerTerms = _selectedCustomer?.effectivePaymentTerms;
+    if (customerTerms != null) {
+      return customerTerms.dueDateForToday;
+    }
+    return _checkoutSettings?.defaultPaymentTerms?.dueDateForToday;
+  }
+
   List<String> get trustedCardTerminalIds =>
       _checkoutSettings?.trustedCardTerminalIds ?? const [];
 

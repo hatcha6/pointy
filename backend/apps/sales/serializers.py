@@ -15,7 +15,9 @@ from apps.catalog.units import (
 )
 from apps.core.models import RelayInstallation, ShopSettings
 from apps.core.roles import user_has_full_visibility, user_is_manager
+from apps.core.timeutils import business_local_date
 from apps.customers.models import Customer
+from apps.customers.payment_terms import MAX_CREDIT_DAYS
 from apps.discounts.cache import (
     active_rules_exist as _active_discount_rules_exist,
     rules_version as discount_rules_version,
@@ -47,6 +49,7 @@ from .services import (
     expected_order_totals,
     record_customer_account_payment,
     record_customer_payment,
+    reschedule_credit_invoice_due_date,
     return_order_items,
     unapplied_coupon_codes,
     validate_order_adjustment_allowed,
@@ -465,6 +468,9 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
             *DocumentLifecycleFields.LIFECYCLE_FIELDS,
             "sale_type",
             "valid_until",
+            "due_date",
+            "is_overdue",
+            "days_overdue",
             "amount_paid",
             "balance_due",
             "payment_status",
@@ -500,6 +506,9 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
             "receipt_number",
             "sale_type",
             "valid_until",
+            "due_date",
+            "is_overdue",
+            "days_overdue",
             "amount_paid",
             "balance_due",
             "payment_status",
@@ -986,8 +995,13 @@ class CheckoutSerializer(serializers.Serializer):
         required=False,
         default=Order.SaleType.STANDARD,
     )
-    # Quotation/credit expiry; for a quotation it also bounds any stock hold.
+    # Quotation-only: how long the offer stands, and the bound on any stock hold.
     valid_until = serializers.DateField(required=False, allow_null=True)
+    # Credit-only (آجل): when the debt is to be settled. Omit the key entirely to
+    # take the customer's standing terms; send it as null to leave the tab open
+    # with no date. The two are different instructions, which is why this is not
+    # defaulted here — ``resolve_credit_due_date`` is told which one arrived.
+    due_date = serializers.DateField(required=False, allow_null=True)
     # Quotation-only: hold the quoted quantities until valid_until.
     reserve_stock = serializers.BooleanField(required=False, default=False)
 
@@ -1049,6 +1063,39 @@ class CheckoutSerializer(serializers.Serializer):
                     )
                 }
             )
+
+        # A due date belongs to a debt. Refused rather than ignored on the other
+        # sale types: a client sending one has misunderstood which field it
+        # wants (``valid_until`` bounds a quotation), and silently dropping it
+        # would leave a cashier believing they had set a term.
+        if "due_date" in attrs and sale_type != Order.SaleType.CREDIT:
+            raise serializers.ValidationError(
+                {
+                    "due_date": (
+                        "Only a credit invoice has a due date. A quotation's "
+                        "offer is bounded by valid_until."
+                    )
+                }
+            )
+        due_date = attrs.get("due_date")
+        if due_date is not None:
+            today = business_local_date()
+            # An invoice cannot be born overdue. ERPNext refuses the same thing
+            # (``validate_due_date``), and here it is nearly always a mis-typed
+            # year on the date picker.
+            if due_date < today:
+                raise serializers.ValidationError(
+                    {"due_date": "A due date cannot be before the invoice date."}
+                )
+            if (due_date - today).days > MAX_CREDIT_DAYS:
+                raise serializers.ValidationError(
+                    {
+                        "due_date": (
+                            f"A due date more than {MAX_CREDIT_DAYS} days out is "
+                            "almost certainly a typo."
+                        )
+                    }
+                )
 
         payments = attrs.get("payments")
         if payments is None:
@@ -1124,6 +1171,8 @@ class CheckoutSerializer(serializers.Serializer):
             discount_result=validated_data.get("discount_result"),
             sale_type=validated_data.get("sale_type", Order.SaleType.STANDARD),
             valid_until=validated_data.get("valid_until"),
+            due_date=validated_data.get("due_date"),
+            due_date_supplied="due_date" in validated_data,
             reserve_stock=validated_data.get("reserve_stock", False),
             request=self.context.get("request"),
         )
@@ -1220,6 +1269,44 @@ class OrderAssignCustomerSerializer(serializers.Serializer):
         return assign_credit_invoice_customer(
             self.context["order"],
             customer=self.validated_data["customer"],
+            request=self.context.get("request"),
+        )
+
+
+class OrderDueDateSerializer(serializers.Serializer):
+    """Reschedule (or clear) the due date on an outstanding credit invoice.
+    Context: ``order``, ``request``.
+
+    ``due_date`` is required-but-nullable rather than optional: clearing the
+    date and forgetting to send one are different intentions, and only the first
+    should empty the field.
+    """
+
+    due_date = serializers.DateField(allow_null=True)
+
+    def validate_due_date(self, value):
+        if value is None:
+            return value
+        today = business_local_date()
+        # An extension into the past is not an extension. Unlike checkout, the
+        # floor here is today rather than the invoice date: a two-month-old
+        # invoice may legitimately be given a due date that has already passed
+        # relative to its issue, just not one that is already behind us.
+        if value < today:
+            raise serializers.ValidationError(
+                "A due date cannot be set in the past."
+            )
+        if (value - today).days > MAX_CREDIT_DAYS:
+            raise serializers.ValidationError(
+                f"A due date more than {MAX_CREDIT_DAYS} days out is almost "
+                "certainly a typo."
+            )
+        return value
+
+    def save(self, **kwargs):
+        return reschedule_credit_invoice_due_date(
+            self.context["order"],
+            due_date=self.validated_data["due_date"],
             request=self.context.get("request"),
         )
 

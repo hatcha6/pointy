@@ -9,6 +9,7 @@ import '../../../core/authorization.dart';
 import '../../../core/parsing.dart';
 import '../../../data/models/analytics_export.dart';
 import '../../../data/models/attachment_summary.dart';
+import '../../../data/models/contact.dart' show PaymentTermsBasis;
 import '../../../data/models/shop_settings.dart';
 import '../../../data/models/system_backup.dart';
 import '../../../data/services/analytics_export_downloader.dart';
@@ -330,6 +331,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late final TextEditingController _transferCommissionController;
   late final TextEditingController _posCashPurchaseLimitController;
   late final TextEditingController _defaultCustomerCreditLimitController;
+  late final TextEditingController _defaultPaymentTermsDaysController;
+  late PaymentTermsBasis _defaultPaymentTermsBasis;
   late final TextEditingController _analyticsSearchController;
   late final TextEditingController _analyticsPlatformController;
   late final TextEditingController _analyticsSessionController;
@@ -401,6 +404,11 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         _defaultCustomerCreditLimitController,
         _formatCreditLimit(widget.settings.defaultCustomerCreditLimit),
       );
+      _setControllerText(
+        _defaultPaymentTermsDaysController,
+        widget.settings.defaultPaymentTermsDays.toString(),
+      );
+      _defaultPaymentTermsBasis = widget.settings.defaultPaymentTermsBasis;
       _cashierReturnWindowHours = widget.settings.cashierReturnWindowHours;
       _requireOpeningCash = widget.settings.requireOpeningCash;
       _autoPrintReceipts = widget.settings.autoPrintReceipts;
@@ -437,6 +445,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _transferCommissionController.dispose();
     _posCashPurchaseLimitController.dispose();
     _defaultCustomerCreditLimitController.dispose();
+    _defaultPaymentTermsDaysController.dispose();
     _analyticsSearchController.dispose();
     _analyticsPlatformController.dispose();
     _analyticsSessionController.dispose();
@@ -467,6 +476,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _defaultCustomerCreditLimitController = TextEditingController(
       text: _formatCreditLimit(settings.defaultCustomerCreditLimit),
     );
+    _defaultPaymentTermsDaysController = TextEditingController(
+      text: settings.defaultPaymentTermsDays.toString(),
+    );
+    _defaultPaymentTermsBasis = settings.defaultPaymentTermsBasis;
     _analyticsSearchController = TextEditingController();
     _analyticsPlatformController = TextEditingController();
     _analyticsSessionController = TextEditingController();
@@ -1041,6 +1054,14 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         enforceCustomerCreditLimits: _enforceCustomerCreditLimits,
         defaultCustomerCreditLimitController:
             _defaultCustomerCreditLimitController,
+        defaultPaymentTermsDaysController: _defaultPaymentTermsDaysController,
+        defaultPaymentTermsBasis: _defaultPaymentTermsBasis,
+        onDefaultPaymentTermsBasisChanged: (basis) {
+          if (basis == null) {
+            return;
+          }
+          setState(() => _defaultPaymentTermsBasis = basis);
+        },
         allowCashierCustomerAccess: _allowCashierCustomerAccess,
         paymentMethodsError: _paymentMethodsError(l10n),
         cardCommissionError: _commissionError(l10n, _cardCommissionController),
@@ -1765,6 +1786,11 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       // Both money fields are cleared by emptying the box, so they are passed
       // even when null — that is a value here, not an omission.
       defaultCustomerCreditLimit: _parseDefaultCustomerCreditLimit(),
+      // An emptied or unparseable box means zero days — due on issue — which is
+      // the shop's state before it ever set a term, not an error to refuse.
+      defaultPaymentTermsDays:
+          int.tryParse(_defaultPaymentTermsDaysController.text.trim()) ?? 0,
+      defaultPaymentTermsBasis: _defaultPaymentTermsBasis,
       allowCashierCustomerAccess: _allowCashierCustomerAccess,
       posCashPurchaseLimit: _parsePosCashPurchaseLimit(),
       inventoryValuationMethod: _inventoryValuationMethod,

@@ -13,10 +13,26 @@ has been paid against it. Deliberately *not* "any order whose payments are less
 than its total": a voided sale keeps its total and carries a reversing negative
 payment, so that definition reads every refunded sale as a debt.
 
-**How it ages.** From the invoice date, because credit invoices carry no agreed
-due date anywhere in the data model. Aging from a due date the shop never
-recorded would be an invention; aging from the invoice date is the standard
-fallback and the report says which it used.
+**How it ages.** From the due date where the invoice records one, and from the
+invoice date where it does not — the same ``COALESCE`` the payables side has
+always used, and the same fallback ERPNext applies (``row.due_date or
+row.posting_date``). Until credit invoices could carry a due date this report
+had only the second half of that rule and said so; it now has both, so an
+invoice sold on 30-day terms stops reading as a month overdue on the day it is
+issued.
+
+**"Not yet due" is not an age.** An invoice inside its terms is outstanding but
+not late, and putting it in the youngest bucket would let a shop with generous
+terms read as though it were chasing money it had not yet asked for. It gets its
+own column, outside the aged buckets — ERPNext keeps the same separation
+(``range0``, excluded from ``total_due``). Only an invoice with a recorded due
+date can land there, so a shop that has never set terms sees a column of zeros
+and every other figure exactly where it was.
+
+**Overdue keeps its existing definition** — outstanding more than 30 days past
+whichever of those two dates applies. It is stated once, in ``OVERDUE_BUCKETS``,
+and deliberately not redefined to mean "past the due date": that is a different
+figure, and this codebase adds a new name rather than re-pointing an old one.
 
 **As of a date, not "now".** Balances are rebuilt from the invoices raised and
 the payments received on or before the period end, so a receivables report run
@@ -54,6 +70,13 @@ ZERO = Decimal("0.00")
 # the same shape.
 BUCKETS = ("d0_30", "d31_60", "d61_90", "d90_plus")
 BUCKET_DAYS = {"d0_30": 30, "d31_60": 60, "d61_90": 90}
+# Outstanding that is still inside its agreed terms. Not one of BUCKETS: it is
+# reported alongside them, never aged, and never summed into an age band.
+NOT_YET_DUE = "not_yet_due"
+# What "overdue" has always meant in this report. Named so that the definition
+# lives in one place and a future change to it is a visible edit rather than a
+# drifting sum (see apps/core/test_money_definitions.py).
+OVERDUE_BUCKETS = ("d31_60", "d61_90", "d90_plus")
 
 
 def receivables_aging(context):
@@ -62,7 +85,7 @@ def receivables_aging(context):
 
     bounded = bounded_rows(rows, limit=context.row_limit("receivables"))
     overdue = sum(
-        (decimal_from(totals[bucket]) for bucket in ("d31_60", "d61_90", "d90_plus")),
+        (decimal_from(totals[bucket]) for bucket in OVERDUE_BUCKETS),
         ZERO,
     )
     figures = {
@@ -72,6 +95,7 @@ def receivables_aging(context):
         "customer_count": len(rows),
         "invoice_count": totals["invoice_count"],
         "oldest_days": totals["oldest_days"],
+        NOT_YET_DUE: money(totals[NOT_YET_DUE]),
         **{bucket: money(totals[bucket]) for bucket in BUCKETS},
     }
     return {
@@ -84,6 +108,7 @@ def receivables_aging(context):
                     Column("customer_name"),
                     Column("invoice_count", ColumnType.COUNT, total=True),
                     Column("oldest_days", ColumnType.COUNT),
+                    Column(NOT_YET_DUE, ColumnType.MONEY, total=True),
                     *[Column(bucket, ColumnType.MONEY, total=True) for bucket in BUCKETS],
                     Column("total", ColumnType.MONEY, total=True),
                 ],
@@ -91,6 +116,7 @@ def receivables_aging(context):
                 total_count=bounded.total_count,
                 limit=bounded.limit,
                 totals={
+                    NOT_YET_DUE: money(totals[NOT_YET_DUE]),
                     **{bucket: money(totals[bucket]) for bucket in BUCKETS},
                     "total": money(totals["total"]),
                     "invoice_count": totals["invoice_count"],
@@ -99,7 +125,8 @@ def receivables_aging(context):
         ],
         "notes": [
             note("receivable_is_open_credit"),
-            note("aged_from_invoice_date"),
+            note("aged_from_due_or_invoice_date"),
+            note("not_yet_due_excluded_from_ages"),
             note("receivables_as_of", date=as_of),
         ],
     }
@@ -128,15 +155,19 @@ def _customer_balances(as_of, context, *, detail=True):
 
     per_customer = {}
     totals = {bucket: ZERO for bucket in BUCKETS}
-    totals.update({"total": ZERO, "invoice_count": 0, "oldest_days": 0})
+    totals.update(
+        {NOT_YET_DUE: ZERO, "total": ZERO, "invoice_count": 0, "oldest_days": 0}
+    )
 
     for invoice in invoices:
         balance = decimal_from(invoice["balance"])
         if balance <= 0:
             continue
-        invoice_date = invoice["invoice_date"]
-        bucket = _bucket_for(invoice_date, thresholds)
-        age = (as_of - invoice_date).days if invoice_date else 0
+        reference = invoice["reference_date"] or invoice["invoice_date"]
+        bucket = _bucket_for(reference, as_of, thresholds)
+        # Days past the date it is aged against, floored at zero: an invoice
+        # still inside its terms is not "-6 days old", it has no age yet.
+        age = max((as_of - reference).days, 0) if reference else 0
 
         key = invoice["customer_id"]
         row = per_customer.setdefault(
@@ -145,6 +176,7 @@ def _customer_balances(as_of, context, *, detail=True):
                 "customer_name": invoice["customer__full_name"] or "",
                 "invoice_count": 0,
                 "oldest_days": 0,
+                NOT_YET_DUE: ZERO,
                 **{name: ZERO for name in BUCKETS},
                 "total": ZERO,
             },
@@ -168,6 +200,7 @@ def _customer_balances(as_of, context, *, detail=True):
             "customer_name": row["customer_name"],
             "invoice_count": row["invoice_count"],
             "oldest_days": row["oldest_days"],
+            NOT_YET_DUE: money(row[NOT_YET_DUE]),
             **{bucket: money(row[bucket]) for bucket in BUCKETS},
             "total": money(row["total"]),
         }
@@ -195,21 +228,38 @@ def _outstanding_invoices(as_of):
                 Subquery(paid, output_field=MONEY), Value(ZERO), output_field=MONEY
             ),
             invoice_date=TruncDate("created_at"),
+            # The date this invoice is aged against. Mirrors the payables side
+            # (``purchasing._supplier_balances``) exactly, so the two halves of
+            # the ledger answer "how old is this" the same way.
+            reference_date=Coalesce("due_date", TruncDate("created_at")),
         )
         .annotate(balance=F("total") - F("paid_amount"))
         .filter(balance__gt=0)
-        .values("customer_id", "customer__full_name", "invoice_date", "balance")
+        .values(
+            "customer_id",
+            "customer__full_name",
+            "invoice_date",
+            "reference_date",
+            "balance",
+        )
     )
 
 
-def _bucket_for(invoice_date, thresholds):
-    if invoice_date is None:
+def _bucket_for(reference, as_of, thresholds):
+    """Which column this balance belongs in, aged against ``reference``.
+
+    A reference date in the future can only be a due date the shop agreed to,
+    so the balance is not late — it has not been asked for yet.
+    """
+    if reference is None:
         return "d90_plus"
-    if invoice_date >= thresholds["d0_30"]:
+    if reference > as_of:
+        return NOT_YET_DUE
+    if reference >= thresholds["d0_30"]:
         return "d0_30"
-    if invoice_date >= thresholds["d31_60"]:
+    if reference >= thresholds["d31_60"]:
         return "d31_60"
-    if invoice_date >= thresholds["d61_90"]:
+    if reference >= thresholds["d61_90"]:
         return "d61_90"
     return "d90_plus"
 
@@ -241,11 +291,13 @@ def customer_statement(context):
     rows = []
     for entry in entries:
         balance += entry["debit"] - entry["credit"]
+        due = entry.get("due_date")
         rows.append(
             {
                 "date": entry["date"].isoformat(),
                 "document": entry["document"],
                 "kind": entry["kind"],
+                "due_date": due.isoformat() if due else "",
                 "debit": money(entry["debit"]),
                 "credit": money(entry["credit"]),
                 "balance": money(balance),
@@ -280,6 +332,7 @@ def customer_statement(context):
                     Column("date", ColumnType.DATE),
                     Column("document"),
                     Column("kind", ColumnType.CHOICE),
+                    Column("due_date", ColumnType.DATE),
                     Column("debit", ColumnType.MONEY, total=True),
                     Column("credit", ColumnType.MONEY, total=True),
                     Column("balance", ColumnType.MONEY),
@@ -332,7 +385,7 @@ def _statement_entries(customer, period):
             customer=customer, sale_type=Order.SaleType.CREDIT
         ).exclude(status=Order.Status.VOID),
         period,
-    ).values("receipt_number", "created_at", "total")
+    ).values("receipt_number", "created_at", "total", "due_date")
     for invoice in invoices:
         entries.append(
             {
@@ -341,6 +394,10 @@ def _statement_entries(customer, period):
                 "kind": "invoice",
                 "debit": decimal_from(invoice["total"]),
                 "credit": ZERO,
+                # Blank rather than null on the payment rows below: a statement
+                # is read as a table, and a due date on the line that credits an
+                # invoice would suggest the payment itself was scheduled.
+                "due_date": invoice["due_date"],
             }
         )
 
@@ -361,6 +418,7 @@ def _statement_entries(customer, period):
                 "kind": "payment" if amount >= 0 else "refund",
                 "debit": ZERO if amount >= 0 else -amount,
                 "credit": amount if amount >= 0 else ZERO,
+                "due_date": None,
             }
         )
 

@@ -34,6 +34,7 @@ from .serializers import (
     CustomerInvoicePaymentSerializer,
     DiscountPreviewSerializer,
     OrderAssignCustomerSerializer,
+    OrderDueDateSerializer,
     OrderExchangeInputSerializer,
     OrderListSerializer,
     OrderSerializer,
@@ -101,6 +102,9 @@ class OrderViewSet(
         "exchange_items": ("sales.add_order",),
         "record_payment": ("sales.add_order",),
         "assign_customer": ("sales.add_order",),
+        # Rescheduling a debt changes no money, but it changes when the shop
+        # chases it — a manager decision, not a till one.
+        "due_date": ("sales.change_order",),
         "outstanding": ("sales.view_order",),
         "convert": ("sales.add_order",),
         "reprint": ("sales.view_order", "printing.add_printjob"),
@@ -353,6 +357,28 @@ class OrderViewSet(
     def _assign_customer(self, request):
         order = self.get_object()
         serializer = OrderAssignCustomerSerializer(
+            data=request.data,
+            context={"order": order, "request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return self._adjusted_order_response(
+            order.pk,
+            status_code=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="due-date")
+    def due_date(self, request, pk=None):
+        # No register session and no money movement: this moves when a debt is
+        # settled, never how much is owed.
+        return run_idempotent_request(
+            request,
+            lambda: self._set_due_date(request),
+        )
+
+    def _set_due_date(self, request):
+        order = self.get_object()
+        serializer = OrderDueDateSerializer(
             data=request.data,
             context={"order": order, "request": request},
         )

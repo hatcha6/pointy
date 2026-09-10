@@ -220,6 +220,7 @@ class PosCartPane extends StatelessWidget {
       payments: payment.payments,
       saleType: payment.saleType,
       validUntil: payment.validUntil,
+      dueDate: payment.dueDate,
       reserveStock: payment.reserveStock,
       printProof: payment.printProof,
     );
@@ -416,9 +417,7 @@ class PosCartPane extends StatelessWidget {
                     formatMoney(credit.outstanding),
                   ),
                 ),
-                Text(
-                  l10n.creditLimitBlockedLimit(formatMoney(credit.limit)),
-                ),
+                Text(l10n.creditLimitBlockedLimit(formatMoney(credit.limit))),
                 Text(
                   l10n.creditLimitBlockedAvailable(
                     formatMoney(credit.available),
@@ -513,6 +512,7 @@ class PosCartPane extends StatelessWidget {
       onShareInvoiceChanged: viewModel.updateShareInvoiceAfterPayment,
       hasCustomer: viewModel.selectedCustomer != null,
       requireCustomerForCredit: viewModel.requireCustomerForCredit,
+      proposedDueDate: viewModel.proposedCreditDueDate,
     );
   }
 }

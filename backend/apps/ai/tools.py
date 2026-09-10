@@ -1748,6 +1748,7 @@ def create_sale(
     amount_received=None,
     sale_type=None,
     valid_until=None,
+    due_date=None,
     reserve_stock=None,
     confirm=False,
     idempotency_key=None,
@@ -1808,6 +1809,11 @@ def create_sale(
         commit["sale_type"] = sale_type
     if valid_until:
         commit["valid_until"] = valid_until
+    # Omitted, not defaulted: leaving the key out is what tells the backend to
+    # apply the customer's standing terms, which is the right answer whenever
+    # the assistant was not given a date.
+    if due_date:
+        commit["due_date"] = due_date
     if reserve_stock is not None:
         commit["reserve_stock"] = bool(reserve_stock)
     try:
@@ -2743,6 +2749,7 @@ _TOOLS = {
         amount_received=args.get("amount_received"),
         sale_type=args.get("sale_type"),
         valid_until=args.get("valid_until"),
+        due_date=args.get("due_date"),
         reserve_stock=args.get("reserve_stock"),
         confirm=bool(args.get("confirm")),
         idempotency_key=key,
@@ -2966,8 +2973,17 @@ def action_tool_definitions():
                         "valid_until": {
                             "type": "string",
                             "description": (
-                                "تاريخ صلاحية العرض/الحجز YYYY-MM-DD (اختياري، "
-                                "إلا أنه مطلوب مع reserve_stock=true)."
+                                "لعرض السعر فقط: تاريخ انتهاء صلاحية العرض/الحجز "
+                                "YYYY-MM-DD (اختياري، إلا أنه مطلوب مع "
+                                "reserve_stock=true). لا يُستخدم للفاتورة الآجلة."
+                            ),
+                        },
+                        "due_date": {
+                            "type": "string",
+                            "description": (
+                                "للفاتورة الآجلة فقط: تاريخ استحقاق الدين "
+                                "YYYY-MM-DD. اتركه فارغًا ليُحتسب تلقائيًا من "
+                                "مهلة السداد المتفق عليها مع العميل."
                             ),
                         },
                         "reserve_stock": {

@@ -234,6 +234,37 @@ class OrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
             sale_type=Order.SaleType.CREDIT, status=Order.Status.OPEN
         )
 
+    def due_on_or_before(self, when):
+        """Open credit whose due date has arrived — the collectable set.
+
+        A null due date counts as due: an invoice issued with no terms recorded
+        is an open tab, payable now. That is how the debt sweep has always read
+        it, and the aging report's invoice-date fallback says the same thing.
+        """
+        return self.open_credit().filter(
+            Q(due_date__isnull=True) | Q(due_date__lte=when)
+        )
+
+    def overdue(self, when=None):
+        """Open credit past its recorded due date.
+
+        Narrower than :meth:`due_on_or_before` by exactly the invoices with no
+        due date: "due now" and "late" are different claims, and only one of
+        them should colour a screen red.
+
+        Derived, never stored. ERPNext keeps an ``Overdue`` status on the
+        invoice and a daily scheduled job to write it
+        (``accounts_controller.update_invoice_status``); that is a second source
+        of truth which is wrong between midnight and whenever the job runs, and
+        this codebase has paid for stored-versus-derived drift before. The
+        comparison is indexed — see ``sales_order_credit_due_idx``.
+        """
+        if when is None:
+            from apps.core.timeutils import business_local_date
+
+            when = business_local_date()
+        return self.open_credit().filter(due_date__isnull=False, due_date__lt=when)
+
     def quotations(self):
         return self.filter(sale_type=Order.SaleType.QUOTATION)
 
@@ -355,9 +386,24 @@ class Order(DocumentMixin, TimeStampedModel):
         choices=SaleType.choices,
         default=SaleType.STANDARD,
     )
-    # For a quotation this is how long the offer (and any stock reservation) is
-    # valid; for a credit invoice it can carry an optional due date. Null = none.
+    # How long a quotation's offer — and any stock reservation behind it — stays
+    # good. Null = no deadline. This carried a credit invoice's due date too
+    # until ``due_date`` below took that over: one column meaning "the offer
+    # lapses" and "the money is owed" made every reader guess which sale type it
+    # was looking at, and the lapse sweep and the debt sweep were reading the
+    # same column for opposite purposes.
     valid_until = models.DateField(blank=True, null=True)
+    # When a credit (آجل) invoice is to be settled. Meaningful only for
+    # ``SaleType.CREDIT`` — a cash sale is paid at the counter and never grows
+    # one, which is what keeps checkout untouched by all of this (ERPNext does
+    # the same, returning early from its payment-schedule pass for POS
+    # invoices). Null means no terms were recorded, which every reader treats as
+    # due now: that is the behaviour every credit invoice already had.
+    #
+    # Proposed from the customer's terms at issue
+    # (``apps.customers.payment_terms.resolve_due_date``) and overridable by
+    # whoever rings the sale up.
+    due_date = models.DateField(blank=True, null=True)
     # Quotation-only: whether the quoted quantities are actively held
     # (StockReservation rows + StockItem.quantity_committed) until ``valid_until``.
     reserves_stock = models.BooleanField(default=False)
@@ -400,6 +446,14 @@ class Order(DocumentMixin, TimeStampedModel):
             models.Index(
                 fields=["sale_type", "status", "-created_at"],
                 name="sales_order_type_status_idx",
+            ),
+            # The debt-reminder sweep and the aging report both ask the same
+            # question — open credit invoices due on or before a date — and the
+            # composite above cannot serve it, because ``-created_at`` sits
+            # between the equality columns and the range one.
+            models.Index(
+                fields=["sale_type", "status", "due_date"],
+                name="sales_order_credit_due_idx",
             ),
         ]
         permissions = [
@@ -454,6 +508,35 @@ class Order(DocumentMixin, TimeStampedModel):
     @property
     def balance_due(self):
         return max(self.raw_balance_due, Decimal("0.00")).quantize(Decimal("0.01"))
+
+    @property
+    def is_overdue(self):
+        """Past its due date with money still owed.
+
+        Only a credit invoice can be late. A quotation has an expiry, not a
+        debt, and a cash sale has neither — reading ``due_date`` without the
+        sale-type guard would make any stray value on another type look like an
+        unpaid bill.
+        """
+        from apps.core.timeutils import business_local_date
+
+        return (
+            self.sale_type == self.SaleType.CREDIT
+            and self.status == self.Status.OPEN
+            and self.due_date is not None
+            and self.due_date < business_local_date()
+            and self.balance_due > Decimal("0.00")
+        )
+
+    @property
+    def days_overdue(self):
+        """How many days late, or 0. Never negative — an invoice due next week
+        is not "-7 days overdue", it is simply not overdue."""
+        from apps.core.timeutils import business_local_date
+
+        if not self.is_overdue:
+            return 0
+        return (business_local_date() - self.due_date).days
 
     @property
     def payment_status(self):

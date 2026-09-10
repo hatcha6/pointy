@@ -383,6 +383,9 @@ class _PaymentSettingsFields extends StatelessWidget {
     required this.requireCustomerForCredit,
     required this.enforceCustomerCreditLimits,
     required this.defaultCustomerCreditLimitController,
+    required this.defaultPaymentTermsDaysController,
+    required this.defaultPaymentTermsBasis,
+    required this.onDefaultPaymentTermsBasisChanged,
     required this.onEnforceCustomerCreditLimitsChanged,
     required this.allowCashierCustomerAccess,
     required this.paymentMethodsError,
@@ -409,6 +412,13 @@ class _PaymentSettingsFields extends StatelessWidget {
   final bool requireCustomerForCredit;
   final bool enforceCustomerCreditLimits;
   final TextEditingController defaultCustomerCreditLimitController;
+
+  /// The shop's default credit terms. Independent of the ceiling switch above:
+  /// "how much" and "by when" are separate decisions, and a shop that does not
+  /// cap anyone may still expect to be paid within the month.
+  final TextEditingController defaultPaymentTermsDaysController;
+  final PaymentTermsBasis defaultPaymentTermsBasis;
+  final ValueChanged<PaymentTermsBasis?> onDefaultPaymentTermsBasisChanged;
   final ValueChanged<bool> onEnforceCustomerCreditLimitsChanged;
   final bool allowCashierCustomerAccess;
   final String? paymentMethodsError;
@@ -526,6 +536,45 @@ class _PaymentSettingsFields extends StatelessWidget {
           ),
           const SizedBox(height: 4),
         ],
+        // Credit terms. Deliberately outside the ceiling switch: a shop can
+        // decline to cap anyone and still expect to be paid within the month,
+        // and zero days — due the day it is issued — is what an invoice with no
+        // due date has always meant.
+        const SizedBox(height: 8),
+        TextFormField(
+          key: const ValueKey('default_payment_terms_days_field'),
+          controller: defaultPaymentTermsDaysController,
+          enabled: enabled,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: InputDecoration(
+            labelText: l10n.defaultPaymentTermsDaysLabel,
+            helperText: l10n.defaultPaymentTermsDaysHelp,
+            helperMaxLines: 3,
+            prefixIcon: const Icon(Icons.event_available_outlined),
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<PaymentTermsBasis>(
+          key: const ValueKey('default_payment_terms_basis_field'),
+          initialValue: defaultPaymentTermsBasis,
+          decoration: InputDecoration(
+            labelText: l10n.paymentTermsBasisLabel,
+            prefixIcon: const Icon(Icons.calendar_month_outlined),
+          ),
+          items: [
+            DropdownMenuItem(
+              value: PaymentTermsBasis.netDays,
+              child: Text(l10n.paymentTermsBasisNetDays),
+            ),
+            DropdownMenuItem(
+              value: PaymentTermsBasis.endOfMonth,
+              child: Text(l10n.paymentTermsBasisEndOfMonth),
+            ),
+          ],
+          onChanged: enabled ? onDefaultPaymentTermsBasisChanged : null,
+        ),
+        const SizedBox(height: 4),
         SwitchListTile(
           key: const ValueKey('allow_cashier_customer_access_switch'),
           contentPadding: EdgeInsets.zero,

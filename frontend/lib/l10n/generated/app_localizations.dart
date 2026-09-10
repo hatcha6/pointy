@@ -9262,6 +9262,108 @@ abstract class AppLocalizations {
   /// **'يُطبَّق على كل عميل ما لم يُحدَّد له سقف خاص من صفحته. اتركه فارغًا لعدم وضع سقف، أو اكتب 0 لمنع البيع الآجل افتراضيًا.'**
   String get defaultCustomerCreditLimitHelp;
 
+  /// No description provided for @defaultPaymentTermsDaysLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مهلة السداد الافتراضية (أيام)'**
+  String get defaultPaymentTermsDaysLabel;
+
+  /// No description provided for @defaultPaymentTermsDaysHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُطبَّق على كل عميل ما لم يُحدَّد له اتفاق خاص من صفحته. اكتب 0 إذا كان الدين مستحقًا يوم إصداره.'**
+  String get defaultPaymentTermsDaysHelp;
+
+  /// No description provided for @paymentTermsBasisLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحسب المهلة من'**
+  String get paymentTermsBasisLabel;
+
+  /// No description provided for @paymentTermsBasisNetDays.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الفاتورة'**
+  String get paymentTermsBasisNetDays;
+
+  /// No description provided for @paymentTermsBasisEndOfMonth.
+  ///
+  /// In ar, this message translates to:
+  /// **'نهاية شهر الفاتورة'**
+  String get paymentTermsBasisEndOfMonth;
+
+  /// No description provided for @paymentTermsPolicyLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مهلة السداد'**
+  String get paymentTermsPolicyLabel;
+
+  /// No description provided for @paymentTermsPolicyShopDefault.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسب إعداد المحل'**
+  String get paymentTermsPolicyShopDefault;
+
+  /// No description provided for @paymentTermsPolicyImmediate.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحق فورًا'**
+  String get paymentTermsPolicyImmediate;
+
+  /// No description provided for @paymentTermsPolicyCustom.
+  ///
+  /// In ar, this message translates to:
+  /// **'مهلة خاصة'**
+  String get paymentTermsPolicyCustom;
+
+  /// No description provided for @paymentTermsDaysLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الأيام'**
+  String get paymentTermsDaysLabel;
+
+  /// No description provided for @paymentTermsDaysRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'المهلة الخاصة تحتاج عدد أيام.'**
+  String get paymentTermsDaysRequired;
+
+  /// No description provided for @effectivePaymentTermsImmediate.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير الآجلة لهذا العميل مستحقة يوم إصدارها.'**
+  String get effectivePaymentTermsImmediate;
+
+  /// No description provided for @effectivePaymentTermsNetDays.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير الآجلة لهذا العميل مستحقة بعد {days} يومًا من تاريخ الفاتورة.'**
+  String effectivePaymentTermsNetDays(int days);
+
+  /// No description provided for @effectivePaymentTermsEndOfMonth.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير الآجلة لهذا العميل مستحقة بعد {days} يومًا من نهاية شهر الفاتورة.'**
+  String effectivePaymentTermsEndOfMonth(int days);
+
+  /// No description provided for @creditDueDateProposedHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مقترح من اتفاق العميل — يمكنك تغييره.'**
+  String get creditDueDateProposedHint;
+
+  /// No description provided for @invoiceOverdueBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'متأخرة {days} يومًا'**
+  String invoiceOverdueBadge(int days);
+
+  /// No description provided for @invoiceDueOnLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تستحق في {date}'**
+  String invoiceDueOnLabel(String date);
+
   /// No description provided for @creditLimitBlockedTitle.
   ///
   /// In ar, this message translates to:

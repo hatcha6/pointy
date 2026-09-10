@@ -21,6 +21,8 @@ import {FxPoster} from './posters/Fx';
 import {AiInvoicePoster} from './posters/AiInvoice';
 import {AiCapabilitiesPoster} from './posters/AiCapabilities';
 import {KioskPoster} from './posters/Kiosk';
+import {CamerasPoster} from './posters/Cameras';
+import {CameraInvoicePoster} from './posters/CameraInvoice';
 import {AVATAR, COVER_FB, COVER_YT} from './brand/kit';
 import {Avatar} from './brand/Avatar';
 import {CoverFacebook, CoverYouTube} from './brand/Covers';
@@ -71,6 +73,8 @@ export const RemotionRoot: React.FC = () => (
     <Composition id="PosterAiInvoice" component={AiInvoicePoster} {...still} />
     <Composition id="PosterAiCapabilities" component={AiCapabilitiesPoster} {...still} />
     <Composition id="PosterKiosk" component={KioskPoster} {...still} />
+    <Composition id="PosterCameras" component={CamerasPoster} {...still} />
+    <Composition id="PosterCameraInvoice" component={CameraInvoicePoster} {...still} />
 
     <Composition id="Avatar" component={Avatar} {...square} />
     <Composition id="CoverFacebook" component={CoverFacebook} {...one} width={COVER_FB.w} height={COVER_FB.h} />

@@ -5235,6 +5235,68 @@ class AppLocalizationsAr extends AppLocalizations {
       'يُطبَّق على كل عميل ما لم يُحدَّد له سقف خاص من صفحته. اتركه فارغًا لعدم وضع سقف، أو اكتب 0 لمنع البيع الآجل افتراضيًا.';
 
   @override
+  String get defaultPaymentTermsDaysLabel => 'مهلة السداد الافتراضية (أيام)';
+
+  @override
+  String get defaultPaymentTermsDaysHelp =>
+      'تُطبَّق على كل عميل ما لم يُحدَّد له اتفاق خاص من صفحته. اكتب 0 إذا كان الدين مستحقًا يوم إصداره.';
+
+  @override
+  String get paymentTermsBasisLabel => 'تُحسب المهلة من';
+
+  @override
+  String get paymentTermsBasisNetDays => 'تاريخ الفاتورة';
+
+  @override
+  String get paymentTermsBasisEndOfMonth => 'نهاية شهر الفاتورة';
+
+  @override
+  String get paymentTermsPolicyLabel => 'مهلة السداد';
+
+  @override
+  String get paymentTermsPolicyShopDefault => 'حسب إعداد المحل';
+
+  @override
+  String get paymentTermsPolicyImmediate => 'مستحق فورًا';
+
+  @override
+  String get paymentTermsPolicyCustom => 'مهلة خاصة';
+
+  @override
+  String get paymentTermsDaysLabel => 'عدد الأيام';
+
+  @override
+  String get paymentTermsDaysRequired => 'المهلة الخاصة تحتاج عدد أيام.';
+
+  @override
+  String get effectivePaymentTermsImmediate =>
+      'الفواتير الآجلة لهذا العميل مستحقة يوم إصدارها.';
+
+  @override
+  String effectivePaymentTermsNetDays(int days) {
+    return 'الفواتير الآجلة لهذا العميل مستحقة بعد $days يومًا من تاريخ الفاتورة.';
+  }
+
+  @override
+  String effectivePaymentTermsEndOfMonth(int days) {
+    return 'الفواتير الآجلة لهذا العميل مستحقة بعد $days يومًا من نهاية شهر الفاتورة.';
+  }
+
+  @override
+  String get creditDueDateProposedHint =>
+      'مقترح من اتفاق العميل — يمكنك تغييره.';
+
+  @override
+  String invoiceOverdueBadge(int days) {
+    return 'متأخرة $days يومًا';
+  }
+
+  @override
+  String invoiceDueOnLabel(String date) {
+    return 'تستحق في $date';
+  }
+
+  @override
   String get creditLimitBlockedTitle => 'تجاوز سقف الدين';
 
   @override
