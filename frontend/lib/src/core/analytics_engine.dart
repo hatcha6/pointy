@@ -169,9 +169,17 @@ class AnalyticsEngine {
   }
 
   Future<void> _start() async {
+    // Bounded, and newest-first underneath: a till that has been unable to
+    // deliver can hold far more than [maxQueueSize] on disk, and reading the
+    // lot meant decoding every one of them at startup only to drop most.
     _queue
       ..clear()
-      ..addAll(await _storage.loadEvents());
+      ..addAll(await _storage.loadEvents(limit: maxQueueSize));
+    // Make the table agree now rather than on the next `track`. Until this ran,
+    // a device could carry weeks of history it would never deliver and never
+    // discard — one till in the field was still shipping a day from three weeks
+    // earlier when the export was taken.
+    unawaited(_trimStoredEvents());
     _installationId = await _loadOrCreateInstallationId();
     _sessionId = generateAnalyticsEventId();
     _isStarted = true;
@@ -706,7 +714,14 @@ class AnalyticsEngine {
         if (!_claimRequestSlot()) {
           break;
         }
-        final batch = _queue.take(maxBatchSize).toList(growable: false);
+        // The NEWEST first, not the oldest. The queue is chronological, so a
+        // backlog's head is its stalest end — and delivering that first is how
+        // a device spends its whole send budget on three-week-old telemetry
+        // while today's sits behind it, forever. Today's data is the data worth
+        // having; history is what the trim is allowed to lose.
+        final batch = _queue
+            .skip(_queue.length > maxBatchSize ? _queue.length - maxBatchSize : 0)
+            .toList(growable: false);
         final result = await _sink.ingestEvents(batch);
         if (result is! Ok<AnalyticsIngestResult>) {
           _recordFlushFailure();
@@ -847,6 +862,17 @@ class AnalyticsEngine {
       // Losing it costs a report; blocking on it costs the shop.
       debugPrint('Analytics queue write failed: $error');
       debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  /// Applies [maxQueueSize] to the table itself, independently of what is in
+  /// memory. Best-effort: a queue that cannot be trimmed is not a reason to
+  /// fail startup.
+  Future<void> _trimStoredEvents() async {
+    try {
+      await _storage.trimToMostRecent(maxQueueSize);
+    } catch (error) {
+      debugPrint('Analytics queue trim failed: $error');
     }
   }
 

@@ -12,7 +12,9 @@ import '../models/analytics_event.dart';
 /// see [SqliteAnalyticsQueue] for what that cost.
 abstract class AnalyticsQueueStorage {
   /// Everything still pending, oldest first.
-  Future<List<AnalyticsEventDraft>> loadEvents();
+  /// The most recent [limit] queued events, oldest first. A null [limit] reads
+  /// the lot, which only a test should want.
+  Future<List<AnalyticsEventDraft>> loadEvents({int? limit});
 
   /// Adds newly recorded events. Idempotent per `clientEventId`, so a retry
   /// after a crash cannot double-queue.
@@ -40,9 +42,9 @@ class LocalAnalyticsQueueStorage implements AnalyticsQueueStorage {
       'pointy.analytics.installation_id.v1';
 
   @override
-  Future<List<AnalyticsEventDraft>> loadEvents() async {
+  Future<List<AnalyticsEventDraft>> loadEvents({int? limit}) async {
     final queue = await AppAnalyticsQueue.instance();
-    final payloads = await queue.loadPayloads();
+    final payloads = await queue.loadPayloads(limit: limit);
     return payloads
         .map(decodeAnalyticsEvent)
         .whereType<AnalyticsEventDraft>()
@@ -110,13 +112,18 @@ class KeyValueAnalyticsQueueStorage implements AnalyticsQueueStorage {
   static const _installationIdKey = 'pointy.analytics.installation_id.v1';
 
   @override
-  Future<List<AnalyticsEventDraft>> loadEvents() async {
+  Future<List<AnalyticsEventDraft>> loadEvents({int? limit}) async {
     final store = await AppKeyValueStore.instance();
     final encoded = await store.getStringList(_queueKey) ?? const <String>[];
-    return encoded
+    final events = encoded
         .map(decodeAnalyticsEvent)
         .whereType<AnalyticsEventDraft>()
         .toList(growable: false);
+    if (limit == null || limit <= 0 || events.length <= limit) {
+      return events;
+    }
+    // The newest, same rule as the SQLite store: a backlog sheds its history.
+    return events.sublist(events.length - limit);
   }
 
   @override
@@ -200,8 +207,12 @@ class MemoryAnalyticsQueueStorage implements AnalyticsQueueStorage {
   String? _installationId;
 
   @override
-  Future<List<AnalyticsEventDraft>> loadEvents() async {
-    return List<AnalyticsEventDraft>.of(_events);
+  Future<List<AnalyticsEventDraft>> loadEvents({int? limit}) async {
+    final events = List<AnalyticsEventDraft>.of(_events);
+    if (limit == null || limit <= 0 || events.length <= limit) {
+      return events;
+    }
+    return events.sublist(events.length - limit);
   }
 
   @override
