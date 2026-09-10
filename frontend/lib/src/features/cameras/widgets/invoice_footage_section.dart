@@ -172,7 +172,7 @@ class _InvoiceFootageSectionState extends State<InvoiceFootageSection> {
               child: PointySpinner(strokeWidth: 2),
             ),
           ),
-          errorBuilder: (context, error) => Center(
+          errorBuilder: (context, error, _) => Center(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Text(

@@ -136,10 +136,11 @@ class _CameraTileState extends State<CameraTile> {
                         : l10n.camerasPausedBanner,
                     busy: widget.isActive,
                   ),
-                  errorBuilder: (context, error) => _TilePlaceholder(
+                  errorBuilder: (context, error, retry) => _TilePlaceholder(
                     label: l10n.cameraStreamFailedLabel,
                     detail: _detailOf(error),
                     icon: Icons.videocam_off_outlined,
+                    onRetry: retry,
                   ),
                 ),
                 Positioned(
@@ -186,12 +187,16 @@ class _TilePlaceholder extends StatelessWidget {
     this.detail,
     this.busy = false,
     this.icon,
+    this.onRetry,
   });
 
   final String label;
   final String? detail;
   final bool busy;
   final IconData? icon;
+
+  /// Offered when the stream has stopped retrying on its own.
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -227,6 +232,20 @@ class _TilePlaceholder extends StatelessWidget {
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: Colors.white38, fontSize: 11),
+              ),
+            ],
+            if (onRetry != null) ...[
+              const SizedBox(height: 4),
+              TextButton(
+                onPressed: onRetry,
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: Text(
+                  AppLocalizations.of(context)!.retryButton,
+                  style: const TextStyle(fontSize: 12),
+                ),
               ),
             ],
           ],

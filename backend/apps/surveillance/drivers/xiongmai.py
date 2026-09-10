@@ -38,6 +38,7 @@ from datetime import datetime
 
 from .base import (
     CONNECT_TIMEOUT,
+    RecorderCapabilityError,
     READ_TIMEOUT,
     ChannelInfo,
     DeviceInfo,
@@ -62,6 +63,18 @@ LOGOUT = 1002
 SYSINFO = 1020
 CHANNEL_TITLE = 1048
 FILE_SEARCH = 1440
+
+#: ``OPFileQuery`` answers at most this many rows and then reports success, so a
+#: single query silently truncates a busy day. The caller cannot tell a short
+#: answer from a complete one, which for invoice-linked footage means "nothing
+#: was recorded then" for a sale the box has perfectly good video of. Paginate by
+#: advancing ``BeginTime`` and de-duplicating.
+SEARCH_PAGE_SIZE = 64
+
+#: A ceiling on that pagination. Firmware that ignores ``BeginTime`` would
+#: otherwise return the same page forever; the de-duplication catches it too,
+#: and between them a search cannot become an unbounded loop against a DVR.
+MAX_SEARCH_PAGES = 16
 TIME_QUERY = 1452
 #: Playback and download share one command; the ``Action`` in the body decides.
 PLAYBACK = 1420
@@ -550,7 +563,7 @@ class XiongmaiDriver(RecorderDriver):
 
     # -- video -------------------------------------------------------------
     def snapshot(self, channel: int, *, quality: str = StreamQuality.SUB) -> bytes:
-        raise RecorderError(
+        raise RecorderCapabilityError(
             "This recorder has no snapshot address; its live view needs ffmpeg "
             "on the server."
         )
@@ -709,6 +722,64 @@ class XiongmaiDriver(RecorderDriver):
         it the player cannot tell "nothing was recorded then" from "the recorder
         is not answering", and would offer to play a gap.
         """
+        segments: list[RecordingSegment] = []
+        seen: set[tuple] = set()
+        cursor = start
+        for _ in range(MAX_SEARCH_PAGES):
+            rows = self._file_query_page(channel, cursor, end)
+            if not rows:
+                break
+            added = 0
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                begins = parse_device_datetime(str(row.get("BeginTime") or ""))
+                ends = parse_device_datetime(str(row.get("EndTime") or ""))
+                if begins is None or ends is None:
+                    continue
+                handle = str(row.get("FileName") or "")
+                key = (begins, ends, handle)
+                if key in seen:
+                    continue
+                seen.add(key)
+                added += 1
+                segments.append(
+                    RecordingSegment(
+                        start=self.from_device_local(begins),
+                        end=self.from_device_local(ends),
+                        handle=handle,
+                        size_bytes=_file_length(row.get("FileLength")),
+                    )
+                )
+            if len(rows) < SEARCH_PAGE_SIZE:
+                # A short page is the last page.
+                break
+            if not added:
+                # A full page that told us nothing new: the box is ignoring
+                # BeginTime. Stop rather than ask the same question forever.
+                break
+            # Advance past the newest segment this page returned. The rows are
+            # device-local and `cursor` is UTC — the conversion back is not
+            # optional, and mixing the two is how a paginating search silently
+            # asks the same question forever.
+            device_times = [
+                parsed
+                for row in rows
+                if isinstance(row, dict)
+                and (parsed := parse_device_datetime(str(row.get("EndTime") or "")))
+                is not None
+            ]
+            if not device_times:
+                break
+            newest = self.from_device_local(max(device_times))
+            if newest <= cursor:
+                break
+            cursor = newest
+        segments.sort(key=lambda segment: segment.start)
+        return segments
+
+    def _file_query_page(self, channel: int, start: datetime, end: datetime) -> list:
+        """One ``OPFileQuery``, which is at most :data:`SEARCH_PAGE_SIZE` rows."""
         payload = {
             "Name": "OPFileQuery",
             "OPFileQuery": {
@@ -730,25 +801,7 @@ class XiongmaiDriver(RecorderDriver):
             # cannot be searched still plays back fine.
             return []
         rows = reply.get("OPFileQuery") or []
-        if not isinstance(rows, list):
-            return []
-        segments = []
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            begins = parse_device_datetime(str(row.get("BeginTime") or ""))
-            ends = parse_device_datetime(str(row.get("EndTime") or ""))
-            if begins is None or ends is None:
-                continue
-            segments.append(
-                RecordingSegment(
-                    start=self.from_device_local(begins),
-                    end=self.from_device_local(ends),
-                    handle=str(row.get("FileName") or ""),
-                    size_bytes=_file_length(row.get("FileLength")),
-                )
-            )
-        return segments
+        return rows if isinstance(rows, list) else []
 
 
 def _file_length(raw) -> int:

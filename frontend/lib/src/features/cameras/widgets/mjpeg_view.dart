@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../../../data/services/api_session.dart';
 import '../../../data/services/surveillance_api_client.dart';
 
 /// Renders a stream of JPEG frames as video, at the lowest cost this app can
@@ -48,6 +49,8 @@ class MjpegView extends StatefulWidget {
     this.placeholder,
     this.errorBuilder,
     this.reconnectDelay = const Duration(seconds: 3),
+    this.maxReconnectDelay = const Duration(seconds: 60),
+    this.maxReconnectAttempts = 6,
     this.autoReconnect = true,
   });
 
@@ -70,6 +73,7 @@ class MjpegView extends StatefulWidget {
 
   /// The stream completed normally: playback reached the end of its window.
   final VoidCallback? onEnded;
+
   /// Fired once per view, with how long the first real picture took to
   /// arrive AND decode AND paint. Measured from the first connection
   /// attempt, so a stream that had to retry reports the whole wait — which
@@ -77,8 +81,29 @@ class MjpegView extends StatefulWidget {
   /// the server cannot see.
   final ValueChanged<Duration>? onFirstFrame;
   final Widget? placeholder;
-  final Widget Function(BuildContext context, Object error)? errorBuilder;
+
+  /// Renders the failure state. ``retry`` dials again from scratch — offer it
+  /// whenever it is passed, because once the attempts are spent nothing else
+  /// will reconnect this tile.
+  final Widget Function(BuildContext context, Object error, VoidCallback retry)?
+  errorBuilder;
+
+  /// The first retry's wait. Each further failure doubles it, up to
+  /// [maxReconnectDelay].
   final Duration reconnectDelay;
+
+  /// Ceiling for the doubling above.
+  final Duration maxReconnectDelay;
+
+  /// How many times a dead stream is retried before the tile gives up and waits
+  /// to be asked again.
+  ///
+  /// A fixed 3-second retry with no limit is what turned one unreachable DVR
+  /// into 18,160 failed requests over three days on 2026-09-08, each one
+  /// holding a server thread through a six-second connect timeout. A camera
+  /// that has not answered six escalating times is not going to answer on the
+  /// seventh, and the person watching would rather be told.
+  final int maxReconnectAttempts;
 
   /// Whether a dead stream is retried. Off for playback, where reaching the end
   /// is success, not a failure to recover from.
@@ -95,6 +120,8 @@ class _MjpegViewState extends State<MjpegView> with WidgetsBindingObserver {
   Timer? _reconnectTimer;
 
   Object? _error;
+  int _reconnectAttempts = 0;
+  bool _gaveUp = false;
   bool _hasPainted = false;
   DateTime? _waitingSince;
   bool _decoding = false;
@@ -146,10 +173,30 @@ class _MjpegViewState extends State<MjpegView> with WidgetsBindingObserver {
 
   void _restart() {
     _teardown();
+    _reconnectAttempts = 0;
+    _gaveUp = false;
     if (_shouldRun) {
       _connect();
     } else if (mounted) {
       setState(() {});
+    }
+  }
+
+  /// Try again now, after the tile has given up. Wired to the error state's
+  /// retry affordance — the only way back once [maxReconnectAttempts] is spent,
+  /// which is deliberate: an automatic escape would rebuild the same loop.
+  void retry() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _error = null;
+      _gaveUp = false;
+      _reconnectAttempts = 0;
+    });
+    _teardown();
+    if (_shouldRun) {
+      _connect();
     }
   }
 
@@ -213,6 +260,10 @@ class _MjpegViewState extends State<MjpegView> with WidgetsBindingObserver {
         _sourceWidth = decoded.image.width;
       }
       _decodeFailures = 0;
+      // Pictures are arriving, so whatever run of failures preceded this is
+      // over. Without this a camera that drops out once an hour would walk its
+      // backoff up to the ceiling over a day and never walk it back.
+      _reconnectAttempts = 0;
       final previous = _image.value;
       _image.value = decoded.image;
       // Disposed after the swap, never before: releasing the image still on
@@ -261,22 +312,92 @@ class _MjpegViewState extends State<MjpegView> with WidgetsBindingObserver {
       return;
     }
     setState(() => _error = error);
-    _scheduleReconnect();
+    _scheduleReconnect(error);
   }
 
   void _onDone() {
     widget.onEnded?.call();
     if (widget.autoReconnect) {
-      _scheduleReconnect();
+      _scheduleReconnect(null);
     }
   }
 
-  void _scheduleReconnect() {
+  /// How long to wait before the next attempt.
+  ///
+  /// A server that has opened its own breaker tells us exactly how long it will
+  /// refuse for; honouring that beats guessing, and keeps a wall of tiles from
+  /// all waking at the same moment on their own schedules.
+  Duration _backoffFor(Object? error) {
+    final serverAsk = _retryAfterFrom(error);
+    if (serverAsk != null) {
+      return serverAsk;
+    }
+    final doubled = widget.reconnectDelay * (1 << (_reconnectAttempts - 1));
+    return doubled > widget.maxReconnectDelay
+        ? widget.maxReconnectDelay
+        : doubled;
+  }
+
+  static Duration? _retryAfterFrom(Object? error) {
+    if (error is! PosApiException || error.statusCode != 503) {
+      return null;
+    }
+    final body = error.decodedBody;
+    if (body is! Map) {
+      return null;
+    }
+    final seconds = body['retry_after'];
+    final value = seconds is num
+        ? seconds.toInt()
+        : int.tryParse('${seconds ?? ''}');
+    if (value == null || value <= 0) {
+      return null;
+    }
+    return Duration(seconds: value.clamp(1, 600));
+  }
+
+  /// Whether retrying this failure could ever work.
+  ///
+  /// A recorder with no still-image endpoint answers 501 however many times it
+  /// is asked, and a rejected password answers 401. Spending the retry ladder
+  /// on those produces the same loop the ladder was added to stop, only slower.
+  /// Anything else — a timeout, a 5xx, a dropped socket — is worth another go.
+  static bool _isPermanent(Object? error) {
+    final status = _statusOf(error);
+    if (status == null) {
+      return false;
+    }
+    // 408 and 429 are explicitly temporary despite being 4xx.
+    if (status == 408 || status == 429) {
+      return false;
+    }
+    return status >= 400 && status < 500 || status == 501;
+  }
+
+  static int? _statusOf(Object? error) =>
+      error is PosApiException ? error.statusCode : null;
+
+  void _scheduleReconnect(Object? error) {
     if (!widget.autoReconnect || !_shouldRun) {
       return;
     }
+    if (_isPermanent(error)) {
+      if (mounted && !_gaveUp) {
+        setState(() => _gaveUp = true);
+      }
+      return;
+    }
+    _reconnectAttempts++;
+    if (_reconnectAttempts > widget.maxReconnectAttempts) {
+      // Stop. The stream stays in its error state, which is what surfaces the
+      // retry affordance; nothing else here will dial the recorder again.
+      if (mounted && !_gaveUp) {
+        setState(() => _gaveUp = true);
+      }
+      return;
+    }
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(widget.reconnectDelay, () {
+    _reconnectTimer = Timer(_backoffFor(error), () {
       if (mounted && _shouldRun) {
         _connect();
       }
@@ -304,7 +425,7 @@ class _MjpegViewState extends State<MjpegView> with WidgetsBindingObserver {
         if (!_hasPainted) {
           final error = _error;
           if (error != null && widget.errorBuilder != null) {
-            return widget.errorBuilder!(context, error);
+            return widget.errorBuilder!(context, error, retry);
           }
           return widget.placeholder ?? const SizedBox.expand();
         }

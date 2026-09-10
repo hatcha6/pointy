@@ -121,7 +121,13 @@ class CameraPlayerViewModel extends ChangeNotifier {
       return _repository.liveFrames(
         camera.id,
         fps: liveFps,
-        quality: camera.liveQuality,
+        // Full screen is one stream, so it takes the main track — the same
+        // split every VMS makes, and the reason `live_quality` defaults to the
+        // sub-stream in the first place: that default exists to keep a wall of
+        // tiles off a DVR's main encoders, not to cap the one camera somebody
+        // is actually looking at. Deriving it from the context rather than
+        // asking the shop to configure two qualities per camera.
+        quality: CameraQuality.main,
         smooth: true,
       );
     }

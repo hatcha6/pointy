@@ -31,6 +31,7 @@ from datetime import datetime
 
 from .base import (
     CONNECT_TIMEOUT,
+    RecorderCapabilityError,
     ChannelInfo,
     DeviceInfo,
     RecorderDriver,
@@ -123,7 +124,7 @@ class GenericRtspDriver(RecorderDriver):
 
     # -- video -------------------------------------------------------------
     def snapshot(self, channel: int, *, quality: str = StreamQuality.SUB) -> bytes:
-        raise RecorderError(
+        raise RecorderCapabilityError(
             "This recorder has no snapshot address; its live view needs ffmpeg "
             "on the server."
         )

@@ -15,7 +15,8 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase, override_settings
+from django.core.cache import cache
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -25,7 +26,8 @@ from apps.core.models import ShopSettings
 from apps.core.roles import MANAGER_GROUP, SUPERVISOR_GROUP, ensure_role_groups
 from apps.sales.models import Order
 
-from . import services, telemetry, transcode
+from . import breaker, services, telemetry, transcode
+from .views import MAX_SNAPSHOT_FPS, resolve_live_stream
 from . import views as views_module
 from .drivers.base import (
     RecorderTarget,
@@ -37,9 +39,15 @@ from .drivers.dahua import DahuaDriver, parse_key_values
 from .drivers.hikvision import HikvisionDriver, stream_id
 from .drivers.registry import detect_driver
 from .models import Camera, Recorder
-from .drivers.base import RecorderError
+from .drivers.base import (
+    RecorderCapabilityError,
+    RecorderError,
+    RecorderUnreachable,
+)
 from .streaming import (
     FfmpegSource,
+    SnapshotSource,
+    _jpeg_frame_end,
     Frame,
     FrameBroker,
     PipedSource,
@@ -74,6 +82,19 @@ updateSerial=XVR5116HS
 DAHUA_CHANNEL_TITLES = """table.ChannelTitle[0].Name=Counter
 table.ChannelTitle[1].Name=Store room
 """
+
+
+def mjpeg_frame(payload: bytes = b"scan") -> bytes:
+    """A structurally valid single-frame JPEG, as ffmpeg's mjpeg encoder emits.
+
+    The demuxer walks JPEG's marker structure rather than scanning for the
+    end-of-image bytes, because those bytes occur inside real frames. That makes
+    it strict about what a frame *is*, so fixtures have to be shaped like one —
+    ``b"\xff\xd8jpeg\xff\xd9"`` is not a JPEG and never was.
+    """
+    quantization = b"\xff\xdb" + (10).to_bytes(2, "big") + b"\x00" * 8
+    start_of_scan = b"\xff\xda" + (4).to_bytes(2, "big") + b"\x01\x00"
+    return b"\xff\xd8" + quantization + start_of_scan + payload + b"\xff\xd9"
 
 
 class _StubDriverMixin:
@@ -840,13 +861,15 @@ class PipedSourceTests(TestCase):
         """It is the source of the bytes, so nothing else can close it — and a
         leaked protocol session is one the recorder will not grant again."""
         driver = self._Driver(chunks=[b"\x00\x00\x01\x65IDR"])
-        self._run(driver, output=b"\xff\xd8jpeg\xff\xd9")
+        self._run(driver, output=mjpeg_frame())
         self.assertTrue(driver.closed)
         self.assertTrue(driver.stopped)
 
     def test_frames_reach_the_consumer(self):
         driver = self._Driver(chunks=[b"\x00\x00\x01\x65IDR"])
-        frames, _process = self._run(driver, output=b"\xff\xd8one\xff\xd9\xff\xd8two\xff\xd9")
+        frames, _process = self._run(
+            driver, output=mjpeg_frame(b"one") + mjpeg_frame(b"two")
+        )
         self.assertEqual(len(frames), 2)
         self.assertTrue(all(frame.data.startswith(b"\xff\xd8") for frame in frames))
 
@@ -1032,3 +1055,443 @@ class JpegDimensionTests(TestCase):
     def test_junk_yields_nothing_rather_than_raising(self):
         for payload in (b"", b"\xff\xd8", b"not a jpeg at all", b"\xff\xd8\xff\xc0\x00"):
             self.assertEqual(telemetry.jpeg_dimensions(payload), (0, 0))
+
+
+@override_settings(
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "surveillance-breaker-tests",
+        }
+    }
+)
+class RecorderCircuitBreakerTests(TestCase):
+    """The guard against 2026-09-08.
+
+    A shop switched its cameras on, the DVR did not answer, and the live view
+    returned 5xx 18,160 times over three days — each one burning a six-second
+    connect timeout on a threadpool the tills share. These prove the breaker
+    stops dialling, and just as importantly that it does not stop dialling for
+    the wrong reasons.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+        cache.clear()
+        # The module-level broker keeps a live stream alive per key, so without
+        # a fresh one a test that opened a working stream would hand the next
+        # test its frames and the driver would never be dialled at all.
+        isolated = FrameBroker()
+        patcher = patch.object(views_module, "broker", isolated)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(isolated.shutdown)
+        self.client = APIClient()
+        user_model = get_user_model()
+        self.manager = user_model.objects.create_user(
+            username="breaker-manager", password="pass1234"
+        )
+        self.manager.groups.add(
+            *self.manager.groups.model.objects.filter(name=MANAGER_GROUP)
+        )
+        self.client.force_authenticate(self.manager)
+        self.recorder = Recorder.objects.create(
+            host="10.0.0.44",
+            username="admin",
+            password="secret",
+            detected_brand="hikvision",
+            status=Recorder.Status.OK,
+        )
+        self.camera = Camera.objects.create(
+            recorder=self.recorder, channel=1, name="الصندوق"
+        )
+        self.other_camera = Camera.objects.create(
+            recorder=self.recorder, channel=2, name="الباب"
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def _live(self, camera=None):
+        return self.client.get(
+            reverse(
+                "surveillance-camera-live", args=[(camera or self.camera).pk]
+            ),
+            {"fps": 1, "smooth": "false"},
+        )
+
+    def test_unreachable_recorder_trips_the_breaker_and_stops_dialling(self):
+        unreachable = RecorderUnreachable("The recorder did not answer in time.")
+        with patch.object(
+            services, "open_driver", side_effect=unreachable
+        ) as open_driver:
+            for _ in range(breaker.FAILURE_THRESHOLD):
+                self.assertEqual(self._live().status_code, 502)
+            dials_before = open_driver.call_count
+
+            response = self._live()
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data["code"], "recorder_cooling_down")
+        self.assertGreater(response.data["retry_after"], 0)
+        self.assertEqual(response["Retry-After"], str(response.data["retry_after"]))
+        # The point of the whole exercise: no fourth connect attempt.
+        self.assertEqual(dials_before, breaker.FAILURE_THRESHOLD)
+
+    def test_one_dead_recorder_trips_once_for_all_its_channels(self):
+        """Sixteen channels behind one unreachable box is one outage, not sixteen."""
+        with patch.object(
+            services, "open_driver", side_effect=RecorderUnreachable("down")
+        ):
+            for _ in range(breaker.FAILURE_THRESHOLD):
+                self._live()
+
+        with patch.object(services, "open_driver") as open_driver:
+            response = self._live(self.other_camera)
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        open_driver.assert_not_called()
+
+    def test_a_working_recorder_is_never_paused(self):
+        with patch.object(services, "open_driver") as open_driver:
+            open_driver.return_value = StubHikvision(target(), {})
+            for _ in range(breaker.FAILURE_THRESHOLD + 3):
+                response = self._live()
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                # Drain so the producer thread unwinds with the test.
+                next(iter(response.streaming_content))
+                response.close()
+
+    def test_a_success_clears_an_in_progress_run_of_failures(self):
+        with patch.object(
+            services, "open_driver", side_effect=RecorderUnreachable("down")
+        ):
+            for _ in range(breaker.FAILURE_THRESHOLD - 1):
+                self._live()
+
+        with patch.object(services, "open_driver") as open_driver:
+            open_driver.return_value = StubHikvision(target(), {})
+            response = self._live()
+            next(iter(response.streaming_content))
+            response.close()
+
+        # The run is over, so the next failure starts counting from one and the
+        # breaker must not open on it. Asked on the other channel of the same
+        # recorder: same breaker, but a stream key the broker has not cached, so
+        # the driver is genuinely dialled rather than served an open stream.
+        with patch.object(
+            services, "open_driver", side_effect=RecorderUnreachable("down")
+        ) as open_driver:
+            response = self._live(self.other_camera)
+        self.assertEqual(response.status_code, 502)
+        open_driver.assert_called_once()
+
+    def test_a_live_stream_that_yields_no_video_trips_the_breaker(self):
+        """The failure that actually happened, and the one the first cut missed.
+
+        A live stream ending with zero frames surfaces as ``StreamError``, not
+        as a connection error — so a breaker that counted only the latter would
+        have watched all 18,160 of them go past.
+        """
+        with patch.object(
+            views_module,
+            "_start_stream",
+            side_effect=StreamError("The recorder did not return any video."),
+        ) as start_stream:
+            for _ in range(breaker.FAILURE_THRESHOLD):
+                self.assertEqual(self._live().status_code, 502)
+            attempts_before = start_stream.call_count
+
+            response = self._live()
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data["code"], "recorder_cooling_down")
+        self.assertEqual(attempts_before, breaker.FAILURE_THRESHOLD)
+
+    def test_playback_with_no_footage_in_the_window_pauses_nothing(self):
+        """Scrubbing into a gap is a normal answer, not an outage.
+
+        Same exception class as the live failure above, deliberately treated
+        differently: the box replied, it simply has nothing recorded then.
+        Letting that pause live view would take working cameras down whenever
+        someone dragged the timeline past the end of a recording.
+        """
+        playback = reverse(
+            "surveillance-camera-playback", args=[self.camera.pk]
+        )
+        window = {
+            "start": "2026-09-07T12:00:00Z",
+            "end": "2026-09-07T12:00:30Z",
+        }
+        with patch.object(transcode, "ffmpeg_available", return_value=True), patch.object(
+            views_module,
+            "_start_stream",
+            side_effect=StreamError("The recorder returned no footage for that time."),
+        ):
+            for _ in range(breaker.FAILURE_THRESHOLD + 2):
+                self.assertEqual(
+                    self.client.get(playback, window).status_code,
+                    status.HTTP_404_NOT_FOUND,
+                )
+
+        with patch.object(services, "open_driver") as open_driver:
+            open_driver.return_value = StubHikvision(target(), {})
+            response = self._live()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        next(iter(response.streaming_content))
+        response.close()
+
+    def test_cooldown_lengthens_while_the_recorder_stays_down(self):
+        first = breaker.cooldown_for(breaker.FAILURE_THRESHOLD)
+        later = breaker.cooldown_for(breaker.FAILURE_THRESHOLD + 3)
+        self.assertEqual(first, breaker.INITIAL_COOLDOWN_SECONDS)
+        self.assertGreater(later, first)
+        self.assertLessEqual(
+            breaker.cooldown_for(breaker.FAILURE_THRESHOLD + 50),
+            breaker.MAX_COOLDOWN_SECONDS,
+        )
+
+    def test_reset_lets_a_repaired_recorder_be_used_immediately(self):
+        with patch.object(
+            services, "open_driver", side_effect=RecorderUnreachable("down")
+        ):
+            for _ in range(breaker.FAILURE_THRESHOLD):
+                self._live()
+        self.assertEqual(self._live().status_code, 503)
+
+        breaker.reset(self.recorder.pk)
+
+        with patch.object(services, "open_driver") as open_driver:
+            open_driver.return_value = StubHikvision(target(), {})
+            response = self._live()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        next(iter(response.streaming_content))
+        response.close()
+
+    def test_editing_a_recorder_clears_its_cooldown(self):
+        """The address may be exactly what was just corrected."""
+        with patch.object(
+            services, "open_driver", side_effect=RecorderUnreachable("down")
+        ):
+            for _ in range(breaker.FAILURE_THRESHOLD):
+                self._live()
+        self.assertEqual(self._live().status_code, 503)
+
+        # Saving a recorder re-probes it; stubbed so the test neither reaches the
+        # network nor waits out a connect timeout.
+        with patch.object(
+            services,
+            "probe_recorder",
+            return_value=services.ConnectionResult(
+                info=None, channels=[], error="stubbed"
+            ),
+        ):
+            response = self.client.patch(
+                reverse("surveillance-recorder-detail", args=[self.recorder.pk]),
+                {"host": "10.0.0.45"},
+                format="json",
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        with patch.object(services, "open_driver") as open_driver:
+            open_driver.return_value = StubHikvision(target(), {})
+            live = self._live()
+        self.assertEqual(live.status_code, status.HTTP_200_OK)
+        next(iter(live.streaming_content))
+        live.close()
+
+    def test_a_broken_cache_fails_open(self):
+        """A breaker that cannot read its own state must still let the shop try."""
+        with patch.object(
+            breaker.cache, "get", side_effect=RuntimeError("redis is down")
+        ), patch.object(services, "open_driver") as open_driver:
+            open_driver.return_value = StubHikvision(target(), {})
+            response = self._live()
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        next(iter(response.streaming_content))
+        response.close()
+
+
+class JpegDemuxTests(SimpleTestCase):
+    """Where the frames on a wall come from.
+
+    Every live and playback path funnels through ``_jpeg_frames``, so a framing
+    mistake here is not one camera's problem — it is every camera, at every
+    quality, which is exactly how it was reported from the field after 0.5.2.
+    """
+
+    @staticmethod
+    def segment(marker: int, payload: bytes) -> bytes:
+        return bytes([0xFF, marker]) + (len(payload) + 2).to_bytes(2, "big") + payload
+
+    @classmethod
+    def frame(cls, *, table: bytes = b"\x10" * 8, entropy: bytes = b"scan") -> bytes:
+        return b"".join(
+            [
+                b"\xff\xd8",
+                cls.segment(0xDB, table),
+                cls.segment(0xDA, b"\x01\x00"),
+                entropy,
+                b"\xff\xd9",
+            ]
+        )
+
+    def test_a_marker_inside_a_quantization_table_does_not_end_the_frame(self):
+        """The grey-pixel bug, exactly.
+
+        Quantization tables are raw bytes with no stuffing, so a table holding
+        255 next to 217 contains a literal end-of-image marker. Scanning for
+        ``FFD9`` cut the frame there and handed the decoder a header with no
+        image behind it, which paints flat grey.
+        """
+        frame = self.frame(table=b"\x10\x10\xff\xd9\x10\x10")
+        self.assertLess(
+            frame.find(b"\xff\xd9") + 2,
+            len(frame),
+            "the fixture must actually contain an early FFD9",
+        )
+
+        self.assertEqual(_jpeg_frame_end(bytearray(frame)), len(frame))
+
+    def test_stuffed_bytes_and_restart_markers_survive_the_scan(self):
+        """Inside entropy data ``FF00`` is a literal 0xFF and ``FFD0``-``FFD7``
+        are restart markers. Neither ends the image."""
+        frame = self.frame(entropy=b"a\xff\x00b\xff\xd0c\xff\x00")
+
+        self.assertEqual(_jpeg_frame_end(bytearray(frame)), len(frame))
+
+    def test_a_frame_still_arriving_is_reported_incomplete_not_emitted(self):
+        frame = self.frame()
+        for cut in (2, 6, len(frame) - 3, len(frame) - 1):
+            with self.subTest(cut=cut):
+                self.assertEqual(_jpeg_frame_end(bytearray(frame[:cut])), -1)
+
+    def test_two_frames_in_one_read_are_split_at_the_right_place(self):
+        first = self.frame(table=b"\x10\xff\xd9\x10")
+        second = self.frame(entropy=b"\xff\x00zz")
+        buffer = bytearray(first + second)
+
+        end = _jpeg_frame_end(buffer)
+        self.assertEqual(end, len(first))
+        del buffer[:end]
+        self.assertEqual(_jpeg_frame_end(buffer), len(second))
+
+    def test_rubbish_where_a_marker_belongs_is_refused_rather_than_emitted(self):
+        # A resync point: better to drop this and hunt the next SOI than to ship
+        # a frame we already know the decoder cannot finish.
+        self.assertEqual(_jpeg_frame_end(bytearray(b"\xff\xd8zzzz")), -2)
+        self.assertEqual(_jpeg_frame_end(bytearray(b"not a jpeg")), -2)
+
+
+@override_settings(
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "surveillance-capability-tests",
+        }
+    }
+)
+class CapabilityRoutingTests(TestCase):
+    """Never ask a recorder a question its firmware cannot answer.
+
+    A Xiongmai box has no still-image endpoint. The driver has always said so —
+    ``supports_snapshot = False`` — but nothing consulted it, so any client
+    asking for the snapshot path got routed onto hardware that cannot serve it.
+    It failed every time, six seconds per attempt: 18,160 failures in three days
+    at one shop, 82.9% of the backend's entire request time, and not one frame
+    to show for it.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+        cache.clear()
+        self.client = APIClient()
+        user_model = get_user_model()
+        self.manager = user_model.objects.create_user(
+            username="caps-manager", password="pass1234"
+        )
+        self.manager.groups.add(
+            *self.manager.groups.model.objects.filter(name=MANAGER_GROUP)
+        )
+        self.client.force_authenticate(self.manager)
+        self.recorder = Recorder.objects.create(
+            host="10.0.0.77",
+            username="admin",
+            password="secret",
+            detected_brand="xiongmai",
+            status=Recorder.Status.OK,
+        )
+        self.camera = Camera.objects.create(
+            recorder=self.recorder, channel=1, name="الصندوق"
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_the_recorder_that_started_this_declares_no_snapshot(self):
+        self.assertFalse(self.recorder.driver_capabilities["snapshot"])
+
+    def test_a_snapshotless_recorder_is_routed_to_rtsp_even_when_asked_not_to(self):
+        """`smooth=false` asks for a path this hardware does not have. Honouring
+        it would only choose a guaranteed failure, so the policy overrides it."""
+        smooth, _fps = resolve_live_stream(
+            None, "false", ffmpeg_available=True, supports_snapshot=False
+        )
+        self.assertTrue(smooth)
+
+    def test_a_recorder_with_snapshots_still_honours_the_request(self):
+        smooth, fps = resolve_live_stream(
+            "8", "false", ffmpeg_available=True, supports_snapshot=True
+        )
+        self.assertFalse(smooth)
+        self.assertLessEqual(fps, MAX_SNAPSHOT_FPS)
+
+    def test_no_snapshot_and_no_ffmpeg_is_refused_at_once(self):
+        """The honest answer, immediately — not six seconds of pretending."""
+        with patch.object(transcode, "ffmpeg_available", return_value=False), patch.object(
+            services, "open_driver"
+        ) as open_driver:
+            response = self.client.get(
+                reverse("surveillance-camera-live", args=[self.camera.pk]),
+                {"fps": 1},
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertIn("ffmpeg", response.data["detail"])
+        open_driver.assert_not_called()
+
+    def test_the_poster_frame_refuses_without_dialling_the_box(self):
+        with patch.object(services, "open_driver") as open_driver:
+            response = self.client.get(
+                reverse("surveillance-camera-snapshot", args=[self.camera.pk])
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_501_NOT_IMPLEMENTED)
+        open_driver.assert_not_called()
+
+    def test_a_capability_refusal_costs_no_retries_and_no_sleeps(self):
+        """The 6,017 ms in the field was 1s + 2s + 3s of backoff, spent
+        rediscovering a fact the driver already knew."""
+
+        class _NoSnapshots:
+            def __init__(self):
+                self.calls = 0
+                self.closed = False
+
+            def snapshot(self, channel, *, quality):
+                self.calls += 1
+                raise RecorderCapabilityError("no snapshot endpoint")
+
+            def close(self):
+                self.closed = True
+
+        driver = _NoSnapshots()
+        source = SnapshotSource(driver, channel=1, fps=2)
+        started = time.monotonic()
+
+        with self.assertRaises(StreamError):
+            next(iter(source.frames(lambda: False)))
+
+        self.assertEqual(driver.calls, 1, "asked once, not four times")
+        self.assertLess(time.monotonic() - started, 0.5, "and without sleeping")
+        self.assertTrue(driver.closed)

@@ -31,6 +31,8 @@ from .drivers.xiongmai import (
     DVRIP_PORT,
     FILE_SEARCH,
     LOGIN,
+    MAX_SEARCH_PAGES,
+    SEARCH_PAGE_SIZE,
     PLAYBACK,
     SYSINFO,
     TAIL,
@@ -700,3 +702,110 @@ class MediaDeframerStatsTests(TestCase):
         deframer = MediaDeframer()
         deframer.feed(b"\x00\x00\x00\x01\x67SPS")
         self.assertEqual(deframer.stats, {})
+
+
+class XiongmaiSearchPaginationTests(TestCase):
+    """``OPFileQuery`` answers at most 64 rows and then reports success.
+
+    A single query therefore truncates a busy day silently, and the caller
+    cannot tell a short answer from a complete one — which for invoice-linked
+    footage means telling a shop "nothing was recorded then" about a sale the
+    recorder has perfectly good video of.
+    """
+
+    def setUp(self):
+        self.start = datetime(2026, 9, 8, 8, 0, tzinfo=dt_timezone.utc)
+        self.end = self.start + timedelta(hours=12)
+
+    @staticmethod
+    def page(first_minute: int, count: int) -> dict:
+        """``count`` consecutive one-minute recordings, oldest first."""
+        rows = []
+        for index in range(count):
+            minute = first_minute + index
+            begins = datetime(2026, 9, 8, 8, 0) + timedelta(minutes=minute)
+            ends = begins + timedelta(minutes=1)
+            rows.append(
+                {
+                    "BeginTime": begins.strftime("%Y-%m-%d %H:%M:%S"),
+                    "EndTime": ends.strftime("%Y-%m-%d %H:%M:%S"),
+                    "FileLength": "1024",
+                    "FileName": f"/idea0/clip-{minute:04d}.h264",
+                }
+            )
+        return {"Ret": 100, "OPFileQuery": rows}
+
+    def test_a_full_page_is_followed_up_until_the_box_runs_out(self):
+        pages = [
+            self.page(0, SEARCH_PAGE_SIZE),
+            self.page(SEARCH_PAGE_SIZE, SEARCH_PAGE_SIZE),
+            self.page(SEARCH_PAGE_SIZE * 2, 5),
+        ]
+        served = []
+
+        def answer(_payload):
+            served.append(len(served))
+            return pages[min(len(served) - 1, len(pages) - 1)]
+
+        driver, fake, patcher = driver_with({FILE_SEARCH: answer})
+        try:
+            segments = driver.search_recordings(1, self.start, self.end)
+        finally:
+            patcher.stop()
+
+        self.assertEqual(len(segments), SEARCH_PAGE_SIZE * 2 + 5)
+        # Every page after the first must have moved BeginTime forward.
+        queries = [c for c in fake.sent if c["id"] == FILE_SEARCH]
+        self.assertEqual(len(queries), 3)
+        begins = [q["payload"]["OPFileQuery"]["BeginTime"] for q in queries]
+        self.assertEqual(begins, sorted(begins))
+        self.assertNotEqual(begins[0], begins[1])
+
+    def test_a_short_first_page_asks_only_once(self):
+        driver, fake, patcher = driver_with({FILE_SEARCH: self.page(0, 3)})
+        try:
+            segments = driver.search_recordings(1, self.start, self.end)
+        finally:
+            patcher.stop()
+
+        self.assertEqual(len(segments), 3)
+        self.assertEqual(len([c for c in fake.sent if c["id"] == FILE_SEARCH]), 1)
+
+    def test_a_box_that_ignores_begintime_cannot_spin_forever(self):
+        """Some firmware returns the same full page whatever it is asked.
+
+        Two independent guards catch it — the page adds nothing new, and the
+        page count is capped — because an unbounded search loop against a DVR is
+        how this feature would take a recorder down instead of reading from it.
+        """
+        driver, fake, patcher = driver_with(
+            {FILE_SEARCH: self.page(0, SEARCH_PAGE_SIZE)}
+        )
+        try:
+            segments = driver.search_recordings(1, self.start, self.end)
+        finally:
+            patcher.stop()
+
+        self.assertEqual(len(segments), SEARCH_PAGE_SIZE, "de-duplicated")
+        queries = [c for c in fake.sent if c["id"] == FILE_SEARCH]
+        self.assertLessEqual(len(queries), MAX_SEARCH_PAGES)
+        self.assertLessEqual(len(queries), 2, "and it notices on the second page")
+
+    def test_segments_come_back_in_time_order(self):
+        pages = [self.page(10, SEARCH_PAGE_SIZE), self.page(0, 2)]
+        served = []
+
+        def answer(_payload):
+            served.append(len(served))
+            return pages[min(len(served) - 1, len(pages) - 1)]
+
+        driver, _fake, patcher = driver_with({FILE_SEARCH: answer})
+        try:
+            segments = driver.search_recordings(1, self.start, self.end)
+        finally:
+            patcher.stop()
+
+        self.assertEqual(
+            [segment.start for segment in segments],
+            sorted(segment.start for segment in segments),
+        )

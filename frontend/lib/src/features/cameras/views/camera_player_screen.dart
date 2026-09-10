@@ -247,12 +247,23 @@ class _CameraPlayerScreenState extends State<CameraPlayerScreen> {
             ? _Message(text: viewModel.error)
             : const PointySpinner(strokeWidth: 2),
       ),
-      errorBuilder: (context, error) => Center(
-        child: _Message(
-          text: viewModel.isLive
-              ? l10n.cameraStreamFailedLabel
-              : l10n.cameraPlaybackNoFootageBody,
-          detail: '$error',
+      errorBuilder: (context, error, retry) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _Message(
+              text: viewModel.isLive
+                  ? l10n.cameraStreamFailedLabel
+                  : l10n.cameraPlaybackNoFootageBody,
+              detail: '$error',
+            ),
+            if (viewModel.isLive)
+              TextButton(
+                onPressed: retry,
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+                child: Text(l10n.retryButton),
+              ),
+          ],
         ),
       ),
     );

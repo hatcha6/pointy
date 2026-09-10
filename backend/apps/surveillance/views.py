@@ -36,7 +36,7 @@ from apps.core.permissions import HasPointyPermission
 from apps.core.streaming import aiter_in_thread
 from apps.sales.models import Order
 
-from . import services, transcode
+from . import breaker, services, transcode
 from . import telemetry
 from .drivers import RecorderError, StreamQuality
 from .models import Camera, Recorder
@@ -105,16 +105,34 @@ def _parse_int(raw, default, *, minimum, maximum):
     return max(minimum, min(maximum, value))
 
 
-def resolve_live_stream(requested_fps, requested_smooth, *, ffmpeg_available):
+def resolve_live_stream(
+    requested_fps,
+    requested_smooth,
+    *,
+    ffmpeg_available,
+    supports_snapshot=True,
+):
     """Which path a live request takes, and at what rate it may run.
 
-    Pulled out of the view because it is the whole frame-rate policy in four
+    Pulled out of the view because it is the whole frame-rate policy in a few
     lines, and a policy worth stating is a policy worth testing: the RTSP path
     is the default wherever ffmpeg exists and is capped only by what the client
     asks for, while the snapshot fallback is capped at the rate an HTTP round
     trip per frame can actually sustain.
+
+    ``supports_snapshot`` is the correction the field forced. A Xiongmai box has
+    no still-image endpoint at all — the driver has always declared that — but
+    nothing consulted the declaration, so a client asking `smooth=false` (or any
+    client at all on a server without ffmpeg) was routed down a path the
+    recorder cannot serve. It failed every single time, six seconds at a time,
+    18,160 times in three days. A recorder that cannot answer a question should
+    never be asked it, and the app should work that out rather than the shop.
     """
     fps = _parse_int(requested_fps, DEFAULT_LIVE_FPS, minimum=1, maximum=MAX_FPS)
+    if not supports_snapshot:
+        # No fallback exists on this hardware: RTSP or nothing. Honouring
+        # `smooth=false` here would only choose a guaranteed failure.
+        return True, fps
     smooth = bool(ffmpeg_available) and requested_smooth != "false"
     if not smooth:
         fps = min(fps, MAX_SNAPSHOT_FPS)
@@ -261,6 +279,25 @@ def _stream_error_response(exc, *, code=status.HTTP_502_BAD_GATEWAY):
     return Response({"detail": str(exc), "code": "stream_failed"}, status=code)
 
 
+def _breaker_response(exc):
+    """503 with ``Retry-After``, so the client can back off on our authority.
+
+    A distinct ``code`` from ``stream_failed`` on purpose: this is not another
+    failed dial, it is us declining to dial, and the tile should say so rather
+    than showing the same "camera unavailable" it shows for a bad password.
+    """
+    response = Response(
+        {
+            "detail": str(exc),
+            "code": "recorder_cooling_down",
+            "retry_after": exc.retry_after,
+        },
+        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+    )
+    response["Retry-After"] = str(exc.retry_after)
+    return response
+
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -289,6 +326,10 @@ class RecorderViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         recorder = serializer.save()
+        # Address, port or credentials may have just been corrected, so whatever
+        # tripped the breaker no longer describes this recorder. Cleared before
+        # the re-probe so the shop's next look at the wall is a real attempt.
+        breaker.reset(recorder.pk)
         self._connect(recorder)
 
     def _connect(self, recorder):
@@ -344,6 +385,10 @@ class RecorderViewSet(viewsets.ModelViewSet):
     def sync(self, request, pk=None):
         """Re-probe a saved recorder and reconcile its channel list."""
         recorder = self.get_object()
+        # An explicit re-probe is a person saying "try it now" — usually right
+        # after fixing the thing that broke. Clear any cooldown first so the
+        # answer they get is about the recorder, not about our backoff.
+        breaker.reset(recorder.pk)
         result = services.probe_recorder(recorder.as_target(), recorder.brand)
         services.apply_connection_result(recorder, result)
         recorder = self.get_queryset().get(pk=recorder.pk)
@@ -459,11 +504,24 @@ class CameraLiveStreamView(_CameraViewMixin, APIView):
         quality = StreamQuality.normalize(
             request.query_params.get("quality") or camera.live_quality
         )
+        capabilities = camera.recorder.driver_capabilities
         smooth, fps = resolve_live_stream(
             request.query_params.get("fps"),
             request.query_params.get("smooth"),
             ffmpeg_available=transcode.ffmpeg_available(),
+            supports_snapshot=capabilities["snapshot"],
         )
+        if smooth and not transcode.ffmpeg_available():
+            # The only path this recorder has, and the server cannot walk it.
+            # Say so now: the alternative was a six-second wait per attempt,
+            # forever, with a generic failure at the end of each one.
+            return _stream_error_response(
+                transcode.TranscodeUnavailable(
+                    "This recorder has no still-image endpoint, so its live view "
+                    "needs ffmpeg on the server."
+                ),
+                code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         width = _parse_int(request.query_params.get("width"), 0, minimum=0, maximum=1920)
 
         mode = "live-rtsp" if smooth else "live-snap"
@@ -489,17 +547,29 @@ class CameraLiveStreamView(_CameraViewMixin, APIView):
         )
 
         try:
+            breaker.check(camera.recorder_id)
+        except breaker.RecorderCircuitOpen as exc:
+            return _breaker_response(exc)
+
+        try:
             started = _start_stream(key, build_source, report=report)
         except RecorderError as exc:
             _record_failure(report, exc)
+            breaker.note_failure(camera.recorder_id, exc)
             return _stream_error_response(exc)
         except transcode.TranscodeUnavailable as exc:
             _record_failure(report, exc)
             return _stream_error_response(exc, code=status.HTTP_503_SERVICE_UNAVAILABLE)
         except StreamError as exc:
+            # On LIVE this means the camera produced no video at all, which is
+            # exactly the loop the breaker exists to stop — 18,160 of these in
+            # three days at one shop. Playback treats the same class as a normal
+            # "nothing recorded then" and deliberately does not pause anything.
             _record_failure(report, exc)
+            breaker.note_failure(camera.recorder_id, exc)
             return _stream_error_response(exc)
 
+        breaker.note_success(camera.recorder_id)
         Camera.objects.filter(pk=camera.pk).update(
             last_frame_at=timezone.now(), status=Camera.Status.ONLINE
         )
@@ -592,14 +662,23 @@ class CameraPlaybackStreamView(_CameraViewMixin, APIView):
         )
 
         try:
+            breaker.check(camera.recorder_id)
+        except breaker.RecorderCircuitOpen as exc:
+            return _breaker_response(exc)
+
+        try:
             started = _start_stream(key, build_source, report=report)
         except RecorderError as exc:
             _record_failure(report, exc)
+            breaker.note_failure(camera.recorder_id, exc)
             return _stream_error_response(exc)
         except transcode.TranscodeUnavailable as exc:
             return _stream_error_response(exc, code=status.HTTP_503_SERVICE_UNAVAILABLE)
         except StreamError as exc:
+            # Not a breaker failure: the box answered, it simply has no footage
+            # for that window. Scrubbing into a gap must not shut live down.
             return _stream_error_response(exc, code=status.HTTP_404_NOT_FOUND)
+        breaker.note_success(camera.recorder_id)
         return _stream_response(request, started.frames())
 
 
@@ -614,15 +693,34 @@ class CameraSnapshotView(_CameraViewMixin, APIView):
         quality = StreamQuality.normalize(
             request.query_params.get("quality") or camera.live_quality
         )
+        if not camera.recorder.driver_capabilities["snapshot"]:
+            # Structural, not transient: this firmware family has no still-image
+            # endpoint. Answering instantly beats dialling a box that will
+            # refuse, and beats the poster frame retrying forever behind it.
+            return _stream_error_response(
+                RecorderError(
+                    "This recorder has no still-image endpoint; its live view "
+                    "needs ffmpeg on the server."
+                ),
+                code=status.HTTP_501_NOT_IMPLEMENTED,
+            )
+
+        try:
+            breaker.check(camera.recorder_id)
+        except breaker.RecorderCircuitOpen as exc:
+            return _breaker_response(exc)
+
         driver = None
         try:
             driver = services.open_driver(camera.recorder)
             payload = driver.snapshot(camera.channel, quality=quality)
         except RecorderError as exc:
+            breaker.note_failure(camera.recorder_id, exc)
             return _stream_error_response(exc)
         finally:
             if driver is not None:
                 driver.close()
+        breaker.note_success(camera.recorder_id)
         response = HttpResponse(payload, content_type="image/jpeg")
         response["Cache-Control"] = "no-store"
         return response

@@ -30,7 +30,11 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 from django.conf import settings
 
 from . import transcode
-from .drivers.base import RecorderError, StreamQuality
+from .drivers.base import (
+    RecorderCapabilityError,
+    RecorderError,
+    StreamQuality,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +131,13 @@ class SnapshotSource:
                 try:
                     payload = self.driver.snapshot(self.channel, quality=self.quality)
                     consecutive_failures = 0
+                except RecorderCapabilityError as exc:
+                    # Nothing to wait for: this recorder has no snapshot
+                    # endpoint and will not grow one between retries. The old
+                    # code spent 1s + 2s + 3s discovering that on every single
+                    # attempt — six seconds per failure, 18,160 times in three
+                    # days at one shop, each holding a worker thread.
+                    raise StreamError(str(exc)) from exc
                 except RecorderError as exc:
                     consecutive_failures += 1
                     # A single miss is a busy encoder, not an outage. Give up
@@ -348,21 +359,110 @@ def _jpeg_frames(process, should_stop, *, seconds_per_frame, anchor, on_empty=No
         if len(buffer) > MAX_FRAME_BYTES:
             raise StreamError("The video stream sent an unreadable frame.")
         while True:
-            end = buffer.find(JPEG_EOI)
-            if end == -1:
-                break
-            payload = bytes(buffer[: end + 2])
-            del buffer[: end + 2]
-            start = payload.find(JPEG_SOI)
+            start = buffer.find(JPEG_SOI)
             if start == -1:
+                # Nothing frame-shaped yet. Keep the last byte in case it is the
+                # 0xFF of an SOI split across two reads.
+                if len(buffer) > 1:
+                    del buffer[: len(buffer) - 1]
+                break
+            if start:
+                # Leading rubbish before the first SOI (ffmpeg banner text on a
+                # bad invocation, or the tail of a frame we resynced past).
+                del buffer[:start]
+            end = _jpeg_frame_end(buffer)
+            if end == _JPEG_INCOMPLETE:
+                break
+            if end == _JPEG_CORRUPT:
+                # Drop this SOI and look for the next one rather than emitting a
+                # frame we know is malformed: a half-decoded JPEG paints as grey
+                # blocks, which reads to a shop as a broken camera.
+                del buffer[:2]
                 continue
+            payload = bytes(buffer[:end])
+            del buffer[:end]
             sequence += 1
             captured_at = (
                 anchor + timedelta(seconds=(sequence - 1) * seconds_per_frame)
                 if anchor is not None
                 else datetime.now(dt_timezone.utc)
             )
-            yield Frame(data=payload[start:], sequence=sequence, captured_at=captured_at)
+            yield Frame(data=payload, sequence=sequence, captured_at=captured_at)
+
+
+#: Sentinels for :func:`_jpeg_frame_end`. Negative so they cannot be mistaken
+#: for an offset.
+_JPEG_INCOMPLETE = -1
+_JPEG_CORRUPT = -2
+
+#: Markers that stand alone — no length, no payload. RSTn punctuate entropy
+#: data; TEM is a temporary-use marker some encoders emit.
+_JPEG_STANDALONE = frozenset({0x01, *range(0xD0, 0xD8)})
+
+
+def _jpeg_frame_end(buffer) -> int:
+    """Index just past this frame's EOI, or a sentinel.
+
+    Walks JPEG's marker structure rather than scanning for ``FFD9``, because
+    ``FFD9`` is not rare in a JPEG that has not ended. Quantization and Huffman
+    tables are raw byte arrays with no stuffing, so a table holding 255 followed
+    by 217 contains a perfectly good end-of-image marker in the middle of the
+    header; APPn segments can carry a whole nested JPEG (an EXIF thumbnail),
+    complete with its own EOI. Cutting the frame there hands the decoder a
+    truncated image, and a truncated JPEG paints its undecoded macroblocks flat
+    grey — the "grey pixels" every camera showed at both qualities.
+
+    ``buffer`` must begin at an SOI.
+    """
+    n = len(buffer)
+    if n < 2 or buffer[0] != 0xFF or buffer[1] != 0xD8:
+        return _JPEG_CORRUPT
+    i = 2
+    while True:
+        # Segments are separated by a marker, optionally preceded by 0xFF fill.
+        if i >= n:
+            return _JPEG_INCOMPLETE
+        if buffer[i] != 0xFF:
+            return _JPEG_CORRUPT
+        while i < n and buffer[i] == 0xFF and i + 1 < n and buffer[i + 1] == 0xFF:
+            i += 1
+        if i + 1 >= n:
+            return _JPEG_INCOMPLETE
+        marker = buffer[i + 1]
+        i += 2
+        if marker == 0xD9:
+            return i
+        if marker in _JPEG_STANDALONE:
+            continue
+        if i + 2 > n:
+            return _JPEG_INCOMPLETE
+        length = (buffer[i] << 8) | buffer[i + 1]
+        if length < 2:
+            return _JPEG_CORRUPT
+        segment_end = i + length
+        if segment_end > n:
+            return _JPEG_INCOMPLETE
+        if marker != 0xDA:
+            i = segment_end
+            continue
+        # Start of scan: entropy-coded data runs until the next real marker.
+        # Inside it a literal 0xFF is stuffed as 0xFF00, and restart markers are
+        # expected punctuation — neither ends the frame.
+        j = segment_end
+        while True:
+            while j < n and buffer[j] != 0xFF:
+                j += 1
+            if j + 1 >= n:
+                return _JPEG_INCOMPLETE
+            following = buffer[j + 1]
+            if following == 0x00 or following in _JPEG_STANDALONE:
+                j += 2
+                continue
+            if following == 0xFF:
+                j += 1
+                continue
+            i = j
+            break
 
 
 def _humanize_ffmpeg_error(raw: str) -> str:

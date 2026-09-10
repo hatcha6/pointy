@@ -73,6 +73,19 @@ class RecorderAuthError(RecorderError):
     code = "auth"
 
 
+class RecorderCapabilityError(RecorderError):
+    """This firmware family cannot do this at all.
+
+    Structural, not transient — retrying, backing off or tripping a circuit
+    breaker are all wasted on it, and a caller that treats it as a failure to
+    recover from will loop forever. The right answer is to stop asking: route
+    around the missing capability where an alternative exists, and say plainly
+    that it does not where none does.
+    """
+
+    code = "unsupported"
+
+
 @dataclass(frozen=True)
 class DeviceInfo:
     brand: str = ""
