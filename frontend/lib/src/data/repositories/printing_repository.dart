@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -446,7 +447,7 @@ class PrintingRepository {
           endpoint: config.endpoint,
         );
       });
-      await _reportPrintAudit(
+      _reportPrintAudit(
         auditEvent,
         _auditStatusForPrintResult(result),
         message: result.message,
@@ -514,7 +515,7 @@ class PrintingRepository {
             ),
             config,
           );
-    await _reportPrintAudit(
+    _reportPrintAudit(
       auditEvent,
       _auditStatusForPrintResult(result),
       message: result.message,
@@ -567,7 +568,7 @@ class PrintingRepository {
           );
 
     if (auditEvent != null) {
-      await _reportPrintAudit(
+      _reportPrintAudit(
         auditEvent,
         _auditStatusForPrintResult(result),
         message: result.message,
@@ -619,7 +620,7 @@ class PrintingRepository {
       shopSettings: shopSettings,
       shopLogoBytes: shopLogoBytes,
     );
-    await _reportPrintAudit(auditEvent, _auditStatusForDocumentAction(status));
+    _reportPrintAudit(auditEvent, _auditStatusForDocumentAction(status));
     return status;
   }
 
@@ -640,7 +641,7 @@ class PrintingRepository {
       shopSettings: shopSettings,
       shopLogoBytes: shopLogoBytes,
     );
-    await _reportPrintAudit(auditEvent, _auditStatusForDocumentAction(status));
+    _reportPrintAudit(auditEvent, _auditStatusForDocumentAction(status));
     return status;
   }
 
@@ -735,7 +736,26 @@ class PrintingRepository {
     }
   }
 
-  Future<void> _reportPrintAudit(
+  /// Closes an audit row with what the printer actually did.
+  ///
+  /// Deliberately **not** awaited: nothing downstream reads the result, the
+  /// failure is already swallowed, and the caller is on the checkout path. It
+  /// used to be awaited, and the field export priced that at **92 ms on every
+  /// sale** — the cashier holding a receipt while the app told the server about
+  /// a receipt it had already printed. Bookkeeping runs behind the shop, not in
+  /// front of it.
+  ///
+  /// Returning `void` rather than an ignored `Future` so a future caller cannot
+  /// quietly put it back on the critical path by awaiting it.
+  void _reportPrintAudit(
+    PrintAuditEvent auditEvent,
+    PrintAuditStatus status, {
+    String message = '',
+  }) {
+    unawaited(_sendPrintAuditReport(auditEvent, status, message: message));
+  }
+
+  Future<void> _sendPrintAuditReport(
     PrintAuditEvent auditEvent,
     PrintAuditStatus status, {
     String message = '',
