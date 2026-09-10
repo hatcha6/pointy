@@ -828,7 +828,16 @@ class RegisterSessionViewSet(
         session = self.get_object()
         if session.status != RegisterSession.Status.OPEN:
             return Response(
-                {"detail": "Register session is already closed."},
+                {
+                    "detail": "Register session is already closed.",
+                    # Machine-readable because the client has to *branch* on
+                    # this, not just print it: a till holding a stale session id
+                    # should re-sync and carry on, and it cannot match on an
+                    # English sentence in a shop running Arabic. On 5 September
+                    # 2026 a cashier met this 21 times in 35 seconds at 02:13
+                    # because nothing distinguished it from any other refusal.
+                    "code": "register_session_already_closed",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -877,7 +886,16 @@ class RegisterSessionViewSet(
         session = self.get_object()
         if session.status != RegisterSession.Status.OPEN:
             return Response(
-                {"detail": "Register session is already closed."},
+                {
+                    "detail": "Register session is already closed.",
+                    # Machine-readable because the client has to *branch* on
+                    # this, not just print it: a till holding a stale session id
+                    # should re-sync and carry on, and it cannot match on an
+                    # English sentence in a shop running Arabic. On 5 September
+                    # 2026 a cashier met this 21 times in 35 seconds at 02:13
+                    # because nothing distinguished it from any other refusal.
+                    "code": "register_session_already_closed",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

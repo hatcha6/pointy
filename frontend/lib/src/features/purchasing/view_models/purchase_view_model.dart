@@ -25,6 +25,7 @@ import '../../../data/services/local_scoped_json_storage.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/units.dart';
 import '../../../data/models/purchase_cost_warning.dart';
+import '../../../data/services/api_error_detail.dart';
 import 'purchase_suggestion_controller.dart';
 
 /// Add sources that mark the new line as the active line for the arrow-key
@@ -1369,7 +1370,7 @@ class PurchaseViewModel extends ChangeNotifier {
         _touchSubmissionIntent();
       case Error<PurchaseSubmission>(exception: final exception):
         _costWarnings = purchaseCostWarningsFromException(exception);
-        _trackDraftSubmitFailed(supplier);
+        _trackDraftSubmitFailed(supplier, exception);
         break;
     }
 
@@ -1433,7 +1434,9 @@ class PurchaseViewModel extends ChangeNotifier {
   /// Persists edits to the reopened draft order without committing it — the
   /// order stays a draft, ready to be submitted later from its details screen.
   /// Returns an error result (and is a no-op) unless [isEditing].
-  Future<Result<PurchaseOrder>> saveDraft() async {
+  Future<Result<PurchaseOrder>> saveDraft({
+    bool acknowledgeCostWarnings = false,
+  }) async {
     final supplier = _selectedSupplier;
     final orderId = _editingOrderId;
     if (orderId == null ||
@@ -1457,12 +1460,19 @@ class PurchaseViewModel extends ChangeNotifier {
       landedCostAllocationMethod: _landedCostAllocationMethod,
       discountCode: _discountCode,
       extraDiscountAmount: _extraDiscount,
+      acknowledgeCostWarnings: acknowledgeCostWarnings,
     );
     switch (result) {
       case Ok<PurchaseOrder>():
+        _costWarnings = const [];
         _trackDraftSaved(result.value, supplier: supplier);
-      case Error<PurchaseOrder>():
-        _trackDraftSubmitFailed(supplier);
+      case Error<PurchaseOrder>(exception: final exception):
+        // Without this the edit screen had nowhere to read the refusal from and
+        // no way to confirm it: a cost the guard flags made saving an edited
+        // order impossible rather than merely gated. On 4–5 September one shop
+        // hit that wall 41 times across two orders.
+        _costWarnings = purchaseCostWarningsFromException(exception);
+        _trackDraftSubmitFailed(supplier, exception);
     }
 
     _isSubmitting = false;
@@ -2324,11 +2334,19 @@ class PurchaseViewModel extends ChangeNotifier {
     );
   }
 
-  void _trackDraftSubmitFailed(SupplierContact supplier) {
+  /// [error] is what the save actually failed with.
+  ///
+  /// It used to be omitted, and the consequence showed up in the field export:
+  /// 49 `submit_failed` events carrying no status and no reason, against a
+  /// backend that had returned a specific 400 every time. An error event that
+  /// cannot say why is barely an event.
+  void _trackDraftSubmitFailed(SupplierContact supplier, [Object? error]) {
     final analyticsEngine = _analyticsEngine;
     if (analyticsEngine == null) {
       return;
     }
+    final statusCode = apiStatusCode(error);
+    final detail = apiErrorDetail(error);
     unawaited(
       analyticsEngine.track(
         AnalyticsEventDraft.audit(
@@ -2339,6 +2357,13 @@ class PurchaseViewModel extends ChangeNotifier {
           attributes: {
             'supplier_id': supplier.id,
             'supplier_name': supplier.name,
+            'status_code': ?statusCode,
+            'error_code': ?apiErrorCode(error),
+            // The reason, trimmed: enough to group failures in an export
+            // without shipping a paragraph per event.
+            if (detail.isNotEmpty)
+              'reason': detail.length > 200 ? detail.substring(0, 200) : detail,
+            'cost_warning_count': _costWarnings.length,
             'line_count': _draft.length,
             'item_count': _draftItemCount(_draft),
             'draft_total': _draftTotal(_draft),

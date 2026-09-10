@@ -9,6 +9,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/parsing.dart';
 import '../../../core/result.dart';
+import '../../../data/services/api_error_detail.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_unit.dart';
 import '../../../data/models/purchase_submission.dart';
@@ -414,14 +415,42 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
         );
       return;
     }
-    final result = await viewModel.saveDraft();
+    var result = await viewModel.saveDraft();
     if (!context.mounted) {
       return;
     }
 
+    // Saving an edit hits the same cost guard as submitting a new draft, but
+    // until now it had no way past it: no acknowledgement was ever sent, so a
+    // flagged cost made the edit unsavable and the Retry below re-ran the
+    // identical request. One shop hit that wall 41 times across two orders on
+    // 4–5 September 2026. Offer the same choice the draft pane offers.
+    if (result is Error<PurchaseOrder> && viewModel.costWarnings.isNotEmpty) {
+      final confirmed = await showPurchaseCostWarningDialog(
+        context,
+        warnings: viewModel.costWarnings,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      if (!confirmed) {
+        viewModel.clearCostWarnings();
+        return;
+      }
+      result = await viewModel.saveDraft(acknowledgeCostWarnings: true);
+      if (!context.mounted) {
+        return;
+      }
+    }
+
     final message = switch (result) {
       Ok(:final value) => l10n.purchaseDraftSaveSuccess(value.orderNumber),
-      Error() => l10n.purchaseDraftSaveError,
+      // The server said why. Saying it back beats a generic failure the buyer
+      // can only answer by pressing the same button again.
+      Error(:final exception) => switch (apiErrorDetail(exception)) {
+        '' => l10n.purchaseDraftSaveError,
+        final detail => '${l10n.purchaseDraftSaveError}: $detail',
+      },
     };
 
     messenger

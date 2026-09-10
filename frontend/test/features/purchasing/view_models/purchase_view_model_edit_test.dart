@@ -204,6 +204,34 @@ void main() {
     expect(purchase.lastUpdateLines!.single.variant.id, 9);
   });
 
+  test('saveDraft can confirm past a cost warning', () async {
+    // Until this existed the edit path sent no acknowledgement at all, so a
+    // flagged cost made an edited order impossible to save. One shop met that
+    // wall 41 times across two orders on 4–5 September 2026.
+    final catalog = _FakeCatalogRepository({5: boxProduct()});
+    final purchase = _FakePurchaseRepository()..refuseUnacknowledgedCosts = true;
+    final vm = PurchaseViewModel(catalog, purchase);
+
+    await vm.loadOrderForEditing(
+      draftOrder(lines: [orderLine(productId: 5, variantId: 9, unit: 'box')]),
+    );
+
+    final refused = await vm.saveDraft();
+    expect(refused, isA<Error<PurchaseOrder>>());
+    expect(purchase.lastUpdateAcknowledged, isFalse);
+    // The screen needs these to offer the confirm at all.
+    expect(vm.costWarnings, hasLength(1));
+    expect(vm.costWarnings.single.message, 'Cost is above the sale price.');
+    expect(vm.costWarnings.single.blocking, isFalse);
+
+    final confirmed = await vm.saveDraft(acknowledgeCostWarnings: true);
+    expect(confirmed, isA<Ok<PurchaseOrder>>());
+    expect(purchase.lastUpdateAcknowledged, isTrue);
+    expect(purchase.updateCalls, 2);
+    // Cleared, so the dialog does not reappear on the next save.
+    expect(vm.costWarnings, isEmpty);
+  });
+
   test('saveDraft is rejected when not editing', () async {
     final vm = PurchaseViewModel(
       _FakeCatalogRepository(const {}),
@@ -257,6 +285,12 @@ class _FakePurchaseRepository extends PurchaseRepository {
   int? lastUpdateOrderId;
   int? lastUpdateSupplierId;
   List<PurchaseDraftLine>? lastUpdateLines;
+  bool? lastUpdateAcknowledged;
+
+  /// When set, an update that does not acknowledge is refused the way the
+  /// backend's cost guard refuses one.
+  bool refuseUnacknowledgedCosts = false;
+  int updateCalls = 0;
 
   @override
   Future<Result<PurchaseDiscountPreview>> previewDiscounts(
@@ -275,10 +309,25 @@ class _FakePurchaseRepository extends PurchaseRepository {
         LandedCostAllocationMethod.byLineValue,
     String discountCode = '',
     double extraDiscountAmount = 0,
+    bool acknowledgeCostWarnings = false,
   }) async {
+    updateCalls++;
     lastUpdateOrderId = purchaseOrderId;
     lastUpdateSupplierId = supplierId;
     lastUpdateLines = lines;
+    lastUpdateAcknowledged = acknowledgeCostWarnings;
+    if (refuseUnacknowledgedCosts && !acknowledgeCostWarnings) {
+      return Error(
+        const PosApiException(
+          message: 'refused',
+          statusCode: 400,
+          responseBody:
+              '{"cost_warnings":[{"kind":"above_sale_price","blocking":"false",'
+              '"index":0,"product_name":"مستر كرنش","base_unit_cost":"2.4444",'
+              '"reference":"1.00","message":"Cost is above the sale price."}]}',
+        ),
+      );
+    }
     return Ok(
       PurchaseOrder(
         id: purchaseOrderId,

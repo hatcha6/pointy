@@ -222,11 +222,15 @@ class PurchasingApiClient {
   /// landed costs wholesale, recalculating totals.
   Future<PurchaseOrder> updatePurchaseOrder(
     int purchaseOrderId,
-    PurchaseOrderDraft draft,
-  ) async {
+    PurchaseOrderDraft draft, {
+    bool acknowledgeCostWarnings = false,
+  }) async {
     final response = await _session.patch(
       'purchase-orders/$purchaseOrderId/',
-      body: draft.toJson(forUpdate: true),
+      body: draft.toJson(
+        forUpdate: true,
+        acknowledgeCostWarnings: acknowledgeCostWarnings,
+      ),
     );
     _session.throwApiException(
       response,

@@ -89,6 +89,7 @@ extension PosRegisterSessionActions on PosViewModel {
 
     _isClosingRegisterSession = true;
     _hasRegisterSessionError = false;
+    _registerSessionErrorMessage = '';
     _notifyChanged();
 
     final result = await _registerSessionRepository.closeSession(
@@ -113,10 +114,24 @@ extension PosRegisterSessionActions on PosViewModel {
         _notifyChanged();
         await loadCurrentRegisterSession();
         return true;
-      case Error<RegisterSession>():
+      case Error<RegisterSession>(exception: final exception):
         _hasRegisterSessionError = true;
+        _registerSessionErrorMessage = apiErrorDetail(exception);
         _isClosingRegisterSession = false;
         _notifyChanged();
+        // The till was holding a session the server had already closed —
+        // usually one closed the previous day from another screen. Nothing here
+        // could ever succeed against that id, so re-read what is actually open
+        // instead of leaving the cashier pressing a dead button. On 5 September
+        // 2026 that state cost 21 presses in 35 seconds at 02:13, and only a
+        // chance refresh ended it.
+        //
+        // Deliberately not an automatic retry: the counted cash belongs to the
+        // shift the cashier was looking at, and silently applying it to a
+        // different session would be worse than the stall.
+        if (apiErrorCode(exception) == 'register_session_already_closed') {
+          await loadCurrentRegisterSession();
+        }
         return false;
     }
   }

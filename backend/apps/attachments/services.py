@@ -440,7 +440,26 @@ def sign_attachment_content_token(attachment: Attachment) -> str:
     )
 
 
-def is_valid_attachment_content_token(attachment: Attachment, token: str) -> bool:
+#: Why a content token was refused. The distinction matters to the caller:
+#: ``expired`` and ``stale`` are fixed by re-reading the owner to get a freshly
+#: signed URL, while ``invalid`` and ``inactive`` never will be.
+TOKEN_EXPIRED = "attachment_token_expired"
+TOKEN_STALE = "attachment_token_stale"
+TOKEN_INVALID = "attachment_token_invalid"
+TOKEN_INACTIVE = "attachment_inactive"
+
+#: The recoverable half, for callers deciding whether a refetch is worth it.
+RECOVERABLE_TOKEN_ERRORS = frozenset({TOKEN_EXPIRED, TOKEN_STALE})
+
+
+def attachment_content_token_error(attachment: Attachment, token: str) -> str | None:
+    """``None`` when the token is good, else which way it is bad.
+
+    Every one of these used to collapse into a single 403 with one message. In
+    the field that produced 63 identical refusals on one attachment across two
+    days with no way to tell an expired six-hour URL from a file that had been
+    replaced — so nothing could decide whether re-reading the owner would help.
+    """
     max_age = getattr(
         settings,
         "POINTY_ATTACHMENT_CONTENT_TOKEN_MAX_AGE_SECONDS",
@@ -452,13 +471,27 @@ def is_valid_attachment_content_token(attachment: Attachment, token: str) -> boo
             salt=ATTACHMENT_CONTENT_SIGNING_SALT,
             max_age=max_age,
         )
+    except signing.SignatureExpired:
+        # Subclass of BadSignature, so it has to be caught first or it is
+        # indistinguishable from a forged token — which is how it stayed
+        # invisible until now.
+        return TOKEN_EXPIRED
     except signing.BadSignature:
-        return False
-    return (
-        payload.get("attachment_id") == attachment.pk
-        and payload.get("checksum_sha256") == attachment.checksum_sha256
-        and attachment.status == Attachment.Status.ACTIVE
-    )
+        return TOKEN_INVALID
+    if (
+        payload.get("attachment_id") != attachment.pk
+        or payload.get("checksum_sha256") != attachment.checksum_sha256
+    ):
+        # Signed correctly, but for a different file or an older version of this
+        # one: the bytes were replaced after the URL was handed out.
+        return TOKEN_STALE
+    if attachment.status != Attachment.Status.ACTIVE:
+        return TOKEN_INACTIVE
+    return None
+
+
+def is_valid_attachment_content_token(attachment: Attachment, token: str) -> bool:
+    return attachment_content_token_error(attachment, token) is None
 
 
 def active_attachments_for(owner, *, role: str | None = None):

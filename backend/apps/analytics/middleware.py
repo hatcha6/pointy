@@ -99,7 +99,10 @@ class BackendPerformanceAnalyticsMiddleware:
             recorder=recorder,
             response=response,
         )
-        attributes = _request_attributes(request, status_code=status_code)
+        attributes = {
+            **_request_attributes(request, status_code=status_code),
+            **_client_error_attributes(response, status_code=status_code),
+        }
         if _should_record_request_event(
             request, status_code=status_code, severity=severity
         ):
@@ -129,6 +132,87 @@ class BackendPerformanceAnalyticsMiddleware:
                 metrics=metrics,
             )
         return response
+
+
+#: Hard cap on the reason text kept per row. Serializer messages are written by
+#: us and describe rules rather than values, but a few interpolate the input, so
+#: this is short enough that nothing meaningful about a customer survives it.
+_MAX_ERROR_DETAIL = 200
+
+#: Field names never worth recording — noisy, and the interesting part of an
+#: auth failure is the status, not the word "detail".
+_UNINTERESTING_ERROR_FIELDS = frozenset({"detail", "code", "non_field_errors"})
+
+
+def _client_error_attributes(response, *, status_code):
+    """Why a 4xx was refused, as far as the response says.
+
+    5xx already carries ``error_type`` and a traceback from
+    ``got_request_exception``; 4xx carried nothing at all, and the field export
+    showed exactly what that costs. Across 4-5 September 2026 one shop met a 400
+    on ``PATCH /api/purchase-orders/`` 41 times and a 403 on one attachment 63
+    times, and neither the screen nor the telemetry could say why — so the
+    failures read as a shop that would not do its bookkeeping rather than an app
+    refusing to let it.
+
+    Reads the DRF payload, never the rendered bytes: touching ``content`` on a
+    streaming response consumes it.
+    """
+    if not (400 <= status_code < 500):
+        return {}
+    if getattr(response, "streaming", False):
+        return {}
+    data = getattr(response, "data", None)
+    if not isinstance(data, dict):
+        return {}
+
+    attributes = {}
+    code = data.get("code")
+    if isinstance(code, str) and code:
+        attributes["error_code"] = code[:64]
+
+    fields = sorted(
+        key
+        for key in data
+        if isinstance(key, str) and key not in _UNINTERESTING_ERROR_FIELDS
+    )
+    if fields:
+        attributes["error_fields"] = fields[:10]
+
+    detail = " · ".join(_error_messages(data))
+    if detail:
+        attributes["error_detail"] = detail[:_MAX_ERROR_DETAIL]
+    return attributes
+
+
+def _error_messages(data, *, limit=3):
+    """The leaf strings of a DRF error body, outermost keys first."""
+    seen = []
+
+    def walk(value, depth=0):
+        if len(seen) >= limit or depth > 4:
+            return
+        if isinstance(value, str):
+            text = value.strip()
+            if text and text not in seen:
+                seen.append(text)
+            return
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                walk(item, depth + 1)
+            return
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key == "code":
+                    continue
+                walk(item, depth + 1)
+
+    walk(data.get("detail"))
+    for key, value in data.items():
+        if key in ("detail", "code"):
+            continue
+        walk(value)
+    return seen
 
 
 def _is_enabled_for_request(request):

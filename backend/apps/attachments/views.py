@@ -3,10 +3,10 @@ from django.db.models import Q
 from django.http import FileResponse, Http404, StreamingHttpResponse
 from django.utils.cache import get_conditional_response
 from django.utils.http import content_disposition_header, http_date, quote_etag
-from rest_framework import parsers, viewsets
+from rest_framework import parsers, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
 
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_is_manager
@@ -14,9 +14,9 @@ from apps.core.streaming import aiter_handle
 
 from .models import Attachment, StorageVolume
 from .serializers import AttachmentSerializer, StorageVolumeSerializer
+from . import services
 from .services import (
     AttachmentStorageError,
-    is_valid_attachment_content_token,
     open_attachment,
     sync_discovered_storage_volumes,
 )
@@ -141,10 +141,32 @@ class AttachmentViewSet(viewsets.ModelViewSet):
             token=request.query_params.get("token", ""),
         )
 
+    #: Wording per refusal. Separate messages because the reader's next action
+    #: differs: two of these are fixed by reloading the page, two are not.
+    _TOKEN_ERROR_DETAIL = {
+        services.TOKEN_EXPIRED: "This link has expired. Reload the page to get a new one.",
+        services.TOKEN_STALE: "This file has changed since the link was made. Reload the page.",
+        services.TOKEN_INVALID: "Attachment content token is invalid.",
+        services.TOKEN_INACTIVE: "This attachment has been deleted.",
+    }
+
     def _file_response(self, *, as_attachment, token=""):
         attachment = self.get_object()
-        if token and not is_valid_attachment_content_token(attachment, token):
-            raise PermissionDenied("Attachment content token is invalid or expired.")
+        if token:
+            token_error = services.attachment_content_token_error(attachment, token)
+            if token_error is not None:
+                # A ``code`` alongside the sentence, so the client can tell a
+                # stale URL (reload and it works) from a dead one (it never
+                # will) instead of retrying the same request forever.
+                return Response(
+                    {
+                        "detail": self._TOKEN_ERROR_DETAIL[token_error],
+                        "code": token_error,
+                        "recoverable": token_error
+                        in services.RECOVERABLE_TOKEN_ERRORS,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         # Attachment bytes are content-addressed by checksum, so the ETag lets
         # every product-image render after the first be a 304 (or, within

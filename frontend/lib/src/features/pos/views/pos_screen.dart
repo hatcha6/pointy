@@ -134,6 +134,7 @@ class PosScreen extends StatelessWidget {
       size: AdaptiveModalSize.standard,
       builder: (context) {
         return RegisterSessionCloseSheet(
+          closeErrorDetail: () => viewModel.registerSessionErrorMessage,
           onClose: (input) {
             return viewModel.closeActiveRegisterSession(
               closingCash: input.closingCash,

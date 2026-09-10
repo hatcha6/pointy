@@ -267,6 +267,7 @@ class PurchaseRepository {
         LandedCostAllocationMethod.byLineValue,
     String discountCode = '',
     double extraDiscountAmount = 0,
+    bool acknowledgeCostWarnings = false,
   }) async {
     if (lines.isEmpty) {
       return Error(Exception('purchase draft is empty'));
@@ -283,7 +284,11 @@ class PurchaseRepository {
         discountCode: discountCode,
         extraDiscountAmount: extraDiscountAmount,
       );
-      return _service.updatePurchaseOrder(purchaseOrderId, draft);
+      return _service.updatePurchaseOrder(
+        purchaseOrderId,
+        draft,
+        acknowledgeCostWarnings: acknowledgeCostWarnings,
+      );
     });
   }
 

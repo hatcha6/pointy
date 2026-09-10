@@ -813,6 +813,52 @@ class AttachmentApiTests(TestCase):
         response = anonymous.get(content_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    def test_an_expired_link_says_so_and_says_it_is_recoverable(self):
+        """63 identical 403s on one attachment over two days is what a single
+        undifferentiated refusal looks like from the outside. A stale six-hour
+        URL is fixed by re-reading the owner; a forged one never is, and the
+        client can only tell them apart if we say which happened."""
+        upload = self.upload_attachment(self.pdf_payload(b"E"), "expired.pdf")
+        content_url = upload.data["content_url"]
+
+        anonymous = APIClient()
+        # Every token in existence is older than a zero-second window.
+        with override_settings(POINTY_ATTACHMENT_CONTENT_TOKEN_MAX_AGE_SECONDS=0):
+            response = anonymous.get(content_url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "attachment_token_expired")
+        self.assertTrue(response.data["recoverable"])
+
+    def test_a_forged_token_is_refused_as_permanent(self):
+        upload = self.upload_attachment(self.pdf_payload(b"F"), "forged.pdf")
+        attachment_id = upload.data["id"]
+
+        anonymous = APIClient()
+        response = anonymous.get(
+            reverse("attachment-content", args=[attachment_id]),
+            {"token": "not-a-real-token"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "attachment_token_invalid")
+        self.assertFalse(response.data["recoverable"])
+
+    def test_a_token_for_replaced_bytes_is_recoverable(self):
+        """The link was signed for content that has since changed — re-reading
+        the owner hands out one that matches."""
+        upload = self.upload_attachment(self.pdf_payload(b"S"), "stale.pdf")
+        content_url = upload.data["content_url"]
+        attachment = Attachment.objects.get(pk=upload.data["id"])
+        attachment.checksum_sha256 = "0" * 64
+        attachment.save(update_fields=["checksum_sha256"])
+
+        response = APIClient().get(content_url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "attachment_token_stale")
+        self.assertTrue(response.data["recoverable"])
+
     def upload_attachment(self, payload, filename):
         return self.client.post(
             reverse("attachment-list"),

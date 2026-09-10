@@ -1832,9 +1832,14 @@ class PosApiService {
 
   Future<PurchaseOrder> updatePurchaseOrder(
     int purchaseOrderId,
-    PurchaseOrderDraft draft,
-  ) {
-    return _purchasing.updatePurchaseOrder(purchaseOrderId, draft);
+    PurchaseOrderDraft draft, {
+    bool acknowledgeCostWarnings = false,
+  }) {
+    return _purchasing.updatePurchaseOrder(
+      purchaseOrderId,
+      draft,
+      acknowledgeCostWarnings: acknowledgeCostWarnings,
+    );
   }
 
   Future<PurchaseOrder> createPosCashPurchase(

@@ -262,6 +262,45 @@ class RegisterSessionApiTests(TestCase):
         self.assertEqual(session.count_100, 6)
         self.assertIsNotNone(session.closed_at)
 
+    def test_closing_a_closed_session_names_itself_so_a_till_can_recover(self):
+        """A till holding yesterday's session id must be able to tell this
+        refusal from any other and re-sync, rather than retry a dead id.
+
+        On 5 September 2026 a cashier met this at 02:13 and pressed the button
+        **21 times in 35 seconds**: the server answered correctly every time and
+        nothing in the response let the app act on it.
+        """
+        start_response = self.client.post(
+            reverse("register-session-start"),
+            {"opening_cash": "10.00"},
+            format="json",
+        )
+        session_id = start_response.data["id"]
+        payload = {
+            "closing_cash": "5.00",
+            "count_025": 0,
+            "count_050": 0,
+            "count_075": 0,
+            "count_100": 0,
+        }
+        first = self.client.post(
+            reverse("register-session-close", args=[session_id]),
+            payload,
+            format="json",
+        )
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+
+        second = self.client.post(
+            reverse("register-session-close", args=[session_id]),
+            payload,
+            format="json",
+        )
+
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(second.data["code"], "register_session_already_closed")
+        # The sentence stays too — it is what the cashier reads.
+        self.assertIn("already closed", second.data["detail"])
+
         current_response = self.client.get(reverse("register-session-current"))
         self.assertEqual(current_response.status_code, status.HTTP_204_NO_CONTENT)
 

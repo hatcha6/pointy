@@ -32,6 +32,7 @@ import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/register_session_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/services/api_error_detail.dart';
 import '../../../data/services/order_document_service.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
 import '../../../shared/unit_options.dart';
@@ -279,6 +280,11 @@ class PosViewModel extends ChangeNotifier {
   // it only ever adds/increments its own product.
   String? _activeCartLineKey;
   bool _hasRegisterSessionError = false;
+
+  /// The server's own words for the last register-session failure, when it gave
+  /// any. Shown beside the generic message so a refusal is answerable rather
+  /// than just repeatable.
+  String _registerSessionErrorMessage = '';
   bool _hasCheckoutSettingsError = false;
   RegisterSession? _availableRegisterSession;
   RegisterSession? _activeRegisterSession;
@@ -407,6 +413,7 @@ class PosViewModel extends ChangeNotifier {
   String? get lastScannedBarcode => _lastScannedBarcode;
   String? get lastScannedProductName => _lastScannedProductName;
   bool get hasRegisterSessionError => _hasRegisterSessionError;
+  String get registerSessionErrorMessage => _registerSessionErrorMessage;
   bool get hasCheckoutSettingsError => _hasCheckoutSettingsError;
   RegisterSession? get availableRegisterSession => _availableRegisterSession;
   RegisterSession? get activeRegisterSession => _activeRegisterSession;
