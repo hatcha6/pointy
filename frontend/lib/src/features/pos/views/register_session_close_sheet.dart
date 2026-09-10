@@ -14,10 +14,16 @@ class RegisterSessionCloseSheet extends StatefulWidget {
   const RegisterSessionCloseSheet({
     super.key,
     required this.onClose,
+    this.closeErrorDetail,
     this.initialClosingCash = '',
   });
 
   final Future<bool> Function(RegisterSessionCloseInput input) onClose;
+
+  /// The server's reason for the last refusal, read after [onClose] returns
+  /// false. Without it the sheet can only say "closing failed", which is what
+  /// turned one stale session id into 21 presses of the same dead button.
+  final String Function()? closeErrorDetail;
   final String initialClosingCash;
 
   @override
@@ -35,6 +41,7 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
   final TextEditingController _count100Controller = TextEditingController();
   bool _isSubmitting = false;
   bool _showError = false;
+  String _errorDetail = '';
 
   @override
   void initState() {
@@ -179,7 +186,10 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
                       if (_showError) ...[
                         SizedBox(height: spacing.md),
                         PointyInlineMessage.error(
-                          message: l10n.closeRegisterSessionError,
+                          message: _errorDetail.isEmpty
+                              ? l10n.closeRegisterSessionError
+                              : '${l10n.closeRegisterSessionError}: '
+                                    '$_errorDetail',
                           icon: Icons.warning_amber_outlined,
                         ),
                       ],
@@ -236,6 +246,7 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
     setState(() {
       _isSubmitting = true;
       _showError = false;
+      _errorDetail = '';
     });
 
     final didClose = await widget.onClose(
@@ -260,6 +271,7 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
     setState(() {
       _isSubmitting = false;
       _showError = true;
+      _errorDetail = widget.closeErrorDetail?.call() ?? '';
     });
   }
 

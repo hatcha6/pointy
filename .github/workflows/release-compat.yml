@@ -123,6 +123,7 @@ jobs:
           flutter build windows --release
           --build-name=${{ needs.version.outputs.build_name }}
           --build-number=${{ needs.version.outputs.build_number }}
+          --dart-define=POINTY_VERSION=${{ needs.version.outputs.version }}
 
       - name: Bundle VC++ runtime
         shell: pwsh

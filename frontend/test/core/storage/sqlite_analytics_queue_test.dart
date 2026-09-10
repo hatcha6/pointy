@@ -94,6 +94,29 @@ void main() {
     ]);
   });
 
+  test('a bounded read returns the newest, still in order', () async {
+    // The whole point: a backlogged till must load today's events, not the
+    // stalest ones the trim is about to discard. Reading `ASC LIMIT n` would
+    // return exactly the wrong n — which is how one till spent three weeks
+    // delivering a single day from the past and never reached the present.
+    await queue.append([for (var i = 0; i < 10; i += 1) entry(i)]);
+
+    expect(await queue.loadPayloads(limit: 3), [
+      entry(7).payload,
+      entry(8).payload,
+      entry(9).payload,
+    ]);
+  });
+
+  test('a limit at or above the depth reads everything', () async {
+    await queue.append([for (var i = 0; i < 3; i += 1) entry(i)]);
+
+    expect(await queue.loadPayloads(limit: 3), hasLength(3));
+    expect(await queue.loadPayloads(limit: 50), hasLength(3));
+    expect(await queue.loadPayloads(limit: 0), hasLength(3));
+    expect(await queue.loadPayloads(), hasLength(3));
+  });
+
   test('order survives a drained-and-refilled queue', () async {
     // The reason seq is AUTOINCREMENT: plain rowids are reused after deletes,
     // so a queue that is constantly drained would eventually hand a new event

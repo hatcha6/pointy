@@ -51,21 +51,31 @@ class SqliteAnalyticsQueue {
       '$_columnId TEXT NOT NULL UNIQUE, '
       '$_columnPayload TEXT NOT NULL)';
 
-  /// Every queued payload, oldest first.
+  /// The [limit] most recent queued payloads, returned oldest first.
+  ///
+  /// Read newest-first and reversed, rather than simply read in order: a device
+  /// that has been unable to deliver holds a backlog whose *oldest* rows are
+  /// precisely the ones [trimToMostRecent] exists to discard, so a bare
+  /// `ORDER BY seq ASC LIMIT n` would load exactly the wrong n. One till in the
+  /// field carried a whole day's telemetry from three weeks earlier and had
+  /// still not reached the current week.
   ///
   /// A row whose JSON will not parse is dropped and the rest are returned — the
   /// blob it replaced would have lost the lot.
-  Future<List<String>> loadPayloads() async {
+  Future<List<String>> loadPayloads({int? limit}) async {
     final rows = await _database.guard(
       () => _database.db.query(
         table,
         columns: <String>[_columnPayload],
-        orderBy: '$_columnSeq ASC',
+        orderBy: '$_columnSeq DESC',
+        limit: limit != null && limit > 0 ? limit : null,
       ),
     );
     return rows
         .map((row) => row[_columnPayload])
         .whereType<String>()
+        .toList(growable: false)
+        .reversed
         .toList(growable: false);
   }
 

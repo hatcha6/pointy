@@ -10,6 +10,7 @@ import 'package:pointy_frontend/src/data/services/analytics_queue_storage.dart';
 
 void main() {
   _registerPacingTests();
+  _registerBacklogDrainTests();
   _registerPortedGuardTests();
   test(
     'analytics engine persists failed events and flushes them later',
@@ -478,6 +479,75 @@ class _CountingQueueStorage extends MemoryAnalyticsQueueStorage {
     writes += 1;
     return super.trimToMostRecent(maxEvents);
   }
+}
+
+void _registerBacklogDrainTests() {
+  group('a backlogged queue delivers today first', () {
+    test('the newest events are sent before the stale ones', () async {
+      // The bug this pins: a till that could not deliver for weeks spent its
+      // whole send budget shipping the oldest events it held, so the current
+      // week never arrived at all. One shop's busiest register — a Windows 8
+      // till on this branch — was still delivering a single day from three
+      // weeks earlier when its export was taken: 38,059 events, none recent.
+      final sink = _FakeAnalyticsSink(shouldFail: true);
+      final storage = MemoryAnalyticsQueueStorage(installationId: 'install-1');
+      final engine = AnalyticsEngine(
+        sink,
+        storage: storage,
+        flushInterval: const Duration(hours: 1),
+        maxBatchSize: 2,
+      );
+      engine.setCurrentUser(1);
+
+      for (var i = 0; i < 5; i += 1) {
+        await engine.trackUsage(
+          AnalyticsEventName.posCheckoutCompleted,
+          metrics: {'total': i.toDouble()},
+        );
+      }
+      sink.submittedBatches.clear();
+
+      sink.shouldFail = false;
+      await engine.flush();
+
+      expect(sink.submittedBatches, isNotEmpty);
+      final firstBatch = sink.submittedBatches.first;
+      expect(firstBatch, hasLength(2));
+      // The last two recorded, not the first two.
+      expect(
+        firstBatch.map((event) => event.metrics['total']).toList(),
+        [3.0, 4.0],
+      );
+    });
+
+    test('a restore reads only as deep as the queue is allowed to be', () async {
+      final storage = MemoryAnalyticsQueueStorage(installationId: 'install-1');
+      // Twelve on disk against a cap of four: the restore must take the newest
+      // four and the table must be cut to match, rather than carrying eight
+      // events that will never be sent and never dropped.
+      await storage.appendEvents([
+        for (var i = 0; i < 12; i += 1)
+          AnalyticsEventDraft.usage(
+            AnalyticsEventName.posCheckoutCompleted,
+            metrics: {'total': i.toDouble()},
+          ),
+      ]);
+
+      final sink = _FakeAnalyticsSink(shouldFail: true);
+      final engine = AnalyticsEngine(
+        sink,
+        storage: storage,
+        flushInterval: const Duration(hours: 1),
+        maxQueueSize: 4,
+        maxBatchSize: 2,
+      );
+      engine.setCurrentUser(1);
+      await engine.flush();
+
+      expect(engine.pendingEventCount, lessThanOrEqualTo(5));
+      expect(await storage.loadEvents(), hasLength(lessThanOrEqualTo(5)));
+    });
+  });
 }
 
 class _FakeAnalyticsSink implements AnalyticsEventSink {
