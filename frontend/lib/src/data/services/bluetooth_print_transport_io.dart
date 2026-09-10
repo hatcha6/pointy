@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart' show MissingPluginException;
 import 'package:flutter_bluetooth_classic_serial/flutter_bluetooth_classic.dart';
 
@@ -24,6 +26,9 @@ class BluetoothPrintTransport extends PrintTransport {
 
   @override
   Future<List<PrinterEndpoint>> discover() async {
+    if (_pluginUnavailable) {
+      return const [];
+    }
     try {
       final supported = await _bluetooth.isBluetoothSupported();
       if (!supported) {
@@ -53,6 +58,12 @@ class BluetoothPrintTransport extends PrintTransport {
 
   @override
   Future<PrintTransportStatus> status(PrinterEndpoint endpoint) async {
+    if (_pluginUnavailable) {
+      return const PrintTransportStatus(
+        isAvailable: false,
+        message: 'bluetooth not supported on this platform',
+      );
+    }
     try {
       final supported = await _bluetooth.isBluetoothSupported();
       if (!supported) {
@@ -119,6 +130,11 @@ class BluetoothPrintTransport extends PrintTransport {
     PrinterEndpoint endpoint,
     List<int> bytes,
   ) async {
+    if (_pluginUnavailable) {
+      return const PrintTransportResult.failure(
+        'bluetooth printing is not supported on this platform',
+      );
+    }
     final address = endpoint.address.trim();
     if (address.isEmpty) {
       return const PrintTransportResult.failure(
@@ -155,9 +171,35 @@ class BluetoothPrintTransport extends PrintTransport {
     }
   }
 
+  /// Platforms where `flutter_bluetooth_classic_serial` actually ships native
+  /// code. Android, iOS and Windows each have a real implementation; the
+  /// package *declares* Linux in its pubspec but ships nothing behind it — its
+  /// `linux/` directory is only the example app's runner scaffolding — so the
+  /// channel is never registered there and every call throws.
+  ///
+  /// That is not theoretical: the shop's Linux back-office machine raised
+  /// `MissingPluginException` for `listen` on this channel **114 times in nine
+  /// days**, which was 114 of its 128 non-camera errors. Asking is the bug, so
+  /// the fix is to stop asking rather than to catch it better.
+  ///
+  /// Deliberately an allow-list. A platform nobody has verified behaves like
+  /// Linux did, and silence is the right default for a best-effort transport.
+  static bool get _platformHasImplementation =>
+      Platform.isAndroid || Platform.isIOS || Platform.isWindows;
+
   /// Latched once the platform proves it has no real implementation, so the
   /// app stops paying for calls that can only fail.
-  bool _pluginUnavailable = false;
+  ///
+  /// Static, not per-instance: a fresh [BluetoothPrintTransport] must not
+  /// rediscover this the hard way, and the answer cannot differ between them.
+  static bool _pluginUnavailable = !_platformHasImplementation;
+
+  /// Test seam — the latch is process-wide, so a test that trips it would
+  /// otherwise leak into every test that ran after it.
+  @visibleForTesting
+  static void resetPluginAvailability() {
+    _pluginUnavailable = !_platformHasImplementation;
+  }
 
   static bool _looksUnimplemented(Object error) {
     return error is MissingPluginException ||
