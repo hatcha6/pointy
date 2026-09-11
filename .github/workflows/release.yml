@@ -718,6 +718,12 @@ jobs:
     name: Build on-prem bundle
     needs: [version, build-android, build-windows, build-linux, build-onprem-images]
     runs-on: ubuntu-latest
+    # A job-level block replaces the workflow-level one outright, so contents
+    # has to be restated: it attaches the bundle to the Release. actions lets
+    # the last step delete the hand-off artifacts once they are consumed.
+    permissions:
+      contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
 
@@ -870,12 +876,16 @@ jobs:
           echo "signed sha256=${digest}"
           echo "  -> ${zip_path}.sig"
 
-      # Short retention: this is by far the largest artifact (it packs all seven
-      # docker image tars, several GB) and is the main quota consumer. For real
-      # releases the zip is attached to the GitHub Release (separate storage, no
-      # Actions-quota cost); for manual test builds this artifact is the only
-      # output, so keep it briefly retrievable. Nothing downstream consumes it.
+      # Test builds only. This is by far the largest artifact — it packs all
+      # seven docker image tars — and at ~1 GB it was the biggest single draw on
+      # the 2 GB Actions storage quota that GitHub reported 90% full on
+      # 2026-09-11. On a real release the very same zip is attached to the
+      # GitHub Release in the next step, which is separate storage and free, so
+      # uploading it here bought a second copy of a file nothing downstream
+      # consumes. A manual test build has no Release to attach to and this
+      # artifact is the only way to get the bundle out, so there it still runs.
       - uses: actions/upload-artifact@v4
+        if: ${{ needs.version.outputs.is_release != 'true' }}
         with:
           name: pointy-onprem
           path: dist/*
@@ -888,6 +898,41 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${{ needs.version.outputs.tag }}" dist/* --clobber
+
+      # Hand-off artifacts exist so one job can pass a file to the next, not so
+      # a person can download them. retention-days: 1 still left ~1.8 GB of them
+      # resident for a full day per run — two runs on 2026-09-08 peaked at 4 GB
+      # against a 2 GB quota — so drop them the moment they have been consumed.
+      #
+      # The server half goes either way: the full bundle above supersedes it and
+      # nothing can use it alone. The client installers go only on a real
+      # release, where they are already Release assets; on a test build they are
+      # the only copy anyone can reach, so they stay.
+      #
+      # success() only, because a failed run has to keep its inputs for a re-run
+      # of this job. continue-on-error because this is housekeeping: a quota is
+      # never worth failing a release over.
+      - name: Drop the consumed hand-off artifacts
+        if: ${{ success() }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IS_RELEASE: ${{ needs.version.outputs.is_release }}
+        run: |
+          set -euo pipefail
+          consumed="pointy-onprem-partial"
+          if [ "${IS_RELEASE}" = "true" ]; then
+            consumed="${consumed} pointy-android pointy-windows pointy-linux"
+          fi
+          for name in ${consumed}; do
+            ids="$(gh api --paginate \
+              "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+              --jq ".artifacts[] | select(.name == \"${name}\") | .id")"
+            for id in ${ids}; do
+              echo "==> dropping ${name} (artifact ${id})"
+              gh api -X DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}"
+            done
+          done
 
   # ---------------------------------------------------------------------------
   # Hosted relay — build the relay image and push it to GitHub Container
