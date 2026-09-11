@@ -35,7 +35,11 @@ from .pricing import PriceResult, lookup_price
 
 logger = logging.getLogger(__name__)
 
-_KEY = "pointy:pricecheck:{catalog_v}:{rules_v}:{channel}:{image}:{digest}"
+# The version segment is the *shape* of the cached PriceResult. Bump it
+# whenever a field is added or removed: an entry pickled by the previous
+# release would otherwise be unpickled into the new dataclass and read back
+# missing its newest fields.
+_KEY = "pointy:pricecheck:v2:{catalog_v}:{rules_v}:{channel}:{image}:{digest}"
 _MISS = "__miss__"
 
 

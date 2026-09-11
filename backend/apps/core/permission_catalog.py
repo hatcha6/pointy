@@ -34,6 +34,10 @@ PERMISSION_CATALOG = [
             _perm("catalog.change_productcategory", "تعديل الفئات", "تعديل بيانات الفئات."),
             _perm("catalog.delete_productcategory", "حذف الفئات", "حذف فئات المنتجات."),
             _perm("catalog.change_billofmaterials", "إدارة الوصفات", "تعريف وصفات التصنيع والتحضير."),
+            _perm("catalog.change_scalebarcoderule", "إعداد ملصقات الميزان", "ضبط طريقة قراءة الباركود الذي تطبعه الموازين."),
+            _perm("scales.view_scale", "عرض الموازين", "الاطلاع على الموازين المعرّفة وحالة آخر إرسال."),
+            _perm("scales.change_scale", "إعداد الموازين", "إضافة الموازين وتعديل عناوينها وإعداداتها."),
+            _perm("scales.push_scale", "إرسال الأسعار للميزان", "إرسال جدول الأصناف والأسعار إلى الميزان."),
         ],
     },
     {

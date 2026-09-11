@@ -17,7 +17,9 @@ from django.utils import timezone
 
 from apps.attachments.models import Attachment
 from apps.attachments.services import sign_attachment_content_token
+from apps.catalog import scale_rules
 from apps.catalog.models import ProductUnitBarcode, ProductVariant, normalize_barcode
+from apps.catalog.scale_quantity import resolve_scale_quantity
 from apps.discounts.models import DiscountRule
 from apps.discounts.services import (
     DiscountContext,
@@ -57,6 +59,11 @@ class PriceResult:
     # is assembled in the view, which has the request for ``build_absolute_uri``.
     image_attachment_id: int | None = None
     image_token: str = ""
+    # Set only when the scanned code was a scale label: what that sticker is
+    # worth, so a kiosk can answer "this packet costs 12.50" rather than only
+    # "this cheese is 40.00 a kilo".
+    label_quantity: Decimal | None = None
+    label_total: Decimal | None = None
 
     @property
     def has_discount(self) -> bool:
@@ -151,6 +158,17 @@ def lookup_price(
                 .order_by("-is_default", "id")
                 .first()
             )
+    scale_match = None
+    if variant is None:
+        # A weighing scale's own label: an in-store prefix, the item's short
+        # code, and the weight (or price) it measured. Only the shop's
+        # configured rules can say which, so an unrecognised layout falls
+        # through to "not found" exactly as before.
+        scale_match = scale_rules.parse(code)
+        if scale_match is not None:
+            variant = scale_rules.resolve_variant(scale_match)
+        if variant is None:
+            return PriceResult.not_found(code)
     if variant is None:
         return PriceResult.not_found(code)
 
@@ -205,6 +223,14 @@ def lookup_price(
             image_attachment_id = attachment.pk
             image_token = sign_attachment_content_token(attachment)
 
+    # What the sticker in the customer's hand is worth. Priced off the
+    # *discounted* unit price, because that is what the till will charge.
+    label = None
+    label_total = None
+    if scale_match is not None:
+        label = resolve_scale_quantity(scale_match, variant, unit_price=result.total)
+        label_total = (result.total * label.quantity).quantize(Decimal("0.01"))
+
     unit_label = product.unit
     variant_name = variant.display_name
     if matched_unit is not None:
@@ -228,4 +254,6 @@ def lookup_price(
         discounts=discounts,
         image_attachment_id=image_attachment_id,
         image_token=image_token,
+        label_quantity=label.quantity if label is not None else None,
+        label_total=label_total,
     )

@@ -150,6 +150,7 @@ INSTALLED_APPS = [
     "apps.clients",
     "apps.companion",
     "apps.surveillance",
+    "apps.scales",
 ]
 
 # Documents that exist only to prove the lifecycle primitive, including the

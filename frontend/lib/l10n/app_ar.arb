@@ -4174,6 +4174,192 @@
     }
   },
   "barcodeScanError": "تعذر البحث عن الباركود. حاول مرة أخرى.",
+  "manageScaleRulesTooltip": "إعداد ملصقات الميزان",
+  "scaleRulesTitle": "ملصقات الميزان",
+  "scaleRulesIntroTitle": "كيف يقرأ الصندوق ملصق الميزان",
+  "scaleRulesIntroMessage": "الميزان يطبع باركود يحمل رمز الصنف والوزن أو السعر. نفس الأرقام تعني وزناً على ميزان وسعراً على آخر، فلا يُخمَّن شيء: عرّف هنا تنسيق كل ميزان لديك. الباركود الذي لا يطابق أي تنسيق يُعامل باركوداً عادياً.",
+  "addScaleRuleButton": "إضافة تنسيق",
+  "scaleRuleEditTitle": "تنسيق ملصق",
+  "scaleRuleNameLabel": "الاسم",
+  "scaleRuleNameHint": "ميزان الخضار",
+  "scaleRulePrefixLabel": "يبدأ الباركود بـ",
+  "scaleRuleItemDigitsLabel": "خانات رمز الصنف",
+  "scaleRuleValueDigitsLabel": "خانات القيمة",
+  "scaleRuleValueKindLabel": "القيمة المطبوعة هي",
+  "scaleRuleValueKindWeight": "وزن",
+  "scaleRuleValueKindPrice": "سعر",
+  "scaleRuleValueKindCount": "عدد",
+  "scaleRuleDecimalsLabel": "منازل عشرية",
+  "scaleRuleUnitLabel": "وحدة الوزن",
+  "scaleRuleRequireCheckDigitLabel": "تحقّق من خانة المراجعة",
+  "scaleRuleRequireCheckDigitHint": "أوقفه فقط إذا كان ميزانك يطبع خانة مراجعة خاطئة.",
+  "scaleRuleActiveLabel": "مُفعّل",
+  "scaleRulePatternLabel": "النمط",
+  "scaleRulePatternHelp": "رقم = ثابت · I = رمز الصنف · V = القيمة · C = خانة المراجعة · X = يُتجاهل",
+  "scaleRulePatternInvalid": "نمط غير صالح.",
+  "scaleRuleExampleLabel": "مثال",
+  "scaleRulePlainSummary": "يبدأ بـ {prefix} · {itemDigits} خانات للصنف · {value}",
+  "@scaleRulePlainSummary": {
+    "description": "Plain-language description of a scale rule, for a shopkeeper who will never read the pattern.",
+    "placeholders": {
+      "prefix": {
+        "type": "String"
+      },
+      "itemDigits": {
+        "type": "int"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "scaleRuleValueWeight": "ثم الوزن",
+  "scaleRuleValuePrice": "ثم السعر",
+  "scaleRuleValueCount": "ثم العدد",
+  "scaleRuleExampleReads": "مثال: {barcode} ← {reading}",
+  "@scaleRuleExampleReads": {
+    "description": "A sample barcode and what the rule reads it as.",
+    "placeholders": {
+      "barcode": {
+        "type": "String"
+      },
+      "reading": {
+        "type": "String"
+      }
+    }
+  },
+  "scaleRuleTryTitle": "جرّب ملصقاً",
+  "scaleRuleTryDescription": "امسك ملصقاً طبعه ميزانك ومرّره على القارئ — سيظهر هنا كيف يقرأه الصندوق.",
+  "scaleRuleTryHint": "امسح أو الصق باركوداً طبعه الميزان",
+  "scaleRuleTryUnreadable": "لا يطابق أي تنسيق مُفعّل. سيُقرأ باركوداً عادياً.",
+  "scaleRuleTryResult": "الصنف {itemCode} · {value}",
+  "@scaleRuleTryResult": {
+    "description": "How a pasted scale label reads under the configured rules.",
+    "placeholders": {
+      "itemCode": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "scaleRuleSaveError": "تعذّر حفظ التنسيق.",
+  "scaleRuleDeleteTitle": "حذف التنسيق؟",
+  "scaleRuleDeleteMessage": "لن يُقرأ أي ملصق بهذا التنسيق بعد الحذف.",
+  "scaleRulesEmpty": "لا توجد تنسيقات بعد.",
+  "scalesTitle": "الموازين",
+  "scalesNavLabel": "الموازين",
+  "scalesIntroTitle": "الميزان يحمل نسخته من الأسعار",
+  "scalesIntroMessage": "الميزان يطبع السعر على الملصق من جدول داخله. إن لم يوافق جدول الميزان الكتالوج فللمحل سعران ولا أحد يعرف بأيّهما باع. أرسل الأسعار من هنا بدل إدخالها في الميزان يدوياً.",
+  "addScaleButton": "إضافة ميزان",
+  "scaleEditTitle": "ميزان",
+  "scaleNameLabel": "الاسم",
+  "scaleTypeLabel": "نوع الميزان",
+  "scaleHostLabel": "عنوان الميزان في الشبكة",
+  "scalePortLabel": "المنفذ",
+  "scaleDepartmentLabel": "رقم القسم في الميزان",
+  "scaleActiveLabel": "مُفعّل",
+  "scaleCheckAction": "اختبار الاتصال",
+  "scalePushAction": "إرسال الأسعار",
+  "scaleExportAction": "تنزيل ملف الأسعار",
+  "scaleExportFallbackAction": "تنزيل الملف بدل الإرسال",
+  "scaleReachableMessage": "الميزان يستجيب.",
+  "scaleUnreachableMessage": "لا يوجد رد من الميزان.",
+  "scaleSaveError": "تعذّر حفظ الميزان.",
+  "scaleDeleteTitle": "حذف الميزان؟",
+  "scaleDeleteMessage": "سيُحذف الميزان وسجلّ عمليات الإرسال إليه.",
+  "scalePushExportedMessage": "أُنشئ الملف. الأسعار لن تتغيّر في الميزان حتى تُحمّل الملف إليه.",
+  "scalePushSucceededMessage": "وصلت {count} أصناف إلى الميزان.",
+  "@scalePushSucceededMessage": {
+    "description": "Every PLU reached the scale.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "scalePushPartialMessage": "وصل {sent} ولم يصل {failed}.",
+  "@scalePushPartialMessage": {
+    "description": "Some PLUs landed and some did not.",
+    "placeholders": {
+      "sent": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+  "scalePushFailedMessage": "لم يصل شيء إلى الميزان.",
+  "scaleLastPushNever": "لم يُرسل شيء بعد.",
+  "scaleStatusNeverPushed": "لم يُرسل",
+  "scaleStatusWaitingToLoad": "بانتظار التحميل",
+  "scaleStatusUpToDate": "محدَّث",
+  "scaleStatusPartial": "ناقص",
+  "scaleStatusFailed": "فشل",
+  "scaleDriverLineFile": "يُحمَّل بملف",
+  "scaleAddressLineLabel": "العنوان",
+  "scaleAssignedCount": "{count} صنفاً على الموازين",
+  "@scaleAssignedCount": {
+    "description": "How many products carry a PLU.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "scalePlusSectionTitle": "الأصناف على الموازين",
+  "scalePlusEmpty": "لا يوجد صنف على الموازين بعد. أضف الأصناف التي تُوزن.",
+  "scaleAssignPluButton": "إضافة صنف",
+  "scaleAssignPluHint": "ابحث بالاسم أو الباركود",
+  "scaleAssignPluTitle": "إضافة صنف إلى الموازين",
+  "scalePluRetireAction": "إيقاف",
+  "scalePluRestoreAction": "إعادة تفعيل",
+  "scalePluRetiredNote": "الرقم لا يُعاد استخدامه؛ قد تكون ملصقاته ما زالت في المحل.",
+  "scalesEmpty": "لا توجد موازين معرّفة.",
+  "scaleLabelWarnNotFractional": "{productName}: هذا المنتج يُباع بالعدد، فلم يُؤخذ الوزن من ملصق الميزان.",
+  "@scaleLabelWarnNotFractional": {
+    "description": "Scale label scanned for a product counted in whole units; the embedded weight was ignored.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      }
+    }
+  },
+  "scaleLabelWarnUnitMismatch": "{productName}: وحدة ملصق الميزان لا تناسب وحدة المنتج، فلم تُؤخذ الكمية من الملصق.",
+  "@scaleLabelWarnUnitMismatch": {
+    "description": "The rule's unit cannot be converted into the product's unit.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      }
+    }
+  },
+  "scaleLabelWarnNoUnitPrice": "{productName}: سعر المنتج صفر، فتعذّر حساب الكمية من سعر الملصق.",
+  "@scaleLabelWarnNoUnitPrice": {
+    "description": "A price-embedded label cannot be divided by a zero unit price.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      }
+    }
+  },
+  "scaleLabelWarnRoundingDrift": "{productName}: الملصق {labelTotal} والمسجَّل {rungTotal}.",
+  "@scaleLabelWarnRoundingDrift": {
+    "description": "The derived quantity does not price back to exactly the sticker's total.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      },
+      "labelTotal": {
+        "type": "String"
+      },
+      "rungTotal": {
+        "type": "String"
+      }
+    }
+  },
   "cameraScannerSingleTitle": "مسح باركود",
   "cameraScannerMultipleTitle": "مسح عدة منتجات",
   "cameraScannerStarting": "جار تشغيل الكاميرا...",

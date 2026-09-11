@@ -61,6 +61,7 @@ from .models import (
     ProductModifierGroup,
     ProductUnit,
     ProductVariant,
+    ScaleBarcodeRule,
     UnitOfMeasure,
     VariantOption,
     VariantOptionValue,
@@ -76,6 +77,7 @@ from .serializers import (
     ProductCatalogSerializer,
     ProductSetVariantPricesSerializer,
     ProductVariantSerializer,
+    ScaleBarcodeRuleSerializer,
     UnitOfMeasureSerializer,
     VariantOptionSerializer,
     VariantOptionValueSerializer,
@@ -1214,3 +1216,26 @@ class UnitOfMeasureViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         if instance.product_units.exists():
             raise ValidationError("This unit is in use by products and cannot be deleted.")
         super().perform_destroy(instance)
+
+
+class ScaleBarcodeRuleViewSet(viewsets.ModelViewSet):
+    """How this shop's scales lay out the labels they print.
+
+    Readable by anyone who can look at the catalog — the till needs the rules to
+    read a sticker at all — and writable only by whoever manages units and
+    barcodes, because a wrong rule here is a wrong quantity at every counter.
+    """
+
+    serializer_class = ScaleBarcodeRuleSerializer
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {
+        "list": ("catalog.view_scalebarcoderule",),
+        "retrieve": ("catalog.view_scalebarcoderule",),
+        "create": ("catalog.add_scalebarcoderule",),
+        "update": ("catalog.change_scalebarcoderule",),
+        "partial_update": ("catalog.change_scalebarcoderule",),
+        "destroy": ("catalog.delete_scalebarcoderule",),
+    }
+    queryset = ScaleBarcodeRule.objects.all()
+    filterset_fields = ("is_active", "value_kind")
+    ordering_fields = ("sequence", "name", "created_at")

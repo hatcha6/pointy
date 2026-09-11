@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group, Permission
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 
+from apps.catalog.scale_defaults import SEEDED_SCALE_RULE_PATTERN
 from apps.catalog.variant_option_defaults import DEFAULT_VARIANT_OPTIONS
 from apps.expenses.category_defaults import DEFAULT_EXPENSE_CATEGORY_NAMES
 from apps.holidays.rules import SOURCE_LOCAL as HOLIDAY_LOCAL_SOURCE
@@ -64,6 +65,7 @@ INITIAL_SETUP_UNSPECIFIED_SUPPLIER_NOTES = (
 
 MANAGER_PERMISSION_DOMAINS = (
     "catalog",
+    "scales",
     "fx",
     "analytics",
     "channels",
@@ -104,6 +106,8 @@ CASHIER_PERMISSION_CODES = (
     # only view_product a cashier's scan 403s (browsing/invoicing still work).
     "catalog.view_productvariant",
     "catalog.view_unitofmeasure",
+    # The till has to know how its scales lay out a label before it can read one.
+    "catalog.view_scalebarcoderule",
     # Floor staff can run/record stock counts; only managers may apply them
     # (apply_stockcount is granted to managers via MANAGER_PERMISSION_DOMAINS).
     "inventory.view_stockcount",
@@ -168,6 +172,8 @@ TECHNICIAN_PERMISSION_CODES = (
     "catalog.view_product",
     "catalog.view_productcategory",
     "catalog.view_unitofmeasure",
+    # The till has to know how its scales lay out a label before it can read one.
+    "catalog.view_scalebarcoderule",
     "core.view_shopsettings",
     "attachments.add_attachment",
     "attachments.view_attachment",
@@ -227,6 +233,8 @@ ACCOUNTANT_PERMISSION_CODES = (
     "catalog.view_product",
     "catalog.view_productcategory",
     "catalog.view_unitofmeasure",
+    # The till has to know how its scales lay out a label before it can read one.
+    "catalog.view_scalebarcoderule",
     "expenses.add_expense",
     "expenses.change_expense",
     "expenses.delete_expense",
@@ -279,6 +287,8 @@ SUPERVISOR_PERMISSION_CODES = (
     "catalog.view_product",
     "catalog.view_productcategory",
     "catalog.view_unitofmeasure",
+    # The till has to know how its scales lay out a label before it can read one.
+    "catalog.view_scalebarcoderule",
     "inventory.view_stockitem",
     "inventory.view_warehouse",
     "inventory.view_stocktransfer",
@@ -324,6 +334,8 @@ INVENTORY_CLERK_PERMISSION_CODES = (
     "catalog.view_product",
     "catalog.view_productcategory",
     "catalog.view_unitofmeasure",
+    # The till has to know how its scales lay out a label before it can read one.
+    "catalog.view_scalebarcoderule",
     "inventory.view_stockitem",
     "inventory.view_warehouse",
     "inventory.view_stocktransfer",
@@ -345,6 +357,8 @@ PURCHASING_AGENT_PERMISSION_CODES = (
     "catalog.view_product",
     "catalog.view_productcategory",
     "catalog.view_unitofmeasure",
+    # The till has to know how its scales lay out a label before it can read one.
+    "catalog.view_scalebarcoderule",
     "purchasing.view_supplier",
     "purchasing.add_supplier",
     "purchasing.change_supplier",
@@ -394,6 +408,8 @@ AUDITOR_PERMISSION_CODES = (
     "catalog.view_product",
     "catalog.view_productcategory",
     "catalog.view_unitofmeasure",
+    # The till has to know how its scales lay out a label before it can read one.
+    "catalog.view_scalebarcoderule",
     "operations.view_job",
 )
 # Single source of truth mapping a role group to the codenames it bundles. Used
@@ -586,6 +602,11 @@ def _model_has_initial_setup_blocking_data(model, model_label):
         # ledger always has somewhere to post. It is scaffolding, not activity —
         # a shop that has added a second location has actually done something.
         return queryset.filter(is_default=False).exists()
+    if model_label == ("catalog", "scalebarcoderule"):
+        # The seeded rule is the layout the till already read before scale rules
+        # were configurable — created by migration on every install, including
+        # one nobody has logged into yet. A rule the shop wrote is activity.
+        return queryset.exclude(pattern=SEEDED_SCALE_RULE_PATTERN).exists()
     if model_label == ("catalog", "unitofmeasure"):
         # Seeded built-in units are configuration scaffolding, not shop activity.
         return queryset.filter(is_system=False).exists()

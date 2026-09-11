@@ -26,10 +26,12 @@ import '../../../shared/components/components.dart';
 import '../../ai/views/smart_reorder_action.dart';
 import '../view_models/catalog_view_model.dart';
 import '../view_models/product_details_view_model.dart';
+import '../view_models/scale_rules_view_model.dart';
 import '../view_models/units_management_view_model.dart';
 import 'product_details_screen.dart';
 import 'product_form.dart';
 import 'product_list.dart';
+import 'scale_rules_screen.dart';
 import 'units_management_screen.dart';
 
 class CatalogScreen extends StatefulWidget {
@@ -52,6 +54,7 @@ class CatalogScreen extends StatefulWidget {
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
+
   /// Optional: without it the stock panel simply shows the total and no
   /// per-place breakdown, which is the right answer for a shop with one
   /// place anyway.
@@ -157,6 +160,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   icon: const Icon(Icons.straighten_outlined),
                 ),
               ),
+              CatalogManagementGuard(
+                capabilities: capabilities,
+                fallback: const SizedBox.shrink(),
+                child: IconButton(
+                  tooltip: l10n.manageScaleRulesTooltip,
+                  onPressed: () => _openScaleRules(context),
+                  icon: const Icon(Icons.scale_outlined),
+                ),
+              ),
             ],
           ),
           body: CatalogManagementGuard(
@@ -219,6 +231,16 @@ class _CatalogScreenState extends State<CatalogScreen> {
             viewModel.catalogRepository,
             analyticsEngine: analyticsEngine,
           ),
+        ),
+      ),
+    );
+  }
+
+  void _openScaleRules(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ScaleRulesScreen(
+          viewModel: ScaleRulesViewModel(viewModel.catalogRepository),
         ),
       ),
     );

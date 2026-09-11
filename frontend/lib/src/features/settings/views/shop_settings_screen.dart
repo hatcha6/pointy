@@ -32,6 +32,8 @@ import '../view_models/prep_stations_view_model.dart';
 import '../view_models/price_checkers_view_model.dart';
 import '../view_models/sales_channels_view_model.dart';
 import '../view_models/warehouses_view_model.dart';
+import '../../scales/view_models/scales_view_model.dart';
+import '../../scales/views/scales_screen.dart';
 import '../view_models/shop_settings_view_model.dart';
 import '../view_models/messaging_settings_view_model.dart';
 import '../view_models/exchange_rates_view_model.dart';
@@ -64,6 +66,7 @@ class ShopSettingsScreen extends StatelessWidget {
     required this.warehouseRepository,
     required this.priceCheckersViewModel,
     required this.cameraSettingsViewModel,
+    required this.scalesViewModel,
     required this.workflowsViewModel,
     required this.assetTypesViewModel,
     required this.prepStationsViewModel,
@@ -85,6 +88,7 @@ class ShopSettingsScreen extends StatelessWidget {
   final WarehouseRepository warehouseRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
   final CameraSettingsViewModel cameraSettingsViewModel;
+  final ScalesViewModel scalesViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final AssetTypesViewModel assetTypesViewModel;
   final PrepStationsViewModel prepStationsViewModel;
@@ -137,6 +141,7 @@ class ShopSettingsScreen extends StatelessWidget {
               warehouseRepository: warehouseRepository,
               priceCheckersViewModel: priceCheckersViewModel,
               cameraSettingsViewModel: cameraSettingsViewModel,
+              scalesViewModel: scalesViewModel,
               workflowsViewModel: workflowsViewModel,
               assetTypesViewModel: assetTypesViewModel,
               prepStationsViewModel: prepStationsViewModel,
@@ -150,6 +155,7 @@ class ShopSettingsScreen extends StatelessWidget {
               canManageSalesChannels: capabilities.canManageSalesChannels,
               canManagePriceCheckers: capabilities.canManagePriceCheckers,
               canManageCameras: capabilities.canManageCameras,
+              canManageScales: capabilities.canManageScales,
               canManageWorkflows: capabilities.canManageWorkflows,
               canManageAttendance: capabilities.canManageAttendance,
               canManageMessaging: capabilities.canManageMessaging,
@@ -170,6 +176,7 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.warehouseRepository,
     required this.priceCheckersViewModel,
     required this.cameraSettingsViewModel,
+    required this.scalesViewModel,
     required this.workflowsViewModel,
     required this.assetTypesViewModel,
     required this.prepStationsViewModel,
@@ -183,6 +190,7 @@ class _ShopSettingsBody extends StatelessWidget {
     required this.canManageSalesChannels,
     required this.canManagePriceCheckers,
     required this.canManageCameras,
+    required this.canManageScales,
     required this.canManageWorkflows,
     required this.canManageAttendance,
     required this.canManageMessaging,
@@ -195,6 +203,7 @@ class _ShopSettingsBody extends StatelessWidget {
   final WarehouseRepository warehouseRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
   final CameraSettingsViewModel cameraSettingsViewModel;
+  final ScalesViewModel scalesViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final AssetTypesViewModel assetTypesViewModel;
   final PrepStationsViewModel prepStationsViewModel;
@@ -208,6 +217,7 @@ class _ShopSettingsBody extends StatelessWidget {
   final bool canManageSalesChannels;
   final bool canManagePriceCheckers;
   final bool canManageCameras;
+  final bool canManageScales;
   final bool canManageWorkflows;
   final bool canManageAttendance;
   final bool canManageMessaging;
@@ -245,6 +255,7 @@ class _ShopSettingsBody extends StatelessWidget {
       warehouseRepository: warehouseRepository,
       priceCheckersViewModel: priceCheckersViewModel,
       cameraSettingsViewModel: cameraSettingsViewModel,
+      scalesViewModel: scalesViewModel,
       workflowsViewModel: workflowsViewModel,
       assetTypesViewModel: assetTypesViewModel,
       prepStationsViewModel: prepStationsViewModel,
@@ -258,6 +269,7 @@ class _ShopSettingsBody extends StatelessWidget {
       canManageSalesChannels: canManageSalesChannels,
       canManagePriceCheckers: canManagePriceCheckers,
       canManageCameras: canManageCameras,
+      canManageScales: canManageScales,
       canManageWorkflows: canManageWorkflows,
       canManageAttendance: canManageAttendance,
       canManageMessaging: canManageMessaging,
@@ -275,6 +287,7 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.warehouseRepository,
     required this.priceCheckersViewModel,
     required this.cameraSettingsViewModel,
+    required this.scalesViewModel,
     required this.workflowsViewModel,
     required this.assetTypesViewModel,
     required this.prepStationsViewModel,
@@ -288,6 +301,7 @@ class _ShopSettingsForm extends StatefulWidget {
     required this.canManageSalesChannels,
     required this.canManagePriceCheckers,
     required this.canManageCameras,
+    required this.canManageScales,
     required this.canManageWorkflows,
     required this.canManageAttendance,
     required this.canManageMessaging,
@@ -301,6 +315,7 @@ class _ShopSettingsForm extends StatefulWidget {
   final WarehouseRepository warehouseRepository;
   final PriceCheckersViewModel priceCheckersViewModel;
   final CameraSettingsViewModel cameraSettingsViewModel;
+  final ScalesViewModel scalesViewModel;
   final WorkflowsViewModel workflowsViewModel;
   final AssetTypesViewModel assetTypesViewModel;
   final PrepStationsViewModel prepStationsViewModel;
@@ -314,6 +329,7 @@ class _ShopSettingsForm extends StatefulWidget {
   final bool canManageSalesChannels;
   final bool canManagePriceCheckers;
   final bool canManageCameras;
+  final bool canManageScales;
   final bool canManageWorkflows;
   final bool canManageAttendance;
   final bool canManageMessaging;
@@ -733,6 +749,15 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                             onTap: widget.viewModel.isSaving
                                 ? null
                                 : () => _openCameraSettings(context),
+                          ),
+                        if (widget.canManageScales)
+                          PointySettingsTile(
+                            icon: Icons.scale_outlined,
+                            title: l10n.scalesTitle,
+                            subtitle: l10n.scalesIntroMessage,
+                            onTap: widget.viewModel.isSaving
+                                ? null
+                                : () => _openScales(context),
                           ),
                         if (widget.canManageAttendance)
                           PointySettingsTile(
@@ -1545,6 +1570,14 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       MaterialPageRoute<void>(
         builder: (routeContext) =>
             PriceCheckersPage(viewModel: widget.priceCheckersViewModel),
+      ),
+    );
+  }
+
+  Future<void> _openScales(BuildContext context) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ScalesScreen(viewModel: widget.scalesViewModel),
       ),
     );
   }

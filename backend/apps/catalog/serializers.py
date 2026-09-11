@@ -6,6 +6,8 @@ from rest_framework import serializers
 
 from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
+
+from . import scale_barcodes
 from .identity import (
     BARCODE_FIELD,
     KIND_PAYLOAD,
@@ -28,6 +30,7 @@ from .models import (
     ProductUnit,
     ProductUnitBarcode,
     ProductVariant,
+    ScaleBarcodeRule,
     UnitOfMeasure,
     VariantOption,
     VariantOptionValue,
@@ -1606,3 +1609,77 @@ class BoughtTogetherProductSerializer(serializers.Serializer):
             if variant.is_default:
                 return variant
         return variants[0] if variants else None
+
+
+class ScaleBarcodeRuleSerializer(serializers.ModelSerializer):
+    """A scale label layout, with a worked example of what it reads.
+
+    The example is the point of the endpoint as much as the fields are: a shop
+    setting a pattern by hand needs to see "2112345015002 reads as item 12345,
+    1.500 kg" before it trusts the rule at a counter.
+    """
+
+    example = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ScaleBarcodeRule
+        fields = [
+            "id",
+            "name",
+            "pattern",
+            "value_kind",
+            "value_decimals",
+            "value_unit",
+            "require_check_digit",
+            "is_active",
+            "sequence",
+            "example",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ("created_at", "updated_at")
+
+    def get_example(self, rule):
+        """A sample code this rule would read, and what it would read it as."""
+
+        try:
+            frozen = rule.as_rule()
+            value = Decimal("1.5") if frozen.value_decimals else Decimal(1)
+            code = scale_barcodes.build_code(frozen, "12345", value)
+        except (scale_barcodes.ScaleRuleError, ArithmeticError, ValueError):
+            return None
+        return {
+            "barcode": code,
+            "item_code": "12345",
+            "value": str(value),
+            "value_kind": frozen.value_kind,
+        }
+
+    def validate(self, attrs):
+        # The model owns the rules about patterns and about two rules fighting
+        # over the same codes; run them here so the API answers with the field
+        # error rather than a 500 from a later save.
+        merged = {}
+        for field in (
+            "name",
+            "pattern",
+            "value_kind",
+            "value_decimals",
+            "value_unit",
+            "require_check_digit",
+            "is_active",
+            "sequence",
+        ):
+            if field in attrs:
+                merged[field] = attrs[field]
+            elif self.instance is not None:
+                merged[field] = getattr(self.instance, field)
+        candidate = ScaleBarcodeRule(**merged)
+        candidate.pk = self.instance.pk if self.instance is not None else None
+        try:
+            candidate.clean()
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(
+                error.message_dict if hasattr(error, "message_dict") else str(error)
+            ) from error
+        return attrs

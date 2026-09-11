@@ -23,6 +23,7 @@ from .models import (
     ProductUnit,
     ProductUnitBarcode,
     ProductVariant,
+    ScaleBarcodeRule,
     UnitOfMeasure,
 )
 
@@ -55,6 +56,8 @@ from .models import (
 @receiver(post_delete, sender=ProductModifierGroup)
 @receiver(post_save, sender=UnitOfMeasure)
 @receiver(post_delete, sender=UnitOfMeasure)
+@receiver(post_save, sender=ScaleBarcodeRule)
+@receiver(post_delete, sender=ScaleBarcodeRule)
 def bump_on_catalog_change(sender, **kwargs):
     bump_catalog_version()
 

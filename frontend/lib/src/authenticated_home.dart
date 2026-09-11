@@ -79,6 +79,7 @@ import 'features/reports/pdf/report_document_builder.dart';
 import 'features/reports/pdf/report_pdf.dart';
 import 'features/reports/views/report_pdf_preview_screen.dart';
 import 'features/reports/views/reports_screen.dart';
+import 'features/scales/view_models/scales_view_model.dart';
 import 'features/settings/view_models/modifier_groups_view_model.dart';
 import 'features/settings/view_models/prep_stations_view_model.dart';
 import 'features/settings/view_models/price_checkers_view_model.dart';
@@ -813,6 +814,10 @@ class _AuthenticatedRoutes implements AppNavigation {
         ),
         cameraSettingsViewModel: CameraSettingsViewModel(
           dependencies.surveillanceRepository,
+        ),
+        scalesViewModel: ScalesViewModel(
+          dependencies.scalesRepository,
+          dependencies.catalogRepository,
         ),
         workflowsViewModel: WorkflowsViewModel(
           dependencies.operationsRepository,

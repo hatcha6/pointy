@@ -7196,6 +7196,295 @@ class AppLocalizationsAr extends AppLocalizations {
   String get barcodeScanError => 'تعذر البحث عن الباركود. حاول مرة أخرى.';
 
   @override
+  String get manageScaleRulesTooltip => 'إعداد ملصقات الميزان';
+
+  @override
+  String get scaleRulesTitle => 'ملصقات الميزان';
+
+  @override
+  String get scaleRulesIntroTitle => 'كيف يقرأ الصندوق ملصق الميزان';
+
+  @override
+  String get scaleRulesIntroMessage =>
+      'الميزان يطبع باركود يحمل رمز الصنف والوزن أو السعر. نفس الأرقام تعني وزناً على ميزان وسعراً على آخر، فلا يُخمَّن شيء: عرّف هنا تنسيق كل ميزان لديك. الباركود الذي لا يطابق أي تنسيق يُعامل باركوداً عادياً.';
+
+  @override
+  String get addScaleRuleButton => 'إضافة تنسيق';
+
+  @override
+  String get scaleRuleEditTitle => 'تنسيق ملصق';
+
+  @override
+  String get scaleRuleNameLabel => 'الاسم';
+
+  @override
+  String get scaleRuleNameHint => 'ميزان الخضار';
+
+  @override
+  String get scaleRulePrefixLabel => 'يبدأ الباركود بـ';
+
+  @override
+  String get scaleRuleItemDigitsLabel => 'خانات رمز الصنف';
+
+  @override
+  String get scaleRuleValueDigitsLabel => 'خانات القيمة';
+
+  @override
+  String get scaleRuleValueKindLabel => 'القيمة المطبوعة هي';
+
+  @override
+  String get scaleRuleValueKindWeight => 'وزن';
+
+  @override
+  String get scaleRuleValueKindPrice => 'سعر';
+
+  @override
+  String get scaleRuleValueKindCount => 'عدد';
+
+  @override
+  String get scaleRuleDecimalsLabel => 'منازل عشرية';
+
+  @override
+  String get scaleRuleUnitLabel => 'وحدة الوزن';
+
+  @override
+  String get scaleRuleRequireCheckDigitLabel => 'تحقّق من خانة المراجعة';
+
+  @override
+  String get scaleRuleRequireCheckDigitHint =>
+      'أوقفه فقط إذا كان ميزانك يطبع خانة مراجعة خاطئة.';
+
+  @override
+  String get scaleRuleActiveLabel => 'مُفعّل';
+
+  @override
+  String get scaleRulePatternLabel => 'النمط';
+
+  @override
+  String get scaleRulePatternHelp =>
+      'رقم = ثابت · I = رمز الصنف · V = القيمة · C = خانة المراجعة · X = يُتجاهل';
+
+  @override
+  String get scaleRulePatternInvalid => 'نمط غير صالح.';
+
+  @override
+  String get scaleRuleExampleLabel => 'مثال';
+
+  @override
+  String scaleRulePlainSummary(String prefix, int itemDigits, String value) {
+    return 'يبدأ بـ $prefix · $itemDigits خانات للصنف · $value';
+  }
+
+  @override
+  String get scaleRuleValueWeight => 'ثم الوزن';
+
+  @override
+  String get scaleRuleValuePrice => 'ثم السعر';
+
+  @override
+  String get scaleRuleValueCount => 'ثم العدد';
+
+  @override
+  String scaleRuleExampleReads(String barcode, String reading) {
+    return 'مثال: $barcode ← $reading';
+  }
+
+  @override
+  String get scaleRuleTryTitle => 'جرّب ملصقاً';
+
+  @override
+  String get scaleRuleTryDescription =>
+      'امسك ملصقاً طبعه ميزانك ومرّره على القارئ — سيظهر هنا كيف يقرأه الصندوق.';
+
+  @override
+  String get scaleRuleTryHint => 'امسح أو الصق باركوداً طبعه الميزان';
+
+  @override
+  String get scaleRuleTryUnreadable =>
+      'لا يطابق أي تنسيق مُفعّل. سيُقرأ باركوداً عادياً.';
+
+  @override
+  String scaleRuleTryResult(String itemCode, String value) {
+    return 'الصنف $itemCode · $value';
+  }
+
+  @override
+  String get scaleRuleSaveError => 'تعذّر حفظ التنسيق.';
+
+  @override
+  String get scaleRuleDeleteTitle => 'حذف التنسيق؟';
+
+  @override
+  String get scaleRuleDeleteMessage =>
+      'لن يُقرأ أي ملصق بهذا التنسيق بعد الحذف.';
+
+  @override
+  String get scaleRulesEmpty => 'لا توجد تنسيقات بعد.';
+
+  @override
+  String get scalesTitle => 'الموازين';
+
+  @override
+  String get scalesNavLabel => 'الموازين';
+
+  @override
+  String get scalesIntroTitle => 'الميزان يحمل نسخته من الأسعار';
+
+  @override
+  String get scalesIntroMessage =>
+      'الميزان يطبع السعر على الملصق من جدول داخله. إن لم يوافق جدول الميزان الكتالوج فللمحل سعران ولا أحد يعرف بأيّهما باع. أرسل الأسعار من هنا بدل إدخالها في الميزان يدوياً.';
+
+  @override
+  String get addScaleButton => 'إضافة ميزان';
+
+  @override
+  String get scaleEditTitle => 'ميزان';
+
+  @override
+  String get scaleNameLabel => 'الاسم';
+
+  @override
+  String get scaleTypeLabel => 'نوع الميزان';
+
+  @override
+  String get scaleHostLabel => 'عنوان الميزان في الشبكة';
+
+  @override
+  String get scalePortLabel => 'المنفذ';
+
+  @override
+  String get scaleDepartmentLabel => 'رقم القسم في الميزان';
+
+  @override
+  String get scaleActiveLabel => 'مُفعّل';
+
+  @override
+  String get scaleCheckAction => 'اختبار الاتصال';
+
+  @override
+  String get scalePushAction => 'إرسال الأسعار';
+
+  @override
+  String get scaleExportAction => 'تنزيل ملف الأسعار';
+
+  @override
+  String get scaleExportFallbackAction => 'تنزيل الملف بدل الإرسال';
+
+  @override
+  String get scaleReachableMessage => 'الميزان يستجيب.';
+
+  @override
+  String get scaleUnreachableMessage => 'لا يوجد رد من الميزان.';
+
+  @override
+  String get scaleSaveError => 'تعذّر حفظ الميزان.';
+
+  @override
+  String get scaleDeleteTitle => 'حذف الميزان؟';
+
+  @override
+  String get scaleDeleteMessage => 'سيُحذف الميزان وسجلّ عمليات الإرسال إليه.';
+
+  @override
+  String get scalePushExportedMessage =>
+      'أُنشئ الملف. الأسعار لن تتغيّر في الميزان حتى تُحمّل الملف إليه.';
+
+  @override
+  String scalePushSucceededMessage(int count) {
+    return 'وصلت $count أصناف إلى الميزان.';
+  }
+
+  @override
+  String scalePushPartialMessage(int sent, int failed) {
+    return 'وصل $sent ولم يصل $failed.';
+  }
+
+  @override
+  String get scalePushFailedMessage => 'لم يصل شيء إلى الميزان.';
+
+  @override
+  String get scaleLastPushNever => 'لم يُرسل شيء بعد.';
+
+  @override
+  String get scaleStatusNeverPushed => 'لم يُرسل';
+
+  @override
+  String get scaleStatusWaitingToLoad => 'بانتظار التحميل';
+
+  @override
+  String get scaleStatusUpToDate => 'محدَّث';
+
+  @override
+  String get scaleStatusPartial => 'ناقص';
+
+  @override
+  String get scaleStatusFailed => 'فشل';
+
+  @override
+  String get scaleDriverLineFile => 'يُحمَّل بملف';
+
+  @override
+  String get scaleAddressLineLabel => 'العنوان';
+
+  @override
+  String scaleAssignedCount(int count) {
+    return '$count صنفاً على الموازين';
+  }
+
+  @override
+  String get scalePlusSectionTitle => 'الأصناف على الموازين';
+
+  @override
+  String get scalePlusEmpty =>
+      'لا يوجد صنف على الموازين بعد. أضف الأصناف التي تُوزن.';
+
+  @override
+  String get scaleAssignPluButton => 'إضافة صنف';
+
+  @override
+  String get scaleAssignPluHint => 'ابحث بالاسم أو الباركود';
+
+  @override
+  String get scaleAssignPluTitle => 'إضافة صنف إلى الموازين';
+
+  @override
+  String get scalePluRetireAction => 'إيقاف';
+
+  @override
+  String get scalePluRestoreAction => 'إعادة تفعيل';
+
+  @override
+  String get scalePluRetiredNote =>
+      'الرقم لا يُعاد استخدامه؛ قد تكون ملصقاته ما زالت في المحل.';
+
+  @override
+  String get scalesEmpty => 'لا توجد موازين معرّفة.';
+
+  @override
+  String scaleLabelWarnNotFractional(String productName) {
+    return '$productName: هذا المنتج يُباع بالعدد، فلم يُؤخذ الوزن من ملصق الميزان.';
+  }
+
+  @override
+  String scaleLabelWarnUnitMismatch(String productName) {
+    return '$productName: وحدة ملصق الميزان لا تناسب وحدة المنتج، فلم تُؤخذ الكمية من الملصق.';
+  }
+
+  @override
+  String scaleLabelWarnNoUnitPrice(String productName) {
+    return '$productName: سعر المنتج صفر، فتعذّر حساب الكمية من سعر الملصق.';
+  }
+
+  @override
+  String scaleLabelWarnRoundingDrift(
+    String productName,
+    String labelTotal,
+    String rungTotal,
+  ) {
+    return '$productName: الملصق $labelTotal والمسجَّل $rungTotal.';
+  }
+
+  @override
   String get cameraScannerSingleTitle => 'مسح باركود';
 
   @override

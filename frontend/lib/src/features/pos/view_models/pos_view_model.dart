@@ -274,6 +274,11 @@ class PosViewModel extends ChangeNotifier {
   String? _errorMessage;
   String? _lastScannedBarcode;
   String? _lastScannedProductName;
+  // How the last scan's scale label was read, when it was one. Kept so the
+  // cashier can be told the two things a sticker can go wrong about: that the
+  // product could not take the measurement, and that the price it rang is not
+  // quite the price printed on it.
+  ScaleQuantity? _scaleQuantity;
   // The cart line the shortcuts (F2 cycle-unit / F4 delete / arrow cycle-unit)
   // act on: the last line a scan or catalog tap landed on, or the last line the
   // cashier tapped to select. A hardware scan never touches a line's quantity —
@@ -412,6 +417,9 @@ class PosViewModel extends ChangeNotifier {
       _discountPreview?.unappliedCouponCodes ?? const [];
   String? get lastScannedBarcode => _lastScannedBarcode;
   String? get lastScannedProductName => _lastScannedProductName;
+
+  /// The last scan's scale-label reading, or null if it was not one.
+  ScaleQuantity? get lastScaleQuantity => _scaleQuantity;
   bool get hasRegisterSessionError => _hasRegisterSessionError;
   String get registerSessionErrorMessage => _registerSessionErrorMessage;
   bool get hasCheckoutSettingsError => _hasCheckoutSettingsError;

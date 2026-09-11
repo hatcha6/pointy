@@ -274,6 +274,14 @@
       ],
       "cwd": "frontend",
       "port": 8092
+    },
+    {
+      "name": "scales-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-scales-preview"
+      ],
+      "port": 8080
     }
   ]
 }

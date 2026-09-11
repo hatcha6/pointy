@@ -13,6 +13,8 @@ from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
 
+from . import scale_barcodes
+
 
 def normalize_sku(value: str | None) -> str:
     return "" if value is None else value.strip().upper()
@@ -1082,3 +1084,171 @@ class BomLine(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.bom_id}: {self.component_variant_id} ×{self.quantity}"
+
+
+class ScaleBarcodeRuleQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(is_active=True)
+
+
+class ScaleBarcodeRule(TimeStampedModel):
+    """How this shop's weighing scales lay out the barcodes they print.
+
+    A price-computing scale prints an in-store code carrying the item and a
+    measured value, and the *same thirteen digits* mean 1.250 kg on one scale
+    and 12.50 dinars on another. Nothing in the code says which. So the layout
+    is declared here, per shop, and :mod:`apps.catalog.scale_barcodes` refuses
+    to read a label no rule describes.
+
+    Rules are tried in ``sequence`` order and the first match wins, so a shop
+    running a produce scale and a deli scale on different prefixes gets both.
+    """
+
+    name = models.CharField(max_length=120)
+    # One character per digit position: literal digits are the prefix the scale
+    # prints, I is the item (PLU) code, V the embedded value, C the check digit,
+    # X a digit to skip. "21IIIIIVVVVVC" is the produce default.
+    pattern = models.CharField(max_length=32)
+    value_kind = models.CharField(
+        max_length=8,
+        choices=[
+            (scale_barcodes.ValueKind.WEIGHT, "Weight"),
+            (scale_barcodes.ValueKind.PRICE, "Price"),
+            (scale_barcodes.ValueKind.COUNT, "Count"),
+        ],
+        default=scale_barcodes.ValueKind.WEIGHT,
+    )
+    # How many of the V digits are decimals. Grams inside five digits is 3.
+    value_decimals = models.PositiveSmallIntegerField(default=3)
+    # The unit the value is in once scaled — only meaningful for weight rules.
+    # Converted to the product's own unit through UnitOfMeasure.reference_factor.
+    value_unit = models.CharField(max_length=32, default=Product.Unit.KILOGRAM)
+    # Cheap scales do print wrong check digits. A shop that owns one turns the
+    # guard off for that rule rather than losing the feature — but it is on by
+    # default, because it is the only thing standing between a misread digit and
+    # a wrong quantity.
+    require_check_digit = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    sequence = models.PositiveIntegerField(default=0)
+
+    objects = ScaleBarcodeRuleQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["sequence", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.pattern})"
+
+    def clean(self):
+        try:
+            scale_barcodes.validate_pattern(self.pattern)
+        except scale_barcodes.ScaleRuleError as error:
+            raise ValidationError({"pattern": str(error)}) from error
+        if self.value_decimals > (self.pattern or "").count(scale_barcodes.VALUE):
+            raise ValidationError(
+                {
+                    "value_decimals": (
+                        "More decimal places than the pattern has value digits."
+                    )
+                }
+            )
+        if not self.is_active:
+            return
+        # Two active rules that can match the same codes make the till's answer
+        # depend on row order, which is no answer at all.
+        clashing = (
+            ScaleBarcodeRule.objects.active()
+            .exclude(pk=self.pk)
+            .filter(pattern__isnull=False)
+        )
+        signature = self.as_rule().signature
+        for other in clashing:
+            try:
+                other_signature = other.as_rule().signature
+            except scale_barcodes.ScaleRuleError:
+                continue  # An unusable row matches nothing, so it clashes with nothing.
+            if other_signature == signature:
+                raise ValidationError(
+                    {
+                        "pattern": (
+                            f"'{other.name}' already matches these codes. "
+                            "Two active rules cannot describe the same label."
+                        )
+                    }
+                )
+
+    def as_rule(self) -> scale_barcodes.ScaleRule:
+        """The frozen, database-free shape the parser works in."""
+
+        return scale_barcodes.ScaleRule(
+            pattern=self.pattern,
+            value_kind=self.value_kind,
+            value_decimals=self.value_decimals,
+            value_unit=self.value_unit,
+            require_check_digit=self.require_check_digit,
+            name=self.name,
+            rule_id=self.pk,
+        )
+
+
+class ScalePluQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(is_active=True)
+
+
+class ScalePlu(TimeStampedModel):
+    """The number a product answers to on the shop's weighing scales.
+
+    A scale does not know about barcodes or SKUs. It knows a PLU: a short
+    number the operator keys in, which the scale then prints into the label
+    along with what it weighed. So this is the product's identity on every
+    scale in the shop, and it has one property that matters more than all the
+    others: **it never moves**. Stickers printed last week are still on shelves
+    and in customers' bags; a PLU that got reassigned turns every one of them
+    into a label for the wrong product, at the wrong price, with nothing on
+    screen to say so. Numbers are therefore allocated once, never reused, and
+    retired by deactivating the row rather than deleting it.
+    """
+
+    variant = models.OneToOneField(
+        ProductVariant,
+        on_delete=models.CASCADE,
+        related_name="scale_plu",
+    )
+    plu_number = models.PositiveIntegerField(unique=True)
+    # What the scale prints on the sticker. Defaults to the product's name, but
+    # stays separate because a scale's label is a few dozen characters of a
+    # character set we do not choose — plenty of them cannot print Arabic at
+    # all, and a shop with one of those needs somewhere to put "JEBEN ABYAD"
+    # without renaming the product everybody else reads.
+    label_name = models.CharField(max_length=40, blank=True)
+    # Packaging weight the scale subtracts before it prints, in grams.
+    tare_grams = models.PositiveIntegerField(default=0)
+    # Printed as a sell-by date on the label. Null leaves the scale's own
+    # setting alone.
+    shelf_life_days = models.PositiveSmallIntegerField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    objects = ScalePluQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["plu_number"]
+
+    def __str__(self) -> str:
+        return f"PLU {self.plu_number}"
+
+    @property
+    def printed_name(self) -> str:
+        return self.label_name.strip() or self.variant.product.name
+
+    @classmethod
+    def next_number(cls) -> int:
+        """The lowest number that has never been used.
+
+        Deliberately ``max + 1`` over *every* row, retired ones included: a gap
+        left by a deactivated PLU stays a gap, because the stickers that carry
+        it may still be in the shop.
+        """
+
+        highest = cls.objects.aggregate(models.Max("plu_number"))["plu_number__max"]
+        return int(highest or 0) + 1

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import '../../core/result.dart';
 import '../../core/token_lru_cache.dart';
 import '../../shared/barcode/scale_barcode.dart';
+import '../../shared/units.dart';
 import '../models/attachment_summary.dart';
 import '../models/barcode_resolution.dart';
 import '../models/bought_together_product.dart';
@@ -53,6 +54,24 @@ class CatalogRepository {
     capacity: 32,
     ttl: const Duration(seconds: 45),
   );
+
+  // Scale rules describe a *layout*, not a price, and a shop changes one about
+  // as often as it buys a scale. So they are cached on a plain TTL rather than
+  // the catalog version token — which moves on every stock save and would put a
+  // request on the scan path for nothing. The settings screen clears them the
+  // moment a rule is edited, so the only staleness left is another device's
+  // edit, bounded by the TTL.
+  static const Duration _scaleRuleTtl = Duration(minutes: 10);
+  List<ScaleBarcodeRule>? _scaleRules;
+  DateTime? _scaleRulesLoadedAt;
+
+  // The unit registry, cached the same way and for the same reason. It answers
+  // one question the till needs and the variant payload deliberately does not
+  // carry: whether a product's base unit may be sold in fractions. Putting it
+  // on every variant row would cost a query per row in the catalog payload —
+  // the hottest response in the app — to repeat one of about a dozen answers.
+  Map<String, UnitOfMeasure>? _unitRegistry;
+  DateTime? _unitRegistryLoadedAt;
 
   Future<Result<ProductPage>> loadProducts({
     required ProductQuery query,
@@ -539,6 +558,149 @@ class CatalogRepository {
     );
   }
 
+  /// The shop's scale label layouts, ordered as the till must try them.
+  ///
+  /// Fails soft: a till that cannot reach the rules endpoint still rings every
+  /// ordinary barcode. It simply stops recognising scale labels, which is the
+  /// safe half of the failure — the alternative is reading a sticker with rules
+  /// we are not sure of.
+  Future<List<ScaleBarcodeRule>> activeScaleRules({
+    bool refresh = false,
+  }) async {
+    final cached = _scaleRules;
+    final loadedAt = _scaleRulesLoadedAt;
+    final fresh =
+        loadedAt != null && DateTime.now().difference(loadedAt) < _scaleRuleTtl;
+    if (!refresh && cached != null && fresh) {
+      return cached;
+    }
+    try {
+      final rules = orderScaleRules(await _service.fetchScaleBarcodeRules());
+      _scaleRules = rules;
+      _scaleRulesLoadedAt = DateTime.now();
+      return rules;
+    } catch (_) {
+      return cached ?? const <ScaleBarcodeRule>[];
+    }
+  }
+
+  /// The shop's unit registry, cached; empty while it is unreachable.
+  ///
+  /// Nothing it can do is worth failing a scan over, so every caller below
+  /// falls back to the built-in unit codes rather than refusing to read a
+  /// label.
+  Future<Map<String, UnitOfMeasure>> _units() async {
+    final loadedAt = _unitRegistryLoadedAt;
+    final fresh =
+        loadedAt != null && DateTime.now().difference(loadedAt) < _scaleRuleTtl;
+    final cached = _unitRegistry;
+    if (cached != null && fresh) {
+      return cached;
+    }
+    try {
+      final result = await loadAllUnits(activeOnly: false);
+      if (result case Ok<List<UnitOfMeasure>>(:final value)) {
+        final registry = {
+          for (final unit in value) unit.code.trim().toLowerCase(): unit,
+        };
+        _unitRegistry = registry;
+        _unitRegistryLoadedAt = DateTime.now();
+        return registry;
+      }
+    } catch (_) {
+      // Unreachable registry: the built-in codes still ring kilograms.
+    }
+    return cached ?? const <String, UnitOfMeasure>{};
+  }
+
+  /// Whether a product's base unit may be sold in fractions.
+  ///
+  /// The shop's own registry answers it, so a shop that defined "وزنة" as a
+  /// weight unit behaves like one using the seeded kilogram.
+  Future<bool> unitAllowsFractional(String code) async {
+    final normalized = code.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final unit = (await _units())[normalized];
+    return unit?.allowsFractional ?? baseUnitAllowsFractional(normalized);
+  }
+
+  /// How many of [productUnit] are in one [valueUnit] — the factor that carries
+  /// a scale label's measurement into the product's own unit.
+  ///
+  /// Null when they cannot be converted between, which the till reports rather
+  /// than guessing at. Answered from the registry so a shop's own unit converts
+  /// like a built-in one; the static tables stand in when it is unreachable.
+  Future<double?> unitConversionFactorFor(
+    String valueUnit,
+    String productUnit,
+  ) async {
+    final source = valueUnit.trim().toLowerCase();
+    final target = productUnit.trim().toLowerCase();
+    if (source.isEmpty || target.isEmpty) {
+      return null;
+    }
+    if (source == target) {
+      return 1;
+    }
+    final units = await _units();
+    final from = units[source];
+    final to = units[target];
+    if (from == null || to == null) {
+      return unitConversionFactor(source, target);
+    }
+    final fromFactor = from.referenceFactor;
+    final toFactor = to.referenceFactor;
+    if (from.dimension != to.dimension ||
+        fromFactor == null ||
+        toFactor == null ||
+        fromFactor <= 0 ||
+        toFactor <= 0) {
+      return null;
+    }
+    return fromFactor / toFactor;
+  }
+
+  /// Drop the cached rules so the next scan re-reads them. Called after an edit.
+  void invalidateScaleRules() {
+    _scaleRules = null;
+    _scaleRulesLoadedAt = null;
+    _unitRegistry = null;
+    _unitRegistryLoadedAt = null;
+    _barcodeCache.clear();
+  }
+
+  Future<Result<List<ScaleBarcodeRule>>> loadScaleBarcodeRules({
+    bool activeOnly = false,
+  }) async {
+    return Result.guard(
+      () => _service.fetchScaleBarcodeRules(activeOnly: activeOnly),
+    );
+  }
+
+  Future<Result<ScaleBarcodeRule>> saveScaleBarcodeRule({
+    int? id,
+    required Map<String, Object?> draft,
+  }) async {
+    final result = await Result.guard(() async {
+      final saved = id == null
+          ? await _service.createScaleBarcodeRule(draft)
+          : await _service.updateScaleBarcodeRule(id: id, changes: draft);
+      return saved;
+    });
+    invalidateScaleRules();
+    return result;
+  }
+
+  Future<Result<void>> deleteScaleBarcodeRule(int id) async {
+    final result = await Result.guard(
+      () => _service.deleteScaleBarcodeRule(id),
+    );
+    invalidateScaleRules();
+    return result;
+  }
+
   /// Resolves a scanned code to the variant it rings up — and, when the code
   /// is a packaging (unit) barcode, to the matched [ProductUnit] so the caller
   /// adds a carton line instead of a piece.
@@ -568,9 +730,13 @@ class CatalogRepository {
       if (direct != null) {
         return direct;
       }
-      // Digital-scale labels embed the weight in the barcode; the catalog
-      // stores only the short item code, so retry with the parsed candidates.
-      final scaleBarcode = parseScaleBarcode(normalizedBarcode);
+      // A weighing scale's own label: the catalog holds the item's short code
+      // (or the masked base code), never the sticker with the weight in it, so
+      // retry with the candidates the matched rule produces.
+      final scaleBarcode = parseScaleBarcode(
+        normalizedBarcode,
+        await activeScaleRules(),
+      );
       if (scaleBarcode == null) {
         return null;
       }
@@ -580,7 +746,8 @@ class CatalogRepository {
           activeOnly: activeOnly,
         );
         if (resolution != null) {
-          return resolution;
+          // Carried on the resolution so the till reads the sticker once.
+          return resolution.copyWith(scaleMatch: scaleBarcode);
         }
       }
       return null;

@@ -12688,6 +12688,520 @@ abstract class AppLocalizations {
   /// **'تعذر البحث عن الباركود. حاول مرة أخرى.'**
   String get barcodeScanError;
 
+  /// No description provided for @manageScaleRulesTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعداد ملصقات الميزان'**
+  String get manageScaleRulesTooltip;
+
+  /// No description provided for @scaleRulesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملصقات الميزان'**
+  String get scaleRulesTitle;
+
+  /// No description provided for @scaleRulesIntroTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كيف يقرأ الصندوق ملصق الميزان'**
+  String get scaleRulesIntroTitle;
+
+  /// No description provided for @scaleRulesIntroMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'الميزان يطبع باركود يحمل رمز الصنف والوزن أو السعر. نفس الأرقام تعني وزناً على ميزان وسعراً على آخر، فلا يُخمَّن شيء: عرّف هنا تنسيق كل ميزان لديك. الباركود الذي لا يطابق أي تنسيق يُعامل باركوداً عادياً.'**
+  String get scaleRulesIntroMessage;
+
+  /// No description provided for @addScaleRuleButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة تنسيق'**
+  String get addScaleRuleButton;
+
+  /// No description provided for @scaleRuleEditTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنسيق ملصق'**
+  String get scaleRuleEditTitle;
+
+  /// No description provided for @scaleRuleNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم'**
+  String get scaleRuleNameLabel;
+
+  /// No description provided for @scaleRuleNameHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ميزان الخضار'**
+  String get scaleRuleNameHint;
+
+  /// No description provided for @scaleRulePrefixLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'يبدأ الباركود بـ'**
+  String get scaleRulePrefixLabel;
+
+  /// No description provided for @scaleRuleItemDigitsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'خانات رمز الصنف'**
+  String get scaleRuleItemDigitsLabel;
+
+  /// No description provided for @scaleRuleValueDigitsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'خانات القيمة'**
+  String get scaleRuleValueDigitsLabel;
+
+  /// No description provided for @scaleRuleValueKindLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'القيمة المطبوعة هي'**
+  String get scaleRuleValueKindLabel;
+
+  /// No description provided for @scaleRuleValueKindWeight.
+  ///
+  /// In ar, this message translates to:
+  /// **'وزن'**
+  String get scaleRuleValueKindWeight;
+
+  /// No description provided for @scaleRuleValueKindPrice.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر'**
+  String get scaleRuleValueKindPrice;
+
+  /// No description provided for @scaleRuleValueKindCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد'**
+  String get scaleRuleValueKindCount;
+
+  /// No description provided for @scaleRuleDecimalsLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'منازل عشرية'**
+  String get scaleRuleDecimalsLabel;
+
+  /// No description provided for @scaleRuleUnitLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'وحدة الوزن'**
+  String get scaleRuleUnitLabel;
+
+  /// No description provided for @scaleRuleRequireCheckDigitLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحقّق من خانة المراجعة'**
+  String get scaleRuleRequireCheckDigitLabel;
+
+  /// No description provided for @scaleRuleRequireCheckDigitHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوقفه فقط إذا كان ميزانك يطبع خانة مراجعة خاطئة.'**
+  String get scaleRuleRequireCheckDigitHint;
+
+  /// No description provided for @scaleRuleActiveLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُفعّل'**
+  String get scaleRuleActiveLabel;
+
+  /// No description provided for @scaleRulePatternLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'النمط'**
+  String get scaleRulePatternLabel;
+
+  /// No description provided for @scaleRulePatternHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم = ثابت · I = رمز الصنف · V = القيمة · C = خانة المراجعة · X = يُتجاهل'**
+  String get scaleRulePatternHelp;
+
+  /// No description provided for @scaleRulePatternInvalid.
+  ///
+  /// In ar, this message translates to:
+  /// **'نمط غير صالح.'**
+  String get scaleRulePatternInvalid;
+
+  /// No description provided for @scaleRuleExampleLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال'**
+  String get scaleRuleExampleLabel;
+
+  /// Plain-language description of a scale rule, for a shopkeeper who will never read the pattern.
+  ///
+  /// In ar, this message translates to:
+  /// **'يبدأ بـ {prefix} · {itemDigits} خانات للصنف · {value}'**
+  String scaleRulePlainSummary(String prefix, int itemDigits, String value);
+
+  /// No description provided for @scaleRuleValueWeight.
+  ///
+  /// In ar, this message translates to:
+  /// **'ثم الوزن'**
+  String get scaleRuleValueWeight;
+
+  /// No description provided for @scaleRuleValuePrice.
+  ///
+  /// In ar, this message translates to:
+  /// **'ثم السعر'**
+  String get scaleRuleValuePrice;
+
+  /// No description provided for @scaleRuleValueCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'ثم العدد'**
+  String get scaleRuleValueCount;
+
+  /// A sample barcode and what the rule reads it as.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: {barcode} ← {reading}'**
+  String scaleRuleExampleReads(String barcode, String reading);
+
+  /// No description provided for @scaleRuleTryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جرّب ملصقاً'**
+  String get scaleRuleTryTitle;
+
+  /// No description provided for @scaleRuleTryDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسك ملصقاً طبعه ميزانك ومرّره على القارئ — سيظهر هنا كيف يقرأه الصندوق.'**
+  String get scaleRuleTryDescription;
+
+  /// No description provided for @scaleRuleTryHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح أو الصق باركوداً طبعه الميزان'**
+  String get scaleRuleTryHint;
+
+  /// No description provided for @scaleRuleTryUnreadable.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يطابق أي تنسيق مُفعّل. سيُقرأ باركوداً عادياً.'**
+  String get scaleRuleTryUnreadable;
+
+  /// How a pasted scale label reads under the configured rules.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصنف {itemCode} · {value}'**
+  String scaleRuleTryResult(String itemCode, String value);
+
+  /// No description provided for @scaleRuleSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ التنسيق.'**
+  String get scaleRuleSaveError;
+
+  /// No description provided for @scaleRuleDeleteTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف التنسيق؟'**
+  String get scaleRuleDeleteTitle;
+
+  /// No description provided for @scaleRuleDeleteMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن يُقرأ أي ملصق بهذا التنسيق بعد الحذف.'**
+  String get scaleRuleDeleteMessage;
+
+  /// No description provided for @scaleRulesEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد تنسيقات بعد.'**
+  String get scaleRulesEmpty;
+
+  /// No description provided for @scalesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموازين'**
+  String get scalesTitle;
+
+  /// No description provided for @scalesNavLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموازين'**
+  String get scalesNavLabel;
+
+  /// No description provided for @scalesIntroTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الميزان يحمل نسخته من الأسعار'**
+  String get scalesIntroTitle;
+
+  /// No description provided for @scalesIntroMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'الميزان يطبع السعر على الملصق من جدول داخله. إن لم يوافق جدول الميزان الكتالوج فللمحل سعران ولا أحد يعرف بأيّهما باع. أرسل الأسعار من هنا بدل إدخالها في الميزان يدوياً.'**
+  String get scalesIntroMessage;
+
+  /// No description provided for @addScaleButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة ميزان'**
+  String get addScaleButton;
+
+  /// No description provided for @scaleEditTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ميزان'**
+  String get scaleEditTitle;
+
+  /// No description provided for @scaleNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاسم'**
+  String get scaleNameLabel;
+
+  /// No description provided for @scaleTypeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الميزان'**
+  String get scaleTypeLabel;
+
+  /// No description provided for @scaleHostLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عنوان الميزان في الشبكة'**
+  String get scaleHostLabel;
+
+  /// No description provided for @scalePortLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنفذ'**
+  String get scalePortLabel;
+
+  /// No description provided for @scaleDepartmentLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم القسم في الميزان'**
+  String get scaleDepartmentLabel;
+
+  /// No description provided for @scaleActiveLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مُفعّل'**
+  String get scaleActiveLabel;
+
+  /// No description provided for @scaleCheckAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختبار الاتصال'**
+  String get scaleCheckAction;
+
+  /// No description provided for @scalePushAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال الأسعار'**
+  String get scalePushAction;
+
+  /// No description provided for @scaleExportAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنزيل ملف الأسعار'**
+  String get scaleExportAction;
+
+  /// No description provided for @scaleExportFallbackAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنزيل الملف بدل الإرسال'**
+  String get scaleExportFallbackAction;
+
+  /// No description provided for @scaleReachableMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'الميزان يستجيب.'**
+  String get scaleReachableMessage;
+
+  /// No description provided for @scaleUnreachableMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد رد من الميزان.'**
+  String get scaleUnreachableMessage;
+
+  /// No description provided for @scaleSaveError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الميزان.'**
+  String get scaleSaveError;
+
+  /// No description provided for @scaleDeleteTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الميزان؟'**
+  String get scaleDeleteTitle;
+
+  /// No description provided for @scaleDeleteMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُحذف الميزان وسجلّ عمليات الإرسال إليه.'**
+  String get scaleDeleteMessage;
+
+  /// No description provided for @scalePushExportedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُنشئ الملف. الأسعار لن تتغيّر في الميزان حتى تُحمّل الملف إليه.'**
+  String get scalePushExportedMessage;
+
+  /// Every PLU reached the scale.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصلت {count} أصناف إلى الميزان.'**
+  String scalePushSucceededMessage(int count);
+
+  /// Some PLUs landed and some did not.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصل {sent} ولم يصل {failed}.'**
+  String scalePushPartialMessage(int sent, int failed);
+
+  /// No description provided for @scalePushFailedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يصل شيء إلى الميزان.'**
+  String get scalePushFailedMessage;
+
+  /// No description provided for @scaleLastPushNever.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُرسل شيء بعد.'**
+  String get scaleLastPushNever;
+
+  /// No description provided for @scaleStatusNeverPushed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُرسل'**
+  String get scaleStatusNeverPushed;
+
+  /// No description provided for @scaleStatusWaitingToLoad.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار التحميل'**
+  String get scaleStatusWaitingToLoad;
+
+  /// No description provided for @scaleStatusUpToDate.
+  ///
+  /// In ar, this message translates to:
+  /// **'محدَّث'**
+  String get scaleStatusUpToDate;
+
+  /// No description provided for @scaleStatusPartial.
+  ///
+  /// In ar, this message translates to:
+  /// **'ناقص'**
+  String get scaleStatusPartial;
+
+  /// No description provided for @scaleStatusFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل'**
+  String get scaleStatusFailed;
+
+  /// No description provided for @scaleDriverLineFile.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُحمَّل بملف'**
+  String get scaleDriverLineFile;
+
+  /// No description provided for @scaleAddressLineLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'العنوان'**
+  String get scaleAddressLineLabel;
+
+  /// How many products carry a PLU.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} صنفاً على الموازين'**
+  String scaleAssignedCount(int count);
+
+  /// No description provided for @scalePlusSectionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأصناف على الموازين'**
+  String get scalePlusSectionTitle;
+
+  /// No description provided for @scalePlusEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد صنف على الموازين بعد. أضف الأصناف التي تُوزن.'**
+  String get scalePlusEmpty;
+
+  /// No description provided for @scaleAssignPluButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة صنف'**
+  String get scaleAssignPluButton;
+
+  /// No description provided for @scaleAssignPluHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث بالاسم أو الباركود'**
+  String get scaleAssignPluHint;
+
+  /// No description provided for @scaleAssignPluTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة صنف إلى الموازين'**
+  String get scaleAssignPluTitle;
+
+  /// No description provided for @scalePluRetireAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيقاف'**
+  String get scalePluRetireAction;
+
+  /// No description provided for @scalePluRestoreAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة تفعيل'**
+  String get scalePluRestoreAction;
+
+  /// No description provided for @scalePluRetiredNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم لا يُعاد استخدامه؛ قد تكون ملصقاته ما زالت في المحل.'**
+  String get scalePluRetiredNote;
+
+  /// No description provided for @scalesEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد موازين معرّفة.'**
+  String get scalesEmpty;
+
+  /// Scale label scanned for a product counted in whole units; the embedded weight was ignored.
+  ///
+  /// In ar, this message translates to:
+  /// **'{productName}: هذا المنتج يُباع بالعدد، فلم يُؤخذ الوزن من ملصق الميزان.'**
+  String scaleLabelWarnNotFractional(String productName);
+
+  /// The rule's unit cannot be converted into the product's unit.
+  ///
+  /// In ar, this message translates to:
+  /// **'{productName}: وحدة ملصق الميزان لا تناسب وحدة المنتج، فلم تُؤخذ الكمية من الملصق.'**
+  String scaleLabelWarnUnitMismatch(String productName);
+
+  /// A price-embedded label cannot be divided by a zero unit price.
+  ///
+  /// In ar, this message translates to:
+  /// **'{productName}: سعر المنتج صفر، فتعذّر حساب الكمية من سعر الملصق.'**
+  String scaleLabelWarnNoUnitPrice(String productName);
+
+  /// The derived quantity does not price back to exactly the sticker's total.
+  ///
+  /// In ar, this message translates to:
+  /// **'{productName}: الملصق {labelTotal} والمسجَّل {rungTotal}.'**
+  String scaleLabelWarnRoundingDrift(
+    String productName,
+    String labelTotal,
+    String rungTotal,
+  );
+
   /// No description provided for @cameraScannerSingleTitle.
   ///
   /// In ar, this message translates to:

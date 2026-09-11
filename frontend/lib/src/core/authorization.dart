@@ -59,6 +59,7 @@ enum AppCapability {
   reviewCameraPlayback,
   exportCameraFootage,
   manageCameras,
+  manageScales,
   manageMessaging,
   viewConversations,
   manageConversations,
@@ -519,6 +520,11 @@ class AuthorizationCapabilities {
           ..add(AppCapability.viewCameras)
           ..add(AppCapability.manageCameras);
       }
+      // Sending prices to a scale changes what the shop's stickers say, so it
+      // rides its own right rather than the general settings one.
+      if (_hasAny(user, const ['push_scale', 'scales.push_scale'])) {
+        capabilities.add(AppCapability.manageScales);
+      }
       if (_hasAny(user, const [
         'view_conversations',
         'crm.view_conversations',
@@ -823,6 +829,7 @@ class AuthorizationCapabilities {
       allows(AppCapability.reviewCameraPlayback);
   bool get canExportCameraFootage => allows(AppCapability.exportCameraFootage);
   bool get canManageCameras => allows(AppCapability.manageCameras);
+  bool get canManageScales => allows(AppCapability.manageScales);
   bool get canManageMessaging => allows(AppCapability.manageMessaging);
   bool get canViewConversations => allows(AppCapability.viewConversations);
   bool get canManageConversations => allows(AppCapability.manageConversations);

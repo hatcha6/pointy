@@ -17,6 +17,7 @@ import 'package:pointy_frontend/src/data/models/product_page.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/models/product_unit.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
+import 'package:pointy_frontend/src/shared/barcode/scale_barcode.dart';
 import 'package:pointy_frontend/src/data/models/unit_of_measure.dart';
 import 'package:pointy_frontend/src/data/models/product_variant_page.dart';
 import 'package:pointy_frontend/src/data/models/query.dart';
@@ -31,6 +32,7 @@ import 'package:pointy_frontend/src/data/repositories/sale_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.dart';
 import 'package:pointy_frontend/src/data/services/analytics_queue_storage.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
+import 'package:pointy_frontend/src/data/services/unit_of_measure_api_client.dart';
 import 'package:pointy_frontend/src/data/services/local_scoped_json_storage.dart';
 import 'package:pointy_frontend/src/data/services/print_transport.dart';
 import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart';
@@ -988,6 +990,134 @@ void main() {
       expect(feedback, [ScanFeedback.success, ScanFeedback.notFound]);
     });
 
+    group('scale labels', () {
+      const weightRule = ScaleBarcodeRule(
+        pattern: '21IIIIIVVVVVC',
+        name: 'produce',
+      );
+      const priceRule = ScaleBarcodeRule(
+        pattern: '23IIIIIVVVVVC',
+        valueKind: ScaleValueKind.price,
+        valueDecimals: 2,
+        name: 'deli',
+      );
+
+      PosViewModel scaleViewModel({
+        List<ProductVariant> catalog = const [_tomatoVariant],
+        List<ScaleBarcodeRule> rules = const [weightRule, priceRule],
+        List<UnitOfMeasure>? units,
+      }) {
+        final viewModel = _viewModel(
+          _FakePosApiService(
+            catalogPages: {1: catalog},
+            scaleRules: rules,
+            unitsOfMeasure: units,
+          ),
+        );
+        addTearDown(viewModel.dispose);
+        return viewModel;
+      }
+
+      test('a weight label rings the weight it carries', () async {
+        final viewModel = scaleViewModel();
+        // 21 · 12345 · 01500 → 1.500 kg of the product stored as "12345".
+        expect(await viewModel.addVariantByBarcode('2112345015002'), isTrue);
+
+        final line = viewModel.cart.single;
+        expect(line.variant.id, _tomatoVariant.id);
+        expect(line.quantity, closeTo(1.5, 0.0001));
+        expect(viewModel.lastScaleQuantity?.hasWarning, isFalse);
+      });
+
+      test('a price label rings the quantity that costs it', () async {
+        final viewModel = scaleViewModel();
+        // 23 · 12345 · 01250 → a 12.50 sticker on a 40.00/kg product.
+        expect(await viewModel.addVariantByBarcode('2312345012500'), isTrue);
+
+        final line = viewModel.cart.single;
+        expect(line.quantity, closeTo(0.312, 0.0001));
+        expect(viewModel.lastScaleQuantity?.labelTotal, closeTo(12.5, 0.0001));
+        // Three decimals cannot land on 12.50 exactly, and the cashier is told.
+        expect(viewModel.lastScaleQuantity?.warning, kScaleWarnRoundingDrift);
+      });
+
+      test('a counted product never takes a weight, and says so', () async {
+        final viewModel = scaleViewModel(catalog: const [_breadVariant]);
+        expect(await viewModel.addVariantByBarcode('2154321015002'), isTrue);
+
+        expect(viewModel.cart.single.quantity, 1);
+        expect(viewModel.lastScaleQuantity?.warning, kScaleWarnNotFractional);
+      });
+
+      test(
+        'with no rules configured a label is just an unknown code',
+        () async {
+          final viewModel = scaleViewModel(rules: const []);
+          expect(await viewModel.addVariantByBarcode('2112345015002'), isFalse);
+          expect(viewModel.barcodeScanStatus, BarcodeScanStatus.notFound);
+          expect(viewModel.lastScaleQuantity, isNull);
+        },
+      );
+
+      test("a shop's own weight unit takes a weight like any other", () async {
+        // Nothing about the code "wazna" says it is a weight; only the shop's
+        // registry does. This is the case the built-in code list cannot answer.
+        const wazna = ProductVariant(
+          id: 110,
+          productId: 10,
+          productName: 'تمر',
+          displayName: 'تمر',
+          fullName: 'تمر',
+          sku: 'DAT-001',
+          unitPrice: 9,
+          quantityOnHand: 30,
+          barcode: '12345',
+          unit: 'wazna',
+          isDefault: true,
+        );
+        final viewModel = scaleViewModel(
+          catalog: const [wazna],
+          units: const [
+            // The shop's own name for the kilogram: same dimension, same
+            // reference factor, a code no built-in list could know.
+            UnitOfMeasure(
+              id: 1,
+              code: 'wazna',
+              name: 'وزنة',
+              dimension: 'weight',
+              referenceFactor: 1,
+              allowsFractional: true,
+            ),
+            UnitOfMeasure(
+              id: 2,
+              code: 'kg',
+              name: 'كيلوغرام',
+              dimension: 'weight',
+              referenceFactor: 1,
+              allowsFractional: true,
+            ),
+          ],
+        );
+
+        expect(await viewModel.addVariantByBarcode('2112345015002'), isTrue);
+        expect(viewModel.cart.single.quantity, closeTo(1.5, 0.0001));
+        expect(viewModel.lastScaleQuantity?.hasWarning, isFalse);
+      });
+
+      test('an unreachable registry falls back to the built-in units', () async {
+        // units: null — the registry cannot be read, and kilograms still work.
+        final viewModel = scaleViewModel();
+        expect(await viewModel.addVariantByBarcode('2112345015002'), isTrue);
+        expect(viewModel.cart.single.quantity, closeTo(1.5, 0.0001));
+      });
+
+      test('an ordinary barcode carries no scale reading', () async {
+        final viewModel = scaleViewModel(catalog: const [_coffeeVariant]);
+        expect(await viewModel.addVariantByBarcode('1000001'), isTrue);
+        expect(viewModel.lastScaleQuantity, isNull);
+      });
+    });
+
     test('a failed barcode lookup chimes the error sound', () async {
       final feedback = <ScanFeedback>[];
       final viewModel = _viewModel(
@@ -1553,6 +1683,36 @@ const _coffeeVariant = ProductVariant(
   isDefault: true,
 );
 
+/// A produce line: the catalog stores the scale's short item code, and the
+/// product is measured rather than counted.
+const _tomatoVariant = ProductVariant(
+  id: 108,
+  productId: 8,
+  productName: 'طماطم',
+  displayName: 'طماطم',
+  fullName: 'طماطم',
+  sku: 'TOM-001',
+  unitPrice: 40,
+  quantityOnHand: 100,
+  barcode: '12345',
+  unit: 'kg',
+  isDefault: true,
+);
+
+/// The same short code on a product sold by the piece.
+const _breadVariant = ProductVariant(
+  id: 109,
+  productId: 9,
+  productName: 'خبز',
+  displayName: 'خبز',
+  fullName: 'خبز',
+  sku: 'BRD-001',
+  unitPrice: 1.5,
+  quantityOnHand: 50,
+  barcode: '54321',
+  isDefault: true,
+);
+
 const _teaVariant = ProductVariant(
   id: 102,
   productId: 2,
@@ -1824,6 +1984,8 @@ class _FakePosApiService extends PosApiService {
     this.discountsVersion,
     this.catalogPages = const {},
     this.shopSettings,
+    this.scaleRules = const [],
+    this.unitsOfMeasure,
   }) : super(
          client: MockClient((_) async => http.Response('{}', 500)),
          baseUrl: 'http://pointy.test/api',
@@ -1832,6 +1994,32 @@ class _FakePosApiService extends PosApiService {
   /// Overrides the settings returned by [fetchShopSettings] (defaults to
   /// [_settings]); lets a test flip flags like `autoPrintReceipts`.
   final ShopSettings? shopSettings;
+
+  /// The scale label layouts this shop has configured. Empty by default, so
+  /// every other test in this file scans plain barcodes exactly as before.
+  final List<ScaleBarcodeRule> scaleRules;
+
+  /// The shop's unit registry. Null means "unreachable", which is the state
+  /// every other test in this file runs in — the till then falls back to the
+  /// built-in unit codes.
+  final List<UnitOfMeasure>? unitsOfMeasure;
+
+  @override
+  Future<List<ScaleBarcodeRule>> fetchScaleBarcodeRules({
+    bool activeOnly = true,
+  }) async => scaleRules;
+
+  @override
+  Future<UnitOfMeasurePage> fetchUnitsOfMeasure({
+    int page = 1,
+    bool? active,
+  }) async {
+    final units = unitsOfMeasure;
+    if (units == null) {
+      throw Exception('no unit registry');
+    }
+    return UnitOfMeasurePage(units: units, hasMore: false);
+  }
 
   /// Overrides the discounts version the real session learns from response
   /// headers, so the no-rules latch can be exercised without HTTP plumbing.
