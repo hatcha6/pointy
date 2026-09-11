@@ -6,6 +6,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/price_checker_device.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
+import '../../../shared/formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
@@ -294,8 +295,7 @@ class _PriceCheckerDeviceCard extends StatelessWidget {
                         child: _IconLine(
                           icon: Icons.lan_outlined,
                           child: Text(
-                            endpoint,
-                            textDirection: TextDirection.ltr,
+                            ltrIsolated(endpoint),
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(color: colors.mutedInk),
                           ),

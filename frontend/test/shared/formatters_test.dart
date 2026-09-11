@@ -39,4 +39,25 @@ void main() {
       expect(formatSpokenMoney('السعر'), 'السعر');
     });
   });
+
+  group('ltrIsolated', () {
+    test('wraps the run in an LTR isolate, unchanged otherwise', () {
+      expect(
+        ltrIsolated('192.168.1.50:20304'),
+        '\u{2066}192.168.1.50:20304\u{2069}',
+      );
+    });
+
+    test('an empty value still closes the isolate it opened', () {
+      expect(ltrIsolated(''), '\u{2066}\u{2069}');
+    });
+
+    test('the isolate is LTR, not first-strong', () {
+      // These runs open with digits, which are not strong: a first-strong
+      // isolate would resolve them to the surrounding Arabic and reorder the
+      // very thing the isolate is protecting.
+      expect(ltrIsolated('1').codeUnitAt(0), 0x2066);
+      expect(ltrIsolated('1').codeUnitAt(2), 0x2069);
+    });
+  });
 }

@@ -7,6 +7,7 @@ import '../../../data/models/scale.dart';
 import '../../../data/services/analytics_export_downloader.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/scales_view_model.dart';
@@ -288,17 +289,10 @@ class _ScaleCard extends StatelessWidget {
               padding: EdgeInsets.only(top: spacing.xs),
               child: _ScaleLine(
                 icon: Icons.lan_outlined,
-                // An LTR isolate (U+2066 … U+2069), not a textDirection
-                // override: the address has to keep its own left-to-right run
-                // so the port does not jump in front of the host, but the LINE
-                // is still an Arabic line and belongs against the right margin
-                // next to its icon. Forcing the Text to LTR pins the string to
-                // the far left of the row instead, stranded from everything
-                // else on the card.
                 child: Text(
-                  '\u{2066}'
-                  '${scale.port > 0 ? '${scale.host}:${scale.port}' : scale.host}'
-                  '\u{2069}',
+                  ltrIsolated(
+                    scale.port > 0 ? '${scale.host}:${scale.port}' : scale.host,
+                  ),
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),

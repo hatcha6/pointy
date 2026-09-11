@@ -68,6 +68,21 @@ const String _isolateEnd = '\u2069'; // POP DIRECTIONAL ISOLATE
 
 String _isolated(String value) => '$_isolateStart$value$_isolateEnd';
 
+/// Wraps a strictly left-to-right run — a host:port, an IMEI, a barcode — so it
+/// keeps its own order inside an Arabic line without dragging the line with it.
+///
+/// This is the fix for a bug that looks like a layout mistake: setting
+/// `textDirection: TextDirection.ltr` on a `Text` also flips what "start"
+/// means for its alignment, so a stretched Text pins itself to the FAR LEFT of
+/// its row, stranded from the icon and the label it belongs to. The isolate
+/// pins only the characters, and leaves the line Arabic.
+///
+/// U+2066 (LEFT-TO-RIGHT ISOLATE) rather than the FIRST STRONG ISOLATE used
+/// above: these runs open with digits, which are not strong, so first-strong
+/// would resolve them to the surrounding RTL and reorder the very thing we are
+/// protecting.
+String ltrIsolated(String value) => '\u{2066}$value\u{2069}';
+
 /// A foreign price and its base-currency equivalent, together.
 ///
 /// Both halves, always. Showing only the converted figure hides the number the
