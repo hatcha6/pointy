@@ -74,6 +74,7 @@ import 'package:pointy_frontend/src/shared/product_tile.dart';
 
 import 'shared/fake_app_navigation.dart';
 import 'support/key_value_store_testing.dart';
+import 'package:pointy_frontend/src/shared/formatters.dart';
 
 /// Stands in for the native save-file dialog: records the bytes the analytics
 /// export handed off and reports back a fixed destination path.
@@ -3023,7 +3024,7 @@ void main() {
       find.byKey(const ValueKey('add_trusted_card_terminal_button')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('0JA8Y13W'), findsOneWidget);
+    expect(find.text(ltrIsolated('0JA8Y13W')), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const ValueKey('trusted_card_terminal_id_field')),
@@ -3033,19 +3034,19 @@ void main() {
       find.byKey(const ValueKey('add_trusted_card_terminal_button')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('ABC123'), findsOneWidget);
+    expect(find.text(ltrIsolated('ABC123')), findsOneWidget);
 
     await tester.tap(
       find.byKey(const ValueKey('remove_trusted_card_terminal_ABC123')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('ABC123'), findsNothing);
+    expect(find.text(ltrIsolated('ABC123')), findsNothing);
 
     await tester.tap(
       find.byKey(const ValueKey('trusted_card_terminals_done_button')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('0JA8Y13W'), findsOneWidget);
+    expect(find.text(ltrIsolated('0JA8Y13W')), findsOneWidget);
 
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();

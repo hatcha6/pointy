@@ -719,10 +719,9 @@ class _TrustedCardTerminalListRow extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                terminalId,
+                ltrIsolated(terminalId),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                textDirection: TextDirection.ltr,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -928,10 +927,9 @@ class _EditableTrustedCardTerminalRow extends StatelessWidget {
         dense: true,
         leading: const Icon(Icons.confirmation_number_outlined),
         title: Text(
-          terminalId,
+          ltrIsolated(terminalId),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          textDirection: TextDirection.ltr,
         ),
         trailing: IconButton(
           key: ValueKey('remove_trusted_card_terminal_$terminalId'),

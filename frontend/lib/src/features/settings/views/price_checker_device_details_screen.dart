@@ -11,6 +11,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import 'price_checker_labels.dart';
+import '../../../shared/formatters.dart';
 
 /// Loads a single device's recent scan events. Supplied by the list page so
 /// this screen needs no repository of its own.
@@ -351,8 +352,7 @@ class _ScanEventRow extends StatelessWidget {
                     child: Text(
                       event.barcode.isEmpty
                           ? priceCheckerEmptyValue
-                          : event.barcode,
-                      textDirection: TextDirection.ltr,
+                          : ltrIsolated(event.barcode),
                       style: textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),

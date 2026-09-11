@@ -52,6 +52,7 @@ import 'messaging_settings_page.dart';
 import 'exchange_rates_page.dart';
 import 'analytics_purge_section.dart';
 import 'subscription_status_page.dart';
+import '../../../shared/formatters.dart';
 
 part 'shop_settings_widgets.dart';
 part 'shop_backup_widgets.dart';

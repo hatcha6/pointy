@@ -273,8 +273,7 @@ class _RawFieldsPanel extends StatelessWidget {
                   Expanded(
                     flex: 2,
                     child: Text(
-                      key,
-                      textDirection: TextDirection.ltr,
+                      ltrIsolated(key),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colors.mutedInk,
                         fontFeatures: const [FontFeature.tabularFigures()],

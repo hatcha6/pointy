@@ -7,6 +7,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/formatters.dart';
 
 /// Pick (or create) the customer for a brand-new SMS conversation. Reuses the
 /// shared customer picker — which already searches existing customers and offers
@@ -89,9 +90,8 @@ class _NewConversationDialogState extends State<_NewConversationDialog> {
                       SizedBox(width: spacing.xs),
                       Expanded(
                         child: Text(
-                          customer.phone,
                           // A phone number reads left-to-right even in an RTL UI.
-                          textDirection: TextDirection.ltr,
+                          ltrIsolated(customer.phone),
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ),

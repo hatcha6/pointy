@@ -11,6 +11,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../data/services/recorder_discovery.dart';
 import '../view_models/camera_settings_view_model.dart';
+import '../../../shared/formatters.dart';
 
 /// Where a shop wires its DVR up, and the only place that ever touches
 /// credentials.
@@ -1033,10 +1034,12 @@ class _DiscoveredTile extends StatelessWidget {
       ),
       title: Text(_title(l10n)),
       // The address is Latin digits however the screen reads, and it is the
-      // detail that tells two identical recorders apart.
-      subtitle: Directionality(
-        textDirection: TextDirection.ltr,
-        child: Text(
+      // detail that tells two identical recorders apart. Isolated rather than
+      // wrapped in a Directionality: a subtitle is stretched to the tile, so
+      // flipping its direction also flips its alignment and strands the address
+      // on the far side of the row from the title it belongs to.
+      subtitle: Text(
+        ltrIsolated(
           recorder.port == 80
               ? recorder.host
               : '${recorder.host}:${recorder.port}',

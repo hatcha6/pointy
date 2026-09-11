@@ -9,6 +9,7 @@ import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/data/services/recorder_discovery.dart';
 import 'package:pointy_frontend/src/features/cameras/view_models/camera_settings_view_model.dart';
 import 'package:pointy_frontend/src/features/cameras/views/camera_settings_page.dart';
+import 'package:pointy_frontend/src/shared/formatters.dart';
 
 /// The setup path for someone who has never typed an IP address.
 ///
@@ -78,12 +79,12 @@ void main() {
     tester,
   ) async {
     await pumpForm(tester, found: const [hikvision]);
-    expect(find.text('192.168.1.64'), findsOneWidget);
+    expect(find.text(ltrIsolated('192.168.1.64')), findsOneWidget);
   });
 
   testWidgets('picking a device fills in the address for them', (tester) async {
     await pumpForm(tester, found: const [hikvision]);
-    await tester.tap(find.text('192.168.1.64'));
+    await tester.tap(find.text(ltrIsolated('192.168.1.64')));
     await tester.pumpAndSettle();
 
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
@@ -103,7 +104,7 @@ void main() {
       tester,
       found: const [DiscoveredRecorder(host: '192.168.1.201', port: 8080)],
     );
-    expect(find.text('192.168.1.201:8080'), findsOneWidget);
+    expect(find.text(ltrIsolated('192.168.1.201:8080')), findsOneWidget);
   });
 
   testWidgets('a network with no recorder says so and offers the fields', (
