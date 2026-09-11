@@ -6,6 +6,10 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../../data/models/card_payment_receipt.dart';
 import '../../../../data/models/sale_order.dart';
+import '../../../../shared/barcode/barcode_scan_listener.dart';
+import '../../../../shared/barcode/scan_feedback_sounds.dart';
+import '../../../companion/companion_scan_listener.dart';
+import '../../../companion/companion_scope.dart';
 import '../../../../shared/design/design.dart';
 import '../../../../shared/formatters.dart';
 import '../../../../shared/responsive/responsive.dart';
@@ -120,6 +124,7 @@ class PaymentSheet extends StatefulWidget {
     this.requireCustomerForCredit = false,
     this.enableQuotations = true,
     this.enableCredit = true,
+    @visibleForTesting this.clock = DateTime.now,
   });
 
   final double total;
@@ -150,12 +155,19 @@ class PaymentSheet extends StatefulWidget {
   /// Whether the آجل (credit) sale type is offered.
   final bool enableCredit;
 
+  /// Injectable time source so tests can drive scanner-burst timing.
+  final DateTime Function() clock;
+
   @override
   State<PaymentSheet> createState() => _PaymentSheetState();
 }
 
 class _PaymentSheetState extends State<PaymentSheet> {
   static const _calculator = SplitTenderPaymentCalculator();
+  static const _receiptMatcher = CardReceiptMatcher();
+
+  /// Two keys closer together than this were not typed by a person.
+  static const _scanBurstGap = Duration(milliseconds: 80);
 
   final List<_TenderLineInput> _tenders = [];
   var _activeTenderIndex = 0;
@@ -167,6 +179,23 @@ class _PaymentSheetState extends State<PaymentSheet> {
   DateTime? _validUntil;
   late var _printInvoiceAfterPayment = widget.printInvoiceAfterPayment;
   late var _shareInvoiceAfterPayment = widget.shareInvoiceAfterPayment;
+
+  /// A receipt that passed every check but has no payment line to prove yet —
+  /// scanned before the cashier set the tender up, or released by a line that
+  /// stopped matching it. It attaches itself the moment a card payment of its
+  /// amount exists, so a good receipt is never silently thrown away.
+  CardPaymentReceipt? _pendingCardReceipt;
+
+  /// Why the last scanned receipt was refused; null when nothing was refused.
+  String? _scanError;
+
+  // How fast the keys reaching this sheet are arriving. A wedge scanner types
+  // a whole receipt URL in about a second, and that URL is full of digits —
+  // without this, every scan would fire the 1/2/3 method hotkeys dozens of
+  // times (each one rewriting the tender) and its terminating Enter could
+  // confirm the sale outright.
+  DateTime? _lastKeyDownAt;
+  var _fastKeyRun = 0;
 
   bool get _isCredit => _saleType == SaleType.credit;
   bool get _isQuotation => _saleType == SaleType.quotation;
@@ -202,6 +231,26 @@ class _PaymentSheetState extends State<PaymentSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // The terminal slip is scanned straight into the sheet — by the counter
+    // scanner or a paired phone — and matches the card payment on its own. The
+    // cashier used to have to open the match dialog first, which is one dialog
+    // too many for something the till can recognise by itself.
+    return CompanionScanListener(
+      bridge: CompanionScope.bridgeOf(context),
+      onScan: _handleScannedValue,
+      child: BarcodeScanListener(
+        // Deliberately the default (short) burst length rather than a
+        // receipt-sized one: only a receipt link is acted on, but every burst
+        // has to be caught and rolled back, because the field it would
+        // otherwise land in is a payment amount.
+        clock: widget.clock,
+        onBarcodeScanned: _handleScannedValue,
+        child: _buildSheet(),
+      ),
+    );
+  }
+
+  Widget _buildSheet() {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
     final colors = context.pointyColors;
@@ -231,6 +280,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       },
       child: Focus(
         autofocus: true,
+        onKeyEvent: _noteKeyTiming,
         child: Material(
           key: const ValueKey('payment_sheet'),
           color: colors.surface,
@@ -311,7 +361,31 @@ class _PaymentSheetState extends State<PaymentSheet> {
     );
   }
 
+  /// Watches how fast keys are arriving so the sheet's single-key shortcuts
+  /// can tell a cashier from a scanner. Never consumes anything.
+  KeyEventResult _noteKeyTiming(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent) {
+      final now = widget.clock();
+      final previous = _lastKeyDownAt;
+      _lastKeyDownAt = now;
+      _fastKeyRun = previous != null && now.difference(previous) <= _scanBurstGap
+          ? _fastKeyRun + 1
+          : 0;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// True while keys are arriving faster than fingers can produce them: four
+  /// of them inside a quarter of a second is a wedge scanner typing a barcode,
+  /// not a cashier reaching for a shortcut. The sheet's one-key shortcuts step
+  /// aside for the length of that burst — a scan must never pick a payment
+  /// method, and its terminating Enter must never confirm the sale.
+  bool get _isScannerTyping => _fastKeyRun >= 3;
+
   void _submitIfPossible() {
+    if (_isScannerTyping) {
+      return;
+    }
     if (_canSubmit) {
       _submit();
     }
@@ -320,7 +394,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
   void _selectMethodByHotkey(PaymentMethod method) {
     // A quotation takes no payment, and a credit sale enters its down-payment
     // per line, so the single-method hotkeys are inert for both.
-    if (_isQuotation || _isCredit) {
+    if (_isQuotation || _isCredit || _isScannerTyping) {
       return;
     }
     if (_enabledMethods.contains(method)) {
@@ -339,6 +413,8 @@ class _PaymentSheetState extends State<PaymentSheet> {
     setState(() {
       _saleType = saleType;
       _showPaymentError = false;
+      _scanError = null;
+      _pendingCardReceipt = null;
       _reserveStock = saleType == SaleType.quotation && _reserveStock;
       // Drop any picked date when the sale type changes: a quotation's stock-hold
       // deadline and a credit invoice's due date are distinct meanings, and each
@@ -483,6 +559,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
           ),
           SizedBox(height: spacing.md),
         ],
+        ..._buildScanNotice(l10n, spacing),
         for (final entry in _tenders.indexed) ...[
           if (entry.$1 > 0) SizedBox(height: spacing.sm),
           TenderLineEditor(
@@ -568,6 +645,39 @@ class _PaymentSheetState extends State<PaymentSheet> {
         ],
       ],
     );
+  }
+
+  /// What the last scan did, when it needs saying.
+  ///
+  /// A matched receipt already says so on its own payment line, so this is
+  /// only ever a problem: a receipt that could not be read, or a good one
+  /// still looking for the payment it belongs to.
+  List<Widget> _buildScanNotice(AppLocalizations l10n, AdaptiveSpacing spacing) {
+    final pending = _pendingCardReceipt;
+    if (pending != null) {
+      return [
+        PointyInlineMessage.warning(
+          key: const ValueKey('payment_scan_pending_receipt'),
+          compact: true,
+          message: l10n.cardReceiptAwaitingCardTender(
+            formatMoney(pending.amount),
+          ),
+        ),
+        SizedBox(height: spacing.sm),
+      ];
+    }
+    final error = _scanError;
+    if (error != null) {
+      return [
+        PointyInlineMessage.error(
+          key: const ValueKey('payment_scan_receipt_error'),
+          compact: true,
+          message: error,
+        ),
+        SizedBox(height: spacing.sm),
+      ];
+    }
+    return const [];
   }
 
   Widget _buildKeypad(AppLocalizations l10n) {
@@ -834,6 +944,101 @@ class _PaymentSheetState extends State<PaymentSheet> {
     );
   }
 
+  /// A receipt scanned into the sheet, from the counter scanner or a paired
+  /// phone, matched without the cashier opening anything.
+  ///
+  /// The checks are the match dialog's, to the letter — the payload decodes
+  /// into a successful receipt from a terminal the shop owns, for the amount
+  /// of the payment it is attached to — so nothing is accepted here that would
+  /// have been refused there. Everything else a till gets scanned with is left
+  /// alone: a product barcode must never become a payment decision.
+  void _handleScannedValue(String value) {
+    if (_isQuotation || !_receiptMatcher.isReceiptLink(value)) {
+      return;
+    }
+
+    final l10n = AppLocalizations.of(context)!;
+    final CardPaymentReceipt receipt;
+    try {
+      receipt = _receiptMatcher.verify(
+        value,
+        trustedTerminalIds: widget.trustedCardTerminalIds,
+      );
+    } on CardPaymentReceiptException catch (exception) {
+      ScanFeedbackSounds.instance.play(ScanFeedback.error);
+      setState(() {
+        _pendingCardReceipt = null;
+        _scanError = cardReceiptErrorMessage(l10n, exception);
+      });
+      return;
+    }
+
+    setState(() {
+      _scanError = null;
+      // One terminal slip proves one payment. A rescan — an impatient second
+      // trigger, or the phone and the counter scanner both reporting the same
+      // QR — must not be spent a second time on another card line.
+      if (_isAlreadyMatched(receipt)) {
+        _pendingCardReceipt = null;
+        return;
+      }
+      _pendingCardReceipt = receipt;
+      _placePendingCardReceipt();
+    });
+    ScanFeedbackSounds.instance.play(
+      _pendingCardReceipt == null ? ScanFeedback.success : ScanFeedback.notFound,
+    );
+  }
+
+  bool _isAlreadyMatched(CardPaymentReceipt receipt) {
+    return _tenders.any(
+      (tender) => tender.cardReceipt?.sourceUrl == receipt.sourceUrl,
+    );
+  }
+
+  /// Hands a held receipt to the first payment it can stand for: a card line
+  /// of exactly its amount that has no receipt of its own.
+  ///
+  /// It never changes what the cashier entered. A receipt with nowhere to go
+  /// waits instead — the sheet says so, and the cashier setting that payment
+  /// up completes the match without scanning again.
+  void _placePendingCardReceipt() {
+    final receipt = _pendingCardReceipt;
+    if (receipt == null) {
+      return;
+    }
+    for (final tender in _tenders) {
+      if (tender.method != PaymentMethod.card || tender.cardReceipt != null) {
+        continue;
+      }
+      final amount = _calculator.parseAmount(tender.amountController.text);
+      if (amount <= 0 || !receipt.amountMatches(amount)) {
+        continue;
+      }
+      tender.cardReceipt = receipt;
+      _pendingCardReceipt = null;
+      _scanError = null;
+      _showPaymentError = false;
+      return;
+    }
+  }
+
+  /// Takes a receipt back off a payment line that no longer fits it, and holds
+  /// on to it rather than dropping it.
+  ///
+  /// A cashier correcting a typed amount (45 on the way to 450) or switching a
+  /// line to cash for a moment should not have to walk back to the terminal
+  /// and scan the slip again — it is still a valid receipt, still unspent, and
+  /// re-attaches by itself as soon as a payment fits it again.
+  void _releaseCardReceipt(_TenderLineInput tender) {
+    final receipt = tender.cardReceipt;
+    if (receipt == null) {
+      return;
+    }
+    tender.cardReceipt = null;
+    _pendingCardReceipt = receipt;
+  }
+
   Future<void> _validateCardReceipt(int index) async {
     if (index < 0 || index >= _tenders.length) {
       return;
@@ -857,6 +1062,10 @@ class _PaymentSheetState extends State<PaymentSheet> {
       tender.cardReceipt = receipt;
       _activeTenderIndex = index;
       _showPaymentError = false;
+      _scanError = null;
+      if (_pendingCardReceipt?.sourceUrl == receipt.sourceUrl) {
+        _pendingCardReceipt = null;
+      }
     });
   }
 
@@ -883,6 +1092,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       );
       _activeTenderIndex = _tenders.length - 1;
       _showPaymentError = false;
+      _placePendingCardReceipt();
     });
   }
 
@@ -894,6 +1104,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       }
       _rebalanceAfterTenderRemoval();
       _showPaymentError = false;
+      _placePendingCardReceipt();
     });
   }
 
@@ -920,6 +1131,14 @@ class _PaymentSheetState extends State<PaymentSheet> {
   void _rebalanceFromTender(int editedIndex) {
     if (_isBalancingTender) {
       return;
+    }
+    if (editedIndex >= 0 && editedIndex < _tenders.length) {
+      // Typing straight into the amount field reaches the tender through here
+      // and nowhere else, so this is where an amount edited after the fact
+      // stops fitting the receipt matched to it. The slip is taken back rather
+      // than left proving a payment it was never rung up for.
+      _clearMismatchedCardReceipt(_tenders[editedIndex]);
+      _placePendingCardReceipt();
     }
     if (_isCredit) {
       // Credit down-payments don't need to cover the total, so each line stands
@@ -964,10 +1183,12 @@ class _PaymentSheetState extends State<PaymentSheet> {
     setState(() {
       _tenders[index].method = method;
       if (method != PaymentMethod.card) {
-        _tenders[index].cardReceipt = null;
+        _releaseCardReceipt(_tenders[index]);
       }
       _activeTenderIndex = index;
       _showPaymentError = false;
+      // Choosing card is often the step a scanned receipt was waiting for.
+      _placePendingCardReceipt();
     });
   }
 
@@ -983,7 +1204,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       final tender = _tenders.first;
       tender.method = method;
       if (method != PaymentMethod.card) {
-        tender.cardReceipt = null;
+        _releaseCardReceipt(tender);
       }
       _activeTenderIndex = 0;
       _showPaymentError = false;
@@ -1047,6 +1268,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       );
     }
     _clearMismatchedCardReceipt(tender);
+    _placePendingCardReceipt();
     if (rebalance && !_isBalancingTender) {
       _rebalanceFromTender(index);
     }
@@ -1059,7 +1281,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
     }
     final amount = _calculator.parseAmount(tender.amountController.text);
     if (tender.method != PaymentMethod.card || !receipt.amountMatches(amount)) {
-      tender.cardReceipt = null;
+      _releaseCardReceipt(tender);
     }
   }
 

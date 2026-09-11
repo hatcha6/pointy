@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/src/shared/barcode/barcode_scan_listener.dart';
+import 'package:pointy_frontend/src/shared/decimal_text_input_formatter.dart';
 
 /// Deterministic time source: sendKeyEvent runs in real time, so burst-vs-
 /// human timing must be driven explicitly, not with pump() (which advances
@@ -268,6 +269,59 @@ void main() {
     expect(events.scanned, isEmpty, reason: 'disabled drops the payload');
     expect(controller.text, isEmpty, reason: 'the burst must not leak');
     expect(submitted, isEmpty);
+  });
+
+  testWidgets('a burst into a field that filters its input is rolled back, '
+      'not left as the digits that got through', (tester) async {
+    // A money field keeps a scan's digits and drops its letters, so the field
+    // no longer ends with the keystream the listener buffered. Reading that as
+    // "someone else rewrote the field" would leave a payment amount with a
+    // barcode buried in it AND drop the scan — the worst of both.
+    final controller = TextEditingController(text: '12.50');
+    addTearDown(controller.dispose);
+    final formatter = DecimalTextInputFormatter();
+    final submitted = <String>[];
+    final events = await pumpListener(
+      tester,
+      child: Material(
+        child: TextField(
+          controller: controller,
+          autofocus: true,
+          inputFormatters: [formatter],
+          onSubmitted: submitted.add,
+        ),
+      ),
+    );
+
+    for (final key in [
+      LogicalKeyboardKey.keyA,
+      LogicalKeyboardKey.digit1,
+      LogicalKeyboardKey.keyB,
+      LogicalKeyboardKey.digit2,
+      LogicalKeyboardKey.digit3,
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.digit5,
+      LogicalKeyboardKey.digit6,
+    ]) {
+      events.clock.advance(const Duration(milliseconds: 20));
+      await tester.sendKeyEvent(key);
+      // What the platform plus the field's own formatter would have done.
+      final typed = controller.text + key.keyLabel.toLowerCase();
+      controller.value = formatter.formatEditUpdate(
+        controller.value,
+        TextEditingValue(
+          text: typed,
+          selection: TextSelection.collapsed(offset: typed.length),
+        ),
+      );
+    }
+    events.clock.advance(const Duration(milliseconds: 20));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    expect(events.scanned, hasLength(1), reason: 'the scan still lands');
+    expect(controller.text, '12.50', reason: 'the amount is untouched');
+    expect(submitted, isEmpty, reason: 'the terminator is consumed');
   });
 
   testWidgets('a ScanWedgeTarget field receives the raw wedge input untouched', (

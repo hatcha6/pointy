@@ -7670,6 +7670,11 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cardReceiptRequiredInline => 'هذه الدفعة تحتاج مسح إيصال البطاقة.';
 
   @override
+  String cardReceiptAwaitingCardTender(String amount) {
+    return 'تمت قراءة إيصال بطاقة بمبلغ $amount. اضبط دفعة بطاقة بنفس المبلغ لمطابقته.';
+  }
+
+  @override
   String get cardReceiptRequiredError =>
       'يجب مطابقة كل دفعة بطاقة قبل تأكيد الدفع.';
 

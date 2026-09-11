@@ -29,17 +29,47 @@ Future<CardPaymentReceipt?> showCardReceiptValidationDialog({
   );
 }
 
+/// The cashier-facing reason a scanned receipt was refused.
+///
+/// Lives here rather than inside the dialog because the payment sheet refuses
+/// receipts too — one wording for one outcome, wherever the receipt came from.
+String cardReceiptErrorMessage(
+  AppLocalizations l10n,
+  CardPaymentReceiptException exception, {
+  double? expectedAmount,
+}) {
+  return switch (exception.code) {
+    CardPaymentReceiptErrorCode.invalidUrl => l10n.cardReceiptInvalidUrlError,
+    CardPaymentReceiptErrorCode.missingQuery =>
+      l10n.cardReceiptMissingQueryError,
+    CardPaymentReceiptErrorCode.decodeFailed => l10n.cardReceiptDecodeError,
+    CardPaymentReceiptErrorCode.invalidPayload => l10n.cardReceiptDecodeError,
+    CardPaymentReceiptErrorCode.invalidAmount =>
+      l10n.cardReceiptInvalidAmountError,
+    CardPaymentReceiptErrorCode.unsuccessfulTransaction =>
+      l10n.cardReceiptUnsuccessfulError,
+    CardPaymentReceiptErrorCode.missingReference =>
+      l10n.cardReceiptMissingReferenceError,
+    CardPaymentReceiptErrorCode.amountMismatch => l10n.cardReceiptAmountMismatch(
+      formatMoney(exception.receipt?.amount ?? 0),
+      formatMoney(expectedAmount ?? 0),
+    ),
+    CardPaymentReceiptErrorCode.terminalNotTrusted =>
+      l10n.cardReceiptTerminalNotTrusted(exception.receipt?.terminalId ?? ''),
+  };
+}
+
 class CardReceiptValidationDialog extends StatefulWidget {
   const CardReceiptValidationDialog({
     super.key,
     required this.expectedAmount,
     required this.trustedTerminalIds,
-    this.parser = const MoamalatReceiptParser(),
+    this.matcher = const CardReceiptMatcher(),
   });
 
   final double expectedAmount;
   final List<String> trustedTerminalIds;
-  final MoamalatReceiptParser parser;
+  final CardReceiptMatcher matcher;
 
   @override
   State<CardReceiptValidationDialog> createState() =>
@@ -163,57 +193,24 @@ class _CardReceiptValidationDialogState
       return;
     }
 
-    CardPaymentReceipt receipt;
+    final CardPaymentReceipt receipt;
     try {
-      receipt = widget.parser.parse(url);
+      receipt = widget.matcher.match(
+        url,
+        expectedAmount: widget.expectedAmount,
+        trustedTerminalIds: widget.trustedTerminalIds,
+      );
     } on CardPaymentReceiptException catch (exception) {
       setState(() {
-        _errorMessage = _errorMessageFor(l10n, exception.code);
-      });
-      return;
-    }
-
-    if (!receipt.amountMatches(widget.expectedAmount)) {
-      setState(() {
-        _errorMessage = l10n.cardReceiptAmountMismatch(
-          formatMoney(receipt.amount),
-          formatMoney(widget.expectedAmount),
+        _errorMessage = cardReceiptErrorMessage(
+          l10n,
+          exception,
+          expectedAmount: widget.expectedAmount,
         );
       });
       return;
     }
 
-    final trustedIds = widget.trustedTerminalIds
-        .map((terminalId) => terminalId.trim().toUpperCase())
-        .where((terminalId) => terminalId.isNotEmpty)
-        .toSet();
-    if (trustedIds.isNotEmpty &&
-        !trustedIds.contains(receipt.terminalId.trim().toUpperCase())) {
-      setState(() {
-        _errorMessage = l10n.cardReceiptTerminalNotTrusted(receipt.terminalId);
-      });
-      return;
-    }
-
     Navigator.of(context).pop(receipt);
-  }
-
-  String _errorMessageFor(
-    AppLocalizations l10n,
-    CardPaymentReceiptErrorCode code,
-  ) {
-    return switch (code) {
-      CardPaymentReceiptErrorCode.invalidUrl => l10n.cardReceiptInvalidUrlError,
-      CardPaymentReceiptErrorCode.missingQuery =>
-        l10n.cardReceiptMissingQueryError,
-      CardPaymentReceiptErrorCode.decodeFailed => l10n.cardReceiptDecodeError,
-      CardPaymentReceiptErrorCode.invalidPayload => l10n.cardReceiptDecodeError,
-      CardPaymentReceiptErrorCode.invalidAmount =>
-        l10n.cardReceiptInvalidAmountError,
-      CardPaymentReceiptErrorCode.unsuccessfulTransaction =>
-        l10n.cardReceiptUnsuccessfulError,
-      CardPaymentReceiptErrorCode.missingReference =>
-        l10n.cardReceiptMissingReferenceError,
-    };
   }
 }

@@ -21,6 +21,7 @@ class CompanionScanListener extends StatefulWidget {
     required this.onScan,
     required this.child,
     this.enabled = true,
+    this.requireCurrentRoute = true,
   });
 
   /// Null when no companion is running — the widget then does nothing, which
@@ -33,6 +34,16 @@ class CompanionScanListener extends StatefulWidget {
   /// resolving a previous scan, a phone scan is dropped rather than queued, so
   /// an impatient double-scan cannot land twice.
   final bool enabled;
+
+  /// Deliver only while this screen's route is the one on top — the same rule
+  /// [BarcodeScanListener] applies to the wedge.
+  ///
+  /// A phone scan is broadcast to every listener at once, so without this the
+  /// POS behind an open payment sheet would still try to add a product for the
+  /// receipt QR the cashier just scanned *into* that sheet. Route gating makes
+  /// the topmost surface the only one that hears — exactly what happens with
+  /// the counter scanner.
+  final bool requireCurrentRoute;
 
   @override
   State<CompanionScanListener> createState() => _CompanionScanListenerState();
@@ -61,9 +72,14 @@ class _CompanionScanListenerState extends State<CompanionScanListener> {
     final bridge = widget.bridge;
     if (bridge == null) return;
     _subscription = bridge.scans.listen((value) {
-      if (!mounted || !widget.enabled) return;
+      if (!mounted || !widget.enabled || _isCoveredByAnotherRoute) return;
       widget.onScan(value);
     });
+  }
+
+  bool get _isCoveredByAnotherRoute {
+    if (!widget.requireCurrentRoute) return false;
+    return ModalRoute.of(context)?.isCurrent == false;
   }
 
   @override
