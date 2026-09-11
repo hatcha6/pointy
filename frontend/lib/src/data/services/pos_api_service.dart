@@ -18,6 +18,7 @@ import '../models/print_audit_event.dart';
 import '../models/print_job.dart';
 import '../models/printer_config.dart';
 import '../models/product.dart';
+import '../../shared/barcode/scale_barcode.dart';
 import '../models/unit_of_measure.dart';
 import '../models/product_category.dart';
 import '../models/product_draft.dart';
@@ -111,6 +112,7 @@ import 'reports_api_client.dart';
 import 'sales_api_client.dart';
 import 'modifier_group_api_client.dart';
 import 'prep_station_api_client.dart';
+import 'scale_barcode_rule_api_client.dart';
 import 'unit_of_measure_api_client.dart';
 import 'sales_channel_api_client.dart';
 import 'fx_api_client.dart';
@@ -155,6 +157,7 @@ class PosApiService {
     _prepStations = PrepStationApiClient(_session);
     _modifierGroups = ModifierGroupApiClient(_session);
     _unitsOfMeasure = UnitOfMeasureApiClient(_session);
+    _scaleBarcodeRules = ScaleBarcodeRuleApiClient(_session);
     _purchasing = PurchasingApiClient(_session);
     _printing = PrintingApiClient(_session);
     _messaging = MessagingApiClient(_session);
@@ -211,6 +214,7 @@ class PosApiService {
   late final PrepStationApiClient _prepStations;
   late final ModifierGroupApiClient _modifierGroups;
   late final UnitOfMeasureApiClient _unitsOfMeasure;
+  late final ScaleBarcodeRuleApiClient _scaleBarcodeRules;
   late final PurchasingApiClient _purchasing;
   late final PrintingApiClient _printing;
   late final MessagingApiClient _messaging;
@@ -1464,6 +1468,28 @@ class PosApiService {
   Future<UnitOfMeasurePage> fetchUnitsOfMeasure({int page = 1, bool? active}) {
     return _unitsOfMeasure.fetchUnits(page: page, active: active);
   }
+
+  Future<List<ScaleBarcodeRule>> fetchScaleBarcodeRules({
+    bool activeOnly = true,
+  }) {
+    return _scaleBarcodeRules.fetchRules(activeOnly: activeOnly);
+  }
+
+  Future<ScaleBarcodeRule> createScaleBarcodeRule(Map<String, Object?> draft) {
+    return _scaleBarcodeRules.createRule(draft);
+  }
+
+  Future<ScaleBarcodeRule> updateScaleBarcodeRule({
+    required int id,
+    required Map<String, Object?> changes,
+  }) {
+    return _scaleBarcodeRules.updateRule(id: id, changes: changes);
+  }
+
+  Future<void> deleteScaleBarcodeRule(int id) {
+    return _scaleBarcodeRules.deleteRule(id);
+  }
+
 
   Future<UnitOfMeasure> createUnitOfMeasure(UnitOfMeasureDraft draft) {
     return _unitsOfMeasure.createUnit(draft);

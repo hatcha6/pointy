@@ -10569,6 +10569,34 @@ abstract class AppLocalizations {
   /// **'تعذر البحث عن الباركود. حاول مرة أخرى.'**
   String get barcodeScanError;
 
+  /// No description provided for @scaleLabelWarnNotFractional.
+  ///
+  /// In ar, this message translates to:
+  /// **'{productName}: هذا المنتج يُباع بالعدد، فلم يُؤخذ الوزن من ملصق الميزان.'**
+  String scaleLabelWarnNotFractional(String productName);
+
+  /// No description provided for @scaleLabelWarnUnitMismatch.
+  ///
+  /// In ar, this message translates to:
+  /// **'{productName}: وحدة ملصق الميزان لا تناسب وحدة المنتج، فلم تُؤخذ الكمية من الملصق.'**
+  String scaleLabelWarnUnitMismatch(String productName);
+
+  /// No description provided for @scaleLabelWarnNoUnitPrice.
+  ///
+  /// In ar, this message translates to:
+  /// **'{productName}: سعر المنتج صفر، فتعذّر حساب الكمية من سعر الملصق.'**
+  String scaleLabelWarnNoUnitPrice(String productName);
+
+  /// No description provided for @scaleLabelWarnRoundingDrift.
+  ///
+  /// In ar, this message translates to:
+  /// **'{productName}: الملصق {labelTotal} والمسجَّل {rungTotal}.'**
+  String scaleLabelWarnRoundingDrift(
+    String productName,
+    String labelTotal,
+    String rungTotal,
+  );
+
   /// No description provided for @cameraScannerSingleTitle.
   ///
   /// In ar, this message translates to:

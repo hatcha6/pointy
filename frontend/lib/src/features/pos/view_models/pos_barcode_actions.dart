@@ -16,6 +16,7 @@ extension PosBarcodeActions on PosViewModel {
 
     _lastScannedBarcode = normalizedBarcode;
     _lastScannedProductName = null;
+    _scaleQuantity = null;
     _barcodeScanStatus = BarcodeScanStatus.resolving;
     // A hardware scan's key burst lands in the (focused) search field and queues
     // a debounced search; clear the field and cancel that debounce now so the
@@ -52,15 +53,40 @@ extension PosBarcodeActions on PosViewModel {
                   isBase: false,
                 )
               : null;
-          // Digital-scale labels carry the weight inside the barcode; for
-          // metric products that weight IS the sold quantity.
-          final scaleBarcode = unitOption == null
-              ? parseScaleBarcode(normalizedBarcode)
-              : null;
-          final resolvedQuantity =
-              scaleBarcode != null && variant.unit != 'piece'
-              ? scaleBarcode.weightKg
-              : quantity;
+          // A weighing scale's label carries the measurement inside the
+          // barcode: the weight it read, or the money that weight costs. The
+          // rule that matched says which, and the product says whether it can
+          // take it at all — a carton scan never can, so a unit barcode wins
+          // outright.
+          final scaleMatch = unitOption == null ? value.scaleMatch : null;
+          var resolvedQuantity = quantity;
+          ScaleQuantity? scaleQuantity;
+          if (scaleMatch != null) {
+            // The shop's unit registry decides whether this product can carry a
+            // measurement at all, so a shop that named its own weight unit
+            // behaves like one using the seeded kilogram. Cached; no round trip
+            // on the scan path after the first.
+            final allowsFractional = await _catalogRepository
+                .unitAllowsFractional(variant.unit);
+            final unitFactor = await _catalogRepository.unitConversionFactorFor(
+              scaleMatch.rule.valueUnit,
+              variant.unit,
+            );
+            scaleQuantity = resolveScaleQuantity(
+              scaleMatch,
+              // The *shelf* price, deliberately: a money label was printed at
+              // the shelf price, so that is what turns its total back into an
+              // amount of product. Any discount then applies to that amount at
+              // checkout, exactly as it would for a hand-weighed line. (The
+              // price checker asks a different question — "what will I pay for
+              // this packet" — and so prices it after discounts.)
+              unitPrice: variant.unitPrice,
+              allowsFractional: allowsFractional,
+              unitFactor: unitFactor,
+            );
+            resolvedQuantity = scaleQuantity.quantity;
+          }
+          _scaleQuantity = scaleQuantity;
           _addVariantToCartAndTrack(
             variant,
             quantity: resolvedQuantity,
@@ -104,6 +130,7 @@ extension PosBarcodeActions on PosViewModel {
     _barcodeScanStatus = BarcodeScanStatus.idle;
     _lastScannedBarcode = null;
     _lastScannedProductName = null;
+    _scaleQuantity = null;
     _notifyChanged();
   }
 

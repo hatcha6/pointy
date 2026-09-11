@@ -3411,6 +3411,48 @@
     }
   },
   "barcodeScanError": "تعذر البحث عن الباركود. حاول مرة أخرى.",
+  "scaleLabelWarnNotFractional": "{productName}: هذا المنتج يُباع بالعدد، فلم يُؤخذ الوزن من ملصق الميزان.",
+  "@scaleLabelWarnNotFractional": {
+    "description": "Scale label scanned for a product counted in whole units; the embedded weight was ignored.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      }
+    }
+  },
+  "scaleLabelWarnUnitMismatch": "{productName}: وحدة ملصق الميزان لا تناسب وحدة المنتج، فلم تُؤخذ الكمية من الملصق.",
+  "@scaleLabelWarnUnitMismatch": {
+    "description": "The rule's unit cannot be converted into the product's unit.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      }
+    }
+  },
+  "scaleLabelWarnNoUnitPrice": "{productName}: سعر المنتج صفر، فتعذّر حساب الكمية من سعر الملصق.",
+  "@scaleLabelWarnNoUnitPrice": {
+    "description": "A price-embedded label cannot be divided by a zero unit price.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      }
+    }
+  },
+  "scaleLabelWarnRoundingDrift": "{productName}: الملصق {labelTotal} والمسجَّل {rungTotal}.",
+  "@scaleLabelWarnRoundingDrift": {
+    "description": "The derived quantity does not price back to exactly the sticker's total.",
+    "placeholders": {
+      "productName": {
+        "type": "String"
+      },
+      "labelTotal": {
+        "type": "String"
+      },
+      "rungTotal": {
+        "type": "String"
+      }
+    }
+  },
   "cameraScannerSingleTitle": "مسح باركود",
   "cameraScannerMultipleTitle": "مسح عدة منتجات",
   "cameraScannerStarting": "جار تشغيل الكاميرا...",

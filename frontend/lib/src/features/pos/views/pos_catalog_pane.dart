@@ -8,10 +8,12 @@ import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
+import '../../../shared/barcode/scale_barcode.dart';
 import '../../../shared/barcode/scan_feedback_sounds.dart';
 import '../../../shared/catalog/catalog.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/formatters.dart';
 import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
@@ -437,6 +439,33 @@ class _PosProductLookupControlsState extends State<_PosProductLookupControls> {
   }
 }
 
+/// What to say when a scale label did not read the way its sticker intended.
+///
+/// Null when the scan was an ordinary one, or when the label read cleanly —
+/// the common case, which keeps its plain "added" line.
+String? _scaleWarningMessage(
+  BuildContext context,
+  AppLocalizations l10n,
+  PosViewModel viewModel,
+) {
+  final resolved = viewModel.lastScaleQuantity;
+  if (resolved == null || !resolved.hasWarning) {
+    return null;
+  }
+  final product = viewModel.lastScannedProductName ?? '';
+  return switch (resolved.warning) {
+    kScaleWarnNotFractional => l10n.scaleLabelWarnNotFractional(product),
+    kScaleWarnUnitMismatch => l10n.scaleLabelWarnUnitMismatch(product),
+    kScaleWarnNoUnitPrice => l10n.scaleLabelWarnNoUnitPrice(product),
+    kScaleWarnRoundingDrift => l10n.scaleLabelWarnRoundingDrift(
+      product,
+      formatMoney(resolved.labelTotal ?? 0),
+      formatMoney(resolved.rungTotal ?? 0),
+    ),
+    _ => null,
+  };
+}
+
 class _BarcodeScanStatusLine extends StatelessWidget {
   const _BarcodeScanStatusLine({required this.viewModel});
 
@@ -447,11 +476,17 @@ class _BarcodeScanStatusLine extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
     final status = viewModel.barcodeScanStatus;
+    // A scale label that could not be read the way the sticker intended still
+    // rings — refusing the sale over a rounding step would be worse — but the
+    // cashier is told, in the same line that would otherwise just say "added".
+    final scaleWarning = status == BarcodeScanStatus.found
+        ? _scaleWarningMessage(context, l10n, viewModel)
+        : null;
     final message = switch (status) {
       BarcodeScanStatus.resolving => l10n.barcodeScanResolving,
-      BarcodeScanStatus.found => l10n.barcodeScanAdded(
-        viewModel.lastScannedProductName ?? '',
-      ),
+      BarcodeScanStatus.found =>
+        scaleWarning ??
+            l10n.barcodeScanAdded(viewModel.lastScannedProductName ?? ''),
       BarcodeScanStatus.notFound => l10n.barcodeScanNotFound(
         viewModel.lastScannedBarcode ?? '',
       ),
@@ -459,7 +494,8 @@ class _BarcodeScanStatusLine extends StatelessWidget {
       BarcodeScanStatus.idle => '',
     };
     final color = switch (status) {
-      BarcodeScanStatus.found => colors.primaryStrong,
+      BarcodeScanStatus.found =>
+        scaleWarning == null ? colors.primaryStrong : colors.warning,
       BarcodeScanStatus.notFound || BarcodeScanStatus.error => colors.danger,
       BarcodeScanStatus.resolving || BarcodeScanStatus.idle => colors.mutedInk,
     };
@@ -473,8 +509,10 @@ class _BarcodeScanStatusLine extends StatelessWidget {
           )
         else
           Icon(
-            status == BarcodeScanStatus.found
+            status == BarcodeScanStatus.found && scaleWarning == null
                 ? Icons.check_circle_outline
+                : status == BarcodeScanStatus.found
+                ? Icons.scale_outlined
                 : Icons.error_outline,
             size: 18,
             color: color,

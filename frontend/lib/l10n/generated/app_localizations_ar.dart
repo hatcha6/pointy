@@ -5973,6 +5973,30 @@ class AppLocalizationsAr extends AppLocalizations {
   String get barcodeScanError => 'تعذر البحث عن الباركود. حاول مرة أخرى.';
 
   @override
+  String scaleLabelWarnNotFractional(String productName) {
+    return '$productName: هذا المنتج يُباع بالعدد، فلم يُؤخذ الوزن من ملصق الميزان.';
+  }
+
+  @override
+  String scaleLabelWarnUnitMismatch(String productName) {
+    return '$productName: وحدة ملصق الميزان لا تناسب وحدة المنتج، فلم تُؤخذ الكمية من الملصق.';
+  }
+
+  @override
+  String scaleLabelWarnNoUnitPrice(String productName) {
+    return '$productName: سعر المنتج صفر، فتعذّر حساب الكمية من سعر الملصق.';
+  }
+
+  @override
+  String scaleLabelWarnRoundingDrift(
+    String productName,
+    String labelTotal,
+    String rungTotal,
+  ) {
+    return '$productName: الملصق $labelTotal والمسجَّل $rungTotal.';
+  }
+
+  @override
   String get cameraScannerSingleTitle => 'مسح باركود';
 
   @override
