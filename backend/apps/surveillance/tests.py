@@ -7,6 +7,7 @@ parts that break in the field (URL shapes, clock offsets, fan-out, gating)
 without needing a camera on the LAN.
 """
 
+import contextlib
 import io
 import subprocess
 import sys
@@ -16,6 +17,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import connections
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -137,6 +139,40 @@ def target(**overrides):
     }
     values.update(overrides)
     return RecorderTarget(**values)
+
+
+def close_stream(response):
+    """Close a streaming response without taking the test's DB connection too.
+
+    ``HttpResponseBase.close`` sends ``request_finished``, and Django wires
+    ``close_old_connections`` to that signal. Inside a ``TestCase`` the
+    connection sits mid-transaction with autocommit off, which
+    ``close_if_unusable_or_obsolete`` reads as "the application never put this
+    back the way it found it" — so it closes it. That ends the class's atomic
+    block, and every test after this one raises ``OperationalError: the
+    connection is closed`` out of its ``setUp``.
+
+    Django does guard this, but only where its own wrapper is the outermost
+    caller: ``closing_iterator_wrapper`` disconnects the receiver, calls
+    ``close()``, reconnects. Closing the response directly inverts that nesting
+    — the wrapper then runs as a *resource closer* inside our ``close()``, and
+    its reconnect lands before our call sends its own signal. Which means
+    disconnecting the receiver around this does nothing at all, and looks like
+    it should. So neutralise the thing that does the damage instead of the
+    signal that reaches it.
+
+    None of this shows on SQLite: the in-memory backend ignores ``close()``
+    outright, because honouring it would delete the database. On Postgres —
+    CI, and every shop — one streaming test took the nine after it down with it.
+    """
+    with contextlib.ExitStack() as stack:
+        for connection in connections.all(initialized_only=True):
+            stack.enter_context(
+                patch.object(
+                    connection, "close_if_unusable_or_obsolete", lambda: None
+                )
+            )
+        response.close()
 
 
 class HikvisionDriverTests(TestCase):
@@ -691,7 +727,7 @@ class ApiTests(TestCase):
         # Drain so the producer thread unwinds with the test, not after it.
         chunks = iter(response.streaming_content)
         self.assertIn(b"\xff\xd8", next(chunks))
-        response.close()
+        close_stream(response)
 
     def test_live_defaults_to_the_rtsp_path_when_ffmpeg_is_present(self):
         """The only path that can carry a real frame rate is the default.
@@ -1160,7 +1196,7 @@ class RecorderCircuitBreakerTests(TestCase):
                 self.assertEqual(response.status_code, status.HTTP_200_OK)
                 # Drain so the producer thread unwinds with the test.
                 next(iter(response.streaming_content))
-                response.close()
+                close_stream(response)
 
     def test_a_success_clears_an_in_progress_run_of_failures(self):
         with patch.object(
@@ -1173,7 +1209,7 @@ class RecorderCircuitBreakerTests(TestCase):
             open_driver.return_value = StubHikvision(target(), {})
             response = self._live()
             next(iter(response.streaming_content))
-            response.close()
+            close_stream(response)
 
         # The run is over, so the next failure starts counting from one and the
         # breaker must not open on it. Asked on the other channel of the same
@@ -1239,7 +1275,7 @@ class RecorderCircuitBreakerTests(TestCase):
             response = self._live()
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         next(iter(response.streaming_content))
-        response.close()
+        close_stream(response)
 
     def test_cooldown_lengthens_while_the_recorder_stays_down(self):
         first = breaker.cooldown_for(breaker.FAILURE_THRESHOLD)
@@ -1266,7 +1302,7 @@ class RecorderCircuitBreakerTests(TestCase):
             response = self._live()
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         next(iter(response.streaming_content))
-        response.close()
+        close_stream(response)
 
     def test_editing_a_recorder_clears_its_cooldown(self):
         """The address may be exactly what was just corrected."""
@@ -1298,7 +1334,7 @@ class RecorderCircuitBreakerTests(TestCase):
             live = self._live()
         self.assertEqual(live.status_code, status.HTTP_200_OK)
         next(iter(live.streaming_content))
-        live.close()
+        close_stream(live)
 
     def test_a_broken_cache_fails_open(self):
         """A breaker that cannot read its own state must still let the shop try."""
@@ -1309,7 +1345,7 @@ class RecorderCircuitBreakerTests(TestCase):
             response = self._live()
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         next(iter(response.streaming_content))
-        response.close()
+        close_stream(response)
 
 
 class JpegDemuxTests(SimpleTestCase):
