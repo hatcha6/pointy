@@ -20,7 +20,11 @@ from rest_framework.views import APIView
 
 from apps.core.dashboard import build_dashboard_snapshot
 from apps.core.models import RelayInstallation
-from apps.core.relay import RelayControlClient, RelayControlError, relay_ai_available
+from apps.core.relay import (
+    RelayControlError,
+    relay_ai_available,
+    scoped_relay_client,
+)
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_event_buffered
 from apps.core.streaming import aiter_in_thread
@@ -240,7 +244,16 @@ class AiChatView(APIView):
             supports_ui=payload.get("supports_ui", False),
         )
 
-        client = RelayControlClient()
+        # Scoped to this installation, not built from the process config.
+        # An enrolled on-prem backend's .env carries only the single-use
+        # enrollment key, which is consumed on first boot; the scoped access
+        # token lives on the RelayInstallation row from then on. A bare
+        # RelayControlClient() therefore validates an env with no credentials
+        # at all and raises ImproperlyConfigured — which is what every AI call
+        # at one paying shop did between 2 and 8 September, while the
+        # subscription gate (a DB read) kept the assistant visible. Eleven
+        # people opened it; none of them got an answer.
+        client = scoped_relay_client(installation)
         # The relay call is opened INSIDE the stream, not before it.
         #
         # Opening it here meant the client's POST got no response — not even
@@ -1027,7 +1040,8 @@ class AiChatResumeView(AiChatView):
             supports_ui=payload.get("supports_ui", False),
         )
 
-        client = RelayControlClient()
+        # Scoped for the same reason as the chat turn above.
+        client = scoped_relay_client(installation)
         # Opened inside the stream, same as the chat turn above.
         return self._sse_response(
             request,
@@ -1132,7 +1146,12 @@ class AiUsageView(APIView):
             if cached is not None:
                 return Response(cached)
         try:
-            usage = RelayControlClient().get_ai_usage(installation.access_token)
+            # Scoped, as above. This site already had the token to hand and
+            # passed it as an argument — but the client validated its own
+            # (empty) config first, so the argument was never reached.
+            usage = scoped_relay_client(installation).get_ai_usage(
+                installation.access_token
+            )
         except RelayControlError as exc:
             return _relay_error_response(exc)
         if ttl > 0:

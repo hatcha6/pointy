@@ -5,13 +5,17 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import AsyncRequestFactory, TestCase, TransactionTestCase
+from django.test import AsyncRequestFactory, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient, force_authenticate
 
 from apps.analytics.models import AnalyticsEvent
 from apps.core.models import RelayInstallation
-from apps.core.relay import RelayControlError, relay_ai_available
+from apps.core.relay import (
+    RelayControlClient,
+    RelayControlError,
+    relay_ai_available,
+)
 
 from .models import AiConversation, AiMessage
 from .relay_stream import iter_relay_sse
@@ -232,7 +236,7 @@ class AiChatViewTests(TestCase):
 
     def test_streams_reply_and_persists_messages(self):
         lines = fake_sse_lines(["Hel", "lo"])
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(lines)
             response = self.client.post(
                 reverse("ai-chat"),
@@ -283,7 +287,7 @@ class AiChatViewTests(TestCase):
                 b"\n",
             ]
         )
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = dropped
             response = self.client.post(
                 reverse("ai-chat"),
@@ -300,7 +304,7 @@ class AiChatViewTests(TestCase):
         self.assertTrue(dropped.closed)  # the upstream response was closed
 
     def test_first_turn_requests_and_persists_an_ai_title(self):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["مرحبا"], reasoning="", title="أكثر المنتجات مبيعًا")
             )
@@ -320,7 +324,7 @@ class AiChatViewTests(TestCase):
 
     def test_followup_turn_does_not_request_or_change_the_title(self):
         conversation = AiConversation.objects.create(user=self.user, title="عنوان موجود")
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["تمام"], reasoning="", title="عنوان جديد مختلف")
             )
@@ -337,7 +341,7 @@ class AiChatViewTests(TestCase):
         self.assertEqual(conversation.title, "عنوان موجود")
 
     def test_attachment_only_first_turn_gets_a_fallback_title(self):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["تم"], reasoning="")  # relay returns no title
             )
@@ -361,7 +365,7 @@ class AiChatViewTests(TestCase):
         self.assertEqual(conversation.title, "فاتورة.png")
 
     def test_audio_only_first_turn_titles_voice_message_not_filename(self):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["تم"], reasoning="")  # relay returns no title
             )
@@ -386,7 +390,7 @@ class AiChatViewTests(TestCase):
         self.assertEqual(conversation.title, "رسالة صوتية")
 
     def test_web_search_sources_are_persisted_and_streamed(self):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(
                     ["ارتفع سعر الذهب"],
@@ -409,7 +413,7 @@ class AiChatViewTests(TestCase):
         self.assertEqual(message.sources, [{"url": "https://ex.com/a", "title": "Site A"}])
 
     def test_web_search_decision_is_carried_onto_continuations(self):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = [
                 FakeRelayResponse(fake_tool_call_sse(web_search=True)),
                 FakeRelayResponse(fake_sse_lines(["تم"], reasoning="")),
@@ -428,7 +432,7 @@ class AiChatViewTests(TestCase):
 
     def test_blocks_when_ai_disabled(self):
         RelayInstallation.objects.update(ai_enabled=False)
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             response = self.client.post(reverse("ai-chat"), {"message": "hi"}, format="json")
         self.assertEqual(response.status_code, 403)
         mock_client.assert_not_called()
@@ -439,7 +443,7 @@ class AiChatViewTests(TestCase):
         AiMessage.objects.create(
             conversation=conversation, role=AiMessage.ROLE_USER, content="قديم"
         )
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
@@ -460,7 +464,7 @@ class AiChatViewTests(TestCase):
         self.assertIn(response.status_code, (401, 403))
 
     def test_forwards_attachments_and_persists_metadata(self):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
@@ -496,7 +500,7 @@ class AiChatViewTests(TestCase):
     def test_forwards_audio_attachment_and_persists_metadata(self):
         # A recorded voice message rides the same attachment path as images: the
         # data URI reaches the relay and only metadata is persisted.
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
@@ -529,7 +533,7 @@ class AiChatViewTests(TestCase):
         )
 
     def test_attachment_only_turn_is_allowed_and_reaches_the_model(self):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
@@ -550,7 +554,7 @@ class AiChatViewTests(TestCase):
         # already started (200) by the time it fails. The status the app acts on
         # rides in the event instead — same body, same mapping, so the rate-limit
         # UI is reached exactly as it was when this was an HTTP 429.
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = RelayControlError(
                 "relay AI returned 429",
                 status_code=429,
@@ -566,7 +570,7 @@ class AiChatViewTests(TestCase):
         self.assertEqual(payload["reset_at"], "2026-06-19T12:00:00Z")
 
     def test_relay_not_entitled_reaches_the_client_as_a_403_error_event(self):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = RelayControlError(
                 "relay AI returned 402",
                 status_code=402,
@@ -580,7 +584,7 @@ class AiChatViewTests(TestCase):
     def test_the_stream_pings_before_the_relay_is_even_reached(self):
         # What fixes the spinning bubble: bytes are on the wire before the call
         # that used to block for up to the full AI timeout with nothing sent.
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = RelayControlError(
                 "unreachable", status_code=None, body=""
             )
@@ -594,11 +598,47 @@ class AiChatViewTests(TestCase):
             "five_hour": {"used": 2, "limit": 30, "remaining": 28},
             "weekly": {"used": 2, "limit": 200, "remaining": 198},
         }
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.get_ai_usage.return_value = snapshot
             response = self.client.get(reverse("ai-usage"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["five_hour"]["remaining"], 28)
+
+    @override_settings(
+        POINTY_RELAY_CONTROL_URL="https://relay.example",
+        POINTY_RELAY_PUBLIC_API_URL="https://relay.example",
+        POINTY_RELAY_CONNECTOR_ADDR="relay.example:443",
+        # An enrolled shop, some weeks after first boot: the license key was
+        # single-use and is spent, and no operator token was ever set. The
+        # scoped credentials live on the RelayInstallation row, which is the
+        # only place they ever were.
+        POINTY_RELAY_ADMIN_TOKEN="",
+        POINTY_RELAY_ACCESS_TOKEN="",
+        POINTY_RELAY_INSTALLATION_ID="",
+        POINTY_RELAY_ENROLLMENT_TOKEN="",
+    )
+    def test_the_assistant_still_works_once_the_license_key_is_spent(self):
+        """The shape of the 2–8 September outage at a paying shop.
+
+        `relay_ai_available` is a database read, so the subscription gate passed
+        and the assistant stayed on screen; eleven people opened it. Every call
+        then built a relay client from the *process* config, which by then held
+        no credentials at all, and raised ImproperlyConfigured before the access
+        token it had already been handed was ever looked at.
+
+        Patching the transport rather than the client factory is the point: the
+        real config validation has to run, or this test proves nothing.
+        """
+        snapshot = {"five_hour": {"used": 1, "limit": 30, "remaining": 29}}
+        with patch.object(
+            RelayControlClient, "get_ai_usage", return_value=snapshot
+        ) as get_usage:
+            response = self.client.get(reverse("ai-usage"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["five_hour"]["remaining"], 29)
+        # Authenticated as the installation, from the row.
+        get_usage.assert_called_once_with("ptr1.inst-1.secret")
 
     def test_usage_endpoint_serves_the_fleet_from_one_relay_call_per_window(self):
         from django.core.cache import cache as django_cache
@@ -618,7 +658,7 @@ class AiChatViewTests(TestCase):
             POINTY_AI_USAGE_CACHE_TTL=60,
         ):
             django_cache.clear()
-            with patch("apps.ai.views.RelayControlClient") as mock_client:
+            with patch("apps.ai.views.scoped_relay_client") as mock_client:
                 mock_client.return_value.get_ai_usage.return_value = snapshot
                 first = self.client.get(reverse("ai-usage"))
                 second = self.client.get(reverse("ai-usage"))
@@ -629,7 +669,7 @@ class AiChatViewTests(TestCase):
             self.assertEqual(mock_client.return_value.get_ai_usage.call_count, 1)
 
     def test_done_event_reports_the_user_message_id(self):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
@@ -676,7 +716,7 @@ class AiChatViewTests(TestCase):
         self.assertTrue(AiMessage.objects.filter(pk=message.pk).exists())
 
     def test_agentic_loop_runs_a_tool_then_streams_the_answer(self):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = [
                 FakeRelayResponse(fake_tool_call_sse()),
                 FakeRelayResponse(fake_sse_lines(["لديك ", "٥ مبيعات"], reasoning="")),
@@ -731,7 +771,7 @@ class AiChatViewTests(TestCase):
         # The relay classifies difficulty once (here: frontier) and reports it as
         # route_tier; the agentic loop must carry that onto the continuation so the
         # whole flow rides one dynamic decision — not re-routed, not a fixed tier.
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = [
                 FakeRelayResponse(fake_tool_call_sse(route_tier="frontier")),
                 FakeRelayResponse(fake_sse_lines(["تم"], reasoning="")),
@@ -751,7 +791,7 @@ class AiChatViewTests(TestCase):
     def test_agentic_loop_caps_tool_rounds(self):
         turns = [FakeRelayResponse(fake_tool_call_sse()) for _ in range(MAX_TOOL_ITERS)]
         turns.append(FakeRelayResponse(fake_sse_lines(["تم"], reasoning="")))
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = turns
             with patch("apps.ai.views.execute_tool", return_value={"ok": True, "data": {}}):
                 response = self.client.post(reverse("ai-chat"), {"message": "loop"}, format="json")
@@ -872,7 +912,7 @@ class AskUserFlowTests(TestCase):
 
     def _seed_paused(self, arguments=ASK_USER_SPEC):
         """Run one turn where the model calls ask_user; returns (conversation, paused)."""
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_tool_call_sse(name="ask_user", arguments=arguments)
             )
@@ -908,7 +948,7 @@ class AskUserFlowTests(TestCase):
 
     def test_ask_user_advertised_only_with_capability(self):
         # Capable client → tool advertised.
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
@@ -922,7 +962,7 @@ class AskUserFlowTests(TestCase):
         self.assertIn("ask_user", names)
 
         # Default (no capability) → tool withheld, so an old client can't be asked.
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
@@ -934,7 +974,7 @@ class AskUserFlowTests(TestCase):
     def test_resume_replays_the_answer_and_continues(self):
         conversation, paused, _ = self._seed_paused()
 
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["تمام، ", "تم"], reasoning="")
             )
@@ -985,7 +1025,7 @@ class AskUserFlowTests(TestCase):
         # detail payload carries the (kept) question spec + the user's answers,
         # resolved from the sibling tool reply.
         conversation, paused, _ = self._seed_paused()
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["تمام"], reasoning="")
             )
@@ -1019,7 +1059,7 @@ class AskUserFlowTests(TestCase):
 
     def test_skipped_question_rehydrates_as_empty_answers(self):
         conversation, paused, _ = self._seed_paused()
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["حسنًا"], reasoning="")
             )
@@ -1042,7 +1082,7 @@ class AskUserFlowTests(TestCase):
 
     def test_resume_skip_feeds_a_declined_result(self):
         conversation, paused, _ = self._seed_paused()
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["حسنًا"], reasoning="")
             )
@@ -1072,7 +1112,7 @@ class AskUserFlowTests(TestCase):
         followup = json.dumps(
             {"questions": [{"id": "q1", "type": "free_text", "prompt": "كم الكمية؟"}]}
         )
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_tool_call_sse(name="ask_user", arguments=followup)
             )
@@ -1201,7 +1241,7 @@ class AskUserFlowTests(TestCase):
             ("data: " + json.dumps({"model": "m", "tier": "smart"}) + "\n").encode("utf-8"),
             b"\n",
         ]
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(no_id_sse)
             response = self.client.post(
                 reverse("ai-chat"),
@@ -1226,7 +1266,7 @@ class AskUserFlowTests(TestCase):
             ),
             FakeRelayResponse(fake_tool_call_sse(name="ask_user", arguments=ASK_USER_SPEC)),
         ]
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = turns
             with patch("apps.ai.views.execute_tool", return_value={"ok": True, "data": {}}):
                 response = self.client.post(
@@ -1261,7 +1301,7 @@ class AskUserFlowTests(TestCase):
             "supplier": {"name": "الوفاق", "matched": False},
             "lines": [{"name": "كابل", "quantity": 5, "unit_cost": "15.00"}],
         }
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = turns
             with patch("apps.ai.views.execute_tool", return_value=extracted):
                 response = self.client.post(
@@ -1287,7 +1327,7 @@ class AskUserFlowTests(TestCase):
 
         # On resume, the relay receives the replayed extraction (call + result)
         # before the ask_user turn — the invoice is back in the model's context.
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["تم"], reasoning="")
             )
@@ -1345,7 +1385,7 @@ class AskUserFlowTests(TestCase):
         return conversation, paused
 
     def _resume_picker(self, conversation, paused, answer):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["تم"], reasoning="")
             )
@@ -1430,7 +1470,7 @@ class AiChatActionToolTests(TestCase):
         )
 
     def _advertised_tools(self, payload):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
@@ -1450,7 +1490,7 @@ class AiChatActionToolTests(TestCase):
         self.assertNotIn("create_sale", without)
 
     def _system_prompt_for(self, payload):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
@@ -1500,7 +1540,7 @@ class AiChatActionToolTests(TestCase):
                 "data": {"category": category.id, "description": "كهرباء", "amount": "30.00"},
             }
         )
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = [
                 FakeRelayResponse(fake_tool_call_sse(name="create_resource", arguments=args)),
                 FakeRelayResponse(fake_sse_lines(["تم تسجيل المصروف"])),
@@ -1556,7 +1596,7 @@ class AiChatActionToolTests(TestCase):
             {"id": "c1", "type": "function", "function": {"name": "create_resource", "arguments": args}},
             {"id": "c2", "type": "function", "function": {"name": "create_resource", "arguments": args}},
         ]
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = [
                 FakeRelayResponse(self._two_call_turn(calls)),
                 FakeRelayResponse(fake_sse_lines(["تم"])),
@@ -1588,7 +1628,7 @@ class AiChatActionToolTests(TestCase):
         # so the first commits and the second is refused (write_limit_reached).
         calls = [create_call("c1", "أول"), create_call("c2", "ثانٍ")]
         with patch("apps.ai.views.MAX_MUTATING_WRITES_PER_TURN", 1):
-            with patch("apps.ai.views.RelayControlClient") as mock_client:
+            with patch("apps.ai.views.scoped_relay_client") as mock_client:
                 mock_client.return_value.open_ai_stream.side_effect = [
                     FakeRelayResponse(self._two_call_turn(calls)),
                     FakeRelayResponse(fake_sse_lines(["تم"])),
@@ -1638,7 +1678,7 @@ class AiChatAsgiStreamingTests(TransactionTestCase):
         return AiChatView.as_view()(request)
 
     def test_streams_an_async_body_and_persists_the_turn(self):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["Hel", "lo"])
             )
@@ -1678,7 +1718,7 @@ class AiChatAsgiStreamingTests(TransactionTestCase):
         # the async bridge must stay out of that path.
         client = APIClient()
         client.force_authenticate(self.user)
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["hi"])
             )
@@ -1718,7 +1758,7 @@ class AiStreamOutcomeTelemetryTests(TestCase):
         return AnalyticsEvent.objects.filter(name="ai.stream_finished")
 
     def _post(self, **relay):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             for key, value in relay.items():
                 setattr(mock_client.return_value.open_ai_stream, key, value)
             response = self.client.post(
@@ -1754,7 +1794,7 @@ class AiStreamOutcomeTelemetryTests(TestCase):
     def test_a_turn_that_dies_mid_stream_is_recorded(self):
         # This one the status code never caught, before or after the change:
         # the 200 had already been sent by the time it broke.
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
@@ -1801,7 +1841,7 @@ class AiChatGeneratedUiTests(TestCase):
 
     def _run_turn(self, payload, tool_arguments, follow_up="تم"):
         """Drive one turn where the model calls render_ui, then answers."""
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = [
                 FakeRelayResponse(
                     fake_tool_call_sse(name="render_ui", arguments=json.dumps(tool_arguments))
@@ -1831,7 +1871,7 @@ class AiChatGeneratedUiTests(TestCase):
     def test_the_surface_is_not_echoed_back_into_the_model_context(self):
         # The model already knows what it drew; sending the whole payload back
         # would burn its context for nothing.
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.side_effect = [
                 FakeRelayResponse(
                     fake_tool_call_sse(
@@ -1874,7 +1914,7 @@ class AiChatGeneratedUiTests(TestCase):
         self.assertEqual(assistant.ui_surfaces, [])
 
     def test_ui_is_gated_by_the_client_capability(self):
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
@@ -1893,7 +1933,7 @@ class AiChatGeneratedUiTests(TestCase):
     def test_the_prompt_tells_the_model_to_prefer_prose(self):
         # The restraint rule is the point: a drawing tool without it turns every
         # one-line answer into a chart.
-        with patch("apps.ai.views.RelayControlClient") as mock_client:
+        with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
             )
