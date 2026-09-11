@@ -7675,6 +7675,14 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get cardReceiptAwaitingCardTenderUnknownAmount =>
+      'تمت قراءة إيصال بطاقة. اضبط دفعة بطاقة لإرفاقه، وسيتم التحقق من المبلغ بعد إتمام البيع.';
+
+  @override
+  String get cardReceiptPendingVerificationSummary =>
+      'إيصال مُرفق — يتم التحقق من مبلغه مع المصرف بعد إتمام البيع.';
+
+  @override
   String get cardReceiptRequiredError =>
       'يجب مطابقة كل دفعة بطاقة قبل تأكيد الدفع.';
 

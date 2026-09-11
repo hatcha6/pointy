@@ -13387,6 +13387,18 @@ abstract class AppLocalizations {
   /// **'تمت قراءة إيصال بطاقة بمبلغ {amount}. اضبط دفعة بطاقة بنفس المبلغ لمطابقته.'**
   String cardReceiptAwaitingCardTender(String amount);
 
+  /// No description provided for @cardReceiptAwaitingCardTenderUnknownAmount.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت قراءة إيصال بطاقة. اضبط دفعة بطاقة لإرفاقه، وسيتم التحقق من المبلغ بعد إتمام البيع.'**
+  String get cardReceiptAwaitingCardTenderUnknownAmount;
+
+  /// No description provided for @cardReceiptPendingVerificationSummary.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال مُرفق — يتم التحقق من مبلغه مع المصرف بعد إتمام البيع.'**
+  String get cardReceiptPendingVerificationSummary;
+
   /// No description provided for @cardReceiptRequiredError.
   ///
   /// In ar, this message translates to:

@@ -4573,6 +4573,8 @@
       }
     }
   },
+  "cardReceiptAwaitingCardTenderUnknownAmount": "تمت قراءة إيصال بطاقة. اضبط دفعة بطاقة لإرفاقه، وسيتم التحقق من المبلغ بعد إتمام البيع.",
+  "cardReceiptPendingVerificationSummary": "إيصال مُرفق — يتم التحقق من مبلغه مع المصرف بعد إتمام البيع.",
   "cardReceiptRequiredError": "يجب مطابقة كل دفعة بطاقة قبل تأكيد الدفع.",
   "cardReceiptValidatedSummary": "تمت المطابقة: {amount}، البطاقة {maskedPan}",
   "@cardReceiptValidatedSummary": {
