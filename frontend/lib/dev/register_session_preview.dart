@@ -179,6 +179,16 @@ final RegisterSessionSummary _demoSummary = RegisterSessionSummary(
     net: 110,
     count: 8,
   ),
+  cardReceipts: const CardReceiptTotals(
+    gross: 4000,
+    verified: 2000,
+    pending: 1000,
+    flagged: 500,
+    unavailable: 0,
+    noReceipt: 500,
+    pendingCount: 2,
+    flaggedCount: 1,
+  ),
   categories: const [
     CategoryBreakdown(category: 'مشروبات', quantity: '12', net: 60),
     CategoryBreakdown(category: 'وجبات', quantity: '5', net: 38),

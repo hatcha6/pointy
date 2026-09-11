@@ -8913,6 +8913,152 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get cardReceiptAwaitingCardTenderUnknownAmount =>
+      'تمت قراءة إيصال بطاقة. اضبط دفعة بطاقة لإرفاقه، وسيتم التحقق من المبلغ بعد إتمام البيع.';
+
+  @override
+  String get cardReceiptPendingVerificationSummary =>
+      'إيصال مُرفق — يتم التحقق من مبلغه مع المصرف بعد إتمام البيع.';
+
+  @override
+  String get cardReceiptStatusVerified => 'موثّق';
+
+  @override
+  String get cardReceiptStatusPending => 'قيد التحقق';
+
+  @override
+  String get cardReceiptStatusFlagged => 'يحتاج مراجعة';
+
+  @override
+  String get cardReceiptStatusUnavailable => 'تعذّر الاتصال';
+
+  @override
+  String get cardReceiptStatusNoReceipt => 'بدون إيصال';
+
+  @override
+  String get cardReceiptStatusVerifiedDetail =>
+      'تم التحقق من هذا الإيصال لدى جهة الإصدار، ومبلغه يطابق الدفعة.';
+
+  @override
+  String get cardReceiptStatusPendingDetail =>
+      'تم مسح الإيصال وسيتم التحقق من مبلغه لدى جهة الإصدار.';
+
+  @override
+  String get cardReceiptStatusFlaggedDetail =>
+      'جهة الإصدار لا تعترف بهذا الإيصال، أو أن مبلغه يخالف الدفعة. يحتاج مراجعة.';
+
+  @override
+  String get cardReceiptStatusUnavailableDetail =>
+      'تعذّر الوصول إلى جهة الإصدار. هذا لا يعني أن الإيصال غير صحيح.';
+
+  @override
+  String get cardReceiptStatusNoReceiptDetail => 'دفعة بطاقة بدون إيصال مرفق.';
+
+  @override
+  String get sessionCardReceiptsTitle => 'التحقق من إيصالات البطاقة';
+
+  @override
+  String sessionCardReceiptsHeadline(String verified, String gross) {
+    return '$verified موثّق من $gross';
+  }
+
+  @override
+  String get sessionCardReceiptsAllVerified =>
+      'كل مبالغ البطاقة في هذه الوردية موثّقة.';
+
+  @override
+  String sessionCardReceiptsNeedsAttention(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دفعة تحتاج مراجعة',
+      few: '$count دفعات تحتاج مراجعة',
+      two: 'دفعتان تحتاجان مراجعة',
+      one: 'دفعة واحدة تحتاج مراجعة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sessionCardReceiptsPendingNote(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دفعة ما زالت قيد التحقق',
+      few: '$count دفعات ما زالت قيد التحقق',
+      two: 'دفعتان ما زالتا قيد التحقق',
+      one: 'دفعة واحدة ما زالت قيد التحقق',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get orderCardReceiptViewButton => 'عرض إيصال الجهاز';
+
+  @override
+  String get orderCardReceiptSheetTitle => 'إيصال جهاز البطاقة';
+
+  @override
+  String get orderCardReceiptOpenOriginal => 'عرض الأصل من المصرف';
+
+  @override
+  String get orderCardReceiptOpenOriginalFailed => 'تعذّر فتح الإيصال الأصلي.';
+
+  @override
+  String get orderCardReceiptNoOriginal => 'لا يوجد رابط أصلي لهذا الإيصال.';
+
+  @override
+  String get orderCardReceiptOriginalHint =>
+      'النسخة المعروضة أعلاه من البيانات المحفوظة لدينا، وتعمل بدون إنترنت. الأصل يُفتح من خادم المصرف ويحتاج اتصالاً.';
+
+  @override
+  String get orderCardReceiptFieldAmount => 'المبلغ';
+
+  @override
+  String get orderCardReceiptFieldTerminal => 'رقم الآلة';
+
+  @override
+  String get orderCardReceiptFieldMerchant => 'التاجر';
+
+  @override
+  String get orderCardReceiptFieldCard => 'البطاقة';
+
+  @override
+  String get orderCardReceiptFieldCardholder => 'حامل البطاقة';
+
+  @override
+  String get orderCardReceiptFieldRrn => 'الرقم المرجعي';
+
+  @override
+  String get orderCardReceiptFieldAuth => 'رقم التفويض';
+
+  @override
+  String get orderCardReceiptFieldDateTime => 'التاريخ والوقت';
+
+  @override
+  String get orderCardReceiptFieldProvider => 'مزوّد الخدمة';
+
+  @override
+  String get orderCardReceiptRawFieldsTitle => 'كل حقول الإيصال';
+
+  @override
+  String get orderCardReceiptRawFieldsSubtitle =>
+      'كما أرسلها المزوّد، للمطابقة المحاسبية.';
+
+  @override
+  String get orderCardReceiptNoneForOrder =>
+      'لا توجد إيصالات بطاقة لهذه الفاتورة.';
+
+  @override
+  String get invoiceCardReceiptFilterLabel => 'إيصال البطاقة';
+
+  @override
+  String get cardProviderMoamalat => 'معاملات';
+
+  @override
+  String get cardProviderMadfoatech => 'مدفوعاتك';
+
+  @override
   String get cardReceiptRequiredError =>
       'يجب مطابقة كل دفعة بطاقة قبل تأكيد الدفع.';
 

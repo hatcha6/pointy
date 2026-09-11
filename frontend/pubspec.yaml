@@ -164,6 +164,11 @@ flutter:
     # Monochrome brand mark used inside the printed "دُوِّنَ في دفتر" tagline
     # (PDF documents + thermal receipts). Read as raw bytes for print rendering.
     - assets/branding/logo_black.png
+    # Issuing-bank marks, keyed by Central Bank slug. Every file is
+    # OPTIONAL: shared/payments/bank_mark.dart falls back to the bank's
+    # Arabic name when one is absent, so a build carrying none still
+    # renders. See assets/banks/README.md for the naming contract.
+    - assets/banks/
     # Barcode scan feedback chimes (see shared/barcode/scan_feedback_sounds.dart).
     - assets/sounds/
 

@@ -212,7 +212,18 @@ class _CardReceiptControls extends StatelessWidget {
             ),
           ),
         ),
-        if (receipt != null) ...[
+        if (receipt != null && receipt.isPending) ...[
+          const SizedBox(height: 8),
+          // Attached, not proved. Saying "matched" here would claim a check
+          // that has not happened: this provider's amount only arrives once the
+          // backend has asked the issuer, after the sale.
+          PointyInlineMessage(
+            key: const ValueKey('payment_card_receipt_pending'),
+            compact: true,
+            icon: Icons.schedule_outlined,
+            message: l10n.cardReceiptPendingVerificationSummary,
+          ),
+        ] else if (receipt != null) ...[
           const SizedBox(height: 8),
           PointyInlineMessage.success(
             compact: true,

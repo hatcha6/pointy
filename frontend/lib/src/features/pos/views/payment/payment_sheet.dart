@@ -677,9 +677,12 @@ class _PaymentSheetState extends State<PaymentSheet> {
         PointyInlineMessage.warning(
           key: const ValueKey('payment_scan_pending_receipt'),
           compact: true,
-          message: l10n.cardReceiptAwaitingCardTender(
-            formatMoney(pending.amount),
-          ),
+          // A receipt that could not state its amount cannot be described by
+          // one; quoting its blank amount as "0.00" would be a lie about what
+          // was scanned.
+          message: pending.canProveAmount
+              ? l10n.cardReceiptAwaitingCardTender(formatMoney(pending.amount))
+              : l10n.cardReceiptAwaitingCardTenderUnknownAmount,
         ),
         SizedBox(height: spacing.sm),
       ];
@@ -1049,7 +1052,16 @@ class _PaymentSheetState extends State<PaymentSheet> {
         continue;
       }
       final amount = _calculator.parseAmount(tender.amountController.text);
-      if (amount <= 0 || !receipt.amountMatches(amount)) {
+      if (amount <= 0) {
+        continue;
+      }
+      // A receipt that can state its amount must land on the line that matches
+      // it. One that cannot — its details live on the issuer's server — goes to
+      // the first card line still without a slip, because there is nothing to
+      // match on and leaving it unattached would lose the only proof the sale
+      // has. The backend checks it against this line's amount once the issuer
+      // answers.
+      if (receipt.canProveAmount && !receipt.amountMatches(amount)) {
         continue;
       }
       tender.cardReceipt = receipt;
@@ -1317,7 +1329,14 @@ class _PaymentSheetState extends State<PaymentSheet> {
       return;
     }
     final amount = _calculator.parseAmount(tender.amountController.text);
-    if (tender.method != PaymentMethod.card || !receipt.amountMatches(amount)) {
+    if (tender.method != PaymentMethod.card) {
+      _releaseCardReceipt(tender);
+      return;
+    }
+    // A receipt that cannot state its amount can never "mismatch" one, so it
+    // stays put while the cashier edits the figure. Releasing it on every
+    // keystroke would detach the sale's only proof and never re-attach it.
+    if (receipt.canProveAmount && !receipt.amountMatches(amount)) {
       _releaseCardReceipt(tender);
     }
   }

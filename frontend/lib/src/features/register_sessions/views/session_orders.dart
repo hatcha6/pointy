@@ -14,6 +14,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/register_session_history_view_model.dart';
+import 'card_receipt_verification_section.dart';
 import 'sale_order_details_sheet.dart';
 
 class SessionOrders extends StatelessWidget {
@@ -133,6 +134,11 @@ class _SessionSummaryPanel extends StatelessWidget {
         _SalesSummarySection(summary: summary),
         const SizedBox(height: 12),
         _PaymentMethodsSection(summary: summary),
+        const SizedBox(height: 12),
+        // Sits directly under the payment methods: it qualifies the card
+        // row above it, and reads as a footnote to it rather than a
+        // separate subject.
+        CardReceiptVerificationSection(totals: summary.cardReceipts),
         const SizedBox(height: 12),
         _CategoriesSection(summary: summary),
         const SizedBox(height: 12),

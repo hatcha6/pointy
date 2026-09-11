@@ -18,6 +18,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/invoice_list_view_model.dart';
 import 'invoice_query_controls.dart';
+import '../../../shared/payments/card_receipt_status.dart';
 
 class InvoiceListScreen extends StatelessWidget {
   const InvoiceListScreen({
@@ -281,6 +282,9 @@ class InvoiceTile extends StatelessWidget {
           label: saleOrderStatusLabel(l10n, invoice.status),
           icon: saleOrderStatusIcon(invoice.status),
         ),
+        // Whether the card money on this sale is backed by a receipt the
+        // shop could show someone. Draws nothing on a cash sale.
+        CardReceiptStatusBadge(status: invoice.cardReceiptStatus),
         // Late first, because that is the one an owner scanning this list is
         // looking for. Falls back to the agreed date when the invoice is still
         // inside its terms, so a credit sale always says where it stands.

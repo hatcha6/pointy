@@ -2,6 +2,17 @@ import 'dart:convert';
 
 import 'package:archive/archive.dart';
 
+/// Who printed a receipt, and — because the two differ in kind — how much a
+/// till can learn from it without a network.
+enum CardReceiptProvider {
+  /// The whole receipt travels inside the QR. Decoded offline, instantly.
+  moamalat,
+
+  /// The QR is an opaque token; the receipt lives on the issuer's server. A
+  /// till can recognise one but cannot read a single field off it.
+  madfoatech,
+}
+
 class CardPaymentReceipt {
   const CardPaymentReceipt({
     required this.sourceUrl,
@@ -20,7 +31,42 @@ class CardPaymentReceipt {
     required this.batch,
     required this.invoiceNumber,
     required this.transactionDateTime,
+    this.provider = CardReceiptProvider.moamalat,
+    this.isPending = false,
   });
+
+  /// A receipt the till has recognised but cannot read.
+  ///
+  /// Everything is blank on purpose. The link carries an opaque token, so any
+  /// value here would be invented, and an invented amount is exactly what the
+  /// amount check exists to catch. The backend settles it against the issuer
+  /// after the sale.
+  const CardPaymentReceipt.pending({
+    required this.sourceUrl,
+    required this.receiptId,
+    required this.provider,
+  }) : amount = 0,
+       amountLabel = '',
+       transactionStatus = '',
+       transactionType = '',
+       merchantName = '',
+       terminalId = '',
+       cardType = '',
+       maskedPan = '',
+       authorizationCode = '',
+       rrn = '',
+       stan = '',
+       batch = '',
+       invoiceNumber = '',
+       transactionDateTime = '',
+       isPending = true;
+
+  /// Which acquirer printed this slip.
+  final CardReceiptProvider provider;
+
+  /// Whether the receipt still has to be proved against its issuer, so nothing
+  /// on it may be treated as fact yet.
+  final bool isPending;
 
   final String sourceUrl;
   final String receiptId;
@@ -56,7 +102,17 @@ class CardPaymentReceipt {
         normalized.contains('approved');
   }
 
+  /// Whether this receipt can be checked against a payment amount at all.
+  ///
+  /// False for a pending receipt: it has no amount, and treating "unknown" as
+  /// "fine" is how an unchecked slip comes to stand for a payment it never
+  /// covered.
+  bool get canProveAmount => !isPending;
+
   bool amountMatches(double expected) {
+    if (!canProveAmount) {
+      return false;
+    }
     return _minorUnits(amount) == _minorUnits(expected);
   }
 
@@ -230,6 +286,51 @@ class MoamalatReceiptParser {
   }
 }
 
+/// Recognises a Madfoatech (مدفوعاتك) receipt link, which is all a till can do
+/// with one.
+///
+/// `https://rms.lpco.ly/RCP/Dwl/<token>` carries 40 bytes of opaque binary and
+/// nothing about the payment, so unlike Moamalat there is no payload to decode:
+/// the amount lives on the issuer's server and takes a slow round trip to
+/// fetch. The till therefore recognises the slip, attaches it, and lets the
+/// backend prove it after the sale rather than holding a queue open for it.
+class MadfoatechReceiptParser {
+  const MadfoatechReceiptParser();
+
+  static const receiptHost = 'rms.lpco.ly';
+  static const receiptPathPrefix = '/RCP/Dwl/';
+
+  bool handles(String url) {
+    final uri = Uri.tryParse(url.trim());
+    return uri != null &&
+        uri.scheme == 'https' &&
+        uri.host == receiptHost &&
+        uri.path.startsWith(receiptPathPrefix);
+  }
+
+  CardPaymentReceipt parse(String url) {
+    final trimmedUrl = url.trim();
+    if (!handles(trimmedUrl)) {
+      throw const CardPaymentReceiptException(
+        CardPaymentReceiptErrorCode.invalidUrl,
+      );
+    }
+    final token = Uri.parse(
+      trimmedUrl,
+    ).path.substring(receiptPathPrefix.length).replaceAll('/', '');
+    if (token.isEmpty) {
+      throw const CardPaymentReceiptException(
+        CardPaymentReceiptErrorCode.missingReference,
+      );
+    }
+    return CardPaymentReceipt.pending(
+      sourceUrl: trimmedUrl,
+      receiptId: token,
+      provider: CardReceiptProvider.madfoatech,
+    );
+  }
+}
+
 /// Decides whether a scanned receipt link may stand in for a card payment.
 ///
 /// Both ways of matching a card payment run these same checks: the cashier
@@ -238,13 +339,25 @@ class MoamalatReceiptParser {
 /// in by being scanned instead — there is one definition of "this receipt
 /// proves this payment", not two that can drift apart.
 class CardReceiptMatcher {
-  const CardReceiptMatcher({this.parser = const MoamalatReceiptParser()});
+  const CardReceiptMatcher({
+    this.parser = const MoamalatReceiptParser(),
+    this.madfoatechParser = const MadfoatechReceiptParser(),
+  });
 
   final MoamalatReceiptParser parser;
+  final MadfoatechReceiptParser madfoatechParser;
 
   /// Whether [value] is a receipt link at all. Anything else a till is scanned
   /// with is none of this matcher's business.
-  bool isReceiptLink(String value) => parser.handles(value);
+  bool isReceiptLink(String value) =>
+      parser.handles(value) || madfoatechParser.handles(value);
+
+  CardPaymentReceipt _parse(String value) {
+    if (madfoatechParser.handles(value)) {
+      return madfoatechParser.parse(value);
+    }
+    return parser.parse(value);
+  }
 
   /// The checks that do not depend on a payment line: the payload decodes into
   /// a successful receipt from a terminal the shop owns.
@@ -257,7 +370,7 @@ class CardReceiptMatcher {
     String value, {
     required List<String> trustedTerminalIds,
   }) {
-    final receipt = parser.parse(value);
+    final receipt = _parse(value);
     _requireTrustedTerminal(receipt, trustedTerminalIds);
     return receipt;
   }
@@ -268,8 +381,12 @@ class CardReceiptMatcher {
     required double expectedAmount,
     required List<String> trustedTerminalIds,
   }) {
-    final receipt = parser.parse(value);
-    if (!receipt.amountMatches(expectedAmount)) {
+    final receipt = _parse(value);
+    // A pending receipt has no amount to check and no terminal to trust: both
+    // live on the issuer's server. Refusing it here would reject every genuine
+    // Madfoatech slip; the backend runs the same two checks once it has the
+    // real values, and flags the payment if either fails.
+    if (receipt.canProveAmount && !receipt.amountMatches(expectedAmount)) {
       throw CardPaymentReceiptException(
         CardPaymentReceiptErrorCode.amountMismatch,
         receipt: receipt,
@@ -286,6 +403,10 @@ class CardReceiptMatcher {
     CardPaymentReceipt receipt,
     List<String> trustedTerminalIds,
   ) {
+    if (receipt.isPending) {
+      // The slip does not say which terminal printed it; only the issuer does.
+      return;
+    }
     final trusted = trustedTerminalIds
         .map((terminalId) => terminalId.trim().toUpperCase())
         .where((terminalId) => terminalId.isNotEmpty)

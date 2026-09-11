@@ -15524,6 +15524,234 @@ abstract class AppLocalizations {
   /// **'تمت قراءة إيصال بطاقة بمبلغ {amount}. اضبط دفعة بطاقة بنفس المبلغ لمطابقته.'**
   String cardReceiptAwaitingCardTender(String amount);
 
+  /// No description provided for @cardReceiptAwaitingCardTenderUnknownAmount.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت قراءة إيصال بطاقة. اضبط دفعة بطاقة لإرفاقه، وسيتم التحقق من المبلغ بعد إتمام البيع.'**
+  String get cardReceiptAwaitingCardTenderUnknownAmount;
+
+  /// No description provided for @cardReceiptPendingVerificationSummary.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال مُرفق — يتم التحقق من مبلغه مع المصرف بعد إتمام البيع.'**
+  String get cardReceiptPendingVerificationSummary;
+
+  /// No description provided for @cardReceiptStatusVerified.
+  ///
+  /// In ar, this message translates to:
+  /// **'موثّق'**
+  String get cardReceiptStatusVerified;
+
+  /// No description provided for @cardReceiptStatusPending.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد التحقق'**
+  String get cardReceiptStatusPending;
+
+  /// No description provided for @cardReceiptStatusFlagged.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحتاج مراجعة'**
+  String get cardReceiptStatusFlagged;
+
+  /// No description provided for @cardReceiptStatusUnavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الاتصال'**
+  String get cardReceiptStatusUnavailable;
+
+  /// No description provided for @cardReceiptStatusNoReceipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون إيصال'**
+  String get cardReceiptStatusNoReceipt;
+
+  /// No description provided for @cardReceiptStatusVerifiedDetail.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم التحقق من هذا الإيصال لدى جهة الإصدار، ومبلغه يطابق الدفعة.'**
+  String get cardReceiptStatusVerifiedDetail;
+
+  /// No description provided for @cardReceiptStatusPendingDetail.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم مسح الإيصال وسيتم التحقق من مبلغه لدى جهة الإصدار.'**
+  String get cardReceiptStatusPendingDetail;
+
+  /// No description provided for @cardReceiptStatusFlaggedDetail.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهة الإصدار لا تعترف بهذا الإيصال، أو أن مبلغه يخالف الدفعة. يحتاج مراجعة.'**
+  String get cardReceiptStatusFlaggedDetail;
+
+  /// No description provided for @cardReceiptStatusUnavailableDetail.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الوصول إلى جهة الإصدار. هذا لا يعني أن الإيصال غير صحيح.'**
+  String get cardReceiptStatusUnavailableDetail;
+
+  /// No description provided for @cardReceiptStatusNoReceiptDetail.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة بطاقة بدون إيصال مرفق.'**
+  String get cardReceiptStatusNoReceiptDetail;
+
+  /// No description provided for @sessionCardReceiptsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التحقق من إيصالات البطاقة'**
+  String get sessionCardReceiptsTitle;
+
+  /// No description provided for @sessionCardReceiptsHeadline.
+  ///
+  /// In ar, this message translates to:
+  /// **'{verified} موثّق من {gross}'**
+  String sessionCardReceiptsHeadline(String verified, String gross);
+
+  /// No description provided for @sessionCardReceiptsAllVerified.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل مبالغ البطاقة في هذه الوردية موثّقة.'**
+  String get sessionCardReceiptsAllVerified;
+
+  /// No description provided for @sessionCardReceiptsNeedsAttention.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{دفعة واحدة تحتاج مراجعة} two{دفعتان تحتاجان مراجعة} few{{count} دفعات تحتاج مراجعة} other{{count} دفعة تحتاج مراجعة}}'**
+  String sessionCardReceiptsNeedsAttention(int count);
+
+  /// No description provided for @sessionCardReceiptsPendingNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{دفعة واحدة ما زالت قيد التحقق} two{دفعتان ما زالتا قيد التحقق} few{{count} دفعات ما زالت قيد التحقق} other{{count} دفعة ما زالت قيد التحقق}}'**
+  String sessionCardReceiptsPendingNote(int count);
+
+  /// No description provided for @orderCardReceiptViewButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض إيصال الجهاز'**
+  String get orderCardReceiptViewButton;
+
+  /// No description provided for @orderCardReceiptSheetTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال جهاز البطاقة'**
+  String get orderCardReceiptSheetTitle;
+
+  /// No description provided for @orderCardReceiptOpenOriginal.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض الأصل من المصرف'**
+  String get orderCardReceiptOpenOriginal;
+
+  /// No description provided for @orderCardReceiptOpenOriginalFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر فتح الإيصال الأصلي.'**
+  String get orderCardReceiptOpenOriginalFailed;
+
+  /// No description provided for @orderCardReceiptNoOriginal.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد رابط أصلي لهذا الإيصال.'**
+  String get orderCardReceiptNoOriginal;
+
+  /// No description provided for @orderCardReceiptOriginalHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'النسخة المعروضة أعلاه من البيانات المحفوظة لدينا، وتعمل بدون إنترنت. الأصل يُفتح من خادم المصرف ويحتاج اتصالاً.'**
+  String get orderCardReceiptOriginalHint;
+
+  /// No description provided for @orderCardReceiptFieldAmount.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get orderCardReceiptFieldAmount;
+
+  /// No description provided for @orderCardReceiptFieldTerminal.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الآلة'**
+  String get orderCardReceiptFieldTerminal;
+
+  /// No description provided for @orderCardReceiptFieldMerchant.
+  ///
+  /// In ar, this message translates to:
+  /// **'التاجر'**
+  String get orderCardReceiptFieldMerchant;
+
+  /// No description provided for @orderCardReceiptFieldCard.
+  ///
+  /// In ar, this message translates to:
+  /// **'البطاقة'**
+  String get orderCardReceiptFieldCard;
+
+  /// No description provided for @orderCardReceiptFieldCardholder.
+  ///
+  /// In ar, this message translates to:
+  /// **'حامل البطاقة'**
+  String get orderCardReceiptFieldCardholder;
+
+  /// No description provided for @orderCardReceiptFieldRrn.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم المرجعي'**
+  String get orderCardReceiptFieldRrn;
+
+  /// No description provided for @orderCardReceiptFieldAuth.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم التفويض'**
+  String get orderCardReceiptFieldAuth;
+
+  /// No description provided for @orderCardReceiptFieldDateTime.
+  ///
+  /// In ar, this message translates to:
+  /// **'التاريخ والوقت'**
+  String get orderCardReceiptFieldDateTime;
+
+  /// No description provided for @orderCardReceiptFieldProvider.
+  ///
+  /// In ar, this message translates to:
+  /// **'مزوّد الخدمة'**
+  String get orderCardReceiptFieldProvider;
+
+  /// No description provided for @orderCardReceiptRawFieldsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل حقول الإيصال'**
+  String get orderCardReceiptRawFieldsTitle;
+
+  /// No description provided for @orderCardReceiptRawFieldsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كما أرسلها المزوّد، للمطابقة المحاسبية.'**
+  String get orderCardReceiptRawFieldsSubtitle;
+
+  /// No description provided for @orderCardReceiptNoneForOrder.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد إيصالات بطاقة لهذه الفاتورة.'**
+  String get orderCardReceiptNoneForOrder;
+
+  /// No description provided for @invoiceCardReceiptFilterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال البطاقة'**
+  String get invoiceCardReceiptFilterLabel;
+
+  /// No description provided for @cardProviderMoamalat.
+  ///
+  /// In ar, this message translates to:
+  /// **'معاملات'**
+  String get cardProviderMoamalat;
+
+  /// No description provided for @cardProviderMadfoatech.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدفوعاتك'**
+  String get cardProviderMadfoatech;
+
   /// No description provided for @cardReceiptRequiredError.
   ///
   /// In ar, this message translates to:

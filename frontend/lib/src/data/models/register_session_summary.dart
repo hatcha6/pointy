@@ -17,6 +17,7 @@ class RegisterSessionSummary {
     required this.refunds,
     required this.paymentMethods,
     required this.paymentTotals,
+    this.cardReceipts = CardReceiptTotals.empty,
     required this.categories,
     required this.cash,
     required this.expenses,
@@ -33,6 +34,9 @@ class RegisterSessionSummary {
   final SessionRefundTotals refunds;
   final List<PaymentMethodBreakdown> paymentMethods;
   final PaymentMethodTotals paymentTotals;
+
+  /// How much of [paymentTotals]' card money carries a checked receipt.
+  final CardReceiptTotals cardReceipts;
   final List<CategoryBreakdown> categories;
   final SessionCashSummary cash;
   final SessionExpenseTotals expenses;
@@ -57,6 +61,7 @@ class RegisterSessionSummary {
         json['payment_methods'],
       ).map(PaymentMethodBreakdown.fromJson).toList(growable: false),
       paymentTotals: PaymentMethodTotals.fromJson(_map(json['payment_totals'])),
+      cardReceipts: CardReceiptTotals.fromJson(_map(json['card_receipts'])),
       categories: _list(
         json['categories'],
       ).map(CategoryBreakdown.fromJson).toList(growable: false),
@@ -176,6 +181,82 @@ class PaymentMethodTotals {
       refund: _money(json['refund']),
       net: _money(json['net']),
       count: _int(json['count']),
+    );
+  }
+}
+
+/// How much of a shift's card money is backed by a checked receipt.
+///
+/// The shift's card total says how much went through the terminal; it does not
+/// say how much of that the shop can prove. Those part company the moment a
+/// provider's receipt has to be proved *after* the sale, so the manager view
+/// shows both — "2,000 verified of 4,000" — rather than one number that mixes
+/// them.
+class CardReceiptTotals {
+  const CardReceiptTotals({
+    required this.gross,
+    required this.verified,
+    required this.pending,
+    required this.flagged,
+    required this.unavailable,
+    required this.noReceipt,
+    required this.pendingCount,
+    required this.flaggedCount,
+  });
+
+  /// Every card dinar taken this shift. The five buckets below sum to it.
+  final double gross;
+
+  /// Proved, and for the amount charged.
+  final double verified;
+
+  /// Scanned, still waiting on the issuer.
+  final double pending;
+
+  /// The issuer disowned it, or it proves a different amount. Needs a human.
+  final double flagged;
+
+  /// The issuer could not be reached. Says nothing about the receipt either way.
+  final double unavailable;
+
+  /// Card money taken with no receipt scanned at all.
+  final double noReceipt;
+
+  final int pendingCount;
+  final int flaggedCount;
+
+  static const empty = CardReceiptTotals(
+    gross: 0,
+    verified: 0,
+    pending: 0,
+    flagged: 0,
+    unavailable: 0,
+    noReceipt: 0,
+    pendingCount: 0,
+    flaggedCount: 0,
+  );
+
+  /// Whether there is anything to say. A shift with no card takings shows no
+  /// card section rather than a row of zeroes.
+  bool get hasCardPayments => gross > 0;
+
+  /// Whether every dinar is accounted for and proved.
+  bool get isFullyVerified => hasCardPayments && verified >= gross;
+
+  /// Whether something needs a person to look at it.
+  bool get needsAttention => flagged > 0;
+
+  factory CardReceiptTotals.fromJson(Map<String, Object?> json) {
+    final counts = _map(json['counts']);
+    return CardReceiptTotals(
+      gross: _money(json['gross']),
+      verified: _money(json['verified']),
+      pending: _money(json['pending']),
+      flagged: _money(json['flagged']),
+      unavailable: _money(json['unavailable']),
+      noReceipt: _money(json['no_receipt']),
+      pendingCount: _int(counts['pending']),
+      flaggedCount: _int(counts['flagged']),
     );
   }
 }

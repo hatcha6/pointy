@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "register-session-preview",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": ["run", "-d", "web-server", "--web-port", "8791", "-t", "lib/dev/register_session_preview.dart"],
+      "port": 8791
+    }
+  ]
+}

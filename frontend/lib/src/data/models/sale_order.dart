@@ -3,6 +3,7 @@ import 'modifier_group.dart';
 import 'print_job.dart';
 import 'printer_config.dart';
 import 'query.dart';
+import '../../shared/payments/card_receipt_status.dart';
 
 /// How a sale is recorded at checkout. `standard` is the normal paid-in-full
 /// flow; `credit` (آجل) is a debt invoice issued unpaid or partly paid;
@@ -391,6 +392,7 @@ class SaleOrder {
     this.amendmentIndex = 0,
     required this.lines,
     required this.payments,
+    this.cardReceiptStatus = CardReceiptStatus.none,
     required this.subtotal,
     required this.total,
     this.receiptNumber,
@@ -470,6 +472,11 @@ class SaleOrder {
   final bool hasReturnableItems;
   final List<SaleOrderLine> lines;
   final List<SalePayment> payments;
+
+  /// How well this sale's CARD money is backed by receipts, worst state
+  /// first. The backend computes it from the payments so a list row does
+  /// not have to load them.
+  final CardReceiptStatus cardReceiptStatus;
   final double subtotal;
   final double discountTotal;
   final double total;
@@ -505,6 +512,7 @@ class SaleOrder {
       id: _intFromJson(json['id']),
       receiptNumber: json['receipt_number']?.toString(),
       status: json['status']?.toString() ?? '',
+      cardReceiptStatus: CardReceiptStatus.parse(json['card_receipt_status']),
       docStatus: json['doc_status']?.toString() ?? '',
       cancelledAt: DateTime.tryParse(
         json['cancelled_at']?.toString() ?? '',
@@ -631,6 +639,12 @@ class SalePayment {
   }
 }
 
+/// The terminal slip behind one card payment, as the shop holds it.
+///
+/// Carries both the tidy per-concept fields the UI renders and [rawFields] —
+/// everything the provider sent, under its own key names. The raw copy is what
+/// a reconciliation against an acquirer's statement needs months later, when
+/// the question turns out to be keyed on something nobody thought to normalise.
 class SalePaymentCardReceipt {
   const SalePaymentCardReceipt({
     required this.provider,
@@ -639,6 +653,16 @@ class SalePaymentCardReceipt {
     required this.rrn,
     required this.stan,
     required this.authorizationCode,
+    this.verificationState = '',
+    this.verificationError = '',
+    this.serverValidated = false,
+    this.sourceUrl = '',
+    this.cardholderName = '',
+    this.terminalId = '',
+    this.merchantName = '',
+    this.transactionDateTime = '',
+    this.amountLabel = '',
+    this.rawFields = const {},
   });
 
   final String provider;
@@ -648,7 +672,38 @@ class SalePaymentCardReceipt {
   final String stan;
   final String authorizationCode;
 
+  /// One of `settled`, `pending`, `mismatch`, `rejected`, `unavailable`, or
+  /// empty for a receipt stored before verification states existed.
+  final String verificationState;
+
+  /// Why a check failed, in the backend's words. Empty when nothing failed.
+  final String verificationError;
+
+  /// Whether the card issuer itself confirmed this receipt, as opposed to the
+  /// till having decoded a payload that carries no signature.
+  final bool serverValidated;
+
+  /// The link that was scanned. The only way to ask the issuer again.
+  final String sourceUrl;
+
+  final String cardholderName;
+  final String terminalId;
+  final String merchantName;
+  final String transactionDateTime;
+
+  /// The amount exactly as the slip printed it, currency and all
+  /// (e.g. `"8.500 د.ل"`). Preferred over [amount] when showing the slip back,
+  /// because it is what the customer is holding.
+  final String amountLabel;
+
+  /// Every field the provider sent, verbatim, under its own key names.
+  final Map<String, String> rawFields;
+
+  /// Whether the shop can re-open the original on the issuer's own server.
+  bool get hasOriginal => sourceUrl.startsWith('https://');
+
   factory SalePaymentCardReceipt.fromJson(Map<String, Object?> json) {
+    final raw = json['raw_fields'];
     return SalePaymentCardReceipt(
       provider: json['provider']?.toString() ?? '',
       amount: _moneyFromJson(json['amount']),
@@ -656,8 +711,38 @@ class SalePaymentCardReceipt {
       rrn: json['rrn']?.toString() ?? '',
       stan: json['stan']?.toString() ?? '',
       authorizationCode: json['authorization_code']?.toString() ?? '',
+      verificationState: json['verification_state']?.toString() ?? '',
+      verificationError: json['verification_error']?.toString() ?? '',
+      serverValidated: json['server_validated'] == true,
+      sourceUrl: json['source_url']?.toString() ?? '',
+      cardholderName: json['cardholder_name']?.toString() ?? '',
+      terminalId: json['terminal_id']?.toString() ?? '',
+      merchantName: json['merchant_name']?.toString() ?? '',
+      transactionDateTime: json['transaction_datetime']?.toString() ?? '',
+      amountLabel: json['amount_label']?.toString() ?? '',
+      rawFields: raw is Map<String, Object?>
+          ? {
+              for (final entry in raw.entries)
+                if (entry.value != null &&
+                    entry.value.toString().trim().isNotEmpty)
+                  entry.key: entry.value.toString(),
+            }
+          : const {},
     );
   }
+
+  /// How this receipt stands, in the vocabulary every surface shares.
+  ///
+  /// An empty state means the receipt predates verification states; it was
+  /// checked at the counter against its own decoded payload, which is what
+  /// `verified` means for a self-contained provider.
+  CardReceiptStatus get status => switch (verificationState) {
+    'settled' || '' => CardReceiptStatus.verified,
+    'pending' => CardReceiptStatus.pending,
+    'mismatch' || 'rejected' => CardReceiptStatus.flagged,
+    'unavailable' => CardReceiptStatus.unavailable,
+    _ => CardReceiptStatus.verified,
+  };
 }
 
 class SaleOrderLine {

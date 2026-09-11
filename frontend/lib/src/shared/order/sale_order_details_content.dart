@@ -17,6 +17,8 @@ import '../payment_labels.dart';
 import '../query_controls/debounced_search_field.dart';
 import '../responsive/responsive.dart';
 import '../date_formatters.dart';
+import '../../features/invoices/views/card_receipt_viewer_sheet.dart';
+import '../payments/card_receipt_status.dart';
 
 typedef SaleOrderReprintAction = Future<bool> Function(SaleOrder order);
 typedef SaleOrderShareAction =
@@ -771,12 +773,17 @@ class _PaymentsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
+    final hasCardReceipt = order.payments.any(
+      (payment) => payment.cardReceipt != null,
+    );
+
     return PointyDetailSection(
       title: l10n.salePaymentsTitle,
       icon: Icons.payments_outlined,
       child: order.payments.isEmpty
           ? Text(l10n.invoicePaymentsEmpty)
           : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (final (index, payment) in order.payments.indexed) ...[
                   if (index > 0) const SizedBox(height: 8),
@@ -792,7 +799,31 @@ class _PaymentsSection extends StatelessWidget {
                           payment.commissionPercent.toStringAsFixed(2),
                         ),
                     ].join(' • '),
+                    badges: [
+                      // Per payment, not per invoice: a split tender can have
+                      // one proved slip and one still waiting, and the row is
+                      // the only place that distinction is visible.
+                      if (payment.cardReceipt != null)
+                        CardReceiptStatusBadge(
+                          status: payment.cardReceipt!.status,
+                        ),
+                    ],
                     trailing: Text(formatMoney(payment.amount)),
+                  ),
+                ],
+                if (hasCardReceipt) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('order_card_receipt_view_button'),
+                      onPressed: () => showCardReceiptViewerSheet(
+                        context: context,
+                        payments: order.payments,
+                      ),
+                      icon: const Icon(Icons.receipt_long_outlined),
+                      label: Text(l10n.orderCardReceiptViewButton),
+                    ),
                   ),
                 ],
               ],
