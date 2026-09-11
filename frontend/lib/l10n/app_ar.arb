@@ -5360,6 +5360,14 @@
   "cardReceiptValidateButton": "طابق الإيصال",
   "cardReceiptRescanButton": "إعادة المسح",
   "cardReceiptRequiredInline": "هذه الدفعة تحتاج مسح إيصال البطاقة.",
+  "cardReceiptAwaitingCardTender": "تمت قراءة إيصال بطاقة بمبلغ {amount}. اضبط دفعة بطاقة بنفس المبلغ لمطابقته.",
+  "@cardReceiptAwaitingCardTender": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "cardReceiptRequiredError": "يجب مطابقة كل دفعة بطاقة قبل تأكيد الدفع.",
   "cardReceiptValidatedSummary": "تمت المطابقة: {amount}، البطاقة {maskedPan}",
   "@cardReceiptValidatedSummary": {

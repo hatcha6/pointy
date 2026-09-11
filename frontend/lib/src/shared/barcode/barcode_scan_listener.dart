@@ -53,7 +53,7 @@ class BarcodeScanListener extends StatefulWidget {
     this.onFunctionKey,
     this.onPageKey,
     this.onCommandEnter,
-    @visibleForTesting this.clock = DateTime.now,
+    this.clock = DateTime.now,
   });
 
   final Widget child;
@@ -92,7 +92,10 @@ class BarcodeScanListener extends StatefulWidget {
   /// [onFunctionKey]. Gated on [enabled].
   final VoidCallback? onCommandEnter;
 
-  /// Injectable time source so tests can drive the burst timing.
+  /// Time source for the burst timing. Injectable so tests can drive it — and
+  /// so a screen that runs its own burst guard alongside this one (the payment
+  /// sheet, whose one-key shortcuts must stand aside for a scan) can hand both
+  /// the same clock instead of letting two views of "now" disagree.
   final DateTime Function() clock;
 
   @override
@@ -288,13 +291,17 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
 
     if (controller != null && valueBeforeBurst != null) {
       // The burst landed in a focused text field — put the field back exactly
-      // as it was, but only if it still ends with what we buffered (input
-      // formatters or programmatic edits may have diverged; never clobber a
-      // value we don't recognize).
-      if (controller.text.endsWith(barcode)) {
+      // as it was. Usually the field simply ends with what we buffered; a
+      // field with an input formatter instead holds whatever survived it (a
+      // money field keeps the scan's digits and drops its letters), which is
+      // still nothing but wreckage from this burst as long as the pre-burst
+      // text is still its prefix. Anything else was rewritten by something
+      // other than these keystrokes, and is left alone.
+      if (controller.text.endsWith(barcode) ||
+          controller.text.startsWith(valueBeforeBurst.text)) {
         controller.value = valueBeforeBurst;
       } else if (widget.ignoreTextInputFocus) {
-        // Field diverged from the keystream (heavy formatting): treat as
+        // Field diverged from the keystream beyond recognition: treat as
         // normal typing rather than guessing at a repair.
         return false;
       }

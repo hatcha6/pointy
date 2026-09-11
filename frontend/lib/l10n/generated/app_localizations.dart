@@ -15518,6 +15518,12 @@ abstract class AppLocalizations {
   /// **'هذه الدفعة تحتاج مسح إيصال البطاقة.'**
   String get cardReceiptRequiredInline;
 
+  /// No description provided for @cardReceiptAwaitingCardTender.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت قراءة إيصال بطاقة بمبلغ {amount}. اضبط دفعة بطاقة بنفس المبلغ لمطابقته.'**
+  String cardReceiptAwaitingCardTender(String amount);
+
   /// No description provided for @cardReceiptRequiredError.
   ///
   /// In ar, this message translates to:

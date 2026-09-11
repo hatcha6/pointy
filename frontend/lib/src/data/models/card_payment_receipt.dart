@@ -64,9 +64,15 @@ class CardPaymentReceipt {
 }
 
 class CardPaymentReceiptException implements Exception {
-  const CardPaymentReceiptException(this.code);
+  const CardPaymentReceiptException(this.code, {this.receipt});
 
   final CardPaymentReceiptErrorCode code;
+
+  /// The decoded receipt, when the payload itself was readable and it was a
+  /// check *against the payment* that failed (wrong amount, unknown terminal).
+  /// The message shown to the cashier quotes its values, so it has to travel
+  /// with the failure rather than be re-parsed by whoever catches it.
+  final CardPaymentReceipt? receipt;
 }
 
 enum CardPaymentReceiptErrorCode {
@@ -77,6 +83,12 @@ enum CardPaymentReceiptErrorCode {
   invalidAmount,
   unsuccessfulTransaction,
   missingReference,
+
+  /// The receipt is genuine but proves a different amount than this payment.
+  amountMismatch,
+
+  /// The receipt comes from a terminal the shop has not listed as its own.
+  terminalNotTrusted,
 }
 
 class MoamalatReceiptParser {
@@ -84,10 +96,22 @@ class MoamalatReceiptParser {
 
   static const receiptHost = 'receipt.moamalat.net';
 
+  /// Whether [url] is a receipt link at all — nothing about whether it is a
+  /// *good* one.
+  ///
+  /// This is the question a till has to answer before it can react to a scan:
+  /// a counter is scanned with product barcodes, loyalty cards and the odd
+  /// stray QR, and only something addressed to the receipt host is worth
+  /// treating — or complaining about — as a card receipt.
+  bool handles(String url) {
+    final uri = Uri.tryParse(url.trim());
+    return uri != null && uri.scheme == 'https' && uri.host == receiptHost;
+  }
+
   CardPaymentReceipt parse(String url) {
     final trimmedUrl = url.trim();
     final uri = Uri.tryParse(trimmedUrl);
-    if (uri == null || uri.scheme != 'https' || uri.host != receiptHost) {
+    if (uri == null || !handles(trimmedUrl)) {
       throw const CardPaymentReceiptException(
         CardPaymentReceiptErrorCode.invalidUrl,
       );
@@ -203,5 +227,76 @@ class MoamalatReceiptParser {
       );
     }
     return amount;
+  }
+}
+
+/// Decides whether a scanned receipt link may stand in for a card payment.
+///
+/// Both ways of matching a card payment run these same checks: the cashier
+/// opening the match dialog, and the payment sheet noticing a receipt scanned
+/// straight into it. A receipt the dialog would refuse therefore cannot slip
+/// in by being scanned instead — there is one definition of "this receipt
+/// proves this payment", not two that can drift apart.
+class CardReceiptMatcher {
+  const CardReceiptMatcher({this.parser = const MoamalatReceiptParser()});
+
+  final MoamalatReceiptParser parser;
+
+  /// Whether [value] is a receipt link at all. Anything else a till is scanned
+  /// with is none of this matcher's business.
+  bool isReceiptLink(String value) => parser.handles(value);
+
+  /// The checks that do not depend on a payment line: the payload decodes into
+  /// a successful receipt from a terminal the shop owns.
+  ///
+  /// Split out from [match] because a receipt can arrive *before* the payment
+  /// it belongs to exists — the payment sheet accepts one scanned while the
+  /// cashier is still setting the tender up, and only then asks which line it
+  /// fits.
+  CardPaymentReceipt verify(
+    String value, {
+    required List<String> trustedTerminalIds,
+  }) {
+    final receipt = parser.parse(value);
+    _requireTrustedTerminal(receipt, trustedTerminalIds);
+    return receipt;
+  }
+
+  /// [verify], plus the receipt having been rung up for [expectedAmount].
+  CardPaymentReceipt match(
+    String value, {
+    required double expectedAmount,
+    required List<String> trustedTerminalIds,
+  }) {
+    final receipt = parser.parse(value);
+    if (!receipt.amountMatches(expectedAmount)) {
+      throw CardPaymentReceiptException(
+        CardPaymentReceiptErrorCode.amountMismatch,
+        receipt: receipt,
+      );
+    }
+    _requireTrustedTerminal(receipt, trustedTerminalIds);
+    return receipt;
+  }
+
+  /// An empty list means the shop has not named its terminals, so any terminal
+  /// passes — the check tightens as the shop configures it, and never turns
+  /// into a hard stop for a shop that never did.
+  void _requireTrustedTerminal(
+    CardPaymentReceipt receipt,
+    List<String> trustedTerminalIds,
+  ) {
+    final trusted = trustedTerminalIds
+        .map((terminalId) => terminalId.trim().toUpperCase())
+        .where((terminalId) => terminalId.isNotEmpty)
+        .toSet();
+    if (trusted.isEmpty ||
+        trusted.contains(receipt.terminalId.trim().toUpperCase())) {
+      return;
+    }
+    throw CardPaymentReceiptException(
+      CardPaymentReceiptErrorCode.terminalNotTrusted,
+      receipt: receipt,
+    );
   }
 }

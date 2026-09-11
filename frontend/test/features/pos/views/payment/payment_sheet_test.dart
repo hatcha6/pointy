@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
+import 'package:pointy_frontend/src/features/companion/companion_bridge.dart';
+import 'package:pointy_frontend/src/features/companion/companion_scope.dart';
 import 'package:pointy_frontend/src/features/pos/views/payment/payment.dart';
+import 'package:pointy_frontend/src/shared/barcode/barcode_scan_listener.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
+
+import '../../../../support/fake_companion_bridge.dart';
+import '../../../../support/moamalat_receipt_links.dart';
 
 void main() {
   testWidgets('wide keypad entry can submit a cash payment', (tester) async {
@@ -532,6 +539,272 @@ void main() {
     expect(confirm.onPressed, isNull);
   });
 
+  testWidgets('a receipt scanned into the sheet matches the card payment '
+      'without opening the dialog', (tester) async {
+    PaymentSheetResult? submitted;
+    await _pumpPaymentSheet(
+      tester,
+      total: 45,
+      requireCardReceipt: true,
+      trustedCardTerminalIds: const ['0JA8Y13W'],
+      onSubmit: (result) => submitted = result,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('payment_method_card')));
+    await tester.pumpAndSettle();
+    expect(find.text('هذه الدفعة تحتاج مسح إيصال البطاقة.'), findsOneWidget);
+
+    _scanIntoSheet(tester, moamalatReceiptUrl(amount: 45));
+    await tester.pump();
+
+    // No dialog was opened, and the payment is matched exactly as if one had
+    // been: the sale can be confirmed and carries the receipt.
+    expect(find.byKey(const ValueKey('card_receipt_url_field')), findsNothing);
+    expect(find.textContaining('تمت المطابقة'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
+    await tester.pump();
+
+    expect(submitted?.payments.single.method, PaymentMethod.card);
+    expect(
+      submitted?.payments.single.cardReceiptUrl,
+      moamalatReceiptUrl(amount: 45),
+      reason: 'the scanned slip is what the sale is sent with',
+    );
+  });
+
+  testWidgets('anything that is not a receipt link is left alone', (
+    tester,
+  ) async {
+    await _pumpPaymentSheet(
+      tester,
+      total: 45,
+      requireCardReceipt: true,
+      trustedCardTerminalIds: const ['0JA8Y13W'],
+    );
+
+    await tester.tap(find.byKey(const ValueKey('payment_method_card')));
+    await tester.pumpAndSettle();
+
+    // A product barcode, a loyalty card, a stray QR: none of them may say
+    // anything about a payment — not even an error.
+    _scanIntoSheet(tester, '6291041500213');
+    _scanIntoSheet(tester, 'https://example.com/whatever');
+    await tester.pump();
+
+    expect(find.textContaining('تمت المطابقة'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('payment_scan_receipt_error')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('payment_scan_pending_receipt')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a receipt from a terminal the shop does not own is refused', (
+    tester,
+  ) async {
+    await _pumpPaymentSheet(
+      tester,
+      total: 45,
+      requireCardReceipt: true,
+      trustedCardTerminalIds: const ['0JA8Y13W'],
+    );
+
+    await tester.tap(find.byKey(const ValueKey('payment_method_card')));
+    await tester.pumpAndSettle();
+
+    _scanIntoSheet(
+      tester,
+      moamalatReceiptUrl(amount: 45, terminalId: 'SOMEONE-ELSE'),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('payment_scan_receipt_error')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('تمت المطابقة'), findsNothing);
+    final confirm = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('payment_confirm_button')),
+    );
+    expect(confirm.onPressed, isNull, reason: 'nothing was matched');
+  });
+
+  testWidgets('a receipt scanned before the card payment exists waits for it', (
+    tester,
+  ) async {
+    await _pumpPaymentSheet(tester, total: 45, requireCardReceipt: true);
+
+    // The sheet opens on cash; the cashier scans the slip first.
+    _scanIntoSheet(tester, moamalatReceiptUrl(amount: 45));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('payment_scan_pending_receipt')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('تمت المطابقة'), findsNothing);
+
+    // Choosing card is the step it was waiting for — no second scan.
+    await tester.tap(find.byKey(const ValueKey('payment_method_card')));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('تمت المطابقة'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('payment_scan_pending_receipt')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('one terminal slip cannot pay for two card lines', (
+    tester,
+  ) async {
+    await _pumpPaymentSheet(
+      tester,
+      total: 90,
+      width: 1366,
+      height: 900,
+      requireCardReceipt: true,
+      enableCash: false,
+      enableTransfer: false,
+    );
+
+    await _tapKey(tester, 'payment_tender_amount_0');
+    await tester.enterText(
+      find.byKey(const ValueKey('payment_tender_amount_0')),
+      '45',
+    );
+    await tester.pump();
+    await _tapKey(tester, 'payment_add_tender');
+
+    final url = moamalatReceiptUrl(amount: 45);
+    _scanIntoSheet(tester, url);
+    await tester.pump();
+    expect(find.textContaining('تمت المطابقة'), findsOneWidget);
+
+    // An impatient second trigger on the same slip must not prove the second
+    // payment as well.
+    _scanIntoSheet(tester, url);
+    await tester.pump();
+
+    expect(find.textContaining('تمت المطابقة'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('payment_scan_pending_receipt')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a receipt an edited amount let go of comes back when the '
+      'amount does', (tester) async {
+    await _pumpPaymentSheet(
+      tester,
+      total: 450,
+      requireCardReceipt: true,
+      enableCash: false,
+      enableTransfer: false,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('payment_tender_amount_0')),
+      '45',
+    );
+    await tester.pump();
+
+    _scanIntoSheet(tester, moamalatReceiptUrl(amount: 45));
+    await tester.pump();
+    expect(find.textContaining('تمت المطابقة'), findsOneWidget);
+
+    // The cashier was mid-way through typing 450: the match no longer fits,
+    // but the slip is still good and must not be thrown away.
+    await tester.enterText(
+      find.byKey(const ValueKey('payment_tender_amount_0')),
+      '450',
+    );
+    await tester.pump();
+    expect(find.textContaining('تمت المطابقة'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('payment_scan_pending_receipt')),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('payment_tender_amount_0')),
+      '45',
+    );
+    await tester.pump();
+    expect(find.textContaining('تمت المطابقة'), findsOneWidget);
+  });
+
+  testWidgets('a paired phone matches a receipt the same way the counter '
+      'scanner does', (tester) async {
+    final bridge = FakeCompanionBridge();
+    addTearDown(bridge.dispose);
+
+    await _pumpPaymentSheet(
+      tester,
+      total: 45,
+      requireCardReceipt: true,
+      companionBridge: bridge,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('payment_method_card')));
+    await tester.pumpAndSettle();
+
+    bridge.emitScan(moamalatReceiptUrl(amount: 45));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('تمت المطابقة'), findsOneWidget);
+  });
+
+  testWidgets("a scanner's key burst neither picks a payment method nor "
+      'confirms the sale', (tester) async {
+    PaymentSheetResult? submitted;
+    var now = DateTime(2026, 9, 11, 12);
+    await _pumpPaymentSheet(
+      tester,
+      total: 45,
+      clock: () => now,
+      onSubmit: (result) => submitted = result,
+    );
+
+    // A wedge types a receipt link — digits and all — and ends with Enter.
+    // Every one of those digits is also a method hotkey, and that Enter is
+    // also the confirm key.
+    for (final key in [
+      LogicalKeyboardKey.digit9,
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.digit3,
+      LogicalKeyboardKey.digit2,
+      LogicalKeyboardKey.enter,
+    ]) {
+      now = now.add(const Duration(milliseconds: 10));
+      await tester.sendKeyEvent(key);
+    }
+    await tester.pump();
+
+    expect(
+      _tenderMethod(tester, 0),
+      PaymentMethod.cash,
+      reason: 'the scan must not pick a payment method',
+    );
+    expect(submitted, isNull, reason: 'the scan must not confirm the sale');
+
+    // The cashier reaching for the same keys, at human pace, still works.
+    now = now.add(const Duration(seconds: 1));
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit2);
+    await tester.pump();
+    expect(_tenderMethod(tester, 0), PaymentMethod.card);
+
+    now = now.add(const Duration(seconds: 1));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(submitted?.payments.single.amount, 45);
+  });
+
   testWidgets('credit/quotation segments hidden when shop disables them', (
     tester,
   ) async {
@@ -564,6 +837,10 @@ Future<void> _pumpPaymentSheet(
   bool enableCredit = true,
   DateTime? proposedDueDate,
   double height = 844,
+  bool requireCardReceipt = false,
+  List<String> trustedCardTerminalIds = const [],
+  CompanionBridge? companionBridge,
+  DateTime Function()? clock,
 }) async {
   tester.view.physicalSize = Size(width, height);
   tester.view.devicePixelRatio = 1;
@@ -583,15 +860,19 @@ Future<void> _pumpPaymentSheet(
       theme: PointyTheme.light(),
       home: Directionality(
         textDirection: TextDirection.rtl,
-        child: Scaffold(
+        child: CompanionScope(
+          bridge: companionBridge,
+          repository: null,
+          child: Scaffold(
           body: SizedBox.expand(
             child: PaymentSheet(
               total: total,
               enableCashPayments: enableCash,
               enableCardPayments: enableCard,
               enableTransferPayments: enableTransfer,
-              requireCardReceipt: false,
-              trustedCardTerminalIds: const [],
+              requireCardReceipt: requireCardReceipt,
+              trustedCardTerminalIds: trustedCardTerminalIds,
+              clock: clock ?? DateTime.now,
               showPrintInvoiceToggle: showPrintInvoiceToggle,
               printInvoiceAfterPayment: printInvoiceAfterPayment,
               onPrintInvoiceChanged: onPrintInvoiceChanged ?? (_) {},
@@ -608,9 +889,28 @@ Future<void> _pumpPaymentSheet(
             ),
           ),
         ),
+        ),
       ),
     ),
   );
+}
+
+/// Hands the sheet a scan the way the counter scanner does: through the very
+/// [BarcodeScanListener] the sheet wired up, so the wiring is under test and
+/// not just the handler behind it.
+void _scanIntoSheet(WidgetTester tester, String value) {
+  tester
+      .widget<BarcodeScanListener>(find.byType(BarcodeScanListener))
+      .onBarcodeScanned(value);
+}
+
+
+PaymentMethod _tenderMethod(WidgetTester tester, int index) {
+  return tester
+      .widget<DropdownButtonFormField<PaymentMethod>>(
+        find.byKey(ValueKey('payment_tender_method_$index')),
+      )
+      .initialValue!;
 }
 
 String _amountText(WidgetTester tester, int index) {
