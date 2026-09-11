@@ -5,10 +5,11 @@ from rest_framework import serializers
 from apps.core.models import ShopSettings
 from apps.core.roles import user_is_manager
 from apps.sales.models import Order
-from .moamalat import (
-    MoamalatReceiptError,
-    parse_moamalat_receipt_url,
-    payment_amount_matches_receipt,
+from .card_receipts import (
+    CardReceiptError,
+    amount_matches,
+    parse_receipt_url,
+    terminal_is_trusted,
 )
 from .models import Payment
 
@@ -90,43 +91,56 @@ class PaymentSerializer(serializers.ModelSerializer):
             existing_receipt_data = getattr(self.instance, "card_receipt_data", {}) or {}
             if receipt_url:
                 try:
-                    receipt = parse_moamalat_receipt_url(receipt_url)
-                except MoamalatReceiptError as exc:
+                    receipt = parse_receipt_url(receipt_url)
+                except CardReceiptError as exc:
                     raise serializers.ValidationError(
                         {"card_receipt_url": str(exc)}
                     ) from exc
-                # An account collection validates ONE receipt against the TOTAL,
-                # then splits it across invoices — so a sub-payment's amount won't
-                # match the receipt. That path sets ``card_receipt_amount_validated``
-                # after checking the total once.
-                if not self.context.get(
-                    "card_receipt_amount_validated"
-                ) and not payment_amount_matches_receipt(amount, receipt):
-                    raise serializers.ValidationError(
-                        {
-                            "card_receipt_url": (
-                                "Card receipt amount does not match the payment amount."
-                            )
-                        }
-                    )
-                trusted_terminal_ids = {
-                    str(terminal_id).strip().upper()
-                    for terminal_id in settings.trusted_card_terminal_ids or []
-                    if str(terminal_id).strip()
-                }
-                receipt_terminal_id = (
-                    str(receipt.fields.get("TerminalId", "")).strip().upper()
-                )
-                if trusted_terminal_ids and receipt_terminal_id not in trusted_terminal_ids:
-                    raise serializers.ValidationError(
-                        {
-                            "card_receipt_url": (
-                                "Card receipt terminal is not trusted for this shop."
-                            )
-                        }
-                    )
-                attrs["card_receipt_data"] = receipt.to_payment_data()
-                if not attrs.get("external_reference"):
+                # A receipt whose provider keeps the details on its own server
+                # cannot be matched here: the link carries an opaque token and
+                # nothing else, and the fetch that resolves it takes tens of
+                # seconds. Blocking a checkout on that would hang the till, so
+                # the slip is recorded as captured-but-unproven and a background
+                # task settles it. Everything below is the check we CAN do now.
+                if receipt.is_verified:
+                    # An account collection validates ONE receipt against the
+                    # TOTAL, then splits it across invoices — so a sub-payment's
+                    # amount won't match the receipt. That path sets
+                    # ``card_receipt_amount_validated`` after checking the total
+                    # once.
+                    if not self.context.get(
+                        "card_receipt_amount_validated"
+                    ) and not amount_matches(amount, receipt):
+                        raise serializers.ValidationError(
+                            {
+                                "card_receipt_url": (
+                                    "Card receipt amount does not match the payment amount."
+                                )
+                            }
+                        )
+                    if not terminal_is_trusted(
+                        receipt, settings.trusted_card_terminal_ids
+                    ):
+                        raise serializers.ValidationError(
+                            {
+                                "card_receipt_url": (
+                                    "Card receipt terminal is not trusted for this shop."
+                                )
+                            }
+                        )
+                receipt_data = receipt.to_payment_data()
+                expected_amount = self.context.get("card_receipt_expected_amount")
+                if expected_amount is not None and not receipt.is_verified:
+                    # One slip covering several invoices: remember the total it
+                    # should prove, or each split row would be checked against
+                    # its own share and every one would fail.
+                    receipt_data["expected_amount"] = f"{Decimal(expected_amount):.2f}"
+                attrs["card_receipt_data"] = receipt_data
+                # Only a proved receipt carries a reference worth recording. An
+                # unproved one would contribute its own opaque token, which is
+                # not a payment reference and would then sit in the field
+                # blocking the real RRN once the issuer supplies it.
+                if receipt.is_verified and not attrs.get("external_reference"):
                     attrs["external_reference"] = receipt.reference[:128]
             elif settings.require_card_payment_receipt and not existing_receipt_data:
                 raise serializers.ValidationError(
@@ -185,9 +199,15 @@ class PaymentSerializer(serializers.ModelSerializer):
         if payment.method == Payment.Method.CARD and payment.card_receipt_data:
             # Promote the scanned receipt into a deduped PaymentCard and link it
             # to a customer (minting a placeholder if the order has none yet).
+            # A receipt still awaiting its issuer has no card details yet, so
+            # this is a no-op for one; the verification task links it once the
+            # fetch fills them in.
             from apps.customers.services import link_card_payment
 
             link_card_payment(payment)
+            from .verification import schedule_receipt_verification
+
+            schedule_receipt_verification(payment)
         if amount > 0 and order.status != Order.Status.PAID:
             paid_total = (paid_total + amount).quantize(Decimal("0.01"))
             if paid_total >= order.total:

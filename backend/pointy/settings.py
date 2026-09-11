@@ -585,6 +585,14 @@ POINTY_IDEMPOTENCY_RETENTION_HOURS = int(
 )
 
 CELERY_BEAT_SCHEDULE = {
+    # Card receipts whose issuer has to be asked are proved after the sale, not
+    # during it. This finds the ones that never got an answer -- the broker was
+    # down at checkout, or the shop was offline long enough to burn the retries
+    # -- so no card payment stays permanently unchecked.
+    "payments.sweep-unverified-card-receipts": {
+        "task": "payments.sweep_unverified_card_receipts",
+        "schedule": crontab(minute="*/20"),
+    },
     "notifications.sync-business-notifications": {
         "task": "notifications.sync_business_notifications",
         "schedule": timedelta(minutes=POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES),

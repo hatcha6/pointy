@@ -20,7 +20,7 @@ from apps.inventory.models import StockItem, StockMovement
 from apps.sales.models import Order, RegisterSession
 from apps.sales.services import create_order_with_lines
 from .models import Payment
-from .moamalat import parse_moamalat_receipt_url
+from .card_receipts import parse_receipt_url
 from .serializers import PaymentSerializer
 
 
@@ -301,7 +301,7 @@ class MoamalatCardReceiptTests(TestCase):
         )
 
     def test_parser_reads_moamalat_receipt_payload(self):
-        receipt = parse_moamalat_receipt_url(_moamalat_receipt_url("1.000"))
+        receipt = parse_receipt_url(_moamalat_receipt_url("1.000"))
 
         self.assertEqual(receipt.amount, Decimal("1.00"))
         self.assertEqual(receipt.fields["PAN"], "639974*********8809")
@@ -352,7 +352,12 @@ class MoamalatCardReceiptTests(TestCase):
             payment.card_receipt_data["masked_pan"],
             "639974*********8809",
         )
+        # The raw payload key is never stored under its own name; the cardholder
+        # is normalised into one field shared with every other provider.
         self.assertNotIn("CardHolder", payment.card_receipt_data)
+        self.assertEqual(
+            payment.card_receipt_data["cardholder_name"], "QARQOOM SALEH"
+        )
 
     def test_card_receipt_amount_must_match_payment_amount(self):
         serializer = PaymentSerializer(
@@ -428,7 +433,9 @@ class MoamalatCardReceiptTests(TestCase):
 
         placeholder = card.customer
         self.assertTrue(placeholder.is_auto_created)
-        self.assertEqual(placeholder.full_name, "Card •••• 8809")
+        # The slip names the cardholder, so the placeholder is a person the
+        # shop can actually find rather than four digits.
+        self.assertEqual(placeholder.full_name, "Qarqoom Saleh")
         self.order.refresh_from_db()
         self.assertEqual(self.order.customer_id, placeholder.pk)
 

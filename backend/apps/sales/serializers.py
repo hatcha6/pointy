@@ -434,6 +434,7 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
     )
     sales_channel_name = serializers.CharField(source="sales_channel.name", read_only=True)
     sales_channel_slug = serializers.CharField(source="sales_channel.slug", read_only=True)
+    card_receipt_status = serializers.SerializerMethodField()
     can_void = serializers.SerializerMethodField()
     can_return = serializers.SerializerMethodField()
     can_exchange = serializers.SerializerMethodField()
@@ -486,6 +487,7 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
             "customer_email",
             "lines",
             "payments",
+            "card_receipt_status",
             "exchanges",
             "subtotal",
             "discount_total",
@@ -536,6 +538,52 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def get_card_receipt_status(self, order):
+        """One word for how well this invoice's CARD money is backed by receipts.
+
+        Worst state wins, because the badge exists to surface the invoices that
+        need a human: an invoice with one proved receipt and one the issuer
+        disowned is a problem, not a success. Reads the prefetched payments, so
+        it costs the list no extra query.
+
+        ``none`` means there is nothing to say -- no card payment, or a shop
+        that does not scan receipts -- and the client shows no badge at all
+        rather than an empty tick.
+        """
+        from apps.payments.card_receipts.base import (
+            MISMATCH,
+            PENDING,
+            REJECTED,
+            SETTLED,
+            UNAVAILABLE,
+        )
+        from apps.payments.models import Payment
+
+        states = set()
+        for payment in order.payments.all():
+            if payment.method != Payment.Method.CARD or payment.amount <= 0:
+                continue
+            data = payment.card_receipt_data or {}
+            if not data:
+                states.add("no_receipt")
+                continue
+            # A receipt stored before verification states existed was checked at
+            # the counter against its own decoded payload.
+            states.add(data.get("verification_state") or SETTLED)
+
+        if not states:
+            return "none"
+        for state, label in (
+            (MISMATCH, "flagged"),
+            (REJECTED, "flagged"),
+            (PENDING, "pending"),
+            (UNAVAILABLE, "unavailable"),
+            ("no_receipt", "no_receipt"),
+        ):
+            if state in states:
+                return label
+        return "verified"
 
     def get_can_void(self, order):
         return self._can_adjust_order(order)

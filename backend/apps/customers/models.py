@@ -400,6 +400,18 @@ class PaymentCard(TimeStampedModel):
     masked_pan = models.CharField(max_length=64, blank=True)
     card_scheme = models.CharField(max_length=64, blank=True)
     aid = models.CharField(max_length=64, blank=True)
+    # The cardholder exactly as the terminal printed it ("SETTA/HATEM"), kept
+    # for the life of the card and never rewritten.
+    #
+    # This is the identity half of the card on an acquirer that masks all but
+    # the last four digits: the fingerprint above is hashed from it, so it is
+    # what makes the SAME person's card land on the SAME customer next time.
+    # The shop is free to rename the customer it created -- to Arabic, to a
+    # nickname, to a real account -- and matching is unaffected, because nothing
+    # here reads Customer.full_name. Stored in its own column rather than left
+    # inside last_receipt_data, which the next payment overwrites, so the name
+    # a card was matched on stays auditable.
+    cardholder_name = models.CharField(max_length=120, blank=True)
     label = models.CharField(max_length=120, blank=True)
     first_seen_at = models.DateTimeField(default=timezone.now)
     last_seen_at = models.DateTimeField(default=timezone.now)

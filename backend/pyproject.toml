@@ -27,6 +27,13 @@ dependencies = [
   "pillow-heif>=1,<2",
   "psycopg[binary]>=3.2,<4",
   "python-bidi>=0.4",
+  # Reads the fields off a card receipt that the issuer only publishes as a
+  # picture (Madfoatech renders a bitmap; nothing about the payment is in the
+  # link). Pure-Python binding, so this pulls in no wheel of its own -- it
+  # shells out to the tesseract binary the runtime image installs. The backend
+  # detects it at runtime and degrades to proving the receipt EXISTS without
+  # reading its amount, so a source install without tesseract still works.
+  "pytesseract>=0.3,<1",
   "requests>=2.32,<3",
   # Reads a barcode out of a PHOTOGRAPH, for the companion camera. The phone
   # decodes in the browser first (instant, no network), but that decoder is
@@ -59,6 +66,8 @@ packages = [
   "apps.catalog",
   "apps.catalog.management",
   "apps.catalog.management.commands",
+  "apps.payments.management",
+  "apps.payments.management.commands",
   "apps.catalog.migrations",
   "apps.inventory",
   "apps.inventory.migrations",

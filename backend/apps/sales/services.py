@@ -1102,6 +1102,7 @@ def record_customer_payment(
     request=None,
     allow_cross_owner=False,
     card_receipt_amount_validated=False,
+    card_receipt_expected_amount=None,
 ):
     """Record a payment against an existing invoice's balance.
 
@@ -1143,6 +1144,12 @@ def record_customer_payment(
             # An account card collection validates its receipt once against the
             # total; the per-invoice splits skip the per-row amount match.
             "card_receipt_amount_validated": card_receipt_amount_validated,
+            # When the receipt can only be proved later (its provider keeps
+            # the details on its own server), the split rows must carry the
+            # total the slip is expected to show. Without it each row would
+            # be checked against its own portion and every one would be
+            # flagged a mismatch.
+            "card_receipt_expected_amount": card_receipt_expected_amount,
         },
     )
     payment_serializer.is_valid(raise_exception=True)
@@ -1211,28 +1218,36 @@ def record_customer_account_payment(
     # the (necessarily failing) per-row amount match but still parse, trust-check
     # and link the same card.
     card_receipt_amount_validated = False
+    card_receipt_expected_amount = None
     if method == Payment.Method.CARD and card_receipt_url:
-        from apps.payments.moamalat import (
-            MoamalatReceiptError,
-            parse_moamalat_receipt_url,
-            payment_amount_matches_receipt,
+        from apps.payments.card_receipts import (
+            CardReceiptError,
+            amount_matches,
+            parse_receipt_url,
         )
 
         try:
-            receipt = parse_moamalat_receipt_url(card_receipt_url)
-        except MoamalatReceiptError as exc:
+            receipt = parse_receipt_url(card_receipt_url)
+        except CardReceiptError as exc:
             raise serializers.ValidationError(
                 {"card_receipt_url": str(exc)}
             ) from exc
-        if not payment_amount_matches_receipt(amount, receipt):
-            raise serializers.ValidationError(
-                {
-                    "card_receipt_url": (
-                        "Card receipt amount does not match the payment amount."
-                    )
-                }
-            )
-        card_receipt_amount_validated = True
+        if receipt.is_verified:
+            if not amount_matches(amount, receipt):
+                raise serializers.ValidationError(
+                    {
+                        "card_receipt_url": (
+                            "Card receipt amount does not match the payment amount."
+                        )
+                    }
+                )
+            card_receipt_amount_validated = True
+        else:
+            # Nothing to check yet: this provider keeps the receipt on its own
+            # server. Every split row carries the collection TOTAL so that the
+            # verification task compares the slip against the sum it should
+            # show, not against one invoice's share of it.
+            card_receipt_expected_amount = amount
 
     remaining = amount
     allocations = []
@@ -1250,6 +1265,7 @@ def record_customer_account_payment(
             request=request,
             card_receipt_url=card_receipt_url,
             card_receipt_amount_validated=card_receipt_amount_validated,
+            card_receipt_expected_amount=card_receipt_expected_amount,
             # Cross-cashier: settle whoever's debt this customer owes.
             allow_cross_owner=True,
         )

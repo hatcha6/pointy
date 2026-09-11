@@ -27,6 +27,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Count, Sum
+from django.db.models.fields.json import KeyTextTransform
 
 from apps.catalog.models import Product
 from apps.expenses.models import Expense
@@ -129,6 +130,7 @@ def build_register_session_summary(session: RegisterSession) -> dict:
         },
         "payment_methods": payment_methods,
         "payment_totals": payment_totals,
+        "card_receipts": _card_receipt_verification(session),
         "categories": categories,
         "cash": _cash_reconciliation(session),
         "expenses": _expenses(session),
@@ -258,6 +260,88 @@ def _refunds(session: RegisterSession):
         {"refund_total_dec": refund_total, "return_count": return_count},
         by_method,
     )
+
+
+def _card_receipt_verification(session: RegisterSession) -> dict:
+    """How much of this shift's card money is backed by a checked receipt.
+
+    A shift's card total answers "how much went through the terminal"; it does
+    not answer "how much of that can we prove". Those separate the moment a
+    provider's receipt has to be proved AFTER the sale, so they are reported
+    separately: a manager closing a drawer wants "2,000 of 4,000 verified", not
+    a single number that quietly mixes the two.
+
+    Buckets, most to least settled:
+
+    ``verified``     a receipt that passed its checks.
+    ``pending``      scanned, still waiting on its issuer.
+    ``flagged``      the issuer disowned it, or it proves a different amount.
+    ``unavailable``  the issuer could not be reached. Says nothing either way.
+    ``no_receipt``   a card payment taken with no receipt scanned at all.
+    """
+    from apps.payments.card_receipts.base import (
+        MISMATCH,
+        PENDING,
+        REJECTED,
+        SETTLED,
+        UNAVAILABLE,
+    )
+
+    card_payments = Payment.objects.filter(
+        register_session=session,
+        method=Payment.Method.CARD,
+        amount__gt=0,
+    )
+    gross = card_payments.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    with_receipt = card_payments.exclude(card_receipt_data={}).aggregate(
+        total=Sum("amount"), count=Count("id")
+    )
+    receipted_total = with_receipt["total"] or Decimal("0.00")
+
+    buckets = {
+        state: Decimal("0.00")
+        for state in (SETTLED, PENDING, MISMATCH, REJECTED, UNAVAILABLE)
+    }
+    counts = dict.fromkeys(buckets, 0)
+    tracked = Decimal("0.00")
+    for row in (
+        card_payments.exclude(card_receipt_data={})
+        # Group on the extracted key, not the JSON document: every receipt is a
+        # distinct blob, so grouping by the document would return one row per
+        # payment and drag every payload back with it.
+        .annotate(state=KeyTextTransform("verification_state", "card_receipt_data"))
+        .values("state")
+        .annotate(total=Sum("amount"), count=Count("id"))
+    ):
+        state = row["state"]
+        amount = row["total"] or Decimal("0.00")
+        if state not in buckets:
+            # A receipt stored before verification states existed. It was
+            # checked at the counter against its own decoded payload, which is
+            # exactly what ``settled`` means for a self-contained provider.
+            state = SETTLED
+        buckets[state] += amount
+        counts[state] += row["count"] or 0
+        tracked += amount
+
+    # Anything with a receipt that somehow escaped the grouping still belongs
+    # somewhere; leaving it out would make the buckets not sum to the total.
+    buckets[SETTLED] += receipted_total - tracked
+
+    return {
+        "gross": _money(gross),
+        "verified": _money(buckets[SETTLED]),
+        "pending": _money(buckets[PENDING]),
+        "flagged": _money(buckets[MISMATCH] + buckets[REJECTED]),
+        "unavailable": _money(buckets[UNAVAILABLE]),
+        "no_receipt": _money(gross - receipted_total),
+        "counts": {
+            "verified": counts[SETTLED],
+            "pending": counts[PENDING],
+            "flagged": counts[MISMATCH] + counts[REJECTED],
+            "unavailable": counts[UNAVAILABLE],
+        },
+    }
 
 
 def _payment_methods(session: RegisterSession, refund_by_method: dict):

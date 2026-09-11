@@ -19,21 +19,100 @@ def _normalize_pan(value) -> str:
     return re.sub(r"\s+", "", str(value or "")).upper()
 
 
+def _pan_identifying_digits(masked_pan: str) -> int:
+    """How many real digits a masked PAN actually reveals."""
+    return len(re.sub(r"[^0-9]", "", masked_pan))
+
+
 def card_fingerprint(receipt_data: dict) -> str:
     """Stable dedupe key for a card from its decoded receipt data.
 
-    Returns "" when there's no masked PAN to key on (nothing to dedupe).
+    Returns "" when there's nothing safe to key on -- which means the card is
+    not deduped and not linked to a customer, rather than being merged with
+    somebody else's.
+
+    How much a receipt reveals depends on who printed it, and that changes what
+    a fingerprint can safely be:
+
+    * Moamalat prints BIN + last four (``639974*********8809``) -- ten digits,
+      enough to identify a card on its own. Its key is computed exactly as it
+      always has been, byte for byte, because changing the formula would
+      re-fingerprint every card already stored and silently duplicate them.
+
+    * Madfoatech prints last four only (``************5091``) and carries no
+      AID. Keyed the old way, that collapses to four digits plus a scheme name:
+      two unrelated customers holding NUMO cards ending 5091 would land on one
+      PaymentCard, and ``link_card_payment`` would file one person's purchase
+      history under the other. With a few hundred cards in a shop that is not a
+      remote possibility, it is the expected outcome. So a thin PAN has to be
+      backed by the cardholder name the slip also prints, and a receipt with
+      neither is left unlinked.
     """
     masked_pan = _normalize_pan(receipt_data.get("masked_pan"))
-    if not masked_pan:
-        return ""
     scheme = str(receipt_data.get("card_type") or "").strip().upper()
     aid = str(receipt_data.get("aid") or "").strip().upper()
-    raw = "|".join([masked_pan, scheme, aid])
+
+    if masked_pan and (_pan_identifying_digits(masked_pan) >= 10 or aid):
+        raw = "|".join([masked_pan, scheme, aid])
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    cardholder = cardholder_key(receipt_data.get("cardholder_name"))
+    if not cardholder:
+        return ""
+    provider = str(receipt_data.get("provider") or "").strip().lower()
+    raw = "|".join([provider, masked_pan, scheme, aid, cardholder])
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def placeholder_card_name(masked_pan) -> str:
+def cardholder_key(value) -> str:
+    """The cardholder name folded to a comparable key, or "" if unusable."""
+    text = re.sub(r"[^A-Z/ ]", "", str(value or "").upper())
+    return re.sub(r"\s+", " ", text.replace("/", " ")).strip()
+
+
+def cardholder_display_name(value) -> str:
+    """The cardholder as a shop would write it, or "" if it cannot be trusted.
+
+    Two formats turn up, and only one of them says what the order is:
+
+    * ``SETTA/HATEM`` -- the EMV form, unambiguously SURNAME/FORENAME, so it is
+      reordered into ``Hatem Setta``.
+    * ``QARQOOM SALEH`` -- Moamalat prints the same name without the slash, and
+      nothing in it marks which half is the surname. It is kept exactly as
+      printed rather than reordered on a guess: ``Qarqoom Saleh`` is findable
+      either way, and a wrong reordering renames a real person.
+
+    Returns "" for anything that does not look like a name at all, so a garbled
+    OCR read becomes a plain card placeholder instead of a customer nobody can
+    find.
+    """
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    if not re.fullmatch(r"[A-Za-z][A-Za-z .'/-]*", text or ""):
+        return ""
+    if "/" in text:
+        surname, _, forename = text.partition("/")
+        surname, forename = surname.strip().title(), forename.strip().title()
+        if len(surname) < 2 or len(forename) < 2:
+            return ""
+        return f"{forename} {surname}"
+    if len(text) < 3 or " " not in text:
+        return ""
+    return text.title()
+
+
+def placeholder_card_name(masked_pan, receipt_data=None) -> str:
+    """What to call the customer a card mints when the order has none.
+
+    Uses the cardholder's own name when the slip printed one -- Madfoatech does,
+    Moamalat does not -- because "Hatem Setta" is a person the shop can find
+    later and "Card •••• 5091" is a puzzle. The row stays ``is_auto_created``
+    either way: the name is a Latin transliteration off a card, not something
+    the shop typed, and that flag is what keeps it out of the customer list and
+    lets a real customer absorb it later.
+    """
+    named = cardholder_display_name((receipt_data or {}).get("cardholder_name"))
+    if named:
+        return named
     digits = re.sub(r"\D", "", str(masked_pan or ""))
     last4 = digits[-4:] if len(digits) >= 4 else digits
     return f"Card •••• {last4 or 'card'}"
@@ -89,7 +168,7 @@ def _create_card(order, fingerprint, masked_pan, receipt_data) -> PaymentCard:
                 order.customer
                 if order.customer_id
                 else Customer.objects.create(
-                    full_name=placeholder_card_name(masked_pan),
+                    full_name=placeholder_card_name(masked_pan, receipt_data),
                     is_auto_created=True,
                 )
             )
@@ -97,6 +176,9 @@ def _create_card(order, fingerprint, masked_pan, receipt_data) -> PaymentCard:
                 customer=owner,
                 fingerprint=fingerprint,
                 masked_pan=masked_pan,
+                cardholder_name=str(
+                    receipt_data.get("cardholder_name") or ""
+                ).strip()[:120],
                 card_scheme=str(receipt_data.get("card_type") or "").strip(),
                 aid=str(receipt_data.get("aid") or "").strip(),
                 first_seen_at=now,
@@ -121,8 +203,21 @@ def _touch_card(card, masked_pan, receipt_data) -> None:
     card.last_receipt_data = receipt_data
     if masked_pan:
         card.masked_pan = masked_pan
+    # Backfill only. The name a card was first matched on is never rewritten:
+    # it is what the fingerprint was built from, so changing it here would
+    # silently decouple the stored key from the value it came from.
+    if not card.cardholder_name:
+        card.cardholder_name = str(
+            receipt_data.get("cardholder_name") or ""
+        ).strip()[:120]
     card.save(
-        update_fields=["last_seen_at", "last_receipt_data", "masked_pan", "updated_at"]
+        update_fields=[
+            "last_seen_at",
+            "last_receipt_data",
+            "masked_pan",
+            "cardholder_name",
+            "updated_at",
+        ]
     )
 
 

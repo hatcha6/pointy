@@ -123,11 +123,20 @@ WORKDIR /app
 # that sells this product is half a feature. POINTY_FFMPEG_PATH overrides the
 # lookup for hosts that ship their own build.
 #
+# tesseract reads a card receipt that its issuer only publishes as a picture.
+# Madfoatech's QR carries an opaque token and nothing else, so the amount can
+# only be learned by fetching the receipt image and reading it; without this the
+# backend can still prove such a receipt EXISTS, but not that it is for the
+# amount charged. Only `eng` is installed, with no language packs: every value
+# on the slip -- amount, terminal, RRN, cardholder -- is ASCII, and the Arabic
+# on it is labels we key on position instead (see payments/card_receipts/ocr.py).
+# Costs roughly a tenth of what ffmpeg above already costs this image.
+#
 # Must run before the hardening step below removes apt/dpkg.
 RUN set -eux; \
     export DEBIAN_FRONTEND=noninteractive; \
     apt-get update; \
-    apt-get install -y --no-install-recommends mdbtools sqlite3 ffmpeg; \
+    apt-get install -y --no-install-recommends mdbtools sqlite3 ffmpeg tesseract-ocr; \
     apt-get autoremove -y; \
     rm -rf /var/lib/apt/lists/*
 
