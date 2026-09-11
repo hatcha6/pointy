@@ -221,6 +221,25 @@ class AnalyticsEngine {
 
   bool get isCollecting => _isCollecting;
 
+  /// Throw away everything this device has recorded but not yet delivered.
+  ///
+  /// Only for the "clear the history" action in settings. Without it the server
+  /// sweep is followed seconds later by this device flushing its own backlog
+  /// into the table it just emptied — and a till that has been unable to
+  /// deliver can be holding weeks of it. Collection stays on; this discards the
+  /// past, it does not stop the future.
+  ///
+  /// Reaches this device only. Every other till keeps its own queue, so a
+  /// purged table refills a little from them and that is expected.
+  Future<void> discardPendingEvents() async {
+    _queue.clear();
+    try {
+      await _storage.clearEvents();
+    } on Exception catch (error) {
+      debugPrint('Analytics queue clear failed: $error');
+    }
+  }
+
   void setCurrentUser(int? userId) {
     // Also the flush gate: [flush] holds everything until this is non-null, so
     // nothing is POSTed before sign-in. The backlog ships on the first flush
@@ -720,7 +739,9 @@ class AnalyticsEngine {
         // while today's sits behind it, forever. Today's data is the data worth
         // having; history is what the trim is allowed to lose.
         final batch = _queue
-            .skip(_queue.length > maxBatchSize ? _queue.length - maxBatchSize : 0)
+            .skip(
+              _queue.length > maxBatchSize ? _queue.length - maxBatchSize : 0,
+            )
             .toList(growable: false);
         final result = await _sink.ingestEvents(batch);
         if (result is! Ok<AnalyticsIngestResult>) {

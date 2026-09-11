@@ -4736,6 +4736,46 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get analyticsPurgeSectionTitle => 'مسح سجل التتبع';
+
+  @override
+  String get analyticsPurgeSectionDescription =>
+      'حذف نهائي لكل الأحداث المخزّنة على الخادم لتحرير مساحة القرص. صدّر ما تحتاجه أولا.';
+
+  @override
+  String get analyticsPurgeButton => 'مسح كل بيانات التتبع';
+
+  @override
+  String get analyticsPurgeRunningButton => 'جار المسح...';
+
+  @override
+  String get analyticsPurgeDialogTitle => 'مسح كل بيانات التتبع؟';
+
+  @override
+  String get analyticsPurgeDialogMessage =>
+      'سيُحذف نهائيا كل حدث مسجّل على الخادم، ويشمل ذلك سجل النشاط وسجل التدقيق وقياسات الأداء. لا يمكن التراجع، ولا تحتفظ النسخ الاحتياطية بنسخة من هذه البيانات.';
+
+  @override
+  String get analyticsPurgeDialogConfirm => 'امسح نهائيا';
+
+  @override
+  String analyticsPurgeDoneMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'حُذف $count حدث',
+      two: 'حُذف حدثان',
+      one: 'حُذف حدث واحد',
+      zero: 'لم يكن هناك ما يُمسح',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get analyticsPurgeFailedMessage =>
+      'تعذر مسح بيانات التتبع. حاول مرة أخرى.';
+
+  @override
   String get analyticsExportCanceledMessage => 'أُلغي حفظ ملف التتبع.';
 
   @override

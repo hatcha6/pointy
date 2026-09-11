@@ -643,6 +643,10 @@ class PosApiService {
     return _shopSettings.removeShopLogo();
   }
 
+  Future<int> purgeAnalyticsEvents() {
+    return _shopSettings.purgeAnalyticsEvents();
+  }
+
   Future<AnalyticsExportFile> exportAnalyticsEvents(
     AnalyticsExportQuery query, {
     void Function(AnalyticsExportProgress progress)? onProgress,

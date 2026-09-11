@@ -2710,6 +2710,47 @@
       }
     }
   },
+  "analyticsPurgeSectionTitle": "مسح سجل التتبع",
+  "@analyticsPurgeSectionTitle": {
+    "description": "Title of the section on the analytics export page that permanently deletes the stored event history."
+  },
+  "analyticsPurgeSectionDescription": "حذف نهائي لكل الأحداث المخزّنة على الخادم لتحرير مساحة القرص. صدّر ما تحتاجه أولا.",
+  "@analyticsPurgeSectionDescription": {
+    "description": "Explains what clearing the tracking history does and that exporting must come first."
+  },
+  "analyticsPurgeButton": "مسح كل بيانات التتبع",
+  "@analyticsPurgeButton": {
+    "description": "Button that starts clearing the stored tracking history."
+  },
+  "analyticsPurgeRunningButton": "جار المسح...",
+  "@analyticsPurgeRunningButton": {
+    "description": "Label on the clear button while the purge is running."
+  },
+  "analyticsPurgeDialogTitle": "مسح كل بيانات التتبع؟",
+  "@analyticsPurgeDialogTitle": {
+    "description": "Title of the confirmation dialog shown before the tracking history is deleted."
+  },
+  "analyticsPurgeDialogMessage": "سيُحذف نهائيا كل حدث مسجّل على الخادم، ويشمل ذلك سجل النشاط وسجل التدقيق وقياسات الأداء. لا يمكن التراجع، ولا تحتفظ النسخ الاحتياطية بنسخة من هذه البيانات.",
+  "@analyticsPurgeDialogMessage": {
+    "description": "Body of the confirmation dialog. Names exactly what is destroyed and says there is no way back: the analytics table is excluded from backups, so no restore can bring it back."
+  },
+  "analyticsPurgeDialogConfirm": "امسح نهائيا",
+  "@analyticsPurgeDialogConfirm": {
+    "description": "Confirm button in the destructive dialog that clears the tracking history."
+  },
+  "analyticsPurgeDoneMessage": "{count, plural, =0{لم يكن هناك ما يُمسح} =1{حُذف حدث واحد} =2{حُذف حدثان} other{حُذف {count} حدث}}",
+  "@analyticsPurgeDoneMessage": {
+    "description": "Snackbar after a successful purge, reporting how many events were deleted.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "analyticsPurgeFailedMessage": "تعذر مسح بيانات التتبع. حاول مرة أخرى.",
+  "@analyticsPurgeFailedMessage": {
+    "description": "Snackbar shown when clearing the tracking history failed."
+  },
   "analyticsExportCanceledMessage": "أُلغي حفظ ملف التتبع.",
   "analyticsExportCancelButton": "إلغاء التصدير",
   "analyticsExportStoppedMessage": "أُوقف التصدير.",
@@ -3047,13 +3088,37 @@
   "effectivePaymentTermsImmediate": "الفواتير الآجلة لهذا العميل مستحقة يوم إصدارها.",
   "effectivePaymentTermsNetDays": "الفواتير الآجلة لهذا العميل مستحقة بعد {days} يومًا من تاريخ الفاتورة.",
   "effectivePaymentTermsEndOfMonth": "الفواتير الآجلة لهذا العميل مستحقة بعد {days} يومًا من نهاية شهر الفاتورة.",
-  "@effectivePaymentTermsNetDays": {"placeholders": {"days": {"type": "int"}}},
-  "@effectivePaymentTermsEndOfMonth": {"placeholders": {"days": {"type": "int"}}},
+  "@effectivePaymentTermsNetDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "@effectivePaymentTermsEndOfMonth": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "creditDueDateProposedHint": "مقترح من اتفاق العميل — يمكنك تغييره.",
   "invoiceOverdueBadge": "متأخرة {days} يومًا",
-  "@invoiceOverdueBadge": {"placeholders": {"days": {"type": "int"}}},
+  "@invoiceOverdueBadge": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
   "invoiceDueOnLabel": "تستحق في {date}",
-  "@invoiceDueOnLabel": {"placeholders": {"date": {"type": "String"}}},
+  "@invoiceDueOnLabel": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "creditLimitBlockedTitle": "تجاوز سقف الدين",
   "creditLimitBlockedMessage": "هذه الفاتورة الآجلة تتجاوز سقف دين العميل. حصِّل دفعة أولى، أو عدّل سقف العميل من صفحته.",
   "creditLimitBlockedOutstanding": "الدين الحالي: {amount}",

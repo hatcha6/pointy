@@ -48,6 +48,7 @@ import '../../../data/repositories/warehouse_repository.dart';
 import 'warehouses_page.dart';
 import 'messaging_settings_page.dart';
 import 'exchange_rates_page.dart';
+import 'analytics_purge_section.dart';
 import 'subscription_status_page.dart';
 
 part 'shop_settings_widgets.dart';
@@ -1452,6 +1453,16 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                                       refreshRoute,
                                     ),
                                   ),
+                                ),
+                              ),
+                              SizedBox(height: spacing.lg),
+                              // Deliberately under the export, not beside it:
+                              // the only safe order is take a copy, then
+                              // clear, and the layout should read that way.
+                              AdaptiveMaxWidth(
+                                width: AppContentWidth.form,
+                                child: AnalyticsPurgeSection(
+                                  viewModel: widget.viewModel,
                                 ),
                               ),
                             ],

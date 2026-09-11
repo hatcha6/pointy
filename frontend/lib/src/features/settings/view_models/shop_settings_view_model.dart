@@ -27,6 +27,7 @@ class ShopSettingsViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool _isSaving = false;
   bool _isExportingAnalytics = false;
+  bool _isPurgingAnalytics = false;
   AnalyticsExportProgress? _analyticsExportProgress;
   AnalyticsExportCancellation? _analyticsExportCancellation;
   DateTime? _analyticsExportProgressNotifiedAt;
@@ -37,6 +38,7 @@ class ShopSettingsViewModel extends ChangeNotifier {
   bool _hasLoadError = false;
   bool _hasSaveError = false;
   bool _hasAnalyticsExportError = false;
+  bool _hasAnalyticsPurgeError = false;
   bool _hasBackupOperationsError = false;
   BackupOperationsStatus? _backupStatus;
   List<BackupDestination> _backupDestinations = const [];
@@ -46,6 +48,7 @@ class ShopSettingsViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
   bool get isExportingAnalytics => _isExportingAnalytics;
+  bool get isPurgingAnalytics => _isPurgingAnalytics;
 
   /// Live download progress of the running export, or `null` when idle.
   AnalyticsExportProgress? get analyticsExportProgress =>
@@ -59,6 +62,7 @@ class ShopSettingsViewModel extends ChangeNotifier {
   bool get hasLoadError => _hasLoadError;
   bool get hasSaveError => _hasSaveError;
   bool get hasAnalyticsExportError => _hasAnalyticsExportError;
+  bool get hasAnalyticsPurgeError => _hasAnalyticsPurgeError;
   bool get hasBackupOperationsError => _hasBackupOperationsError;
   BackupOperationsStatus? get backupStatus => _backupStatus;
   List<BackupDestination> get backupDestinations => _backupDestinations;
@@ -224,6 +228,38 @@ class ShopSettingsViewModel extends ChangeNotifier {
     }
     _analyticsExportProgressNotifiedAt = now;
     notifyListeners();
+  }
+
+  /// Clear the shop's stored event history. Returns how many rows went, or
+  /// `null` if the server refused or never answered.
+  ///
+  /// Nothing is tracked about this from here on purpose. The server writes the
+  /// one authoritative record of a purge — who ran it and how much went — as
+  /// the last thing it does, and a client-side copy of that would be a second
+  /// row claiming the same fact. A failure is already captured: the middleware
+  /// records every 4xx and 5xx with its reason.
+  Future<int?> purgeAnalyticsEvents() async {
+    _isPurgingAnalytics = true;
+    _hasAnalyticsPurgeError = false;
+    notifyListeners();
+
+    final result = await _repository.purgeAnalyticsEvents();
+    _isPurgingAnalytics = false;
+
+    switch (result) {
+      case Ok<int>():
+        // Drop this device's undelivered backlog too, or it flushes straight
+        // back into the table that was just emptied — a till that has been
+        // offline can be holding weeks of it. Other tills keep their own
+        // queues; nothing here can reach them.
+        await _analyticsEngine?.discardPendingEvents();
+        notifyListeners();
+        return result.value;
+      case Error<int>():
+        _hasAnalyticsPurgeError = true;
+        notifyListeners();
+        return null;
+    }
   }
 
   Future<AnalyticsExportFile?> exportAnalyticsEvents(

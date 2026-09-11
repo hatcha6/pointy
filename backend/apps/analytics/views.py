@@ -29,6 +29,7 @@ from .services import (
     filter_events_for_export,
     ingest_events,
     iter_events_export_zip,
+    purge_events,
 )
 from .throttling import (
     AnalyticsIngestRateThrottle,
@@ -171,7 +172,6 @@ ANALYTICS_EVENT_ACTIONS = {
     ),
     "purchase_order_deleted": "purchasing.purchase_order.deleted",
 }
-
 
 
 class NumberInFilter(django_filters.BaseInFilter, django_filters.NumberFilter):
@@ -403,15 +403,11 @@ def build_events_export_response(
     if isinstance(django_request, ASGIRequest):
         body = aiter_in_thread(generator, maxsize=8)
     response = StreamingHttpResponse(body, content_type="application/zip")
-    response["Content-Disposition"] = (
-        f'attachment; filename="{export_zip_filename(exported_at)}"'
-    )
+    response["Content-Disposition"] = f'attachment; filename="{export_zip_filename(exported_at)}"'
     if event_count is not None:
         response["X-Pointy-Analytics-Event-Count"] = str(event_count)
     if estimated_event_count is not None:
-        response["X-Pointy-Analytics-Event-Count-Estimate"] = str(
-            estimated_event_count
-        )
+        response["X-Pointy-Analytics-Event-Count-Estimate"] = str(estimated_event_count)
     response["X-Accel-Buffering"] = "no"
     return response
 
@@ -428,6 +424,7 @@ class AnalyticsEventViewSet(
         "retrieve": ("analytics.view_analyticsevent",),
         "ingest": ("analytics.add_analyticsevent",),
         "export": ("analytics.view_analyticsevent",),
+        "purge": ("analytics.delete_analyticsevent",),
     }
     queryset = AnalyticsEvent.objects.select_related("received_by")
     # Keyset paging: a page number is an OFFSET into a table that grows at the
@@ -441,7 +438,12 @@ class AnalyticsEventViewSet(
     ordering_fields = ("occurred_at", "created_at", "severity", "risk_score")
 
     def get_permissions(self):
-        if self.action == "export":
+        # Reading the shop's whole event history, or erasing it, is manager
+        # work on top of the permission code — the same gate export has always
+        # had. No other role is given the analytics delete permission, so the
+        # two checks agree; the manager check is what keeps them agreeing if
+        # someone ever hands the permission out per-user.
+        if self.action in {"export", "purge"}:
             return [IsAuthenticated(), IsManager(), HasPointyPermission()]
         return super().get_permissions()
 
@@ -488,6 +490,22 @@ class AnalyticsEventViewSet(
             status=status.HTTP_202_ACCEPTED,
         )
 
+    @action(detail=False, methods=["post"])
+    def purge(self, request):
+        """Delete the shop's entire event history once it has been exported.
+
+        POST rather than DELETE: this is an operation on the collection, not the
+        removal of an addressable resource, and the response carries the count
+        the screen reports back.
+
+        No filters, on purpose. A purge that quietly honoured whatever the
+        export form happened to be set to would be the worst kind of destructive
+        button — one whose blast radius is off-screen. It clears everything, the
+        dialog says everything, and the one row it leaves behind records that.
+        """
+        deleted = purge_events(user=request.user)
+        return Response({"deleted": deleted}, status=status.HTTP_200_OK)
+
     @action(
         detail=False,
         methods=["get"],
@@ -509,13 +527,9 @@ class AnalyticsEventViewSet(
         # the exact count once the rows have actually streamed. ``count=exact``
         # buys the old behaviour back for callers that need it up front.
         count_mode = filters.get("count", "estimate")
-        event_count = (
-            count_events_for_export(queryset) if count_mode == "exact" else None
-        )
+        event_count = count_events_for_export(queryset) if count_mode == "exact" else None
         estimated_event_count = (
-            estimate_export_rows(queryset, alias=queryset.db)
-            if count_mode == "estimate"
-            else None
+            estimate_export_rows(queryset, alias=queryset.db) if count_mode == "estimate" else None
         )
 
         generator = iter_events_export_zip(

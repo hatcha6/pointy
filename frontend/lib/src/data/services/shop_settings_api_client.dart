@@ -104,6 +104,34 @@ class ShopSettingsApiClient {
     );
   }
 
+  /// Clear the shop's stored event history. Returns how many rows went.
+  ///
+  /// Manager-only on the server, and irreversible: there is no soft-delete
+  /// behind this and no undo in front of it.
+  Future<int> purgeAnalyticsEvents() async {
+    // Well past the 60-second default. The sweep is batched server-side, but a
+    // shop clearing a year of telemetry is deleting millions of rows and a
+    // client timeout here would report a failure for a purge that is actually
+    // still running — the worst possible thing to tell someone about a button
+    // they cannot press twice with confidence.
+    final response = await _session.post(
+      'analytics-events/purge/',
+      timeout: const Duration(minutes: 5),
+    );
+    _session.ensureSuccess(response, 'Analytics purge failed with status');
+    final body = _session.decodedBody(response);
+    if (body is Map<String, Object?>) {
+      final deleted = body['deleted'];
+      if (deleted is int) {
+        return deleted;
+      }
+      if (deleted is num) {
+        return deleted.toInt();
+      }
+    }
+    return 0;
+  }
+
   Future<AnalyticsExportFile> exportAnalyticsEvents(
     AnalyticsExportQuery query, {
     void Function(AnalyticsExportProgress progress)? onProgress,

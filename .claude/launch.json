@@ -257,6 +257,23 @@
         "frontend-document-trail-preview"
       ],
       "port": 8080
+    },
+    {
+      "name": "analytics-purge-preview",
+      "runtimeExecutable": "flutter",
+      "runtimeArgs": [
+        "run",
+        "-d",
+        "web-server",
+        "--web-hostname",
+        "127.0.0.1",
+        "--web-port",
+        "8092",
+        "-t",
+        "lib/dev/analytics_purge_preview.dart"
+      ],
+      "cwd": "frontend",
+      "port": 8092
     }
   ]
 }

@@ -8407,6 +8407,60 @@ abstract class AppLocalizations {
   /// **'حُفظ ملف التتبع في: {path}'**
   String analyticsExportSavedMessage(String path);
 
+  /// Title of the section on the analytics export page that permanently deletes the stored event history.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح سجل التتبع'**
+  String get analyticsPurgeSectionTitle;
+
+  /// Explains what clearing the tracking history does and that exporting must come first.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف نهائي لكل الأحداث المخزّنة على الخادم لتحرير مساحة القرص. صدّر ما تحتاجه أولا.'**
+  String get analyticsPurgeSectionDescription;
+
+  /// Button that starts clearing the stored tracking history.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح كل بيانات التتبع'**
+  String get analyticsPurgeButton;
+
+  /// Label on the clear button while the purge is running.
+  ///
+  /// In ar, this message translates to:
+  /// **'جار المسح...'**
+  String get analyticsPurgeRunningButton;
+
+  /// Title of the confirmation dialog shown before the tracking history is deleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح كل بيانات التتبع؟'**
+  String get analyticsPurgeDialogTitle;
+
+  /// Body of the confirmation dialog. Names exactly what is destroyed and says there is no way back: the analytics table is excluded from backups, so no restore can bring it back.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُحذف نهائيا كل حدث مسجّل على الخادم، ويشمل ذلك سجل النشاط وسجل التدقيق وقياسات الأداء. لا يمكن التراجع، ولا تحتفظ النسخ الاحتياطية بنسخة من هذه البيانات.'**
+  String get analyticsPurgeDialogMessage;
+
+  /// Confirm button in the destructive dialog that clears the tracking history.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح نهائيا'**
+  String get analyticsPurgeDialogConfirm;
+
+  /// Snackbar after a successful purge, reporting how many events were deleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لم يكن هناك ما يُمسح} =1{حُذف حدث واحد} =2{حُذف حدثان} other{حُذف {count} حدث}}'**
+  String analyticsPurgeDoneMessage(int count);
+
+  /// Snackbar shown when clearing the tracking history failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر مسح بيانات التتبع. حاول مرة أخرى.'**
+  String get analyticsPurgeFailedMessage;
+
   /// No description provided for @analyticsExportCanceledMessage.
   ///
   /// In ar, this message translates to:

@@ -71,6 +71,10 @@ class ShopSettingsRepository {
     return Result.guard(_service.removeShopLogo);
   }
 
+  Future<Result<int>> purgeAnalyticsEvents() async {
+    return Result.guard(_service.purgeAnalyticsEvents);
+  }
+
   Future<Result<AnalyticsExportFile>> exportAnalyticsEvents(
     AnalyticsExportQuery query, {
     void Function(AnalyticsExportProgress progress)? onProgress,

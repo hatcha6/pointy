@@ -7,7 +7,7 @@ from collections import deque
 from dataclasses import dataclass
 
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import F, Max, Q
 from django.utils import timezone
 
 from .models import AnalyticsEvent
@@ -280,9 +280,7 @@ def iter_events_export_zip_orm(
         with archive.open(data_filename, mode="w", force_zip64=True) as member:
             with io.TextIOWrapper(member, encoding="utf-8", newline="") as text:
                 if export_format == "csv":
-                    writer = csv.DictWriter(
-                        text, fieldnames=ANALYTICS_EXPORT_CSV_FIELDS
-                    )
+                    writer = csv.DictWriter(text, fieldnames=ANALYTICS_EXPORT_CSV_FIELDS)
                     writer.writeheader()
                     for row in iter_export_rows(queryset, batch_size=batch_size):
                         writer.writerow(_event_export_row(row))
@@ -372,6 +370,72 @@ def filter_events_for_export(queryset, filters):
     # Ordering is left to iter_export_rows: keyset pagination needs id order,
     # which the primary key serves for free on every filter combination.
     return queryset
+
+
+# Rows removed per DELETE. Short enough that each statement holds only a brief
+# lock on a table the tills are still writing to, long enough that clearing a
+# month of telemetry — the first client's September export ran to 417,361 rows —
+# is a few hundred statements and not a few hundred thousand.
+ANALYTICS_PURGE_BATCH_SIZE = 5000
+
+
+def purge_events(*, user=None) -> int:
+    """Delete every recorded event, and record one event saying so.
+
+    Telemetry is machine exhaust that accumulates without bound: on the first
+    client's database this one table was 86% of a 6.4 GB dump. It is already
+    left out of the backup archive (see
+    ``core.backup_database.DEFAULT_EXCLUDED_TABLES``), so what this reclaims is
+    live disk, not archive size.
+
+    What goes with it is the whole table, which is more than timing rows: the
+    activity log reads from here, and so do the AUDIT rows other apps write
+    about period-lock overrides and reviewed fraud findings. Nothing holds a
+    foreign key into it and the three cross-app readers (the users screen's
+    activity summary, the fraud reprint metric, the relay's diagnostics pull)
+    all degrade to "no rows in that window", so this is destructive without
+    being unsafe. Say so before asking.
+
+    Bounded by the highest id present when the sweep begins, which buys two
+    things: a till ingesting telemetry mid-sweep cannot keep the loop running,
+    and the audit row written at the end is never eaten by the sweep that wrote
+    it.
+    """
+    from . import buffer
+
+    # This worker may be holding recorded-but-uninserted rows. Left alone they
+    # land *after* the sweep and the table reads as un-purged. Sibling workers
+    # keep their own buffers, so a few in-flight rows can still arrive behind
+    # us — a tail of seconds, not a reason to leave the visible backlog.
+    buffer.flush()
+
+    cutoff = AnalyticsEvent.objects.aggregate(highest=Max("pk"))["highest"]
+    if cutoff is None:
+        return 0
+
+    deleted_total = 0
+    while True:
+        ids = list(
+            AnalyticsEvent.objects.filter(pk__lte=cutoff)
+            .order_by()
+            .values_list("pk", flat=True)[:ANALYTICS_PURGE_BATCH_SIZE]
+        )
+        if not ids:
+            break
+        deleted, _ = AnalyticsEvent.objects.filter(pk__in=ids).delete()
+        deleted_total += deleted
+
+    # Written last, and deliberately not buffered: erasing an audit trail is
+    # itself an auditable act, and this is the one row left to say it happened,
+    # who did it, and how much went.
+    record_event(
+        name="analytics.events.purged",
+        event_type=AnalyticsEvent.EventType.AUDIT,
+        severity=AnalyticsEvent.Severity.WARNING,
+        user=user,
+        metrics={"deleted": deleted_total},
+    )
+    return deleted_total
 
 
 def build_event(
