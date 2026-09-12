@@ -1930,9 +1930,7 @@ class AiChatGeneratedUiTests(TestCase):
                 prompt = kwargs["messages"][0]["content"]
                 self.assertEqual("render_ui" in prompt, expected)
 
-    def test_the_prompt_tells_the_model_to_prefer_prose(self):
-        # The restraint rule is the point: a drawing tool without it turns every
-        # one-line answer into a chart.
+    def _ui_prompt(self):
         with patch("apps.ai.views.scoped_relay_client") as mock_client:
             mock_client.return_value.open_ai_stream.return_value = FakeRelayResponse(
                 fake_sse_lines(["ok"])
@@ -1942,6 +1940,25 @@ class AiChatGeneratedUiTests(TestCase):
             )
             b"".join(response.streaming_content)
             _, kwargs = mock_client.return_value.open_ai_stream.call_args
-            prompt = kwargs["messages"][0]["content"]
-        self.assertIn("الأصل أن تجيب نصًا", prompt)
-        self.assertIn("بلا أي بطاقة", prompt)
+            return kwargs["messages"][0]["content"]
+
+    def test_the_prompt_maps_each_answer_shape_to_a_component(self):
+        # The model has real widgets; left to itself it answers everything in
+        # prose. The prompt has to name which shape goes with which question.
+        prompt = self._ui_prompt()
+        self.assertIn("اختر دائمًا الشكل الذي يوصل المعنى أسرع", prompt)
+        for component in ("Table", "BarChart", "LineChart", "MetricGrid", "SummaryList"):
+            self.assertIn(component, prompt)
+
+    def test_the_prompt_forbids_markdown_tables_and_record_lists(self):
+        # The failure this replaced: a top-10 answered as a markdown bullet list,
+        # and breakdowns as raw markdown tables, when Table renders both properly.
+        prompt = self._ui_prompt()
+        self.assertIn("ممنوع منعًا باتًّا في النص: جداول Markdown", prompt)
+        self.assertIn("قوائم نقطية أو مرقّمة طويلة من السجلات", prompt)
+
+    def test_the_prompt_still_keeps_prose_for_prose_answers(self):
+        # Fitness cuts both ways: a single number or a judgement stays text.
+        prompt = self._ui_prompt()
+        self.assertIn("رقم واحد، أو حكم، أو نصيحة، أو شرح", prompt)
+        self.assertIn("لا تلفّ جملة واحدة داخل Card", prompt)
