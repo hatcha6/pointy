@@ -3483,7 +3483,18 @@ func (s HTTPServer) handleFulusWebhook(w http.ResponseWriter, r *http.Request) {
 			"error", err,
 			"payload", truncateForLog(body),
 		)
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unusable payload"})
+		// 200, not 400. We could not use this push, but no retry will change
+		// that, and a 4xx tells the provider the ENDPOINT is broken: theirs
+		// retries three times within two seconds and counts every attempt
+		// against us, which is how 223 consecutive failures accumulated over a
+		// feed whose only real fault was an event name we did not recognise.
+		// Providers disable an endpoint that keeps failing, and a disabled
+		// webhook is a far worse outcome than a push we declined to store.
+		// The reason rides in the body so it reaches their delivery log too.
+		writeJSON(w, http.StatusOK, map[string]string{
+			"status": "ignored",
+			"reason": err.Error(),
+		})
 		return
 	}
 	stored, err := store.UpsertExchangeRate(r.Context(), rate)

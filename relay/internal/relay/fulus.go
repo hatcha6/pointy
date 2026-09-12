@@ -133,6 +133,13 @@ type fulusEnvelope struct {
 	Currencies json.RawMessage `json:"currencies"`
 }
 
+// fulusWebhookEnvelope is one push. Their delivery also carries a TOP-LEVEL
+// "timestamp", which is the instant of the delivery attempt and not of the
+// publication — the two differ by minutes, and their three retries of one
+// publication each carry a different one. It is deliberately not read here.
+// Only data.created_at states when the rate began to stand, and only that may
+// ever reach EffectiveAt: the natural key ends in effective_at, so taking the
+// delivery instant would land one published rate as three separate rows.
 type fulusWebhookEnvelope struct {
 	Event string    `json:"event"`
 	Data  fulusRate `json:"data"`
@@ -342,11 +349,14 @@ func VerifyFulusWebhook(secret string, body []byte, signature string) bool {
 // ParseFulusWebhook turns a verified push into a storable rate.
 func ParseFulusWebhook(body []byte) (control.ExchangeRate, error) {
 	var envelope fulusWebhookEnvelope
-	if err := json.Unmarshal(body, &envelope); err != nil {
+	// UseNumber, like every other decode here: a rate that arrives by webhook
+	// and again by poll must carry identical digits, or the two paths overwrite
+	// each other's row with float-rounded and exact spellings of one number.
+	if err := unmarshalFulusJSON(body, &envelope); err != nil {
 		return control.ExchangeRate{}, err
 	}
-	if envelope.Event != "" && !isFulusPublicationEvent(envelope.Event) {
-		return control.ExchangeRate{}, fmt.Errorf("unsupported fulus event %q", envelope.Event)
+	if isFulusWithdrawalEvent(envelope.Event) {
+		return control.ExchangeRate{}, fmt.Errorf("withdrawal event %q", envelope.Event)
 	}
 	rate, ok := envelope.Data.toExchangeRate()
 	if !ok {
@@ -357,17 +367,34 @@ func ParseFulusWebhook(body []byte) (control.ExchangeRate, error) {
 	return rate, nil
 }
 
-// isFulusPublicationEvent reports whether the event announces a rate that now
-// stands. A correction is published as a new rate at a new instant, so an
-// update is stored exactly like a creation; a deletion is not, because the
+// isFulusWithdrawalEvent reports whether the event retracts a rate rather than
+// announcing one. A correction is published as a new rate at a new instant, so
+// an update stores exactly like a creation; a retraction does not, because the
 // document that froze that rate must still be able to resolve it.
-func isFulusPublicationEvent(event string) bool {
-	switch strings.ToLower(strings.TrimSpace(event)) {
-	case "rate.created", "rate.updated", "rate.published":
-		return true
-	default:
+//
+// The polarity here is deliberate, and was earned. This began as an allow-list
+// of the three names their docs show, which meant an event name we had not
+// anticipated failed CLOSED — and their live feed publishes "rate.new", a name
+// that appears nowhere in either their English or Arabic spec. Every push was
+// discarded for two weeks while the docs said we were correct.
+//
+// A deny-list fails the other way: an unrecognised name is stored. That is the
+// mild direction. The worst case is a rate the provider had withdrawn, which
+// the poller would have stored anyway, and which we never delete regardless —
+// whereas the worst case of failing closed is exactly what happened, silent
+// total data loss behind a feed that still looked configured. What a payload
+// actually contains is the real gate; the name only has to catch retraction.
+func isFulusWithdrawalEvent(event string) bool {
+	normalised := strings.ToLower(strings.TrimSpace(event))
+	if normalised == "" {
 		return false
 	}
+	for _, marker := range []string{"delete", "remove", "revoke", "retract"} {
+		if strings.Contains(normalised, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // unusableReason names the field that stopped a payload from becoming a rate.
