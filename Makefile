@@ -133,7 +133,7 @@ ENDURANCE_WORKERS ?= 4
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format frontend-scales-preview \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
 	onprem-test onprem-rehearsal onprem-rehearsal-clean upgrade-rehearsal upgrade-check \
-	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable postgres-ready clean
+	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable ai-enable-remote postgres-ready clean
 
 help: ## Show available commands.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nPointy POS commands\n\n"} /^[a-zA-Z0-9_-]+:.*##/ {printf "  %-22s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -615,9 +615,14 @@ ai-enable: ## Provision the relay installation, enable AI, and sync Django (wait
 dev-ai: postgres redis postgres-ready relay-migrate backend-dev-migrate frontend-install ## Run the full AI stack (Postgres, Redis, relay, Django, Flutter) and enable AI.
 	$(MAKE) -j4 relay-run backend-run frontend-web ai-enable
 
+ai-enable-remote: ## Unlock AI + image search for this dev installation on the REMOTE relay (needs RELAY_REMOTE_ADMIN_TOKEN).
+	@RELAY_REMOTE_HOST="$(RELAY_REMOTE_HOST)" \
+		RELAY_REMOTE_ADMIN_TOKEN="$(RELAY_REMOTE_ADMIN_TOKEN)" \
+		bash deploy/enable-remote-ai.sh
+
 dev-remote: postgres redis postgres-ready backend-dev-migrate frontend-install ## Run Django + connector + Flutter against the REMOTE relay (no local relay; backend self-enrolls on first run).
 	@$(PYTHON) -c "import secrets; print(secrets.token_hex(24))" > "$(RELAY_REMOTE_TOKEN_FILE)"
-	$(MAKE) -j3 backend-run-remote frontend-web relay-connector-remote
+	$(MAKE) -j4 backend-run-remote frontend-web relay-connector-remote ai-enable-remote
 
 clean: ## Remove generated local caches and build output.
 	find "$(BACKEND_DIR)" -type d -name __pycache__ -prune -exec rm -rf {} +

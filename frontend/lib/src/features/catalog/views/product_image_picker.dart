@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/result.dart';
+import '../../../data/services/api_error_detail.dart';
 import '../../../data/models/attachment_summary.dart';
 import '../../../data/models/product_image_search_result.dart';
 import '../../../data/models/product_image_upload.dart';
@@ -329,6 +330,7 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
   var _hasMoreResults = false;
   var _page = 1;
   String? _errorKey;
+  String _errorDetail = '';
 
   bool get _isSearching => _isLoadingInitial || _isLoadingMore;
 
@@ -462,6 +464,7 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
     if (query.length < 2) {
       setState(() {
         _errorKey = 'short';
+        _errorDetail = '';
         _hasMoreResults = false;
       });
       return;
@@ -496,9 +499,14 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
           _isLoadingInitial = false;
           _isLoadingMore = false;
         });
-      case Error<List<ProductImageSearchResult>>():
+      case Error<List<ProductImageSearchResult>>(:final exception):
         setState(() {
-          _errorKey = 'failed';
+          // The server says why — an unpaid subscription reads differently
+          // from a relay outage, and only one of them is worth retrying. The
+          // one case we can name gets an Arabic sentence; anything else falls
+          // back to what the server said rather than to nothing.
+          _errorKey = apiStatusCode(exception) == 403 ? 'unsubscribed' : 'failed';
+          _errorDetail = apiErrorDetail(exception);
           _hasMoreResults = false;
           _isLoadingInitial = false;
           _isLoadingMore = false;
@@ -507,10 +515,13 @@ class _ProductImageSearchSheetState extends State<ProductImageSearchSheet> {
   }
 
   String _errorText(AppLocalizations l10n) {
-    return switch (_errorKey) {
-      'short' => l10n.productImageSearchShortQuery,
-      _ => l10n.productImageSearchError,
-    };
+    if (_errorKey == 'short') {
+      return l10n.productImageSearchShortQuery;
+    }
+    if (_errorKey == 'unsubscribed') {
+      return l10n.productImageSearchNotSubscribed;
+    }
+    return _errorDetail.isNotEmpty ? _errorDetail : l10n.productImageSearchError;
   }
 }
 

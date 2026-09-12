@@ -42,6 +42,18 @@ class ProductImageSearchUnavailable(ProductImageSearchError):
     pass
 
 
+class ProductImageSearchNotEntitled(ProductImageSearchError):
+    """The relay answered, and said this shop is not paying for it.
+
+    Kept apart from :class:`ProductImageSearchUnavailable` because the two ask
+    the shop for opposite things: "unavailable" means wait and try again, and
+    this means the subscription does not cover the feature. Collapsing them —
+    which is what this did — leaves an owner refreshing a button that is never
+    going to work, with nothing on screen to say why. Mirrors how the AI chat
+    endpoint already separates the two.
+    """
+
+
 class ProductImageImportError(ProductImageSearchError):
     pass
 
@@ -130,6 +142,11 @@ def search_product_images(
         )
     except RelayControlError as exc:
         logger.info("Relay product image search failed: %s", exc)
+        # 401/402 is the relay refusing on entitlement, not failing.
+        if exc.status_code in (401, 402):
+            raise ProductImageSearchNotEntitled(
+                "Product image search is not included in this shop's subscription."
+            ) from exc
         raise ProductImageSearchUnavailable(
             "Product image search is unavailable right now."
         ) from exc

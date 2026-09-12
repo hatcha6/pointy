@@ -306,7 +306,15 @@ class CatalogApiClient {
       'products/image-search/',
       query: queryParameters,
     );
-    _session.ensureSuccess(response, 'Product image search failed with status');
+    // throwApiException, not ensureSuccess: the backend distinguishes "your
+    // subscription does not cover this" (403) from "the relay is down, try
+    // again" (503), and those ask the shop for opposite things. ensureSuccess
+    // keeps only the status code, which is how both arrived on screen as one
+    // unactionable sentence.
+    _session.throwApiException(
+      response,
+      'Product image search failed with status',
+    );
     final decoded = _session.decodedBody(response);
     final results = decoded is Map<String, Object?> ? decoded['results'] : null;
     if (results is! List<Object?>) {

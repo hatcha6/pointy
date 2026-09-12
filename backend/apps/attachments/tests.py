@@ -27,6 +27,7 @@ from apps.purchasing.models import PurchaseOrder, Supplier
 
 from .image_normalization import MAX_DIMENSION, normalize_image_bytes
 from .image_search import (
+    ProductImageSearchNotEntitled,
     ProductImageSearchResult,
     ProductImageSearchUnavailable,
     RemoteImageUpload,
@@ -246,6 +247,66 @@ class AttachmentApiTests(TestCase):
         self.assertEqual(result["source_name"], "Example Shop")
         self.assertIn("import_token", result)
         self.assertNotIn("image_url", result)
+
+    def test_an_unpaid_shop_is_told_so_rather_than_told_to_wait(self):
+        """402 from the relay is an answer, not an outage.
+
+        The shop sees a different sentence and a different status, because the
+        two ask for opposite things: one means try again later, this means the
+        subscription does not cover it.
+        """
+
+        with (
+            patch(
+                "apps.attachments.image_search.RelayInstallation"
+            ) as mock_installation,
+            patch(
+                "apps.attachments.image_search.RelayControlClient"
+            ) as mock_client,
+        ):
+            mock_installation.load.return_value = SimpleNamespace(
+                access_token="ptr1.inst.secret"
+            )
+            mock_client.return_value.search_product_images.side_effect = (
+                RelayControlError(
+                    "relay control returned 402: subscription inactive",
+                    status_code=402,
+                )
+            )
+            with self.assertRaises(ProductImageSearchNotEntitled):
+                search_product_images(query="قهوة")
+
+    def test_the_endpoint_answers_an_unpaid_shop_with_403(self):
+        with patch(
+            "apps.catalog.views.search_product_images",
+            side_effect=ProductImageSearchNotEntitled(
+                "Product image search is not included in this shop's subscription."
+            ),
+        ):
+            response = self.client.get(reverse("product-image-search"), {"q": "قهوة"})
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("subscription", response.data["detail"])
+
+    def test_a_relay_outage_is_still_a_503(self):
+        # Anything that is not an entitlement refusal keeps the old answer, so a
+        # shop that IS paying still sees "try again" when the relay is down.
+        with (
+            patch(
+                "apps.attachments.image_search.RelayInstallation"
+            ) as mock_installation,
+            patch(
+                "apps.attachments.image_search.RelayControlClient"
+            ) as mock_client,
+        ):
+            mock_installation.load.return_value = SimpleNamespace(
+                access_token="ptr1.inst.secret"
+            )
+            mock_client.return_value.search_product_images.side_effect = (
+                RelayControlError("relay control request failed: timed out")
+            )
+            with self.assertRaises(ProductImageSearchUnavailable):
+                search_product_images(query="قهوة")
 
     def test_product_image_search_maps_relay_results(self):
         relay_payload = {

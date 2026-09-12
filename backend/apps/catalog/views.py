@@ -32,6 +32,7 @@ from apps.attachments.image_search import (
     ProductImageDownloadError,
     ProductImageImportError,
     ProductImageSearchError,
+    ProductImageSearchNotEntitled,
     ProductImageSearchUnavailable,
     import_product_image_from_token,
     search_product_images,
@@ -663,6 +664,8 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
                 page=serializer.validated_data["page"],
                 page_size=serializer.validated_data["page_size"],
             )
+        except ProductImageSearchNotEntitled as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
         except ProductImageSearchUnavailable as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         except ProductImageSearchError as exc:

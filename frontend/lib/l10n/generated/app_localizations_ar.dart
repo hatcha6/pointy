@@ -6047,6 +6047,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذر البحث عن الصور. تحقق من إعداد مزود البحث وحاول مرة أخرى.';
 
   @override
+  String get productImageSearchNotSubscribed =>
+      'البحث عن الصور غير مشمول في اشتراك هذا المتجر.';
+
+  @override
   String get productImageAttachError => 'تم حفظ المنتج، لكن تعذر حفظ الصورة.';
 
   @override

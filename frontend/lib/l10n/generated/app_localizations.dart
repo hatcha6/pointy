@@ -10678,6 +10678,12 @@ abstract class AppLocalizations {
   /// **'تعذر البحث عن الصور. تحقق من إعداد مزود البحث وحاول مرة أخرى.'**
   String get productImageSearchError;
 
+  /// No description provided for @productImageSearchNotSubscribed.
+  ///
+  /// In ar, this message translates to:
+  /// **'البحث عن الصور غير مشمول في اشتراك هذا المتجر.'**
+  String get productImageSearchNotSubscribed;
+
   /// No description provided for @productImageAttachError.
   ///
   /// In ar, this message translates to:
