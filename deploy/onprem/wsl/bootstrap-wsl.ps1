@@ -1,13 +1,13 @@
-<#
-  Pointy on-prem — the ONLY PowerShell we ship.
+﻿<#
+  Pointy on-prem - the ONLY PowerShell we ship.
 
   Everything that deploys, updates, watches and heals the stack is bash under
   deploy/onprem/*.sh, running inside a WSL2 distro. This file exists solely
   because two jobs cannot be done from Linux:
 
-    1. INSTALL  — enabling the Windows features, installing WSL, importing the
+    1. INSTALL  - enabling the Windows features, installing WSL, importing the
                   distro, and registering the boot task.
-    2. -Boot    — bridging the Windows LAN into the NAT'd WSL VM (portproxy +
+    2. -Boot    - bridging the Windows LAN into the NAT'd WSL VM (portproxy +
                   firewall), which must be re-done on every boot because the
                   WSL VM's IP changes each time it starts.
 
@@ -117,7 +117,7 @@ function Test-DistroExists { (Get-RegisteredDistros) -contains $Distro }
 # -Boot : bridge the LAN into the NAT'd WSL VM.
 #
 # WSL2 sits behind a NAT with a fresh private IP on every VM start, and
-# localhostForwarding only maps the Windows *loopback* — not the LAN. So the
+# localhostForwarding only maps the Windows *loopback* - not the LAN. So the
 # tills cannot reach the stack until we forward the host's ports at the WSL IP,
 # and we must re-do it whenever that IP changes.
 #
@@ -144,7 +144,7 @@ function Get-WslIp {
 }
 
 # portproxy is implemented by the IP Helper service. Without it running, every
-# `netsh ... add` silently succeeds and forwards nothing — the single most
+# `netsh ... add` silently succeeds and forwards nothing - the single most
 # common reason a WSL deployment is unreachable from the LAN.
 function Enable-IpHelper {
     try {
@@ -195,7 +195,7 @@ function Set-PortProxy {
     return $true
 }
 
-# Windows very often already has something on :80 — IIS, the World Wide Web
+# Windows very often already has something on :80 - IIS, the World Wide Web
 # Publishing Service, a vendor's print or label server. `netsh ... add` still
 # reports success in that case; the listener simply never binds, and the symptom
 # is "the browser app doesn't load" with a perfectly healthy stack behind it.
@@ -237,7 +237,7 @@ function Add-FirewallRule {
 
 function Invoke-BootReconcile {
     if (-not (Test-DistroExists)) {
-        Die "distro '$Distro' is not registered — run this script without -Boot to install."
+        Die "distro '$Distro' is not registered - run this script without -Boot to install."
     }
 
     # Starting any process boots the VM and, with systemd=true, PID 1 keeps it
@@ -306,7 +306,7 @@ function Assert-Preflight {
                  "Reboot into firmware setup and enable Intel VT-x / AMD-V (often called " +
                  "'Virtualization Technology' or 'SVM Mode'), then re-run this script.")
         }
-        Write-Log "no hypervisor running yet — expected before the Windows features are enabled" "INFO"
+        Write-Log "no hypervisor running yet - expected before the Windows features are enabled" "INFO"
     }
 
     $drive = (Get-Item $InstallRoot -ErrorAction SilentlyContinue)
@@ -314,14 +314,14 @@ function Assert-Preflight {
     try {
         $free = (Get-PSDrive -Name $root).Free / 1GB
         if ($free -lt 20) {
-            Write-Log ("only {0:N1} GB free on {1}: — the distro, images and Postgres data all live " +
+            Write-Log ("only {0:N1} GB free on {1}: - the distro, images and Postgres data all live " +
                        "here and the virtual disk only ever grows. 20 GB+ recommended." -f $free, $root) "WARN"
         }
     } catch { }
 
     if (Get-Service -Name "com.docker.service" -ErrorAction SilentlyContinue) {
         Write-Log ("Docker Desktop is installed on this machine. This installer does NOT migrate an " +
-                   "existing Docker Desktop deployment — it builds a clean WSL one alongside it.") "WARN"
+                   "existing Docker Desktop deployment - it builds a clean WSL one alongside it.") "WARN"
         if (-not $Force) {
             $answer = Read-Host "Continue anyway? Type 'yes' to proceed"
             if ($answer -ne "yes") { Die "aborted at the operator's request." }
@@ -339,7 +339,7 @@ function Enable-WindowsFeatures {
             Write-Log "Windows feature ${feature}: already enabled"
             continue
         }
-        Write-Log "enabling Windows feature ${feature}…"
+        Write-Log "enabling Windows feature ${feature}..."
         # DISM works with no internet, unlike the Store-based paths.
         $r = Invoke-Native -File "dism.exe" -Arguments @(
             "/online", "/enable-feature", "/featurename:$feature", "/all", "/norestart")
@@ -355,42 +355,116 @@ function Enable-WindowsFeatures {
     }
 }
 
+# Is a working, modern wsl.exe actually present? This is the ONLY thing that
+# decides whether the WSL step succeeded. An installer exit code is a hint about
+# one attempt; this is the outcome, and the outcome is what the next step needs.
+function Test-WslReady {
+    $ver = Invoke-Wsl @("--version")
+    if ($ver.ExitCode -eq 0 -and (($ver.Output -replace "`0","") -match "WSL[^\d]*\d+\.\d+")) {
+        return $true
+    }
+    # Older inbox builds have no --version but do answer --status.
+    $st = Invoke-Wsl @("--status")
+    return ($st.ExitCode -eq 0)
+}
+
+function Get-WslVersionLine {
+    $ver = Invoke-Wsl @("--version")
+    if ($ver.ExitCode -ne 0) { return "unknown" }
+    return ((($ver.Output -replace "`0","") -split "`r?`n" | Select-Object -First 1).Trim())
+}
+
 function Install-Wsl {
+    # Already working (a re-run, or an up-to-date machine)? Do nothing. Installing
+    # over a good WSL is how a working machine gets broken.
+    if (Test-WslReady) {
+        Write-Log "WSL already present and working: $(Get-WslVersionLine)"
+        $r = Invoke-Wsl @("--set-default-version", "2")
+        if ($r.ExitCode -ne 0) { Write-Log "could not set WSL default version 2: $($r.Output.Trim())" "WARN" }
+        return
+    }
+
     # Prefer the MSI we ship: it is the same modern wsl.exe on Windows 10 and 11,
     # needs no internet and no Microsoft Store (shops are frequently offline, and
     # the Store is commonly stripped from POS images).
     $msi = Get-ChildItem -Path $PSScriptRoot -Filter "wsl*.msi" -ErrorAction SilentlyContinue |
         Sort-Object Name -Descending | Select-Object -First 1
+
+    $rebootHint = $false
+    $lastCode   = $null
+    $lastOutput = ""
+
     if ($msi) {
-        Write-Log "installing WSL from the bundled $($msi.Name)…"
-        # No manual quoting: PowerShell quotes each array element itself, and
-        # adding our own passes literal quote characters through to msiexec.
-        $r = Invoke-Native -File "msiexec.exe" -Arguments @("/i", $msi.FullName, "/quiet", "/norestart")
-        if ($r.ExitCode -notin @(0, 3010, 1638)) {   # 1638 = same-or-newer already installed
-            Die "WSL MSI install failed (exit $($r.ExitCode)). $($r.Output.Trim())"
+        # Windows Installer is single-threaded machine-wide. The DISM feature
+        # enable we just ran, Windows Update, or a vendor updater will hold that
+        # mutex and msiexec returns 1618 IMMEDIATELY. That is a "come back in a
+        # moment", not a failure - and it is why this step used to fail on the
+        # first run and pass on the second.
+        $transient = @(1618, 1601)   # 1601 = Windows Installer service unavailable
+        $attempts  = 5
+        for ($i = 1; $i -le $attempts; $i++) {
+            Write-Log "installing WSL from the bundled $($msi.Name) (attempt ${i}/${attempts})..."
+            # Verbose MSI log next to our own, so a genuine failure is diagnosable
+            # on site instead of being a bare exit code.
+            $msiLog = Join-Path $LogDir ("wsl-msi-{0}.log" -f $i)
+            try { if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Force -Path $LogDir | Out-Null } } catch { }
+            # No manual quoting: PowerShell quotes each array element itself, and
+            # adding our own passes literal quote characters through to msiexec.
+            $r = Invoke-Native -File "msiexec.exe" -Arguments @(
+                "/i", $msi.FullName, "/quiet", "/norestart", "/l*v", $msiLog)
+            $lastCode = $r.ExitCode; $lastOutput = $r.Output.Trim()
+
+            if ($r.ExitCode -in @(0, 1638)) { break }          # 1638 = same-or-newer installed
+            if ($r.ExitCode -in @(3010, 1641)) { $rebootHint = $true; break }
+            if ($r.ExitCode -in $transient -and $i -lt $attempts) {
+                Write-Log ("Windows Installer is busy (exit $($r.ExitCode)); another install is " +
+                           "running. Waiting 20s and retrying.") "WARN"
+                Start-Sleep -Seconds 20
+                continue
+            }
+            Write-Log "msiexec returned $($r.ExitCode); verifying whether WSL works anyway. Log: ${msiLog}" "WARN"
+            break
         }
     } else {
         Write-Log "no bundled WSL MSI found; falling back to 'wsl --update' (needs internet)" "WARN"
         $r = Invoke-Wsl @("--update")
-        if ($r.ExitCode -ne 0) {
-            Die ("WSL is not installed and could not be updated online. Put the WSL MSI " +
-                 "(wsl.<version>.x64.msi) next to this script and re-run.")
+        $lastCode = $r.ExitCode; $lastOutput = $r.Output.Trim()
+    }
+
+    # THE decision. `wsl --update` reports non-zero when there is nothing to do,
+    # and msiexec can report an odd code for an install that landed perfectly, so
+    # neither exit code is trusted over the machine's actual state.
+    if (Test-WslReady) {
+        if ($null -ne $lastCode -and $lastCode -notin @(0, 1638)) {
+            Write-Log "the WSL installer returned ${lastCode}, but WSL works - continuing." "WARN"
         }
+        Write-Log "WSL: $(Get-WslVersionLine)"
+        $r = Invoke-Wsl @("--set-default-version", "2")
+        if ($r.ExitCode -ne 0) { Write-Log "could not set WSL default version 2: $($r.Output.Trim())" "WARN" }
+        return
     }
 
-    $r = Invoke-Wsl @("--set-default-version", "2")
-    if ($r.ExitCode -ne 0) { Write-Log "could not set WSL default version 2: $($r.Output.Trim())" "WARN" }
-
-    $ver = Invoke-Wsl @("--version")
-    if ($ver.ExitCode -eq 0) {
-        Write-Log ("WSL: " + (($ver.Output -replace "`0","") -split "`r?`n" | Select-Object -First 1).Trim())
+    # Not working. Now the exit code earns its keep as the explanation.
+    if ($rebootHint) {
+        Write-Log ""
+        Write-Log "WSL was installed but needs a REBOOT before it can run." "WARN"
+        Write-Log "Reboot, then run this exact command again to continue the install:" "WARN"
+        Write-Log "  powershell -ExecutionPolicy Bypass -File `"$PSCommandPath`"" "WARN"
+        exit 2
     }
+    if (-not $msi) {
+        Die ("WSL is not installed and could not be updated online (exit ${lastCode}). Put the WSL MSI " +
+             "(wsl.<version>.x64.msi) next to this script and re-run. ${lastOutput}")
+    }
+    Die ("WSL still does not run after installing $($msi.Name) (msiexec exit ${lastCode}). " +
+         "The verbose MSI log is under ${LogDir}. If this machine has never had the " +
+         "virtualization features enabled, reboot once and re-run this script. ${lastOutput}")
 }
 
 function Write-WslConfig {
     # Host-wide WSL2 VM tuning. Unknown keys are ignored with a warning by older
     # wsl.exe, so we only write the modern ones when the running WSL supports
-    # them — otherwise every single `wsl` call prints noise into our logs.
+    # them - otherwise every single `wsl` call prints noise into our logs.
     $totalGb = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
     $memGb   = [int][math]::Max(4, [math]::Min(8, [math]::Floor($totalGb / 2)))
     $cpus    = [int][math]::Max(2, [math]::Min(4, [Environment]::ProcessorCount))
@@ -402,7 +476,7 @@ function Write-WslConfig {
     }
 
     $lines = @(
-        "# GENERATED by bootstrap-wsl.ps1 — Pointy on-prem.",
+        "# GENERATED by bootstrap-wsl.ps1 - Pointy on-prem.",
         "[wsl2]",
         "memory=${memGb}GB",
         "processors=${cpus}",
@@ -416,7 +490,7 @@ function Write-WslConfig {
     if ($modern) {
         $lines += @(
             "# Let the virtual disk hand free space back to Windows. Without this the",
-            "# vhdx only ever grows — a year of image churn silently fills C:.",
+            "# vhdx only ever grows - a year of image churn silently fills C:.",
             "sparseVhd=true",
             "autoMemoryReclaim=gradual",
             "# Never idle-stop the VM: it is a server, not a developer shell.",
@@ -439,12 +513,12 @@ function Import-Distro {
     $rootfs = Get-ChildItem -Path $PSScriptRoot -Filter "pointy-wsl-rootfs*.tar*" -ErrorAction SilentlyContinue |
         Select-Object -First 1
     if (-not $rootfs) {
-        Die ("no distro image found. Expected pointy-wsl-rootfs.tar.gz next to this script — " +
+        Die ("no distro image found. Expected pointy-wsl-rootfs.tar.gz next to this script - " +
              "is this a complete bundle?")
     }
     $target = Join-Path $InstallRoot "distro"
     New-Item -ItemType Directory -Force -Path $target | Out-Null
-    Write-Log "importing '${Distro}' from $($rootfs.Name) into ${target} (this takes a few minutes)…"
+    Write-Log "importing '${Distro}' from $($rootfs.Name) into ${target} (this takes a few minutes)..."
     $r = Invoke-Wsl @("--import", $Distro, $target, $rootfs.FullName, "--version", "2")
     if ($r.ExitCode -ne 0) {
         $detail = ($r.Output -replace "`0", "").Trim()
@@ -484,9 +558,9 @@ function Copy-BundleIntoGuest {
     # Stream the bundle in as a tar over stdin. A Windows-side file copy would
     # go through DrvFs and can rewrite line endings; a single CRLF in a .sh makes
     # bash fail with "\r: command not found", and a CRLF in .env puts a trailing
-    # \r inside the generated Postgres password — a failure that only shows up
+    # \r inside the generated Postgres password - a failure that only shows up
     # later, as an unexplained authentication error.
-    Write-Log "copying the bundle into ${GuestDir} inside the distro…"
+    Write-Log "copying the bundle into ${GuestDir} inside the distro..."
     Invoke-Guest "mkdir -p ${GuestDir}" | Out-Null
 
     $tar = Join-Path $env:TEMP ("pointy-bundle-{0}.tar" -f ([guid]::NewGuid().ToString("N")))
@@ -495,7 +569,7 @@ function Copy-BundleIntoGuest {
         #
         # wsl/ goes IN (minus its install-only inputs): update.sh adopts
         # wsl/bootstrap-wsl.ps1 out of each new bundle, and -Boot copies it back
-        # out to Windows — that is the only way a fix to the LAN bridge ever
+        # out to Windows - that is the only way a fix to the LAN bridge ever
         # reaches an installed shop. The rootfs tarball and the MSI are excluded:
         # they are one-time install inputs and together are most of the bundle.
         $r = Invoke-Native -File "tar.exe" -Arguments @(
@@ -507,7 +581,7 @@ function Copy-BundleIntoGuest {
 
         $guestTar = "/tmp/pointy-bundle.tar"
         $winTar   = $tar -replace '\\', '/'
-        # Read it from the Windows filesystem in BINARY through /mnt — the copy
+        # Read it from the Windows filesystem in BINARY through /mnt - the copy
         # is byte-exact because tar content is opaque to DrvFs.
         $mnt = "/mnt/" + $winTar.Substring(0,1).ToLower() + $winTar.Substring(2)
         $x = Invoke-Guest "cp '${mnt}' ${guestTar} && tar -xf ${guestTar} -C ${GuestDir} && rm -f ${guestTar}"
@@ -523,7 +597,7 @@ function Copy-BundleIntoGuest {
 }
 
 function Invoke-GuestInstall {
-    Write-Log "running install.sh inside the distro — this is where the stack actually comes up…"
+    Write-Log "running install.sh inside the distro - this is where the stack actually comes up..."
     # Stream it live: this step loads images and starts Postgres, and takes
     # minutes. A silent installer here reads as a hang.
     $code = 1
@@ -607,7 +681,7 @@ function Register-BootTask {
     # auto-logon with the password in clear text under Winlogon. This does not.
     #
     # The distro is registered to THIS user's SID, so the task must run as this
-    # user — not SYSTEM, which cannot see it.
+    # user - not SYSTEM, which cannot see it.
     $userId = "$env:USERDOMAIN\$env:USERNAME"
     try {
         $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType S4U -RunLevel Highest
@@ -638,7 +712,7 @@ function Register-BootTask {
 
 if ($Boot) {
     if (-not (Test-DistroExists)) {
-        Die "distro '$Distro' is not registered — run this script without -Boot to install."
+        Die "distro '$Distro' is not registered - run this script without -Boot to install."
     }
     # Start the distro first: the promotion check has to read a file inside it.
     $ping = Invoke-Guest "true"

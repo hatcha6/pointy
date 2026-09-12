@@ -1,0 +1,84 @@
+# Load bootstrap-wsl.ps1's FUNCTIONS without running its install flow, then
+# replace everything it shells out to with fakes a test can script.
+#
+# The functions are lifted out by AST rather than by dot-sourcing, because
+# dot-sourcing would run the entry point at the bottom of the file - which on a
+# Mac means trying to install WSL. No test hook is added to the production
+# script for this; it stays a plain script that knows nothing about tests.
+
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+
+$script:BootstrapPath = (Resolve-Path (Join-Path $PSScriptRoot ".." "bootstrap-wsl.ps1")).Path
+$src  = Get-Content -Raw $script:BootstrapPath
+$errs = $null; $toks = $null
+$ast  = [System.Management.Automation.Language.Parser]::ParseInput($src, [ref]$toks, [ref]$errs)
+if ($errs -and $errs.Count) { throw "bootstrap-wsl.ps1 does not parse: $($errs[0].Message)" }
+foreach ($fn in $ast.FindAll({ param($n)
+    $n -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
+    Invoke-Expression $fn.Extent.Text
+}
+
+# Script-scope variables the real file sets at the top.
+$Distro      = "Pointy"
+$InstallRoot = Join-Path ([IO.Path]::GetTempPath()) ("pointy-test-" + [guid]::NewGuid().ToString("N"))
+$LogDir      = Join-Path $InstallRoot "logs"
+$ApiPort     = 8000
+$WebPort     = 80
+$PSCommandPath2 = "C:\ProgramData\Pointy\bootstrap-wsl.ps1"
+
+# --- the fakes -------------------------------------------------------------
+$script:Log       = [System.Collections.ArrayList]::new()
+$script:NativeLog = [System.Collections.ArrayList]::new()
+$script:MsiQueue  = [System.Collections.Queue]::new()   # exit codes msiexec returns, in order
+$script:WslReady  = $false                              # does wsl.exe work right now?
+$script:MsiPresent= $true
+$script:UpdateRc  = 0
+$script:Slept     = 0
+
+# Also mirrored to a file: a scenario that ends in `exit` cannot report back
+# in-process, and the exit code alone does not say WHY.
+function Write-Log { param([string]$Message, [string]$Level = "INFO")
+    [void]$script:Log.Add("${Level}: ${Message}")
+    if ($env:POINTY_TEST_LOG) { Add-Content -Path $env:POINTY_TEST_LOG -Value "${Level}: ${Message}" } }
+function Die { param([string]$Message)
+    Write-Log $Message "ERROR"; exit 1 }
+function Start-Sleep { param([int]$Seconds) $script:Slept += $Seconds }
+
+function Invoke-Native {
+    param([string]$File, [string[]]$Arguments)
+    [void]$script:NativeLog.Add("$File $($Arguments -join ' ')")
+    if ($File -eq "msiexec.exe") {
+        $code = if ($script:MsiQueue.Count) { $script:MsiQueue.Dequeue() } else { 0 }
+        # A successful MSI install is what makes wsl.exe start working.
+        if ($code -in @(0, 1638, 3010)) { $script:WslReady = $script:MsiMakesItWork }
+        return [pscustomobject]@{ ExitCode = $code; Output = "" }
+    }
+    return [pscustomobject]@{ ExitCode = 0; Output = "" }
+}
+
+function Invoke-Wsl {
+    param([string[]]$Arguments)
+    [void]$script:NativeLog.Add("wsl.exe $($Arguments -join ' ')")
+    switch ($Arguments[0]) {
+        "--version" {
+            if ($script:WslReady) { return [pscustomobject]@{ ExitCode = 0; Output = "WSL version: 2.3.26.0`nKernel: 5.15" } }
+            return [pscustomobject]@{ ExitCode = 1; Output = "" }
+        }
+        "--status"  { return [pscustomobject]@{ ExitCode = ($(if ($script:WslReady) { 0 } else { 1 })); Output = "" } }
+        "--update"  { if ($script:UpdateRc -eq 0) { $script:WslReady = $script:MsiMakesItWork }
+                      return [pscustomobject]@{ ExitCode = $script:UpdateRc; Output = "" } }
+        default     { return [pscustomobject]@{ ExitCode = 0; Output = "" } }
+    }
+}
+
+# Only the bundled-MSI lookup goes through Get-ChildItem in the code under test.
+function Get-ChildItem {
+    param([string]$Path, [string]$Filter, $ErrorAction)
+    if (-not $script:MsiPresent) { return @() }
+    return @([pscustomobject]@{ Name = "wsl.2.3.26.0.x64.msi"; FullName = "C:\bundle\wsl\wsl.2.3.26.0.x64.msi" })
+}
+
+function logged([string]$needle) { return [bool]($script:Log | Where-Object { $_ -like "*$needle*" }) }
+function called([string]$needle) { return [bool]($script:NativeLog | Where-Object { $_ -like "*$needle*" }) }
+function msiexecCalls { return @($script:NativeLog | Where-Object { $_ -like "msiexec.exe*" }).Count }
