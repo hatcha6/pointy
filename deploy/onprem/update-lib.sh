@@ -246,7 +246,7 @@ pu_install_file() {
 POINTY_ADOPT_FILES="docker-compose.yml install.sh watchdog.sh
 register-autostart.sh update.sh update-agent.sh update-lib.sh
 discovery-responder.py migrate-fahd.sh
-disable-watchdog.sh fix-backend-outages.sh
+disable-watchdog.sh
 wsl/bootstrap-wsl.ps1 wsl/timezone-map.txt
 .env.example VERSION.txt INSTALL.md README.md"
 
@@ -588,6 +588,25 @@ pu_apply_bundle() {
   [ -f VERSION.txt ] && cp VERSION.txt "${snapshot}/VERSION.txt"
 
   pu_adopt_bundle "$dir" "$assigned"
+
+  # A release can add a variable the stack refuses to boot without. The bundle's
+  # .env.example carries it, but .env is stateful and is deliberately NOT
+  # adopted - so without this the new backend comes up against an .env that
+  # predates its own requirements and dies on a `${VAR:?}` it has never seen.
+  #
+  # install.sh --env-only is that fill, and it is the SAME code the installer
+  # runs: one definition of "a complete .env", not a second one that drifts.
+  # Guarded because a downgrade adopts an older install.sh that does not know
+  # the flag, and would run a full install instead.
+  if grep -q -- '--env-only' install.sh 2>/dev/null; then
+    if ! bash install.sh --env-only; then
+      pu_restore_snapshot "$snapshot"
+      pu_warn "the new release needs .env values this deployment cannot supply; still on ${current}"
+      return 1
+    fi
+  else
+    pu_warn "adopted install.sh has no --env-only; skipping the .env completeness check"
+  fi
 
   if [ "$strategy" = live ]; then
     pu_apply_live "$assigned"

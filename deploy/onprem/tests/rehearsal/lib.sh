@@ -231,7 +231,7 @@ rig_build_bundle() {
   cp "${RIG_ONPREM_DIR}/install.sh" "${RIG_ONPREM_DIR}/watchdog.sh" \
      "${RIG_ONPREM_DIR}/register-autostart.sh" "${RIG_ONPREM_DIR}/update-agent.sh" \
      "${RIG_ONPREM_DIR}/update.sh" "${RIG_ONPREM_DIR}/update-lib.sh" \
-     "${RIG_ONPREM_DIR}/disable-watchdog.sh" "${RIG_ONPREM_DIR}/fix-backend-outages.sh" \
+     "${RIG_ONPREM_DIR}/disable-watchdog.sh" \
      "${RIG_ONPREM_DIR}/discovery-responder.py" "${RIG_ONPREM_DIR}/migrate-fahd.sh" \
      "${RIG_ONPREM_DIR}/INSTALL.md" "${RIG_ONPREM_DIR}/README.md" "${bundle}/" || return 1
   cp "${RIG_ONPREM_DIR}/wsl/bootstrap-wsl.ps1" "${RIG_ONPREM_DIR}/wsl/timezone-map.txt" \

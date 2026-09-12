@@ -266,7 +266,7 @@ make_bundle() {
   local f
   for f in docker-compose.yml install.sh watchdog.sh register-autostart.sh \
            update.sh update-agent.sh update-lib.sh discovery-responder.py \
-           migrate-fahd.sh disable-watchdog.sh fix-backend-outages.sh \
+           migrate-fahd.sh disable-watchdog.sh \
            .env.example INSTALL.md README.md; do
     printf 'bundled %s from %s\n' "$f" "$version" >"${dir}/${f}"
   done

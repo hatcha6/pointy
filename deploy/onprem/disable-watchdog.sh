@@ -3,9 +3,10 @@
 # Disables the Pointy uptime watchdog on Linux: stops the systemd timer and
 # disables it so it never runs at boot or on its 5-minute schedule again.
 #
-# NOTE — the interval outages were NOT caused by the watchdog (see
-# fix-backend-outages.sh: the ASGI workers were self-terminating on a request
-# limit; the watchdog only revived the stack afterwards). With the watchdog
+# NOTE — the interval outages were NOT caused by the watchdog: the ASGI workers
+# were self-terminating on a request limit and the watchdog only revived the
+# stack afterwards. install.sh now pins POINTY_ASGI_MAX_REQUESTS=0 on every run,
+# so that cause is gone and disabling the watchdog cannot help it. With the watchdog
 # disabled, nothing restarts the stack after a reboot, a power cut, or a
 # Docker crash: someone must run `docker compose up -d` by hand. Re-enable at
 # any time with:  sudo bash register-autostart.sh

@@ -177,11 +177,11 @@ test_adopt_creates_the_wsl_subdirectory_for_an_older_deployment() {
 
 test_adopt_skips_files_the_bundle_does_not_carry() {
   installed_deploy 1.0.0
-  printf 'local customisation\n' >fix-backend-outages.sh
+  printf 'local customisation\n' >migrate-fahd.sh
   make_bundle "${PU_TEST_DIR}/b" 1.1.0
-  rm "${PU_TEST_DIR}/b/fix-backend-outages.sh"
+  rm "${PU_TEST_DIR}/b/migrate-fahd.sh"
   pu_adopt_bundle "${PU_TEST_DIR}/b" 1.1.0
-  assert_file_contains fix-backend-outages.sh 'local customisation'
+  assert_file_contains migrate-fahd.sh 'local customisation'
 }
 
 test_adopt_copies_only_the_listed_files() {
