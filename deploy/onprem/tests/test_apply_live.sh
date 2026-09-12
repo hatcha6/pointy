@@ -279,10 +279,19 @@ test_publishing_clients_warns_but_does_not_fail_when_the_backend_refuses() {
 # ---------------------------------------------------------------------------
 
 test_autostart_registration_is_skipped_without_systemd() {
+  # Deleting the stub is NOT enough to make systemctl absent: a Linux host has a
+  # real one on PATH, so this test passed on a Mac and asserted the opposite of
+  # its own name in CI. Restricting PATH to the stub directory is what actually
+  # removes it.
   rm -f "${PU_STUB_DIR}/systemctl"
   printf 'exit 0\n' >register-autostart.sh
-  assert_ok pu_register_autostart
-  assert_eq '' "$(pu_register_autostart 2>&1)"
+  local saved="$PATH" rc out
+  PATH="$PU_STUB_DIR"
+  pu_register_autostart; rc=$?
+  out="$(pu_register_autostart 2>&1)"
+  PATH="$saved"
+  assert_eq 0 "$rc" "registration without systemd should be a silent no-op"
+  assert_eq '' "$out" "registration without systemd should print nothing"
 }
 
 test_autostart_registration_runs_as_root() {
