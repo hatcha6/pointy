@@ -1042,6 +1042,30 @@
   "dashboardPaymentCountMetric": "عدد المدفوعات",
   "dashboardCommissionMetric": "العمولات",
   "dashboardPaymentMixTitle": "توزيع طرق الدفع",
+  "dashboardPaymentMixByValue": "بالقيمة",
+  "@dashboardPaymentMixByValue": {
+    "description": "Payment mix toggle: split the chart by money collected."
+  },
+  "dashboardPaymentMixByCount": "بعدد العمليات",
+  "@dashboardPaymentMixByCount": {
+    "description": "Payment mix toggle: split the chart by number of payments."
+  },
+  "dashboardPaymentMixTotalValue": "إجمالي المقبوض",
+  "@dashboardPaymentMixTotalValue": {
+    "description": "Label under the total in the middle of the payment mix donut, value mode."
+  },
+  "dashboardPaymentMixTotalCount": "إجمالي العمليات",
+  "@dashboardPaymentMixTotalCount": {
+    "description": "Label under the total in the middle of the payment mix donut, count mode."
+  },
+  "dashboardExchangeRatesTitle": "أسعار الصرف",
+  "@dashboardExchangeRatesTitle": {
+    "description": "Title of the exchange-rate band at the top of the dashboard."
+  },
+  "dashboardExchangeRatesOpenAction": "كل أسعار الصرف",
+  "@dashboardExchangeRatesOpenAction": {
+    "description": "Tooltip on the button opening the full exchange-rates page."
+  },
   "dashboardPaymentMethodsTitle": "طرق الدفع",
   "dashboardPaymentMethodCount": "{count, plural, =0{لا مدفوعات} =1{دفعة واحدة} =2{دفعتان} other{{count} دفعات}}",
   "@dashboardPaymentMethodCount": {

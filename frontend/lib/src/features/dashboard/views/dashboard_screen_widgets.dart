@@ -294,42 +294,255 @@ class _HourlySalesChart extends StatelessWidget {
   }
 }
 
-class _PaymentMixChart extends StatelessWidget {
-  const _PaymentMixChart({required this.methods});
+/// What the payment mix is split by.
+///
+/// The same three methods tell two different stories: cash can be most of the
+/// takings while cards are most of the *transactions*, and a shop deciding
+/// whether a card terminal is earning its commission needs the second number,
+/// not the first. Value is the default because the dashboard around it is about
+/// money.
+enum _PaymentMixMetric { value, volume }
+
+/// The payment-mix donut, with its value/volume switch.
+///
+/// Owns the whole card rather than just the chart so the switch sits under the
+/// title where it reads as part of the card, and so the legend can restate
+/// every figure in whichever unit is selected.
+class _PaymentMixCard extends StatefulWidget {
+  const _PaymentMixCard({required this.methods});
 
   final List<PaymentMethodInsight> methods;
 
   @override
+  State<_PaymentMixCard> createState() => _PaymentMixCardState();
+}
+
+class _PaymentMixCardState extends State<_PaymentMixCard> {
+  _PaymentMixMetric _metric = _PaymentMixMetric.value;
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+
+    return PointyDetailSection(
+      title: l10n.dashboardPaymentMixTitle,
+      icon: Icons.pie_chart_outline,
+      minHeight: 300,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: SegmentedButton<_PaymentMixMetric>(
+              showSelectedIcon: false,
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              segments: [
+                ButtonSegment(
+                  value: _PaymentMixMetric.value,
+                  label: Text(l10n.dashboardPaymentMixByValue),
+                ),
+                ButtonSegment(
+                  value: _PaymentMixMetric.volume,
+                  label: Text(l10n.dashboardPaymentMixByCount),
+                ),
+              ],
+              selected: {_metric},
+              onSelectionChanged: (selection) =>
+                  setState(() => _metric = selection.first),
+            ),
+          ),
+          SizedBox(height: spacing.sm),
+          _PaymentMixChart(methods: widget.methods, metric: _metric),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentMixChart extends StatelessWidget {
+  const _PaymentMixChart({required this.methods, required this.metric});
+
+  final List<PaymentMethodInsight> methods;
+  final _PaymentMixMetric metric;
+
+  /// Below this share a slice is too thin to letter, so it is left bare and
+  /// read off the legend instead of being overprinted with its neighbour.
+  static const double _minLabelledShare = 0.07;
+
+  double _amount(PaymentMethodInsight method) => switch (metric) {
+    _PaymentMixMetric.value => method.total.abs(),
+    _PaymentMixMetric.volume => method.count.toDouble(),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final spacing = AdaptiveSpacing.of(context);
     final nonZero = methods
-        .where((method) => method.total.abs() > 0)
+        .where((method) => _amount(method) > 0)
         .toList(growable: false);
     if (nonZero.isEmpty) {
       return const _EmptyWidgetData();
     }
-    final colors = _chartColors(context);
-    return SizedBox(
-      height: 220,
-      child: PieChart(
-        PieChartData(
-          centerSpaceRadius: 46,
-          sectionsSpace: 2,
-          sections: [
-            for (var index = 0; index < nonZero.length; index += 1)
-              PieChartSectionData(
-                value: nonZero[index].total.abs(),
-                title: _paymentMethodLabel(l10n, nonZero[index].method),
-                radius: 74,
-                color: colors[index % colors.length],
-                titleStyle: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: context.pointyColors.surface,
-                  fontWeight: FontWeight.w700,
+    final palette = _chartColors(context);
+    final total = nonZero.fold<double>(0, (sum, m) => sum + _amount(m));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 190,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              PieChart(
+                PieChartData(
+                  centerSpaceRadius: 46,
+                  sectionsSpace: 2,
+                  sections: [
+                    for (var index = 0; index < nonZero.length; index += 1)
+                      PieChartSectionData(
+                        value: _amount(nonZero[index]),
+                        showTitle:
+                            total > 0 &&
+                            _amount(nonZero[index]) / total >=
+                                _minLabelledShare,
+                        title:
+                            '${((_amount(nonZero[index]) / total) * 100).round()}%',
+                        radius: 44,
+                        color: palette[index % palette.length],
+                        titleStyle: theme.textTheme.labelSmall?.copyWith(
+                          color: context.pointyColors.surface,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                  ],
                 ),
+              ),
+              // The hole would otherwise be the emptiest part of the card, and
+              // the one number every split implies is the total it splits.
+              _PaymentMixTotal(total: total, metric: metric),
+            ],
+          ),
+        ),
+        SizedBox(height: spacing.sm),
+        Wrap(
+          spacing: spacing.md,
+          runSpacing: spacing.xs,
+          children: [
+            for (var index = 0; index < nonZero.length; index += 1)
+              _PaymentMixLegendEntry(
+                color: palette[index % palette.length],
+                label: _paymentMethodLabel(l10n, nonZero[index].method),
+                amount: switch (metric) {
+                  _PaymentMixMetric.value => formatMoney(
+                    nonZero[index].total.abs(),
+                  ),
+                  _PaymentMixMetric.volume => _formatNumber(
+                    nonZero[index].count,
+                  ),
+                },
               ),
           ],
         ),
+      ],
+    );
+  }
+}
+
+class _PaymentMixTotal extends StatelessWidget {
+  const _PaymentMixTotal({required this.total, required this.metric});
+
+  final double total;
+  final _PaymentMixMetric metric;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+
+    return SizedBox(
+      width: 76,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              switch (metric) {
+                // Compact inside the donut's hole: the legend below carries
+                // the exact figures, this one only has to give the scale.
+                _PaymentMixMetric.value =>
+                  '${_compactNumber(total)} $currencySymbol',
+                _PaymentMixMetric.volume => _formatNumber(total.round()),
+              },
+              maxLines: 1,
+              style: switch (theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              )) {
+                final style? => PointyTypography.numeric(style),
+                null => null,
+              },
+            ),
+          ),
+          Text(
+            switch (metric) {
+              _PaymentMixMetric.value => l10n.dashboardPaymentMixTotalValue,
+              _PaymentMixMetric.volume => l10n.dashboardPaymentMixTotalCount,
+            },
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.labelSmall?.copyWith(color: colors.mutedInk),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _PaymentMixLegendEntry extends StatelessWidget {
+  const _PaymentMixLegendEntry({
+    required this.color,
+    required this.label,
+    required this.amount,
+  });
+
+  final Color color;
+  final String label;
+  final String amount;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: theme.textTheme.labelMedium),
+        const SizedBox(width: 4),
+        Text(
+          amount,
+          style: switch (theme.textTheme.labelMedium?.copyWith(
+            color: colors.mutedInk,
+          )) {
+            final style? => PointyTypography.numeric(style),
+            null => null,
+          },
+        ),
+      ],
     );
   }
 }
@@ -784,14 +997,18 @@ double _maxValue(Iterable<double> values) {
   return max <= 0 ? 1 : max * 1.25;
 }
 
+/// Categorical series colours, ordered so that the first few are the ones a
+/// reader can actually tell apart. The two greens used to sit side by side,
+/// which made a three-method payment mix look like two slices and a sliver of
+/// the same colour; the neutral now separates them.
 List<Color> _chartColors(BuildContext context) {
   final colors = context.pointyColors;
   return [
     colors.primaryStrong,
     colors.accentAmber,
+    colors.mutedInk,
     colors.primaryDark,
     colors.warning,
-    colors.mutedInk,
     colors.danger,
   ];
 }

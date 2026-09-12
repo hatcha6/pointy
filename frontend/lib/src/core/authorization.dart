@@ -68,6 +68,7 @@ enum AppCapability {
   viewExpenses,
   manageExpenses,
   viewPayments,
+  viewExchangeRates,
   viewAttendance,
   manageAttendance,
   viewOperations,
@@ -686,6 +687,12 @@ class AuthorizationCapabilities {
       if (_hasAny(user, const ['view_payment', 'payments.view_payment'])) {
         capabilities.add(AppCapability.viewPayments);
       }
+      // Reading a rate is not the same as trading in one: an accountant costing
+      // imports holds this without any of the dashboard's revenue permissions,
+      // so it grants the rates band and nothing else.
+      if (_hasAny(user, const ['view_exchangerate', 'fx.view_exchangerate'])) {
+        capabilities.add(AppCapability.viewExchangeRates);
+      }
       if (_hasAny(user, const [
         'add_expense',
         'change_expense',
@@ -753,6 +760,7 @@ class AuthorizationCapabilities {
   bool get canCollectCustomerDebt => allows(AppCapability.collectCustomerDebt);
 
   bool get canViewDashboard => allows(AppCapability.viewDashboard);
+  bool get canViewExchangeRates => allows(AppCapability.viewExchangeRates);
   bool get canViewSalesDashboard => allows(AppCapability.viewSalesDashboard);
   bool get canViewPaymentDashboard =>
       allows(AppCapability.viewPaymentDashboard);

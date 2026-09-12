@@ -1562,8 +1562,10 @@ class PosApiService {
 
   Future<List<Currency>> fetchCurrencies() => _fx.fetchCurrencies();
 
-  Future<List<ExchangeRate>> fetchRateHistory({String? fromCode}) =>
-      _fx.fetchRateHistory(fromCode: fromCode);
+  Future<List<ExchangeRate>> fetchRateHistory({
+    String? fromCode,
+    int pageSize = 100,
+  }) => _fx.fetchRateHistory(fromCode: fromCode, pageSize: pageSize);
 
   Future<ExchangeRate> recordManualRate(ManualRateDraft draft) =>
       _fx.recordManualRate(draft);

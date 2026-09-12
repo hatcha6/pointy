@@ -3320,6 +3320,42 @@ abstract class AppLocalizations {
   /// **'توزيع طرق الدفع'**
   String get dashboardPaymentMixTitle;
 
+  /// Payment mix toggle: split the chart by money collected.
+  ///
+  /// In ar, this message translates to:
+  /// **'بالقيمة'**
+  String get dashboardPaymentMixByValue;
+
+  /// Payment mix toggle: split the chart by number of payments.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعدد العمليات'**
+  String get dashboardPaymentMixByCount;
+
+  /// Label under the total in the middle of the payment mix donut, value mode.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي المقبوض'**
+  String get dashboardPaymentMixTotalValue;
+
+  /// Label under the total in the middle of the payment mix donut, count mode.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي العمليات'**
+  String get dashboardPaymentMixTotalCount;
+
+  /// Title of the exchange-rate band at the top of the dashboard.
+  ///
+  /// In ar, this message translates to:
+  /// **'أسعار الصرف'**
+  String get dashboardExchangeRatesTitle;
+
+  /// Tooltip on the button opening the full exchange-rates page.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل أسعار الصرف'**
+  String get dashboardExchangeRatesOpenAction;
+
   /// No description provided for @dashboardPaymentMethodsTitle.
   ///
   /// In ar, this message translates to:

@@ -1764,6 +1764,24 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardPaymentMixTitle => 'توزيع طرق الدفع';
 
   @override
+  String get dashboardPaymentMixByValue => 'بالقيمة';
+
+  @override
+  String get dashboardPaymentMixByCount => 'بعدد العمليات';
+
+  @override
+  String get dashboardPaymentMixTotalValue => 'إجمالي المقبوض';
+
+  @override
+  String get dashboardPaymentMixTotalCount => 'إجمالي العمليات';
+
+  @override
+  String get dashboardExchangeRatesTitle => 'أسعار الصرف';
+
+  @override
+  String get dashboardExchangeRatesOpenAction => 'كل أسعار الصرف';
+
+  @override
   String get dashboardPaymentMethodsTitle => 'طرق الدفع';
 
   @override

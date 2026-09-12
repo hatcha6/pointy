@@ -16,8 +16,10 @@ import '../../../shared/shell/shell.dart';
 import '../../../data/models/dashboard_ai_digest.dart';
 import '../../../data/models/camera.dart';
 import '../view_models/dashboard_cameras_view_model.dart';
+import '../view_models/dashboard_fx_view_model.dart';
 import '../view_models/dashboard_view_model.dart';
 import 'dashboard_cameras_band.dart';
+import 'dashboard_fx_band.dart';
 
 part 'dashboard_screen_hero.dart';
 part 'dashboard_screen_widgets.dart';
@@ -35,6 +37,8 @@ class DashboardScreen extends StatelessWidget {
     this.camerasViewModel,
     this.onOpenCamera,
     this.onOpenCameraWall,
+    this.fxViewModel,
+    this.onOpenExchangeRates,
   });
 
   final DashboardViewModel viewModel;
@@ -48,6 +52,21 @@ class DashboardScreen extends StatelessWidget {
   final DashboardCamerasViewModel? camerasViewModel;
   final ValueChanged<Camera>? onOpenCamera;
   final VoidCallback? onOpenCameraWall;
+
+  /// Null for a user who may not read exchange rates, which is what keeps every
+  /// cashier's dashboard from asking the backend for them on every load.
+  final DashboardFxViewModel? fxViewModel;
+  final VoidCallback? onOpenExchangeRates;
+
+  /// Everything the dashboard shows, refreshed together. The rates band is
+  /// loaded once per session on its own, so pull-to-refresh is the one place a
+  /// stale rate can be corrected without restarting the app.
+  Future<void> _refreshAll() async {
+    await Future.wait([
+      viewModel.loadDashboard(),
+      if (fxViewModel != null) fxViewModel!.refresh(),
+    ]);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,7 +91,7 @@ class DashboardScreen extends StatelessWidget {
                 fallback: const SizedBox.shrink(),
                 child: IconButton(
                   tooltip: l10n.refreshDashboardTooltip,
-                  onPressed: viewModel.loadDashboard,
+                  onPressed: _refreshAll,
                   icon: const Icon(Icons.sync),
                 ),
               ),
@@ -86,6 +105,9 @@ class DashboardScreen extends StatelessWidget {
               camerasViewModel: camerasViewModel,
               onOpenCamera: onOpenCamera,
               onOpenCameraWall: onOpenCameraWall,
+              fxViewModel: fxViewModel,
+              onOpenExchangeRates: onOpenExchangeRates,
+              onRefresh: _refreshAll,
               navigation: _DashboardNavigation(
                 openCatalog: _destinationAction(
                   context,
@@ -199,17 +221,23 @@ class _DashboardBody extends StatelessWidget {
     required this.viewModel,
     required this.capabilities,
     required this.navigation,
+    required this.onRefresh,
     this.camerasViewModel,
     this.onOpenCamera,
     this.onOpenCameraWall,
+    this.fxViewModel,
+    this.onOpenExchangeRates,
   });
 
   final DashboardViewModel viewModel;
   final AuthorizationCapabilities capabilities;
   final _DashboardNavigation navigation;
+  final Future<void> Function() onRefresh;
   final DashboardCamerasViewModel? camerasViewModel;
   final ValueChanged<Camera>? onOpenCamera;
   final VoidCallback? onOpenCameraWall;
+  final DashboardFxViewModel? fxViewModel;
+  final VoidCallback? onOpenExchangeRates;
 
   @override
   Widget build(BuildContext context) {
@@ -239,7 +267,7 @@ class _DashboardBody extends StatelessWidget {
     }
 
     return RefreshIndicator(
-      onRefresh: viewModel.loadDashboard,
+      onRefresh: onRefresh,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: spacing.pagePadding,
@@ -271,6 +299,8 @@ class _DashboardBody extends StatelessWidget {
                 camerasViewModel: camerasViewModel,
                 onOpenCamera: onOpenCamera,
                 onOpenCameraWall: onOpenCameraWall,
+                fxViewModel: fxViewModel,
+                onOpenExchangeRates: onOpenExchangeRates,
               ),
             ],
           ),
@@ -330,6 +360,8 @@ class _DashboardSections extends StatelessWidget {
     this.camerasViewModel,
     this.onOpenCamera,
     this.onOpenCameraWall,
+    this.fxViewModel,
+    this.onOpenExchangeRates,
   });
 
   final DashboardSnapshot snapshot;
@@ -340,6 +372,8 @@ class _DashboardSections extends StatelessWidget {
   final DashboardCamerasViewModel? camerasViewModel;
   final ValueChanged<Camera>? onOpenCamera;
   final VoidCallback? onOpenCameraWall;
+  final DashboardFxViewModel? fxViewModel;
+  final VoidCallback? onOpenExchangeRates;
 
   @override
   Widget build(BuildContext context) {
@@ -434,12 +468,7 @@ class _DashboardSections extends StatelessWidget {
         explained(
           'payment_mix',
           l10n.dashboardPaymentMixTitle,
-          PointyDetailSection(
-            title: l10n.dashboardPaymentMixTitle,
-            icon: Icons.pie_chart_outline,
-            minHeight: 300,
-            child: _PaymentMixChart(methods: payments.methods),
-          ),
+          _PaymentMixCard(methods: payments.methods),
         ),
       if (profitability != null)
         explained(
@@ -644,6 +673,16 @@ class _DashboardSections extends StatelessWidget {
             navigation: navigation,
           ),
         ),
+        // Under the shop's own money, before anything else: the dinar rate is
+        // what the next container of stock will cost, so it belongs beside the
+        // takings rather than buried in the cards below. Costs nothing when the
+        // shop has no rates — the band collapses to zero height.
+        if (fxViewModel != null)
+          DashboardFxBand(
+            viewModel: fxViewModel!,
+            onOpenRates: onOpenExchangeRates,
+            leadingGap: spacing.lg,
+          ),
         // Directly under the headline numbers: "how is the shop doing" is
         // naturally followed by "and what does it look like right now". The
         // band takes up no space at all when there is nothing to show.

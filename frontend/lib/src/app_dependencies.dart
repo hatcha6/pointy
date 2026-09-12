@@ -33,6 +33,7 @@ import 'data/repositories/price_checker_repository.dart';
 import 'data/repositories/scales_repository.dart';
 import 'data/repositories/surveillance_repository.dart';
 import 'features/dashboard/view_models/dashboard_cameras_view_model.dart';
+import 'features/dashboard/view_models/dashboard_fx_view_model.dart';
 import 'data/repositories/printing_repository.dart';
 import 'data/repositories/purchase_repository.dart';
 import 'data/repositories/register_session_repository.dart';
@@ -151,6 +152,7 @@ class PointyAppDependencies {
     stockCountRepository = StockCountRepository(service);
     subscriptionRepository = SubscriptionRepository(service);
     fxRepository = FxRepository(service);
+    dashboardFxViewModel = DashboardFxViewModel(fxRepository);
     messagingRepository = MessagingRepository(service);
     crmRepository = CrmRepository(service);
     userRepository = UserRepository(service);
@@ -239,6 +241,12 @@ class PointyAppDependencies {
   /// the snapshot thumbnails survive navigating away and back, rather than
   /// re-reading storage and re-fetching stills on every visit to the dashboard.
   late final DashboardCamerasViewModel dashboardCamerasViewModel;
+
+  /// The dashboard's exchange-rate band. Long-lived so the rates and their
+  /// trend survive navigating away and back: they move a few times a day, and
+  /// re-fetching four requests' worth on every visit to the dashboard would be
+  /// paying a lot for a number that has not changed.
+  late final DashboardFxViewModel dashboardFxViewModel;
   late final AiChatRepository aiChatRepository;
   late final PurchaseRepository purchaseRepository;
   late final PaymentsRepository paymentsRepository;

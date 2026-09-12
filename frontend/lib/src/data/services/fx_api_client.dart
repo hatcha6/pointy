@@ -35,11 +35,17 @@ class FxApiClient {
   }
 
   /// The rate history — what the shop knew, and when.
-  Future<List<ExchangeRate>> fetchRateHistory({String? fromCode}) async {
+  ///
+  /// [pageSize] is small for a caller that only wants a recent trend; the
+  /// settings page keeps the full hundred because it is the audit trail.
+  Future<List<ExchangeRate>> fetchRateHistory({
+    String? fromCode,
+    int pageSize = 100,
+  }) async {
     final response = await _session.get(
       'exchange-rates/',
       query: {
-        'page_size': '100',
+        'page_size': '$pageSize',
         'ordering': '-effective_at',
         if (fromCode != null && fromCode.isNotEmpty) 'from_currency': fromCode,
       },

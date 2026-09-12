@@ -279,6 +279,9 @@ frontend-web: frontend-install ## Run the Flutter app as a local web server.
 frontend-preview: frontend-install ## Run the stock-count UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/stock_count_preview.dart
 
+frontend-dashboard-preview: frontend-install ## Run the owner-dashboard UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/dashboard_preview.dart
+
 frontend-cameras-preview: frontend-install ## Run the camera (DVR/NVR) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/cameras_preview.dart
 

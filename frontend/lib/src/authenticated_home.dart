@@ -90,6 +90,7 @@ import 'features/settings/view_models/shop_settings_view_model.dart';
 import 'features/settings/view_models/messaging_settings_view_model.dart';
 import 'features/settings/view_models/exchange_rates_view_model.dart';
 import 'features/settings/view_models/subscription_status_view_model.dart';
+import 'features/settings/views/exchange_rates_page.dart';
 import 'features/settings/views/shop_settings_screen.dart';
 import 'features/user_settings/views/user_settings_screen.dart';
 import 'features/users/view_models/user_management_view_model.dart';
@@ -324,6 +325,11 @@ class _AuthenticatedRoutes implements AppNavigation {
     final camerasViewModel = capabilities.canWatchCamerasLive
         ? dependencies.dashboardCamerasViewModel
         : null;
+    // Same rule for rates: a cashier holds no FX permission, so their dashboard
+    // never asks the backend for them.
+    final fxViewModel = capabilities.canViewExchangeRates
+        ? dependencies.dashboardFxViewModel
+        : null;
     return _screen(
       'dashboard',
       DashboardScreen(
@@ -346,6 +352,23 @@ class _AuthenticatedRoutes implements AppNavigation {
                 from: AppNavigationDestination.dashboard,
               )
             : null,
+        fxViewModel: fxViewModel,
+        onOpenExchangeRates: fxViewModel == null
+            ? null
+            : () => openExchangeRates(routeContext),
+      ),
+    );
+  }
+
+  /// The full exchange-rates page: every currency, the history behind each
+  /// rate, and the place to type the rate the shop actually paid. The dashboard
+  /// band is the glance; this is where a rate gets questioned.
+  void openExchangeRates(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ExchangeRatesPage(
+          viewModel: ExchangeRatesViewModel(dependencies.fxRepository),
+        ),
       ),
     );
   }

@@ -190,6 +190,12 @@ flutter run
 
 The Flutter app reads from the Django API. The POS catalog keeps a small Arabic sample fallback only for local development when the API is unavailable.
 
+Screens are reviewed without a backend through dev-only preview harnesses under
+`frontend/lib/dev/`, each with its own `make` target. The owner dashboard is
+`make frontend-dashboard-preview`
+(`?screen=dashboard|board|dark|fx|payments`) — it feeds the real screen fake
+repositories, so there is no server, no login, and no shop data involved.
+
 ## Relay Quick Start
 
 The relay is a separate Go project. It keeps the fast remote-access path out of

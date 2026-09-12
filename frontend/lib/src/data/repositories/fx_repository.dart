@@ -16,8 +16,13 @@ class FxRepository {
     return Result.guard(() => _service.fetchCurrencies());
   }
 
-  Future<Result<List<ExchangeRate>>> loadRateHistory({String? fromCode}) {
-    return Result.guard(() => _service.fetchRateHistory(fromCode: fromCode));
+  Future<Result<List<ExchangeRate>>> loadRateHistory({
+    String? fromCode,
+    int pageSize = 100,
+  }) {
+    return Result.guard(
+      () => _service.fetchRateHistory(fromCode: fromCode, pageSize: pageSize),
+    );
   }
 
   Future<Result<ExchangeRate>> recordManualRate(ManualRateDraft draft) {

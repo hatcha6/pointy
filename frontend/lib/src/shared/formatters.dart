@@ -123,11 +123,17 @@ String formatSpokenMoney(String rawValue) {
 /// genuinely moves in the third decimal, and rounding it to two would make two
 /// visibly different rates look identical.
 String formatExchangeRate(double rate, String fromCode, String toCode) {
-  final trimmed = _trimRate(rate);
   final from = _isolated('1 ${currencySymbolFor(fromCode)}');
-  final to = _isolated('$trimmed ${currencySymbolFor(toCode)}');
-  return '$from = $to';
+  return '$from = ${_isolated(formatRateQuote(rate, toCode))}';
 }
+
+/// Only the quoted side of a rate — "6.85 د.ل".
+///
+/// For surfaces that already say what is being quoted (a ticker tile headed
+/// USD, say) and would otherwise repeat "1 $ =" on every row. Same precision
+/// rule as [formatExchangeRate]: this is a rate, not a price.
+String formatRateQuote(double rate, String toCode) =>
+    '${_trimRate(rate)} ${currencySymbolFor(toCode)}';
 
 /// Drops trailing zeros without inventing precision. Written out rather than
 /// done with a capturing regex because Dart's [String.replaceFirst] takes the
