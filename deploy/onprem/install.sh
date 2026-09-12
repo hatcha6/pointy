@@ -265,18 +265,23 @@ done
 # key that is present but empty was set that way deliberately, and a key that
 # already has a value is the shop's, not ours.
 carried=0
-while IFS= read -r line; do
-  case "$line" in
-    [A-Z]*=*) ;;
-    *) continue ;;
-  esac
-  key="${line%%=*}"
-  value="${line#*=}"
-  grep -qE "^${key}=" .env && continue
-  case "$value" in *replace-with-*) continue ;; esac
-  printf '%s=%s\n' "$key" "$value" >>.env
-  carried=$((carried + 1))
-done < .env.example
+# Guarded: an incomplete bundle has no template, and redirecting from a file
+# that is not there aborts the script on Linux before the check below can name
+# what is missing - turning a clear refusal into a bare exit code.
+if [ -f .env.example ]; then
+  while IFS= read -r line; do
+    case "$line" in
+      [A-Z]*=*) ;;
+      *) continue ;;
+    esac
+    key="${line%%=*}"
+    value="${line#*=}"
+    grep -qE "^${key}=" .env && continue
+    case "$value" in *replace-with-*) continue ;; esac
+    printf '%s=%s\n' "$key" "$value" >>.env
+    carried=$((carried + 1))
+  done < .env.example
+fi
 [ "$carried" -eq 0 ] || echo "    + ${carried} key(s) this .env predated, taken from .env.example"
 
 # --- The gate. --------------------------------------------------------------
