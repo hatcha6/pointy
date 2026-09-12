@@ -89,6 +89,55 @@ check "obfuscation symbols are uploaded (else a crash is unreadable)" \
 refute "symbols are never attached to a public release" \
   "grep -qE 'gh release upload.*symbols' $RELEASE"
 
+echo "== The Windows installer is readable by Windows =="
+# Windows PowerShell 5.1 - the one on every Windows 10 POS box - decodes a .ps1
+# with no byte-order mark using the machine's ANSI codepage, NOT UTF-8. On an
+# Arabic-locale machine that is CP1256, where the third byte of a UTF-8 em-dash
+# lands on 0x94 = U+201D, which PowerShell accepts as a STRING DELIMITER. Twenty
+# em-dashes in a comment header is therefore twenty stray quotes, and the script
+# does not parse. This cost us an install day at a shop.
+#
+# Two independent defences, because either alone is one editor away from gone:
+# the file is pure ASCII (so the codepage cannot matter), and it carries a BOM
+# (so if a non-ASCII character ever comes back, it is still read as UTF-8).
+PS1=deploy/onprem/wsl/bootstrap-wsl.ps1
+check "the WSL bootstrap carries a UTF-8 BOM" \
+  "head -c3 $PS1 | cmp -s - <(printf '\\357\\273\\277')"
+# Byte-exact on purpose: a grep character class for "non-ASCII" is locale- and
+# implementation-dependent, and the obvious [^[:print:][:space:]] form silently
+# matches nothing on macOS. Deleting every ASCII byte and measuring what is left
+# cannot be argued with.
+ps1_high="$(tail -c +4 "$PS1" | LC_ALL=C tr -d '\000-\177' | wc -c | tr -d ' ')"
+if [ "$ps1_high" = 0 ]; then
+  ok "the WSL bootstrap is pure ASCII (codepage cannot corrupt it)"
+else
+  bad "the WSL bootstrap has ${ps1_high} non-ASCII byte(s); CP1256 can turn them into string delimiters"
+fi
+
+echo "== A shop can actually boot what we ship =="
+# Every ${VAR:?} in compose is a variable the stack refuses to start without.
+# If one is added to compose but not to .env.example, the release installs
+# cleanly here and strands a shop with no till.
+missing_env=""
+for key in $(grep -oE '\$\{[A-Z_][A-Z0-9_]*:\?' "$COMPOSE" | sed 's/^\${//; s/:?$//' | sort -u); do
+  grep -qE "^${key}=" deploy/onprem/.env.example || missing_env="${missing_env} ${key}"
+done
+if [ -z "$missing_env" ]; then
+  ok "every compose-required variable is present in .env.example"
+else
+  bad "compose requires these but .env.example does not carry them:${missing_env}"
+fi
+check "the installer generates a per-shop DJANGO_SECRET_KEY" \
+  "grep -q 'set_env_default DJANGO_SECRET_KEY' deploy/onprem/install.sh"
+check "the installer generates a per-shop database password" \
+  "grep -q 'set_env_default POINTY_POSTGRES_PASSWORD' deploy/onprem/install.sh"
+# A template placeholder is a non-empty string. Anything that treats one as a
+# configured value ships every shop the same secret key.
+check "template placeholders do not count as configured values" \
+  "grep -q 'replace-with' deploy/onprem/install.sh"
+check "the app reaches Postgres through the pooler, not around it" \
+  "grep -q 'POINTY_DATABASE_URL \"postgres://pointy:\${pg_password}@pgbouncer' deploy/onprem/install.sh"
+
 echo
 if [ "$fails" -ne 0 ]; then
   echo "FAILED: $fails hardening check(s)."

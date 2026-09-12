@@ -31,6 +31,25 @@ jobs:
       - name: Static assertions on what we ship
         run: bash scripts/check_release_hardening.sh
 
+  onprem-deploy:
+    name: On-prem deploy scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # These drive the real install/update scripts with docker, curl and
+      # systemd stubbed, so they need nothing installed. They were written
+      # alongside the update engine but never ran here, which is how an
+      # installer regression reaches a shop before it reaches us.
+      - name: Install and update engine
+        run: bash deploy/onprem/tests/run-tests.sh
+
+      # The Windows half. pwsh is preinstalled on the GitHub Linux runners, and
+      # these tests fake wsl.exe/msiexec/netsh, so they need no Windows at all -
+      # which matters, because the logic they cover exists specifically to
+      # handle the ways Windows misreports what it just did.
+      - name: Windows bootstrap (WSL install + LAN bridge)
+        run: pwsh -NoProfile -File deploy/onprem/wsl/tests/run-tests.ps1
+
   backend-source:
     name: Backend suite (source)
     runs-on: ubuntu-latest
