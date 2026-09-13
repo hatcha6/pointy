@@ -772,8 +772,24 @@ CORS_ALLOW_HEADERS = (
     "x-pointy-platform",
     "x-pointy-relay-token",
 )
-# Let the browser read the idempotency replay marker on the response.
-CORS_EXPOSE_HEADERS = ["Idempotency-Replayed"]
+# The mirror image of CORS_ALLOW_HEADERS, and just as easy to forget: on a
+# CROSS-origin request a browser hides every non-safelisted response header from
+# JavaScript unless it is named here. Silently, too — the header arrives on the
+# wire and simply is not there when the client reads it.
+#
+# A served web build is same-origin (nginx serves the Flutter build and proxies
+# /api), so this does not bite in production. It bites everywhere the two are
+# split: `flutter run -d web-server` against a separate backend, and any
+# deployment that serves the app from another origin. Without these entries the
+# version headers are invisible there, and the client silently falls back to
+# revalidating on its poll alone — the catalog-version push has been inert in
+# that setup since it was added.
+CORS_EXPOSE_HEADERS = [
+    "Idempotency-Replayed",
+    "X-Pointy-State",
+    "X-Pointy-Catalog-Version",
+    "X-Pointy-Discounts-Version",
+]
 CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
 POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED = env("POINTY_ANALYTICS_BACKEND_PERFORMANCE_ENABLED")
 POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS = env("POINTY_ANALYTICS_BACKEND_SLOW_REQUEST_MS")

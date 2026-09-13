@@ -15,7 +15,7 @@ The list below is the contract. When ``ApiSession`` starts sending a new header,
 this test fails until the setting is updated — which is the point.
 """
 
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 # Mirrors the non-safelisted headers set in
@@ -29,6 +29,19 @@ CLIENT_REQUEST_HEADERS = [
     "X-Pointy-Device-Id",
     "X-Pointy-Platform",
     "X-Pointy-Relay-Token",
+]
+
+# The response headers the client READS. Forgetting one does not break the web
+# build loudly the way a missing request header does — the header arrives on the
+# wire and is simply invisible to JavaScript, so whatever depends on it quietly
+# does nothing. Only cross-origin setups are affected (a served build is
+# same-origin behind nginx), which is exactly why it goes unnoticed: it works
+# in production and not while developing against a separate backend.
+CLIENT_RESPONSE_HEADERS = [
+    "Idempotency-Replayed",
+    "X-Pointy-Catalog-Version",
+    "X-Pointy-Discounts-Version",
+    "X-Pointy-State",
 ]
 
 ORIGIN = "http://localhost:8080"
@@ -88,3 +101,34 @@ class CorsPreflightTests(SimpleTestCase):
         self.assertEqual(
             response.headers.get("access-control-allow-credentials"), "true"
         )
+
+
+@override_settings(CORS_ALLOWED_ORIGINS=[ORIGIN])
+class CorsExposedResponseHeaderTests(TestCase):
+    """The other half of the contract: what the browser lets the client read."""
+
+    def _exposed(self):
+        response = self.client.get(reverse("setup-status"), HTTP_ORIGIN=ORIGIN)
+        raw = response.headers.get("access-control-expose-headers", "")
+        return {part.strip().lower() for part in raw.split(",") if part.strip()}
+
+    def test_every_header_the_client_reads_is_exposed(self):
+        exposed = self._exposed()
+        missing = [
+            header
+            for header in CLIENT_RESPONSE_HEADERS
+            if header.lower() not in exposed
+        ]
+
+        self.assertEqual(
+            missing,
+            [],
+            "CORS_EXPOSE_HEADERS is missing response header(s) the client reads. "
+            "The browser will hide them from JavaScript without any error, so "
+            "whatever depends on them silently stops working on the web build.",
+        )
+
+    def test_the_state_vector_alone_is_exposed(self):
+        """Pinned on its own: this is how every client learns anything changed,
+        so a failure should name it rather than the whole set."""
+        self.assertIn("x-pointy-state", self._exposed())
