@@ -204,7 +204,16 @@ class _PosCatalogGrid extends StatelessWidget {
     }
   }
 
-  Future<void> _selectProduct(BuildContext context, Product product) async {
+  /// Wraps the whole tap-to-add flow — variant picker, weight entry, modifier
+  /// sheet and all their nesting — so a background refresh cannot reorder the
+  /// grid under the cashier's finger midway through it.
+  Future<void> _selectProduct(BuildContext context, Product product) {
+    return viewModel.duringCriticalInteraction(
+      () => _selectProductFlow(context, product),
+    );
+  }
+
+  Future<void> _selectProductFlow(BuildContext context, Product product) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context)!;
     // The add itself returns keyboard focus to the search field (via the view

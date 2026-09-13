@@ -242,7 +242,12 @@ def perm_version() -> int:
 def bump_perm_version() -> None:
     """Orphan every cached permission set: each key embeds the version, so
     advancing it makes the old keys unreachable (they expire on their own)."""
-    if _permission_ttl() <= 0:
+    from apps.core.state_version import state_versions_enabled
+
+    # This counter has two consumers: the cache below and the state vector
+    # clients revalidate on. Either one being switched on has to keep it
+    # moving, or a client would trust a frozen number and never re-fetch.
+    if _permission_ttl() <= 0 and not state_versions_enabled():
         return  # nothing is ever cached; skip the Redis round-trip (tests/CI)
     try:
         cache.incr(_PERM_VERSION_KEY)

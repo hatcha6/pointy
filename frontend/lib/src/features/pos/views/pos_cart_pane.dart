@@ -496,23 +496,26 @@ class PosCartPane extends StatelessWidget {
   }
 
   Future<PaymentSheetResult?> _showPaymentDialog(BuildContext context) {
-    return showPosPaymentSheet(
-      context: context,
-      total: viewModel.total,
-      enableCashPayments: viewModel.enableCashPayments,
-      enableCardPayments: viewModel.enableCardPayments,
-      enableTransferPayments: viewModel.enableTransferPayments,
-      requireCardReceipt: viewModel.requireCardPaymentReceipt,
-      trustedCardTerminalIds: viewModel.trustedCardTerminalIds,
-      showPrintInvoiceToggle: viewModel.shouldShowPrintInvoiceCheckbox,
-      printInvoiceAfterPayment: viewModel.printInvoiceAfterPayment,
-      onPrintInvoiceChanged: viewModel.updatePrintInvoiceAfterPayment,
-      showShareInvoiceToggle: viewModel.shouldShowShareInvoiceCheckbox,
-      shareInvoiceAfterPayment: viewModel.shareInvoiceAfterPayment,
-      onShareInvoiceChanged: viewModel.updateShareInvoiceAfterPayment,
-      hasCustomer: viewModel.selectedCustomer != null,
-      requireCustomerForCredit: viewModel.requireCustomerForCredit,
-      proposedDueDate: viewModel.proposedCreditDueDate,
+    // Nothing may redraw the sell screen while money is being taken.
+    return viewModel.duringCriticalInteraction(
+      () => showPosPaymentSheet(
+        context: context,
+        total: viewModel.total,
+        enableCashPayments: viewModel.enableCashPayments,
+        enableCardPayments: viewModel.enableCardPayments,
+        enableTransferPayments: viewModel.enableTransferPayments,
+        requireCardReceipt: viewModel.requireCardPaymentReceipt,
+        trustedCardTerminalIds: viewModel.trustedCardTerminalIds,
+        showPrintInvoiceToggle: viewModel.shouldShowPrintInvoiceCheckbox,
+        printInvoiceAfterPayment: viewModel.printInvoiceAfterPayment,
+        onPrintInvoiceChanged: viewModel.updatePrintInvoiceAfterPayment,
+        showShareInvoiceToggle: viewModel.shouldShowShareInvoiceCheckbox,
+        shareInvoiceAfterPayment: viewModel.shareInvoiceAfterPayment,
+        onShareInvoiceChanged: viewModel.updateShareInvoiceAfterPayment,
+        hasCustomer: viewModel.selectedCustomer != null,
+        requireCustomerForCredit: viewModel.requireCustomerForCredit,
+        proposedDueDate: viewModel.proposedCreditDueDate,
+      ),
     );
   }
 }
@@ -875,10 +878,12 @@ class _CartScrollContentState extends State<_CartScrollContent> {
       await _editLineUnit(context, line);
       return;
     }
-    final weight = await showWeightEntrySheet(
-      context,
-      variant: line.variant,
-      initialQuantity: line.quantity,
+    final weight = await _viewModel.duringCriticalInteraction(
+      () => showWeightEntrySheet(
+        context,
+        variant: line.variant,
+        initialQuantity: line.quantity,
+      ),
     );
     if (weight != null && context.mounted) {
       _viewModel.setCartLineQuantity(line.lineKey, weight);
@@ -886,14 +891,16 @@ class _CartScrollContentState extends State<_CartScrollContent> {
   }
 
   Future<void> _editLineUnit(BuildContext context, CartLine line) async {
-    final selection = await showUnitQuantitySheet(
-      context,
-      product: Product.fromVariant(line.variant),
-      variant: line.variant,
-      initialUnitCode: line.unitCode.isEmpty
-          ? line.variant.unit
-          : line.unitCode,
-      initialQuantity: line.quantity,
+    final selection = await _viewModel.duringCriticalInteraction(
+      () => showUnitQuantitySheet(
+        context,
+        product: Product.fromVariant(line.variant),
+        variant: line.variant,
+        initialUnitCode: line.unitCode.isEmpty
+            ? line.variant.unit
+            : line.unitCode,
+        initialQuantity: line.quantity,
+      ),
     );
     if (selection != null && context.mounted) {
       _viewModel.setCartLineUnit(line.lineKey, selection.unit);

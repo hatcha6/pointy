@@ -43,6 +43,14 @@ x-backend-environment: &backend-environment
   POINTY_DISCOUNT_PREVIEW_CACHE_TTL: "${POINTY_DISCOUNT_PREVIEW_CACHE_TTL:-15}"
   POINTY_CATALOG_CACHE_ENABLED: "${POINTY_CATALOG_CACHE_ENABLED:-true}"
   POINTY_PRICE_LOOKUP_CACHE_TTL: "${POINTY_PRICE_LOOKUP_CACHE_TTL:-30}"
+  # The "what changed" counters every client revalidates on: an admin's edit
+  # reaches the tills within one poll instead of at the next restart. Turning
+  # this off does not break anything — clients fall back to their own TTLs and
+  # go back to showing stale prices for a while.
+  POINTY_STATE_VERSION_ENABLED: "${POINTY_STATE_VERSION_ENABLED:-true}"
+  # Seconds between an idle client's polls of /api/state/. Served in the
+  # response, so raising it slows every till without a client release.
+  POINTY_STATE_POLL_INTERVAL_SECONDS: "${POINTY_STATE_POLL_INTERVAL_SECONDS:-15}"
   # Extra Postgres workers the analytics/diagnostics export may fan its COPY
   # across. The per-row formatting is CPU-bound and parallelises ~1.3-1.4x, but
   # every worker competes with the POS while the shop trades. Postgres here is

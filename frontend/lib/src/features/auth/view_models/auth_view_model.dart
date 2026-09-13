@@ -84,6 +84,35 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Re-read who we are, quietly.
+  ///
+  /// Called when the server's permissions counter moves: the cashier is still
+  /// signed in, but what they may do has changed and the UI has to reshape.
+  /// [loadCurrentUser] cannot serve here — it sets [AuthStatus.checking]
+  /// first, which sends the whole app back to the loading gate mid-shift.
+  Future<void> refreshCurrentUser() async {
+    if (_status != AuthStatus.authenticated) {
+      return;
+    }
+    final result = await _authRepository.loadCurrentUser();
+    switch (result) {
+      case Ok<PosUser?>(value: final user):
+        if (user == null) {
+          // The session really is gone — disabled account, or signed out from
+          // elsewhere. That is a logout, and it has to take effect.
+          _currentUser = null;
+          _status = await _resolveUnauthenticatedStatus();
+        } else {
+          _currentUser = user;
+        }
+        notifyListeners();
+      case Error<PosUser?>():
+        // Keep the permissions we have. The network blinking must not throw a
+        // cashier out mid-sale; the next bump (or the next login) tries again.
+        break;
+    }
+  }
+
   Future<AuthStatus> _resolveUnauthenticatedStatus() async {
     final result = await _authRepository.loadOnboardingStatus();
     return switch (result) {

@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart' show ValueNotifier, kIsWeb;
 
 import 'core/analytics_engine.dart';
 import 'core/result.dart';
+import 'core/revalidation.dart';
+import 'core/server_state.dart';
 import 'data/models/analytics_event.dart';
 import 'data/models/device_settings.dart';
 import 'data/repositories/ai_chat_repository.dart';
@@ -53,6 +55,7 @@ import 'data/services/connection_coordinator.dart';
 import 'data/services/connection_profile_storage.dart';
 import 'data/services/connection_status_controller.dart';
 import 'data/services/pos_api_service.dart';
+import 'data/services/server_state_watcher.dart';
 import 'data/services/pos_http_client.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'features/companion/companion_bridge.dart';
@@ -68,6 +71,7 @@ import 'features/attendance/view_models/attendance_view_model.dart';
 import 'features/migration/view_models/migration_view_model.dart';
 import 'features/employees/view_models/employee_payroll_view_model.dart';
 import 'features/notifications/view_models/notification_center_view_model.dart';
+import 'features/pos/view_models/pos_revalidation.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'features/printing/view_models/printing_settings_view_model.dart';
 import 'features/invoices/view_models/invoice_list_view_model.dart';
@@ -187,9 +191,119 @@ class PointyAppDependencies {
       analyticsEngine: analyticsEngine,
       scanFeedback: ScanFeedbackSounds.instance.play,
     );
+    revalidator = Revalidator(service.serverState);
+    serverStateWatcher = ServerStateWatcher(
+      fetchState: service.fetchServerState,
+      state: service.serverState,
+    );
+    _registerRevalidationWatchers();
+  }
+
+  /// Everything that must refresh itself when the server says its data moved.
+  ///
+  /// This is the whole list, in one place on purpose: a screen that caches or
+  /// holds data and is missing from here is a screen that will show a stale
+  /// number until someone restarts the app, and that is far easier to notice
+  /// against a list than scattered across twenty view models.
+  void _registerRevalidationWatchers() {
+    // Permissions are the exception that purges instead of refreshing: a
+    // revoked permission must not leave the data it used to authorise sitting
+    // readable in a cache. Drop every cached body, then re-resolve who we are
+    // so the UI reshapes to whatever this user may now do.
+    revalidator.watch(
+      label: 'permissions',
+      domains: const {ServerStateDomain.permissions},
+      debounce: Duration.zero,
+      onStale: () async {
+        service.purgeCachedResponses();
+        catalogRepository.invalidateAll();
+        await authViewModel.refreshCurrentUser();
+        await _refreshSessionViewModels();
+      },
+    );
+    // The sell screen's own rules live with the sell screen.
+    registerPosRevalidation(
+      revalidator: revalidator,
+      posViewModel: posViewModel,
+    );
+    // The back-office screens. Each is a view model that loads once and then
+    // lives as long as the session, so without this every one of them shows
+    // whatever it read the first time it was opened. They are nullable: a
+    // screen nobody has visited has nothing to refresh, and stays that way.
+    revalidator.watch(
+      label: 'contacts',
+      domains: const {ServerStateDomain.contacts},
+      onStale: () async => _contactManagementViewModel?.loadContacts(),
+    );
+    revalidator.watch(
+      label: 'discounts',
+      domains: const {ServerStateDomain.discounts},
+      onStale: () async => _discountManagementViewModel?.loadRules(),
+    );
+    revalidator.watch(
+      label: 'employees',
+      domains: const {ServerStateDomain.employees},
+      onStale: () async => _employeePayrollViewModel?.loadEmployees(),
+    );
+    revalidator.watch(
+      label: 'users',
+      domains: const {ServerStateDomain.users},
+      onStale: () async => _activityLogViewModel?.loadUsers(),
+    );
+    revalidator.watch(
+      label: 'notifications',
+      domains: const {
+        ServerStateDomain.notifications,
+        ServerStateDomain.notificationsUser,
+      },
+      onStale: () async => _notificationCenterViewModel?.refresh(),
+    );
+    // Purchasing reads the same catalog the POS does, and buys at prices the
+    // back office edits.
+    revalidator.watch(
+      label: 'purchasing-catalog',
+      domains: const {ServerStateDomain.catalogDefs},
+      onStale: () async => _purchaseViewModel?.loadCatalog(),
+    );
+    revalidator.watch(
+      label: 'purchasing-warehouses',
+      domains: const {ServerStateDomain.warehouses},
+      onStale: () async => _purchaseViewModel?.loadWarehouses(),
+    );
+    revalidator.watch(
+      label: 'fx',
+      domains: const {ServerStateDomain.fx},
+      onStale: () async => dashboardFxViewModel.load(),
+    );
+    // The dashboard is a read model over almost everything, and its repository
+    // caches a snapshot; anything material moving should re-read it.
+    revalidator.watch(
+      label: 'dashboard',
+      domains: const {
+        ServerStateDomain.catalogDefs,
+        ServerStateDomain.settings,
+        ServerStateDomain.stock,
+      },
+      // Stock moves on every sale in the shop, so this one waits a beat
+      // longer: a dashboard a few seconds behind is fine, a dashboard
+      // re-reading itself on every checkout in the building is not.
+      debounce: const Duration(seconds: 5),
+      onStale: () async {
+        // Its repository holds a 45s snapshot; without dropping that first the
+        // refresh would be answered from the cache it exists to refresh.
+        dashboardRepository.invalidateSnapshots();
+        await _dashboardViewModel?.loadDashboard();
+      },
+    );
   }
 
   final PosApiService service;
+
+  /// Turns the server's "what changed" counters into screen refreshes.
+  late final Revalidator revalidator;
+
+  /// Keeps an idle till hearing about changes it would otherwise miss.
+  late final ServerStateWatcher serverStateWatcher;
   late final ClientUpdateService clientUpdateService;
   final bool _enableAutomaticConnection;
   late final AnalyticsRepository analyticsRepository;
@@ -470,6 +584,9 @@ class PointyAppDependencies {
         ),
       );
       unawaited(_startCompanionBridge());
+      // Start listening for other devices' edits only once there is a session
+      // to make the request with; an anonymous poll would just 401 forever.
+      serverStateWatcher.start();
       posViewModel.loadCurrentRegisterSession();
       posViewModel.loadCheckoutSettings();
       unawaited(posViewModel.restorePersistedSessions('${currentUser.id}'));
@@ -487,6 +604,7 @@ class PointyAppDependencies {
     if (authViewModel.status == AuthStatus.unauthenticated) {
       _lastAuthenticatedUserId = null;
       analyticsEngine.setCurrentUser(null);
+      serverStateWatcher.stop();
       _stopCompanionBridge();
       _disposeSessionViewModels();
     }
@@ -542,6 +660,8 @@ class PointyAppDependencies {
   }
 
   void dispose() {
+    serverStateWatcher.dispose();
+    revalidator.dispose();
     connectionStatus.removeListener(_handleConnectionStatusChanged);
     connectionStatus.dispose();
     connectionCoordinator.dispose();

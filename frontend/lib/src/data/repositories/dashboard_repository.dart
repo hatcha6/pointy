@@ -35,6 +35,15 @@ class DashboardRepository {
     return result;
   }
 
+  /// Drop the cached snapshots so the next read goes to the server.
+  ///
+  /// For a revalidation: the caller already knows the server says this data
+  /// moved, and a refresh answered from the very cache it is meant to refresh
+  /// would silently do nothing for up to [_snapshotTtl].
+  void invalidateSnapshots() {
+    _snapshotsByDays.clear();
+  }
+
   Future<Result<DashboardAiDigest>> loadAiDigest({required int days}) {
     return Result.guard(() => _service.fetchDashboardAiDigest(days: days));
   }

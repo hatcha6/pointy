@@ -102,6 +102,7 @@ from apps.core.backup_views import (
     RestoreUploadView,
 )
 from apps.core.dashboard import DashboardView
+from apps.core.state_views import state_view
 from apps.clients.views import (
     ClientFileView,
     ClientLandingView,
@@ -321,6 +322,9 @@ urlpatterns = [
         name="report-period-lock",
     ),
     path("api/dashboard/", DashboardView.as_view(), name="dashboard"),
+    # The "what changed" counters clients poll while idle. Redis-only, 304 on
+    # an unchanged vector — see apps.core.state_views.
+    path("api/state/", state_view, name="state"),
     path(
         "api/expense-ledger/",
         ExpenseLedgerView.as_view(),

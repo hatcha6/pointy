@@ -131,10 +131,12 @@ import 'scales_api_client.dart';
 import 'unit_of_measure_api_client.dart';
 import 'fx_api_client.dart';
 import 'sales_channel_api_client.dart';
+import 'server_state_api_client.dart';
 import 'shop_settings_api_client.dart';
 import 'stock_count_api_client.dart';
 import 'user_api_client.dart';
 import '../../core/app_version.dart';
+import '../../core/server_state.dart';
 
 export 'api_session.dart' show PosApiException;
 
@@ -186,14 +188,26 @@ class PosApiService {
     _ai = AiApiClient(_session);
     _companion = CompanionApiClient(_session);
     _surveillance = SurveillanceApiClient(_session);
+    _serverState = ServerStateApiClient(_session);
   }
 
   String get baseUrl => _session.baseUrl;
   String? get catalogVersionToken => _session.catalogVersionToken;
   String? get discountsVersionToken => _session.discountsVersionToken;
+
+  /// The server's "what changed" counters, updated by every response that
+  /// passes through this service. Caches key on it; screens listen to it.
+  ServerStateNotifier get serverState => _session.serverState;
+
+  /// One poll of the state endpoint, for [ServerStateWatcher].
+  Future<ServerStateSnapshot> fetchServerState() => _serverState.fetchState();
+
+  /// Drop every cached response body — see [PosApiSession.purgeCachedResponses].
+  void purgeCachedResponses() => _session.purgeCachedResponses();
   bool get usesRelay => _session.usesRelay;
 
   late final PosApiSession _session;
+  late final ServerStateApiClient _serverState;
 
   /// Stamp this install's identity on every outgoing request so the backend can
   /// name the device behind one it rejects.

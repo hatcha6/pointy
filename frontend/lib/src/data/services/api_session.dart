@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../../core/app_version.dart';
+import '../../core/server_state.dart';
 
 typedef ApiPerformanceRecorder =
     void Function(ApiRequestPerformance performance);
@@ -148,20 +149,27 @@ class PosApiSession {
   final LinkedHashMap<String, _ConditionalCacheEntry> _conditionalCache =
       LinkedHashMap();
 
-  /// The backend's catalog version, pushed on catalog/preview/checkout
-  /// responses (X-Pointy-Catalog-Version). Client-side catalog caches key
-  /// their entries on this token: any product/price/stock/discount change
-  /// server-side advances it, instantly orphaning stale entries — the till
-  /// learns within one interaction, no polling. Null until first seen (or on
-  /// old backends), in which case caches fall back to their TTLs alone.
-  String? get catalogVersionToken => _catalogVersionToken;
-  String? _catalogVersionToken;
+  /// The backend's "what changed" counters, pushed on EVERY API response
+  /// (X-Pointy-State). Caches key their entries on the domain they depend on,
+  /// and screens listen for the domains they display, so an edit made anywhere
+  /// reaches this device through whatever request it makes next — and through
+  /// [ServerStateWatcher]'s poll when it makes none at all.
+  ///
+  /// Owned here because this is the one place every response passes through.
+  /// Empty until the first response (or on a backend that publishes nothing),
+  /// in which case every consumer falls back to the TTLs it already had.
+  final ServerStateNotifier serverState = ServerStateNotifier();
 
-  /// Discounts twin of [catalogVersionToken] (X-Pointy-Discounts-Version):
-  /// advances on any discount-rule edit. The POS latches "no active rules" at
-  /// a specific value and skips preview requests while it still matches.
-  String? get discountsVersionToken => _discountsVersionToken;
-  String? _discountsVersionToken;
+  /// The composite catalog stamp. Kept as a named getter because it is what
+  /// the POS scan/search caches key on; it is just one entry in [serverState].
+  String? get catalogVersionToken =>
+      serverState.versionOf(ServerStateDomain.catalog);
+
+  /// Discounts twin of [catalogVersionToken]: advances on any discount-rule
+  /// edit. The POS latches "no active rules" at a specific value and skips
+  /// preview requests while it still matches.
+  String? get discountsVersionToken =>
+      serverState.versionOf(ServerStateDomain.discounts);
 
   String get baseUrl => _baseUrl;
   bool get usesRelay => _relayToken.isNotEmpty;
@@ -203,8 +211,9 @@ class PosApiSession {
     _conditionalCache.clear();
     // New callers must not join requests still in flight to the old target.
     _inFlightGets.clear();
-    _catalogVersionToken = null;
-    _discountsVersionToken = null;
+    // Counters belong to one backend. Carrying them across would make the new
+    // server's first vector look unchanged when in truth we know nothing.
+    serverState.reset();
   }
 
   /// In-flight GET coalescing: two widgets asking for the same URL at the same
@@ -681,14 +690,7 @@ class PosApiSession {
   }
 
   void captureResponseState(http.Response response) {
-    final catalogVersion = response.headers['x-pointy-catalog-version'];
-    if (catalogVersion != null && catalogVersion.isNotEmpty) {
-      _catalogVersionToken = catalogVersion;
-    }
-    final discountsVersion = response.headers['x-pointy-discounts-version'];
-    if (discountsVersion != null && discountsVersion.isNotEmpty) {
-      _discountsVersionToken = discountsVersion;
-    }
+    serverState.apply(_readStateVector(response.headers));
 
     final setCookie = response.headers['set-cookie'];
     if (setCookie == null || setCookie.isEmpty) {
@@ -721,8 +723,37 @@ class PosApiSession {
     _csrfToken = null;
     _conditionalCache.clear();
     _inFlightGets.clear();
-    _catalogVersionToken = null;
-    _discountsVersionToken = null;
+    serverState.reset();
+  }
+
+  /// Throw away every cached response body without touching the session.
+  ///
+  /// The permissions counter moving is the one change that cannot be answered
+  /// by re-fetching: a permission that was just revoked would leave the data it
+  /// used to authorise sitting readable in the conditional-GET cache, and an
+  /// If-None-Match against it would even be answered 304. So that domain
+  /// purges rather than refreshes.
+  void purgeCachedResponses() {
+    _conditionalCache.clear();
+    _inFlightGets.clear();
+  }
+
+  /// The state vector a response carries. Older backends send only the two
+  /// legacy single-value headers; folding them into the same map means there
+  /// is one store of versions on the client rather than three.
+  Map<String, String> _readStateVector(Map<String, String> headers) {
+    final vector = Map<String, String>.of(
+      parseServerStateHeader(headers['x-pointy-state']),
+    );
+    final catalogVersion = headers['x-pointy-catalog-version'];
+    if (catalogVersion != null && catalogVersion.isNotEmpty) {
+      vector.putIfAbsent(ServerStateDomain.catalog, () => catalogVersion);
+    }
+    final discountsVersion = headers['x-pointy-discounts-version'];
+    if (discountsVersion != null && discountsVersion.isNotEmpty) {
+      vector.putIfAbsent(ServerStateDomain.discounts, () => discountsVersion);
+    }
+    return vector;
   }
 
   Future<http.Response> _send({

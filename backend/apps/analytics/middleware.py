@@ -322,6 +322,12 @@ def _should_record_request_event(request, *, status_code, severity):
     *content* serves (product images) are the highest-volume 2xx endpoint once
     a catalog screen scrolls; keep only the slow/error ones.
 
+    The state-version poll is the same shape as a 304 even when it answers
+    200: every till asks every few seconds, and in a busy shop the answer keeps
+    changing (each sale moves the stock counter), so the 304 exclusion alone
+    would not cover it. A successful poll carries no signal — only its slow and
+    failing cases are kept.
+
     The ingest endpoint itself is excluded outright. Recording a telemetry row
     about the delivery of telemetry is circular, and in the field it was the
     single largest thing in the database: a client stuck in a rejection loop
@@ -334,6 +340,10 @@ def _should_record_request_event(request, *, status_code, severity):
         return False
     if _is_analytics_ingest_path(getattr(request, "path", "")):
         return False
+    if severity == AnalyticsEvent.Severity.INFO and _is_state_poll_path(
+        getattr(request, "path", "")
+    ):
+        return False
     if severity == AnalyticsEvent.Severity.INFO and _is_attachment_content_path(
         getattr(request, "path", "")
     ):
@@ -343,6 +353,10 @@ def _should_record_request_event(request, *, status_code, severity):
 
 def _is_analytics_ingest_path(path):
     return path.startswith("/api/analytics-events/ingest")
+
+
+def _is_state_poll_path(path):
+    return path.rstrip("/") == "/api/state"
 
 
 def _is_attachment_content_path(path):

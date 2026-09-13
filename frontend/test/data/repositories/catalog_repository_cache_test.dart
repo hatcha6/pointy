@@ -152,4 +152,80 @@ void main() {
 
     expect(requests, 3);
   });
+
+  test('a revalidation bypasses the page cache it is refreshing', () async {
+    // The caller is here *because* the server said this data moved. Answering
+    // from the local page cache would refresh nothing — and the counter that
+    // moved (catalog_defs) is not the one the cache keys on (catalog).
+    final repository = CatalogRepository(serviceWith(version: '7'));
+    const query = ProductQuery(search: 'فلتر');
+
+    await repository.loadProducts(query: query, page: 1);
+    await repository.loadProducts(query: query, page: 1);
+    expect(requests, 1);
+
+    await repository.loadProducts(query: query, page: 1, bypassCache: true);
+    expect(requests, 2);
+  });
+
+  test(
+    'scale rules re-read when the scales counter moves, not the catalog',
+    () async {
+      // Keying them on the composite catalog token would put a request on the
+      // scan path after every sale in the shop; keying them on their own domain
+      // means another device's rule edit lands immediately instead of waiting
+      // out a ten-minute TTL.
+      var state = 'catalog=7,scales=1';
+      requests = 0;
+      final service = PosApiService(
+        client: MockClient((request) async {
+          requests += 1;
+          return http.Response(
+            jsonEncode({'count': 0, 'next': null, 'results': []}),
+            200,
+            headers: {'x-pointy-state': state},
+          );
+        }),
+        baseUrl: 'http://pointy.test/api',
+      );
+      final repository = CatalogRepository(service);
+
+      await repository.activeScaleRules();
+      await repository.activeScaleRules();
+      final afterCaching = requests;
+      expect(afterCaching, greaterThan(0));
+
+      // A sale elsewhere moves the catalog counter: the rules are untouched.
+      state = 'catalog=8,scales=1';
+      await service.fetchProducts(query: const ProductQuery(), page: 1);
+      final afterCatalogMove = requests;
+      await repository.activeScaleRules();
+      expect(requests, afterCatalogMove, reason: 'still served locally');
+
+      // Somebody edits a rule: the next scan re-reads them.
+      state = 'catalog=8,scales=2';
+      await service.fetchProducts(query: const ProductQuery(), page: 1);
+      final afterRuleEdit = requests;
+      await repository.activeScaleRules();
+      expect(requests, afterRuleEdit + 1);
+    },
+  );
+
+  test(
+    'invalidateAll drops everything a revoked permission could expose',
+    () async {
+      final repository = CatalogRepository(serviceWith(version: '7'));
+      const query = ProductQuery(search: 'فلتر');
+
+      await repository.loadProducts(query: query, page: 1);
+      await repository.resolveBarcode('6291041500213');
+      final afterWarmUp = requests;
+
+      repository.invalidateAll();
+
+      await repository.loadProducts(query: query, page: 1);
+      await repository.resolveBarcode('6291041500213');
+      expect(requests, greaterThan(afterWarmUp));
+    },
+  );
 }

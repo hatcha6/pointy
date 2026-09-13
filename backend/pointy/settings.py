@@ -180,9 +180,11 @@ MIDDLEWARE = [
     # they run after permission checks, so a request destined to 401 never
     # reaches one.
     "apps.core.anonymous_throttle.AnonymousBurstCeilingMiddleware",
-    # Pushes the catalog version to clients on every API response so POS-side
-    # scan/search caches invalidate deterministically (apps.catalog.cache).
-    "apps.catalog.middleware.CatalogVersionHeaderMiddleware",
+    # Pushes the state-version vector to clients on every API response so
+    # their caches and loaded screens revalidate deterministically
+    # (apps.core.state_version). Also stamps the two legacy single-value
+    # headers older clients know, from the same read.
+    "apps.core.state_middleware.StateVersionHeaderMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -1028,6 +1030,20 @@ POINTY_ACTIVE_PRODUCT_CACHE_TTL = (
 # (304 on unchanged polls) and invalidates the price-checker lookup cache.
 POINTY_CATALOG_CACHE_ENABLED = (
     False if TESTING else env.bool("POINTY_CATALOG_CACHE_ENABLED", default=True)
+)
+# State-version vector (apps.core.state_version): the "what changed" counters
+# published on every API response and polled by idle clients, so a till's caches
+# and loaded screens revalidate the moment an admin edits anything. Forced off
+# under tests for the same reason as the catalog stamp — test rollbacks do not
+# fire signals, so a version bumped in one test would leak into the next; the
+# dedicated tests opt back in with override_settings.
+POINTY_STATE_VERSION_ENABLED = (
+    False if TESTING else env.bool("POINTY_STATE_VERSION_ENABLED", default=True)
+)
+# How often clients poll /api/state/ while in the foreground. Served in the
+# response body, so raising it slows every till down without a client release.
+POINTY_STATE_POLL_INTERVAL_SECONDS = env.int(
+    "POINTY_STATE_POLL_INTERVAL_SECONDS", default=15
 )
 # Price-checker barcode lookups (seconds; 0 disables). Version-keyed against
 # catalog + discount edits; the TTL only bounds discount time-window boundaries.

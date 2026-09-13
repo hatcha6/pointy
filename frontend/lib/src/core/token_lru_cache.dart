@@ -45,6 +45,14 @@ class TokenLruCache<T> {
     }
   }
 
+  /// The stored value ignoring both the token and the TTL, or null if nothing
+  /// was ever stored.
+  ///
+  /// For the one case where stale beats empty: a load that *failed*. A scale
+  /// rule from ten minutes ago still reads the label correctly; refusing the
+  /// scan because the network blinked does not.
+  T? readStale(String key) => _entries[key]?.value;
+
   void clear() {
     _entries.clear();
   }

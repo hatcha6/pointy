@@ -61,7 +61,12 @@ def _read_version(key) -> int | None:
 
 
 def _bump(key) -> None:
-    if not notifications_cache_enabled():
+    from apps.core.state_version import state_versions_enabled
+
+    # This counter has two consumers: the cache below and the state vector
+    # clients revalidate on. Either one being switched on has to keep it
+    # moving, or a client would trust a frozen number and never re-fetch.
+    if not notifications_cache_enabled() and not state_versions_enabled():
         return
     try:
         cache.incr(key)

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
@@ -297,6 +298,11 @@ class PosViewModel extends ChangeNotifier {
   // print its Z-Report after the active session has already been cleared.
   int? _lastClosedRegisterSessionId;
   int _catalogRequestVersion = 0;
+
+  /// How many already-loaded catalog pages a silent refresh re-reads. Three is
+  /// the point where keeping the cashier's place stops being worth the extra
+  /// requests every till would make at the same moment.
+  static const int _maxSilentRefreshPages = 3;
   Future<void>? _catalogLoadFuture;
   ProductQuery? _catalogLoadFutureQuery;
   Future<void>? _checkoutSettingsLoadFuture;
@@ -404,6 +410,63 @@ class PosViewModel extends ChangeNotifier {
   bool get printInvoiceAfterPayment => _printInvoiceAfterPayment;
   bool get shareInvoiceAfterPayment => _shareInvoiceAfterPayment;
   Customer? get selectedCustomer => _selectedCustomer;
+
+  /// Whether a background refresh may touch the screen right now.
+  ///
+  /// The cashier's hands are the constraint, not the data's. Swapping the grid
+  /// out from under a tap, or re-reading settings while a payment is being
+  /// taken, is worse than the staleness it fixes — so anything the server
+  /// pushes while this is false is held, not dropped, and applied the moment it
+  /// turns true (see [Revalidator]).
+  ///
+  /// An open cart is deliberately NOT a reason to refuse: carts stay open for
+  /// minutes at a time, refreshing the grid never touches one, and a cashier
+  /// who is mid-sale is exactly the person who must not be shown last week's
+  /// price on the next item they add.
+  bool get canRevalidateNow =>
+      !_isCheckingOut && !isResolvingBarcode && _criticalInteractionDepth == 0;
+
+  /// A depth, not a flag: these nest (a variant picker opening a weight sheet
+  /// opening a modifier sheet), and an inner sheet closing must not reopen the
+  /// gate while an outer one is still up.
+  int _criticalInteractionDepth = 0;
+
+  /// Called by the screens that own a moment nothing may interrupt — the
+  /// payment sheet, a quantity edit, a modifier picker. Balanced calls; the
+  /// closing one reopens the gate and lets held refreshes run.
+  void beginCriticalInteraction() {
+    _criticalInteractionDepth += 1;
+    _syncRevalidationGate();
+  }
+
+  /// Run [action] with the gate held shut, reopening it however [action] ends.
+  ///
+  /// Prefer this to the raw pair: a sheet that throws or is dismissed by the
+  /// system back gesture would otherwise leave the gate shut for the rest of
+  /// the shift, and that till would quietly stop hearing about price changes.
+  Future<T> duringCriticalInteraction<T>(Future<T> Function() action) async {
+    beginCriticalInteraction();
+    try {
+      return await action();
+    } finally {
+      endCriticalInteraction();
+    }
+  }
+
+  void endCriticalInteraction() {
+    if (_criticalInteractionDepth == 0) {
+      return;
+    }
+    _criticalInteractionDepth -= 1;
+    _syncRevalidationGate();
+  }
+
+  /// Invoked whenever the gate above may have just opened. Wired to
+  /// [Revalidator.gateOpened] so held refreshes land at the first safe moment.
+  void Function()? _onInteractionSettled;
+  set onInteractionSettled(void Function()? callback) =>
+      _onInteractionSettled = callback;
+
   bool get hasMoreProducts => _hasMoreProducts;
   String? get errorMessage => _errorMessage;
   String get couponCode => _couponCode;
@@ -498,8 +561,25 @@ class PosViewModel extends ChangeNotifier {
       return;
     }
     notifyListeners();
+    _syncRevalidationGate();
     _schedulePersist();
   }
+
+  /// Every state transition in the POS passes through [_notifyChanged], so
+  /// watching it is how a held refresh finds its safe moment without each of
+  /// the dozen places that finish a sale, a scan or a dialog having to
+  /// remember to say so — the one that forgot would be a till stuck stale.
+  /// Only the rising edge fires: a checkout ending reopens the gate, a cart
+  /// edit while it was already open is not news.
+  void _syncRevalidationGate() {
+    final open = canRevalidateNow;
+    if (open && !_gateWasOpen) {
+      _onInteractionSettled?.call();
+    }
+    _gateWasOpen = open;
+  }
+
+  bool _gateWasOpen = true;
 
   @override
   void dispose() {

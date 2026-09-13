@@ -67,6 +67,7 @@ class _FakeCatalogRepository extends CatalogRepository {
   Future<Result<ProductPage>> loadProducts({
     required ProductQuery query,
     int page = 1,
+    bool bypassCache = false,
   }) async {
     return const Ok(ProductPage(products: [_bread], hasMore: false));
   }

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../../core/result.dart';
+import '../../core/server_state.dart';
 import '../../core/token_lru_cache.dart';
 import '../../shared/barcode/scale_barcode.dart';
 import '../../shared/units.dart';
@@ -56,32 +57,44 @@ class CatalogRepository {
   );
 
   // Scale rules describe a *layout*, not a price, and a shop changes one about
-  // as often as it buys a scale. So they are cached on a plain TTL rather than
-  // the catalog version token — which moves on every stock save and would put a
-  // request on the scan path for nothing. The settings screen clears them the
-  // moment a rule is edited, so the only staleness left is another device's
-  // edit, bounded by the TTL.
+  // as often as it buys a scale. Keying them on the composite catalog token
+  // would put a request on the scan path after every sale in the shop, so they
+  // ride their own `scales` domain: it moves only when a rule is actually
+  // edited, which makes another device's edit land immediately instead of
+  // waiting out a ten-minute TTL. The TTL stays as the backstop for a backend
+  // that publishes no versions at all.
   static const Duration _scaleRuleTtl = Duration(minutes: 10);
-  List<ScaleBarcodeRule>? _scaleRules;
-  DateTime? _scaleRulesLoadedAt;
+  static const String _singleton = 'singleton';
+  final TokenLruCache<List<ScaleBarcodeRule>> _scaleRulesCache = TokenLruCache(
+    capacity: 1,
+    ttl: _scaleRuleTtl,
+  );
 
-  // The unit registry, cached the same way and for the same reason. It answers
-  // one question the till needs and the variant payload deliberately does not
-  // carry: whether a product's base unit may be sold in fractions. Putting it
-  // on every variant row would cost a query per row in the catalog payload —
-  // the hottest response in the app — to repeat one of about a dozen answers.
-  Map<String, UnitOfMeasure>? _unitRegistry;
-  DateTime? _unitRegistryLoadedAt;
+  // The unit registry, cached the same way — on `catalog_defs`, because a unit
+  // is a definition. It answers one question the till needs and the variant
+  // payload deliberately does not carry: whether a product's base unit may be
+  // sold in fractions. Putting it on every variant row would cost a query per
+  // row in the catalog payload — the hottest response in the app — to repeat
+  // one of about a dozen answers.
+  final TokenLruCache<Map<String, UnitOfMeasure>> _unitRegistryCache =
+      TokenLruCache(capacity: 1, ttl: _scaleRuleTtl);
 
+  String? _domainToken(String domain) => _service.serverState.versionOf(domain);
+
+  /// [bypassCache] is for a *revalidation*: the caller already knows the server
+  /// says this data moved, so answering from the cache it is refreshing would
+  /// defeat the point. Normally the token check below is enough — but the
+  /// token and the reason for refreshing are two different counters, and a
+  /// revalidation must not depend on them having moved together.
   Future<Result<ProductPage>> loadProducts({
     required ProductQuery query,
     int page = 1,
+    bool bypassCache = false,
   }) async {
     final cacheKey = _productPageCacheKey(query, page);
-    final cached = _productPageCache.read(
-      cacheKey,
-      _service.catalogVersionToken,
-    );
+    final cached = bypassCache
+        ? null
+        : _productPageCache.read(cacheKey, _service.catalogVersionToken);
     if (cached != null) {
       return Ok(cached);
     }
@@ -567,20 +580,19 @@ class CatalogRepository {
   Future<List<ScaleBarcodeRule>> activeScaleRules({
     bool refresh = false,
   }) async {
-    final cached = _scaleRules;
-    final loadedAt = _scaleRulesLoadedAt;
-    final fresh =
-        loadedAt != null && DateTime.now().difference(loadedAt) < _scaleRuleTtl;
-    if (!refresh && cached != null && fresh) {
+    final token = _domainToken(ServerStateDomain.scales);
+    final cached = _scaleRulesCache.read(_singleton, token);
+    if (!refresh && cached != null) {
       return cached;
     }
     try {
       final rules = orderScaleRules(await _service.fetchScaleBarcodeRules());
-      _scaleRules = rules;
-      _scaleRulesLoadedAt = DateTime.now();
+      _scaleRulesCache.write(_singleton, rules, token);
       return rules;
     } catch (_) {
-      return cached ?? const <ScaleBarcodeRule>[];
+      // Stale rules still read the label. Refusing the scan does not.
+      return _scaleRulesCache.readStale(_singleton) ??
+          const <ScaleBarcodeRule>[];
     }
   }
 
@@ -590,11 +602,9 @@ class CatalogRepository {
   /// falls back to the built-in unit codes rather than refusing to read a
   /// label.
   Future<Map<String, UnitOfMeasure>> _units() async {
-    final loadedAt = _unitRegistryLoadedAt;
-    final fresh =
-        loadedAt != null && DateTime.now().difference(loadedAt) < _scaleRuleTtl;
-    final cached = _unitRegistry;
-    if (cached != null && fresh) {
+    final token = _domainToken(ServerStateDomain.catalogDefs);
+    final cached = _unitRegistryCache.read(_singleton, token);
+    if (cached != null) {
       return cached;
     }
     try {
@@ -603,14 +613,14 @@ class CatalogRepository {
         final registry = {
           for (final unit in value) unit.code.trim().toLowerCase(): unit,
         };
-        _unitRegistry = registry;
-        _unitRegistryLoadedAt = DateTime.now();
+        _unitRegistryCache.write(_singleton, registry, token);
         return registry;
       }
     } catch (_) {
       // Unreachable registry: the built-in codes still ring kilograms.
     }
-    return cached ?? const <String, UnitOfMeasure>{};
+    return _unitRegistryCache.readStale(_singleton) ??
+        const <String, UnitOfMeasure>{};
   }
 
   /// Whether a product's base unit may be sold in fractions.
@@ -664,11 +674,21 @@ class CatalogRepository {
 
   /// Drop the cached rules so the next scan re-reads them. Called after an edit.
   void invalidateScaleRules() {
-    _scaleRules = null;
-    _scaleRulesLoadedAt = null;
-    _unitRegistry = null;
-    _unitRegistryLoadedAt = null;
+    _scaleRulesCache.clear();
+    _unitRegistryCache.clear();
     _barcodeCache.clear();
+  }
+
+  /// Drop everything this repository has cached.
+  ///
+  /// For the one change no re-fetch can answer: the signed-in user's
+  /// permissions moved. What they may see has changed, so nothing read under
+  /// the old ones may survive to be shown under the new ones.
+  void invalidateAll() {
+    _barcodeCache.clear();
+    _productPageCache.clear();
+    _scaleRulesCache.clear();
+    _unitRegistryCache.clear();
   }
 
   Future<Result<List<ScaleBarcodeRule>>> loadScaleBarcodeRules({

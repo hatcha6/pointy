@@ -83,6 +83,59 @@ extension PosCatalogActions on PosViewModel {
     _notifyChanged();
   }
 
+  /// Silently re-read what the grid is already showing.
+  ///
+  /// The refresh a price edit on another device triggers. Unlike
+  /// [loadCatalog] it raises no loading state and empties nothing: the tiles
+  /// stay on screen and their contents are swapped when the new page arrives,
+  /// so a cashier mid-shift sees the price change and nothing else. Pages the
+  /// cashier had already scrolled through are re-read too, up to
+  /// [PosViewModel._maxSilentRefreshPages] — enough to keep their place without turning one
+  /// edit into a burst of requests from every till at once.
+  ///
+  /// A failure leaves the screen exactly as it was. Stale beats blank, and the
+  /// next bump will try again.
+  Future<void> refreshVisibleCatalog() async {
+    if (_isLoading || _isLoadingMore) {
+      return; // A load already in flight will land current data anyway.
+    }
+    final querySnapshot = _query;
+    final requestVersion = ++_catalogRequestVersion;
+    final pagesToRead = math.min(
+      math.max(_nextProductPage - 1, 1),
+      PosViewModel._maxSilentRefreshPages,
+    );
+
+    final refreshed = <Product>[];
+    var hasMore = _hasMoreProducts;
+    for (var page = 1; page <= pagesToRead; page++) {
+      final result = await _catalogRepository.loadProducts(
+        query: querySnapshot,
+        page: page,
+        // We are here *because* the server said this changed; reading it back
+        // out of the local page cache would refresh nothing.
+        bypassCache: true,
+      );
+      // The cashier searched, filtered, or triggered a real load while we were
+      // reading: their request wins, and ours is dropped without a trace.
+      if (requestVersion != _catalogRequestVersion || querySnapshot != _query) {
+        return;
+      }
+      switch (result) {
+        case Ok<ProductPage>():
+          refreshed.addAll(result.value.products);
+          hasMore = result.value.hasMore;
+        case Error<ProductPage>():
+          return; // Keep what is on screen.
+      }
+    }
+
+    _products = refreshed;
+    _hasMoreProducts = hasMore;
+    _nextProductPage = pagesToRead + 1;
+    _notifyChanged();
+  }
+
   Future<void> loadMoreCatalog() async {
     if (_isLoading || _isLoadingMore || !_hasMoreProducts) {
       return;

@@ -5,63 +5,57 @@ INCR (see cache.py), so over-invalidation is harmless — the cost of a bump is 
 cache miss on the next catalog read, never a wrong answer. StockItem is the one
 high-frequency sender (one save per line per checkout), which is exactly what
 keeps cached stock quantities honest.
+
+The senders are not spelled out here: they are the models the state-version
+registry already declares for ``catalog_defs`` (definitions) and ``stock``
+(quantities), because "what belongs in the catalog payload" is one fact and
+must have one home. The catalog version is the *composite* of those two — it
+keys the server's ETags and the price-checker cache, both of which have to
+notice a quantity change as much as a price change. Clients get all three
+numbers and pick: ``catalog_defs`` for "refresh what is on screen now",
+``stock`` for "mark it dirty", ``catalog`` for cache keying.
 """
 
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 
-from apps.attachments.models import Attachment
-from apps.inventory.models import StockItem
+from apps.core.state_version import resolve_models
 
 from .cache import bump_catalog_version
-from .models import (
-    ModifierGroup,
-    ModifierOption,
-    Product,
-    ProductCategory,
-    ProductModifierGroup,
-    ProductUnit,
-    ProductUnitBarcode,
-    ProductVariant,
+from .models import Product, ScaleBarcodeRule
+
+# Definitions + quantities, from the single registry. Scale barcode rules are
+# not part of any payload the version keys, but a rule change reshapes how a
+# scanned weight label resolves to a product, so it has always invalidated
+# alongside — kept explicit rather than folded into a domain it does not
+# belong to.
+_SENDERS = (
+    *resolve_models("catalog_defs"),
+    *resolve_models("stock"),
     ScaleBarcodeRule,
-    UnitOfMeasure,
 )
 
 
-@receiver(post_save, sender=Product)
-@receiver(post_delete, sender=Product)
-@receiver(post_save, sender=ProductVariant)
-@receiver(post_delete, sender=ProductVariant)
-@receiver(post_save, sender=ProductUnit)
-@receiver(post_delete, sender=ProductUnit)
-@receiver(post_save, sender=ProductUnitBarcode)
-@receiver(post_delete, sender=ProductUnitBarcode)
-@receiver(post_save, sender=ProductCategory)
-@receiver(post_delete, sender=ProductCategory)
-@receiver(post_save, sender=StockItem)
-@receiver(post_delete, sender=StockItem)
-# Product cards render primary_image/image_attachments, uploaded without
-# touching the Product row itself.
-@receiver(post_save, sender=Attachment)
-@receiver(post_delete, sender=Attachment)
-# Modifier sets and unit-of-measure labels embed in the catalog payload
-# (modifier_group_details, per-line unit labels) without touching Product rows;
-# their edits must orphan catalog ETags too — and they let the modifier-group /
-# unit list endpoints ride the same version.
-@receiver(post_save, sender=ModifierGroup)
-@receiver(post_delete, sender=ModifierGroup)
-@receiver(post_save, sender=ModifierOption)
-@receiver(post_delete, sender=ModifierOption)
-@receiver(post_save, sender=ProductModifierGroup)
-@receiver(post_delete, sender=ProductModifierGroup)
-@receiver(post_save, sender=UnitOfMeasure)
-@receiver(post_delete, sender=UnitOfMeasure)
-@receiver(post_save, sender=ScaleBarcodeRule)
-@receiver(post_delete, sender=ScaleBarcodeRule)
 def bump_on_catalog_change(sender, **kwargs):
     bump_catalog_version()
 
 
+for _sender in _SENDERS:
+    post_save.connect(
+        bump_on_catalog_change,
+        sender=_sender,
+        dispatch_uid=f"catalog_version.save.{_sender._meta.label}",
+    )
+    post_delete.connect(
+        bump_on_catalog_change,
+        sender=_sender,
+        dispatch_uid=f"catalog_version.delete.{_sender._meta.label}",
+    )
+
+
 @receiver(m2m_changed, sender=Product.categories.through)
 def bump_on_categorization_change(sender, **kwargs):
+    if kwargs.get("action") not in {"post_add", "post_remove", "post_clear"}:
+        return
     bump_catalog_version()
+

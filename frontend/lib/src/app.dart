@@ -76,11 +76,19 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
             ConnectionPhase.connectedLocal) {
       unawaited(_dependencies.connectionCoordinator.rediscover());
     }
+    if (state == AppLifecycleState.resumed) {
+      // Coming back is when the screen is most likely to be stale — the device
+      // was asleep while the back office was editing. Ask straight away rather
+      // than waiting out the poll interval.
+      _dependencies.serverStateWatcher.resume();
+    }
     if (state != AppLifecycleState.resumed) {
       // Telemetry is written on a short delay rather than once per event, so
       // leaving the foreground is the last reliable moment to get it on disk:
       // the process may be suspended or killed before the timer would fire.
       unawaited(_dependencies.analyticsEngine.flushPendingWrites());
+      // Nobody is looking: stop asking what changed until they are.
+      _dependencies.serverStateWatcher.pause();
     }
   }
 

@@ -58,9 +58,12 @@ class ShopSettingsQuerySet(models.QuerySet):
         # ``.filter(pk=1).update(...)`` skips post_save, so it must drop the
         # cached singleton itself or a stale copy survives until the TTL.
         rows = super().update(**kwargs)
-        from apps.core import caching
+        from apps.core import caching, state_version
 
         caching.invalidate_shop_settings()
+        # ...and tell every client, for the same reason: a setting written this
+        # way is still a setting every till is showing.
+        state_version.bump("settings")
         return rows
 
 
