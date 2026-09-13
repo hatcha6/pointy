@@ -20,9 +20,11 @@ def _png_logo_bytes(width=64, height=64):
     )
     return buffer.getvalue()
 
+from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.cache import cache
+from django.db import OperationalError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase, override_settings
@@ -37,6 +39,7 @@ from apps.attachments.models import Attachment
 from apps.inventory.models import StockItem, StockMovement
 from apps.payments.models import Payment
 from apps.analytics.models import AnalyticsEvent
+from apps.notifications.services import sync_business_notifications
 from apps.purchasing.models import (
     PurchaseOrder,
     PurchaseOrderAuditEvent,
@@ -44,11 +47,18 @@ from apps.purchasing.models import (
     SupplierPayment,
 )
 from apps.sales.models import Order, OrderLine, RegisterCashMovement, RegisterSession
-from .models import RelayConnectorSetupToken, RelayInstallation, ShopSettings
+from .backup import queue_due_scheduled_backup
+from .models import (
+    RelayConnectorSetupToken,
+    RelayInstallation,
+    ShopSettings,
+    SystemBackupSchedule,
+)
 from .roles import (
     ACCOUNTANT_GROUP,
     AUDITOR_GROUP,
     CASHIER_GROUP,
+    INITIAL_SETUP_SHOP_ACTIVITY_MODELS,
     INVENTORY_CLERK_GROUP,
     MANAGER_GROUP,
     PURCHASING_AGENT_GROUP,
@@ -2551,6 +2561,79 @@ class BootstrapAdminTests(TestCase):
 
         self.assertFalse(initial_admin_setup_required())
 
+    def test_first_boot_machinery_never_closes_the_onboarding_door(self):
+        """Nothing the installation writes to itself may lock the owner out.
+
+        This is the regression test for a real field failure. The periodic
+        ``core.run_due_scheduled_backup`` task fires every 60 seconds and calls
+        ``SystemBackupSchedule.load()``, which materialises that singleton. The
+        old "does any model anywhere have rows?" scan counted it as shop
+        activity, so roughly a minute after a fresh install came up — before
+        anyone had opened the app — onboarding reported itself already done.
+        The owner was shown a login screen for an installation containing no
+        users, and the only way in was ``docker exec ... createsuperuser``.
+
+        So: run what first boot and the beat schedule actually run, against an
+        installation nobody has touched, and require the wizard to still open.
+        """
+        ShopSettings.load()
+        RelayInstallation.objects.create(
+            installation_id="install-1",
+            relay_public_api_url="https://relay.example.com",
+            connector_token="ptc1.install-1.secret",
+            access_token="ptr1.install-1.secret",
+        )
+        RelayConnectorSetupToken.objects.create(token_hash="hash-1")
+        queue_due_scheduled_backup()
+        sync_business_notifications()
+
+        self.assertTrue(SystemBackupSchedule.objects.exists())
+        self.assertTrue(initial_admin_setup_required())
+
+        response = APIClient().get(reverse("setup-status"))
+
+        self.assertEqual(response.data, {"requires_onboarding": True})
+
+    def test_shop_activity_models_are_empty_on_a_fresh_install(self):
+        """Guards the allow-list itself.
+
+        Every entry in ``INITIAL_SETUP_SHOP_ACTIVITY_MODELS`` is read as "a
+        person did this", so a model that arrives pre-seeded by a migration
+        would silently close onboarding on every new install — the exact bug
+        the allow-list exists to prevent, re-entered through the front door.
+        The migrated test database *is* a fresh install, so the check is simply
+        that all of them are empty here.
+        """
+        seeded = {
+            f"{app_label}.{model_name}": django_apps.get_model(app_label, model_name)
+            ._default_manager.all()
+            .count()
+            for app_label, model_name in INITIAL_SETUP_SHOP_ACTIVITY_MODELS
+        }
+
+        self.assertEqual(
+            {label: count for label, count in seeded.items() if count},
+            {},
+            "a model on the shop-activity allow-list is seeded on a fresh "
+            "install; remove it, or narrow it to the rows a person creates",
+        )
+
+    def test_unreadable_table_does_not_conclude_setup_is_done(self):
+        """A database hiccup must not permanently brick onboarding.
+
+        The old scan treated any exception as "data exists", so one unreadable
+        table was enough to answer "setup already done" forever.
+        """
+        real_get_model = django_apps.get_model
+
+        def unreadable(app_label, model_name=None, **kwargs):
+            if (app_label, model_name) in INITIAL_SETUP_SHOP_ACTIVITY_MODELS:
+                raise OperationalError("relation does not exist")
+            return real_get_model(app_label, model_name, **kwargs)
+
+        with mock.patch.object(django_apps, "get_model", side_effect=unreadable):
+            self.assertTrue(initial_admin_setup_required())
+
     def test_initial_admin_setup_ignores_operational_analytics_events(self):
         AnalyticsEvent.objects.create(
             name="backend.request",
@@ -2813,9 +2896,14 @@ class AuthThrottlingTests(TestCase):
 
     def test_setup_admin_endpoint_is_throttled(self):
         client = APIClient()
-        # Default rate is 5/hour for the setup throttle; a password under the
-        # enforced floor keeps each attempt at 400 without completing onboarding.
-        for _ in range(5):
+        # Read the budget rather than pinning it: the number is a deployment
+        # setting, and what matters is that the throttle engages at all. A
+        # password under the enforced floor keeps each attempt at 400 without
+        # completing onboarding.
+        from apps.core.throttling import SetupRateThrottle
+
+        budget = SetupRateThrottle().num_requests
+        for _ in range(budget):
             response = client.post(
                 reverse("setup-initial-admin"),
                 {"username": "owner", "password": "pw"},

@@ -2,16 +2,6 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.db import IntegrityError, transaction
-from django.db.models import Q
-
-from apps.catalog.scale_defaults import SEEDED_SCALE_RULE_PATTERN
-from apps.catalog.variant_option_defaults import DEFAULT_VARIANT_OPTIONS
-from apps.expenses.category_defaults import DEFAULT_EXPENSE_CATEGORY_NAMES
-from apps.holidays.rules import SOURCE_LOCAL as HOLIDAY_LOCAL_SOURCE
-from apps.fx.currencies import (
-    BUILTIN_CODES as FX_BUILTIN_CURRENCY_CODES,
-    SOURCE_MANUAL as FX_MANUAL_SOURCE,
-)
 
 MANAGER_GROUP = "manager"
 CASHIER_GROUP = "cashier"
@@ -34,33 +24,63 @@ ROLE_GROUPS = (
     TECHNICIAN_GROUP,
     CASHIER_GROUP,
 )
-INITIAL_SETUP_IGNORED_MODELS = {
-    ("admin", "logentry"),
-    ("analytics", "analyticsevent"),
-    ("auth", "group"),
-    ("auth", "permission"),
-    ("auth", "user"),
-    ("contenttypes", "contenttype"),
-    # Relay plumbing: the licence record and the connector's bootstrap secret
-    # are written during boot, before anyone has logged in, so they can never
-    # be evidence that a shop has started working. Counting them as activity
-    # would tell a brand-new install its setup was already done and leave the
-    # first-run wizard with no way in.
-    ("core", "relayinstallation"),
-    ("core", "relayconnectorsetuptoken"),
-    ("sessions", "session"),
-}
-INITIAL_SETUP_VARIANT_OPTION_CODES = {
-    option["code"]
-    for option in DEFAULT_VARIANT_OPTIONS
-}
-INITIAL_SETUP_VARIANT_VALUE_CODES_BY_OPTION = {
-    option["code"]: {code for code, _name, _display_order in option["values"]}
-    for option in DEFAULT_VARIANT_OPTIONS
-}
-INITIAL_SETUP_UNSPECIFIED_SUPPLIER_NAME = "مورد غير محدد"
-INITIAL_SETUP_UNSPECIFIED_SUPPLIER_NOTES = (
-    "تم إنشاؤه لربط أوامر الشراء القديمة التي لم يكن لها مورد."
+#: The rows that prove a shop has actually started working, and the ONLY rows
+#: that close the door on the first-run wizard.
+#:
+#: This list is deliberately an allow-list rather than the "scan every model and
+#: exempt the innocent ones" denylist it replaces. That denylist bricked a real
+#: install: ``core.run_due_scheduled_backup`` runs every 60 seconds and calls
+#: ``SystemBackupSchedule.load()``, which materialises its singleton row. One
+#: minute after the containers came up — before anyone had ever opened the app —
+#: the scan found that row, concluded the shop was already in business, and
+#: answered ``requires_onboarding: false``. The owner got a login screen for an
+#: installation with no users in it, and the only way in was
+#: ``docker exec ... createsuperuser``.
+#:
+#: That failure mode is the whole reason for the inversion. Under a denylist,
+#: every new model, every migration that seeds a default, and every background
+#: task that touches a table before first login is a fresh chance to lock the
+#: owner out of their own shop, and it fails *silently* and *permanently*.
+#: Under an allow-list the same mistakes are harmless: an unlisted model simply
+#: does not vote, so the worst case is that the wizard stays reachable slightly
+#: longer than it strictly needed to — recoverable, and visible.
+#:
+#: What belongs here: a model whose rows can only exist because a person did
+#: shop work. What does not: anything a migration seeds, anything boot or a
+#: periodic task writes, and anything synced from the relay. Every entry is
+#: checked by ``test_shop_activity_models_are_empty_on_a_fresh_install``, which
+#: fails if a model on this list ever starts arriving pre-seeded.
+INITIAL_SETUP_SHOP_ACTIVITY_MODELS = (
+    ("sales", "order"),
+    ("sales", "registersession"),
+    ("catalog", "product"),
+    ("catalog", "productcategory"),
+    ("customers", "customer"),
+    ("customers", "asset"),
+    ("purchasing", "purchaseorder"),
+    ("inventory", "stockmovement"),
+    ("inventory", "stockledgerentry"),
+    ("inventory", "stockcount"),
+    ("payments", "payment"),
+    ("expenses", "expense"),
+    ("operations", "job"),
+    ("employees", "employee"),
+    ("discounts", "discountrule"),
+    ("treasury", "moneycount"),
+    ("treasury", "moneytransfer"),
+    # Peripherals somebody configured by hand. Deliberately NOT here:
+    # ``printing.printagent`` and ``price_checker.pricecheckerdevice``, which
+    # self-register over the LAN — a kiosk or print agent left running from an
+    # earlier install can announce itself to a brand-new backend before its
+    # owner has opened the app, which is the very thing this list must not
+    # mistake for shop work.
+    ("printing", "printerprofile"),
+    ("scales", "scale"),
+    ("surveillance", "recorder"),
+    ("messaging", "messaginggateway"),
+    # A finished data import is the clearest possible evidence that this
+    # installation already belongs to a shop, even before anyone logs in.
+    ("migration", "migrationrun"),
 )
 
 MANAGER_PERMISSION_DOMAINS = (
@@ -545,112 +565,64 @@ def user_has_full_visibility(user):
 
 
 def initial_admin_setup_required():
+    """Whether the first-run wizard should be offered.
+
+    True while this installation has no users *and* no sign that a shop is
+    already running on it. The first half is the real test; the second only
+    stops a stranger on the shop LAN from claiming an existing shop whose user
+    accounts were lost (a half-finished restore, say).
+
+    Note which way this errs. With no users, nobody can sign in at all, so
+    answering "no onboarding needed" does not protect the installation — it
+    bricks it, and hands the owner a ``docker exec`` as their only way in.
+    ``pointy_domain_data_exists`` is therefore built to stay quiet unless a
+    person has genuinely worked in this shop.
+    """
     User = get_user_model()
     return not User.objects.exists() and not pointy_domain_data_exists()
 
 
 def pointy_domain_data_exists():
-    for model in apps.get_models():
-        model_label = (model._meta.app_label, model._meta.model_name)
-        if model_label in INITIAL_SETUP_IGNORED_MODELS:
-            continue
+    """Whether a person has done shop work on this installation.
+
+    Asks only the models on ``INITIAL_SETUP_SHOP_ACTIVITY_MODELS``; everything
+    else — seeded defaults, relay-synced reference data, singletons materialised
+    by boot code or a periodic task — cannot vote. See that constant for why the
+    question is asked this way round.
+    """
+    if _shop_setup_wizard_was_completed():
+        return True
+    for label in INITIAL_SETUP_SHOP_ACTIVITY_MODELS:
         try:
-            if _model_has_initial_setup_blocking_data(model, model_label):
+            if apps.get_model(*label)._default_manager.all().exists():
                 return True
         except Exception:
-            return True
+            # A model that has been renamed away, or a table that cannot be
+            # read right now (mid-migration, say), is not evidence that a shop
+            # is running here. The old scan answered "yes, data exists" to
+            # every exception, which turned one unreadable table — or one stale
+            # entry in a list — into an installation that could never be
+            # onboarded, only ``docker exec``-ed into.
+            continue
     return False
 
 
-def _model_has_initial_setup_blocking_data(model, model_label):
-    queryset = model._default_manager.all()
-    if model_label == ("channels", "saleschannel"):
-        # The built-in POS channel is seeded data, not shop activity.
-        return queryset.filter(is_system=False).exists()
-    if model_label == ("core", "shopsettings"):
-        # The singleton is materialised during boot — relay enrollment reads the
-        # shop name before anyone has ever logged in — so its bare existence is
-        # scaffolding, not shop activity. Treating it as activity would answer
-        # "setup already done" on an install that has no users at all, leaving
-        # the first-run wizard with no way in. The wizard is what fills in
-        # shop_type, so that is the mark of a shop that has actually onboarded.
-        return queryset.exclude(shop_type="").exists()
-    if model_label == ("attendance", "biotimeconnection"):
-        # An untouched singleton row is configuration scaffolding, not activity.
-        return queryset.exclude(base_url="").exists()
-    if model_label == ("operations", "workflowtemplate"):
-        # Seeded default workflows are configuration, not shop activity.
-        return queryset.filter(is_system=False).exists()
-    if model_label == ("customers", "assettype"):
-        # The built-in kinds of item a repair shop takes in (phone, vehicle, …)
-        # are seeded configuration. A shop that added its own — "تلفاز" for an
-        # electronics repairer — has actually done something.
-        return queryset.filter(is_system=False).exists()
-    if model_label == ("expenses", "expensecategory"):
-        # Seeded default expense categories are configuration, not activity.
-        return queryset.exclude(name__in=DEFAULT_EXPENSE_CATEGORY_NAMES).exists()
-    if model_label == ("operations", "workflowstage"):
-        return queryset.filter(template__is_system=False).exists()
-    if model_label == ("treasury", "moneyaccount"):
-        # The seeded cash box and bank account are scaffolding created by
-        # migration so money always has somewhere to land — same reasoning as
-        # the default warehouse below. A shop that added its own account has
-        # actually done something.
-        return queryset.filter(is_default=False).exists()
-    if model_label == ("inventory", "warehouse"):
-        # The default "Main" warehouse is created by migration so the valuation
-        # ledger always has somewhere to post. It is scaffolding, not activity —
-        # a shop that has added a second location has actually done something.
-        return queryset.filter(is_default=False).exists()
-    if model_label == ("catalog", "scalebarcoderule"):
-        # The seeded rule is the layout the till already read before scale rules
-        # were configurable — created by migration on every install, including
-        # one nobody has logged into yet. A rule the shop wrote is activity.
-        return queryset.exclude(pattern=SEEDED_SCALE_RULE_PATTERN).exists()
-    if model_label == ("catalog", "unitofmeasure"):
-        # Seeded built-in units are configuration scaffolding, not shop activity.
-        return queryset.filter(is_system=False).exists()
-    if model_label == ("holidays", "holiday"):
-        # Built-in (migration-seeded) and relay-synced holidays are configuration,
-        # not shop activity — only a shop-authored local holiday counts.
-        return queryset.filter(source=HOLIDAY_LOCAL_SOURCE).exists()
-    if model_label == ("fx", "currency"):
-        # The built-in currency registry is migration-seeded reference data, on
-        # the same footing as the seeded units and expense categories. A shop
-        # that added a currency of its own has actually done something.
-        return queryset.exclude(pk__in=FX_BUILTIN_CURRENCY_CODES).exists()
-    if model_label == ("fx", "exchangerate"):
-        # Rates arrive from the relay feed on their own — before anyone has
-        # logged in, on an install that has not been set up — so a populated
-        # rate table is no evidence a shop has started working. Only a rate the
-        # owner typed is an act of the shop. Same reasoning as the holidays
-        # calendar directly above.
-        return queryset.filter(source=FX_MANUAL_SOURCE).exists()
-    if model_label == ("catalog", "variantoption"):
-        return queryset.exclude(
-            code__in=INITIAL_SETUP_VARIANT_OPTION_CODES,
-        ).exists()
-    if model_label == ("catalog", "variantoptionvalue"):
-        return queryset.exclude(_initial_setup_seed_variant_value_query()).exists()
-    if model_label == ("purchasing", "supplier"):
-        return queryset.exclude(
-            name=INITIAL_SETUP_UNSPECIFIED_SUPPLIER_NAME,
-            contact_name="",
-            phone="",
-            email="",
-            address="",
-            notes=INITIAL_SETUP_UNSPECIFIED_SUPPLIER_NOTES,
-            is_active=True,
-            purchase_orders__isnull=True,
-        ).distinct().exists()
-    return queryset.exists()
+def _shop_setup_wizard_was_completed():
+    """Whether someone has been through the first-run shop-setup wizard.
 
+    The ``ShopSettings`` singleton itself is no evidence — boot code
+    materialises it before anyone has logged in, because relay enrollment reads
+    the shop name. Its ``shop_type`` is a different matter: it is blank on every
+    fresh install and only the wizard fills it in, so a shop that has one has
+    demonstrably been set up by a person. That makes it the one signal that
+    survives a restore which brought the shop's data back without its users.
+    """
+    from .models import ShopSettings
 
-def _initial_setup_seed_variant_value_query():
-    query = Q()
-    for option_code, value_codes in INITIAL_SETUP_VARIANT_VALUE_CODES_BY_OPTION.items():
-        query |= Q(option__code=option_code, code__in=value_codes)
-    return query
+    try:
+        return ShopSettings.objects.exclude(shop_type="").exists()
+    except Exception:
+        return False
 
 
 def create_initial_admin_user(

@@ -1112,7 +1112,11 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "login": env("DJANGO_THROTTLE_LOGIN", default="30/min"),
         "login_username": env("DJANGO_THROTTLE_LOGIN_USERNAME", default="6/min"),
-        "setup": env("DJANGO_THROTTLE_SETUP", default="5/hour"),
+        # See SetupRateThrottle: the initial-admin endpoint closes itself after
+        # one success, so this bounds abuse rather than guarding a secret. Kept
+        # wide enough that a fumbled first-run wizard cannot lock an owner out
+        # of a brand-new installation.
+        "setup": env("DJANGO_THROTTLE_SETUP", default="20/hour"),
         "password_change": env("DJANGO_THROTTLE_PASSWORD_CHANGE", default="10/min"),
         # Telemetry has its own bucket so a backlog flush can only ever refuse
         # telemetry. Steady-state ingest across the whole fleet is a handful of

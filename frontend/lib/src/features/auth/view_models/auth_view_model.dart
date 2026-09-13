@@ -63,7 +63,7 @@ class AuthViewModel extends ChangeNotifier {
     if (forgetRememberedUser) {
       await _authRepository.forgetCurrentUser();
       _currentUser = null;
-      _status = await _resolveUnauthenticatedStatus();
+      _status = await _resolveUnauthenticatedStatus(retryOnFailure: true);
       _hasError = false;
       notifyListeners();
       return;
@@ -74,11 +74,11 @@ class AuthViewModel extends ChangeNotifier {
       case Ok<PosUser?>(value: final user):
         _currentUser = user;
         _status = user == null
-            ? await _resolveUnauthenticatedStatus()
+            ? await _resolveUnauthenticatedStatus(retryOnFailure: true)
             : AuthStatus.authenticated;
       case Error<PosUser?>(exception: _):
         _currentUser = null;
-        _status = await _resolveUnauthenticatedStatus();
+        _status = await _resolveUnauthenticatedStatus(retryOnFailure: true);
         _hasError = false;
     }
     notifyListeners();
@@ -113,15 +113,45 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
-  Future<AuthStatus> _resolveUnauthenticatedStatus() async {
-    final result = await _authRepository.loadOnboardingStatus();
-    return switch (result) {
-      Ok<OnboardingStatus>(value: final status) =>
-        status.requiresOnboarding
+  /// Waits between tries of the onboarding probe. One entry per extra attempt.
+  static const List<Duration> _onboardingProbeRetryDelays = [
+    Duration(milliseconds: 400),
+    Duration(seconds: 1),
+  ];
+
+  /// Decide which screen an unauthenticated app belongs on.
+  ///
+  /// [retryOnFailure] buys a few more tries for the callers that cannot afford
+  /// to guess wrong. This probe chooses between the first-run wizard and the
+  /// login screen, and on a fresh install the login screen is a dead end —
+  /// there are no accounts to sign in with, so an owner who lands there has no
+  /// way forward but to restart the app and hope. The probe's timeout is five
+  /// seconds, sized for a till mid-shift rather than for the cold start of a
+  /// backend that came up moments ago, so a single timed-out request must not
+  /// be what settles it.
+  ///
+  /// Logout passes false deliberately: we were signed in a moment ago, so
+  /// accounts demonstrably exist, and a cashier whose server has gone down
+  /// should reach the login screen immediately rather than sit through retries
+  /// of a question already answered.
+  Future<AuthStatus> _resolveUnauthenticatedStatus({
+    bool retryOnFailure = false,
+  }) async {
+    final delays = retryOnFailure
+        ? _onboardingProbeRetryDelays
+        : const <Duration>[];
+    for (var attempt = 0; attempt <= delays.length; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(delays[attempt - 1]);
+      }
+      final result = await _authRepository.loadOnboardingStatus();
+      if (result case Ok<OnboardingStatus>(value: final status)) {
+        return status.requiresOnboarding
             ? AuthStatus.setupRequired
-            : AuthStatus.unauthenticated,
-      Error<OnboardingStatus>() => AuthStatus.unauthenticated,
-    };
+            : AuthStatus.unauthenticated;
+      }
+    }
+    return AuthStatus.unauthenticated;
   }
 
   Future<bool> login({
@@ -189,7 +219,7 @@ class AuthViewModel extends ChangeNotifier {
         return true;
       case Error<PosUser>(exception: _):
         _currentUser = null;
-        _status = await _resolveUnauthenticatedStatus();
+        _status = await _resolveUnauthenticatedStatus(retryOnFailure: true);
         _hasError = _status == AuthStatus.setupRequired;
         notifyListeners();
         return false;

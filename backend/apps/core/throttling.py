@@ -79,7 +79,17 @@ class LoginUsernameRateThrottle(_FailOpenThrottleMixin, SimpleRateThrottle):
 
 
 class SetupRateThrottle(_FailOpenThrottleMixin, SimpleRateThrottle):
-    """Throttle initial-admin-setup attempts per client IP."""
+    """Throttle initial-admin-setup attempts per client IP.
+
+    Deliberately looser than the login throttle, because this endpoint is not
+    guessable: it creates the *first* user and then answers 409 forever, so
+    there is no secret to grind at and an attacker who wanted to claim a fresh
+    install would need exactly one request, not thousands. A tight limit buys
+    almost nothing here and costs a great deal — every rejected attempt counts,
+    including plain validation errors, so an owner who mistypes a password a
+    few times on the first-run wizard would be locked out of their own new
+    installation for an hour with no way in but ``docker exec``.
+    """
 
     scope = "setup"
 
