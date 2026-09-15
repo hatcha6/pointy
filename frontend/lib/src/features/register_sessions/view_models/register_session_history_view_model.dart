@@ -51,6 +51,13 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
   bool get hasZReportError => _hasZReportError;
 
   List<RegisterSession> _sessions = [];
+
+  /// A session reached by deep link (from an invoice's "جلسة الدرج" row) rather
+  /// than by scrolling the history. It is kept at the head of the list through
+  /// every reload, because it is usually older than the first page and would
+  /// otherwise vanish — taking the selection with it — the moment the history
+  /// refreshed underneath the reviewer.
+  RegisterSession? _pinnedSession;
   List<SaleOrder> _orders = [];
   List<RegisterCashMovement> _cashMovements = [];
   RegisterSession? _selectedSession;
@@ -103,6 +110,11 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
   bool get hasMoreCashMovements => _hasMoreCashMovements;
 
   Future<void> loadSessions() async {
+    // Held so the trailing selection refresh below can tell "the shift on
+    // screen when this refresh began" from "a shift selected while it was in
+    // flight" — a deep link arriving mid-load has already fetched its own
+    // detail, and refreshing it again costs three more requests.
+    final selectedAtStart = _selectedSession;
     _isLoadingSessions = true;
     _hasSessionLoadError = false;
     _hasMoreSessions = true;
@@ -112,7 +124,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     final result = await _registerSessionRepository.loadSessionHistory();
     switch (result) {
       case Ok<RegisterSessionPage>():
-        _sessions = result.value.sessions;
+        _sessions = _withPinnedSession(result.value.sessions);
         _nextSessionCursor = result.value.nextCursor;
         // "More" means "there is a cursor to ask with". Trusting a bare `next`
         // would spin forever against a page that cannot be advanced.
@@ -129,7 +141,7 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
           _nextCashMovementCursor = null;
         }
       case Error<RegisterSessionPage>():
-        _sessions = [];
+        _sessions = _withPinnedSession(const []);
         _selectedSession = null;
         _selectedSummary = null;
         _orders = [];
@@ -147,8 +159,13 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
 
     // Refresh means refresh: the detail pane is showing the same shift the list
     // just re-read, and on an open drawer its sales and totals have moved on.
+    // Only that shift, though — a selection made *during* this load (the
+    // drawer-session deep link, which runs alongside the constructor's load)
+    // has just fetched orders, movements and the summary for itself, and
+    // re-fetching all three is pure waste on the slow link where the orderings
+    // actually diverge.
     final selected = _selectedSession;
-    if (selected != null) {
+    if (selected != null && identical(selected, selectedAtStart)) {
       await _reloadSelectedSessionDetail(selected);
     }
   }
@@ -181,6 +198,41 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
 
     _isLoadingMoreSessions = false;
     notifyListeners();
+  }
+
+  List<RegisterSession> _withPinnedSession(List<RegisterSession> sessions) {
+    final pinned = _pinnedSession;
+    if (pinned == null || sessions.any((session) => session.id == pinned.id)) {
+      return sessions;
+    }
+    return [pinned, ...sessions];
+  }
+
+  /// Selects the session with [sessionId], fetching it when it is not in the
+  /// history already. Returns false when it cannot be loaded (deleted, or out
+  /// of this user's scope), so the caller can say so instead of opening an
+  /// empty screen.
+  Future<bool> focusSession(int sessionId) async {
+    final loaded = _sessions.where((session) => session.id == sessionId);
+    if (loaded.isNotEmpty) {
+      _pinnedSession = loaded.first;
+      await selectSession(loaded.first);
+      return true;
+    }
+
+    final result = await _registerSessionRepository.loadSession(sessionId);
+    switch (result) {
+      case Ok<RegisterSession>(value: final session):
+        // Pin before selecting: an in-flight `loadSessions` (the constructor
+        // fires one) may land either side of this and would otherwise replace
+        // the list with a first page that does not contain this shift.
+        _pinnedSession = session;
+        _sessions = _withPinnedSession(_sessions);
+        await selectSession(session);
+        return true;
+      case Error<RegisterSession>():
+        return false;
+    }
   }
 
   Future<void> selectSession(RegisterSession session) async {
@@ -507,6 +559,17 @@ class RegisterSessionHistoryViewModel extends ChangeNotifier {
     }
     _isLoadingCashMovements = false;
     notifyListeners();
+  }
+
+  /// The full document behind a row in the session's sales strip. The strip
+  /// serializes summaries (a line COUNT, no line items), so the details sheet
+  /// has to fetch before it can show products or offer a return.
+  Future<SaleOrder?> loadOrderDetail(int orderId) async {
+    final result = await _saleRepository.loadOrder(orderId);
+    return switch (result) {
+      Ok<SaleOrder>(value: final order) => order,
+      Error<SaleOrder>() => null,
+    };
   }
 
   Future<void> _reloadOrdersForSelectedSession(RegisterSession session) async {

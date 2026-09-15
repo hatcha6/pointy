@@ -605,6 +605,7 @@ class _SessionSalesList extends StatelessWidget {
               final canReturn = order.canReturn || canManagerAdjust;
               return SessionOrderTile(
                 order: order,
+                loadDetail: viewModel.loadOrderDetail,
                 onReprint: viewModel.requestReprint,
                 onVoid: canVoid ? viewModel.voidOrder : null,
                 onReturn: canReturn ? viewModel.returnItems : null,
@@ -706,12 +707,14 @@ class SessionOrderTile extends StatelessWidget {
   const SessionOrderTile({
     super.key,
     required this.order,
+    this.loadDetail,
     this.onReprint,
     this.onVoid,
     this.onReturn,
   });
 
   final SaleOrder order;
+  final SaleOrderDetailLoader? loadDetail;
   final Future<bool> Function(SaleOrder order)? onReprint;
   final Future<bool> Function(SaleOrder order, {String reason})? onVoid;
   final Future<bool> Function(
@@ -757,6 +760,7 @@ class SessionOrderTile extends StatelessWidget {
       onTap: () => showSaleOrderDetailsSheet(
         context,
         order,
+        loadDetail: loadDetail,
         onReprint: onReprint,
         onVoid: onVoid == null
             ? null

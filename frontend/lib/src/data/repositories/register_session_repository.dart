@@ -15,6 +15,10 @@ class RegisterSessionRepository {
     return Result.guard(_service.fetchCurrentRegisterSession);
   }
 
+  Future<Result<RegisterSession>> loadSession(int sessionId) async {
+    return Result.guard(() => _service.fetchRegisterSession(sessionId));
+  }
+
   /// First page when [cursor] is null, then the page after [cursor]
   /// (a [RegisterSessionPage.nextCursor] from the previous response).
   Future<Result<RegisterSessionPage>> loadSessionHistory({

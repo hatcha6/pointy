@@ -194,6 +194,14 @@
       "port": 8080
     },
     {
+      "name": "invoice-attribution-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-invoice-attribution-preview"
+      ],
+      "port": 8080
+    },
+    {
       "name": "register-session-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [

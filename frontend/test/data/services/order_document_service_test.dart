@@ -97,6 +97,40 @@ void main() {
     },
   );
 
+  test('the sale invoice PDF names the cashier and the drawer session', () {
+    const service = OrderDocumentService();
+    final template = service.saleInvoiceTemplate(
+      order: _saleOrder(
+        receiptNumber: 'R-9',
+        total: 50,
+        createdAt: DateTime(2026, 5, 20, 9),
+        cashierId: 4,
+        cashierName: 'سالم الفيتوري',
+        registerSession: 7,
+        registerSessionNumber: 'RS-7',
+      ),
+      shopSettings: _settings,
+    );
+
+    final details = {
+      for (final field in template.details) field.label: field.value,
+    };
+    expect(details['الكاشير'], 'سالم الفيتوري');
+    expect(details['جلسة الدرج'], 'RS-7');
+  });
+
+  test('a sale with no drawer session grows no empty attribution rows', () {
+    const service = OrderDocumentService();
+    final template = service.saleInvoiceTemplate(
+      order: _saleOrder(receiptNumber: 'R-10', total: 50),
+      shopSettings: _settings,
+    );
+
+    final labels = template.details.map((field) => field.label);
+    expect(labels, isNot(contains('الكاشير')));
+    expect(labels, isNot(contains('جلسة الدرج')));
+  });
+
   test('the sale invoice issue date carries the time, not just the day', () {
     const service = OrderDocumentService();
     final template = service.saleInvoiceTemplate(
@@ -802,11 +836,19 @@ SaleOrder _saleOrder({
   SaleType saleType = SaleType.standard,
   String paymentStatus = '',
   DateTime? validUntil,
+  int? cashierId,
+  String? cashierName,
+  int? registerSession,
+  String? registerSessionNumber,
 }) {
   return SaleOrder(
     id: 1,
     receiptNumber: receiptNumber,
     status: 'paid',
+    cashierId: cashierId,
+    cashierName: cashierName,
+    registerSession: registerSession,
+    registerSessionNumber: registerSessionNumber,
     lines: lines,
     payments: payments,
     subtotal: subtotal,

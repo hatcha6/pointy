@@ -6087,6 +6087,16 @@
   "invoiceStatusVoid": "ملغاة",
   "invoiceCustomerFilterTitle": "العميل",
   "invoiceCustomerLabel": "العميل",
+  "invoiceCashierLabel": "الكاشير",
+  "invoiceCashierValue": "الكاشير: {cashierName}",
+  "@invoiceCashierValue": {
+    "description": "Cashier who rang up the sale, shown in an invoice row.",
+    "placeholders": {
+      "cashierName": {
+        "type": "String"
+      }
+    }
+  },
   "invoiceRegisterSessionLabel": "جلسة الدرج",
   "invoiceRegisterSessionValue": "جلسة {sessionNumber}",
   "@invoiceRegisterSessionValue": {

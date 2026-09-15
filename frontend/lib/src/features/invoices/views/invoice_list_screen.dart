@@ -273,6 +273,8 @@ class InvoiceTile extends StatelessWidget {
         l10n.lineItemCount(invoice.lineCount),
         if (invoice.customerName != null && invoice.customerName!.isNotEmpty)
           invoice.customerName!,
+        if ((invoice.cashierName ?? '').trim().isNotEmpty)
+          l10n.invoiceCashierValue(invoice.cashierName!.trim()),
         if (invoice.registerSessionNumber != null &&
             invoice.registerSessionNumber!.isNotEmpty)
           l10n.invoiceRegisterSessionValue(invoice.registerSessionNumber!),

@@ -10204,6 +10204,14 @@ class AppLocalizationsAr extends AppLocalizations {
   String get invoiceCustomerLabel => 'العميل';
 
   @override
+  String get invoiceCashierLabel => 'الكاشير';
+
+  @override
+  String invoiceCashierValue(String cashierName) {
+    return 'الكاشير: $cashierName';
+  }
+
+  @override
   String get invoiceRegisterSessionLabel => 'جلسة الدرج';
 
   @override

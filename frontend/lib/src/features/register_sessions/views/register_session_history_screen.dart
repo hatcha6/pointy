@@ -15,19 +15,43 @@ import '../view_models/register_session_history_view_model.dart';
 import 'register_session_list.dart';
 import 'session_orders.dart';
 
-class RegisterSessionHistoryScreen extends StatelessWidget {
+class RegisterSessionHistoryScreen extends StatefulWidget {
   const RegisterSessionHistoryScreen({
     super.key,
     required this.viewModel,
     required this.contactRepository,
     required this.capabilities,
     required this.navigation,
+    this.initialSessionId,
   });
 
   final RegisterSessionHistoryViewModel viewModel;
   final ContactRepository contactRepository;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
+
+  /// Selected on open, fetching the shift when it is older than the first page
+  /// of history. Set when the screen is reached from an invoice's drawer-session
+  /// link rather than from the drawer.
+  final int? initialSessionId;
+
+  @override
+  State<RegisterSessionHistoryScreen> createState() =>
+      _RegisterSessionHistoryScreenState();
+}
+
+class _RegisterSessionHistoryScreenState
+    extends State<RegisterSessionHistoryScreen> {
+  RegisterSessionHistoryViewModel get viewModel => widget.viewModel;
+
+  @override
+  void initState() {
+    super.initState();
+    final sessionId = widget.initialSessionId;
+    if (sessionId != null) {
+      unawaited(viewModel.focusSession(sessionId));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,14 +63,14 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
         return PointyScaffold(
           drawer: AppNavigationDrawer(
             selectedDestination: AppNavigationDestination.registerSessions,
-            navigation: navigation,
+            navigation: widget.navigation,
           ),
           appBar: AppBar(
             leading: const PointyNavigationMenuButton(),
             title: Text(l10n.registerSessionHistoryTitle),
             actions: [
               RegisterSessionsGuard(
-                capabilities: capabilities,
+                capabilities: widget.capabilities,
                 fallback: const SizedBox.shrink(),
                 child: IconButton(
                   tooltip: l10n.refreshRegisterSessionsTooltip,
@@ -57,11 +81,11 @@ class RegisterSessionHistoryScreen extends StatelessWidget {
             ],
           ),
           body: RegisterSessionsGuard(
-            capabilities: capabilities,
+            capabilities: widget.capabilities,
             child: _HistoryWorkspace(
               viewModel: viewModel,
-              contactRepository: contactRepository,
-              capabilities: capabilities,
+              contactRepository: widget.contactRepository,
+              capabilities: widget.capabilities,
             ),
           ),
         );

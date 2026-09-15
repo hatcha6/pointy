@@ -27,6 +27,17 @@ class RegisterSessionApiClient {
     );
   }
 
+  Future<RegisterSession> fetchRegisterSession(int sessionId) async {
+    final response = await _session.get('register-sessions/$sessionId/');
+    _session.ensureSuccess(
+      response,
+      'Register session request failed with status',
+    );
+    return RegisterSession.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   /// Newest-first, paginated by cursor: pass the previous page's
   /// [RegisterSessionPage.nextCursor] to continue. A page number would be an
   /// offset into a list that grows at its head every time a drawer opens, which

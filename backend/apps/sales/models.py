@@ -82,6 +82,32 @@ class RegisterSession(TimeStampedModel):
             return "RS"
         return f"RS-{self.pk}"
 
+    @property
+    def owner_display_name(self) -> str:
+        """Who opened the drawer, spelled out — the till accountability line.
+
+        Falls back to the immutable ``owner_key`` when the account was since
+        deleted, so a sale never loses its attribution just because someone
+        left the shop.
+        """
+        owner = self.owner
+        if owner is None:
+            return self.owner_key
+        return owner.get_full_name().strip() or owner.username
+
+    @property
+    def owner_short_name(self) -> str:
+        """The cashier's first name — what a 58 mm receipt has room for.
+
+        Empty when the account is gone, unlike ``owner_display_name``: this one
+        is printed on a slip a customer walks out with, and "user:5" is a worse
+        answer there than no line at all. The internal record keeps the key.
+        """
+        owner = self.owner
+        if owner is None:
+            return ""
+        return owner.first_name.strip() or owner.username
+
     # The four aggregates below are each read directly by the reconciliation
     # payloads AND re-read by the composites (``expected_cash`` reads all four;
     # ``cash_variance`` re-reads ``expected_cash``; ``has_cash_variance`` re-reads
@@ -286,7 +312,26 @@ class OrderQuerySet(DocumentQuerySetMixin, models.QuerySet):
         return self.with_lifecycle_relations().select_related(
             "customer",
             "register_session",
+            # ``cashier_name`` reads the session's owner; without this join it
+            # is one query per row on a page of sales rung up by more than one
+            # person — invisible on a till's own shift, obvious on the invoices
+            # list an owner actually scrolls.
+            "register_session__owner",
             "sales_channel",
+        ).defer(
+            # Only the three name fields are ever read off the joined cashier
+            # (``RegisterSession.owner_display_name``/``owner_short_name``).
+            # Without this the list drags a password hash and eight unrelated
+            # auth columns across for every row on the page. Deferring a field
+            # something later decides to read would cost a query per row, so
+            # keep this list to columns no serializer touches.
+            "register_session__owner__password",
+            "register_session__owner__last_login",
+            "register_session__owner__is_superuser",
+            "register_session__owner__is_staff",
+            "register_session__owner__is_active",
+            "register_session__owner__email",
+            "register_session__owner__date_joined",
         ).prefetch_related(
             "lines__adjustment_lines",
             "payments",

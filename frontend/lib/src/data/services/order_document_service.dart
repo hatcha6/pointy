@@ -445,6 +445,15 @@ class OrderDocumentService {
               highlight: true,
             ),
         ],
+        // Who rang it up and on which drawer: the line that turns a printed
+        // copy back into a person and a shift without opening the Z-Report.
+        if ((order.cashierName ?? '').trim().isNotEmpty)
+          OrderDocumentField(labels.cashier, order.cashierName!.trim()),
+        if ((order.registerSessionNumber ?? '').trim().isNotEmpty)
+          OrderDocumentField(
+            labels.registerSession,
+            order.registerSessionNumber!.trim(),
+          ),
       ],
       itemsTable: OrderDocumentTable(
         columns: [
@@ -996,6 +1005,7 @@ class OrderDocumentLabels {
     required this.customer,
     required this.supplier,
     required this.registerSession,
+    required this.cashier,
     required this.status,
     required this.issueDate,
     required this.createdAt,
@@ -1068,6 +1078,7 @@ class OrderDocumentLabels {
       customer = 'العميل',
       supplier = 'المورد',
       registerSession = 'جلسة الدرج',
+      cashier = 'الكاشير',
       status = 'الحالة',
       issueDate = 'تاريخ الإصدار',
       createdAt = 'تاريخ الإنشاء',
@@ -1139,6 +1150,7 @@ class OrderDocumentLabels {
   final String customer;
   final String supplier;
   final String registerSession;
+  final String cashier;
   final String status;
   final String issueDate;
   final String createdAt;

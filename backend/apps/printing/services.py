@@ -153,10 +153,27 @@ def shop_logo_base64(shop_settings):
     return base64.b64encode(content).decode("ascii")
 
 
+def cashier_payload(order):
+    """The person behind the drawer this order was rung up on, or None.
+
+    Derived from the register session rather than stored on the order: the
+    session already owns that fact, and a second copy is a second thing that
+    can disagree with the Z-Report.
+    """
+    session = order.register_session if order.register_session_id else None
+    if session is None:
+        return None
+    return {
+        "id": session.owner_id,
+        "name": session.owner_short_name,
+        "full_name": session.owner_display_name,
+    }
+
+
 def build_receipt_payload(order):
     shop_settings = ShopSettings.load()
     order = (
-        Order.objects.select_related("register_session")
+        Order.objects.select_related("register_session", "register_session__owner")
         .prefetch_related(
             "lines__variant__product",
             "lines__variant__option_values__option",
@@ -202,6 +219,10 @@ def build_receipt_payload(order):
                 if order.register_session_id
                 else None
             ),
+            # Who rang it up, so a slip in a customer's hand traces back to a
+            # person without anyone having to open the Z-Report. First name
+            # only: a 58 mm roll has no room for a full one.
+            "cashier": cashier_payload(order),
             "lines": [
                 receipt_line_payload(line, unit_labels=unit_labels)
                 for line in order.lines.all()

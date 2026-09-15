@@ -378,6 +378,10 @@ class PosApiService {
     return _users.updateUser(id: id, draft: draft);
   }
 
+  Future<PosUser> fetchUser(int id) {
+    return _users.fetchUser(id);
+  }
+
   Future<UserActivityOverview> fetchUserActivity(int id) {
     return _users.fetchUserActivity(id);
   }
@@ -1394,6 +1398,10 @@ class PosApiService {
 
   Future<RegisterSession?> fetchCurrentRegisterSession() {
     return _registerSessions.fetchCurrentRegisterSession();
+  }
+
+  Future<RegisterSession> fetchRegisterSession(int sessionId) {
+    return _registerSessions.fetchRegisterSession(sessionId);
   }
 
   Future<RegisterSessionPage> fetchRegisterSessionHistory({String? cursor}) {

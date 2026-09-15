@@ -8,6 +8,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../data/models/sale_order.dart';
 import '../../data/services/order_document_service.dart';
 import '../components/components.dart';
+import '../design/design.dart';
 import '../formatters.dart';
 import '../order_totals.dart';
 import 'pointy_quantity_stepper.dart'
@@ -65,6 +66,8 @@ class SaleOrderDetailsContent extends StatefulWidget {
     this.onRecordPayment,
     this.onAssignCustomer,
     this.onConvert,
+    this.onOpenCashier,
+    this.onOpenRegisterSession,
     this.isRecordingPayment = false,
     this.isAssigningCustomer = false,
     this.isConverting = false,
@@ -100,6 +103,13 @@ class SaleOrderDetailsContent extends StatefulWidget {
   /// When provided and the order is an OPEN quotation, surfaces a
   /// "تحويل إلى بيع" action. The callback opens the conversion dialog.
   final SaleOrderConvertAction? onConvert;
+
+  /// Opens the profile of the cashier who rang this sale up, and the drawer
+  /// session it belongs to. When either is null that row stays plain text —
+  /// which is what a surface with nowhere to navigate (a preview, a sheet) and
+  /// a user without the rights to see the target both get.
+  final ValueChanged<int>? onOpenCashier;
+  final ValueChanged<int>? onOpenRegisterSession;
   final bool isRecordingPayment;
   final bool isAssigningCustomer;
   final bool isConverting;
@@ -185,7 +195,11 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
             ),
             const SizedBox(height: 12),
           ],
-          _SummarySection(order: order),
+          _SummarySection(
+            order: order,
+            onOpenCashier: widget.onOpenCashier,
+            onOpenRegisterSession: widget.onOpenRegisterSession,
+          ),
           const SizedBox(height: 16),
           _LinesSection(order: order),
           const SizedBox(height: 16),
@@ -656,9 +670,15 @@ class _ActionsSection extends StatelessWidget {
 }
 
 class _SummarySection extends StatelessWidget {
-  const _SummarySection({required this.order});
+  const _SummarySection({
+    required this.order,
+    this.onOpenCashier,
+    this.onOpenRegisterSession,
+  });
 
   final SaleOrder order;
+  final ValueChanged<int>? onOpenCashier;
+  final ValueChanged<int>? onOpenRegisterSession;
 
   @override
   Widget build(BuildContext context) {
@@ -682,11 +702,24 @@ class _SummarySection extends StatelessWidget {
               label: l10n.invoiceCustomerLabel,
               value: order.customerName!,
             ),
+          if ((order.cashierName ?? '').trim().isNotEmpty)
+            _DetailRow(
+              label: l10n.invoiceCashierLabel,
+              value: order.cashierName!.trim(),
+              onTap: (onOpenCashier == null || order.cashierId == null)
+                  ? null
+                  : () => onOpenCashier!(order.cashierId!),
+            ),
           if (order.registerSessionNumber != null &&
               order.registerSessionNumber!.isNotEmpty)
             _DetailRow(
               label: l10n.invoiceRegisterSessionLabel,
               value: order.registerSessionNumber!,
+              onTap:
+                  (onOpenRegisterSession == null ||
+                      order.registerSession == null)
+                  ? null
+                  : () => onOpenRegisterSession!(order.registerSession!),
             ),
           _DetailRow(
             label: l10n.invoiceLineCountLabel,
@@ -869,13 +902,33 @@ class _TotalsSection extends StatelessWidget {
 }
 
 class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
+  const _DetailRow({required this.label, required this.value, this.onTap});
 
   final String label;
   final String value;
 
+  /// When given, the value becomes a link to the record it names — the
+  /// cashier's profile, the drawer session. Null leaves it as plain text, which
+  /// is what every surface that cannot navigate (a preview, a modal sheet with
+  /// no navigator of its own) gets.
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    final valueText = Text(
+      value,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.end,
+      style: TextStyle(
+        fontWeight: FontWeight.w600,
+        color: onTap == null ? null : colors.primaryStrong,
+        decoration: onTap == null ? null : TextDecoration.underline,
+        decorationColor: onTap == null ? null : colors.primaryStrong,
+      ),
+    );
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -883,13 +936,33 @@ class _DetailRow extends StatelessWidget {
           Expanded(child: Text(label)),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              value,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.end,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
+            child: onTap == null
+                ? valueText
+                : Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: InkWell(
+                      onTap: onTap,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(child: valueText),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.open_in_new,
+                              size: 14,
+                              color: colors.primaryStrong,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
           ),
         ],
       ),

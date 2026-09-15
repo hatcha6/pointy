@@ -194,11 +194,7 @@ class RegisterSessionSerializer(serializers.ModelSerializer):
     def get_owner_name(self, session):
         """Who opened the session — the till accountability line. Falls back to
         the immutable owner_key when the user account was since deleted."""
-        owner = session.owner
-        if owner is None:
-            return session.owner_key
-        full_name = owner.get_full_name().strip()
-        return full_name or owner.username
+        return session.owner_display_name
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -432,6 +428,17 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
         source="register_session.session_number",
         read_only=True,
     )
+    # Who rang the sale up. Derived from the drawer session rather than stored
+    # on the order: the session already owns that fact, and a second copy is a
+    # second thing that can disagree with the Z-Report.
+    cashier = serializers.IntegerField(
+        source="register_session.owner_id",
+        read_only=True,
+    )
+    cashier_name = serializers.CharField(
+        source="register_session.owner_display_name",
+        read_only=True,
+    )
     sales_channel_name = serializers.CharField(source="sales_channel.name", read_only=True)
     sales_channel_slug = serializers.CharField(source="sales_channel.slug", read_only=True)
     card_receipt_status = serializers.SerializerMethodField()
@@ -477,6 +484,8 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
             "payment_status",
             "register_session",
             "register_session_number",
+            "cashier",
+            "cashier_name",
             "sales_channel",
             "sales_channel_name",
             "sales_channel_slug",
@@ -516,6 +525,8 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
             "payment_status",
             "register_session",
             "register_session_number",
+            "cashier",
+            "cashier_name",
             "sales_channel",
             "sales_channel_name",
             "sales_channel_slug",

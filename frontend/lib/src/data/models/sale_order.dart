@@ -398,6 +398,8 @@ class SaleOrder {
     this.receiptNumber,
     this.registerSession,
     this.registerSessionNumber,
+    this.cashierId,
+    this.cashierName,
     this.customer,
     this.customerNumber,
     this.customerName,
@@ -443,6 +445,12 @@ class SaleOrder {
   final int amendmentIndex;
   final int? registerSession;
   final String? registerSessionNumber;
+
+  /// Who rang this sale up — the register session's owner, resolved server-side
+  /// so a till and the invoices list can never name different people. Null on a
+  /// sale with no drawer session (an imported or channel order).
+  final int? cashierId;
+  final String? cashierName;
   final int? customer;
   final String? customerNumber;
   final String? customerName;
@@ -522,6 +530,8 @@ class SaleOrder {
       amendmentIndex: (json['amendment_index'] as num?)?.toInt() ?? 0,
       registerSession: _nullableIntFromJson(json['register_session']),
       registerSessionNumber: json['register_session_number']?.toString(),
+      cashierId: _nullableIntFromJson(json['cashier']),
+      cashierName: json['cashier_name']?.toString(),
       customer: _nullableIntFromJson(json['customer']),
       customerNumber: json['customer_number']?.toString(),
       customerName: json['customer_name']?.toString(),

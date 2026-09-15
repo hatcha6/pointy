@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -12,6 +14,7 @@ import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
 import '../../../data/repositories/surveillance_repository.dart';
 import '../../cameras/widgets/invoice_footage_section.dart';
+import '../../../shared/components/components.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/sale_order_details_content.dart';
@@ -33,6 +36,8 @@ class InvoiceDetailsScreen extends StatefulWidget {
     required this.initialOrder,
     required this.capabilities,
     this.analyticsEngine,
+    this.onOpenCashier,
+    this.onOpenRegisterSession,
   });
 
   final SaleRepository saleRepository;
@@ -49,6 +54,11 @@ class InvoiceDetailsScreen extends StatefulWidget {
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
 
+  /// Jump from the summary to the cashier who rang the sale up, and to the
+  /// drawer session it belongs to. Null leaves those rows as plain text.
+  final ValueChanged<int>? onOpenCashier;
+  final ValueChanged<int>? onOpenRegisterSession;
+
   @override
   State<InvoiceDetailsScreen> createState() => _InvoiceDetailsScreenState();
 }
@@ -62,6 +72,15 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
     initialOrder: widget.initialOrder,
     analyticsEngine: widget.analyticsEngine,
   );
+
+  @override
+  void initState() {
+    super.initState();
+    // The invoice we were handed is a list row: totals and status, no line
+    // items (see `OrderListSerializer`). Fetch the real document on open
+    // instead of waiting for someone to press refresh.
+    unawaited(_viewModel.loadInvoice());
+  }
 
   @override
   void dispose() {
@@ -124,6 +143,8 @@ class _InvoiceDetailsScreenState extends State<InvoiceDetailsScreen> {
               initialOrder: widget.initialOrder,
               capabilities: widget.capabilities,
               analyticsEngine: widget.analyticsEngine,
+              onOpenCashier: widget.onOpenCashier,
+              onOpenRegisterSession: widget.onOpenRegisterSession,
               viewModel: _viewModel,
             ),
           ),
@@ -147,6 +168,8 @@ class InvoiceDetailsView extends StatefulWidget {
     required this.initialOrder,
     required this.capabilities,
     this.analyticsEngine,
+    this.onOpenCashier,
+    this.onOpenRegisterSession,
     this.viewModel,
     this.showHeader = false,
   });
@@ -164,6 +187,11 @@ class InvoiceDetailsView extends StatefulWidget {
   final SaleOrder initialOrder;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
+
+  /// Jump from the summary to the cashier who rang the sale up, and to the
+  /// drawer session it belongs to. Null leaves those rows as plain text.
+  final ValueChanged<int>? onOpenCashier;
+  final ValueChanged<int>? onOpenRegisterSession;
 
   /// When provided, the view uses this view model and does not create or
   /// dispose its own — the owner ([InvoiceDetailsScreen]) manages it.
@@ -191,6 +219,29 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
       );
 
   @override
+  void initState() {
+    super.initState();
+    // Only when this view owns the model: the pushed screen that lends us one
+    // has already kicked off its own fetch, and a second would be a duplicate
+    // request on every invoice opened on a phone.
+    if (widget.viewModel == null) {
+      unawaited(_viewModel.loadInvoice());
+    }
+  }
+
+  @override
+  void didUpdateWidget(InvoiceDetailsView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The master-detail pane can reuse this element as the selection moves down
+    // the list; follow the selection instead of showing the invoice we happened
+    // to be built with until someone presses refresh.
+    if (widget.viewModel == null &&
+        widget.initialOrder.id != oldWidget.initialOrder.id) {
+      unawaited(_viewModel.showOrder(widget.initialOrder));
+    }
+  }
+
+  @override
   void dispose() {
     if (widget.viewModel == null) {
       _viewModel.dispose();
@@ -209,10 +260,17 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
 
         final body = _viewModel.hasLoadError
             ? Center(child: Text(l10n.invoiceDetailsLoadError))
+            // Until the full document lands we only hold the list row, which
+            // carries no line items — rendering it would say the invoice has no
+            // products. Wait rather than lie.
+            : (!_viewModel.hasLoadedDetail && _viewModel.isLoading)
+            ? const PointyLoadingArea()
             : AdaptiveMaxWidth(
                 width: AppContentWidth.detail,
                 child: SaleOrderDetailsContent(
                   order: order,
+                  onOpenCashier: widget.onOpenCashier,
+                  onOpenRegisterSession: widget.onOpenRegisterSession,
                   showTitle: false,
                   popOnSuccessfulAdjustment: false,
                   padding: const EdgeInsets.all(16),
@@ -431,6 +489,8 @@ class _InvoiceDetailsViewState extends State<InvoiceDetailsView> {
           initialOrder: newOrder,
           capabilities: widget.capabilities,
           analyticsEngine: widget.analyticsEngine,
+          onOpenCashier: widget.onOpenCashier,
+          onOpenRegisterSession: widget.onOpenRegisterSession,
         ),
       ),
     );

@@ -218,6 +218,12 @@ class EscPosReceiptEncoder {
     final createdAt = _formatDateTime(order['created_at']);
     final lines = _list(order['lines']);
     final publicInvoiceUrl = _string(order['public_invoice_url']);
+    // Who rang it up and on which drawer, so a slip handed back over the
+    // counter traces to a person and a shift without opening the Z-Report.
+    final cashierName = _string(_map(order['cashier'])['name']);
+    final sessionNumber = _string(
+      _map(order['register_session'])['session_number'],
+    );
 
     final bytes = <int>[];
     bytes.addAll(
@@ -243,6 +249,18 @@ class EscPosReceiptEncoder {
         _text(
           generator,
           createdAt,
+          styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
+        ),
+      );
+    }
+    for (final attribution in [
+      if (cashierName.isNotEmpty) 'الكاشير: $cashierName',
+      if (sessionNumber.isNotEmpty) 'جلسة الدرج: $sessionNumber',
+    ]) {
+      bytes.addAll(
+        _text(
+          generator,
+          attribution,
           styles: PosStyles(align: PosAlign.right, codeTable: codeTable),
         ),
       );

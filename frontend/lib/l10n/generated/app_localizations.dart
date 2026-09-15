@@ -17778,6 +17778,18 @@ abstract class AppLocalizations {
   /// **'العميل'**
   String get invoiceCustomerLabel;
 
+  /// No description provided for @invoiceCashierLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاشير'**
+  String get invoiceCashierLabel;
+
+  /// Cashier who rang up the sale, shown in an invoice row.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاشير: {cashierName}'**
+  String invoiceCashierValue(String cashierName);
+
   /// No description provided for @invoiceRegisterSessionLabel.
   ///
   /// In ar, this message translates to:

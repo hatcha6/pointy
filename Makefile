@@ -130,7 +130,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-venv backend-install backend-env backend-migrate backend-migrations backend-dev-migrate backend-run backend-run-remote \
 	backend-load-test backend-stress-test backend-endurance-test \
 	backend-shell backend-superuser backend-test backend-test-pg backend-check backend-celery backend-celery-beat \
-	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format frontend-scales-preview \
+	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format frontend-scales-preview frontend-invoice-attribution-preview \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
 	onprem-test onprem-rehearsal onprem-rehearsal-clean upgrade-rehearsal upgrade-check \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable ai-enable-remote postgres-ready clean
@@ -347,6 +347,9 @@ frontend-shop-setup-preview: frontend-install ## Run the first-run shop-setup wi
 
 frontend-migration-preview: frontend-install ## Run the data-migration settings UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/migration_preview.dart
+
+frontend-invoice-attribution-preview: frontend-install ## Run the invoice cashier/drawer-session attribution UI preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/invoice_attribution_preview.dart
 
 frontend-register-session-preview: frontend-install ## Run the register-session summary + Z-Report UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/register_session_preview.dart

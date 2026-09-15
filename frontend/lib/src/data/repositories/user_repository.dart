@@ -19,6 +19,10 @@ class UserRepository {
     );
   }
 
+  Future<Result<PosUser>> loadUser(int id) async {
+    return Result.guard(() => _service.fetchUser(id));
+  }
+
   Future<Result<PermissionCatalog>> loadPermissionCatalog() async {
     return Result.guard(() => _service.fetchPermissionCatalog());
   }

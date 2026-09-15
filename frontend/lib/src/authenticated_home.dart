@@ -554,7 +554,10 @@ class _AuthenticatedRoutes implements AppNavigation {
     );
   }
 
-  Widget registerSessionsRouteBuilder(BuildContext routeContext) {
+  Widget registerSessionsRouteBuilder(
+    BuildContext routeContext, {
+    int? initialSessionId,
+  }) {
     return _screen(
       'register_sessions',
       RegisterSessionHistoryScreen(
@@ -568,6 +571,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         contactRepository: dependencies.contactRepository,
         capabilities: capabilities,
         navigation: this,
+        initialSessionId: initialSessionId,
       ),
     );
   }
@@ -597,6 +601,8 @@ class _AuthenticatedRoutes implements AppNavigation {
                 initialOrder: order,
                 capabilities: capabilities,
                 analyticsEngine: dependencies.analyticsEngine,
+                onOpenCashier: _cashierLinkFor(context, order),
+                onOpenRegisterSession: _registerSessionLinkFor(context),
               ),
             ),
           );
@@ -612,10 +618,35 @@ class _AuthenticatedRoutes implements AppNavigation {
           initialOrder: order,
           capabilities: capabilities,
           analyticsEngine: dependencies.analyticsEngine,
+          onOpenCashier: _cashierLinkFor(context, order),
+          onOpenRegisterSession: _registerSessionLinkFor(context),
           showHeader: true,
         ),
       ),
     );
+  }
+
+  /// The two invoice attribution links, or null when this user may not follow
+  /// them — which is what leaves the row as plain text rather than a link that
+  /// opens a denied screen.
+  ValueChanged<int>? _cashierLinkFor(BuildContext context, SaleOrder order) {
+    if (!capabilities.allows(AppCapability.manageUsers)) {
+      return null;
+    }
+    return (userId) => unawaited(
+      openUserProfileById(
+        context,
+        userId,
+        displayName: order.cashierName ?? '',
+      ),
+    );
+  }
+
+  ValueChanged<int>? _registerSessionLinkFor(BuildContext context) {
+    if (!capabilities.allows(AppCapability.viewRegisterSessions)) {
+      return null;
+    }
+    return (sessionId) => openRegisterSessionById(context, sessionId);
   }
 
   Widget returnsExchangeRouteBuilder(BuildContext routeContext) {
@@ -645,27 +676,88 @@ class _AuthenticatedRoutes implements AppNavigation {
         navigation: this,
         onOpenUserPermissions: (user) =>
             _openUserPermissions(routeContext, user),
-        onOpenUserDetails: guardedValueAction(AppCapability.manageUsers, (
-          user,
-        ) {
-          push(
-            routeContext,
-            (_) => _screen(
-              'user_details',
-              UserDetailsScreen(
-                viewModel: UserDetailsViewModel(
-                  dependencies.userRepository,
-                  initialUser: user,
-                ),
-                capabilities: capabilities,
-                onManagePermissions: (target) =>
-                    _openUserPermissions(routeContext, target),
-              ),
-            ),
-          );
-        }),
+        onOpenUserDetails: guardedValueAction(
+          AppCapability.manageUsers,
+          (user) => _openUserDetails(routeContext, user),
+        ),
       ),
     );
+  }
+
+  void _openUserDetails(BuildContext context, PosUser user) {
+    push(
+      context,
+      (_) => _screen(
+        'user_details',
+        UserDetailsScreen(
+          viewModel: UserDetailsViewModel(
+            dependencies.userRepository,
+            initialUser: user,
+          ),
+          capabilities: capabilities,
+          onManagePermissions: (target) =>
+              _openUserPermissions(context, target),
+        ),
+      ),
+    );
+  }
+
+  /// Opens one person's profile from a record that names them by id — the
+  /// cashier row on an invoice.
+  ///
+  /// [displayName], when the calling record already carries it, opens the
+  /// screen immediately on a stub: `UserDetailsViewModel` fetches the activity
+  /// overview on construction and that response carries the full user, so
+  /// fetching the user here as well would be a second round trip for a title
+  /// we already have. Without a name there is nothing to render, so it falls
+  /// back to loading the user first.
+  Future<bool> openUserProfileById(
+    BuildContext context,
+    int userId, {
+    String displayName = '',
+  }) {
+    if (!capabilities.allows(AppCapability.manageUsers)) {
+      return Future.value(false);
+    }
+    if (displayName.trim().isNotEmpty) {
+      _openUserDetails(context, _userStub(userId, displayName.trim()));
+      return Future.value(true);
+    }
+    return _loadThenOpen(
+      context,
+      AppCapability.manageUsers,
+      () => dependencies.userRepository.loadUser(userId),
+      _openUserDetails,
+    );
+  }
+
+  /// Just enough user for the details screen's title while its own fetch is in
+  /// flight; every other field is replaced by the activity overview's `user`.
+  PosUser _userStub(int userId, String displayName) {
+    return PosUser(
+      id: userId,
+      username: displayName,
+      displayName: displayName,
+      role: UserRole.cashier,
+      isActive: true,
+    );
+  }
+
+  /// Opens the register-session history with [sessionId] already selected — the
+  /// drawer-session row on an invoice. The screen fetches the shift itself, so
+  /// an old session that is not on the first page still opens.
+  bool openRegisterSessionById(BuildContext context, int sessionId) {
+    if (!capabilities.allows(AppCapability.viewRegisterSessions)) {
+      return false;
+    }
+    push(
+      context,
+      (routeContext) => registerSessionsRouteBuilder(
+        routeContext,
+        initialSessionId: sessionId,
+      ),
+    );
+    return true;
   }
 
   Future<bool> _openUserPermissions(BuildContext context, PosUser user) async {
@@ -2113,6 +2205,10 @@ class _AuthenticatedRoutes implements AppNavigation {
         }
         _openJobById(context, id);
         return Future.value(true);
+      case 'user' || 'cashier':
+        return openUserProfileById(context, id);
+      case 'register-session' || 'session':
+        return Future.value(openRegisterSessionById(context, id));
       default:
         return Future.value(false);
     }

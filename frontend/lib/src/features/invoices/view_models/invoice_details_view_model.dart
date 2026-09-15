@@ -43,6 +43,7 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
   SaleOrder _order;
   bool _isLoading = false;
   bool _hasLoadError = false;
+  bool _hasLoadedDetail = false;
   bool _isRecordingPayment = false;
   bool _isConverting = false;
   bool _isAssigningCustomer = false;
@@ -51,6 +52,12 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
   SaleOrder get order => _order;
   bool get isLoading => _isLoading;
   bool get hasLoadError => _hasLoadError;
+
+  /// Whether the order on screen is the full document rather than the summary
+  /// row the list handed over. List rows carry a line COUNT and no line items
+  /// (see `OrderListSerializer`), so a details surface that renders one before
+  /// its own fetch lands truthfully reports an invoice with no products.
+  bool get hasLoadedDetail => _hasLoadedDetail;
   bool get isRecordingPayment => _isRecordingPayment;
   bool get isConverting => _isConverting;
   bool get isAssigningCustomer => _isAssigningCustomer;
@@ -64,12 +71,30 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<SaleOrder>(value: final order):
         _order = order;
+        _hasLoadedDetail = true;
       case Error<SaleOrder>():
         _hasLoadError = true;
     }
 
     _isLoading = false;
     notifyListeners();
+  }
+
+  /// Points this view model at a different invoice and fetches it.
+  ///
+  /// The master-detail pane reuses one details surface as the selection moves
+  /// down the list; without this the pane kept showing whichever invoice it was
+  /// first built with until someone hit refresh.
+  Future<void> showOrder(SaleOrder order) {
+    if (order.id == _order.id && _hasLoadedDetail) {
+      return Future<void>.value();
+    }
+    _order = order;
+    _hasLoadedDetail = false;
+    _hasLoadError = false;
+    _idempotencyKeysBySignature.clear();
+    notifyListeners();
+    return loadInvoice();
   }
 
   /// Records a payment against this (credit) invoice and reloads the order on
@@ -106,6 +131,7 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
     if (didRecord) {
       _clearIdempotencyKey(signature);
       _order = result.value;
+      _hasLoadedDetail = true;
     }
 
     _isRecordingPayment = false;
@@ -117,6 +143,27 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
       await _printPaymentProof(method: method, amount: amount);
     }
     return didRecord;
+  }
+
+  // The details pane is disposed and rebuilt as the selection moves down the
+  // invoices list, so a fetch started for the previous row is routinely still
+  // in flight when its view model goes away. Swallow the late notification
+  // rather than assert "used after disposed" — the same guard the catalog and
+  // purchasing view models carry for the same reason.
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (_disposed) {
+      return;
+    }
+    super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   /// Builds and prints a "سند قبض" proof for the most-recent payment on the
@@ -178,6 +225,7 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
     if (didAssign) {
       _clearIdempotencyKey(signature);
       _order = result.value;
+      _hasLoadedDetail = true;
       _trackCustomerAssigned(previousCustomerId: previousCustomerId);
     }
 
@@ -411,6 +459,7 @@ class InvoiceDetailsViewModel extends ChangeNotifier {
     switch (result) {
       case Ok<SaleOrder>(value: final updatedOrder):
         _order = updatedOrder;
+        _hasLoadedDetail = true;
         _trackOrderAdjustmentCompleted(
           eventName: eventName,
           originalOrder: order,

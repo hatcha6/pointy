@@ -25,6 +25,14 @@ class UserApiClient {
     return PosUserPage.fromAny(_session.decodedBody(response));
   }
 
+  Future<PosUser> fetchUser(int id) async {
+    final response = await _session.get('users/$id/');
+    _session.ensureSuccess(response, 'User request failed with status');
+    return PosUser.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
   Future<PermissionCatalog> fetchPermissionCatalog() async {
     final response = await _session.get('users/permission-catalog/');
     _session.ensureSuccess(
