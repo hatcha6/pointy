@@ -21,6 +21,8 @@ class ShopSettings {
     required this.trustedCardTerminalIds,
     required this.cardCommissionPercent,
     required this.transferCommissionPercent,
+    this.autoPrintMinLineCount,
+    this.autoPrintMinTotal,
     this.requireCustomerForCredit = true,
     this.allowCashierCustomerAccess = true,
     this.warnLowStockBeforeSale = true,
@@ -44,6 +46,18 @@ class ShopSettings {
   final bool enableOnlineInvoices;
   final bool requireOpeningCash;
   final bool autoPrintReceipts;
+
+  /// Auto-print floor: how much of a sale it takes before a receipt prints by
+  /// itself. A sale qualifies on clearing EITHER — enough lines or enough money
+  /// — so a big basket of cheap things and one expensive thing both print, and
+  /// a single loaf of bread does not. Null (or 0) on both means every sale
+  /// prints, which is what auto-print meant before these existed.
+  ///
+  /// The rule is [saleClearsAutoPrintFloor]; the backend states the same rule
+  /// in `ShopSettings.sale_clears_auto_print_floor`, and the two have to agree
+  /// or a shop sees the queue print a sale the till skipped.
+  final int? autoPrintMinLineCount;
+  final double? autoPrintMinTotal;
   final bool autoPrintKitchenTickets;
   final bool allowOverselling;
   final bool preventSellingAtLoss;
@@ -98,6 +112,34 @@ class ShopSettings {
   /// cap, 0 counts: it means "no credit by default", not "no rule".
   bool get hasDefaultCustomerCreditLimit => defaultCustomerCreditLimit != null;
 
+  /// Whether auto-printing is limited to sales of a certain size at all.
+  bool get hasAutoPrintFloor =>
+      (autoPrintMinLineCount ?? 0) > 0 || (autoPrintMinTotal ?? 0) > 0;
+
+  /// Whether a sale of this shape is big enough to print a receipt by itself.
+  ///
+  /// Whichever floors the shop set, clearing *either* is enough: a basket of
+  /// cheap things qualifies on [lineCount], one expensive thing on [total]. A
+  /// floor of 0 reads as no floor — a cleared box must not quietly mean "every
+  /// sale qualifies", which is what a literal `lineCount >= 0` would say.
+  ///
+  /// The backend asks the same question of the same numbers before it queues a
+  /// receipt; keep the two in step.
+  bool saleClearsAutoPrintFloor({
+    required int lineCount,
+    required double total,
+  }) {
+    final minLines = autoPrintMinLineCount ?? 0;
+    final minTotal = autoPrintMinTotal ?? 0;
+    if (minLines <= 0 && minTotal <= 0) {
+      return true;
+    }
+    if (minLines > 0 && lineCount >= minLines) {
+      return true;
+    }
+    return minTotal > 0 && total >= minTotal;
+  }
+
   factory ShopSettings.fromJson(Map<String, Object?> json) {
     final logoJson = json['logo_attachment'];
     return ShopSettings(
@@ -114,6 +156,12 @@ class ShopSettings {
       autoPrintReceipts: json['auto_print_receipts'] is bool
           ? json['auto_print_receipts'] as bool
           : json['auto_print_receipts']?.toString() == 'true',
+      autoPrintMinLineCount: json['auto_print_min_line_count'] == null
+          ? null
+          : _intFromJson(json['auto_print_min_line_count'], 0),
+      autoPrintMinTotal: json['auto_print_min_total'] == null
+          ? null
+          : _moneyFromJson(json['auto_print_min_total'], 0),
       autoPrintKitchenTickets: _boolFromJson(
         json['auto_print_kitchen_tickets'],
         false,
@@ -204,6 +252,14 @@ class ShopLogoUpload {
   final String contentType;
 }
 
+/// The settings **write** payload.
+///
+/// Deliberately carries no auto-print floor. This branch ships no settings UI
+/// for it (the floor is set from a modern client), and the draft goes out as a
+/// PATCH body assembled field by field — so naming the keys here would send
+/// them as null on every save and silently clear a floor the shop had set
+/// elsewhere. Omitted keys are left alone by the server; that is the whole
+/// reason they stay omitted.
 class ShopSettingsDraft {
   const ShopSettingsDraft({
     required this.shopName,
@@ -313,6 +369,13 @@ bool _boolFromJson(Object? value, bool fallback) {
     return fallback;
   }
   return value.toString() == 'true';
+}
+
+int _intFromJson(Object? value, int fallback) {
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse(value?.toString() ?? '') ?? fallback;
 }
 
 double _moneyFromJson(Object? value, double fallback) {
