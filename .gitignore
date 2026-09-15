@@ -32,6 +32,11 @@ pyarmor.bug.log
 *.dump
 *.pgdump
 
+# Analytics event exports pulled from a shop for field analysis. Same reasoning
+# as the dumps above: they are large, and every event carries a real till's
+# real activity. Unzipped alongside the repo root by habit, so match anywhere.
+pointy-analytics-events*.zip
+
 # Legacy client DB exports for data migration (large binaries)
 *.mdb
 fahd_data.sqlite

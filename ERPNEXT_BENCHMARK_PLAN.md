@@ -1,10 +1,47 @@
 # Pointy vs. ERPNext — Benchmark, Gap Register, and Improvement Plan
 
-**Date:** 2026-08-26
+**Date:** 2026-08-26. **Last reconciled against the tree: 2026-09-13.**
 **Mirror project:** [frappe/erpnext](https://github.com/frappe/erpnext) (+ the Frappe framework underneath it)
 **Purpose:** use the most-scrutinised open ERP in the world as a checklist against our own model, decide
 what is genuinely missing, and sequence the work. This is a *selective adoption* plan, not a
 "catch up to ERPNext" plan — see §8 Anti-goals.
+
+> **Status, 2026-09-13.** Phases 1a, 2 and most of 3 have shipped since this was written, and the
+> document had drifted far enough that it was describing gaps that no longer exist. Every row below
+> was re-verified against the tree on that date, not against this document's own memory of itself.
+> What that reconciliation changed is summarised in §0; the three things it *found* — a gap Phase 2
+> created, a deferral whose own revisit condition has fired, and the one item that gets more expensive
+> every month — are in §5 and §10.
+
+---
+
+## 0. Where we actually are (reconciled 2026-09-13)
+
+| Plan item | Verdict | Evidence |
+|---|---|---|
+| **0** Valuation method ratified | **Done** 2026-08-26 | Owner-visible choice, API-guarded |
+| **0** Oracle taught the new invariants | **Done** | Models the ledger event by event |
+| **0** Published data-model reference | **Not started** | There is still no `docs/` directory |
+| **1a** Document lifecycle | **Done** 2026-09-06 | `apps/documents`, **10 registered types** — sale, payment, purchase_order, purchase_receipt, supplier_payment, expense, payroll_run, stock_count, stock_transfer, stock_transfer_receipt |
+| **1b** Naming series | **Not started** | `sales/models.py` still builds `f"R{created_at:%Y%m%d}{id:06d}"` inline. No prefix setting, no series table, no branch discriminator |
+| **1c** Valued stock ledger | **Done** 2026-08-26 | `StockLedgerEntry`, `StockValuationBin`, `repost_valuation` |
+| **1d** COGS from the ledger | **Done** 2026-08-26 | `OrderLine.unit_cost` restamped at issue |
+| **2** Multi-location | **Done** 2026-09-06 | `Warehouse` (flat, 4 kinds incl. transit), `StockItem` now FK + unique on (variant, warehouse), `StockTransfer` → `StockTransferReceipt` two-step, `RegisterProfile` per device, Flutter surfaces for all of it |
+| **3** Money control | **~80%** | Credit limits + per-customer policy, payment terms and due dates, receivables/payables aging, customer/supplier statements, overdue reminders via `apps/crm`. **Open: user-directed allocation** — collections allocate oldest-first automatically (`sales/serializers.py`), and there is no advance / on-account concept |
+| **4** Shadow ledger | **Planned** — reversed 2026-09-13 | Declined 08-28, un-declined 09-13 on a rationale in neither of its own triggers: Libyan courts treat a **stamped paper ledger** as authoritative, and a دفتر الأستاذ cannot be printed without accounts. Re-sized ≈5 → **13–18 weeks** (§7 Phase 4, §10.3) |
+| **5** Document flow | **Not started** | No `SalesOrder`, `DeliveryNote`, `MaterialRequest`, supplier quotation or purchase invoice anywhere |
+| **6** Extensibility | **Not started** | No custom fields, no generic workflow (still operations-only), no row-level scoping. 19 hard-coded report types, no schedule/pin |
+
+Two things shipped that this plan never asked for and should be recorded here so the next reconciliation
+does not mistake them for gaps: **multi-currency** (Track A, 2026-08-31 — `apps/fx`, relay-fed
+parallel-market rates, per-product pricing currency) and **period locking**, which arrived early with the
+accountant reports overhaul rather than with Phase 4 as sequenced. That second one matters more than it
+looked: **Phase 4 now inherits half of its own exit criterion** before it starts.
+
+**One verdict changed after this table was written.** Phase 4 was *deferred* when §0 was drafted and is
+*planned* by the end of the same reconciliation — reversed once the ERPNext accounting surface was
+actually measured (§7) and the stamped-ledger rationale surfaced from the GTM dossier (§10.3). It is
+recorded as a reversal rather than edited into looking like a plan that always said so.
 
 ---
 
@@ -33,7 +70,7 @@ Where the comparison misleads:
 
 ## 2. What was actually inspected (grounding)
 
-Pointy, current `main`-ish tree:
+Pointy, at first writing (2026-08-26):
 
 - 25 backend Django apps (`backend/apps/*`), ~120 models, 1,953 backend test functions.
 - 31 frontend feature modules (`frontend/lib/src/features/*`).
@@ -49,6 +86,22 @@ Pointy, current `main`-ish tree:
     not a valued ledger (no rate, no running value, no backdated reposting).
   - 9 fixed report types (`ReportRun.ReportType`); no user-definable reports.
   - Batches exist (`StockBatch`, expiry-driven); no serial-number tracking for stock.
+
+Pointy, re-read 2026-09-13 (the same method: models and services, not memory):
+
+- **34 backend apps, ~145 models, 3,549 backend test functions, 37 frontend feature modules.**
+- Of the four findings above, **three have been closed** and one stands:
+  - ~~One stock bucket~~ — `StockItem` is now `ForeignKey` + `UniqueConstraint(variant, warehouse)`.
+  - ~~Last-cost valuation~~ — closed by 1c/1d.
+  - ~~No credit limit / terms / statements~~ — all three shipped.
+  - **Still true: no ledger.** No `Account`, `GLEntry` or `JournalEntry` exists. This is now a
+    *decision* (§10.3) rather than an omission — but see the note there about its expiry condition.
+- **Still true and unchanged:** no tax model of any kind; no serial-number tracking (`StockBatch` is
+  still the only identity below the variant); no custom fields; no naming series; no generic workflow
+  outside `apps/operations`; no row/field-level permission scoping.
+- **New since:** `apps/fx` (multi-currency), `apps/treasury` (derived money position), `apps/documents`
+  (lifecycle primitive), `apps/surveillance`, `apps/companion`, `apps/scales`, `apps/invoice_intake`.
+- Report types grew 9 → **19**, all still hard-coded, none schedulable or pinnable.
 
 ERPNext, `develop` branch (fetched, not recalled): modules `accounts, assets, buying, crm, edi,
 maintenance, manufacturing, projects, quality_management, regional, selling, setup, stock,
@@ -68,21 +121,22 @@ subcontracting, support, telephony, utilities`. Doctype inventories pulled for `
 | **AI** | None in core | Agentic assistant, vision, voice, deep links, PO-from-invoice | **We win** |
 | **Inventory basics** | Item, variants, UoM conversion, barcodes, reorder | Same, plus multi-unit/carton barcodes, cost normalisation, blind stock count | **Par** |
 | **Purchasing** | MR → RFQ → SQ → PO → PR → PI, landed cost, subcontracting | PO → Receipt, landed cost entries, adjustments, POS cash-PO | **Behind (partial flow)** |
-| **Selling flow** | Quotation → Sales Order → Delivery Note → Sales Invoice, partial delivery/billing | Invoice + quotation + credit invoice; no order/delivery split | **Behind** |
+| **Selling flow** | Quotation → Sales Order → Delivery Note → Sales Invoice, partial delivery/billing | Invoice + quotation + credit invoice; no order/delivery split | **Behind** (unchanged 09-13) |
 | **Discounts/pricing** | Pricing Rule, Promotional Scheme, Price List per party | Rich engine: tiered/multi-buy/BXGY, RFM-targeted, O(1) preview | **We win** |
 | **Stock ledger & valuation** | Stock Ledger Entry, Bin, FIFO/moving-avg, Stock Reconciliation, repost, stock closing balance | Valued ledger entries + bins + repost, moving average/FIFO/LIFO (2026-08-26). No backdated auto-repost, no period closing balance | **Par (was structural)** |
-| **Multi-location** | Warehouse tree, Bin, transfers, putaway, pick lists | None (single bucket) | **Behind — structural** |
-| **Accounting** | Full double entry: COA, GL Entry, Journal/Payment Entry, cost centers, dimensions, budgets, fiscal year, period close, bank rec | Bespoke rollups per domain; no ledger, no trial balance, no P&L that ties | **Behind — structural** |
-| **Receivables control** | Credit limit + hold, payment terms/schedule, dunning, statements, payment reconciliation, advances | Credit invoices + payments, partial aging | **Behind** |
-| **Tax** | Item tax templates, tax categories/rules, withholding, inclusive/exclusive | None | **Behind (low urgency here)** |
-| **Document lifecycle** | `docstatus` draft/submitted/cancelled + amend, versioning, immutability | Per-domain ad-hoc statuses; PO reopen/re-apply logic hand-rolled | **Behind — structural** |
+| **Serialized stock** | Serial No with its own status, warranty and movement history | `StockBatch` only (expiry-driven). No identity below the variant | **Behind** — and the only gap with a named prospect (§5.1) |
+| **Multi-location** | Warehouse tree, Bin, transfers, putaway, pick lists | `Warehouse` (flat, 4 kinds), per-warehouse stock rows, two-step transfer through transit, per-device register profile (2026-09-06). No tree, no putaway, no pick lists — all refused, not missed | **Par (was structural)** |
+| **Accounting** | Full double entry across **191 doctypes / 52 reports**: COA, GL Entry, Journal/Payment Entry, cost centers, dimensions, budgets, fiscal year, period close, bank rec | No ledger, no trial balance. `apps/treasury` derives cash/bank position, period lock shipped, one-definition-per-figure statically enforced | **Behind — structural. Now scheduled:** Phase 4 reversed 2026-09-13, sized 13–18 weeks, targeting par-for-our-buyer on ~8 spine doctypes and 5 reports while refusing ~150 |
+| **Receivables control** | Credit limit + hold, payment terms/schedule, dunning, statements, payment reconciliation, advances | Credit limits with per-customer policy, payment terms + due dates, receivables/payables aging, customer/supplier statements, AI-drafted overdue reminders. Missing: user-directed allocation and advances | **Par** |
+| **Tax** | Item tax templates, tax categories/rules, withholding, inclusive/exclusive | None. `catalog/0002_remove_product_tax_rate` deleted the last trace | **Behind (low urgency here)** |
+| **Document lifecycle** | `docstatus` draft/submitted/cancelled + amend, versioning, immutability | `apps/documents` across 10 types: immutability at the model layer, cancel writes reversals, period-lock guard, declarative registry. **Amend is declared but not yet used** — the PO still corrects in place | **Par (was structural)** |
 | **Approvals** | Generic Workflow engine (states × roles × transitions) on any doc | Ad-hoc; `WorkflowTemplate`/`WorkflowStage` exist but only for operations jobs | **Behind** |
-| **Permissions** | Role × doctype × verb, field-level perm levels, row-level user permissions | 8 roles + additive per-user permission codes, escalation guard | **Par (we lack row/field scoping)** |
-| **Reporting** | Report Builder, query/script reports, dashboards, number cards — no developer needed | 9 hard-coded report types + AI assistant | **Behind on self-service; AI is our answer** |
+| **Permissions** | Role × doctype × verb, field-level perm levels, row-level user permissions | 8 roles + additive per-user permission codes, escalation guard | **Behind — and newly so.** Par was the right call when there was one stock bucket; Phase 2 created places to scope *to* and nothing scopes to them (§5.2) |
+| **Reporting** | Report Builder, query/script reports, dashboards, number cards — no developer needed | 19 hard-coded report types (up from 9) + CSV/PDF + AI assistant. Still none schedulable or pinnable | **Behind on self-service; AI is our answer** |
 | **Extensibility** | Custom fields, custom doctypes, naming series, print format builder, webhooks, app marketplace | Code changes required for all of it | **Behind (deliberately, for now)** |
 | **Manufacturing** | BOM (multi-level), Work Order, Job Card, Routing, Workstation, Production Plan/MRP | `BillOfMaterials`/`BomLine` recipes, made-to-order, kitchen stations | **Behind (mostly irrelevant to us)** |
 | **Projects / Assets / Quality / Support** | All present | Operations (repair jobs) ≈ support/maintenance; nothing else | **Behind (mostly irrelevant to us)** |
-| **Multi-company / multi-currency** | Yes, with exchange revaluation | Single company, single currency | **Behind (not needed yet)** |
+| **Multi-company / multi-currency** | Yes, with exchange revaluation | Multi-currency shipped 2026-08-31 (`apps/fx`, relay-fed parallel-market rates, per-product pricing currency). Multi-company still refused | **Par on currency; refused on company** |
 
 ---
 
@@ -111,6 +165,13 @@ independent rollups that can silently disagree. A ledger makes disagreement *imp
 and our simulation oracle can assert it continuously. **Ship it as a shadow ledger first**: no chart
 of accounts UX, a preset COA per `shop_type`, users never see an account code unless they ask.
 
+*Status 2026-09-13: scheduled.* Declined 08-28, reversed 09-13, sized **13–18 weeks** in §7 Phase 4. Two
+things learned from reading their implementation rather than their doctype list. First, the sentence
+above needs amending: users never see an account code **at all**, not "unless they ask" — §8.1 now names
+an account-tree screen as the drift signal. Second, a GL is not self-proving: ERPNext devotes **19
+doctypes and reports** to finding and repairing ledger inconsistency, so the oracle work (4d) is the
+primitive's other half, not its polish.
+
 ### P3 — Valued stock ledger entries + Bin
 One append-only row per stock event carrying `qty_change`, `valuation_rate`, `balance_qty`,
 `balance_value`, `warehouse`, `voucher`. Stock value and COGS are derived from the ledger, not from
@@ -130,30 +191,118 @@ Three cheap ones, in order: **naming series** per document type; **custom fields
 **per-register profiles** (ERPNext's POS Profile) so a device gets its own warehouse, payment modes,
 price list and permissions instead of one global `ShopSettings`.
 
+*Status 2026-09-13:* per-register profiles shipped **narrowly** — warehouse only (§10.8). Naming series
+and custom fields are both untouched, and of the three, naming series is the one with a deadline (§5.3).
+
+### P6 — Scoping, which we did not list and now need
+Not in the original five, and it belongs there: ERPNext scopes permissions to *rows* — a user permission
+on a warehouse means you do not see stock you have no business seeing. We ranked this as field-level
+polish because we had one warehouse and the row dimension did not exist. Phase 2 created it. §5.2.
+
 ---
 
 ## 5. Feature gaps ranked by Libyan-market ROI
 
+**Re-ranked 2026-09-13.** The original ranking was written when Phases 1–3 were all ahead of us; ten of
+its sixteen rows are now shipped or resolved. What follows is the list as it stands, and the first three
+entries are the reconciliation's actual findings rather than a reshuffle of the old ones.
+
+**Amended later the same day:** the shadow GL moved from #10/*Later* to #4/*near-term* once the ERPNext
+accounting surface was measured rather than estimated and the reason to build it turned out not to be the
+one it had been declined against. §5.6 states that reversal plainly; §10.3 carries the argument.
+
+### 5.1 — Serialized inventory is mis-ranked, and it is the only gap with a customer attached
+
+It sat at **#13, "Later"**, described as a repair-shop nicety. That was wrong, and
+[SERIALIZED_INVENTORY_PLAN.md](SERIALIZED_INVENTORY_PLAN.md) (2026-09-10) makes the argument at length:
+for a used-goods trader, a serial number is not a label on a sale, it is a costed, located, dated object,
+and **no other inventory model makes their numbers correct at all**. Every remaining item on this list is
+demand we have inferred. This one is a named prospect — a used-phone shop tracking every handset by IMEI,
+working around a POS that has only products and sub-barcodes.
+
+The plan is written and nothing is built. **It should be the next thing built.**
+
+### 5.2 — Phase 2 created a permission gap, and the fix is filed under "Later"
+
+`RegisterProfile` answers *which warehouse does this till sell out of*. Nothing answers *which warehouses
+may this user see, count, or move stock between* — because until 2026-09-06 there was one bucket and the
+question could not be asked. A shop that opens a store room now has a control surface it did not have
+last month and no way to control it.
+
+Row-level scoping is Phase 6, ranked *Later*, on a ranking written before the thing it scopes existed.
+This is the general hazard of a phased plan: **a phase can create the gap that a later phase was sized to
+close, and the ranking does not notice.** The narrow version — scope stock transfer and stock count to a
+user's permitted warehouses — is small, and is worth doing before the general mechanism.
+
+### 5.3 — Naming series is the only item that gets more expensive by waiting
+
+Everything else on this list costs the same in six months. Numbering does not: retrofitting a series means
+renumbering documents a shop has already printed and handed to customers. It is sized **S**, it has been
+"remaining in Phase 1" across the completion of two other phases, and today's numbers are an inline
+f-string — `R{date}{id:06d}` — with no prefix setting and no branch discriminator, which §10.6 says the
+column needs from the start.
+
+It is the cheapest unshipped item on the list and the only one carrying a deadline. Do it alongside 5.1.
+
+### 5.4 — The full register
+
 | # | Gap | Why it matters here | Cost | Priority |
 |---|---|---|---|---|
-| 1 | **Customer credit limit + overdue block at POS** | آجل is universal; the owner's #1 fear is unrecoverable credit. Pairs with our SMS/WhatsApp messaging for reminders — ERPNext can't do that. | S | **Now** |
-| 2 | **Warehouses / store room (مخزن) + transfers** | Shop + back store is the default; multi-branch is the natural upsell. Every month we wait, the migration gets bigger. | L | **Now** |
-| 3 | ~~**Valued stock ledger + reposting**~~ | **Shipped 2026-08-26.** Correct COGS and correct stock value = the wedge. | L | **Done** |
-| 4 | **Immutable documents + cancel/amend** | Audit, disputes, cashier fraud, and it simplifies existing code. | M | **Now** |
-| 5 | **Shadow GL + trial balance + P&L** | Proof of correctness; unlocks the accountant persona. | L | Next |
-| 6 | **Payment terms, due dates, statements, aging** | Wholesale customers ask for a statement (كشف حساب) by name. | M | Next |
-| 7 | **Sales Order → Delivery Note split** | "Order today, deliver tomorrow" wholesale/appliance flow we can't model. | M | Next |
-| 8 | **Material Request (store → shop requisition)** | Natural companion to warehouses. | S | Next |
-| 9 | **Period close / accounting-period lock** | Stops last month's numbers moving after they were reported. | S | Next |
-| 10 | **Generic approval workflow** | Discount above X, PO above Y, payroll run — all currently ad-hoc. | M | Later |
-| 11 | **Custom fields + naming series** | Removes us from the critical path of every customer's small ask. | M | Later |
-| 12 | **Self-service reporting** | Every customer wants one more report. Our AI assistant can leapfrog the report builder if we add export/schedule/pin. | M | Later |
-| 13 | **Serial-number tracking** | Phones, appliances, warranty claims — our repair-shop customers. | M | Later |
-| 14 | **Line-level tax (inclusive/exclusive)** | Low urgency in Libya, but blocks any second market and B2B tax invoices. | S | Later |
-| 15 | Supplier quotation comparison, partial purchase invoicing | Nice-to-have for purchasing agents. | M | Later |
+| 1 | **Serialized inventory (IMEI/serial/VIN)** | §5.1. The only gap with a named prospect. Plan written, nothing built. | L | **Now** |
+| 2 | **Warehouse-scoped permissions** | §5.2. A gap Phase 2 opened; the narrow version is cheap. | S→M | **Now** |
+| 3 | **Naming series** | §5.3. The only item with a deadline. | S | **Now** |
+| 4 | **Shadow GL + stamped Arabic ledger** | **Moved up 2026-09-13 from #10/Later.** Not for the trial balance — for the دفتر اليومية / الأستاذ a Libyan court treats as authoritative, which cannot be printed without accounts. §10.3, sized in §7 Phase 4. | **XL (13–18 wks)** | **Near-term** |
+| 5 | **Payment allocation to specific invoices + advances** | Finishes Phase 3. Collections allocate oldest-first today, which is right by default and wrong when a customer pays *this* invoice. Also a prerequisite the ledger will want. | M | Next |
+| 6 | **Amend as a real transition** | The lifecycle primitive declares `Correction.AMEND` and nothing uses it; the PO still corrects in place. The registry comment already names this as next. | S | Next |
+| 7 | **Material Request (store → shop requisition)** | Strictly cheaper than when it was ranked: the transfer document it feeds now exists. | S | Next |
+| 8 | **Sales Order → Delivery Note split** | "Order today, deliver tomorrow" wholesale/appliance flow we still cannot model. | M | Next |
+| 9 | **Backdated auto-repost + stock closing balance** | The two pieces of Phase 1c we scoped out. `repost_valuation` is manual; nothing triggers it on a backdated correction. The ledger will make this matter more, not less. | M | Next |
+| 10 | **Published data-model reference** | Phase 0's one unfinished item. There is no `docs/` directory — and Phase 4 is exactly the phase that will wish it existed. | S | Next |
+| 11 | **Self-service reporting** | 19 report types now, none schedulable or pinnable. Export/schedule/pin was the condition under which AI leapfrogs a report builder; only export shipped. | M | Later |
+| 12 | **Custom fields + generic workflow** | Removes us from the critical path of every customer's small ask. | M | Later |
+| 13 | **Line-level tax (inclusive/exclusive)** | Still zero urgency in Libya; still a hard blocker for any second market. Cheaper once a ledger exists to post it to. | S | Later |
+| 14 | Supplier quotation comparison, partial purchase invoicing | Nice-to-have for purchasing agents. | M | Later |
+| 15 | **Bank reconciliation** | Not previously listed. 18 doctypes + 3 reports in ERPNext, refused here — but the **most plausible future ask of the whole refused set** once a shop banks seriously. Cash dominance and no e-invoicing mandate keep it safely ignorable for now. | L | Watch |
 | 16 | Fixed assets + depreciation, projects, quality inspection, MRP, multi-company | No customer demand identified. | XL | **Not planned** |
 
----
+**Shipped since the first ranking**, kept here so the next reconciliation can see what moved: valued stock
+ledger (#3, 08-26), customer credit limits (#1, 09-05), warehouses and transfers (#2, 09-06), immutable
+documents (#4, 09-06), payment terms / statements / aging (#6, 09-06 area), period close and lock (#9,
+arrived early with the accountant reports overhaul).
+
+### 5.5 — Not on this list, and deliberately
+
+Two other plans are written and unbuilt, and neither is an ERPNext gap:
+[FX_FORECAST_PLAN.md](FX_FORECAST_PLAN.md) (margin protection against rate drift — a subtraction we can
+already make exactly, not the forecast that was asked for) and
+[LEARNING_MODULE_PLAN.md](LEARNING_MODULE_PLAN.md) (training staff inside the real app against a sandbox
+shop). They compete for the same weeks as everything above, and ERPNext has no opinion about either —
+which is a point in their favour, not against them.
+
+### 5.6 — The shadow GL was declined against the wrong question
+
+Recorded separately from §5.4 because a reversal inside one working day deserves to be legible rather
+than quietly absorbed into a table.
+
+It was declined on 2026-08-28 against the question *"does a customer's accountant want statements?"* The
+answer was no and still is — the evidence in §10.3 is a competitor's live install with a full
+double-entry module and zero accounts ever created. Nothing about that has changed.
+
+What changed is that this was never the only question. **Libyan courts treat stamped paper ledgers as
+authoritative over electronic records**, and the highest-value unbuilt feature in the GTM dossier is an
+Arabic print-ready stampable دفتر اليومية / دفتر الأستاذ. A daybook can be faked from money events; a
+دفتر الأستاذ cannot exist without accounts. So the ledger is not an accountant's instrument nobody
+requested — it is the engine under a document a shop can hold, in a market where the paper notebook is
+the incumbent and our brand is literally دفتر.
+
+Three things this does **not** license, stated here because they are how this goes wrong:
+
+- **It is not compliance.** Small traders are legally exempt from keeping books. This sells as control,
+  and the specific buyer is a shop with real آجل exposure — the disputes that reach a court.
+- **It does not reopen §8.1.** No chart of accounts is shown to anyone. See the anti-goal, which now
+  names the account-tree screen as the drift signal.
+- **It is XL, not a side quest.** 13–18 weeks, measured rather than guessed, against ≈5 in the original
+  plan. §7 Phase 4 carries the decomposition and the eleven posting rules that are the real work.
 
 ## 6. What we do that ERPNext does not — protect and press
 
@@ -183,21 +332,31 @@ extended to assert the new invariants.
   with their `test_valuation.py` cases ported alongside it. **Still pending: the engine is not yet the
   source of truth for COGS** — see 1c/1d below. Until then the last-cost path still decides
   `OrderLine.unit_cost`; the setting records intent and the Phase 1 wiring is what makes it bite.
-- Extend the business-simulation oracle with the invariants the later phases must satisfy
-  (stock value = Σ ledger balance value; Σ debits = Σ credits; receivables = Σ unpaid invoices).
-- Generate an ER/model reference doc for the backend (ERPNext publishes theirs; we should too).
+- ~~Extend the business-simulation oracle with the invariants the later phases must satisfy~~
+  **Done.** The oracle models the ledger event by event and independently predicts every line cost.
+  The debits-equal-credits invariant is moot while §10.3 holds.
+- **Still open (2026-09-13): generate an ER/model reference doc for the backend.** There is no `docs/`
+  directory. This is the last unfinished Phase 0 item and the cheapest thing on the whole plan.
 
-**Exit:** the oracle fails loudly on the invariants we are about to build toward.
+**Exit:** the oracle fails loudly on the invariants we are about to build toward. **Met, except the
+model reference.**
 
-### Phase 1 — Correctness spine (≈6–8 weeks)
-- **1a** Document lifecycle: draft/submitted/cancelled/amended on `Order`, `PurchaseOrder`,
-  `PurchaseReceipt`, `Payment`, `SupplierPayment`, `Expense`, `PayrollRun`, `StockCount`.
-  Immutability enforced at the model layer; cancel writes reversals; amend links to the amended doc.
-  Retire the hand-rolled PO reopen/re-apply logic onto this primitive.
+### Phase 1 — Correctness spine (≈6–8 weeks) — **shipped except 1b**
+- **1a** ~~Document lifecycle~~ **Done 2026-09-06.** `apps/documents` carries the primitive and
+  `registrations.py` declares every document type in one readable file. Ten types adopted — the eight
+  planned plus `StockTransfer` and `StockTransferReceipt`, which Phase 2 got for free by landing after
+  it. Immutability is enforced at the model layer, cancel writes reversals, and the period lock is a
+  guard on the transition rather than a check each domain remembers.
+  **One piece deliberately unbuilt:** `Correction.AMEND` is declared and nothing uses it. The PO still
+  corrects in place — the affordance we built on purpose — and the registry says why: adding an amend
+  route nothing calls would be exactly the untested cancel path the design exists to avoid. Converting
+  the in-place route into a true amendment is #5 in §5.4.
 - **1b** Naming series per document type (generalise `invoice_number` / `customer_number`). Carries a
   branch discriminator from the start — a *column*, the way ERPNext scopes a series to a company, not a
   per-deployment constant (§10.6). Cheap to design in, and retrofitting one means renumbering documents a
   shop has already printed and handed to customers.
+  **Still not started as of 2026-09-13**, and the sentence above is the reason it should stop being
+  deferred: it is the one item on this plan whose cost rises with every month of trading. See §5.3.
 - **1c** ~~Valued stock ledger entries~~ **Done 2026-08-26.** `StockLedgerEntry` (append-only, valued),
   `StockValuationBin` (the live cache, rebuildable), and a minimal `Warehouse` whose default "Main" row
   every ledger entry carries from its first migration — so Phase 2 adds screens, not a second migration
@@ -217,21 +376,33 @@ extended to assert the new invariants.
 
 **Exit (1c/1d met):** stock value, COGS and gross profit all derive from one append-only table. The
 business-simulation oracle was taught the new costing rule and proves the wiring end to end — it now
-models the ledger event by event and independently predicts every line cost. Remaining in Phase 1:
-**1a** (document lifecycle) and **1b** (numbering series).
+models the ledger event by event and independently predicts every line cost. ~~Remaining in Phase 1:
+**1a** (document lifecycle) and~~ **1a shipped 2026-09-06. Remaining in Phase 1: 1b alone.**
 
-### Phase 2 — Multi-location (≈6 weeks)
-Because Phase 1c already stamps a warehouse on every ledger row, this phase adds surfaces and data, not
-a re-migration of history.
+### Phase 2 — Multi-location (≈6 weeks) — **shipped 2026-09-06**
+Because Phase 1c already stamped a warehouse on every ledger row, this phase added surfaces and data, not
+a re-migration of history. That bet paid: the expensive part had already been bought.
 
-- `Warehouse` (shop floor / store room / van), `Bin` (variant × warehouse) replacing the `OneToOne`
-  `StockItem`, with a migration that lands every existing quantity in the implicit "Main" warehouse.
-- Stock transfer document with optional in-transit; per-warehouse reorder levels; stock count per warehouse.
-- **Register/device profile** (ERPNext's POS Profile): default warehouse, allowed payment modes,
-  price list, discount permissions per register — carved out of global `ShopSettings`.
-- POS, purchasing, reports, price checker all become warehouse-aware; single-warehouse shops see no change.
+- ~~`Warehouse`, `Bin` replacing the `OneToOne` `StockItem`~~ **Done.** `Warehouse` is **flat, not a
+  tree** — ERPNext's nested set with non-posting group nodes costs four of its thirteen warehouse tests
+  just to hold together, and a shop with a showroom, a store room and possibly a van does not need a
+  hierarchy. `StockItem` is now `ForeignKey` + `UniqueConstraint(variant, warehouse)`, and the word
+  `Bin` stayed spoken for by `StockValuationBin`, which is the same idea for value.
+- ~~Stock transfer with optional in-transit~~ **Done**, and the transit step is not optional: a
+  `TRANSIT` warehouse kind that nothing sells from, a `StockTransfer` that dispatches into it and a
+  `StockTransferReceipt` that draws out of it, both of them lifecycle documents.
+- ~~Register/device profile~~ **Done, narrowly.** `RegisterProfile` is keyed on `device_id` and today
+  answers exactly one question — which place this till sells out of — because the warehouse is a
+  property of where the till stands, not of who stands at it. Payment modes, price list and discount
+  permissions are *not* carved out of `ShopSettings` yet; they were not needed to make locations work
+  and nothing has asked.
+- ~~POS, purchasing, reports, price checker warehouse-aware~~ **Done.** A shop that never opens a second
+  warehouse never gets a profile row and sees no change anywhere.
+- **What this phase created and did not close:** places to scope permissions *to*, with nothing scoping
+  to them. See §5.2.
 
-**Exit:** a shop can run a back store and a shop floor, move stock between them, and the ledger still ties.
+**Exit:** a shop can run a back store and a shop floor, move stock between them, and the ledger still
+ties. **Met.**
 
 **Note on branches vs. warehouses.** Multiple warehouses inside one shop is a schema problem and is solved
 here. Multiple *branches* was an architecture problem; §10.6 settled it on 2026-09-06 in favour of a hosted
@@ -247,44 +418,193 @@ and the receipt is a separate document that references it.
 
 Nothing in this phase is relay-mediated, and the on-prem single-shop deployment is untouched by any of it.
 
-### Phase 3 — Money control (≈5 weeks)
-- Customer credit limit + configurable block/warn at POS; supplier equivalent.
-- Payment terms and due-date schedules on credit invoices and POs.
-- Customer/supplier statements (كشف حساب) and a real aging report, printable and PDF-able.
-- Payment allocation against specific invoices (on-account vs. advance), and reconciliation of the two.
-- Dunning-lite: overdue reminders through the existing messaging gateway, AI-drafted, human-approved.
+### Phase 3 — Money control (≈5 weeks) — **~80% shipped**
+- ~~Customer credit limit + configurable block/warn at POS~~ **Done 2026-09-05**, and the block/warn
+  question dissolved once the ceiling became per-customer — see §10.4.
+- ~~Payment terms and due-date schedules on credit invoices and POs~~ **Done.** `Customer.payment_terms`,
+  a shop default, and `Order.due_date` with its own index.
+- ~~Customer/supplier statements (كشف حساب) and a real aging report~~ **Done.** Four of the nineteen
+  report types: receivables aging, payables aging, customer statement, supplier statement — JSON, PDF
+  and CSV.
+- **Open: payment allocation against specific invoices (on-account vs. advance).** Collections allocate
+  **oldest-first, automatically**. That is the right default and the wrong answer when a customer pays
+  *this* invoice and means it, and there is no representation for money received against no invoice at
+  all. This is the one substantive piece of Phase 3 still missing — #4 in §5.4.
+- ~~Dunning-lite: overdue reminders, AI-drafted, human-approved~~ **Done** via `apps/crm` transactional
+  messaging; due-today, overdue and undated all remind, future-dated are held back.
 
 **Exit:** an owner can answer "who owes me what, since when, and did the reminder go out?" in one screen.
+**Met** — the missing allocation work is about directing money, not about seeing the debt.
 
-### Phase 4 — Shadow ledger (≈5 weeks)
-- Preset chart of accounts per `shop_type`; `gl_entry` append-only table; posting rules per document.
-- Trial balance, P&L and balance-sheet-lite reports; accounting-period lock and period close.
-- Accountant-only UI; nothing in the cashier or owner path changes.
+### Phase 4 — Shadow ledger (**re-sized 2026-09-13: 13–18 weeks**) — planned, not deferred
 
-**Exit:** trial balance is zero on every oracle run; P&L ties to the sales/expenses reports we already ship.
+**This phase was declined on 2026-08-28 and un-declined on 2026-09-13.** §10.3 carries the full
+reasoning, including the uncomfortable part: it was reversed on a rationale that appeared in neither of
+its own revisit triggers. Read that before building, because *why* it is being built decides what it
+looks like.
 
-### Phase 5 — Document flow completeness (≈4 weeks)
+The original sizing of ≈5 weeks was wrong. It sized the **ledger** and not the **posting rules**, which
+are the bulk of the work and all of the risk.
+
+#### What is actually on the other side (fetched 2026-09-13, not recalled)
+
+ERPNext's `accounts/` module is **191 doctypes and 52 reports**. The ten core files alone:
+
+| File | Lines |
+|---|---|
+| `accounts/doctype/payment_entry/payment_entry.py` | 3,364 |
+| `accounts/utils.py` | 2,908 |
+| `controllers/accounts_controller.py` | 1,823 |
+| `accounts/doctype/journal_entry/journal_entry.py` | 1,311 |
+| `accounts/report/financial_statements.py` | 1,036 |
+| `accounts/doctype/period_closing_voucher/period_closing_voucher.py` | 950 |
+| `accounts/report/trial_balance/trial_balance.py` | 805 |
+| `accounts/doctype/account/account.py` | 743 |
+| `accounts/general_ledger.py` | 739 |
+| `accounts/doctype/gl_entry/gl_entry.py` | 523 |
+
+**That number is not the number we have to match.** Sorting the 191:
+
+- **~8 are the spine.** Account (21 fields), GL Entry (47 fields), Journal Entry + child, Fiscal Year,
+  Accounting Period, Period Closing Voucher.
+- **~25 we already have under another name.** POS Profile → `RegisterProfile`. POS Opening/Closing Entry
+  → register sessions and the Z-report. Payment Term / Terms Template / Payment Schedule →
+  `customers/payment_terms.py` + due dates. Mode of Payment → payment methods. Bank / Bank Account →
+  `MoneyAccount`. Pricing Rule + Promotional Scheme → our discount engine, which is better. Dunning +
+  Dunning Type → CRM overdue reminders. Process Statement of Accounts → our statement reports. Currency
+  Exchange Settings → `apps/fx`. Accounts Receivable/Payable reports → our aging.
+- **5 of the 52 reports matter here:** trial balance, P&L, balance sheet, general-ledger drill-down,
+  account balance. The rest are dimensions, consolidation, TDS, shares, deferred revenue, depreciation.
+- **~150 are refused** — dimensions, cost centers, budgets, finance books, shareholders and share
+  ledgers, subscriptions, tax withholding, deferred accounting, consolidation, multi-company, loyalty,
+  invoice discounting, bank guarantees.
+
+#### The finding that should shape our design
+
+**Nineteen doctypes and reports in `accounts/` exist solely to find and repair ledger inconsistency:**
+`ledger_health`, `ledger_health_monitor` (+ company child), `ledger_merge` (+ accounts child),
+`bisect_accounting_statements`, `bisect_nodes`, the four `repost_accounting_ledger` /
+`repost_payment_ledger` families, `unreconcile_payment` (+ entries child), and the reports
+`invalid_ledger_entries`, `general_and_payment_ledger_comparison`, `voucher_wise_balance`,
+`cheques_and_deposits_incorrectly_cleared`, `calculated_discount_mismatch`.
+
+A tenth of the module is devoted to the ledger having gone wrong in production, under a mature team.
+Two conclusions, and the second is ours:
+
+1. A GL drifts under real load. Building one does not by itself make numbers correct — it creates a
+   second thing that can disagree with the first.
+2. **Their answer is repair tooling after the fact; ours is the oracle asserting the invariant
+   continuously.** That is the same argument that declined this phase in August, now pointed at the
+   ledger itself, and it is why 4d is not optional polish.
+
+#### 4a — The spine
+
+- `Account` + a **preset chart per `shop_type`**, seeded and never user-edited (§8.1 stands). Flat-ish
+  parent/child rather than their nested set with `lft`/`rgt`; no account categories, no finance books.
+  *~400 lines + fixtures.*
+- `GLEntry`, append-only. Their row is 47 fields; ours needs ~16 — posting date, account, debit, credit,
+  party type/party, voucher type/no/line, against, remarks, is_opening, is_cancelled, and the currency
+  columns `apps/fx` implies. No dimensions, no cost center, no finance book. *~200 lines.*
+- **The posting engine**, ported in spirit from `general_ledger.py`. Drop dimension offsetting,
+  cost-center allocation and budget validation — that is most of their 739 lines. **Port faithfully:**
+  entry merging, the negative-toggle, the debit/credit difference check with a round-off entry rather
+  than a swallowed remainder, and reverse-on-cancel. Each of those exists because somebody's numbers came
+  out wrong without it. *~350 lines.*
+- Fiscal year and an opening-balance entry, so a shop already trading starts from figures it recognises
+  rather than a replay of history nobody trusts — the same move the 1c opening migration made.
+
+#### 4b — Posting rules: the real work
+
+**Eleven money models**, one posting function each, matching `apps/core/money_dates.MONEY_DATE_FIELDS`
+exactly so the two registries cannot drift: `payments.Payment`, `sales.Order`, `sales.OrderAdjustment`,
+`sales.RegisterCashMovement`, `sales.RegisterSession`, `expenses.Expense`,
+`purchasing.SupplierPayment`, `purchasing.PurchaseOrder`, `employees.PayrollRun`,
+`treasury.MoneyTransfer`, `treasury.MoneyCount`.
+
+This is where every bug will live. The edge cases that make a naive rule book a wrong number, each of
+which needs its own oracle assertion: returns and exchanges, voids, refunds against a closed register,
+landed costs, per-pack UoM cost normalisation, priced modifiers, pooled whole-unit discount allocation,
+and partial payment against a credit invoice.
+
+**The hardest single rule is FX, and it is new since this plan was written.** A purchase order carries a
+frozen rate, the goods arrive later, the supplier is paid later again at a different rate — and the
+difference has to post *somewhere*. ERPNext has an entire `exchange_rate_revaluation` doctype for this.
+Multi-currency shipped 2026-08-31, so we inherit the problem on the day we have a ledger; it does not
+get to be a later phase.
+
+**What the document primitive does and does not give us here.** It gives an enumerated list of every
+document that moves money, the cancel-writes-reversals contract already enforced at the model layer, and
+a round-trip test that will fail the moment a `gl` effect does not reverse. It does **not** post
+anything: `submit_effects` is documentation plus that test's checklist, not an execution hook, and each
+domain still writes its own entries. Useful head start; not free posting.
+
+#### 4c — Reports, and the one that is the actual reason
+
+- Trial balance (~200 lines against their 805 — no dimensions, no finance books, no party TB).
+- P&L and balance-sheet-lite (~350 against their 1,036 shared — no consolidation).
+- General-ledger drill-down (~200).
+- Period close (~250 against their 950). **The period *lock* already shipped** with the accountant
+  reports overhaul, so this phase inherits half of its own exit criterion.
+- **The stampable Arabic دفتر اليومية / دفتر الأستاذ.** ERPNext cannot produce this and is not trying to.
+  It is the reason this phase exists — see §10.3 — and it is the one deliverable here that a Libyan shop
+  can hold. Note the honest limit: the *daybook* half could be approximated from money events today; the
+  **الأستاذ half cannot exist without accounts**, which is precisely what makes the ledger load-bearing
+  rather than ornamental.
+
+#### 4d — Proof, not repair
+
+Teach the oracle: Σ debits = Σ credits on every run; every money event posts exactly once; a cancelled
+document's reversals net its original to zero; stock value from the valuation ledger ties to the
+inventory account balance; receivables tie to Σ unpaid invoices. *~300 test lines,* on machinery we
+already own. This is what we build **instead of** their nineteen repair tools, and it is the difference
+between a ledger that is *repairable* and one that is *provable*.
+
+**Exit:** trial balance is zero on every oracle run; P&L ties to the sales and expense reports we already
+ship; a shop can print a stamped Arabic ledger a court will accept. **Sizing: 13–18 weeks** — 10–14 to
+par-for-our-buyer, 3–4 more for the three things in §10.3 that make it better than theirs.
+
+**Anti-goal check.** Nothing above puts a chart of accounts in front of a shopkeeper. The accounts are
+seeded per shop type, never edited, and never shown; what the owner sees is a printable ledger and the
+reports that already exist. §8.1 is unchanged, and if this phase starts to require an account-tree
+screen, that is the signal it has drifted.
+
+### Phase 5 — Document flow completeness (≈4 weeks) — not started
 - Sales Order → Delivery Note split with partial delivery and partial invoicing.
-- Material Request (store → shop requisition) feeding Phase 2 transfers.
+- Material Request (store → shop requisition) feeding Phase 2 transfers. **Cheaper than when it was
+  sized**: the transfer document it feeds now exists, so this is a request that resolves into one.
 - Supplier quotation comparison; partial purchase invoicing.
 
-### Phase 6 — Extensibility without a developer (≈4–5 weeks)
+Both of the first two now sit on primitives that shipped, so this phase is smaller than 4 weeks if
+taken after §5.4's first three.
+
+### Phase 6 — Extensibility without a developer (≈4–5 weeks) — not started
 - Generic workflow/approval engine, generalised from `WorkflowTemplate`/`WorkflowStage`.
 - Custom fields on core entities (schema registry + JSON storage + form rendering).
-- Row-level permission scoping (by warehouse / register / channel) and field-level masking for cost prices.
+- **Row-level permission scoping (by warehouse / register / channel)** and field-level masking for cost
+  prices. **This item should not wait for this phase.** Phase 2 shipped the warehouses it scopes to, so
+  the narrow version — scope stock transfer and stock count to a user's permitted warehouses — is now a
+  live gap rather than a future nicety, and is promoted to §5.4 #2. The general mechanism can still land
+  here.
 - Self-service reporting: either a saved-query builder, or — preferred — AI-generated reports that can be
-  exported, scheduled, and pinned to the dashboard.
+  exported, scheduled, and pinned to the dashboard. **Of export / schedule / pin, only export shipped**
+  (CSV and PDF, with the streaming export path). Schedule and pin were the half that made AI a
+  *replacement* for a report builder rather than a supplement to one.
 
 ### Opportunistic backlog
-Line-level tax engine, serial numbers, fixed assets, lead/opportunity pipeline, recurring/subscription
-invoices, customer portal, a `regional/` isolation layer before any second country.
+Line-level tax engine, ~~serial numbers~~ (**promoted out of this list 2026-09-13 — §5.1**), fixed assets,
+lead/opportunity pipeline, recurring/subscription invoices, customer portal, a `regional/` isolation layer
+before any second country.
 
 ---
 
 ## 8. Anti-goals — what we deliberately will not copy
 
-1. **A user-facing chart of accounts.** Shopkeepers will not maintain one. The ledger stays internal
-   until an accountant asks for it.
+1. **A user-facing chart of accounts.** Shopkeepers will not maintain one — the evidence in §10.3 is a
+   live competitor install with a full accounting module and *zero* accounts ever created. **This stands
+   unchanged now that Phase 4 is planned**, and the distinction is the one to hold onto: the chart is
+   seeded per `shop_type`, never edited and never displayed; what a shop sees is a **printable stamped
+   ledger** and the reports it already has. An account-tree screen appearing in Phase 4 is the signal
+   that the phase has drifted, not a feature.
 2. **A metadata/doctype engine.** Frappe's whole product is that engine; rebuilding it would consume a
    year and give us a worse Django. Targeted custom fields only.
 3. ~~**Multi-company / multi-currency**~~ **Split 2026-09-06.** Multi-currency shipped (Track A, from
@@ -307,9 +627,25 @@ invoices, customer portal, a `regional/` isolation layer before any second count
 - **Reposting/rebuild tooling as a first-class command.** They can recompute valuation and GL for a
   period. We should be able to rebuild every derived value (stock balances, popularity, RFM, ledger)
   on demand, and prove it changes nothing.
+  *Read more closely 2026-09-13, and the lesson inverts.* Their `accounts/` module carries **19 doctypes
+  and reports whose only job is to find and repair ledger drift** — `ledger_health`, `ledger_merge`,
+  `bisect_accounting_statements`, four `repost_*` families, `invalid_ledger_entries`,
+  `general_and_payment_ledger_comparison`, and more. A tenth of the module exists because the ledger goes
+  wrong in production under a mature team. Take the *rebuild* command, which is genuinely good practice;
+  do **not** take the surrounding diagnostic estate as the model. The cheaper answer is the one we
+  already own — assert the invariant continuously and never let the drift accumulate. **Repairable
+  versus provable is the whole difference**, and it is the case for Phase 4d.
 - **Period locking** as a general mechanism, not just for accounting.
 - **A regional isolation layer** for country-specific rules, created *before* the second country.
 - **Published data-model documentation** — they publish doctype references; ours lives only in code.
+  *Still true 2026-09-13: there is no `docs/` directory.* This was also Phase 0's third bullet, which
+  means it has now been the cheapest unfinished item on the plan for eighteen days across two completed
+  phases — the reliable signature of a task nobody owns.
+- **A declarative registry for cross-cutting behaviour.** Not stolen from them; discovered here.
+  `apps/documents/registrations.py` puts every document type in one file you can read top to bottom, so
+  that adding one is visibly a decision rather than a scattered edit. It is the pattern to reach for the
+  next time a concern spans domains — and the reason Phase 2's transfer documents got the lifecycle for
+  free.
 
 ---
 
@@ -322,25 +658,57 @@ invoices, customer portal, a `regional/` isolation layer before any second count
    FIFO, LIFO), chosen at setup and guarded afterwards. Moving average is the default because the shop
    already running predates the setting, and it is the method closest to what it was getting.
 3. ~~**Does any current or pipeline customer have an accountant who wants formal statements?**~~
-   **Resolved 2026-08-28: Phase 4 is deferred, and the ledger is not being built yet.** The evidence
-   came from the competitor dumps we already hold. Aboghris ships a full double-entry module — chart
-   of accounts, `QYODAT` journal entries, trial balance, `ميزانية`, bank transfers, a dedicated
-   `حسابات` user group — and the live shop running it has **889 sales, 195 purchases, 7 configured
-   banks, and zero accounts, zero journal entries, zero balances**. The accounting surface is a sales
-   checkbox nobody touches; the *bank list* is maintained. Fahd's shop (751,901 sales) likewise
-   carries no receivable records. Meanwhile a GL would have prevented only 2 of the 4 money bugs we
-   have actually fixed (`e2f8827f`, `6b9e86ce`) — the other two were below its granularity and were
-   caught by the oracle, which is the cheaper mechanism we already own.
+   ~~**Resolved 2026-08-28: Phase 4 is deferred, and the ledger is not being built yet.**~~
+   **Reversed 2026-09-13: the ledger is being built. Phase 4 is planned, re-sized to 13–18 weeks.**
 
-   What was built instead (2026-08-28), covering the three holes a ledger would have closed:
-   - **`apps/treasury`** — derived cash/bank balances, transfers, counts. No posting, no accounts
-     tree: balances are read from the money events that already exist.
-   - **Shrinkage and cost-basis stock value surfaced** from the valuation ledger, which had been
-     computing both correctly and reporting neither.
-   - **One definition per money figure, enforced** by `apps/core/test_money_definitions.py`.
+   Both halves are kept below, because the August evidence did not become wrong — it became answerable
+   to a different question — and it is still what decides the *shape* of what gets built.
 
-   Revisit the ledger when a named customer's accountant asks for a trial balance, or when
-   multi-warehouse/multi-branch lands and money starts moving between locations.
+   **What was decided in August, and why it was right then.** The question asked was whether a customer's
+   accountant wanted formal statements. The answer was no, from the competitor dumps we already hold.
+   Aboghris ships a full double-entry module — chart of accounts, `QYODAT` journal entries, trial
+   balance, `ميزانية`, bank transfers, a dedicated `حسابات` user group — and the live shop running it has
+   **889 sales, 195 purchases, 7 configured banks, and zero accounts, zero journal entries, zero
+   balances**. The accounting surface is a sales checkbox nobody touches; the *bank list* is maintained.
+   Fahd's shop (751,901 sales) carries no receivable records either. A GL would have prevented 2 of the 4
+   money bugs we have actually fixed (`e2f8827f`, `6b9e86ce`); the other two were below its granularity
+   and were caught by the oracle, which is cheaper and already ours.
+
+   What was built instead (2026-08-28) covered the three holes a ledger would have closed: `apps/treasury`
+   (derived cash/bank balances, transfers, counts — no posting, no accounts tree), shrinkage and
+   cost-basis stock value surfaced from the valuation ledger, and one definition per money figure
+   enforced by `apps/core/test_money_definitions.py`.
+
+   **What reversed it, and the uncomfortable part.** The deferral wrote itself two revisit triggers: a
+   named accountant asking for a trial balance, or multi-warehouse landing. **Neither is why this
+   flipped.** The second one did fire — multi-warehouse landed 2026-09-06 and a transfer moves value
+   between places — but on its own it justified an oracle invariant, not a ledger.
+
+   What actually reversed it was a fact that was in the GTM dossier the whole time and in neither
+   trigger: **Libyan courts treat stamped paper ledgers as authoritative over electronic records.** The
+   highest-value unbuilt feature in that dossier is an Arabic print-ready stampable دفتر اليومية /
+   دفتر الأستاذ — which makes us the system that *produces* the legally authoritative notebook, in a
+   market where the paper notebook is the real incumbent and our brand is literally دفتر.
+
+   You cannot print a دفتر الأستاذ without accounts. The daybook half could be faked from money events;
+   the ledger half cannot. So the GL stops being an accountant's instrument nobody asked for and becomes
+   the engine under a document a shop can hold — **which is a demand we can point at, rather than one we
+   inferred.**
+
+   Three notes that keep this honest:
+
+   - **This does not sell as compliance.** Small traders in Libya are legally *exempt* from keeping
+     books. It sells as **control** — specifically, it is the آجل credit dispute that reaches a court,
+     so the buyer for this is a shop with real credit exposure, not every shop. Do not pitch it as a
+     legal requirement; it is not one.
+   - **The August evidence still shapes the build.** Nobody touches a chart of accounts, so nobody is
+     shown one. Preset per `shop_type`, seeded, never edited, never displayed. §8.1 is unchanged and
+     Phase 4 carries its own anti-goal check.
+   - **The triggers were watching for the wrong thing.** Two conditions were written, one fired, and the
+     reason the decision actually changed was in a document nobody re-read. That is the same failure as
+     §10.9's third case, one level up: a conditional deferral is only as good as the conditions somebody
+     thought to write. Cross-read the GTM dossier at the next reconciliation, not just this plan.
+
 4. ~~**Credit limits: block or warn by default?**~~ **Resolved 2026-09-05: neither, by default.** The
    question dissolved once the ceiling became per-customer. `ShopSettings.enforce_customer_credit_limits`
    is **off** out of the box, so nothing is capped until a shop asks for it; with it on, an over-limit
@@ -377,3 +745,36 @@ invoices, customer portal, a `regional/` isolation layer before any second count
 
    Consequences are recorded against **1b** and **Phase 2**. Do not re-open without a named chain customer
    and economics that have changed.
+
+7. **Serialized inventory: promote it over the rest of the register?** (new, 2026-09-13) The plan is
+   written, the prospect is named, and §5.1 argues its original *Later* ranking was a category error.
+   The counter-argument is that it is sized **L** and would consume the same weeks as items 2, 3 and 4
+   of §5.4 combined — three cheap things with no customer waiting on them, one of which (naming series)
+   has a deadline. **Recommendation: do 5.3 (naming series, S) alongside it rather than after it**, and
+   let 5.2 follow, because serialization is the only item where waiting costs a deal rather than an
+   afternoon of migration.
+
+8. **Does the register profile finish, or stay narrow?** (new, 2026-09-13) `RegisterProfile` was carved
+   out for exactly one field because that was what locations needed. ERPNext's POS Profile also carries
+   payment modes, price list and discount permissions, all of which are global `ShopSettings` here.
+   Nothing has asked for them. The decision is whether to complete the shape now, while the model is
+   new and empty, or to keep adding fields to it one customer request at a time — which is what
+   `ShopSettings` itself is, and is why it needed carving.
+
+### 10.9 — A note on how this document failed between reconciliations
+
+Recorded because the failure mode will recur. Between 2026-08-26 and 2026-09-13 this plan went stale in
+three distinct ways, and only the first is the obvious one:
+
+1. **Shipped work not marked shipped.** Phases 1a, 2 and most of 3 completed without the doc changing.
+   Annoying, easily fixed, and the least interesting.
+2. **A ranking that could not see its own consequences.** Phase 2 shipped and *created* the gap at §5.2,
+   which was sized and scheduled in Phase 6 by a ranking written before the thing existed. A phased plan
+   cannot notice this on its own: each phase is checked against the plan, never the plan against the
+   phase.
+3. **A deferral whose expiry condition passed silently.** §10.3 wrote its own revisit trigger and nothing
+   watched it. The condition fired on 2026-09-06 and was noticed a week later only because someone read
+   the whole document top to bottom.
+
+The cheap mitigation for (2) and (3) is the same: **every phase completion re-reads §5 and §10, not just
+its own section.** A conditional deferral with no watcher is a decision that expires into an omission.
