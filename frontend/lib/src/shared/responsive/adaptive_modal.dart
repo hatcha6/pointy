@@ -291,6 +291,15 @@ Future<T?> showAdaptiveFormSurface<T>({
   if (desktopPresentation == AdaptiveFormPresentation.dialog) {
     return showDialog<T>(
       context: context,
+      // The nearest navigator, not the root one.
+      //
+      // `showDialog` defaults to the root, which crosses a nested app boundary:
+      // the learning module hosts a second, sandboxed `PointyApp`, and a
+      // root-routed dialog from the practice till would mount *outside* that
+      // app — over the real one, with none of the training chrome around it.
+      // Everywhere else the two are the same navigator, so this changes
+      // nothing for the shipping screens.
+      useRootNavigator: false,
       barrierDismissible: isDismissible,
       barrierColor: barrierColor,
       routeSettings: routeSettings,

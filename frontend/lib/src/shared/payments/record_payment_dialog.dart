@@ -7,6 +7,8 @@ import '../../data/models/sale_order.dart' show PaymentMethod;
 import '../../features/pos/views/payment/card_receipt_validation_dialog.dart';
 import '../formatters.dart';
 import '../payment_labels.dart';
+import '../tutor/anchors.dart';
+import '../tutor/tutor_target.dart';
 
 /// One selectable payment method in [RecordPaymentDialog]. Method-enum agnostic
 /// (carries the backend api value as a string) so the same dialog serves
@@ -173,29 +175,32 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
                 },
               ),
               const SizedBox(height: 12),
-              TextField(
-                key: const ValueKey('record_payment_amount_field'),
-                controller: _amountController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+              TutorTarget(
+                anchor: TutorAnchor.recordPaymentAmountField,
+                child: TextField(
+                  key: const ValueKey('record_payment_amount_field'),
+                  controller: _amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  // The error names the ceiling rather than just refusing: the
+                  // supplier flow passes no balance line at all, so without the
+                  // number the cashier is told there is a limit they were never
+                  // shown.
+                  decoration: InputDecoration(
+                    labelText: l10n.invoicePaymentAmountLabel,
+                    errorText: _showAmountError
+                        ? l10n.recordPaymentAmountMaxError(
+                            formatMoney(widget.maxAmount),
+                          )
+                        : null,
+                  ),
+                  onChanged: (_) {
+                    if (_showAmountError) {
+                      setState(() => _showAmountError = false);
+                    }
+                  },
                 ),
-                // The error names the ceiling rather than just refusing: the
-                // supplier flow passes no balance line at all, so without the
-                // number the cashier is told there is a limit they were never
-                // shown.
-                decoration: InputDecoration(
-                  labelText: l10n.invoicePaymentAmountLabel,
-                  errorText: _showAmountError
-                      ? l10n.recordPaymentAmountMaxError(
-                          formatMoney(widget.maxAmount),
-                        )
-                      : null,
-                ),
-                onChanged: (_) {
-                  if (_showAmountError) {
-                    setState(() => _showAmountError = false);
-                  }
-                },
               ),
               if (widget.showReference) ...[
                 const SizedBox(height: 12),
@@ -237,7 +242,13 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.cancelButton),
         ),
-        FilledButton(onPressed: _submit, child: Text(l10n.confirmButton)),
+        TutorTarget(
+          anchor: TutorAnchor.recordPaymentConfirmButton,
+          child: FilledButton(
+            onPressed: _submit,
+            child: Text(l10n.confirmButton),
+          ),
+        ),
       ],
     );
   }

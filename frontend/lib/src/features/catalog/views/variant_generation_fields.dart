@@ -9,6 +9,8 @@ import '../view_models/variant_generation.dart';
 import 'variant_identity_watcher.dart';
 import '../../../shared/components/pointy_progress.dart';
 import '../../../shared/components/pointy_searchable_picker.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 
 /// Lets the user define a product's options (e.g. Color, Size): options already
 /// on the product show as removable chips, and everything the shop has saved
@@ -120,33 +122,36 @@ class VariantOptionField extends StatelessWidget {
               ),
             ),
           const SizedBox(height: 10),
-          PointySearchablePicker<int>(
-            fieldKey: const ValueKey('variant_option_search_field'),
-            entries: [
-              for (final option in reusableOptions)
-                PointyPickerEntry<int>(
-                  value: option.id,
-                  label: option.displayLabel,
-                  subtitle: _valuesPreview(option),
-                  keywords: option.code,
-                ),
-            ],
-            hintText: onCreateOption == null
-                ? l10n.variantOptionSearchHint
-                : l10n.variantOptionSearchOrCreateHint,
-            clearTooltip: l10n.clearSearchTooltip,
-            noMatchText: l10n.variantOptionSearchNoMatch,
-            emptyText: onCreateOption == null
-                ? l10n.variantOptionSearchNoMatch
-                : l10n.variantOptionSearchEmpty,
-            onSelected: (id) {
-              final option = byId[id];
-              if (option != null) {
-                onToggleOption(option);
-              }
-            },
-            onCreate: onCreateOption,
-            createLabel: l10n.createVariantOptionInline,
+          TutorTarget(
+            anchor: TutorAnchor.productVariantOptionPicker,
+            child: PointySearchablePicker<int>(
+              fieldKey: const ValueKey('variant_option_search_field'),
+              entries: [
+                for (final option in reusableOptions)
+                  PointyPickerEntry<int>(
+                    value: option.id,
+                    label: option.displayLabel,
+                    subtitle: _valuesPreview(option),
+                    keywords: option.code,
+                  ),
+              ],
+              hintText: onCreateOption == null
+                  ? l10n.variantOptionSearchHint
+                  : l10n.variantOptionSearchOrCreateHint,
+              clearTooltip: l10n.clearSearchTooltip,
+              noMatchText: l10n.variantOptionSearchNoMatch,
+              emptyText: onCreateOption == null
+                  ? l10n.variantOptionSearchNoMatch
+                  : l10n.variantOptionSearchEmpty,
+              onSelected: (id) {
+                final option = byId[id];
+                if (option != null) {
+                  onToggleOption(option);
+                }
+              },
+              onCreate: onCreateOption,
+              createLabel: l10n.createVariantOptionInline,
+            ),
           ),
         ],
       ],
@@ -372,19 +377,25 @@ class _OptionValueGroup extends StatelessWidget {
                 // Picking values one by one is the right default, but "every
                 // size we carry" is a real answer and should stay one tap.
                 if (onSelectAll != null && pickableValues.isNotEmpty)
-                  TextButton(
-                    onPressed: onSelectAll,
-                    style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsetsDirectional.only(
-                        start: 8,
-                        end: 4,
+                  TutorTarget(
+                    anchor: TutorAnchor.productVariantOptionValuesSelectAll,
+                    id: option.displayLabel,
+                    child: TextButton(
+                      onPressed: onSelectAll,
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsetsDirectional.only(
+                          start: 8,
+                          end: 4,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      l10n.selectAllVariantOptionValues(pickableValues.length),
+                      child: Text(
+                        l10n.selectAllVariantOptionValues(
+                          pickableValues.length,
+                        ),
+                      ),
                     ),
                   ),
               ],

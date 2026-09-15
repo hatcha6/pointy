@@ -142,6 +142,7 @@ enum _PoActionStyle { normal, danger }
 /// description) that the old bare icon row lacked.
 class _PoAction {
   const _PoAction({
+    required this.id,
     required this.icon,
     required this.label,
     required this.description,
@@ -149,6 +150,10 @@ class _PoAction {
     this.style = _PoActionStyle.normal,
     this.busy = false,
   });
+
+  /// Stable name for this action, independent of its Arabic label — what a
+  /// lesson points at, so rewording the footer cannot re-aim a step.
+  final String id;
 
   final IconData icon;
   final String label;
@@ -180,6 +185,7 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
 
     final submit = viewModel.canSubmit
         ? _PoAction(
+            id: 'submit',
             icon: Icons.send_outlined,
             label: l10n.submitPurchaseOrderAction,
             description: l10n.purchaseOrderSubmitDescription,
@@ -192,6 +198,7 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
     final edit = (viewModel.canEdit && onEdit != null)
         ? _PoAction(
             icon: Icons.edit_outlined,
+            id: 'edit',
             label: l10n.editPurchaseOrderAction,
             description: l10n.purchaseOrderEditDescription,
             onTap: statusBusy ? null : onEdit,
@@ -200,6 +207,7 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
     final receive = viewModel.canReceive
         ? _PoAction(
             icon: Icons.inventory_outlined,
+            id: 'receive',
             label: l10n.receivePurchaseLinesAction,
             description: l10n.purchaseOrderReceiveDescription,
             busy: statusBusy,
@@ -211,6 +219,7 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
     final pay = viewModel.canRecordPayment
         ? _PoAction(
             icon: Icons.account_balance_wallet_outlined,
+            id: 'record_payment',
             label: l10n.recordSupplierPaymentAction,
             description: l10n.purchaseOrderRecordPaymentDescription,
             busy: payBusy,
@@ -222,6 +231,7 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
     final returnItems = viewModel.canReturn
         ? _PoAction(
             icon: Icons.keyboard_return_outlined,
+            id: 'return_items',
             label: l10n.returnPurchaseItemsAction,
             description: l10n.purchaseOrderReturnDescription,
             busy: adjustBusy,
@@ -233,6 +243,7 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
     final refund = viewModel.canRefund
         ? _PoAction(
             icon: Icons.payments_outlined,
+            id: 'refund_items',
             label: l10n.refundPurchaseItemsAction,
             description: l10n.purchaseOrderRefundDescription,
             busy: adjustBusy,
@@ -244,6 +255,7 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
     final exchange = viewModel.canExchange
         ? _PoAction(
             icon: Icons.swap_horiz_outlined,
+            id: 'exchange_items',
             label: l10n.exchangePurchaseItemsAction,
             description: l10n.purchaseOrderExchangeDescription,
             busy: adjustBusy,
@@ -255,6 +267,7 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
     final cancel = viewModel.canCancel
         ? _PoAction(
             icon: Icons.cancel_outlined,
+            id: 'cancel',
             label: l10n.cancelButton,
             description: l10n.purchaseOrderCancelActionDescription,
             style: _PoActionStyle.danger,
@@ -334,10 +347,14 @@ class _PurchaseOrderActionFooter extends StatelessWidget {
 }
 
 Widget _secondaryActionButton(BuildContext context, _PoAction action) {
-  return OutlinedButton.icon(
-    onPressed: action.onTap,
-    icon: Icon(action.icon),
-    label: Text(action.label),
+  return TutorTarget(
+    anchor: TutorAnchor.purchaseOrderAction,
+    id: action.id,
+    child: OutlinedButton.icon(
+      onPressed: action.onTap,
+      icon: Icon(action.icon),
+      label: Text(action.label),
+    ),
   );
 }
 
@@ -352,17 +369,25 @@ Widget _primaryActionButton(BuildContext context, _PoAction action) {
   final label = Text(action.label);
 
   if (action.style == _PoActionStyle.danger) {
-    return OutlinedButton.icon(
-      onPressed: action.onTap,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: colors.danger,
-        side: BorderSide(color: colors.danger.withValues(alpha: 0.5)),
+    return TutorTarget(
+      anchor: TutorAnchor.purchaseOrderAction,
+      id: action.id,
+      child: OutlinedButton.icon(
+        onPressed: action.onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: colors.danger,
+          side: BorderSide(color: colors.danger.withValues(alpha: 0.5)),
+        ),
+        icon: icon,
+        label: label,
       ),
-      icon: icon,
-      label: label,
     );
   }
-  return FilledButton.icon(onPressed: action.onTap, icon: icon, label: label);
+  return TutorTarget(
+    anchor: TutorAnchor.purchaseOrderAction,
+    id: action.id,
+    child: FilledButton.icon(onPressed: action.onTap, icon: icon, label: label),
+  );
 }
 
 Widget? _footerSummary(BuildContext context, PurchaseOrder order) {

@@ -75,6 +75,7 @@ import 'features/pos/view_models/pos_revalidation.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'features/printing/view_models/printing_settings_view_model.dart';
 import 'features/invoices/view_models/invoice_list_view_model.dart';
+import 'features/learning/view_models/learning_view_model.dart';
 import 'features/purchasing/view_models/purchase_order_list_view_model.dart';
 import 'features/purchasing/view_models/purchase_view_model.dart';
 import 'features/stock_count/view_models/stock_count_sessions_view_model.dart';
@@ -393,6 +394,8 @@ class PointyAppDependencies {
   PurchaseOrderListViewModel? _purchaseOrderListViewModel;
   StockCountSessionsViewModel? _stockCountSessionsViewModel;
   UserSettingsViewModel? _userSettingsViewModel;
+  LearningViewModel? _learningViewModel;
+  int? _learningViewModelUserId;
 
   int? _lastAuthenticatedUserId;
 
@@ -459,6 +462,27 @@ class PointyAppDependencies {
       );
     }
     _wasConnectionReady = ready;
+  }
+
+  /// The learning catalogue's view model.
+  ///
+  /// Keyed on [userId], not on the [capabilities] object: the authenticated
+  /// shell builds a fresh `AuthorizationCapabilities` on every rebuild and the
+  /// class has no value equality, so comparing instances would dispose and
+  /// replace the view model the mounted screen is still listening to. Keying on
+  /// the user still does the job the key is for — the "matches my permissions"
+  /// filter must follow whoever is signed in, so the next user gets their own.
+  LearningViewModel learningViewModel(
+    int userId,
+    AuthorizationCapabilities capabilities,
+  ) {
+    final existing = _learningViewModel;
+    if (existing != null && _learningViewModelUserId == userId) {
+      return existing;
+    }
+    existing?.dispose();
+    _learningViewModelUserId = userId;
+    return _learningViewModel = LearningViewModel(capabilities: capabilities);
   }
 
   DeviceSettingsViewModel get deviceSettingsViewModel =>
@@ -701,5 +725,8 @@ class PointyAppDependencies {
     _stockCountSessionsViewModel = null;
     _userSettingsViewModel?.dispose();
     _userSettingsViewModel = null;
+    _learningViewModel?.dispose();
+    _learningViewModel = null;
+    _learningViewModelUserId = null;
   }
 }

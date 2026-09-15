@@ -7,6 +7,8 @@ import '../../../data/models/register_cash_movement.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/components/pointy_progress.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 
 class RegisterCashMovementSheet extends StatefulWidget {
   const RegisterCashMovementSheet({
@@ -77,33 +79,39 @@ class _RegisterCashMovementSheetState extends State<RegisterCashMovementSheet> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  controller: _amountController,
-                  enabled: !_isSubmitting,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
+                TutorTarget(
+                  anchor: TutorAnchor.registerCashMovementAmountField,
+                  child: TextFormField(
+                    controller: _amountController,
+                    enabled: !_isSubmitting,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [DecimalTextInputFormatter()],
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: l10n.cashMovementAmountLabel,
+                      prefixIcon: const Icon(Icons.payments_outlined),
+                    ),
+                    validator: (value) => _validateAmount(value, l10n),
                   ),
-                  inputFormatters: [DecimalTextInputFormatter()],
-                  textInputAction: TextInputAction.next,
-                  decoration: InputDecoration(
-                    labelText: l10n.cashMovementAmountLabel,
-                    prefixIcon: const Icon(Icons.payments_outlined),
-                  ),
-                  validator: (value) => _validateAmount(value, l10n),
                 ),
                 const SizedBox(height: 12),
-                TextFormField(
-                  controller: _reasonController,
-                  enabled: !_isSubmitting,
-                  minLines: 2,
-                  maxLines: 4,
-                  textInputAction: TextInputAction.done,
-                  decoration: InputDecoration(
-                    labelText: l10n.cashMovementReasonLabel,
-                    prefixIcon: const Icon(Icons.notes_outlined),
+                TutorTarget(
+                  anchor: TutorAnchor.registerCashMovementReasonField,
+                  child: TextFormField(
+                    controller: _reasonController,
+                    enabled: !_isSubmitting,
+                    minLines: 2,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.done,
+                    decoration: InputDecoration(
+                      labelText: l10n.cashMovementReasonLabel,
+                      prefixIcon: const Icon(Icons.notes_outlined),
+                    ),
+                    validator: (value) => _validateReason(value, l10n),
+                    onFieldSubmitted: (_) => _submit(),
                   ),
-                  validator: (value) => _validateReason(value, l10n),
-                  onFieldSubmitted: (_) => _submit(),
                 ),
                 if (_showError) ...[
                   const SizedBox(height: 12),
@@ -122,20 +130,23 @@ class _RegisterCashMovementSheetState extends State<RegisterCashMovementSheet> {
                       child: Text(l10n.cancelButton),
                     ),
                     const Spacer(),
-                    FilledButton.icon(
-                      onPressed: _isSubmitting ? null : _submit,
-                      icon: _isSubmitting
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: PointySpinner(strokeWidth: 2),
-                            )
-                          : Icon(isPayIn ? Icons.input : Icons.output),
-                      label: Text(
-                        _isSubmitting
-                            ? l10n.savingButton
-                            : isPayIn
-                            ? l10n.payInRegisterSessionButton
-                            : l10n.payOutRegisterSessionButton,
+                    TutorTarget(
+                      anchor: TutorAnchor.registerCashMovementConfirmButton,
+                      child: FilledButton.icon(
+                        onPressed: _isSubmitting ? null : _submit,
+                        icon: _isSubmitting
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: PointySpinner(strokeWidth: 2),
+                              )
+                            : Icon(isPayIn ? Icons.input : Icons.output),
+                        label: Text(
+                          _isSubmitting
+                              ? l10n.savingButton
+                              : isPayIn
+                              ? l10n.payInRegisterSessionButton
+                              : l10n.payOutRegisterSessionButton,
+                        ),
                       ),
                     ),
                   ],

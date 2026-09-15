@@ -91,7 +91,18 @@ class PurchaseViewModel extends ChangeNotifier {
        _draftStorage = draftStorage,
        suggestions =
            suggestionController ??
-           PurchaseSuggestionController(repository: _purchaseRepository) {
+           PurchaseSuggestionController(
+             repository: _purchaseRepository,
+             // A practice run must not mute a real product's suggestions: the
+             // practice catalogue's ids are 1-12, which is every real shop's
+             // first dozen products too. Practice keeps its own list, which is
+             // diverted to memory and dies with the process.
+             muteScope:
+                 persistScope != null &&
+                     PracticeStorageScopes.contains(persistScope)
+                 ? persistScope
+                 : 'all',
+           ) {
     suggestions.addListener(notifyListeners);
     loadCatalog();
     unawaited(loadSupplierCurrencies());
@@ -277,6 +288,7 @@ class PurchaseViewModel extends ChangeNotifier {
       notifyListeners();
     }
   }
+
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   bool get isSubmitting => _isSubmitting;

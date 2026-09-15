@@ -14,6 +14,8 @@ import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/payments/record_payment_dialog.dart';
 import '../../../shared/components/pointy_progress.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 
 /// Opens the focused collect-debt flow as a dialog (used from the POS).
 Future<void> showCollectDebtDialog(
@@ -221,14 +223,17 @@ class _CollectDebtDialogState extends State<CollectDebtDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            FilledButton.icon(
-              key: const ValueKey('collect_debt_pick_customer'),
-              onPressed: _isRecording ? null : _pickCustomer,
-              icon: const Icon(Icons.person_search_outlined),
-              label: Text(
-                _customer == null
-                    ? l10n.collectDebtPickCustomer
-                    : l10n.collectDebtChangeCustomer,
+            TutorTarget(
+              anchor: TutorAnchor.collectDebtPickCustomerButton,
+              child: FilledButton.icon(
+                key: const ValueKey('collect_debt_pick_customer'),
+                onPressed: _isRecording ? null : _pickCustomer,
+                icon: const Icon(Icons.person_search_outlined),
+                label: Text(
+                  _customer == null
+                      ? l10n.collectDebtPickCustomer
+                      : l10n.collectDebtChangeCustomer,
+                ),
               ),
             ),
             if (_customer != null) ...[
@@ -291,16 +296,19 @@ class _CollectDebtDialogState extends State<CollectDebtDialog> {
         ],
         if (hasDebt) ...[
           const SizedBox(height: 16),
-          FilledButton.icon(
-            key: const ValueKey('collect_debt_record_payment'),
-            onPressed: _isRecording ? null : _collect,
-            icon: _isRecording
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: PointySpinner(strokeWidth: 2),
-                  )
-                : const Icon(Icons.payments_outlined),
-            label: Text(l10n.collectDebtRecordPayment),
+          TutorTarget(
+            anchor: TutorAnchor.collectDebtRecordPaymentButton,
+            child: FilledButton.icon(
+              key: const ValueKey('collect_debt_record_payment'),
+              onPressed: _isRecording ? null : _collect,
+              icon: _isRecording
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: PointySpinner(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.payments_outlined),
+              label: Text(l10n.collectDebtRecordPayment),
+            ),
           ),
         ],
       ],

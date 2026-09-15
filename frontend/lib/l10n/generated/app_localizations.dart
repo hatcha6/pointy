@@ -17058,6 +17058,42 @@ abstract class AppLocalizations {
   /// **'إتمام البيع'**
   String get posShortcutCheckout;
 
+  /// No description provided for @posShortcutsSectionPayment.
+  ///
+  /// In ar, this message translates to:
+  /// **'داخل نافذة الدفع'**
+  String get posShortcutsSectionPayment;
+
+  /// No description provided for @posShortcutPayCash.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفع نقدًا'**
+  String get posShortcutPayCash;
+
+  /// No description provided for @posShortcutPayCard.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفع بالبطاقة'**
+  String get posShortcutPayCard;
+
+  /// No description provided for @posShortcutPayTransfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفع بتحويل'**
+  String get posShortcutPayTransfer;
+
+  /// No description provided for @posShortcutConfirmPayment.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الدفع'**
+  String get posShortcutConfirmPayment;
+
+  /// No description provided for @posShortcutCancelPayment.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء والعودة إلى السلة'**
+  String get posShortcutCancelPayment;
+
   /// No description provided for @payInRegisterSessionDescription.
   ///
   /// In ar, this message translates to:
@@ -29930,6 +29966,408 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'كل الكاميرات'**
   String get dashboardCamerasOpenWallAction;
+
+  /// No description provided for @learningDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التعلّم'**
+  String get learningDrawerLabel;
+
+  /// No description provided for @learningTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التعلّم'**
+  String get learningTitle;
+
+  /// No description provided for @learningHeaderTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعلّم دفتر'**
+  String get learningHeaderTitle;
+
+  /// No description provided for @learningHeaderSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدلّة قصيرة لكل عملية في البرنامج — ابحث عمّا تحتاجه الآن.'**
+  String get learningHeaderSubtitle;
+
+  /// No description provided for @learningSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن مهمة أو مصطلح…'**
+  String get learningSearchHint;
+
+  /// Learning catalogue progress line.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنهيت {finished} من {total}'**
+  String learningProgressValue(int finished, int total);
+
+  /// Number of guides currently listed.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد أدلّة} =1{دليل واحد} =2{دليلان} other{{count} أدلّة}}'**
+  String learningResultsCount(int count);
+
+  /// Approximate reading time of a learning guide.
+  ///
+  /// In ar, this message translates to:
+  /// **'{minutes} دقيقة'**
+  String learningReadingTime(int minutes);
+
+  /// No description provided for @learningEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد أدلّة'**
+  String get learningEmptyTitle;
+
+  /// No description provided for @learningSelectGuidePlaceholder.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر دليلًا لقراءته'**
+  String get learningSelectGuidePlaceholder;
+
+  /// No description provided for @learningFinishedBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'مكتمل'**
+  String get learningFinishedBadge;
+
+  /// No description provided for @learningMarkFinishedButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد كمكتمل'**
+  String get learningMarkFinishedButton;
+
+  /// No description provided for @learningMarkUnfinishedButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء تحديد الاكتمال'**
+  String get learningMarkUnfinishedButton;
+
+  /// No description provided for @learningOpenScreenButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح الشاشة'**
+  String get learningOpenScreenButton;
+
+  /// No description provided for @learningRelatedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اقرأ بعدها'**
+  String get learningRelatedTitle;
+
+  /// No description provided for @learningOutsidePermissionsNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الدليل يشرح شاشة لا تملك صلاحيتها حاليًا.'**
+  String get learningOutsidePermissionsNote;
+
+  /// No description provided for @learningStepsSectionLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخطوات'**
+  String get learningStepsSectionLabel;
+
+  /// No description provided for @learningTrackFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المسار'**
+  String get learningTrackFilterTitle;
+
+  /// No description provided for @learningLevelFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستوى'**
+  String get learningLevelFilterTitle;
+
+  /// No description provided for @learningKindFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نوع الدليل'**
+  String get learningKindFilterTitle;
+
+  /// No description provided for @learningAudienceFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'النطاق'**
+  String get learningAudienceFilterTitle;
+
+  /// No description provided for @learningProgressFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة'**
+  String get learningProgressFilterTitle;
+
+  /// No description provided for @learningSortTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الترتيب'**
+  String get learningSortTitle;
+
+  /// No description provided for @learningFilterAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get learningFilterAll;
+
+  /// No description provided for @learningTrackGettingStarted.
+  ///
+  /// In ar, this message translates to:
+  /// **'البداية'**
+  String get learningTrackGettingStarted;
+
+  /// No description provided for @learningTrackSelling.
+  ///
+  /// In ar, this message translates to:
+  /// **'البيع'**
+  String get learningTrackSelling;
+
+  /// No description provided for @learningTrackMoney.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفع والتحصيل'**
+  String get learningTrackMoney;
+
+  /// No description provided for @learningTrackReturns.
+  ///
+  /// In ar, this message translates to:
+  /// **'المرتجعات والاستبدال'**
+  String get learningTrackReturns;
+
+  /// No description provided for @learningTrackRegister.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدرج والورديات'**
+  String get learningTrackRegister;
+
+  /// No description provided for @learningTrackCatalog.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتجات والكتالوج'**
+  String get learningTrackCatalog;
+
+  /// No description provided for @learningTrackInventory.
+  ///
+  /// In ar, this message translates to:
+  /// **'المخزون'**
+  String get learningTrackInventory;
+
+  /// No description provided for @learningTrackPurchasing.
+  ///
+  /// In ar, this message translates to:
+  /// **'المشتريات'**
+  String get learningTrackPurchasing;
+
+  /// No description provided for @learningTrackContacts.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملاء والموردون'**
+  String get learningTrackContacts;
+
+  /// No description provided for @learningTrackReports.
+  ///
+  /// In ar, this message translates to:
+  /// **'التقارير والسجلات'**
+  String get learningTrackReports;
+
+  /// No description provided for @learningTrackOperations.
+  ///
+  /// In ar, this message translates to:
+  /// **'العمليات والصيانة'**
+  String get learningTrackOperations;
+
+  /// No description provided for @learningTrackPeople.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظفون والصلاحيات'**
+  String get learningTrackPeople;
+
+  /// No description provided for @learningTrackDevices.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجهزة والطباعة'**
+  String get learningTrackDevices;
+
+  /// No description provided for @learningTrackSetup.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإعداد والاتصال'**
+  String get learningTrackSetup;
+
+  /// No description provided for @learningLevelBeginner.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبتدئ'**
+  String get learningLevelBeginner;
+
+  /// No description provided for @learningLevelIntermediate.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوسط'**
+  String get learningLevelIntermediate;
+
+  /// No description provided for @learningLevelAdvanced.
+  ///
+  /// In ar, this message translates to:
+  /// **'متقدّم'**
+  String get learningLevelAdvanced;
+
+  /// No description provided for @learningKindWalkthrough.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطوات'**
+  String get learningKindWalkthrough;
+
+  /// No description provided for @learningKindConcept.
+  ///
+  /// In ar, this message translates to:
+  /// **'شرح'**
+  String get learningKindConcept;
+
+  /// No description provided for @learningKindReference.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرجع'**
+  String get learningKindReference;
+
+  /// No description provided for @learningAudienceAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الأدلّة'**
+  String get learningAudienceAll;
+
+  /// No description provided for @learningAudienceMyPermissions.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما تسمح به صلاحياتي'**
+  String get learningAudienceMyPermissions;
+
+  /// No description provided for @learningProgressAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get learningProgressAll;
+
+  /// No description provided for @learningProgressUnfinished.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تكتمل'**
+  String get learningProgressUnfinished;
+
+  /// No description provided for @learningProgressFinished.
+  ///
+  /// In ar, this message translates to:
+  /// **'مكتملة'**
+  String get learningProgressFinished;
+
+  /// No description provided for @learningSortRecommended.
+  ///
+  /// In ar, this message translates to:
+  /// **'الترتيب المقترح'**
+  String get learningSortRecommended;
+
+  /// No description provided for @learningSortLevel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأسهل أولًا'**
+  String get learningSortLevel;
+
+  /// No description provided for @learningSortShortest.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأقصر أولًا'**
+  String get learningSortShortest;
+
+  /// No description provided for @learningSortAlphabetical.
+  ///
+  /// In ar, this message translates to:
+  /// **'أبجديًا'**
+  String get learningSortAlphabetical;
+
+  /// Coach panel step counter.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخطوة {step} من {total}'**
+  String lessonStepProgress(int step, int total);
+
+  /// No description provided for @lessonAnchorOffScreen.
+  ///
+  /// In ar, this message translates to:
+  /// **'العنصر المطلوب غير ظاهر على الشاشة الآن.'**
+  String get lessonAnchorOffScreen;
+
+  /// Shown above a lesson's start button when earlier lessons have not been completed.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُستحسن إتمام {lessons} قبل هذا التمرين.'**
+  String lessonPrerequisiteHint(String lessons);
+
+  /// Advances a lesson step that only asks the learner to read and notice something.
+  ///
+  /// In ar, this message translates to:
+  /// **'فهمت، تابع'**
+  String get lessonUnderstoodButton;
+
+  /// No description provided for @lessonRestartButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة البدء'**
+  String get lessonRestartButton;
+
+  /// No description provided for @lessonExitButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء التدريب'**
+  String get lessonExitButton;
+
+  /// No description provided for @lessonCompleteTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنجزت التمرين'**
+  String get lessonCompleteTitle;
+
+  /// No description provided for @lessonCompleteMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمّت العملية كاملة على متجر التدريب. لم يتأثر محلك بشيء.'**
+  String get lessonCompleteMessage;
+
+  /// No description provided for @trainingModeBannerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'وضع التدريب — لا شيء هنا حقيقي'**
+  String get trainingModeBannerTitle;
+
+  /// No description provided for @trainingModeBannerMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل بيع ومخزون ونقد في هذه الشاشة يخصّ متجر تدريب مؤقّت، ولا يمسّ بيانات محلك ولا يطبع إيصالًا.'**
+  String get trainingModeBannerMessage;
+
+  /// No description provided for @lessonStartButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابدأ التمرين'**
+  String get lessonStartButton;
+
+  /// No description provided for @lessonPracticeLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمرين عملي'**
+  String get lessonPracticeLabel;
+
+  /// No description provided for @lessonExitConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء التدريب؟'**
+  String get lessonExitConfirmTitle;
+
+  /// No description provided for @lessonExitConfirmMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُحذف متجر التدريب بكل ما فيه.'**
+  String get lessonExitConfirmMessage;
 }
 
 class _AppLocalizationsDelegate

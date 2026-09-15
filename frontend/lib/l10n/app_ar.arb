@@ -5916,6 +5916,12 @@
   "posShortcutCycleUnit": "تبديل وحدة الصنف المحدد",
   "posShortcutDeleteLine": "حذف الصنف المحدد",
   "posShortcutCheckout": "إتمام البيع",
+  "posShortcutsSectionPayment": "داخل نافذة الدفع",
+  "posShortcutPayCash": "الدفع نقدًا",
+  "posShortcutPayCard": "الدفع بالبطاقة",
+  "posShortcutPayTransfer": "الدفع بتحويل",
+  "posShortcutConfirmPayment": "تأكيد الدفع",
+  "posShortcutCancelPayment": "إلغاء والعودة إلى السلة",
   "payInRegisterSessionDescription": "إيداع مبلغ نقدي في الدرج",
   "payOutRegisterSessionDescription": "سحب مبلغ نقدي من الدرج",
   "posCashPurchaseTitle": "شراء نقدي من الصندوق",
@@ -11031,5 +11037,121 @@
   "dashboardCamerasAutoDescription": "نعرض كاميرات الصندوق أولاً، وهذا ما يحدث إن لم تختر شيئاً.",
   "dashboardCamerasResetAction": "العودة للاختيار التلقائي",
   "dashboardCamerasNoneSelected": "لن تظهر أي كاميرا على اللوحة.",
-  "dashboardCamerasOpenWallAction": "كل الكاميرات"
+  "dashboardCamerasOpenWallAction": "كل الكاميرات",
+  "learningDrawerLabel": "التعلّم",
+  "learningTitle": "التعلّم",
+  "learningHeaderTitle": "تعلّم دفتر",
+  "learningHeaderSubtitle": "أدلّة قصيرة لكل عملية في البرنامج — ابحث عمّا تحتاجه الآن.",
+  "learningSearchHint": "ابحث عن مهمة أو مصطلح…",
+  "learningProgressValue": "أنهيت {finished} من {total}",
+  "@learningProgressValue": {
+    "description": "Learning catalogue progress line.",
+    "placeholders": {
+      "finished": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "learningResultsCount": "{count, plural, =0{لا توجد أدلّة} =1{دليل واحد} =2{دليلان} other{{count} أدلّة}}",
+  "@learningResultsCount": {
+    "description": "Number of guides currently listed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "learningReadingTime": "{minutes} دقيقة",
+  "@learningReadingTime": {
+    "description": "Approximate reading time of a learning guide.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "learningEmptyTitle": "لا توجد أدلّة",
+  "learningSelectGuidePlaceholder": "اختر دليلًا لقراءته",
+  "learningFinishedBadge": "مكتمل",
+  "learningMarkFinishedButton": "تحديد كمكتمل",
+  "learningMarkUnfinishedButton": "إلغاء تحديد الاكتمال",
+  "learningOpenScreenButton": "افتح الشاشة",
+  "learningRelatedTitle": "اقرأ بعدها",
+  "learningOutsidePermissionsNote": "هذا الدليل يشرح شاشة لا تملك صلاحيتها حاليًا.",
+  "learningStepsSectionLabel": "الخطوات",
+  "learningTrackFilterTitle": "المسار",
+  "learningLevelFilterTitle": "المستوى",
+  "learningKindFilterTitle": "نوع الدليل",
+  "learningAudienceFilterTitle": "النطاق",
+  "learningProgressFilterTitle": "الحالة",
+  "learningSortTitle": "الترتيب",
+  "learningFilterAll": "الكل",
+  "learningTrackGettingStarted": "البداية",
+  "learningTrackSelling": "البيع",
+  "learningTrackMoney": "الدفع والتحصيل",
+  "learningTrackReturns": "المرتجعات والاستبدال",
+  "learningTrackRegister": "الدرج والورديات",
+  "learningTrackCatalog": "المنتجات والكتالوج",
+  "learningTrackInventory": "المخزون",
+  "learningTrackPurchasing": "المشتريات",
+  "learningTrackContacts": "العملاء والموردون",
+  "learningTrackReports": "التقارير والسجلات",
+  "learningTrackOperations": "العمليات والصيانة",
+  "learningTrackPeople": "الموظفون والصلاحيات",
+  "learningTrackDevices": "الأجهزة والطباعة",
+  "learningTrackSetup": "الإعداد والاتصال",
+  "learningLevelBeginner": "مبتدئ",
+  "learningLevelIntermediate": "متوسط",
+  "learningLevelAdvanced": "متقدّم",
+  "learningKindWalkthrough": "خطوات",
+  "learningKindConcept": "شرح",
+  "learningKindReference": "مرجع",
+  "learningAudienceAll": "كل الأدلّة",
+  "learningAudienceMyPermissions": "ما تسمح به صلاحياتي",
+  "learningProgressAll": "الكل",
+  "learningProgressUnfinished": "لم تكتمل",
+  "learningProgressFinished": "مكتملة",
+  "learningSortRecommended": "الترتيب المقترح",
+  "learningSortLevel": "الأسهل أولًا",
+  "learningSortShortest": "الأقصر أولًا",
+  "learningSortAlphabetical": "أبجديًا",
+  "lessonStepProgress": "الخطوة {step} من {total}",
+  "@lessonStepProgress": {
+    "description": "Coach panel step counter.",
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "lessonAnchorOffScreen": "العنصر المطلوب غير ظاهر على الشاشة الآن.",
+  "lessonPrerequisiteHint": "يُستحسن إتمام {lessons} قبل هذا التمرين.",
+  "@lessonPrerequisiteHint": {
+    "description": "Shown above a lesson's start button when earlier lessons have not been completed.",
+    "placeholders": {
+      "lessons": {
+        "type": "String"
+      }
+    }
+  },
+  "lessonUnderstoodButton": "فهمت، تابع",
+  "@lessonUnderstoodButton": {
+    "description": "Advances a lesson step that only asks the learner to read and notice something."
+  },
+  "lessonRestartButton": "إعادة البدء",
+  "lessonExitButton": "إنهاء التدريب",
+  "lessonCompleteTitle": "أنجزت التمرين",
+  "lessonCompleteMessage": "تمّت العملية كاملة على متجر التدريب. لم يتأثر محلك بشيء.",
+  "trainingModeBannerTitle": "وضع التدريب — لا شيء هنا حقيقي",
+  "trainingModeBannerMessage": "كل بيع ومخزون ونقد في هذه الشاشة يخصّ متجر تدريب مؤقّت، ولا يمسّ بيانات محلك ولا يطبع إيصالًا.",
+  "lessonStartButton": "ابدأ التمرين",
+  "lessonPracticeLabel": "تمرين عملي",
+  "lessonExitConfirmTitle": "إنهاء التدريب؟",
+  "lessonExitConfirmMessage": "سيُحذف متجر التدريب بكل ما فيه."
 }

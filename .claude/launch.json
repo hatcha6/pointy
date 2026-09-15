@@ -298,6 +298,14 @@
         "frontend-scales-preview"
       ],
       "port": 8080
+    },
+    {
+      "name": "learning-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-learning-preview"
+      ],
+      "port": 8080
     }
   ]
 }

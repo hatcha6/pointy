@@ -13,6 +13,8 @@ import '../../../companion/companion_scope.dart';
 import '../../../../shared/design/design.dart';
 import '../../../../shared/formatters.dart';
 import '../../../../shared/responsive/responsive.dart';
+import '../../../../shared/tutor/anchors.dart';
+import '../../../../shared/tutor/tutor_target.dart';
 import '../../../../shared/components/components.dart';
 import '../../models/split_tender_payment.dart';
 import 'card_receipt_validation_dialog.dart';
@@ -274,104 +276,135 @@ class _PaymentSheetState extends State<PaymentSheet> {
     final colors = context.pointyColors;
     final summary = _summary;
 
-    // Keyboard-first checkout: 1/2/3 pick cash/card/transfer, Enter confirms,
-    // Esc cancels. These fire only when a text field isn't consuming the key,
-    // so editing a tender amount still works normally.
+    // Keyboard-first checkout: Ctrl+1/2/3 pick cash/card/transfer, Enter
+    // confirms, Esc cancels.
+    //
+    // The method keys carry Ctrl because the bare digits did not work: a
+    // `CallbackShortcuts` ancestor sees a digit that the focused text field did
+    // not treat as a shortcut, so typing an amount into a tender line selected
+    // a payment method instead of entering the number. Unreachable on a sale
+    // paid one way — the amount is already filled in — and unavoidable on a
+    // split, where typing the first tender's amount is the whole operation.
+    //
+    // Ctrl also settles the scanner question by construction: a wedge cannot
+    // hold a modifier, so a scanned receipt link can no longer look like a
+    // method key.
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): widget.onCancel,
         const SingleActivator(LogicalKeyboardKey.enter): _submitIfPossible,
         const SingleActivator(LogicalKeyboardKey.numpadEnter):
             _submitIfPossible,
-        const SingleActivator(LogicalKeyboardKey.digit1): () =>
-            _selectMethodByHotkey(PaymentMethod.cash),
-        const SingleActivator(LogicalKeyboardKey.numpad1): () =>
-            _selectMethodByHotkey(PaymentMethod.cash),
-        const SingleActivator(LogicalKeyboardKey.digit2): () =>
-            _selectMethodByHotkey(PaymentMethod.card),
-        const SingleActivator(LogicalKeyboardKey.numpad2): () =>
-            _selectMethodByHotkey(PaymentMethod.card),
-        const SingleActivator(LogicalKeyboardKey.digit3): () =>
-            _selectMethodByHotkey(PaymentMethod.transfer),
-        const SingleActivator(LogicalKeyboardKey.numpad3): () =>
-            _selectMethodByHotkey(PaymentMethod.transfer),
+        for (final (method, digit, numpad) in const [
+          (
+            PaymentMethod.cash,
+            LogicalKeyboardKey.digit1,
+            LogicalKeyboardKey.numpad1,
+          ),
+          (
+            PaymentMethod.card,
+            LogicalKeyboardKey.digit2,
+            LogicalKeyboardKey.numpad2,
+          ),
+          (
+            PaymentMethod.transfer,
+            LogicalKeyboardKey.digit3,
+            LogicalKeyboardKey.numpad3,
+          ),
+        ]) ...{
+          SingleActivator(digit, control: true): () =>
+              _selectMethodByHotkey(method),
+          SingleActivator(numpad, control: true): () =>
+              _selectMethodByHotkey(method),
+          // macOS cashiers reach for ⌘ without thinking; both work.
+          SingleActivator(digit, meta: true): () =>
+              _selectMethodByHotkey(method),
+          SingleActivator(numpad, meta: true): () =>
+              _selectMethodByHotkey(method),
+        },
       },
       child: Focus(
         autofocus: true,
         onKeyEvent: _noteKeyTiming,
-        child: Material(
-          key: const ValueKey('payment_sheet'),
-          color: colors.surface,
-          borderRadius: BorderRadius.circular(PointyRadii.sheet),
-          clipBehavior: Clip.antiAlias,
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _PaymentHeader(
-                  title: l10n.paymentDialogTitle,
-                  onCancel: widget.onCancel,
-                ),
-                Divider(height: 1, color: colors.line),
-                Flexible(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final isWide =
-                          constraints.maxWidth >= AppBreakpoints.tabletMin;
-                      return SingleChildScrollView(
-                        padding: spacing.sectionPadding,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SaleTypeSegmentedControl(
-                              label: l10n.saleTypeLabel,
-                              selectedSaleType: _saleType,
-                              enableCredit: widget.enableCredit,
-                              enableQuotations: widget.enableQuotations,
-                              onSelected: _selectSaleType,
-                            ),
-                            if (_saleTypeSelectorVisible)
-                              SizedBox(height: spacing.lg),
-                            if (_isMissingRequiredCustomer) ...[
-                              PointyInlineMessage.warning(
-                                key: const ValueKey(
-                                  'sale_customer_required_banner',
-                                ),
-                                message: l10n.saleCustomerRequiredBanner,
-                                icon: Icons.person_off_outlined,
+        child: TutorTarget(
+          anchor: TutorAnchor.paymentSheet,
+          child: Material(
+            key: const ValueKey('payment_sheet'),
+            color: colors.surface,
+            borderRadius: BorderRadius.circular(PointyRadii.sheet),
+            clipBehavior: Clip.antiAlias,
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _PaymentHeader(
+                    title: l10n.paymentDialogTitle,
+                    onCancel: widget.onCancel,
+                  ),
+                  Divider(height: 1, color: colors.line),
+                  Flexible(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isWide =
+                            constraints.maxWidth >= AppBreakpoints.tabletMin;
+                        return SingleChildScrollView(
+                          padding: spacing.sectionPadding,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SaleTypeSegmentedControl(
+                                label: l10n.saleTypeLabel,
+                                selectedSaleType: _saleType,
+                                enableCredit: widget.enableCredit,
+                                enableQuotations: widget.enableQuotations,
+                                onSelected: _selectSaleType,
                               ),
-                              SizedBox(height: spacing.lg),
+                              if (_saleTypeSelectorVisible)
+                                SizedBox(height: spacing.lg),
+                              if (_isMissingRequiredCustomer) ...[
+                                PointyInlineMessage.warning(
+                                  key: const ValueKey(
+                                    'sale_customer_required_banner',
+                                  ),
+                                  message: l10n.saleCustomerRequiredBanner,
+                                  icon: Icons.person_off_outlined,
+                                ),
+                                SizedBox(height: spacing.lg),
+                              ],
+                              if (_isQuotation)
+                                _buildQuotationPanel(l10n)
+                              else if (isWide)
+                                _buildWidePaymentLayout(l10n, summary)
+                              else
+                                _buildNarrowPaymentLayout(l10n, summary),
                             ],
-                            if (_isQuotation)
-                              _buildQuotationPanel(l10n)
-                            else if (isWide)
-                              _buildWidePaymentLayout(l10n, summary)
-                            else
-                              _buildNarrowPaymentLayout(l10n, summary),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                PointyStickyActionFooter(
-                  secondaryActions: [
-                    TextButton(
-                      key: const ValueKey('payment_cancel_button'),
-                      onPressed: widget.onCancel,
-                      child: Text(l10n.cancelButton),
+                          ),
+                        );
+                      },
                     ),
-                  ],
-                  primaryAction: FilledButton.icon(
-                    key: const ValueKey('payment_confirm_button'),
-                    onPressed: _canSubmit ? _submit : null,
-                    icon: const Icon(Icons.check),
-                    label: Text(l10n.confirmPaymentButton),
                   ),
-                ),
-              ],
+                  PointyStickyActionFooter(
+                    secondaryActions: [
+                      TextButton(
+                        key: const ValueKey('payment_cancel_button'),
+                        onPressed: widget.onCancel,
+                        child: Text(l10n.cancelButton),
+                      ),
+                    ],
+                    primaryAction: TutorTarget(
+                      anchor: TutorAnchor.paymentConfirmButton,
+                      child: FilledButton.icon(
+                        key: const ValueKey('payment_confirm_button'),
+                        onPressed: _canSubmit ? _submit : null,
+                        icon: const Icon(Icons.check),
+                        label: Text(l10n.confirmPaymentButton),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -386,7 +419,8 @@ class _PaymentSheetState extends State<PaymentSheet> {
       final now = widget.clock();
       final previous = _lastKeyDownAt;
       _lastKeyDownAt = now;
-      _fastKeyRun = previous != null && now.difference(previous) <= _scanBurstGap
+      _fastKeyRun =
+          previous != null && now.difference(previous) <= _scanBurstGap
           ? _fastKeyRun + 1
           : 0;
     }
@@ -412,7 +446,12 @@ class _PaymentSheetState extends State<PaymentSheet> {
   void _selectMethodByHotkey(PaymentMethod method) {
     // A quotation takes no payment, and a credit sale enters its down-payment
     // per line, so the single-method hotkeys are inert for both.
-    if (_isQuotation || _isCredit || _isScannerTyping) {
+    //
+    // No scanner check here, unlike Enter: these keys carry Ctrl, and a wedge
+    // cannot hold a modifier. Keeping the check would have made the shortcut
+    // fail precisely when it is most useful — pressed straight after typing an
+    // amount, which reads to the burst guard as a scan in progress.
+    if (_isQuotation || _isCredit) {
       return;
     }
     if (_enabledMethods.contains(method)) {
@@ -608,15 +647,18 @@ class _PaymentSheetState extends State<PaymentSheet> {
           ),
         ],
         SizedBox(height: spacing.sm),
-        OutlinedButton.icon(
-          key: const ValueKey('payment_add_tender'),
-          onPressed: _addTender,
-          icon: const Icon(Icons.add),
-          label: Text(
-            _isCredit ? l10n.addDownPaymentButton : l10n.addSplitTenderButton,
-          ),
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
+        TutorTarget(
+          anchor: TutorAnchor.paymentAddTenderButton,
+          child: OutlinedButton.icon(
+            key: const ValueKey('payment_add_tender'),
+            onPressed: _addTender,
+            icon: const Icon(Icons.add),
+            label: Text(
+              _isCredit ? l10n.addDownPaymentButton : l10n.addSplitTenderButton,
+            ),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+            ),
           ),
         ),
         // Credit (آجل): after the optional down-payment, set when the remaining
@@ -670,7 +712,10 @@ class _PaymentSheetState extends State<PaymentSheet> {
   /// A matched receipt already says so on its own payment line, so this is
   /// only ever a problem: a receipt that could not be read, or a good one
   /// still looking for the payment it belongs to.
-  List<Widget> _buildScanNotice(AppLocalizations l10n, AdaptiveSpacing spacing) {
+  List<Widget> _buildScanNotice(
+    AppLocalizations l10n,
+    AdaptiveSpacing spacing,
+  ) {
     final pending = _pendingCardReceipt;
     if (pending != null) {
       return [
@@ -917,11 +962,16 @@ class _PaymentSheetState extends State<PaymentSheet> {
               labelText: l10n.creditDueDateLabel,
               prefixIcon: const Icon(Icons.event_available_outlined),
               suffixIcon: hasDate
-                  ? IconButton(
-                      key: const ValueKey('credit_due_date_clear'),
-                      tooltip: l10n.creditDueDateClearTooltip,
-                      icon: const Icon(Icons.close),
-                      onPressed: () => setState(() => _dueDate = null),
+                  // Only present once a date is set, which is what makes it the
+                  // honest thing for a lesson to check after picking one.
+                  ? TutorTarget(
+                      anchor: TutorAnchor.paymentCreditDueDateClear,
+                      child: IconButton(
+                        key: const ValueKey('credit_due_date_clear'),
+                        tooltip: l10n.creditDueDateClearTooltip,
+                        icon: const Icon(Icons.close),
+                        onPressed: () => setState(() => _dueDate = null),
+                      ),
                     )
                   : const Icon(Icons.expand_more),
             ),
@@ -953,11 +1003,15 @@ class _PaymentSheetState extends State<PaymentSheet> {
       now.day,
     ).add(Duration(days: days));
     final selected = _dueDate != null && DateUtils.isSameDay(_dueDate, target);
-    return ChoiceChip(
-      key: ValueKey('credit_due_date_preset_$days'),
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => setState(() => _dueDate = target),
+    return TutorTarget(
+      anchor: TutorAnchor.paymentCreditDueDatePreset,
+      id: '$days',
+      child: ChoiceChip(
+        key: ValueKey('credit_due_date_preset_$days'),
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => setState(() => _dueDate = target),
+      ),
     );
   }
 
@@ -1026,7 +1080,9 @@ class _PaymentSheetState extends State<PaymentSheet> {
       _placePendingCardReceipt();
     });
     ScanFeedbackSounds.instance.play(
-      _pendingCardReceipt == null ? ScanFeedback.success : ScanFeedback.notFound,
+      _pendingCardReceipt == null
+          ? ScanFeedback.success
+          : ScanFeedback.notFound,
     );
   }
 

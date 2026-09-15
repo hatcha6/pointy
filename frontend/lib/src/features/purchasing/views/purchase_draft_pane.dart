@@ -25,6 +25,8 @@ import '../../../shared/responsive/responsive.dart';
 import '../../../shared/unit_options.dart';
 import '../../../shared/units.dart';
 import '../../../data/models/warehouse.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 import 'supplier_currency_field.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_pricing_sheet.dart';
@@ -238,21 +240,26 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
   }
 
   Widget _buildSubmitButton(BuildContext context, AppLocalizations l10n) {
-    return FilledButton.icon(
-      onPressed: viewModel.canSubmitDraft ? () => _submitDraft(context) : null,
-      icon: viewModel.isSubmitting
-          ? const SizedBox.square(
-              dimension: 18,
-              child: PointySpinner(strokeWidth: 2),
-            )
-          : const Icon(Icons.inventory_outlined),
-      label: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Text(
-          viewModel.isSubmitting
-              ? l10n.purchaseSubmitInProgressButton
-              : l10n.submitPurchaseDraftButton(formatMoney(viewModel.total)),
-          maxLines: 1,
+    return TutorTarget(
+      anchor: TutorAnchor.purchaseSubmitButton,
+      child: FilledButton.icon(
+        onPressed: viewModel.canSubmitDraft
+            ? () => _submitDraft(context)
+            : null,
+        icon: viewModel.isSubmitting
+            ? const SizedBox.square(
+                dimension: 18,
+                child: PointySpinner(strokeWidth: 2),
+              )
+            : const Icon(Icons.inventory_outlined),
+        label: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            viewModel.isSubmitting
+                ? l10n.purchaseSubmitInProgressButton
+                : l10n.submitPurchaseDraftButton(formatMoney(viewModel.total)),
+            maxLines: 1,
+          ),
         ),
       ),
     );
@@ -531,16 +538,19 @@ class _PurchaseDraftHeaderActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton(
-          key: const ValueKey('purchase_draft_settings_button'),
-          tooltip: l10n.purchaseDraftSettingsActionTooltip,
-          onPressed: viewModel.isSubmitting ? null : onEditSettings,
-          icon: const Icon(Icons.tune),
-          color: hasSettingsIssue
-              ? colors.danger
-              : hasSettings
-              ? colors.primaryStrong
-              : null,
+        TutorTarget(
+          anchor: TutorAnchor.purchaseSettingsButton,
+          child: IconButton(
+            key: const ValueKey('purchase_draft_settings_button'),
+            tooltip: l10n.purchaseDraftSettingsActionTooltip,
+            onPressed: viewModel.isSubmitting ? null : onEditSettings,
+            icon: const Icon(Icons.tune),
+            color: hasSettingsIssue
+                ? colors.danger
+                : hasSettings
+                ? colors.primaryStrong
+                : null,
+          ),
         ),
         IconButton(
           tooltip: l10n.clearPurchaseDraftTooltip,
@@ -1220,11 +1230,14 @@ class _ReceiveImmediatelyToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return PointyOrderToggleRow(
-      label: l10n.receivePurchaseImmediatelyLabel,
-      value: viewModel.receiveImmediately,
-      enabled: !viewModel.isSubmitting,
-      onChanged: viewModel.updateReceiveImmediately,
+    return TutorTarget(
+      anchor: TutorAnchor.purchaseReceiveImmediatelyToggle,
+      child: PointyOrderToggleRow(
+        label: l10n.receivePurchaseImmediatelyLabel,
+        value: viewModel.receiveImmediately,
+        enabled: !viewModel.isSubmitting,
+        onChanged: viewModel.updateReceiveImmediately,
+      ),
     );
   }
 }
@@ -1389,16 +1402,19 @@ class _PurchaseDraftSettingsDialogState
                 ),
                 const SizedBox(height: 12),
               ],
-              ContactSelectionTile(
-                label: l10n.selectedSupplierLabel,
-                value: _selectedSupplier?.name ?? '',
-                placeholder: l10n.noSupplierSelectedLabel,
-                icon: Icons.local_shipping_outlined,
-                enabled: !widget.viewModel.isSubmitting,
-                onSelect: _selectSupplier,
-                onClear: () => setState(() => _selectedSupplier = null),
-                allowClear: _selectedSupplier != null,
-                selectActionIcon: Icons.edit_outlined,
+              TutorTarget(
+                anchor: TutorAnchor.contactSelectionTile,
+                child: ContactSelectionTile(
+                  label: l10n.selectedSupplierLabel,
+                  value: _selectedSupplier?.name ?? '',
+                  placeholder: l10n.noSupplierSelectedLabel,
+                  icon: Icons.local_shipping_outlined,
+                  enabled: !widget.viewModel.isSubmitting,
+                  onSelect: _selectSupplier,
+                  onClear: () => setState(() => _selectedSupplier = null),
+                  allowClear: _selectedSupplier != null,
+                  selectActionIcon: Icons.edit_outlined,
+                ),
               ),
               const SizedBox(height: 12),
               // Deliberate wedge target: suppliers print the invoice number
@@ -1589,9 +1605,12 @@ class _PurchaseDraftSettingsDialogState
           onPressed: _refreshDiscountPreview,
           child: Text(l10n.refreshDiscountPreviewTooltip),
         ),
-        FilledButton(
-          onPressed: _hasInvalidDate ? null : _save,
-          child: Text(l10n.saveButton),
+        TutorTarget(
+          anchor: TutorAnchor.purchaseSettingsSaveButton,
+          child: FilledButton(
+            onPressed: _hasInvalidDate ? null : _save,
+            child: Text(l10n.saveButton),
+          ),
         ),
       ],
     );
@@ -2058,38 +2077,42 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
     // equivalent underneath, is the difference between "162" meaning a carton
     // of eggs and meaning an egg — the exact confusion the purchase cost guard
     // exists to catch after the fact.
-    final costField = TextField(
-      controller: _costController,
-      focusNode: _costFocusNode,
-      enabled: widget.enabled,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [DecimalTextInputFormatter()],
-      decoration: InputDecoration(
-        labelText: line.isBaseUnit
-            ? l10n.purchaseLineCostLabel
-            : l10n.purchaseLineCostPerUnitLabel(line.unitLabel),
-        isDense: true,
-        prefixIcon: const Icon(Icons.payments_outlined),
-        helperText: line.isBaseUnit || baseUnitCost <= 0
-            ? null
-            : l10n.purchaseLineCostPerBaseHelper(
-                formatMoney(baseUnitCost),
-                unitLabel(l10n, line.variant.unit),
-              ),
-        suffixIcon: widget.onLineTotalEntry == null
-            ? null
-            : IconButton(
-                tooltip: l10n.purchaseLineTotalEntryTooltip,
-                icon: const Icon(Icons.functions, size: 18),
-                onPressed: widget.enabled ? _promptLineTotal : null,
-              ),
+    final costField = TutorTarget(
+      anchor: TutorAnchor.purchaseLineCostField,
+      id: line.variant.sku,
+      child: TextField(
+        controller: _costController,
+        focusNode: _costFocusNode,
+        enabled: widget.enabled,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [DecimalTextInputFormatter()],
+        decoration: InputDecoration(
+          labelText: line.isBaseUnit
+              ? l10n.purchaseLineCostLabel
+              : l10n.purchaseLineCostPerUnitLabel(line.unitLabel),
+          isDense: true,
+          prefixIcon: const Icon(Icons.payments_outlined),
+          helperText: line.isBaseUnit || baseUnitCost <= 0
+              ? null
+              : l10n.purchaseLineCostPerBaseHelper(
+                  formatMoney(baseUnitCost),
+                  unitLabel(l10n, line.variant.unit),
+                ),
+          suffixIcon: widget.onLineTotalEntry == null
+              ? null
+              : IconButton(
+                  tooltip: l10n.purchaseLineTotalEntryTooltip,
+                  icon: const Icon(Icons.functions, size: 18),
+                  onPressed: widget.enabled ? _promptLineTotal : null,
+                ),
+        ),
+        onChanged: (value) {
+          final parsed = parseDecimal(value);
+          if (parsed != null && parsed >= 0) {
+            widget.onCostChanged(parsed);
+          }
+        },
       ),
-      onChanged: (value) {
-        final parsed = parseDecimal(value);
-        if (parsed != null && parsed >= 0) {
-          widget.onCostChanged(parsed);
-        }
-      },
     );
 
     final quantityStepper = PointyQuantityStepper(

@@ -5,6 +5,8 @@ import '../../../core/authorization.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/pos_view_model.dart';
@@ -167,20 +169,26 @@ class _StartSessionGate extends StatelessWidget {
       icon: const Icon(Icons.refresh),
       label: Text(l10n.retryButton),
     );
-    final startButton = _action(
+    // The key rides the wrapper, not the button: the action bar's contract is
+    // read off the widget it is handed, and `find.byKey` must still match
+    // exactly one widget.
+    final startButton = TutorTarget(
       key: const ValueKey('register_session_gate_start_button'),
-      primary: !failedToRead,
-      onPressed: isStarting ? null : () => _startSession(context),
-      icon: isStarting
-          ? const SizedBox.square(
-              dimension: 18,
-              child: PointySpinner(strokeWidth: 2),
-            )
-          : const Icon(Icons.play_arrow),
-      label: Text(
-        isStarting
-            ? l10n.startingRegisterSessionButton
-            : l10n.startRegisterSessionButton,
+      anchor: TutorAnchor.registerStartSessionButton,
+      child: _action(
+        primary: !failedToRead,
+        onPressed: isStarting ? null : () => _startSession(context),
+        icon: isStarting
+            ? const SizedBox.square(
+                dimension: 18,
+                child: PointySpinner(strokeWidth: 2),
+              )
+            : const Icon(Icons.play_arrow),
+        label: Text(
+          isStarting
+              ? l10n.startingRegisterSessionButton
+              : l10n.startRegisterSessionButton,
+        ),
       ),
     );
 
@@ -199,22 +207,25 @@ class _StartSessionGate extends StatelessWidget {
             icon: Icons.info_outline,
           ),
         SizedBox(height: spacing.md),
-        TextField(
-          controller: openingCashController,
-          enabled: !isStarting,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [DecimalTextInputFormatter()],
-          onChanged: (_) => onOpeningCashChanged(),
-          textInputAction: TextInputAction.done,
-          decoration: InputDecoration(
-            labelText: l10n.openingCashInputLabel,
-            hintText: viewModel.requireOpeningCash
-                ? null
-                : l10n.moneyAmountHint,
-            errorText: showOpeningCashRequiredError
-                ? l10n.openingCashRequiredError
-                : null,
-            prefixIcon: const Icon(Icons.payments_outlined),
+        TutorTarget(
+          anchor: TutorAnchor.registerOpeningCashField,
+          child: TextField(
+            controller: openingCashController,
+            enabled: !isStarting,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [DecimalTextInputFormatter()],
+            onChanged: (_) => onOpeningCashChanged(),
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              labelText: l10n.openingCashInputLabel,
+              hintText: viewModel.requireOpeningCash
+                  ? null
+                  : l10n.moneyAmountHint,
+              errorText: showOpeningCashRequiredError
+                  ? l10n.openingCashRequiredError
+                  : null,
+              prefixIcon: const Icon(Icons.payments_outlined),
+            ),
           ),
         ),
         SizedBox(height: spacing.md),
@@ -230,7 +241,7 @@ class _StartSessionGate extends StatelessWidget {
   }
 
   Widget _action({
-    required Key key,
+    Key? key,
     required bool primary,
     required VoidCallback? onPressed,
     required Widget icon,

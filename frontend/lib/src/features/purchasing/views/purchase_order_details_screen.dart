@@ -15,6 +15,8 @@ import '../../../shared/documents/document_trail_sheet.dart';
 import '../../../shared/documents/document_trail_scope.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/quantity_adjustment_dialog.dart';
 import '../../../shared/order_totals.dart';

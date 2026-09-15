@@ -7,6 +7,8 @@ import '../../../shared/design/design.dart';
 import '../../../shared/product_category_picker.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/variant_option_value_picker.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 import 'variant_identity_watcher.dart';
 import '../../../shared/components/pointy_progress.dart';
 
@@ -52,15 +54,18 @@ class ProductParentFormFields extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    final nameField = TextFormField(
-      controller: nameController,
-      textInputAction: TextInputAction.next,
-      decoration: InputDecoration(
-        labelText: l10n.productNameLabel,
-        hintText: l10n.productNameHint,
-        prefixIcon: const Icon(Icons.inventory_2_outlined),
+    final nameField = TutorTarget(
+      anchor: TutorAnchor.productNameField,
+      child: TextFormField(
+        controller: nameController,
+        textInputAction: TextInputAction.next,
+        decoration: InputDecoration(
+          labelText: l10n.productNameLabel,
+          hintText: l10n.productNameHint,
+          prefixIcon: const Icon(Icons.inventory_2_outlined),
+        ),
+        validator: requiredValidator,
       ),
-      validator: requiredValidator,
     );
     final categoryField = AsyncSelectionField<int>(
       fieldKey: const ValueKey('product_form_categories_field'),
@@ -208,41 +213,50 @@ class ProductVariantFormFields extends StatelessWidget {
           prefixIcon: const Icon(Icons.tune_outlined),
         ),
       ),
-      TextFormField(
-        key: skuFieldKey,
-        controller: skuController,
-        textInputAction: TextInputAction.next,
-        textCapitalization: TextCapitalization.characters,
-        decoration: InputDecoration(
-          labelText: l10n.skuLabel,
-          hintText: l10n.skuHint,
-          prefixIcon: const Icon(Icons.qr_code_2),
-          suffixIcon: IdentityStatusIcon(state: skuState, isBarcode: false),
-          helperText: identityHelperText(l10n, skuState, isBarcode: false),
-          // The server error stays visible until the value changes; validator
-          // errors (a blank SKU) still win, so both can never show at once.
-          errorText: skuError,
+      TutorTarget(
+        anchor: TutorAnchor.productSkuField,
+        child: TextFormField(
+          key: skuFieldKey,
+          controller: skuController,
+          textInputAction: TextInputAction.next,
+          textCapitalization: TextCapitalization.characters,
+          decoration: InputDecoration(
+            labelText: l10n.skuLabel,
+            hintText: l10n.skuHint,
+            prefixIcon: const Icon(Icons.qr_code_2),
+            suffixIcon: IdentityStatusIcon(state: skuState, isBarcode: false),
+            helperText: identityHelperText(l10n, skuState, isBarcode: false),
+            // The server error stays visible until the value changes; validator
+            // errors (a blank SKU) still win, so both can never show at once.
+            errorText: skuError,
+          ),
+          validator: (value) => skuError ?? requiredValidator(value),
         ),
-        validator: (value) => skuError ?? requiredValidator(value),
       ),
-      BarcodeInputRow(
-        fieldKey: barcodeFieldKey,
-        controller: barcodeController,
-        label: l10n.barcodeLabel,
-        hint: l10n.barcodeHint,
-        state: barcodeState,
-        errorText: barcodeError,
-      ),
-      TextFormField(
-        controller: priceController,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        textInputAction: TextInputAction.done,
-        inputFormatters: [DecimalTextInputFormatter()],
-        decoration: InputDecoration(
-          labelText: l10n.unitPriceLabel,
-          prefixIcon: const Icon(Icons.sell_outlined),
+      TutorTarget(
+        anchor: TutorAnchor.productBarcodeField,
+        child: BarcodeInputRow(
+          fieldKey: barcodeFieldKey,
+          controller: barcodeController,
+          label: l10n.barcodeLabel,
+          hint: l10n.barcodeHint,
+          state: barcodeState,
+          errorText: barcodeError,
         ),
-        validator: numberValidator,
+      ),
+      TutorTarget(
+        anchor: TutorAnchor.productPriceField,
+        child: TextFormField(
+          controller: priceController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textInputAction: TextInputAction.done,
+          inputFormatters: [DecimalTextInputFormatter()],
+          decoration: InputDecoration(
+            labelText: l10n.unitPriceLabel,
+            prefixIcon: const Icon(Icons.sell_outlined),
+          ),
+          validator: numberValidator,
+        ),
       ),
     ];
 

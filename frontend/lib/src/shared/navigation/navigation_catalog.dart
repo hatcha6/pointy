@@ -328,6 +328,32 @@ List<NavCatalogGroup> appNavigationCatalog(AppLocalizations l10n) {
           keywords: const ['device', 'printer', 'أجهزة', 'طابعة'],
         ),
         NavCatalogEntry(
+          destination: AppNavigationDestination.learning,
+          icon: Icons.school_outlined,
+          selectedIcon: Icons.school,
+          // Someone reaching for this is stuck on a task, not looking for a
+          // section called "learning" — so the palette matches the words they
+          // would actually type when stuck.
+          keywords: const [
+            'learning',
+            'help',
+            'guide',
+            'tutorial',
+            'how to',
+            'manual',
+            'docs',
+            'تعلم',
+            'تعليم',
+            'مساعدة',
+            'شرح',
+            'دليل',
+            'كيف',
+            'دروس',
+            'تدريب',
+          ],
+          label: l10n.learningDrawerLabel,
+        ),
+        NavCatalogEntry(
           destination: AppNavigationDestination.users,
           icon: Icons.group_outlined,
           selectedIcon: Icons.group,

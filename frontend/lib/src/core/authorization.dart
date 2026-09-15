@@ -98,6 +98,15 @@ enum AppCapability {
   countStock,
   applyStockCount,
   useAiAssistant,
+
+  /// The in-app learning library.
+  ///
+  /// Granted unconditionally to every role — a cashier who cannot read how the
+  /// till works is the problem the module exists to solve, and there is nothing
+  /// in a guide to withhold. It is a capability at all because every navigation
+  /// destination needs one; if a shop ever wants to withdraw it, that becomes a
+  /// backend permission wired in here like the rest.
+  useLearningMode,
 }
 
 class AuthorizationCapabilities {
@@ -142,6 +151,7 @@ class AuthorizationCapabilities {
       AppCapability.closeRegisterSession,
       AppCapability.createRegisterCashMovement,
       AppCapability.manageDeviceSettings,
+      AppCapability.useLearningMode,
     };
 
     // Manager-controlled: lets cashiers look up customers (to attach one to a

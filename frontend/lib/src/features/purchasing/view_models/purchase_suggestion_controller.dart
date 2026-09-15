@@ -24,6 +24,7 @@ class PurchaseSuggestionController extends ChangeNotifier {
     ScopedJsonStorage muteStorage = const SharedPreferencesScopedJsonStorage(
       'pointy.purchase.suggestions.mutes.v1',
     ),
+    this.muteScope = 'all',
   }) : _repository = repository,
        _debounce = debounce,
        _muteStorage = muteStorage {
@@ -33,6 +34,12 @@ class PurchaseSuggestionController extends ChangeNotifier {
   final PurchaseRepository _repository;
   final Duration _debounce;
   final ScopedJsonStorage _muteStorage;
+
+  /// Which mute list this controller reads and writes. One list for the whole
+  /// device is right for a real shop — "stop suggesting this" is about the
+  /// shop's buying, not one buyer's — so the default is shared. A practice run
+  /// passes its own scope instead; see [PurchaseViewModel].
+  final String muteScope;
 
   /// Bounded so a long session cannot grow it without limit. 32 draft states is
   /// far more than the add/remove churn of one order.
@@ -89,15 +96,17 @@ class PurchaseSuggestionController extends ChangeNotifier {
       for (final item in _suggestions.usualBasket.items)
         if (!onDraft.contains(item.variantId)) item,
     ];
-    return PurchaseUsualBasket(available: remaining.isNotEmpty, items: remaining);
+    return PurchaseUsualBasket(
+      available: remaining.isNotEmpty,
+      items: remaining,
+    );
   }
 
   bool get isRefreshing => _isRefreshing;
 
   /// Whether the strip should be on screen at all. False collapses it to
   /// nothing — no empty state, no placeholder, no reserved band.
-  bool get isVisible =>
-      _featureEnabled && !_isCollapsed && _supplierId != null;
+  bool get isVisible => _featureEnabled && !_isCollapsed && _supplierId != null;
 
   bool get hasAnything => items.isNotEmpty || usualBasket.available;
 
@@ -262,7 +271,9 @@ class PurchaseSuggestionController extends ChangeNotifier {
 
     // The draft moved on while this was in flight — chase the current state.
     final currentKey = _stateKey(_supplierId, _variantIds);
-    if (_supplierId != null && currentKey != key && _cache[currentKey] == null) {
+    if (_supplierId != null &&
+        currentKey != key &&
+        _cache[currentKey] == null) {
       _pendingKey = currentKey;
       _debounceTimer?.cancel();
       _debounceTimer = Timer(_debounce, _fetchPending);
@@ -285,7 +296,7 @@ class PurchaseSuggestionController extends ChangeNotifier {
 
   Future<void> _restoreMutes() async {
     try {
-      final raw = await _muteStorage.load('all');
+      final raw = await _muteStorage.load(muteScope);
       if (raw == null || _disposed) {
         return;
       }
@@ -303,7 +314,7 @@ class PurchaseSuggestionController extends ChangeNotifier {
 
   Future<void> _persistMutes() async {
     try {
-      await _muteStorage.save('all', jsonEncode(_mutes.toList()));
+      await _muteStorage.save(muteScope, jsonEncode(_mutes.toList()));
     } on Object {
       // Best-effort: mutes survive the session either way.
     }

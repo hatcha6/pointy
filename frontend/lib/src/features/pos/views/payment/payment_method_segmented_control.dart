@@ -4,6 +4,8 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../../data/models/sale_order.dart';
 import '../../../../shared/design/design.dart';
 import '../../../../shared/payment_labels.dart';
+import '../../../../shared/tutor/anchors.dart';
+import '../../../../shared/tutor/tutor_target.dart';
 
 /// Single-select control for the active tender's payment method. Splitting a
 /// payment is a separate, explicit action (the full-width "add payment" button
@@ -67,9 +69,13 @@ class PaymentMethodSegmentedControl extends StatelessWidget {
                 ButtonSegment(
                   value: method,
                   icon: Icon(paymentMethodIcon(method)),
-                  label: Text(
-                    paymentMethodLabel(l10n, method),
-                    key: ValueKey('payment_method_${method.apiValue}'),
+                  label: TutorTarget(
+                    anchor: TutorAnchor.paymentMethodSegment,
+                    id: method.apiValue,
+                    child: Text(
+                      paymentMethodLabel(l10n, method),
+                      key: ValueKey('payment_method_${method.apiValue}'),
+                    ),
                   ),
                 ),
             ],

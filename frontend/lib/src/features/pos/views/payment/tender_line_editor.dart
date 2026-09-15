@@ -9,6 +9,8 @@ import '../../../../shared/design/design.dart';
 import '../../../../shared/formatters.dart';
 import '../../../../shared/payment_labels.dart';
 import '../../../../shared/responsive/responsive.dart';
+import '../../../../shared/tutor/anchors.dart';
+import '../../../../shared/tutor/tutor_target.dart';
 
 class TenderLineEditor extends StatelessWidget {
   const TenderLineEditor({
@@ -79,16 +81,22 @@ class TenderLineEditor extends StatelessWidget {
           padding: EdgeInsetsDirectional.all(spacing.md),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final amountField = TextField(
-                key: ValueKey('payment_tender_amount_$index'),
-                controller: amountController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+              final amountField = TutorTarget(
+                anchor: TutorAnchor.paymentTenderAmountField,
+                // By position, because that is how a split is built: "the
+                // second line takes the rest" is the whole idea of the step.
+                id: '$index',
+                child: TextField(
+                  key: ValueKey('payment_tender_amount_$index'),
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [DecimalTextInputFormatter()],
+                  onTap: onSelected,
+                  onChanged: (_) => onAmountChanged(),
+                  decoration: InputDecoration(labelText: amountLabel),
                 ),
-                inputFormatters: [DecimalTextInputFormatter()],
-                onTap: onSelected,
-                onChanged: (_) => onAmountChanged(),
-                decoration: InputDecoration(labelText: amountLabel),
               );
               final methodField = DropdownButtonFormField<PaymentMethod>(
                 key: ValueKey('payment_tender_method_$index'),
@@ -201,14 +209,17 @@ class _CardReceiptControls extends StatelessWidget {
       children: [
         Align(
           alignment: AlignmentDirectional.centerStart,
-          child: OutlinedButton.icon(
-            key: const ValueKey('payment_card_receipt_button'),
-            onPressed: canValidateCardReceipt ? onValidateCardReceipt : null,
-            icon: const Icon(Icons.qr_code_scanner_outlined),
-            label: Text(
-              receipt == null
-                  ? l10n.cardReceiptValidateButton
-                  : l10n.cardReceiptRescanButton,
+          child: TutorTarget(
+            anchor: TutorAnchor.paymentCardReceiptButton,
+            child: OutlinedButton.icon(
+              key: const ValueKey('payment_card_receipt_button'),
+              onPressed: canValidateCardReceipt ? onValidateCardReceipt : null,
+              icon: const Icon(Icons.qr_code_scanner_outlined),
+              label: Text(
+                receipt == null
+                    ? l10n.cardReceiptValidateButton
+                    : l10n.cardReceiptRescanButton,
+              ),
             ),
           ),
         ),

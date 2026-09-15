@@ -3,6 +3,8 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../../data/models/sale_order.dart';
 import '../../../../shared/design/design.dart';
+import '../../../../shared/tutor/anchors.dart';
+import '../../../../shared/tutor/tutor_target.dart';
 
 /// Single-select control for how the sale is recorded: عادي (standard, paid in
 /// full), آجل (credit / debt), or عرض سعر (quotation, no payment). Quotation and
@@ -75,9 +77,16 @@ class SaleTypeSegmentedControl extends StatelessWidget {
                 ButtonSegment(
                   value: type,
                   icon: Icon(_saleTypeIcon(type)),
-                  label: Text(
-                    _saleTypeLabel(l10n, type),
-                    key: ValueKey('sale_type_${type.apiValue}'),
+                  // The label carries the anchor because the segment itself is
+                  // built by SegmentedButton: tapping the label taps the
+                  // segment, and a lesson can then name *which* one.
+                  label: TutorTarget(
+                    anchor: TutorAnchor.paymentSaleTypeSegment,
+                    id: type.apiValue,
+                    child: Text(
+                      _saleTypeLabel(l10n, type),
+                      key: ValueKey('sale_type_${type.apiValue}'),
+                    ),
                   ),
                 ),
             ],

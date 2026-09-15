@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../design/design.dart';
 import '../query_controls/debounced_search_field.dart';
+import '../tutor/anchors.dart';
+import '../tutor/tutor_target.dart';
 
 /// One selectable row in a [PointySearchablePicker] menu.
 @immutable
@@ -476,47 +478,52 @@ class _MenuRowTile<T extends Object> extends StatelessWidget {
       _CreateRow<T>() => null,
     };
 
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: _menuRowHeight),
-        padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 12, 8),
-        color: isHighlighted ? colors.primaryContainer : null,
-        child: Row(
-          children: [
-            Icon(
-              isCreate ? Icons.add_circle_outline : Icons.label_outline,
-              size: 18,
-              color: isCreate ? colors.primaryStrong : colors.mutedInk,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: isCreate ? FontWeight.w600 : null,
-                      color: isCreate ? colors.primaryStrong : null,
-                    ),
-                  ),
-                  if (subtitle != null && subtitle.isNotEmpty)
+    return TutorTarget(
+      // By label, because that is what a lesson can name: "pick المقاس".
+      anchor: TutorAnchor.searchablePickerRow,
+      id: label,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: _menuRowHeight),
+          padding: const EdgeInsetsDirectional.fromSTEB(12, 8, 12, 8),
+          color: isHighlighted ? colors.primaryContainer : null,
+          child: Row(
+            children: [
+              Icon(
+                isCreate ? Icons.add_circle_outline : Icons.label_outline,
+                size: 18,
+                color: isCreate ? colors.primaryStrong : colors.mutedInk,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     Text(
-                      subtitle,
+                      label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.mutedInk,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: isCreate ? FontWeight.w600 : null,
+                        color: isCreate ? colors.primaryStrong : null,
                       ),
                     ),
-                ],
+                    if (subtitle != null && subtitle.isNotEmpty)
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.mutedInk,
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

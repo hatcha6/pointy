@@ -13,6 +13,8 @@ import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_product_create.dart';
 import 'purchase_suggestion_strip.dart';
@@ -81,29 +83,35 @@ class PurchaseCatalogPane extends StatelessWidget {
               spacing: spacing.gutter,
             ),
             itemBuilder: (context, variant) {
-              return ProductTile.variant(
-                key: ValueKey(variant.id),
-                variant: variant,
-                showPrice: false,
-                showStock: true,
-                cartQuantity: draftQuantities[variant.id] ?? 0,
-                onTap: viewModel.isSubmitting
-                    ? null
-                    : () {
-                        unawaited(
-                          viewModel
-                              .addVariant(
-                                variant,
-                                source: 'purchase_catalog_tile',
-                              )
-                              // Focus goes back to the search field once the
-                              // line lands, so the next product can be looked
-                              // up or scanned without a tap. (It used to be
-                              // dropped outright, which left the buyer with no
-                              // focused field at all.)
-                              .then((_) => viewModel.requestSearchFocus()),
-                        );
-                      },
+              return TutorTarget(
+                anchor: TutorAnchor.purchaseProductTile,
+                // The SKU, as on the till: a lesson that says "order more أرز"
+                // must point at أرز, not at whichever tile mounted first.
+                id: variant.sku,
+                child: ProductTile.variant(
+                  key: ValueKey(variant.id),
+                  variant: variant,
+                  showPrice: false,
+                  showStock: true,
+                  cartQuantity: draftQuantities[variant.id] ?? 0,
+                  onTap: viewModel.isSubmitting
+                      ? null
+                      : () {
+                          unawaited(
+                            viewModel
+                                .addVariant(
+                                  variant,
+                                  source: 'purchase_catalog_tile',
+                                )
+                                // Focus goes back to the search field once the
+                                // line lands, so the next product can be looked
+                                // up or scanned without a tap. (It used to be
+                                // dropped outright, which left the buyer with no
+                                // focused field at all.)
+                                .then((_) => viewModel.requestSearchFocus()),
+                          );
+                        },
+                ),
               );
             },
           );
@@ -173,7 +181,6 @@ class PurchaseCatalogPane extends StatelessWidget {
     return variant;
   }
 }
-
 
 /// The purchasing catalog's search field, owning its own focus node so the view
 /// model can pull focus back between the buyer's actions — the same
@@ -254,23 +261,27 @@ class _PurchaseProductLookupControlsState
     final l10n = AppLocalizations.of(context)!;
     final viewModel = widget.viewModel;
 
-    return ProductQueryControls(
-      query: viewModel.query,
-      catalogRepository: viewModel.catalogRepository,
-      allowAvailabilityFilter: false,
-      searchHint: l10n.purchaseProductLookupHint,
-      searchFieldKey: const ValueKey('purchase_product_lookup_field'),
-      searchFocusNode: _searchFocusNode,
-      searchResetSignal: viewModel.searchResetController,
-      autofocus: AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
-      onSearchChanged: viewModel.updateSearch,
-      onOpenCameraScanner: viewModel.isSubmitting
-          ? null
-          : widget.onOpenCameraScanner,
-      onSearchSubmitted: viewModel.isSubmitting
-          ? null
-          : (barcode) => widget.onSearchSubmitted(barcode),
-      onQueryChanged: viewModel.applyQuery,
+    return TutorTarget(
+      anchor: TutorAnchor.purchaseCatalogSearchField,
+      child: ProductQueryControls(
+        query: viewModel.query,
+        catalogRepository: viewModel.catalogRepository,
+        allowAvailabilityFilter: false,
+        searchHint: l10n.purchaseProductLookupHint,
+        searchFieldKey: const ValueKey('purchase_product_lookup_field'),
+        searchFocusNode: _searchFocusNode,
+        searchResetSignal: viewModel.searchResetController,
+        autofocus:
+            AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
+        onSearchChanged: viewModel.updateSearch,
+        onOpenCameraScanner: viewModel.isSubmitting
+            ? null
+            : widget.onOpenCameraScanner,
+        onSearchSubmitted: viewModel.isSubmitting
+            ? null
+            : (barcode) => widget.onSearchSubmitted(barcode),
+        onQueryChanged: viewModel.applyQuery,
+      ),
     );
   }
 }
@@ -302,7 +313,8 @@ class _PurchaseScanStatusLine extends StatelessWidget {
     final color = switch (status) {
       PurchaseScanStatus.found => colors.primaryStrong,
       PurchaseScanStatus.notFound || PurchaseScanStatus.error => colors.danger,
-      PurchaseScanStatus.resolving || PurchaseScanStatus.idle => colors.mutedInk,
+      PurchaseScanStatus.resolving ||
+      PurchaseScanStatus.idle => colors.mutedInk,
     };
 
     return Row(

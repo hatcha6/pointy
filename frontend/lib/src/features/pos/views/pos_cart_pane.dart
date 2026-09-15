@@ -19,6 +19,8 @@ import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/pos_view_model.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 import '../../../data/models/cart_line.dart';
 import '../../../data/models/product.dart';
 import 'cart_line_note_sheet.dart';
@@ -82,17 +84,26 @@ class PosCartPane extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: PointyOrderPanel(
-                    title: l10n.currentSaleTitle,
-                    subtitle: _saleDraftSubtitle(l10n, viewModel),
-                    trailing: _PosCartHeaderActions(
-                      viewModel: viewModel,
-                      isCartLocked: isCartLocked,
-                      onEditSettings: () => _showSaleSettingsDialog(context),
-                    ),
-                    child: _CartScrollContent(
-                      viewModel: viewModel,
-                      isCartLocked: isCartLocked,
+                  // Keyed by whoever the sale is for. It is the line on screen
+                  // that tells the cashier whose invoice this is, so it is also
+                  // the honest way for a lesson to check that they attached the
+                  // customer the narration named — rather than merely that a
+                  // picker closed, which any customer would satisfy.
+                  child: TutorTarget(
+                    anchor: TutorAnchor.posCartCustomer,
+                    id: _saleDraftSubtitle(l10n, viewModel),
+                    child: PointyOrderPanel(
+                      title: l10n.currentSaleTitle,
+                      subtitle: _saleDraftSubtitle(l10n, viewModel),
+                      trailing: _PosCartHeaderActions(
+                        viewModel: viewModel,
+                        isCartLocked: isCartLocked,
+                        onEditSettings: () => _showSaleSettingsDialog(context),
+                      ),
+                      child: _CartScrollContent(
+                        viewModel: viewModel,
+                        isCartLocked: isCartLocked,
+                      ),
                     ),
                   ),
                 ),
@@ -819,44 +830,48 @@ class _CartScrollContentState extends State<_CartScrollContent> {
                         Divider(height: 1, color: colors.line),
                     itemBuilder: (context, index) {
                       final line = visibleLines[index];
-                      return CartLineTile(
-                        line: line,
-                        selected:
-                            scopeFocused &&
-                            focusedLine?.lineKey == line.lineKey,
-                        onSelect: widget.isCartLocked
-                            ? null
-                            : () => _focusLine(line),
-                        onAdd: widget.isCartLocked
-                            ? null
-                            : () => _viewModel.incrementCartLine(
-                                line.lineKey,
-                                source: 'cart_quantity_button',
-                              ),
-                        onRemove: widget.isCartLocked
-                            ? null
-                            : () => _viewModel.decrementCartLine(
-                                line.lineKey,
-                                source: 'cart_quantity_button',
-                              ),
-                        onDelete: widget.isCartLocked
-                            ? null
-                            : () => _deleteCartLineWithUndo(line.lineKey),
-                        onEditQuantity: widget.isCartLocked
-                            ? null
-                            : () => _editLineQuantity(context, line),
-                        onSwitchUnit:
-                            widget.isCartLocked ||
-                                !Product.fromVariant(
-                                  line.variant,
-                                ).hasSellableUnits
-                            ? null
-                            : () => _editLineUnit(context, line),
-                        onEditNote:
-                            widget.isCartLocked ||
-                                !_viewModel.enableKitchenOperations
-                            ? null
-                            : () => _editLineNote(context, line),
+                      return TutorTarget(
+                        anchor: TutorAnchor.posCartLine,
+                        id: line.variant.sku,
+                        child: CartLineTile(
+                          line: line,
+                          selected:
+                              scopeFocused &&
+                              focusedLine?.lineKey == line.lineKey,
+                          onSelect: widget.isCartLocked
+                              ? null
+                              : () => _focusLine(line),
+                          onAdd: widget.isCartLocked
+                              ? null
+                              : () => _viewModel.incrementCartLine(
+                                  line.lineKey,
+                                  source: 'cart_quantity_button',
+                                ),
+                          onRemove: widget.isCartLocked
+                              ? null
+                              : () => _viewModel.decrementCartLine(
+                                  line.lineKey,
+                                  source: 'cart_quantity_button',
+                                ),
+                          onDelete: widget.isCartLocked
+                              ? null
+                              : () => _deleteCartLineWithUndo(line.lineKey),
+                          onEditQuantity: widget.isCartLocked
+                              ? null
+                              : () => _editLineQuantity(context, line),
+                          onSwitchUnit:
+                              widget.isCartLocked ||
+                                  !Product.fromVariant(
+                                    line.variant,
+                                  ).hasSellableUnits
+                              ? null
+                              : () => _editLineUnit(context, line),
+                          onEditNote:
+                              widget.isCartLocked ||
+                                  !_viewModel.enableKitchenOperations
+                              ? null
+                              : () => _editLineNote(context, line),
+                        ),
                       );
                     },
                   ),
@@ -977,16 +992,19 @@ class _PosCartHeaderActions extends StatelessWidget {
           onSelectSession: viewModel.switchSaleSession,
           onDiscardSession: viewModel.discardSaleSession,
         ),
-        IconButton(
-          key: const ValueKey('sale_draft_settings_button'),
-          tooltip: l10n.saleDraftSettingsActionTooltip,
-          onPressed: isCartLocked ? null : onEditSettings,
-          icon: const Icon(Icons.tune),
-          color: hasIssue
-              ? colors.danger
-              : hasActiveSettings
-              ? colors.primaryStrong
-              : null,
+        TutorTarget(
+          anchor: TutorAnchor.posSaleSettingsButton,
+          child: IconButton(
+            key: const ValueKey('sale_draft_settings_button'),
+            tooltip: l10n.saleDraftSettingsActionTooltip,
+            onPressed: isCartLocked ? null : onEditSettings,
+            icon: const Icon(Icons.tune),
+            color: hasIssue
+                ? colors.danger
+                : hasActiveSettings
+                ? colors.primaryStrong
+                : null,
+          ),
         ),
         IconButton(
           tooltip: l10n.clearCartTooltip,
@@ -1060,16 +1078,19 @@ class _SaleSettingsDialogState extends State<_SaleSettingsDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ContactSelectionTile(
-                label: l10n.selectedCustomerLabel,
-                value: _selectedCustomer?.fullName ?? '',
-                placeholder: l10n.walkInCustomerLabel,
-                icon: Icons.person_pin_circle_outlined,
-                enabled: !widget.viewModel.isCheckingOut,
-                onSelect: _selectCustomer,
-                onClear: () => setState(() => _selectedCustomer = null),
-                allowClear: _selectedCustomer != null,
-                selectActionIcon: Icons.edit_outlined,
+              TutorTarget(
+                anchor: TutorAnchor.contactSelectionTile,
+                child: ContactSelectionTile(
+                  label: l10n.selectedCustomerLabel,
+                  value: _selectedCustomer?.fullName ?? '',
+                  placeholder: l10n.walkInCustomerLabel,
+                  icon: Icons.person_pin_circle_outlined,
+                  enabled: !widget.viewModel.isCheckingOut,
+                  onSelect: _selectCustomer,
+                  onClear: () => setState(() => _selectedCustomer = null),
+                  allowClear: _selectedCustomer != null,
+                  selectActionIcon: Icons.edit_outlined,
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -1111,7 +1132,10 @@ class _SaleSettingsDialogState extends State<_SaleSettingsDialog> {
           onPressed: _refresh,
           child: Text(l10n.refreshDiscountPreviewTooltip),
         ),
-        FilledButton(onPressed: _apply, child: Text(l10n.saveButton)),
+        TutorTarget(
+          anchor: TutorAnchor.posSaleSettingsSaveButton,
+          child: FilledButton(onPressed: _apply, child: Text(l10n.saveButton)),
+        ),
       ],
     );
   }
@@ -1195,21 +1219,24 @@ class _CheckoutFooter extends StatelessWidget {
       ),
       primaryAction: CheckoutGuard(
         capabilities: capabilities,
-        child: FilledButton.icon(
-          onPressed: canSubmit ? onCheckout : null,
-          icon: viewModel.isCheckingOut
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: PointySpinner(strokeWidth: 2),
-                )
-              : const Icon(Icons.payments_outlined),
-          label: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              viewModel.isCheckingOut
-                  ? l10n.checkoutInProgressButton
-                  : l10n.payAmount(formatMoney(viewModel.total)),
-              maxLines: 1,
+        child: TutorTarget(
+          anchor: TutorAnchor.posCheckoutButton,
+          child: FilledButton.icon(
+            onPressed: canSubmit ? onCheckout : null,
+            icon: viewModel.isCheckingOut
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: PointySpinner(strokeWidth: 2),
+                  )
+                : const Icon(Icons.payments_outlined),
+            label: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                viewModel.isCheckingOut
+                    ? l10n.checkoutInProgressButton
+                    : l10n.payAmount(formatMoney(viewModel.total)),
+                maxLines: 1,
+              ),
             ),
           ),
         ),

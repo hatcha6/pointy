@@ -60,6 +60,16 @@ class _PosShortcutsSheet extends StatelessWidget {
       _PosShortcutGroup(l10n.posShortcutsSectionCheckout, [
         _PosShortcut([commandKey, 'Enter'], l10n.posShortcutCheckout),
       ]),
+      // The payment keys are modifier-prefixed so a bare digit always lands in
+      // the amount field — which makes them worth spelling out here, since a
+      // cashier will not discover them by accident.
+      _PosShortcutGroup(l10n.posShortcutsSectionPayment, [
+        _PosShortcut([commandKey, '1'], l10n.posShortcutPayCash),
+        _PosShortcut([commandKey, '2'], l10n.posShortcutPayCard),
+        _PosShortcut([commandKey, '3'], l10n.posShortcutPayTransfer),
+        _PosShortcut(const ['Enter'], l10n.posShortcutConfirmPayment),
+        _PosShortcut(const ['Esc'], l10n.posShortcutCancelPayment),
+      ]),
     ];
 
     return SafeArea(

@@ -11,6 +11,8 @@ import '../../../shared/catalog/pointy_category_strip.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/query_controls/query_empty_state.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -74,10 +76,13 @@ class PurchaseOrderListScreen extends StatelessWidget {
             ],
           ),
           floatingActionButton: capabilities.canCreatePurchaseOrder
-              ? FloatingActionButton.extended(
-                  onPressed: onCreatePurchaseOrder,
-                  icon: const Icon(Icons.add),
-                  label: Text(l10n.newPurchaseOrderButton),
+              ? TutorTarget(
+                  anchor: TutorAnchor.purchaseNewOrderButton,
+                  child: FloatingActionButton.extended(
+                    onPressed: onCreatePurchaseOrder,
+                    icon: const Icon(Icons.add),
+                    label: Text(l10n.newPurchaseOrderButton),
+                  ),
                 )
               : null,
           body: AuthorizationGuard(
@@ -187,12 +192,16 @@ class _PurchaseOrderListBody extends StatelessWidget {
                     order.isEditable &&
                     (!order.hasReceivedStock ||
                         capabilities.canReceivePurchaseOrder);
-                return PurchaseOrderTile(
-                  order: order,
-                  onTap: () => onOpenPurchaseOrder(order),
-                  onPrint: () => _printOrder(context, order),
-                  onShare: () => _shareOrder(context, order),
-                  onEdit: canEdit ? () => onEditPurchaseOrder(order) : null,
+                return TutorTarget(
+                  anchor: TutorAnchor.purchaseOrderRow,
+                  id: order.orderNumber,
+                  child: PurchaseOrderTile(
+                    order: order,
+                    onTap: () => onOpenPurchaseOrder(order),
+                    onPrint: () => _printOrder(context, order),
+                    onShare: () => _shareOrder(context, order),
+                    onEdit: canEdit ? () => onEditPurchaseOrder(order) : null,
+                  ),
                 );
               },
             ),

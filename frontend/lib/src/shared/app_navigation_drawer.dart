@@ -11,6 +11,8 @@ import 'design/design.dart';
 import 'navigation/app_navigation.dart';
 import 'navigation/navigation_catalog.dart';
 import 'theme/theme_mode_controls.dart';
+import 'tutor/anchors.dart';
+import 'tutor/tutor_target.dart';
 
 export 'navigation/app_navigation.dart';
 
@@ -305,44 +307,52 @@ class _NavDestinationTile extends StatelessWidget {
     final colors = context.pointyColors;
     final foreground = selected ? colors.primaryDark : colors.ink;
 
-    return Padding(
-      padding: EdgeInsetsDirectional.symmetric(
-        horizontal: dense ? 6 : 10,
-        vertical: 2,
-      ),
-      child: Material(
-        color: selected ? colors.primaryContainer : Colors.transparent,
-        borderRadius: BorderRadius.circular(PointyRadii.chip),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: EdgeInsetsDirectional.fromSTEB(
-              dense ? 12 : 16,
-              dense ? 9 : 11,
-              12,
-              dense ? 9 : 11,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  selected ? destination.selectedIcon : destination.icon,
-                  size: 20,
-                  color: selected ? colors.primaryDark : colors.mutedInk,
-                ),
-                SizedBox(width: dense ? 12 : 14),
-                Expanded(
-                  child: Text(
-                    destination.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: foreground,
-                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+    return TutorTarget(
+      // By destination name, not label: a lesson that says "open الأصناف" must
+      // survive the day someone rewords the drawer.
+      anchor: TutorAnchor.navigationDestination,
+      id: destination.destination.name,
+      child: Padding(
+        padding: EdgeInsetsDirectional.symmetric(
+          horizontal: dense ? 6 : 10,
+          vertical: 2,
+        ),
+        child: Material(
+          color: selected ? colors.primaryContainer : Colors.transparent,
+          borderRadius: BorderRadius.circular(PointyRadii.chip),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: EdgeInsetsDirectional.fromSTEB(
+                dense ? 12 : 16,
+                dense ? 9 : 11,
+                12,
+                dense ? 9 : 11,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    selected ? destination.selectedIcon : destination.icon,
+                    size: 20,
+                    color: selected ? colors.primaryDark : colors.mutedInk,
+                  ),
+                  SizedBox(width: dense ? 12 : 14),
+                  Expanded(
+                    child: Text(
+                      destination.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: foreground,
+                        fontWeight: selected
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -365,18 +375,22 @@ class _CollapsedRailDestinationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
-    return Tooltip(
-      message: destination.label,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: IconButton(
-          isSelected: selected,
-          style: IconButton.styleFrom(
-            backgroundColor: selected ? colors.primaryContainer : null,
-            foregroundColor: selected ? colors.primaryDark : colors.mutedInk,
+    return TutorTarget(
+      anchor: TutorAnchor.navigationDestination,
+      id: destination.destination.name,
+      child: Tooltip(
+        message: destination.label,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: IconButton(
+            isSelected: selected,
+            style: IconButton.styleFrom(
+              backgroundColor: selected ? colors.primaryContainer : null,
+              foregroundColor: selected ? colors.primaryDark : colors.mutedInk,
+            ),
+            onPressed: onTap,
+            icon: Icon(selected ? destination.selectedIcon : destination.icon),
           ),
-          onPressed: onTap,
-          icon: Icon(selected ? destination.selectedIcon : destination.icon),
         ),
       ),
     );

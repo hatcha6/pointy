@@ -196,6 +196,101 @@ Screens are reviewed without a backend through dev-only preview harnesses under
 (`?screen=dashboard|board|dark|fx|payments`) — it feeds the real screen fake
 repositories, so there is no server, no login, and no shop data involved.
 
+## Learning Module
+
+`التعلّم` is an in-app library of short Arabic guides, one per operation the
+shop actually performs — ring up a split payment, take a down payment on a
+credit (آجل) invoice, receive a purchase order short, close the drawer, pair a
+device for remote access. It answers the support calls that repeat.
+
+The guides are **data, not screens**: `LearningGuide` objects living in
+`frontend/lib/src/features/learning/content/`, one file per track, assembled by
+`learning_library.dart`. Adding a guide is a content change — no UI work — and
+`frontend/test/features/learning/learning_library_test.dart` fails the build on
+a duplicate id, a dangling cross-link, or an empty section.
+
+The catalogue carries the same search / filter / sort controls as the products,
+invoices and purchase-order lists (`QueryControlBar` + `QueryFilterSheet`), with
+one addition: search normalizes Arabic before matching, so `اجل` finds `آجل`,
+`فاتوره` finds `فاتورة`, and `٥٨` finds `58`. Every query token must match (AND),
+and a title hit outranks a passing mention in a body.
+
+Filters are track, level, kind (steps / explanation / reference), progress, and
+`ما تسمح به صلاحياتي` — which narrows the catalogue to what this user's
+permissions actually reach. It is opt-in rather than automatic: an owner
+training a new hire has to be able to read the cashier's guides.
+
+### Practice lessons (the sandbox)
+
+A guide tells you; a lesson lets you do it. A lesson runs **the real app** —
+same screens, same widgets, same Arabic — against an in-memory practice shop, so
+stock really decrements and the drawer really accumulates while nothing touches
+the shop's database.
+
+The seam is the one `PointyApp(apiService:)` already exposes, but the fake is
+cut one level deeper than the existing e2e test: `SandboxClient` is an
+`http.Client`, not a stubbed `PosApiService`, so requests still go through the
+real repositories, view models and serializers. A lesson therefore breaks when
+the API contract breaks. Unimplemented routes answer a loud `501` — never an
+empty list, never a silent success.
+
+Lessons are data (`lib/src/features/learning/lessons/`) with two consumers:
+
+- **the learner** — `LessonRunnerScreen` hosts the sandboxed app beside a coach
+  panel, behind a full-width non-dismissible training banner. It never performs
+  a step for you; it narrates, rings the control, and waits.
+- **CI** — `test/learning/lessons_test.dart` *performs* every step through the
+  real screens and asserts each expectation plus the final outcome against the
+  sandbox shop.
+
+Lessons point at widgets through `TutorAnchor`, a closed enum, never through
+text or position — anchoring a tutorial to copy means it silently rots the first
+time someone rewords a button. `TutorTarget` marks a widget; outside a lesson it
+is a pass-through with no state and no listeners. Pass an instance `id` wherever
+an anchor repeats (a product tile, a cart line, a tender): without one the ring
+lands on whichever instance mounted first, and the step completes on something
+the learner was never told to touch.
+
+#### How a lesson rots, and what catches it
+
+`test/learning/` is built around the four failure modes, because a tutorial that
+is quietly wrong is worse than none:
+
+| Rot | Caught by |
+|---|---|
+| The anchor stops mounting (screen redesigned) | `lessons_test.dart`, per step, naming the anchor |
+| The anchor becomes ambiguous (one control became a list) | `lessons_test.dart` — a step with no `anchorId` must match exactly one widget |
+| The step becomes free (something else already satisfies it, so it self-skips and the narration falls a step behind) | `lessons_test.dart` — a step's expectation must be *false* before the act |
+| The shop never moved (every step passed, no sale happened) | `lessons_test.dart` — the outcome, asserted against the sandbox ledger, and required to be false at the start |
+| A `TutorTarget` was deleted but its enum value survives | `lesson_staleness_test.dart` — scans `lib/src` for the wrapper |
+| An anchor no lesson uses any more | `lesson_staleness_test.dart` — dead anchors are deleted, not kept "just in case" |
+| A guide was renamed, so its practice button silently vanished | `lesson_staleness_test.dart` — every `guideId` must resolve |
+| A back-office lesson seeded with a cashier (opens on a permissions message) | `lesson_staleness_test.dart` — the seed's practice user must hold the lesson's capability |
+| A route the practice shop does not implement | the sandbox answers `501` and the run fails naming it |
+
+**The harness has one honest blind spot.** CI types with `enterText`, which sets
+the controller directly, so it cannot see a keystroke being stolen before it
+reaches the field — which is how the payment sheet's bare `1/2/3` method hotkeys
+survived until a cashier tried to type a split-tender amount. Keyboard handling
+needs its own `sendKeyEvent` test; there is one in
+`test/features/pos/views/payment/payment_sheet_test.dart`.
+
+Preview it with `make frontend-learning-preview`
+(`?screen=board|catalogue|search|filtered|cashier|guide|concept|remote|empty|filters|lesson`,
+and `?screen=lesson&id=<lesson id>` for a specific lesson).
+
+Phase 1 ships 16 lessons across the till, the drawer, the catalogue, purchasing
+and the money that moves without a sale. The written library is still an order
+of magnitude broader, which is the intended shape: breadth is content, and the
+spine under it is built once.
+
+The sandbox implements **only what a lesson reaches** — everything else answers
+`501` and says so in Arabic. So returns, exchanges and stock counts are not in
+the practice shop yet: they need a lesson first, and the lesson needs an
+instance id on the shared `PointyQuantityStepper` (the return dialog's quantity
+lives inside it, and the same gap is why no lesson edits a cart line's
+quantity).
+
 ## Relay Quick Start
 
 The relay is a separate Go project. It keeps the fast remote-access path out of

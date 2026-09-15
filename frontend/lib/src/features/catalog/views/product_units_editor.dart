@@ -9,6 +9,8 @@ import '../../../shared/barcode/camera_text_barcode_scanner_sheet.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/units.dart';
 
@@ -325,10 +327,13 @@ class _ProductUnitsEditorState extends State<ProductUnitsEditor> {
         SizedBox(height: spacing.sm),
         Align(
           alignment: AlignmentDirectional.centerStart,
-          child: OutlinedButton.icon(
-            onPressed: widget.enabled ? _addRow : null,
-            icon: const Icon(Icons.add),
-            label: Text(l10n.productUnitsAddButton),
+          child: TutorTarget(
+            anchor: TutorAnchor.productAddUnitButton,
+            child: OutlinedButton.icon(
+              onPressed: widget.enabled ? _addRow : null,
+              icon: const Icon(Icons.add),
+              label: Text(l10n.productUnitsAddButton),
+            ),
           ),
         ),
         if (_rows.isNotEmpty) ...[
@@ -591,16 +596,19 @@ class _UnitBarcodesField extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextField(
-                controller: row.barcodeInputController,
-                focusNode: row.barcodeInputFocusNode,
-                enabled: enabled,
-                textInputAction: TextInputAction.done,
-                onSubmitted: enabled ? _submit : null,
-                decoration: InputDecoration(
-                  labelText: l10n.productUnitBarcodeAddHint,
-                  isDense: true,
-                  prefixIcon: const Icon(Icons.qr_code_2),
+              child: TutorTarget(
+                anchor: TutorAnchor.productUnitBarcodeField,
+                child: TextField(
+                  controller: row.barcodeInputController,
+                  focusNode: row.barcodeInputFocusNode,
+                  enabled: enabled,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: enabled ? _submit : null,
+                  decoration: InputDecoration(
+                    labelText: l10n.productUnitBarcodeAddHint,
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.qr_code_2),
+                  ),
                 ),
               ),
             ),
@@ -610,12 +618,15 @@ class _UnitBarcodesField extends StatelessWidget {
               onPressed: enabled ? () => _scan(context) : null,
               icon: const Icon(Icons.photo_camera_outlined),
             ),
-            IconButton(
-              tooltip: l10n.productUnitBarcodeAddTooltip,
-              onPressed: enabled
-                  ? () => _submit(row.barcodeInputController.text)
-                  : null,
-              icon: const Icon(Icons.add_circle_outline),
+            TutorTarget(
+              anchor: TutorAnchor.productUnitAddBarcodeButton,
+              child: IconButton(
+                tooltip: l10n.productUnitBarcodeAddTooltip,
+                onPressed: enabled
+                    ? () => _submit(row.barcodeInputController.text)
+                    : null,
+                icon: const Icon(Icons.add_circle_outline),
+              ),
             ),
           ],
         ),

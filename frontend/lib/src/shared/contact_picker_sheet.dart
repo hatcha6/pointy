@@ -9,6 +9,8 @@ import 'design/design.dart';
 import 'query_controls/debounced_search_field.dart';
 import 'query_controls/query_empty_state.dart';
 import 'responsive/responsive.dart';
+import 'tutor/anchors.dart';
+import 'tutor/tutor_target.dart';
 
 class ContactSelectionTile extends StatelessWidget {
   const ContactSelectionTile({
@@ -308,14 +310,20 @@ class _CustomerPickerState extends State<_CustomerPicker> {
         padding: EdgeInsets.zero,
         framed: false,
         itemBuilder: (context, customer) {
-          return PointyDataRow(
-            leading: const Icon(Icons.person_outline),
-            title: customer.fullName,
-            subtitle: [
-              if (customer.phone.isNotEmpty) customer.phone,
-              if (customer.email.isNotEmpty) customer.email,
-            ].join(' • '),
-            onTap: () => Navigator.of(context).pop(customer),
+          return TutorTarget(
+            // By name: a lesson that says "pick أحمد" must point at أحمد, not
+            // at whichever row the page happened to put first.
+            anchor: TutorAnchor.contactPickerRow,
+            id: customer.fullName,
+            child: PointyDataRow(
+              leading: const Icon(Icons.person_outline),
+              title: customer.fullName,
+              subtitle: [
+                if (customer.phone.isNotEmpty) customer.phone,
+                if (customer.email.isNotEmpty) customer.email,
+              ].join(' • '),
+              onTap: () => Navigator.of(context).pop(customer),
+            ),
           );
         },
       ),
@@ -449,15 +457,19 @@ class _SupplierPickerState extends State<_SupplierPicker> {
         padding: EdgeInsets.zero,
         framed: false,
         itemBuilder: (context, supplier) {
-          return PointyDataRow(
-            leading: const Icon(Icons.local_shipping_outlined),
-            title: supplier.name,
-            subtitle: [
-              if (supplier.contactName.isNotEmpty) supplier.contactName,
-              if (supplier.phone.isNotEmpty) supplier.phone,
-              if (supplier.email.isNotEmpty) supplier.email,
-            ].join(' • '),
-            onTap: () => Navigator.of(context).pop(supplier),
+          return TutorTarget(
+            anchor: TutorAnchor.contactPickerRow,
+            id: supplier.name,
+            child: PointyDataRow(
+              leading: const Icon(Icons.local_shipping_outlined),
+              title: supplier.name,
+              subtitle: [
+                if (supplier.contactName.isNotEmpty) supplier.contactName,
+                if (supplier.phone.isNotEmpty) supplier.phone,
+                if (supplier.email.isNotEmpty) supplier.email,
+              ].join(' • '),
+              onTap: () => Navigator.of(context).pop(supplier),
+            ),
           );
         },
       ),
@@ -561,21 +573,27 @@ class _PickerShell extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               actions: [
-                FilledButton.icon(
-                  onPressed: onCreate,
-                  icon: const Icon(Icons.add),
-                  label: Text(createLabel),
+                TutorTarget(
+                  anchor: TutorAnchor.contactPickerCreateButton,
+                  child: FilledButton.icon(
+                    onPressed: onCreate,
+                    icon: const Icon(Icons.add),
+                    label: Text(createLabel),
+                  ),
                 ),
               ],
             ),
             SizedBox(height: spacing.md),
             // Debounced: a raw onChanged used to fire one server-paginated
             // contacts query per keystroke, mid-checkout.
-            DebouncedSearchField(
-              value: searchValue,
-              hintText: searchHint,
-              clearTooltip: AppLocalizations.of(context)!.clearSearchTooltip,
-              onChanged: onSearchChanged,
+            TutorTarget(
+              anchor: TutorAnchor.contactPickerSearchField,
+              child: DebouncedSearchField(
+                value: searchValue,
+                hintText: searchHint,
+                clearTooltip: AppLocalizations.of(context)!.clearSearchTooltip,
+                onChanged: onSearchChanged,
+              ),
             ),
             SizedBox(height: spacing.sm),
             Expanded(child: child),
@@ -664,19 +682,25 @@ class _CustomerFormState extends State<CustomerForm> {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _nameController,
-              autofocus: !_isEditing,
-              decoration: InputDecoration(
-                labelText: l10n.customerFullNameLabel,
+            TutorTarget(
+              anchor: TutorAnchor.contactFormNameField,
+              child: TextFormField(
+                controller: _nameController,
+                autofocus: !_isEditing,
+                decoration: InputDecoration(
+                  labelText: l10n.customerFullNameLabel,
+                ),
+                validator: _requiredValidator,
               ),
-              validator: _requiredValidator,
             ),
             const SizedBox(height: 10),
-            TextFormField(
-              controller: _phoneController,
-              decoration: InputDecoration(labelText: l10n.phoneOptionalLabel),
-              keyboardType: TextInputType.phone,
+            TutorTarget(
+              anchor: TutorAnchor.contactFormPhoneField,
+              child: TextFormField(
+                controller: _phoneController,
+                decoration: InputDecoration(labelText: l10n.phoneOptionalLabel),
+                keyboardType: TextInputType.phone,
+              ),
             ),
             const SizedBox(height: 10),
             TextFormField(
@@ -743,16 +767,19 @@ class _CustomerFormState extends State<CustomerForm> {
               ),
             ],
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _isSaving ? null : _submit,
-              icon: _isSaving
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: PointySpinner(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save_outlined),
-              label: Text(
-                _isSaving ? l10n.savingButton : l10n.saveCustomerButton,
+            TutorTarget(
+              anchor: TutorAnchor.contactFormSaveButton,
+              child: FilledButton.icon(
+                onPressed: _isSaving ? null : _submit,
+                icon: _isSaving
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: PointySpinner(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(
+                  _isSaving ? l10n.savingButton : l10n.saveCustomerButton,
+                ),
               ),
             ),
           ],
@@ -893,11 +920,14 @@ class _SupplierFormState extends State<SupplierForm> {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _nameController,
-              autofocus: !_isEditing,
-              decoration: InputDecoration(labelText: l10n.supplierNameLabel),
-              validator: _requiredValidator,
+            TutorTarget(
+              anchor: TutorAnchor.contactFormNameField,
+              child: TextFormField(
+                controller: _nameController,
+                autofocus: !_isEditing,
+                decoration: InputDecoration(labelText: l10n.supplierNameLabel),
+                validator: _requiredValidator,
+              ),
             ),
             const SizedBox(height: 10),
             TextFormField(
@@ -945,16 +975,19 @@ class _SupplierFormState extends State<SupplierForm> {
               ),
             ],
             const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _isSaving ? null : _submit,
-              icon: _isSaving
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: PointySpinner(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save_outlined),
-              label: Text(
-                _isSaving ? l10n.savingButton : l10n.saveSupplierButton,
+            TutorTarget(
+              anchor: TutorAnchor.contactFormSaveButton,
+              child: FilledButton.icon(
+                onPressed: _isSaving ? null : _submit,
+                icon: _isSaving
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: PointySpinner(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(
+                  _isSaving ? l10n.savingButton : l10n.saveSupplierButton,
+                ),
               ),
             ),
           ],

@@ -50,10 +50,11 @@ String cardReceiptErrorMessage(
       l10n.cardReceiptUnsuccessfulError,
     CardPaymentReceiptErrorCode.missingReference =>
       l10n.cardReceiptMissingReferenceError,
-    CardPaymentReceiptErrorCode.amountMismatch => l10n.cardReceiptAmountMismatch(
-      formatMoney(exception.receipt?.amount ?? 0),
-      formatMoney(expectedAmount ?? 0),
-    ),
+    CardPaymentReceiptErrorCode.amountMismatch =>
+      l10n.cardReceiptAmountMismatch(
+        formatMoney(exception.receipt?.amount ?? 0),
+        formatMoney(expectedAmount ?? 0),
+      ),
     CardPaymentReceiptErrorCode.terminalNotTrusted =>
       l10n.cardReceiptTerminalNotTrusted(exception.receipt?.terminalId ?? ''),
   };

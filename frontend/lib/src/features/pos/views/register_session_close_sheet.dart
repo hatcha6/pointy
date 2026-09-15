@@ -9,6 +9,8 @@ import '../../../shared/design/design.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 
 class RegisterSessionCloseSheet extends StatefulWidget {
   const RegisterSessionCloseSheet({
@@ -118,22 +120,25 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      TextFormField(
-                        key: const ValueKey(
-                          'register_session_closing_cash_field',
+                      TutorTarget(
+                        anchor: TutorAnchor.registerCloseCountedCashField,
+                        child: TextFormField(
+                          key: const ValueKey(
+                            'register_session_closing_cash_field',
+                          ),
+                          controller: _closingCashController,
+                          enabled: !_isSubmitting,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          inputFormatters: [DecimalTextInputFormatter()],
+                          textInputAction: TextInputAction.next,
+                          decoration: InputDecoration(
+                            labelText: l10n.closingCashInputLabel,
+                            prefixIcon: const Icon(Icons.payments_outlined),
+                          ),
+                          validator: (value) => _validateMoney(value, l10n),
                         ),
-                        controller: _closingCashController,
-                        enabled: !_isSubmitting,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        inputFormatters: [DecimalTextInputFormatter()],
-                        textInputAction: TextInputAction.next,
-                        decoration: InputDecoration(
-                          labelText: l10n.closingCashInputLabel,
-                          prefixIcon: const Icon(Icons.payments_outlined),
-                        ),
-                        validator: (value) => _validateMoney(value, l10n),
                       ),
                       SizedBox(height: spacing.md),
                       ResponsiveFormGrid(
@@ -207,19 +212,22 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
                     child: Text(l10n.cancelButton),
                   ),
                 ],
-                primaryAction: FilledButton.icon(
-                  key: const ValueKey('register_session_close_submit_button'),
-                  onPressed: _isSubmitting ? null : _submit,
-                  icon: _isSubmitting
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: PointySpinner(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.lock_outline),
-                  label: Text(
-                    _isSubmitting
-                        ? l10n.closingRegisterSessionButton
-                        : l10n.closeRegisterSessionButton,
+                primaryAction: TutorTarget(
+                  anchor: TutorAnchor.registerCloseConfirmButton,
+                  child: FilledButton.icon(
+                    key: const ValueKey('register_session_close_submit_button'),
+                    onPressed: _isSubmitting ? null : _submit,
+                    icon: _isSubmitting
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: PointySpinner(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.lock_outline),
+                    label: Text(
+                      _isSubmitting
+                          ? l10n.closingRegisterSessionButton
+                          : l10n.closeRegisterSessionButton,
+                    ),
                   ),
                 ),
               ),

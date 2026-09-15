@@ -19,6 +19,8 @@ import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/unit_options.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 import '../view_models/pos_view_model.dart';
 import 'modifier_sheet.dart';
 import 'pos_variant_picker_sheet.dart';
@@ -137,13 +139,20 @@ class _PosCatalogGrid extends StatelessWidget {
                 spacing: spacing.gutter,
               ),
               itemBuilder: (context, product) {
-                return ProductTile(
-                  key: ValueKey(product.id),
-                  product: product,
-                  cartQuantity: cartQuantities[product.id] ?? 0,
-                  onTap: canCheckout
-                      ? () => _selectProduct(context, product)
-                      : null,
+                return TutorTarget(
+                  anchor: TutorAnchor.posProductTile,
+                  // The SKU, so a lesson can say "tap خبز" and have the
+                  // spotlight land on خبز rather than on whichever tile
+                  // mounted first.
+                  id: product.defaultVariant?.sku,
+                  child: ProductTile(
+                    key: ValueKey(product.id),
+                    product: product,
+                    cartQuantity: cartQuantities[product.id] ?? 0,
+                    onTap: canCheckout
+                        ? () => _selectProduct(context, product)
+                        : null,
+                  ),
                 );
               },
             );
@@ -368,32 +377,35 @@ class _PosProductLookupControlsState extends State<_PosProductLookupControls> {
     return CheckoutCapabilityBuilder(
       capabilities: capabilities,
       builder: (context, canCheckout) {
-        return ProductQueryControls(
-          query: viewModel.query,
-          catalogRepository: viewModel.catalogRepository,
-          allowAvailabilityFilter: false,
-          searchHint: l10n.posProductLookupHint,
-          searchFieldKey: const ValueKey('product_lookup_field'),
-          searchFocusNode: _searchFocusNode,
-          // Clears the field (and cancels its debounce) after a scan so a
-          // scanned barcode never lingers in the search box.
-          searchResetSignal: viewModel.searchResetController,
-          autofocus:
-              AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
-          onSearchChanged: viewModel.updateSearch,
-          onOpenCameraScanner:
-              canCheckout &&
-                  !viewModel.isCheckingOut &&
-                  !viewModel.isResolvingBarcode
-              ? () => _openCameraScanner(context)
-              : null,
-          onSearchSubmitted:
-              canCheckout &&
-                  !viewModel.isCheckingOut &&
-                  !viewModel.isResolvingBarcode
-              ? viewModel.addVariantByBarcode
-              : null,
-          onQueryChanged: viewModel.applyQuery,
+        return TutorTarget(
+          anchor: TutorAnchor.posCatalogSearchField,
+          child: ProductQueryControls(
+            query: viewModel.query,
+            catalogRepository: viewModel.catalogRepository,
+            allowAvailabilityFilter: false,
+            searchHint: l10n.posProductLookupHint,
+            searchFieldKey: const ValueKey('product_lookup_field'),
+            searchFocusNode: _searchFocusNode,
+            // Clears the field (and cancels its debounce) after a scan so a
+            // scanned barcode never lingers in the search box.
+            searchResetSignal: viewModel.searchResetController,
+            autofocus:
+                AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
+            onSearchChanged: viewModel.updateSearch,
+            onOpenCameraScanner:
+                canCheckout &&
+                    !viewModel.isCheckingOut &&
+                    !viewModel.isResolvingBarcode
+                ? () => _openCameraScanner(context)
+                : null,
+            onSearchSubmitted:
+                canCheckout &&
+                    !viewModel.isCheckingOut &&
+                    !viewModel.isResolvingBarcode
+                ? viewModel.addVariantByBarcode
+                : null,
+            onQueryChanged: viewModel.applyQuery,
+          ),
         );
       },
     );

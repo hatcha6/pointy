@@ -29,6 +29,7 @@ enum AppNavigationDestination {
   reports,
   activityLog,
   deviceSettings,
+  learning,
   users,
   settings,
 }
@@ -69,6 +70,7 @@ AppCapability appNavigationDestinationCapability(
     AppNavigationDestination.activityLog => AppCapability.viewActivityLog,
     AppNavigationDestination.deviceSettings =>
       AppCapability.manageDeviceSettings,
+    AppNavigationDestination.learning => AppCapability.useLearningMode,
     AppNavigationDestination.users => AppCapability.manageUsers,
     AppNavigationDestination.settings => AppCapability.manageShopSettings,
   };

@@ -793,16 +793,56 @@ void main() {
     );
     expect(submitted, isNull, reason: 'the scan must not confirm the sale');
 
-    // The cashier reaching for the same keys, at human pace, still works.
+    // The cashier reaching for the method key, at human pace, still works.
     now = now.add(const Duration(seconds: 1));
-    await tester.sendKeyEvent(LogicalKeyboardKey.digit2);
-    await tester.pump();
+    await _pressMethodHotkey(tester, LogicalKeyboardKey.digit2);
     expect(_tenderMethod(tester, 0), PaymentMethod.card);
 
     now = now.add(const Duration(seconds: 1));
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
     expect(submitted?.payments.single.amount, 45);
+  });
+
+  testWidgets('typing a split tender amount does not pick a payment method', (
+    tester,
+  ) async {
+    // The bug a cashier hits on the first split they ever take: the sheet's
+    // method hotkeys used to be bare 1/2/3, and a `CallbackShortcuts` ancestor
+    // sees a digit the focused text field did not claim. So typing "12" into
+    // the first tender selected cash and then card, and the number never
+    // arrived. Unreachable on a sale paid one way — the amount is prefilled —
+    // and unavoidable on a split.
+    PaymentSheetResult? submitted;
+    await _pumpPaymentSheet(
+      tester,
+      total: 30,
+      onSubmit: (result) => submitted = result,
+    );
+
+    final amountField = find.byKey(const ValueKey('payment_tender_amount_0'));
+    // `showKeyboard`, not `tap`: in the compact layout the pinned footer sits
+    // over the field's centre, so a tap lands on the confirm button.
+    await tester.showKeyboard(amountField);
+    await tester.pump();
+    // Through the keyboard, not through the controller: `enterText` sets the
+    // value directly and never exercises the shortcut at all — which is why
+    // the lesson runner did not catch this and a cashier did.
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit1);
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit2);
+    await tester.pump();
+
+    expect(
+      _tenderMethod(tester, 0),
+      PaymentMethod.cash,
+      reason: 'digits typed into an amount must not change the method',
+    );
+
+    expect(submitted, isNull, reason: 'typing must not confirm the sale');
+
+    // And the modifier form still selects a method, from the same focus.
+    await _pressMethodHotkey(tester, LogicalKeyboardKey.digit2);
+    expect(_tenderMethod(tester, 0), PaymentMethod.card);
   });
 
   testWidgets('credit/quotation segments hidden when shop disables them', (
@@ -864,31 +904,31 @@ Future<void> _pumpPaymentSheet(
           bridge: companionBridge,
           repository: null,
           child: Scaffold(
-          body: SizedBox.expand(
-            child: PaymentSheet(
-              total: total,
-              enableCashPayments: enableCash,
-              enableCardPayments: enableCard,
-              enableTransferPayments: enableTransfer,
-              requireCardReceipt: requireCardReceipt,
-              trustedCardTerminalIds: trustedCardTerminalIds,
-              clock: clock ?? DateTime.now,
-              showPrintInvoiceToggle: showPrintInvoiceToggle,
-              printInvoiceAfterPayment: printInvoiceAfterPayment,
-              onPrintInvoiceChanged: onPrintInvoiceChanged ?? (_) {},
-              showShareInvoiceToggle: false,
-              shareInvoiceAfterPayment: false,
-              onShareInvoiceChanged: (_) {},
-              hasCustomer: hasCustomer,
-              requireCustomerForCredit: requireCustomerForCredit,
-              enableQuotations: enableQuotations,
-              enableCredit: enableCredit,
-              proposedDueDate: proposedDueDate,
-              onSubmit: onSubmit ?? (_) {},
-              onCancel: () {},
+            body: SizedBox.expand(
+              child: PaymentSheet(
+                total: total,
+                enableCashPayments: enableCash,
+                enableCardPayments: enableCard,
+                enableTransferPayments: enableTransfer,
+                requireCardReceipt: requireCardReceipt,
+                trustedCardTerminalIds: trustedCardTerminalIds,
+                clock: clock ?? DateTime.now,
+                showPrintInvoiceToggle: showPrintInvoiceToggle,
+                printInvoiceAfterPayment: printInvoiceAfterPayment,
+                onPrintInvoiceChanged: onPrintInvoiceChanged ?? (_) {},
+                showShareInvoiceToggle: false,
+                shareInvoiceAfterPayment: false,
+                onShareInvoiceChanged: (_) {},
+                hasCustomer: hasCustomer,
+                requireCustomerForCredit: requireCustomerForCredit,
+                enableQuotations: enableQuotations,
+                enableCredit: enableCredit,
+                proposedDueDate: proposedDueDate,
+                onSubmit: onSubmit ?? (_) {},
+                onCancel: () {},
+              ),
             ),
           ),
-        ),
         ),
       ),
     ),
@@ -903,7 +943,6 @@ void _scanIntoSheet(WidgetTester tester, String value) {
       .widget<BarcodeScanListener>(find.byType(BarcodeScanListener))
       .onBarcodeScanned(value);
 }
-
 
 PaymentMethod _tenderMethod(WidgetTester tester, int index) {
   return tester
@@ -925,5 +964,20 @@ Future<void> _tapKey(WidgetTester tester, String key) async {
   await tester.ensureVisible(finder);
   await tester.pump();
   await tester.tap(finder);
+  await tester.pump();
+}
+
+/// Ctrl+digit — the payment-method hotkey.
+///
+/// It is modifier-prefixed because a bare digit reached the sheet's shortcuts
+/// even while a tender amount field had focus, so typing an amount picked a
+/// payment method instead of entering the number.
+Future<void> _pressMethodHotkey(
+  WidgetTester tester,
+  LogicalKeyboardKey key,
+) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+  await tester.sendKeyEvent(key);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
   await tester.pump();
 }

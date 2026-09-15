@@ -20,6 +20,8 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../shared/unit_options.dart';
 import '../../contacts/views/collect_debt_dialog.dart';
@@ -94,14 +96,17 @@ class PosScreen extends StatelessWidget {
                 PosAccessGuard(
                   capabilities: capabilities,
                   fallback: const SizedBox.shrink(),
-                  child: _RegisterSessionPill(
-                    sessionNumber:
-                        viewModel.activeRegisterSession!.sessionNumber,
-                    tooltip: l10n.posSessionMenuTooltip,
-                    busy:
-                        viewModel.isCreatingCashMovement ||
-                        viewModel.isClosingRegisterSession,
-                    onTap: () => _showRegisterSessionMenu(context),
+                  child: TutorTarget(
+                    anchor: TutorAnchor.registerSessionMenuButton,
+                    child: _RegisterSessionPill(
+                      sessionNumber:
+                          viewModel.activeRegisterSession!.sessionNumber,
+                      tooltip: l10n.posSessionMenuTooltip,
+                      busy:
+                          viewModel.isCreatingCashMovement ||
+                          viewModel.isClosingRegisterSession,
+                      onTap: () => _showRegisterSessionMenu(context),
+                    ),
                   ),
                 ),
             ],
@@ -320,6 +325,7 @@ class PosScreen extends StatelessWidget {
       if (capabilities.canCreateRegisterCashMovement) ...[
         _PosSessionAction(
           icon: Icons.add_circle_outline,
+          id: 'pay_in',
           label: l10n.payInRegisterSessionButton,
           description: l10n.payInRegisterSessionDescription,
           onTap: () =>
@@ -327,6 +333,7 @@ class PosScreen extends StatelessWidget {
         ),
         _PosSessionAction(
           icon: Icons.remove_circle_outline,
+          id: 'pay_out',
           label: l10n.payOutRegisterSessionButton,
           description: l10n.payOutRegisterSessionDescription,
           onTap: () =>
@@ -338,6 +345,7 @@ class PosScreen extends StatelessWidget {
       if (capabilities.canCreatePosCashPurchase)
         _PosSessionAction(
           icon: Icons.shopping_basket_outlined,
+          id: 'cash_purchase',
           label: l10n.posCashPurchaseTitle,
           description: l10n.posCashPurchaseDescription,
           onTap: () => _showPosCashPurchaseSheet(context),
@@ -345,6 +353,7 @@ class PosScreen extends StatelessWidget {
       if (capabilities.canCollectCustomerDebt)
         _PosSessionAction(
           icon: Icons.request_quote_outlined,
+          id: 'collect_debt',
           label: l10n.collectDebtTitle,
           description: l10n.collectDebtSessionDescription,
           onTap: () => showCollectDebtDialog(
@@ -357,6 +366,7 @@ class PosScreen extends StatelessWidget {
       if (capabilities.canAccessPos)
         _PosSessionAction(
           icon: Icons.sync,
+          id: 'refresh_catalog',
           label: l10n.refreshCatalogTooltip,
           description: l10n.refreshCatalogDescription,
           onTap: viewModel.loadCatalog,
@@ -364,6 +374,7 @@ class PosScreen extends StatelessWidget {
       if (capabilities.canCloseRegisterSession)
         _PosSessionAction(
           icon: Icons.lock_outline,
+          id: 'close_session',
           label: l10n.closeRegisterSessionTooltip,
           description: l10n.closeRegisterSessionDescription,
           danger: true,
@@ -376,12 +387,17 @@ class PosScreen extends StatelessWidget {
 /// One labeled action in the POS session menu.
 class _PosSessionAction {
   const _PosSessionAction({
+    required this.id,
     required this.icon,
     required this.label,
     required this.description,
     required this.onTap,
     this.danger = false,
   });
+
+  /// Stable name for this action, independent of its Arabic label — what a
+  /// lesson points at, so rewording the menu cannot silently re-aim a step.
+  final String id;
 
   final IconData icon;
   final String label;
@@ -470,25 +486,29 @@ class _PosSessionActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
     final accent = action.danger ? colors.danger : colors.primaryStrong;
-    return ListTile(
-      onTap: onInvoke,
-      leading: CircleAvatar(
-        backgroundColor: accent.withValues(alpha: 0.12),
-        foregroundColor: accent,
-        child: Icon(action.icon),
-      ),
-      title: Text(
-        action.label,
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: action.danger ? colors.danger : colors.ink,
-          fontWeight: FontWeight.w700,
+    return TutorTarget(
+      anchor: TutorAnchor.registerSessionAction,
+      id: action.id,
+      child: ListTile(
+        onTap: onInvoke,
+        leading: CircleAvatar(
+          backgroundColor: accent.withValues(alpha: 0.12),
+          foregroundColor: accent,
+          child: Icon(action.icon),
         ),
-      ),
-      subtitle: Text(
-        action.description,
-        style: Theme.of(
-          context,
-        ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+        title: Text(
+          action.label,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            color: action.danger ? colors.danger : colors.ink,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text(
+          action.description,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+        ),
       ),
     );
   }

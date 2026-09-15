@@ -123,9 +123,12 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.cancelButton),
         ),
-        FilledButton(
-          onPressed: _receivableLines.isEmpty ? null : _submit,
-          child: Text(l10n.confirmButton),
+        TutorTarget(
+          anchor: TutorAnchor.purchaseReceiveConfirmButton,
+          child: FilledButton(
+            onPressed: _receivableLines.isEmpty ? null : _submit,
+            child: Text(l10n.confirmButton),
+          ),
         ),
       ],
     );
@@ -268,16 +271,22 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: receivedController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
+                child: TutorTarget(
+                  anchor: TutorAnchor.purchaseReceiveQuantityField,
+                  // A delivery that came up short is the point of the lesson,
+                  // so the step has to name the line that is short.
+                  id: line.variantSku,
+                  child: TextField(
+                    controller: receivedController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: l10n.purchaseReceiveReceivedLabel,
+                      isDense: true,
+                    ),
+                    onChanged: (_) => onChanged(),
                   ),
-                  decoration: InputDecoration(
-                    labelText: l10n.purchaseReceiveReceivedLabel,
-                    isDense: true,
-                  ),
-                  onChanged: (_) => onChanged(),
                 ),
               ),
               const SizedBox(width: 8),

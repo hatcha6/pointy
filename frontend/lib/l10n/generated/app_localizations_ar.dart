@@ -9811,6 +9811,24 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posShortcutCheckout => 'إتمام البيع';
 
   @override
+  String get posShortcutsSectionPayment => 'داخل نافذة الدفع';
+
+  @override
+  String get posShortcutPayCash => 'الدفع نقدًا';
+
+  @override
+  String get posShortcutPayCard => 'الدفع بالبطاقة';
+
+  @override
+  String get posShortcutPayTransfer => 'الدفع بتحويل';
+
+  @override
+  String get posShortcutConfirmPayment => 'تأكيد الدفع';
+
+  @override
+  String get posShortcutCancelPayment => 'إلغاء والعودة إلى السلة';
+
+  @override
   String get payInRegisterSessionDescription => 'إيداع مبلغ نقدي في الدرج';
 
   @override
@@ -17285,4 +17303,228 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get dashboardCamerasOpenWallAction => 'كل الكاميرات';
+
+  @override
+  String get learningDrawerLabel => 'التعلّم';
+
+  @override
+  String get learningTitle => 'التعلّم';
+
+  @override
+  String get learningHeaderTitle => 'تعلّم دفتر';
+
+  @override
+  String get learningHeaderSubtitle =>
+      'أدلّة قصيرة لكل عملية في البرنامج — ابحث عمّا تحتاجه الآن.';
+
+  @override
+  String get learningSearchHint => 'ابحث عن مهمة أو مصطلح…';
+
+  @override
+  String learningProgressValue(int finished, int total) {
+    return 'أنهيت $finished من $total';
+  }
+
+  @override
+  String learningResultsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count أدلّة',
+      two: 'دليلان',
+      one: 'دليل واحد',
+      zero: 'لا توجد أدلّة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String learningReadingTime(int minutes) {
+    return '$minutes دقيقة';
+  }
+
+  @override
+  String get learningEmptyTitle => 'لا توجد أدلّة';
+
+  @override
+  String get learningSelectGuidePlaceholder => 'اختر دليلًا لقراءته';
+
+  @override
+  String get learningFinishedBadge => 'مكتمل';
+
+  @override
+  String get learningMarkFinishedButton => 'تحديد كمكتمل';
+
+  @override
+  String get learningMarkUnfinishedButton => 'إلغاء تحديد الاكتمال';
+
+  @override
+  String get learningOpenScreenButton => 'افتح الشاشة';
+
+  @override
+  String get learningRelatedTitle => 'اقرأ بعدها';
+
+  @override
+  String get learningOutsidePermissionsNote =>
+      'هذا الدليل يشرح شاشة لا تملك صلاحيتها حاليًا.';
+
+  @override
+  String get learningStepsSectionLabel => 'الخطوات';
+
+  @override
+  String get learningTrackFilterTitle => 'المسار';
+
+  @override
+  String get learningLevelFilterTitle => 'المستوى';
+
+  @override
+  String get learningKindFilterTitle => 'نوع الدليل';
+
+  @override
+  String get learningAudienceFilterTitle => 'النطاق';
+
+  @override
+  String get learningProgressFilterTitle => 'الحالة';
+
+  @override
+  String get learningSortTitle => 'الترتيب';
+
+  @override
+  String get learningFilterAll => 'الكل';
+
+  @override
+  String get learningTrackGettingStarted => 'البداية';
+
+  @override
+  String get learningTrackSelling => 'البيع';
+
+  @override
+  String get learningTrackMoney => 'الدفع والتحصيل';
+
+  @override
+  String get learningTrackReturns => 'المرتجعات والاستبدال';
+
+  @override
+  String get learningTrackRegister => 'الدرج والورديات';
+
+  @override
+  String get learningTrackCatalog => 'المنتجات والكتالوج';
+
+  @override
+  String get learningTrackInventory => 'المخزون';
+
+  @override
+  String get learningTrackPurchasing => 'المشتريات';
+
+  @override
+  String get learningTrackContacts => 'العملاء والموردون';
+
+  @override
+  String get learningTrackReports => 'التقارير والسجلات';
+
+  @override
+  String get learningTrackOperations => 'العمليات والصيانة';
+
+  @override
+  String get learningTrackPeople => 'الموظفون والصلاحيات';
+
+  @override
+  String get learningTrackDevices => 'الأجهزة والطباعة';
+
+  @override
+  String get learningTrackSetup => 'الإعداد والاتصال';
+
+  @override
+  String get learningLevelBeginner => 'مبتدئ';
+
+  @override
+  String get learningLevelIntermediate => 'متوسط';
+
+  @override
+  String get learningLevelAdvanced => 'متقدّم';
+
+  @override
+  String get learningKindWalkthrough => 'خطوات';
+
+  @override
+  String get learningKindConcept => 'شرح';
+
+  @override
+  String get learningKindReference => 'مرجع';
+
+  @override
+  String get learningAudienceAll => 'كل الأدلّة';
+
+  @override
+  String get learningAudienceMyPermissions => 'ما تسمح به صلاحياتي';
+
+  @override
+  String get learningProgressAll => 'الكل';
+
+  @override
+  String get learningProgressUnfinished => 'لم تكتمل';
+
+  @override
+  String get learningProgressFinished => 'مكتملة';
+
+  @override
+  String get learningSortRecommended => 'الترتيب المقترح';
+
+  @override
+  String get learningSortLevel => 'الأسهل أولًا';
+
+  @override
+  String get learningSortShortest => 'الأقصر أولًا';
+
+  @override
+  String get learningSortAlphabetical => 'أبجديًا';
+
+  @override
+  String lessonStepProgress(int step, int total) {
+    return 'الخطوة $step من $total';
+  }
+
+  @override
+  String get lessonAnchorOffScreen =>
+      'العنصر المطلوب غير ظاهر على الشاشة الآن.';
+
+  @override
+  String lessonPrerequisiteHint(String lessons) {
+    return 'يُستحسن إتمام $lessons قبل هذا التمرين.';
+  }
+
+  @override
+  String get lessonUnderstoodButton => 'فهمت، تابع';
+
+  @override
+  String get lessonRestartButton => 'إعادة البدء';
+
+  @override
+  String get lessonExitButton => 'إنهاء التدريب';
+
+  @override
+  String get lessonCompleteTitle => 'أنجزت التمرين';
+
+  @override
+  String get lessonCompleteMessage =>
+      'تمّت العملية كاملة على متجر التدريب. لم يتأثر محلك بشيء.';
+
+  @override
+  String get trainingModeBannerTitle => 'وضع التدريب — لا شيء هنا حقيقي';
+
+  @override
+  String get trainingModeBannerMessage =>
+      'كل بيع ومخزون ونقد في هذه الشاشة يخصّ متجر تدريب مؤقّت، ولا يمسّ بيانات محلك ولا يطبع إيصالًا.';
+
+  @override
+  String get lessonStartButton => 'ابدأ التمرين';
+
+  @override
+  String get lessonPracticeLabel => 'تمرين عملي';
+
+  @override
+  String get lessonExitConfirmTitle => 'إنهاء التدريب؟';
+
+  @override
+  String get lessonExitConfirmMessage => 'سيُحذف متجر التدريب بكل ما فيه.';
 }

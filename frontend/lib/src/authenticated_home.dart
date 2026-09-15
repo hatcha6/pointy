@@ -48,6 +48,7 @@ import 'features/expenses/views/expenses_screen.dart';
 import 'features/invoices/views/invoice_details_screen.dart';
 import 'features/returns_exchange/views/returns_exchange_lookup_screen.dart';
 import 'features/invoices/views/invoice_list_screen.dart';
+import 'features/learning/views/learning_screen.dart';
 import 'features/notifications/views/notification_center_host.dart';
 import 'features/assets/view_models/asset_details_view_model.dart';
 import 'features/assets/view_models/assets_view_model.dart';
@@ -289,6 +290,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.reports => reportsRouteBuilder,
       AppNavigationDestination.activityLog => activityLogRouteBuilder,
       AppNavigationDestination.deviceSettings => deviceSettingsRouteBuilder,
+      AppNavigationDestination.learning => learningRouteBuilder,
       AppNavigationDestination.users => usersRouteBuilder,
       AppNavigationDestination.settings => shopSettingsRouteBuilder,
       AppNavigationDestination.dashboard ||
@@ -1054,6 +1056,16 @@ class _AuthenticatedRoutes implements AppNavigation {
         priceCheckerRepository: dependencies.priceCheckerRepository,
         analyticsEngine: dependencies.analyticsEngine,
         capabilities: capabilities,
+        navigation: this,
+      ),
+    );
+  }
+
+  Widget learningRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'learning',
+      LearningScreen(
+        viewModel: dependencies.learningViewModel(currentUser.id, capabilities),
         navigation: this,
       ),
     );

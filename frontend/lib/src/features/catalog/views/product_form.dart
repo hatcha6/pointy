@@ -26,6 +26,8 @@ import 'modifier_group_selector.dart';
 import 'product_form_section.dart';
 import 'product_image_picker.dart';
 import 'product_units_editor.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
 import 'variant_identity_watcher.dart';
@@ -576,26 +578,29 @@ class _ProductFormState extends State<ProductForm> {
                       ),
                     if (_step > 0) const SizedBox(width: 12),
                     Expanded(
-                      child: FilledButton.icon(
-                        onPressed: widget.viewModel.isSaving
-                            ? null
-                            : _step == 0
-                            ? _continueToVariant
-                            : _submit,
-                        icon: widget.viewModel.isSaving
-                            ? const SizedBox.square(
-                                dimension: 18,
-                                child: PointySpinner(strokeWidth: 2),
-                              )
-                            : Icon(
-                                _step == 0 ? Icons.arrow_forward : Icons.add,
-                              ),
-                        label: Text(
-                          widget.viewModel.isSaving
-                              ? l10n.creatingProductButton
+                      child: TutorTarget(
+                        anchor: TutorAnchor.productFormPrimaryButton,
+                        child: FilledButton.icon(
+                          onPressed: widget.viewModel.isSaving
+                              ? null
                               : _step == 0
-                              ? l10n.nextButton
-                              : l10n.createProductButton,
+                              ? _continueToVariant
+                              : _submit,
+                          icon: widget.viewModel.isSaving
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: PointySpinner(strokeWidth: 2),
+                                )
+                              : Icon(
+                                  _step == 0 ? Icons.arrow_forward : Icons.add,
+                                ),
+                          label: Text(
+                            widget.viewModel.isSaving
+                                ? l10n.creatingProductButton
+                                : _step == 0
+                                ? l10n.nextButton
+                                : l10n.createProductButton,
+                          ),
                         ),
                       ),
                     ),
@@ -1294,28 +1299,34 @@ class _GeneratedVariantFormStep extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextFormField(
-          controller: skuController,
-          textInputAction: TextInputAction.next,
-          textCapitalization: TextCapitalization.characters,
-          decoration: InputDecoration(
-            labelText: l10n.skuPrefixLabel,
-            hintText: l10n.skuPrefixHint,
-            prefixIcon: const Icon(Icons.qr_code_2),
+        TutorTarget(
+          anchor: TutorAnchor.productSkuPrefixField,
+          child: TextFormField(
+            controller: skuController,
+            textInputAction: TextInputAction.next,
+            textCapitalization: TextCapitalization.characters,
+            decoration: InputDecoration(
+              labelText: l10n.skuPrefixLabel,
+              hintText: l10n.skuPrefixHint,
+              prefixIcon: const Icon(Icons.qr_code_2),
+            ),
+            validator: requiredValidator,
           ),
-          validator: requiredValidator,
         ),
         const SizedBox(height: 12),
-        TextFormField(
-          controller: priceController,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          textInputAction: TextInputAction.done,
-          decoration: InputDecoration(
-            labelText: l10n.generatedVariantPriceLabel,
-            prefixIcon: const Icon(Icons.sell_outlined),
+        TutorTarget(
+          anchor: TutorAnchor.productGeneratedPriceField,
+          child: TextFormField(
+            controller: priceController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              labelText: l10n.generatedVariantPriceLabel,
+              prefixIcon: const Icon(Icons.sell_outlined),
+            ),
+            inputFormatters: [DecimalTextInputFormatter()],
+            validator: numberValidator,
           ),
-          inputFormatters: [DecimalTextInputFormatter()],
-          validator: numberValidator,
         ),
         const SizedBox(height: 12),
         VariantOptionValuesField(

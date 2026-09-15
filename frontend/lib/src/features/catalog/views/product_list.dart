@@ -21,6 +21,8 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/tutor/anchors.dart';
+import '../../../shared/tutor/tutor_target.dart';
 import '../view_models/catalog_view_model.dart';
 import '../view_models/pricing_currency_options.dart';
 import '../view_models/product_details_view_model.dart';
@@ -51,6 +53,7 @@ class ProductList extends StatelessWidget {
   final InventoryRepository inventoryRepository;
   final PrintingRepository printingRepository;
   final PurchaseRepository purchaseRepository;
+
   /// Optional: without it the stock panel simply shows the total and no
   /// per-place breakdown, which is the right answer for a shop with one
   /// place anyway.
@@ -298,7 +301,7 @@ class ProductList extends StatelessWidget {
       inventoryRepository: inventoryRepository,
       printingRepository: printingRepository,
       purchaseRepository: purchaseRepository,
-    warehouseRepository: warehouseRepository,
+      warehouseRepository: warehouseRepository,
       saleRepository: saleRepository,
       shopSettingsRepository: shopSettingsRepository,
       capabilities: capabilities,
@@ -570,10 +573,13 @@ class _CatalogActionBar extends StatelessWidget {
               ),
             ),
             if (canCreateProduct)
-              FilledButton.icon(
-                onPressed: onCreateProduct,
-                icon: const Icon(Icons.add),
-                label: Text(l10n.addProductButton),
+              TutorTarget(
+                anchor: TutorAnchor.catalogAddProductButton,
+                child: FilledButton.icon(
+                  onPressed: onCreateProduct,
+                  icon: const Icon(Icons.add),
+                  label: Text(l10n.addProductButton),
+                ),
               ),
           ],
         );

@@ -98,10 +98,21 @@ Future<void> _pumpGate(WidgetTester tester, PosViewModel viewModel) async {
 }
 
 /// The gate's own retry/start buttons, by the keys the widget assigns them.
+///
+/// The start action is wrapped in a `TutorTarget` so a lesson can point at it,
+/// and the key rides that wrapper — the action bar reads its contract off the
+/// widget it is handed. These finders reach the button underneath, so the
+/// assertions below still describe the control the cashier presses.
 Finder _retryButton() =>
     find.byKey(const ValueKey('register_session_gate_retry_button'));
-Finder _startButton() =>
+Finder _startButtonAction() =>
     find.byKey(const ValueKey('register_session_gate_start_button'));
+Finder _startButton() => find.descendant(
+  of: _startButtonAction(),
+  matching: find.byWidgetPredicate(
+    (widget) => widget is FilledButton || widget is OutlinedButton,
+  ),
+);
 
 void main() {
   testWidgets('a definite "no open session" still leads with starting one', (
