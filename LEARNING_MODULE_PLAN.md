@@ -1,9 +1,77 @@
 # Learning Module — teaching Pointy inside Pointy
 
-**Date:** 2026-09-10
-**Status:** Proposed. Nothing built.
+**Date:** 2026-09-10. **Last reconciled against the tree: 2026-09-15.**
+**Status:** Phase 0 and most of Phase 1 shipped (`19103318`). See §0.
 **Shape:** Run the *real* app against a sandbox shop, and make every lesson an
 integration test with a narration track.
+
+---
+
+## 0. Status, 2026-09-15
+
+The spine shipped, and so did 16 lessons. Everything below is the plan as
+written on 2026-09-10; this section is the only part re-verified against the
+tree, and it records where the plan was wrong rather than quietly editing the
+prediction to match the outcome.
+
+**What shipped.** `SandboxShop` + `SandboxClient` over a real `http.Client`,
+the lesson engine, `TutorAnchor`/`TutorTarget`, the coach panel, the runner
+screen, the CI runner, and 98 written guides with Arabic-normalizing search.
+16 lessons: cash sale, multi-item with search, card sale, split tender, آجل with
+a down payment, quotation, cash movement, register close, create product,
+product with generated variants, carton barcode, create PO, receive short, add
+customer mid-sale, collect a debt, pay a supplier.
+
+**The phases interleaved, and that was right.** §12 put purchasing and the
+catalogue in Phase 2, behind Phase 1's returns and exchange. It went the other
+way: the catalogue and purchasing lessons landed, and returns, exchange, stock
+count and the cart-quantity edit did not. Not a change of mind — they all need
+an instance id on the shared `PointyQuantityStepper`, which is where the
+quantity a learner would change lives, and putting learning-module knowledge
+into a core design component deserved its own decision rather than being made in
+passing. The sandbox has no handlers for them either: §5's "implement only what
+lessons reach" holds, so those routes answer the same loud 501 as anything else
+outside the practice shop.
+
+**Where the plan was wrong.**
+
+- **§6's example shows lesson text as ARB keys.** It is Dart strings. Guide and
+  lesson prose is structured single-locale content, and
+  `content/learning_library.dart` carries the reasoning. The *chrome* — buttons,
+  the banner, the coach's own labels — is in the ARB as the house rule requires.
+- **§6 promises a "show me" escape hatch.** Not built, and not missed: the
+  escalation is a hint after 20 seconds. A lesson that performs itself is a
+  lesson nobody has done, which is the same argument §13 makes about video.
+- **§9's distinct `PointyTheme` accent did not ship.** The banner and the
+  warning-coloured frame around the practice app did. The theme swap is still
+  the right idea for "different at a glance from across the counter".
+- **§9's simulated printing is contained by absence, not by a preview.** No
+  printer is configured in the practice shop and the reprint route answers
+  `{simulated: true}`, so nothing reaches a printer — but a lesson that prints
+  does not yet *show* a labelled receipt, which is what the section asked for.
+- **§9's "entering and leaving appears in the activity log" did not ship.**
+- **§10's shop-type gate did not ship.** The capability gate did, on both ends:
+  a lesson declares one, and CI fails if the seed's practice user could not
+  reach the screen.
+- **§10's `requires` DAG is a note, not a gate.** Ids resolve and cannot loop
+  (CI checks both), and the guide says which lesson to do first — but someone
+  sent to close the register today can practise closing the register today.
+- **§11 says `useLearningMode` is granted through the backend's
+  `ROLE_PERMISSION_CODES`.** It is granted in the frontend's base non-manager
+  capability set. Same effect for every role today; an owner cannot yet withdraw
+  it, which is what the backend grant was for.
+- **§10 says progress is "per-user and local". It was per-*device*** — one key
+  for the whole till, so two cashiers shared one set of ticks. Found by this
+  reconciliation and fixed; the key is now scoped by user id and a test pins it.
+
+**What the build added that the plan did not anticipate.** Anchors needed
+*instance ids* — the SKU, the contact's name, the tender's index — or a step
+rings an arbitrary one of several identical widgets and completes on something
+the learner was never told to touch. Steps needed an `observe` act with an
+explicit acknowledgement, so a lesson can explain something without the engine
+skipping past it. And the CI runner needed three rot checks beyond §7's single
+"the anchor resolved": an ambiguous anchor, a step already satisfied before the
+learner acts, and an outcome already true at the start.
 
 ---
 
@@ -263,6 +331,12 @@ There are 215 `ValueKey('...')` uses in `lib/src`, sprinkled ad hoc (and zero
    empty space.
 4. Lessons never anchor on text, position, or index. `find.text` is banned in the
    lesson runner by review, and worth a lint if it recurs.
+5. **(Added in the build.)** Where an anchor repeats — a product tile, a cart
+   line, a tender, a menu action — the wrapper carries an *instance id* and the
+   step names it. Without this a step rings whichever instance mounted first and
+   completes on a different one, which is worse than no spotlight: the narration
+   keeps describing something the learner is not looking at. CI fails a step
+   that omits the id while more than one instance is on screen.
 
 The cost is honest and should be stated: **this sprinkles `TutorTarget` through
 feature screens.** It is a small, mechanical, reviewable diff per screen, but it
@@ -346,20 +420,33 @@ a backend-backed record is a later question, not a Phase 1 one.
 
 ## 11. Where it lives
 
+As built (2026-09-15):
+
 ```
 frontend/lib/src/features/learning/
+  content/                            # 98 guides, one file per track
   views/learning_screen.dart          # catalogue
   views/lesson_runner_screen.dart     # hosts the sandboxed app + coach panel
-  views/coach_panel.dart              # narration, spotlight, progress, "show me"
-  engine/lesson.dart                  # TutorLesson / TutorStep / TutorAct / TutorExpect
+  views/coach_panel.dart              # narration, spotlight, progress, hint
+  engine/lesson.dart                  # TutorLesson / TutorStep / TutorAct
+  engine/expectations.dart            # TutorExpect + what it may read
   engine/lesson_runner.dart           # shared by the UI and the CI runner
-  lessons/                            # the content, one file per track
-  sandbox/                            # §5
+  lessons/                            # 16 lessons, one file per track
+  sandbox/sandbox_shop.dart           # the state and its invariants
+  sandbox/sandbox_models.dart         # what the shop owns
+  sandbox/sandbox_payloads.dart       # the wire format
+  sandbox/sandbox_request.dart        # one parsed request + a route matcher
+  sandbox/sandbox_client.dart         # http.Client, dispatching to:
+  sandbox/handlers/                   # one file per API area (§5)
+  sandbox/seeds/                      # named starting shops
 frontend/lib/src/shared/tutor/
   anchors.dart                        # TutorAnchor enum
-  tutor_target.dart                   # the wrapper widget
+  tutor_target.dart                   # the wrapper widget + registry
 frontend/test/learning/
-  lessons_test.dart                   # runs every lesson headlessly
+  lessons_test.dart                   # performs every lesson headlessly
+  lesson_staleness_test.dart          # the checks that need no widget tree
+  practice_storage_test.dart          # nothing reaches the device
+  lesson_runner_screen_test.dart      # the learner-facing half
 frontend/lib/dev/learning_preview.dart
 ```
 
@@ -399,6 +486,13 @@ Ship Phase 1 and stop to look. If shops use it, breadth is cheap; if they do not
 we have learned that for the price of a spine and twelve lessons rather than two
 hundred.
 
+> **What happened (2026-09-15).** Phase 0 shipped as written. Phase 1 shipped
+> ten of its twelve operations and borrowed four from Phase 2 — the catalogue
+> and purchasing lessons — while returns, exchange, the quantity edit and the
+> scan did not land. The stopping point still holds: 16 lessons, and the next
+> question is whether a shop uses them, not whether the list is complete. §0
+> has the reasoning.
+
 ## 13. What we are deliberately not building
 
 - **Video or screenshot walkthroughs.** They rot fastest, teach least, and cannot
@@ -428,6 +522,12 @@ hundred.
    lessons run in CI against real serializers. A contract test that replays real
    response fixtures through the sandbox handlers is the fuller answer if drift
    turns out to bite.
-4. **How much `TutorTarget` sprinkling is too much?** Worth measuring after Phase
-   1: if twelve lessons need forty anchors, breadth is affordable. If they need
-   two hundred, the anchoring strategy needs rethinking before Phase 2.
+4. **How much `TutorTarget` sprinkling is too much?** ~~Worth measuring after
+   Phase 1~~ — **measured: 16 lessons, 63 anchors**, against the "forty for
+   twelve" line this question drew. Affordable, and the marginal cost is
+   falling: the contact picker, the searchable picker and the record-payment
+   dialog are each wrapped once and used by several lessons across different
+   screens. The cost that did show up is not the count but *where* — the next
+   lessons (returns, exchange, stock count, cart quantity) all want an id on
+   one shared design component, `PointyQuantityStepper`, which is a different
+   kind of decision from wrapping a feature screen.

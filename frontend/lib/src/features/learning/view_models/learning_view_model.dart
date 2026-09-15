@@ -15,18 +15,25 @@ import '../search/learning_search.dart';
 /// pretending otherwise would add a spinner to a screen that can always paint
 /// immediately.
 class LearningViewModel extends ChangeNotifier {
-  LearningViewModel({required this.capabilities});
+  LearningViewModel({required this.capabilities, required this.userId});
 
   final AuthorizationCapabilities capabilities;
 
-  static const _finishedStorageKey = 'learning.finished_guides';
+  /// Whose progress this is.
+  ///
+  /// A till is shared: the cashier who marked "returns" finished this morning
+  /// is not the one reading the catalogue this evening, and one device-wide
+  /// list would show each of them the other's ticks.
+  final int userId;
+
+  String get _finishedStorageKey => 'learning.finished_guides.$userId';
 
   LearningQuery _query = const LearningQuery();
   LearningQuery get query => _query;
 
   Set<String> _finished = <String>{};
 
-  /// Ids the user has marked as finished. Local to this device — an owner
+  /// Ids this user has marked as finished. Local to this device — an owner
   /// asking "has Fatima been trained on returns?" is a different feature with a
   /// server-side record behind it, and pretending this answers it would be
   /// worse than not answering.

@@ -119,6 +119,7 @@ Future<LearningViewModel> _pumpLearning(
 
   final viewModel = LearningViewModel(
     capabilities: AuthorizationCapabilities.forUser(_managerUser),
+    userId: _managerUser.id,
   );
 
   await tester.pumpWidget(

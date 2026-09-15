@@ -482,7 +482,10 @@ class PointyAppDependencies {
     }
     existing?.dispose();
     _learningViewModelUserId = userId;
-    return _learningViewModel = LearningViewModel(capabilities: capabilities);
+    return _learningViewModel = LearningViewModel(
+      capabilities: capabilities,
+      userId: userId,
+    );
   }
 
   DeviceSettingsViewModel get deviceSettingsViewModel =>

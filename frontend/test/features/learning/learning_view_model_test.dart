@@ -18,6 +18,7 @@ void main() {
     );
     return LearningViewModel(
       capabilities: AuthorizationCapabilities.forUser(user),
+      userId: user.id,
     )..initialize();
   }
 
@@ -115,7 +116,7 @@ void main() {
     expect(viewModel.isFinished('selling.first_sale'), isTrue);
     expect(viewModel.finishedCount, 1);
     expect(
-      await store.getStringList('learning.finished_guides'),
+      await store.getStringList('learning.finished_guides.1'),
       contains('selling.first_sale'),
     );
 
@@ -135,12 +136,28 @@ void main() {
 
   test('restored progress drops ids that no longer exist', () async {
     installMemoryKeyValueStore({
-      'learning.finished_guides': ['selling.first_sale', 'gone.guide'],
+      'learning.finished_guides.1': ['selling.first_sale', 'gone.guide'],
     });
     final viewModel = build();
     await viewModel.restoreProgress();
 
     expect(viewModel.finished, {'selling.first_sale'});
+  });
+
+  test('one till, two cashiers, two sets of ticks', () async {
+    // A till is shared. Progress used to live under one device-wide key, so the
+    // cashier who marked a guide finished this morning put a tick on the
+    // catalogue of whoever read it this evening — and "who has been trained on
+    // returns" is the one question this list is asked.
+    installMemoryKeyValueStore();
+    final manager = build();
+    await manager.toggleFinished('selling.first_sale');
+
+    final cashier = build(manager: false);
+    await cashier.restoreProgress();
+
+    expect(cashier.isFinished('selling.first_sale'), isFalse);
+    expect(manager.isFinished('selling.first_sale'), isTrue);
   });
 
   test('clearing drops the search and every filter but keeps the sort', () {

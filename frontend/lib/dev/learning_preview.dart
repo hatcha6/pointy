@@ -103,6 +103,7 @@ LearningViewModel _viewModel({
   );
   return LearningViewModel(
     capabilities: AuthorizationCapabilities.forUser(user),
+    userId: user.id,
   )..setQuery(query);
 }
 
