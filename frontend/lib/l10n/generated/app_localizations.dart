@@ -17766,6 +17766,24 @@ abstract class AppLocalizations {
   /// **'ملغاة'**
   String get invoiceStatusVoid;
 
+  /// No description provided for @invoiceCashierFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكاشير'**
+  String get invoiceCashierFilterTitle;
+
+  /// No description provided for @allCashiersFilterLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الكاشيرين'**
+  String get allCashiersFilterLabel;
+
+  /// No description provided for @clearCashierFilterTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة فلتر الكاشير'**
+  String get clearCashierFilterTooltip;
+
   /// No description provided for @invoiceCustomerFilterTitle.
   ///
   /// In ar, this message translates to:
@@ -21465,35 +21483,35 @@ abstract class AppLocalizations {
   /// **'اختيار مستخدم'**
   String get employeeUserOpenPickerTooltip;
 
-  /// No description provided for @employeeUserPickerTitle.
+  /// No description provided for @userPickerTitle.
   ///
   /// In ar, this message translates to:
   /// **'اختيار مستخدم'**
-  String get employeeUserPickerTitle;
+  String get userPickerTitle;
 
-  /// No description provided for @employeeUserPickerSearchHint.
+  /// No description provided for @userPickerSearchHint.
   ///
   /// In ar, this message translates to:
   /// **'ابحث باسم المستخدم أو البريد'**
-  String get employeeUserPickerSearchHint;
+  String get userPickerSearchHint;
 
-  /// No description provided for @employeeUserPickerEmpty.
+  /// No description provided for @userPickerEmpty.
   ///
   /// In ar, this message translates to:
   /// **'لا توجد مستخدمون مطابقون.'**
-  String get employeeUserPickerEmpty;
+  String get userPickerEmpty;
 
-  /// No description provided for @employeeUserPickerClear.
+  /// No description provided for @userPickerClear.
   ///
   /// In ar, this message translates to:
   /// **'مسح الاختيار'**
-  String get employeeUserPickerClear;
+  String get userPickerClear;
 
-  /// No description provided for @employeeUserPickerLoadError.
+  /// No description provided for @userPickerLoadError.
   ///
   /// In ar, this message translates to:
   /// **'تعذر تحميل المستخدمين.'**
-  String get employeeUserPickerLoadError;
+  String get userPickerLoadError;
 
   /// Fallback label for a user id when the username is not loaded.
   ///

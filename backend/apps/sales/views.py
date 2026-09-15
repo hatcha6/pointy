@@ -1,5 +1,6 @@
 import logging
 
+import django_filters
 from django.db import IntegrityError, transaction
 from django.db.models import Prefetch
 from django.utils import timezone
@@ -78,6 +79,40 @@ def _best_effort_print_step(description, step):
         return None
 
 
+class OrderFilter(django_filters.FilterSet):
+    """Order list filters.
+
+    A ``FilterSet`` rather than the plain ``filterset_fields`` dict so
+    ``cashier`` can be spelled the way the serializer spells it while filtering
+    through the drawer session that actually holds it. Declaring it here also
+    keeps the validation — ``?cashier=abc`` is a 400, not a silently unfiltered
+    list that the client still labels as filtered — and the AI tool registry
+    reads ``base_filters``, so the assistant gains the filter with it.
+    """
+
+    # Whose sales these are, by the person rather than by the shift: reviewing
+    # one cashier's history should not mean picking their sessions one at a
+    # time. ``get_queryset``'s own scoping still applies underneath, so a
+    # cashier passing someone else's id gets nothing back, not someone else's
+    # sales.
+    cashier = django_filters.NumberFilter(field_name="register_session__owner")
+
+    class Meta:
+        model = Order
+        # Dict form (vs a plain tuple) so the date field also exposes range/day
+        # lookups (created_at__gte / __lte / __date) — additive, existing exact
+        # filters are unchanged. Lets the assistant ask for "today's sales" etc.
+        fields = {
+            "status": ["exact"],
+            "sale_type": ["exact"],
+            "customer": ["exact"],
+            "register_session": ["exact"],
+            "register_session__status": ["exact"],
+            "sales_channel": ["exact"],
+            "created_at": ["exact", "gte", "lte", "date"],
+        }
+
+
 class OrderViewSet(
     mixins.CreateModelMixin,
     mixins.RetrieveModelMixin,
@@ -114,18 +149,7 @@ class OrderViewSet(
         "lookup": ("sales.process_return_lookup",),
     }
     queryset = Order.objects.with_serializer_relations()
-    # Dict form (vs a plain tuple) so the date field also exposes range/day
-    # lookups (created_at__gte / __lte / __date) — additive, existing exact
-    # filters are unchanged. Lets the assistant ask for "today's sales" etc.
-    filterset_fields = {
-        "status": ["exact"],
-        "sale_type": ["exact"],
-        "customer": ["exact"],
-        "register_session": ["exact"],
-        "register_session__status": ["exact"],
-        "sales_channel": ["exact"],
-        "created_at": ["exact", "gte", "lte", "date"],
-    }
+    filterset_class = OrderFilter
     search_fields = (
         "receipt_number",
         "lines__variant__product__name",

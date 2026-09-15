@@ -13,6 +13,12 @@ enum AppCapability {
   viewDiscountDashboard,
   viewPrintingDashboard,
   viewReports,
+
+  /// Sees shop-wide sales rather than only this till's own — the mirror of the
+  /// backend's `user_has_full_visibility`, which scopes the invoices list to
+  /// the caller's own register sessions for everyone else. Gates affordances
+  /// that only make sense across people, such as filtering invoices by cashier.
+  viewShopWideSales,
   viewActivityLog,
   viewFraudFindings,
   manageFraudFindings,
@@ -371,7 +377,10 @@ class AuthorizationCapabilities {
       if (_hasAny(user, const ['view_reportrun', 'reports.view_reportrun'])) {
         capabilities
           ..add(AppCapability.viewDashboard)
-          ..add(AppCapability.viewSalesDashboard);
+          ..add(AppCapability.viewSalesDashboard)
+          // Same permission the backend reads for `user_has_full_visibility`,
+          // so what the UI offers and what the list returns agree.
+          ..add(AppCapability.viewShopWideSales);
         if (_hasAny(user, const ['view_payment', 'payments.view_payment'])) {
           capabilities.add(AppCapability.viewPaymentDashboard);
         }
@@ -775,6 +784,7 @@ class AuthorizationCapabilities {
   bool get canViewPrintingDashboard =>
       allows(AppCapability.viewPrintingDashboard);
   bool get canViewReports => allows(AppCapability.viewReports);
+  bool get canViewShopWideSales => allows(AppCapability.viewShopWideSales);
   bool get canViewActivityLog => allows(AppCapability.viewActivityLog);
   bool get canViewFraudFindings => allows(AppCapability.viewFraudFindings);
   bool get canManageFraudFindings => allows(AppCapability.manageFraudFindings);

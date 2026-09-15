@@ -146,12 +146,12 @@ class _CreateEmployeeFormState extends State<CreateEmployeeForm> {
     final picked = await showAsyncMultiSelectPicker<int>(
       context: context,
       strings: AsyncSelectionPickerStrings<int>(
-        title: l10n.employeeUserPickerTitle,
-        searchHint: l10n.employeeUserPickerSearchHint,
-        emptyText: l10n.employeeUserPickerEmpty,
-        clearText: l10n.employeeUserPickerClear,
+        title: l10n.userPickerTitle,
+        searchHint: l10n.userPickerSearchHint,
+        emptyText: l10n.userPickerEmpty,
+        clearText: l10n.userPickerClear,
         clearSearchTooltip: l10n.clearSearchTooltip,
-        loadErrorText: l10n.employeeUserPickerLoadError,
+        loadErrorText: l10n.userPickerLoadError,
         confirmText: l10n.confirmButton,
         fallbackLabelForId: (id) => l10n.userFallbackLabel(id),
       ),

@@ -582,6 +582,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       InvoiceListScreen(
         viewModel: dependencies.invoiceListViewModel,
         contactRepository: dependencies.contactRepository,
+        userRepository: dependencies.userRepository,
         capabilities: capabilities,
         navigation: this,
         onOpenInvoice: guardedSaleOrderAction(AppCapability.viewInvoices, (

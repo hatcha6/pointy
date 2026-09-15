@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../data/repositories/user_repository.dart';
 import '../../../shared/query_controls/query_control_bar.dart';
 import '../../../shared/responsive/responsive.dart';
 import 'invoice_filter_sheet.dart';
@@ -14,11 +15,16 @@ class InvoiceQueryControls extends StatelessWidget {
     required this.contactRepository,
     required this.onSearchChanged,
     required this.onQueryChanged,
+    this.userRepository,
     this.enabled = true,
   });
 
   final SaleOrderQuery query;
   final ContactRepository contactRepository;
+
+  /// Enables the cashier filter. Null for a viewer the backend scopes to their
+  /// own register sessions anyway — see [InvoiceFilterSheet.userRepository].
+  final UserRepository? userRepository;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<SaleOrderQuery> onQueryChanged;
   final bool enabled;
@@ -51,7 +57,8 @@ class InvoiceQueryControls extends StatelessWidget {
   /// to scope a listing rather than the user.
   static int narrowingFilterCount(SaleOrderQuery query) {
     return (query.status == SaleOrderStatusFilter.all ? 0 : 1) +
-        (query.customerId == null ? 0 : 1);
+        (query.customerId == null ? 0 : 1) +
+        (query.cashierId == null ? 0 : 1);
   }
 
   /// Drops the search term and every user-set filter, keeping the caller's
@@ -62,6 +69,8 @@ class InvoiceQueryControls extends StatelessWidget {
       status: SaleOrderStatusFilter.all,
       customerId: null,
       customerName: null,
+      cashierId: null,
+      cashierName: null,
     );
   }
 
@@ -72,6 +81,7 @@ class InvoiceQueryControls extends StatelessWidget {
       builder: (context) => InvoiceFilterSheet(
         query: query,
         contactRepository: contactRepository,
+        userRepository: userRepository,
       ),
     );
 

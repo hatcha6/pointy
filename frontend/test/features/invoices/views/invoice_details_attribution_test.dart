@@ -12,6 +12,7 @@ import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/sale_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.dart';
+import 'package:pointy_frontend/src/data/repositories/user_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/invoices/view_models/invoice_list_view_model.dart';
 import 'package:pointy_frontend/src/features/invoices/views/invoice_details_screen.dart';
@@ -245,6 +246,7 @@ Future<void> _pumpInvoices(
         child: InvoiceListScreen(
           viewModel: viewModel,
           contactRepository: ContactRepository(service),
+          userRepository: UserRepository(service),
           capabilities: capabilities,
           onOpenInvoice: (_) {},
           navigation: FakeAppNavigation(currentUser: user),

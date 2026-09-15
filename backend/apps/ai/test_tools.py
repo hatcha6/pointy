@@ -160,6 +160,18 @@ class AiToolDispatchTests(TestCase):
         )
         self.assertTrue(result["ok"], result)
 
+    def test_orders_expose_the_cashier_filter(self):
+        # "Show me Bahr's sales" has to work in the assistant too, not only in
+        # the invoices screen's filter sheet.
+        meta = get_registry()["orders"]
+        self.assertIn("cashier", meta.filter_keys)
+        result = query_resource(
+            user=self.manager,
+            resource="orders",
+            filters={"cashier": self.manager.pk},
+        )
+        self.assertTrue(result["ok"], result)
+
     def test_get_resource_missing_is_clean_not_found(self):
         result = get_resource(user=self.manager, resource="orders", id=999999)
         self.assertFalse(result["ok"])

@@ -851,6 +851,8 @@ class SaleOrderQuery extends ModelQuery {
     this.ordering = SaleOrderOrdering.newest,
     this.customerId,
     this.customerName,
+    this.cashierId,
+    this.cashierName,
     this.productId,
     this.variantId,
   });
@@ -860,6 +862,13 @@ class SaleOrderQuery extends ModelQuery {
   final SaleOrderStatusFilter status;
   final int? customerId;
   final String? customerName;
+
+  /// Narrows the list to the sales one person rang up. [cashierName] is carried
+  /// alongside so the filter can name them without another fetch. The backend
+  /// still scopes the list to what the caller may see, so this can only ever
+  /// narrow what is already visible.
+  final int? cashierId;
+  final String? cashierName;
   final int? productId;
   final int? variantId;
   @override
@@ -872,6 +881,8 @@ class SaleOrderQuery extends ModelQuery {
     ...status.filters,
     if (customerId != null)
       QueryFilter(parameter: 'customer', value: '$customerId'),
+    if (cashierId != null)
+      QueryFilter(parameter: 'cashier', value: '$cashierId'),
     if (productId != null)
       QueryFilter(parameter: 'product', value: '$productId'),
     if (variantId != null)
@@ -885,6 +896,8 @@ class SaleOrderQuery extends ModelQuery {
       ordering: ordering,
       customerId: id,
       customerName: name,
+      cashierId: cashierId,
+      cashierName: cashierName,
       productId: productId,
       variantId: variantId,
     );
@@ -896,6 +909,8 @@ class SaleOrderQuery extends ModelQuery {
     SaleOrderOrdering? ordering,
     Object? customerId = _unset,
     Object? customerName = _unset,
+    Object? cashierId = _unset,
+    Object? cashierName = _unset,
     Object? productId = _unset,
     Object? variantId = _unset,
   }) {
@@ -909,6 +924,12 @@ class SaleOrderQuery extends ModelQuery {
       customerName: identical(customerName, _unset)
           ? this.customerName
           : customerName as String?,
+      cashierId: identical(cashierId, _unset)
+          ? this.cashierId
+          : cashierId as int?,
+      cashierName: identical(cashierName, _unset)
+          ? this.cashierName
+          : cashierName as String?,
       productId: identical(productId, _unset)
           ? this.productId
           : productId as int?,
@@ -926,6 +947,8 @@ class SaleOrderQuery extends ModelQuery {
         other.ordering == ordering &&
         other.customerId == customerId &&
         other.customerName == customerName &&
+        other.cashierId == cashierId &&
+        other.cashierName == cashierName &&
         other.productId == productId &&
         other.variantId == variantId;
   }
@@ -937,6 +960,8 @@ class SaleOrderQuery extends ModelQuery {
     ordering,
     customerId,
     customerName,
+    cashierId,
+    cashierName,
     productId,
     variantId,
   );

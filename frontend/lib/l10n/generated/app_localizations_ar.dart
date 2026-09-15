@@ -10198,6 +10198,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get invoiceStatusVoid => 'ملغاة';
 
   @override
+  String get invoiceCashierFilterTitle => 'الكاشير';
+
+  @override
+  String get allCashiersFilterLabel => 'كل الكاشيرين';
+
+  @override
+  String get clearCashierFilterTooltip => 'إزالة فلتر الكاشير';
+
+  @override
   String get invoiceCustomerFilterTitle => 'العميل';
 
   @override
@@ -12363,19 +12372,19 @@ class AppLocalizationsAr extends AppLocalizations {
   String get employeeUserOpenPickerTooltip => 'اختيار مستخدم';
 
   @override
-  String get employeeUserPickerTitle => 'اختيار مستخدم';
+  String get userPickerTitle => 'اختيار مستخدم';
 
   @override
-  String get employeeUserPickerSearchHint => 'ابحث باسم المستخدم أو البريد';
+  String get userPickerSearchHint => 'ابحث باسم المستخدم أو البريد';
 
   @override
-  String get employeeUserPickerEmpty => 'لا توجد مستخدمون مطابقون.';
+  String get userPickerEmpty => 'لا توجد مستخدمون مطابقون.';
 
   @override
-  String get employeeUserPickerClear => 'مسح الاختيار';
+  String get userPickerClear => 'مسح الاختيار';
 
   @override
-  String get employeeUserPickerLoadError => 'تعذر تحميل المستخدمين.';
+  String get userPickerLoadError => 'تعذر تحميل المستخدمين.';
 
   @override
   String userFallbackLabel(int id) {

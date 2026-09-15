@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/repositories/contact_repository.dart';
+import '../../../data/repositories/user_repository.dart';
 import '../../../data/services/order_document_service.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_denied_view.dart';
@@ -25,6 +26,7 @@ class InvoiceListScreen extends StatelessWidget {
     super.key,
     required this.viewModel,
     required this.contactRepository,
+    required this.userRepository,
     required this.capabilities,
     required this.onOpenInvoice,
     required this.navigation,
@@ -33,6 +35,12 @@ class InvoiceListScreen extends StatelessWidget {
 
   final InvoiceListViewModel viewModel;
   final ContactRepository contactRepository;
+
+  /// Backs the cashier filter — "show me Bahr's invoices". Only offered to a
+  /// viewer who sees shop-wide sales; everyone else is scoped by the backend to
+  /// their own register sessions, so filtering by someone else would only ever
+  /// return nothing.
+  final UserRepository userRepository;
   final AuthorizationCapabilities capabilities;
   final ValueChanged<SaleOrder> onOpenInvoice;
   final AppNavigation navigation;
@@ -77,6 +85,9 @@ class InvoiceListScreen extends StatelessWidget {
             child: _InvoiceListBody(
               viewModel: viewModel,
               contactRepository: contactRepository,
+              userRepository: capabilities.canViewShopWideSales
+                  ? userRepository
+                  : null,
               onOpenInvoice: onOpenInvoice,
               detailPaneBuilder: detailPaneBuilder,
             ),
@@ -91,12 +102,14 @@ class _InvoiceListBody extends StatefulWidget {
   const _InvoiceListBody({
     required this.viewModel,
     required this.contactRepository,
+    required this.userRepository,
     required this.onOpenInvoice,
     this.detailPaneBuilder,
   });
 
   final InvoiceListViewModel viewModel;
   final ContactRepository contactRepository;
+  final UserRepository? userRepository;
   final ValueChanged<SaleOrder> onOpenInvoice;
   final Widget Function(BuildContext context, SaleOrder order)?
   detailPaneBuilder;
@@ -155,6 +168,7 @@ class _InvoiceListBodyState extends State<_InvoiceListBody> {
           InvoiceQueryControls(
             query: viewModel.query,
             contactRepository: widget.contactRepository,
+            userRepository: widget.userRepository,
             onSearchChanged: viewModel.updateSearch,
             onQueryChanged: viewModel.applyQuery,
             enabled: !viewModel.isLoading,

@@ -161,6 +161,73 @@ class InvoiceCashierAttributionTests(TestCase):
         self.assertEqual(payload["cashier"]["full_name"], "سالم الفيتوري")
         self.assertEqual(payload["register_session"]["session_number"], f"RS-{session_id}")
 
+    def test_the_list_can_be_filtered_to_one_cashier(self):
+        # "Show me Bahr's invoices" — the point of the whole attribution.
+        bahr, bahr_client, _ = self._cashier(first_name="بحر")
+        _, other_client, _ = self._cashier(first_name="محمد")
+        bahr_order = self._checkout(bahr_client)["id"]
+        other_order = self._checkout(other_client)["id"]
+
+        response = self.manager_client.get(
+            reverse("order-list"), {"cashier": bahr.pk}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        ids = [row["id"] for row in response.data["results"]]
+        self.assertEqual(ids, [bahr_order])
+        self.assertNotIn(other_order, ids)
+
+    def test_a_cashier_filter_that_is_not_a_number_is_refused(self):
+        # Ignoring it would answer an unfiltered list that the client still
+        # labels "filtered by Bahr" — a wrong answer dressed as a right one.
+        response = self.manager_client.get(
+            reverse("order-list"), {"cashier": "bahr"}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_the_filter_cannot_widen_what_a_cashier_may_see(self):
+        # The list is scoped to the caller's own register sessions unless they
+        # have full visibility; the filter narrows that scope, never escapes it.
+        _, bahr_client, _ = self._cashier(first_name="بحر")
+        bahr_order = self._checkout(bahr_client)["id"]
+        mohammed, mohammed_client, _ = self._cashier(first_name="محمد")
+        self._checkout(mohammed_client)
+
+        response = bahr_client.get(
+            reverse("order-list"), {"cashier": mohammed.pk}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["results"], [])
+        # And Bahr's own list is untouched.
+        own = bahr_client.get(reverse("order-list")).data["results"]
+        self.assertEqual([row["id"] for row in own], [bahr_order])
+
+    def test_filtering_by_cashier_costs_no_query_per_row(self):
+        for _ in range(2):
+            _, client, _ = self._cashier(first_name="أ")
+            self._checkout(client)
+        cashier, client, _ = self._cashier(first_name="ب")
+        for _ in range(2):
+            self._checkout(client)
+        params = {"cashier": cashier.pk}
+        self.manager_client.get(reverse("order-list"), params)
+        with CaptureQueriesContext(connection) as few:
+            self.manager_client.get(reverse("order-list"), params)
+
+        for _ in range(3):
+            self._checkout(client)
+        with CaptureQueriesContext(connection) as more:
+            more_response = self.manager_client.get(reverse("order-list"), params)
+
+        self.assertEqual(len(more_response.data["results"]), 5)
+        self.assertEqual(
+            len(few),
+            len(more),
+            "a filtered page must cost the same however many rows it returns",
+        )
+
     def test_naming_the_cashier_costs_no_query_per_row(self):
         """Each row's cashier is a different user, so an unjoined
         ``register_session.owner`` shows up as one extra query per order."""

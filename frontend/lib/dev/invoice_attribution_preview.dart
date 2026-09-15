@@ -8,6 +8,7 @@
 //   ?screen=plain    the same pane for a user who may not follow the links
 //   ?screen=loading  what the pane shows while the real document is fetched
 //   ?screen=dark     the linked pane under the dark palette
+//   ?screen=filters  the invoices filter sheet, cashier section included
 //
 // See AGENTS.md — a black canvas after start is a browser refresh issue, not a
 // slow compile. Reload once.
@@ -25,7 +26,9 @@ import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/sale_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
+import 'package:pointy_frontend/src/data/repositories/user_repository.dart';
 import 'package:pointy_frontend/src/features/invoices/views/invoice_details_screen.dart';
+import 'package:pointy_frontend/src/features/invoices/views/invoice_filter_sheet.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
@@ -55,6 +58,7 @@ class InvoiceAttributionPreviewApp extends StatelessWidget {
         'plain' => _pane(linked: false),
         'loading' => _pane(linked: true, neverResolves: true),
         'dark' => _pane(linked: true),
+        'filters' => _filters(),
         _ => const _Board(),
       },
     );
@@ -83,6 +87,23 @@ Widget _pane({required bool linked, bool neverResolves = false}) {
   );
 }
 
+/// The filter sheet's body, rendered inline so a screenshot catches it without
+/// having to drive a modal open through a Flutter-web canvas.
+Widget _filters({bool selected = true}) {
+  final service = PosApiService();
+  return Scaffold(
+    body: SafeArea(
+      child: InvoiceFilterSheet(
+        query: selected
+            ? const SaleOrderQuery(cashierId: 4, cashierName: 'سالم الفيتوري')
+            : const SaleOrderQuery(),
+        contactRepository: ContactRepository(service),
+        userRepository: _FakeUserRepository(),
+      ),
+    ),
+  );
+}
+
 class _Board extends StatelessWidget {
   const _Board();
 
@@ -104,6 +125,13 @@ class _Board extends StatelessWidget {
                 390,
                 900,
                 _pane(linked: true, neverResolves: true),
+              ),
+              _frame('الفلاتر — هاتف', 390, 900, _filters()),
+              _frame(
+                'الفلاتر — بلا كاشير',
+                390,
+                900,
+                _filters(selected: false),
               ),
               _frame('منسوبة — لوحة عريضة', 620, 900, _pane(linked: true)),
               _frame(
@@ -160,6 +188,40 @@ class _Board extends StatelessWidget {
 }
 
 // --- fakes -------------------------------------------------------------------
+
+class _FakeUserRepository extends UserRepository {
+  _FakeUserRepository() : super(PosApiService());
+
+  @override
+  Future<Result<PosUserPage>> loadUsers({
+    int page = 1,
+    String search = '',
+    String role = '',
+  }) async {
+    const people = [
+      (4, 'salem', 'سالم الفيتوري'),
+      (5, 'bahr', 'بحر'),
+      (6, 'mkhalid', 'محمد خالد'),
+    ];
+    final term = search.trim();
+    return Ok(
+      PosUserPage(
+        users: [
+          for (final (id, username, name) in people)
+            if (term.isEmpty || name.contains(term) || username.contains(term))
+              PosUser(
+                id: id,
+                username: username,
+                displayName: name,
+                role: UserRole.cashier,
+                isActive: true,
+              ),
+        ],
+        hasMore: false,
+      ),
+    );
+  }
+}
 
 class _FakeSaleRepository extends SaleRepository {
   _FakeSaleRepository({this.neverResolves = false}) : super(PosApiService());
