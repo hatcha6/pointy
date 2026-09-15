@@ -2,14 +2,26 @@
 //
 // Renders the camera wall, the playback screen, the settings page and the
 // invoice footage panel with fake repositories — no backend, no DVR, no auth.
-// The frame streams are synthetic: a generator paints a moving JPEG, which is
-// enough to prove the player, the clock, the frame-drop path and the layout
-// without a recorder on the LAN.
 //
+// Two frame sources, and the difference matters:
+//
+// * `source=synthetic` (default) paints a moving picture in-process. It proves
+//   the player, the clock, the frame-drop path and the layout, and it needs
+//   nothing running. It cannot prove anything about *decoding*, because the
+//   frames are PNGs this file drew — they have no quantization tables, so no
+//   JPEG framing question is ever asked.
+// * `source=rig` serves **real video** from `tools/camera-rig`: frames encoded
+//   by ffmpeg, carrying a recorder's quantization table — the one holding
+//   `FF D9` that painted every tile grey in the field. That is the source to
+//   use before believing the player works.
+//
+//   docker compose -f tools/camera-rig/docker-compose.yml up -d --build
 //   flutter run -d web-server --web-port 8080 -t lib/dev/cameras_preview.dart
+//   open 'http://localhost:8080/?screen=grey-pixels'
 //
 // Screens: board | wall | wall-single | wall-empty | playback | live-player
-//          | settings | invoice
+//          | settings | invoice | grey-pixels
+// Params:  source=synthetic|rig|rig-clean|rig-broken   rig=<base url>
 //
 // See AGENTS.md ("UI preview harness"). Not part of the shipping app.
 import 'dart:async';
@@ -18,6 +30,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
@@ -37,6 +50,7 @@ import 'package:pointy_frontend/src/features/cameras/views/cameras_screen.dart';
 import 'package:pointy_frontend/src/features/dashboard/view_models/dashboard_cameras_view_model.dart';
 import 'package:pointy_frontend/src/features/dashboard/views/dashboard_cameras_band.dart';
 import 'package:pointy_frontend/src/features/cameras/widgets/invoice_footage_section.dart';
+import 'package:pointy_frontend/src/features/cameras/widgets/mjpeg_view.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/navigation/app_navigation.dart';
 import 'package:pointy_frontend/src/shared/components/components.dart';
@@ -71,9 +85,11 @@ class _PreviewApp extends StatelessWidget {
   }
 }
 
-String _selectedScreen() {
+String _selectedScreen() => _param('screen') ?? 'wall';
+
+String? _param(String name) {
   final uri = Uri.base;
-  final direct = uri.queryParameters['screen'];
+  final direct = uri.queryParameters[name];
   if (direct != null) {
     return direct;
   }
@@ -81,8 +97,19 @@ String _selectedScreen() {
   final parsed = Uri.tryParse(
     fragment.startsWith('/') ? fragment.substring(1) : fragment,
   );
-  return parsed?.queryParameters['screen'] ?? 'wall';
+  return parsed?.queryParameters[name];
 }
+
+/// Where `tools/camera-rig` is listening. Override with `&rig=http://host:port`
+/// when the rig runs somewhere other than this machine.
+String get _rigBase => _param('rig') ?? 'http://localhost:8090';
+
+/// Which feed the fake repository hands to the player.
+///
+/// `rig` is the trapped one on purpose: the whole reason to point the harness
+/// at real video is to see the frame that used to break, so that is what you
+/// get unless you ask for the clean one.
+String get _frameSource => _param('source') ?? 'synthetic';
 
 class _PreviewRouter extends StatelessWidget {
   const _PreviewRouter();
@@ -110,6 +137,8 @@ class _PreviewRouter extends StatelessWidget {
         return _recorderForm(found: false);
       case 'invoice':
         return _invoice();
+      case 'grey-pixels':
+        return const _GreyPixelsBoard();
       case 'wall':
       default:
         return _wall();
@@ -510,7 +539,7 @@ class _FakeSurveillanceRepository extends SurveillanceRepository {
     bool smooth = false,
     int width = 0,
   }) {
-    return _syntheticFrames(cameraId, fps: fps);
+    return _framesFor(cameraId, fps: fps);
   }
 
   @override
@@ -523,15 +552,92 @@ class _FakeSurveillanceRepository extends SurveillanceRepository {
     CameraQuality? quality,
     int width = 0,
   }) {
-    return _syntheticFrames(cameraId, fps: fps, anchor: start, speed: speed);
+    return _framesFor(cameraId, fps: fps, anchor: start, speed: speed);
+  }
+}
+
+/// The feed named by `?source=`, for whichever surface asked.
+Stream<CameraFrame> _framesFor(
+  int cameraId, {
+  int fps = 4,
+  DateTime? anchor,
+  double speed = 1.0,
+}) {
+  switch (_frameSource) {
+    case 'rig':
+      return _rigFrames('trap', fps: fps, anchor: anchor, speed: speed);
+    case 'rig-clean':
+      return _rigFrames('clean', fps: fps, anchor: anchor, speed: speed);
+    case 'rig-broken':
+      return _rigFrames('broken', fps: fps, anchor: anchor, speed: speed);
+    default:
+      return _syntheticFrames(cameraId, fps: fps, anchor: anchor, speed: speed);
+  }
+}
+
+/// Real frames, off the rig, through the widget's real decoder.
+///
+/// Stills on a timer rather than a held MJPEG socket, because that is what the
+/// shipping client does on web too — `SurveillanceApiClient._frames` falls back
+/// to polling there, since a browser HTTP client buffers a streaming response
+/// until it ends and a live tile would otherwise show nothing, ever. So this is
+/// not a shortcut around the real path; on this platform it *is* the real path.
+Stream<CameraFrame> _rigFrames(
+  String variant, {
+  int fps = 4,
+  DateTime? anchor,
+  double speed = 1.0,
+}) async* {
+  final interval = Duration(milliseconds: (1000 / fps).round());
+  final client = http.Client();
+  var index = 0;
+  try {
+    while (true) {
+      final started = DateTime.now();
+      http.Response? response;
+      try {
+        response = await client.get(
+          Uri.parse('$_rigBase/$variant/snapshot.jpg?i=$index'),
+        );
+      } catch (_) {
+        // The rig is not up. Say so through the player's own error path rather
+        // than throwing, so the harness shows the widget's failure state —
+        // which is a thing worth previewing too.
+        throw StateError(
+          'camera rig unreachable at $_rigBase — '
+          'docker compose -f tools/camera-rig/docker-compose.yml up -d',
+        );
+      }
+      if (response.statusCode == 200) {
+        yield CameraFrame(
+          bytes: response.bodyBytes,
+          capturedAt: anchor == null
+              ? DateTime.now()
+              : anchor.add(
+                  Duration(milliseconds: (index * 1000 * speed / fps).round()),
+                ),
+        );
+      }
+      index++;
+      final elapsed = DateTime.now().difference(started);
+      final remaining = interval - elapsed;
+      if (remaining > Duration.zero) {
+        await Future<void>.delayed(remaining);
+      }
+    }
+  } finally {
+    client.close();
   }
 }
 
 /// A moving picture with no camera behind it.
 ///
-/// Real JPEG bytes, so the widget under preview runs its actual decode path
-/// rather than a stub — which is the only way the preview tells you anything
-/// about how the player behaves.
+/// Enough to prove layout, the clock, frame-drop and teardown. **Not** enough
+/// to prove decoding: these frames are PNGs (see `_paintFrame`), and every
+/// interesting way a real frame goes wrong is a JPEG question — a quantization
+/// table that contains a false end-of-image, a truncated scan, a restart marker
+/// mid-entropy. A PNG has none of those, so a player that would paint grey on a
+/// real camera looks perfect here. Use `?source=rig` for that.
 Stream<CameraFrame> _syntheticFrames(
   int seed, {
   int fps = 4,
@@ -587,9 +693,197 @@ Future<Uint8List> _paintFrame(int seed, int index) async {
   final picture = recorder.endRecording();
   final image = await picture.toImage(width.toInt(), height.toInt());
   picture.dispose();
-  // PNG rather than JPEG: `toByteData` has no JPEG encoder, and the player
-  // decodes both through the same codec, so nothing under test changes.
+  // PNG rather than JPEG: `toByteData` has no JPEG encoder. Both go through
+  // `instantiateImageCodec`, so the *plumbing* is unchanged — but the bytes are
+  // not, and JPEG framing is exactly where this feature has actually broken.
+  // That gap is what `tools/camera-rig` exists to close; see the file header.
   final data = await image.toByteData(format: ui.ImageByteFormat.png);
   image.dispose();
   return data!.buffer.asUint8List();
+}
+
+// ---------------------------------------------------------------------------
+// The grey pixels, on screen
+// ---------------------------------------------------------------------------
+
+/// Three feeds off the rig, so "grey pixels" stops being a phrase in a commit.
+///
+/// **clean** is a frame with ffmpeg's own quantization table. **recorder table**
+/// is the same picture carrying the table a DVR sent — the one holding `FF D9`
+/// — and it must look identical: that is the fix working, in the client, on the
+/// bytes that broke it. **cut at the false marker** is what the old demuxer
+/// handed the decoder, and it is what a shop phoned about.
+///
+/// Pinned LTR, unlike the rest of the app: this is a before/after comparison
+/// read in the order the labels are written, and mirroring it puts "clean" on
+/// the right of the sentence describing it as the left.
+///
+///   open 'http://localhost:8080/?screen=grey-pixels'
+class _GreyPixelsBoard extends StatelessWidget {
+  const _GreyPixelsBoard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF14110E),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Real frames from tools/camera-rig',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'If the middle tile matches the left, the demuxer is intact. '
+                  'The right tile is the bug.',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final tiles = [
+                        const _RigTile(
+                          variant: 'clean',
+                          label: 'clean',
+                          caption: 'ffmpeg’s own quantization table',
+                        ),
+                        const _RigTile(
+                          variant: 'trap',
+                          label: 'recorder table (FF D9)',
+                          caption: 'must be identical to clean',
+                        ),
+                        const _RigTile(
+                          variant: 'broken',
+                          label: 'cut at the false marker',
+                          caption: 'what the shop saw',
+                        ),
+                      ];
+                      // One column on a phone, a row anywhere there is width.
+                      if (constraints.maxWidth < 760) {
+                        return ListView.separated(
+                          itemCount: tiles.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (context, index) =>
+                              SizedBox(height: 240, child: tiles[index]),
+                        );
+                      }
+                      return Row(
+                        children: [
+                          for (var i = 0; i < tiles.length; i++) ...[
+                            if (i > 0) const SizedBox(width: 12),
+                            Expanded(child: tiles[i]),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RigTile extends StatelessWidget {
+  const _RigTile({
+    required this.variant,
+    required this.label,
+    required this.caption,
+  });
+
+  final String variant;
+  final String label;
+  final String caption;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: ColoredBox(
+              color: const Color(0xFF231F1A),
+              child: MjpegView(
+                // A factory, not a stream: MjpegView calls this again on every
+                // reconnect.
+                frames: () => _rigFrames(variant, fps: 8),
+                fit: BoxFit.contain,
+                // An empty tile and a broken tile look identical without this.
+                // The truncated frame never decodes, so MjpegView never gets a
+                // first frame and would otherwise just sit here looking like a
+                // layout mistake.
+                placeholder: const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text(
+                      'no frame has decoded yet',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Color(0xFF7A736A), fontSize: 12),
+                    ),
+                  ),
+                ),
+                // The rig being down, and a frame that will not decode, are
+                // different failures and the harness should show which.
+                errorBuilder: (context, error, retry) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$error',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFFE5A3A3),
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: retry,
+                          child: const Text('retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Text(
+          caption,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.55),
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
 }

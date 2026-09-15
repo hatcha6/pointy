@@ -1,0 +1,70 @@
+# The camera rig: what it takes to know the surveillance stack works without a
+# recorder on the desk. See README.md.
+#
+#   docker compose -f tools/camera-rig/docker-compose.yml up -d --build
+#
+# Two halves, deliberately:
+#
+#   mediamtx + publisher   real RTSP, real H.264, real ffmpeg. Proves the
+#                          transcode spine and gives the client real video.
+#   fake-dvr               the JPEG the field actually sent us. Proves the
+#                          demuxer, which the real half provably cannot.
+#   fake-onvif             a box that lies about its address, sells Profile S
+#                          without G, and double-counts its own cameras.
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: pointy-rig-mediamtx
+    ports:
+      - "8554:8554"
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+    # No healthcheck: the MediaMTX image is built FROM scratch and ships no
+    # shell, so every CMD-SHELL probe fails on a server that is perfectly well.
+    # The publisher's restart policy is what actually waits for the port.
+
+  publisher:
+    build: .
+    container_name: pointy-rig-publisher
+    depends_on: [mediamtx]
+    # -re paces at wall-clock so the stream behaves like a camera rather than
+    # arriving as fast as the CPU can encode; -stream_loop -1 never ends.
+    # zerolatency + a 1s GOP keeps first-frame time honest for the live path.
+    command: >
+      ffmpeg -hide_banner -loglevel warning
+      -re -stream_loop -1
+      -f lavfi -i testsrc2=size=704x576:rate=15
+      -c:v libx264 -preset ultrafast -tune zerolatency
+      -g 15 -pix_fmt yuv420p
+      -f rtsp -rtsp_transport tcp rtsp://mediamtx:8554/shop
+    # Load-bearing, not tidiness: this is how the publisher waits for MediaMTX.
+    # ffmpeg exits if the RTSP port is not accepting yet, and compose restarts
+    # it until it is.
+    restart: unless-stopped
+
+  fake-dvr:
+    build: .
+    container_name: pointy-rig-fake-dvr
+    ports:
+      - "8090:8080"
+    command: python3 /rig/fake_dvr.py --port 8080 --size 704x576 --fps 8
+    healthcheck:
+      # Not "is it up" but "is the trap armed": a rig that has stopped
+      # reproducing the bug must fail loudly, not pass quietly.
+      test: ["CMD-SHELL", "curl -sf localhost:8080/health | grep -q '\"trap_armed\": true'"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  fake-onvif:
+    build: .
+    container_name: pointy-rig-fake-onvif
+    ports:
+      - "8091:8000"
+    depends_on: [mediamtx]
+    command: python3 /rig/fake_onvif.py --port 8000 --rtsp rtsp://mediamtx:8554/shop --channels 4
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf localhost:8000/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 12

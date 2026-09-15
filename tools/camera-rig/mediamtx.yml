@@ -1,0 +1,21 @@
+# MediaMTX for the camera rig: RTSP only, no auth, one path.
+#
+# This is the half of the rig that is genuinely real — a real RTSP server
+# speaking to real ffmpeg, which is what proves the transcode spine, the frame
+# broker and the client's decode path. What it cannot prove is the JPEG demuxer;
+# see fake_dvr.py for why, and for the half that can.
+logLevel: info
+api: no
+metrics: no
+rtmp: no
+hls: no
+webrtc: no
+srt: no
+
+rtspTransports: [tcp]
+rtspAddress: :8554
+
+paths:
+  # Published into by the `publisher` service. Named for what it stands in for.
+  shop:
+    source: publisher

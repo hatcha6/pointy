@@ -6,6 +6,7 @@ FRONTEND_DIR := frontend
 RELAY_DIR := relay
 PYTHON ?= python3
 VENV := $(BACKEND_DIR)/.venv
+CAMERA_RIG := tools/camera-rig/docker-compose.yml
 PIP := $(VENV)/bin/pip
 MANAGE := $(VENV)/bin/python $(BACKEND_DIR)/manage.py
 FLUTTER ?= flutter
@@ -131,6 +132,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-load-test backend-stress-test backend-endurance-test \
 	backend-shell backend-superuser backend-test backend-test-pg backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format frontend-scales-preview frontend-invoice-attribution-preview \
+	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
 	onprem-test onprem-rehearsal onprem-rehearsal-clean upgrade-rehearsal upgrade-check \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable ai-enable-remote postgres-ready clean
@@ -284,6 +286,27 @@ frontend-dashboard-preview: frontend-install ## Run the owner-dashboard UI previ
 
 frontend-cameras-preview: frontend-install ## Run the camera (DVR/NVR) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/cameras_preview.dart
+
+camera-rig: docker-check ## Start the camera rig (MediaMTX + fake DVR + fake ONVIF).
+	docker compose -f $(CAMERA_RIG) up -d --build
+	@# The fake DVR encodes its frames with ffmpeg at boot, so it answers a
+	@# second or two after the container starts. Wait for the trap rather than
+	@# printing a health check that was always going to miss.
+	@for i in $$(seq 1 30); do \
+		curl -sf localhost:8090/health >/dev/null 2>&1 && break; \
+		sleep 1; \
+	done
+	@echo "rig up — RTSP rtsp://localhost:8554/shop | DVR :8090 | ONVIF :8091"
+	@curl -sf localhost:8090/health || echo "fake DVR did not come up; make camera-rig-logs"
+
+camera-rig-stop: docker-check ## Stop the camera rig.
+	docker compose -f $(CAMERA_RIG) down
+
+camera-rig-logs: docker-check ## Tail the camera rig's logs.
+	docker compose -f $(CAMERA_RIG) logs -f
+
+camera-rig-test: camera-rig backend-install ## Run the surveillance tests that need the rig.
+	$(MANAGE) test apps.surveillance.test_rig
 
 frontend-operations-preview: frontend-install ## Run the operations UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/operations_preview.dart
