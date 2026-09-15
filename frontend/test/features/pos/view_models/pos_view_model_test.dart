@@ -41,6 +41,7 @@ import 'package:pointy_frontend/src/shared/unit_options.dart';
 
 void main() {
   _registerQuantityCoalescingTests();
+  _registerAutoPrintFloorTests();
   test(
     'cart totals update and checkout locks mutations until success',
     () async {
@@ -1855,6 +1856,30 @@ const _settings = ShopSettings(
 
 /// [_settings] with automatic receipt printing on, so checkout exercises the
 /// post-sale print path (and its failure guards).
+/// Auto-print with a floor under it: three lines, or twenty dinars. A sale that
+/// clears either prints; anything smaller does not.
+const _autoPrintFloorSettings = ShopSettings(
+  shopName: 'نقطة البيع',
+  receiptHeader: '',
+  receiptFooter: '',
+  enableOnlineInvoices: false,
+  requireOpeningCash: true,
+  autoPrintReceipts: true,
+  autoPrintMinLineCount: 3,
+  autoPrintMinTotal: 20,
+  allowOverselling: false,
+  preventSellingAtLoss: true,
+  lowStockThreshold: 5,
+  cashierReturnWindowHours: 42,
+  enableCashPayments: true,
+  enableCardPayments: true,
+  enableTransferPayments: true,
+  requireCardPaymentReceipt: false,
+  trustedCardTerminalIds: [],
+  cardCommissionPercent: 1,
+  transferCommissionPercent: 0,
+);
+
 const _autoPrintSettings = ShopSettings(
   shopName: 'نقطة البيع',
   receiptHeader: '',
@@ -2288,5 +2313,158 @@ void _registerQuantityCoalescingTests() {
       ),
       isEmpty,
     );
+  });
+}
+
+/// Auto-print with a floor: a shop that sells one loaf of bread at a time does
+/// not want a slip for every loaf, but the cashier must still be able to print
+/// one when the customer asks.
+void _registerAutoPrintFloorTests() {
+  group('the auto-print floor', () {
+    Future<(PosViewModel, _StubPrintingRepository, List<SaleCheckoutDraft>)>
+    readyViewModel() async {
+      final drafts = <SaleCheckoutDraft>[];
+      final apiService = _FakePosApiService(
+        shopSettings: _autoPrintFloorSettings,
+        catalogPages: const {
+          1: [_coffeeVariant, _teaVariant, _coffeeBeansVariant],
+        },
+        onCheckout: (draft, _) async {
+          drafts.add(draft);
+          // An آجل sale carries no payment, so the total comes off the draft.
+          return _saleOrder(
+            total: draft.payments.fold<double>(0, (sum, p) => sum + p.amount),
+            lines: const [],
+          );
+        },
+      );
+      final printing = _StubPrintingRepository(
+        apiService,
+        invoiceResult: () async =>
+            const PrintTransportResult.success('printed'),
+      );
+      final viewModel = _viewModel(apiService, printingRepository: printing);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
+      await viewModel.loadCheckoutSettings();
+      return (viewModel, printing, drafts);
+    }
+
+    test('a single cheap line does not print itself', () async {
+      final (viewModel, printing, drafts) = await readyViewModel();
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+
+      expect(viewModel.cartWouldAutoPrintReceipt(), isFalse);
+      await viewModel.checkoutCurrentSale(
+        payments: const [
+          SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 3.5),
+        ],
+      );
+      await _settle();
+
+      expect(printing.invoiceCalls, 0);
+      // And the backend is told not to queue one either, so the two routes
+      // cannot disagree about the same sale.
+      expect(drafts.single.toJson()['receipt_delivery'], isNull);
+    });
+
+    test('a basket of cheap things prints on line count', () async {
+      final (viewModel, printing, _) = await readyViewModel();
+
+      viewModel.addVariant(_coffeeVariant);
+      viewModel.addVariant(_teaVariant);
+      viewModel.addVariant(_coffeeBeansVariant);
+      await _settle();
+
+      expect(viewModel.cart, hasLength(3));
+      expect(viewModel.cartWouldAutoPrintReceipt(), isTrue);
+      await viewModel.checkoutCurrentSale(
+        payments: const [
+          SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 15.25),
+        ],
+      );
+      await _settle();
+
+      expect(printing.invoiceCalls, 1);
+    });
+
+    test('one expensive line prints on the total', () async {
+      final (viewModel, printing, _) = await readyViewModel();
+
+      viewModel.addVariant(_coffeeBeansVariant);
+      viewModel.setVariantQuantity(_coffeeBeansVariant, 3);
+      await _settle();
+
+      expect(viewModel.cart, hasLength(1));
+      expect(viewModel.total, 27);
+      expect(viewModel.cartWouldAutoPrintReceipt(), isTrue);
+      await viewModel.checkoutCurrentSale(
+        payments: const [
+          SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 27),
+        ],
+      );
+      await _settle();
+
+      expect(printing.invoiceCalls, 1);
+    });
+
+    test('the cashier can still print a sale under the floor', () async {
+      final (viewModel, printing, _) = await readyViewModel();
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+
+      // The box is back precisely because this sale would not print itself.
+      expect(viewModel.shouldShowPrintInvoiceCheckbox, isTrue);
+      viewModel.updatePrintInvoiceAfterPayment(true);
+
+      await viewModel.checkoutCurrentSale(
+        payments: const [
+          SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 3.5),
+        ],
+      );
+      await _settle();
+
+      expect(printing.invoiceCalls, 1);
+    });
+
+    test('the box disappears again once the cart clears the floor', () async {
+      final (viewModel, _, _) = await readyViewModel();
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+      expect(viewModel.shouldShowPrintInvoiceCheckbox, isTrue);
+
+      viewModel.addVariant(_teaVariant);
+      viewModel.addVariant(_coffeeBeansVariant);
+      await _settle();
+
+      expect(viewModel.shouldShowPrintInvoiceCheckbox, isFalse);
+    });
+
+    test('an آجل invoice under the floor still prints', () async {
+      // The floor holds back receipts for transient carts. A debt invoice is
+      // the customer's only record of what they owe, so it is not one.
+      final (viewModel, printing, _) = await readyViewModel();
+
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+
+      expect(
+        viewModel.cartWouldAutoPrintReceipt(saleType: SaleType.credit),
+        isTrue,
+      );
+      await viewModel.checkoutCurrentSale(
+        payments: const [],
+        saleType: SaleType.credit,
+      );
+      await _settle();
+
+      expect(printing.invoiceCalls, 1);
+    });
   });
 }

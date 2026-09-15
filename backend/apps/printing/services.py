@@ -686,6 +686,30 @@ def expire_stale_queued_print_jobs(now=None):
     return expired
 
 
+def order_clears_auto_print_floor(order, shop_settings=None):
+    """Whether this order is big enough for the shop's auto-print floor.
+
+    Lives here rather than inline so the checkout view can ask the same
+    question before deciding what to do with a print request the till sent.
+    The line count is only counted when a floor is actually configured — the
+    overwhelmingly common case is no floor at all, and that must not cost a
+    query on every sale.
+    """
+    settings_obj = shop_settings or ShopSettings.load()
+    if not settings_obj.has_auto_print_floor:
+        return True
+    # The floor holds back receipts for transient carts, not documents someone
+    # deliberately issued. A quotation is handed to the customer by definition,
+    # and an آجل invoice is the only record they have of what they owe — a
+    # five-dinar debt with no slip is worse than a five-dinar receipt too many.
+    if order.sale_type != Order.SaleType.STANDARD:
+        return True
+    return settings_obj.sale_clears_auto_print_floor(
+        line_count=order.lines.count(),
+        total=order.total,
+    )
+
+
 def enqueue_receipt_print_job(order_id):
     order = Order.objects.get(pk=order_id)
     # A transient standard cart isn't a document until it's paid; credit (debt)
@@ -698,6 +722,10 @@ def enqueue_receipt_print_job(order_id):
 
     shop_settings = ShopSettings.load()
     if not shop_settings.auto_print_receipts:
+        return None
+    # Under the shop's floor, this sale is not one that prints by itself. The
+    # cashier can still print it by hand, which arrives as a manual reprint.
+    if not order_clears_auto_print_floor(order, shop_settings):
         return None
 
     template_version = get_default_receipt_template_version()

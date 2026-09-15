@@ -51,6 +51,8 @@ class ShopSettings {
     required this.trustedCardTerminalIds,
     required this.cardCommissionPercent,
     required this.transferCommissionPercent,
+    this.autoPrintMinLineCount,
+    this.autoPrintMinTotal,
     this.requireCustomerForCredit = true,
     this.allowCashierCustomerAccess = true,
     this.warnLowStockBeforeSale = true,
@@ -86,6 +88,18 @@ class ShopSettings {
   final bool enableOnlineInvoices;
   final bool requireOpeningCash;
   final bool autoPrintReceipts;
+
+  /// Auto-print floor: how much of a sale it takes before a receipt prints by
+  /// itself. A sale qualifies on clearing EITHER — enough lines or enough money
+  /// — so a big basket of cheap things and one expensive thing both print, and
+  /// a single loaf of bread does not. Null (or 0) on both means every sale
+  /// prints, which is what auto-print meant before these existed.
+  ///
+  /// The rule is [saleClearsAutoPrintFloor]; the backend states the same rule
+  /// in `ShopSettings.sale_clears_auto_print_floor`, and the two have to agree
+  /// or a shop sees the queue print a sale the till skipped.
+  final int? autoPrintMinLineCount;
+  final double? autoPrintMinTotal;
   final bool autoPrintKitchenTickets;
   final bool allowOverselling;
   final bool preventSellingAtLoss;
@@ -162,6 +176,34 @@ class ShopSettings {
   /// cap, 0 counts: it means "no credit by default", not "no rule".
   bool get hasDefaultCustomerCreditLimit => defaultCustomerCreditLimit != null;
 
+  /// Whether auto-printing is limited to sales of a certain size at all.
+  bool get hasAutoPrintFloor =>
+      (autoPrintMinLineCount ?? 0) > 0 || (autoPrintMinTotal ?? 0) > 0;
+
+  /// Whether a sale of this shape is big enough to print a receipt by itself.
+  ///
+  /// Whichever floors the shop set, clearing *either* is enough: a basket of
+  /// cheap things qualifies on [lineCount], one expensive thing on [total]. A
+  /// floor of 0 reads as no floor — a cleared box must not quietly mean "every
+  /// sale qualifies", which is what a literal `lineCount >= 0` would say.
+  ///
+  /// The backend asks the same question of the same numbers before it queues a
+  /// receipt; keep the two in step.
+  bool saleClearsAutoPrintFloor({
+    required int lineCount,
+    required double total,
+  }) {
+    final minLines = autoPrintMinLineCount ?? 0;
+    final minTotal = autoPrintMinTotal ?? 0;
+    if (minLines <= 0 && minTotal <= 0) {
+      return true;
+    }
+    if (minLines > 0 && lineCount >= minLines) {
+      return true;
+    }
+    return minTotal > 0 && total >= minTotal;
+  }
+
   factory ShopSettings.fromJson(Map<String, Object?> json) {
     final logoJson = json['logo_attachment'];
     return ShopSettings(
@@ -179,6 +221,12 @@ class ShopSettings {
       autoPrintReceipts: json['auto_print_receipts'] is bool
           ? json['auto_print_receipts'] as bool
           : json['auto_print_receipts']?.toString() == 'true',
+      autoPrintMinLineCount: json['auto_print_min_line_count'] == null
+          ? null
+          : _intFromJson(json['auto_print_min_line_count'], 0),
+      autoPrintMinTotal: json['auto_print_min_total'] == null
+          ? null
+          : _moneyFromJson(json['auto_print_min_total'], 0),
       autoPrintKitchenTickets: _boolFromJson(
         json['auto_print_kitchen_tickets'],
         false,
@@ -316,6 +364,8 @@ class ShopSettingsDraft {
     required this.trustedCardTerminalIds,
     required this.cardCommissionPercent,
     required this.transferCommissionPercent,
+    this.autoPrintMinLineCount,
+    this.autoPrintMinTotal,
     this.requireCustomerForCredit = true,
     this.allowCashierCustomerAccess = true,
     this.warnLowStockBeforeSale = true,
@@ -350,6 +400,8 @@ class ShopSettingsDraft {
   final bool enableOnlineInvoices;
   final bool requireOpeningCash;
   final bool autoPrintReceipts;
+  final int? autoPrintMinLineCount;
+  final double? autoPrintMinTotal;
   final bool autoPrintKitchenTickets;
   final bool allowOverselling;
   final bool preventSellingAtLoss;
@@ -389,6 +441,8 @@ class ShopSettingsDraft {
       enableOnlineInvoices: settings.enableOnlineInvoices,
       requireOpeningCash: settings.requireOpeningCash,
       autoPrintReceipts: settings.autoPrintReceipts,
+      autoPrintMinLineCount: settings.autoPrintMinLineCount,
+      autoPrintMinTotal: settings.autoPrintMinTotal,
       autoPrintKitchenTickets: settings.autoPrintKitchenTickets,
       allowOverselling: settings.allowOverselling,
       warnLowStockBeforeSale: settings.warnLowStockBeforeSale,
@@ -449,6 +503,8 @@ class ShopSettingsDraft {
     bool? enableOnlineInvoices,
     bool? requireOpeningCash,
     bool? autoPrintReceipts,
+    Object? autoPrintMinLineCount = _keep,
+    Object? autoPrintMinTotal = _keep,
     bool? autoPrintKitchenTickets,
     bool? allowOverselling,
     bool? warnLowStockBeforeSale,
@@ -487,6 +543,12 @@ class ShopSettingsDraft {
       enableOnlineInvoices: enableOnlineInvoices ?? this.enableOnlineInvoices,
       requireOpeningCash: requireOpeningCash ?? this.requireOpeningCash,
       autoPrintReceipts: autoPrintReceipts ?? this.autoPrintReceipts,
+      autoPrintMinLineCount: identical(autoPrintMinLineCount, _keep)
+          ? this.autoPrintMinLineCount
+          : autoPrintMinLineCount as int?,
+      autoPrintMinTotal: identical(autoPrintMinTotal, _keep)
+          ? this.autoPrintMinTotal
+          : autoPrintMinTotal as double?,
       autoPrintKitchenTickets:
           autoPrintKitchenTickets ?? this.autoPrintKitchenTickets,
       allowOverselling: allowOverselling ?? this.allowOverselling,
@@ -554,6 +616,11 @@ class ShopSettingsDraft {
       'enable_online_invoices': enableOnlineInvoices,
       'require_opening_cash': requireOpeningCash,
       'auto_print_receipts': autoPrintReceipts,
+      // Null clears the floor — an empty box on the settings form means "print
+      // every sale", so it has to reach the server as a null and not be
+      // dropped from the payload.
+      'auto_print_min_line_count': autoPrintMinLineCount,
+      'auto_print_min_total': autoPrintMinTotal?.toStringAsFixed(2),
       'auto_print_kitchen_tickets': autoPrintKitchenTickets,
       'allow_overselling': allowOverselling,
       'prevent_selling_at_loss': preventSellingAtLoss,

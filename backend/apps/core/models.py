@@ -1,4 +1,5 @@
 from datetime import time
+from decimal import Decimal
 
 from django.conf import settings as django_settings
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -120,6 +121,24 @@ class ShopSettings(TimeStampedModel):
     enable_job_tracking = models.BooleanField(default=False)
     require_opening_cash = models.BooleanField(default=True)
     auto_print_receipts = models.BooleanField(default=False)
+    # Auto-print floor: how big a sale has to be before it prints by itself.
+    # A shop that sells single cheap items all day does not want a slip for one
+    # loaf of bread, but does want one for the weekly shop. A sale prints when
+    # it clears EITHER floor — enough lines OR enough money — so they are
+    # alternatives, not conditions to satisfy together. Null (or 0) on both,
+    # the default, means every sale prints, which is what auto-print meant
+    # before these existed. Nothing here stops a cashier printing by hand.
+    auto_print_min_line_count = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+    )
+    auto_print_min_total = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(0)],
+    )
     auto_print_kitchen_tickets = models.BooleanField(default=False)
     allow_overselling = models.BooleanField(default=False)
     prevent_selling_at_loss = models.BooleanField(default=True)
@@ -367,6 +386,33 @@ class ShopSettings(TimeStampedModel):
             "card": self.card_commission_percent,
             "transfer": self.transfer_commission_percent,
         }.get(method, 0)
+
+    @property
+    def has_auto_print_floor(self) -> bool:
+        """Whether auto-print is limited to sales of a certain size at all."""
+        return bool(self.auto_print_min_line_count) or bool(
+            self.auto_print_min_total
+        )
+
+    def sale_clears_auto_print_floor(self, *, line_count, total) -> bool:
+        """Whether a sale of this shape is big enough to print by itself.
+
+        The one statement of the rule: whichever floor the shop set, clearing
+        *either* of them is enough. Both the server's print queue and the till's
+        own local printing ask this same question, so a shop never sees one of
+        them print a sale the other would have skipped.
+
+        A floor of 0 reads as "no floor", the same as leaving it empty — a shop
+        clearing the box should not accidentally mean "every sale qualifies on
+        line count", which is what ``line_count >= 0`` would say.
+        """
+        min_lines = self.auto_print_min_line_count or 0
+        min_total = Decimal(self.auto_print_min_total or 0)
+        if min_lines <= 0 and min_total <= 0:
+            return True
+        if min_lines > 0 and (line_count or 0) >= min_lines:
+            return True
+        return min_total > 0 and Decimal(str(total or 0)) >= min_total
 
     def apply_shop_type_preset(self, shop_type: str):
         """Flip the feature defaults for a shop vertical, then record the type.

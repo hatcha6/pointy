@@ -9175,6 +9175,48 @@ abstract class AppLocalizations {
   /// **'طباعة الإيصالات تلقائيًا'**
   String get autoPrintReceiptsLabel;
 
+  /// No description provided for @autoPrintFloorTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تطبع الفواتير الصغيرة'**
+  String get autoPrintFloorTitle;
+
+  /// No description provided for @autoPrintMinLineCountLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد الأدنى لعدد الأصناف'**
+  String get autoPrintMinLineCountLabel;
+
+  /// No description provided for @autoPrintMinTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد الأدنى لإجمالي الفاتورة'**
+  String get autoPrintMinTotalLabel;
+
+  /// No description provided for @autoPrintFloorHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُطبع الفاتورة تلقائيًا إذا تحقّق أي من الشرطين. اترك الحقلين فارغين لطباعة كل عملية بيع، ويبقى بإمكان الكاشير طباعة أي فاتورة يدويًا.'**
+  String get autoPrintFloorHelp;
+
+  /// Auto-print floor shown in the collapsed receipt settings summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد الأدنى للطباعة: {floor}'**
+  String autoPrintFloorSummary(String floor);
+
+  /// Line-count half of the auto-print floor summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} صنف'**
+  String autoPrintFloorLinesValue(int count);
+
+  /// No description provided for @autoPrintFloorEitherJoiner.
+  ///
+  /// In ar, this message translates to:
+  /// **'أو'**
+  String get autoPrintFloorEitherJoiner;
+
   /// No description provided for @enableOnlineInvoicesLabel.
   ///
   /// In ar, this message translates to:

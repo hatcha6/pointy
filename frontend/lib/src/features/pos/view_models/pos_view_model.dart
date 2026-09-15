@@ -505,9 +505,39 @@ class PosViewModel extends ChangeNotifier {
   /// On by default; shops can silence the prompt from Settings.
   bool get warnLowStockBeforeSale =>
       _checkoutSettings?.warnLowStockBeforeSale ?? true;
+
+  /// Whether the cart as it stands would print a receipt without being asked:
+  /// auto-print is on AND the sale clears whatever floor the shop set.
+  ///
+  /// The floor holds back receipts for transient carts, not documents someone
+  /// deliberately issued — a quotation is handed over by definition, and an آجل
+  /// invoice is the customer's only record of the debt — so anything but a
+  /// standard sale prints as it always did. The backend draws the same line.
+  bool cartWouldAutoPrintReceipt({SaleType saleType = SaleType.standard}) {
+    final settings = _checkoutSettings;
+    if (settings == null || !settings.autoPrintReceipts) {
+      return false;
+    }
+    if (saleType != SaleType.standard) {
+      return true;
+    }
+    return settings.saleClearsAutoPrintFloor(
+      lineCount: _cart.length,
+      total: total,
+    );
+  }
+
+  /// The manual print box appears whenever the sale is not going to print by
+  /// itself — auto-print off, or a sale under the shop's auto-print floor. A
+  /// floor says what prints unasked; it must never leave a cashier with no way
+  /// to hand over a slip the customer asked for.
   bool get shouldShowPrintInvoiceCheckbox =>
+      _checkoutSettings != null && !cartWouldAutoPrintReceipt();
+  /// Sharing is not printing: a floor decides what the printer does, and has
+  /// nothing to say about sending the customer a link. So this keeps the rule
+  /// it always had — the box shows whenever the shop is not auto-printing.
+  bool get shouldShowShareInvoiceCheckbox =>
       _checkoutSettings != null && !_checkoutSettings!.autoPrintReceipts;
-  bool get shouldShowShareInvoiceCheckbox => shouldShowPrintInvoiceCheckbox;
   bool get enableCashPayments => _checkoutSettings?.enableCashPayments ?? true;
   bool get enableCardPayments => _checkoutSettings?.enableCardPayments ?? true;
   bool get enableTransferPayments =>
@@ -623,7 +653,10 @@ class PosViewModel extends ChangeNotifier {
           code: result.value.currencyCode,
         );
         _checkoutShopLogoBytes = await _loadShopLogoBytes(result.value);
-        if (result.value.autoPrintReceipts) {
+        // Only when the box can never appear again. With a floor set it can,
+        // and a tick the cashier made for the small sale in front of them must
+        // survive a settings refresh.
+        if (result.value.autoPrintReceipts && !result.value.hasAutoPrintFloor) {
           _clearManualInvoiceActionsForSaleSessions();
         }
       case Error<ShopSettings>():

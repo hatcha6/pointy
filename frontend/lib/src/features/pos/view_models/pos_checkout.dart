@@ -168,8 +168,10 @@ extension PosCheckoutActions on PosViewModel {
     // Any +/- run still open belongs to the sale being rung up, not the next
     // one: emit it before the checkout event so the order reads correctly.
     _cartQuantityRuns.settleAll();
+    // Auto-print only carries a sale that clears the shop's floor; below it the
+    // POS showed the print box instead, so a tick there is the whole answer.
     final shouldPrintInvoice =
-        _checkoutSettings?.autoPrintReceipts == true ||
+        cartWouldAutoPrintReceipt(saleType: saleType) ||
         _printInvoiceAfterPayment;
     PrinterConfig? invoicePrinterConfig;
     if (shouldPrintInvoice) {

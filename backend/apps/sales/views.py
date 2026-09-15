@@ -598,11 +598,20 @@ class OrderViewSet(
             claim_print_job,
             enqueue_manual_receipt_reprint,
             enqueue_receipt_print_job,
+            order_clears_auto_print_floor,
         )
 
-        if ShopSettings.load().auto_print_receipts:
+        shop_settings = ShopSettings.load()
+        if shop_settings.auto_print_receipts and order_clears_auto_print_floor(
+            order,
+            shop_settings,
+        ):
             job = enqueue_receipt_print_job(order.pk)
         else:
+            # The till asked for this print by name: either auto-print is off
+            # and the cashier ticked the box, or the sale is under the shop's
+            # auto-print floor and they wanted a slip anyway. A floor decides
+            # what prints on its own, never what a cashier may ask for.
             job = enqueue_manual_receipt_reprint(order, user=request.user)
 
         if job is None:

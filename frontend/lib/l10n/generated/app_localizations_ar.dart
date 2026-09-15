@@ -5189,6 +5189,32 @@ class AppLocalizationsAr extends AppLocalizations {
   String get autoPrintReceiptsLabel => 'طباعة الإيصالات تلقائيًا';
 
   @override
+  String get autoPrintFloorTitle => 'لا تطبع الفواتير الصغيرة';
+
+  @override
+  String get autoPrintMinLineCountLabel => 'الحد الأدنى لعدد الأصناف';
+
+  @override
+  String get autoPrintMinTotalLabel => 'الحد الأدنى لإجمالي الفاتورة';
+
+  @override
+  String get autoPrintFloorHelp =>
+      'تُطبع الفاتورة تلقائيًا إذا تحقّق أي من الشرطين. اترك الحقلين فارغين لطباعة كل عملية بيع، ويبقى بإمكان الكاشير طباعة أي فاتورة يدويًا.';
+
+  @override
+  String autoPrintFloorSummary(String floor) {
+    return 'الحد الأدنى للطباعة: $floor';
+  }
+
+  @override
+  String autoPrintFloorLinesValue(int count) {
+    return '$count صنف';
+  }
+
+  @override
+  String get autoPrintFloorEitherJoiner => 'أو';
+
+  @override
   String get enableOnlineInvoicesLabel =>
       'إظهار رابط وQR للفاتورة عبر الإنترنت';
 

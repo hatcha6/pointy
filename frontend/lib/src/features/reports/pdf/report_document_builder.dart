@@ -29,6 +29,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../data/models/pos_user.dart';
 import '../../../data/models/report_run.dart';
 import '../../../data/models/shop_settings.dart';
+import '../../../shared/formatters.dart';
 import '../report_labels.dart';
 import '../report_titles.dart';
 import 'report_pdf.dart';
@@ -383,6 +384,13 @@ List<ReportPdfField> _shopSettingFieldsForReport(
         label: 'الطباعة التلقائية للإيصالات',
         value: _boolLabel(settings.autoPrintReceipts),
       ),
+      // With a floor set, "on" only holds for sales above it — a report that
+      // says nothing about the floor overstates how many receipts were printed.
+      if (settings.autoPrintReceipts && settings.hasAutoPrintFloor)
+        ReportPdfField(
+          label: 'الحد الأدنى للطباعة التلقائية',
+          value: _autoPrintFloorLabel(settings),
+        ),
       ReportPdfField(
         label: 'نافذة إرجاع الكاشير',
         value: '${settings.cashierReturnWindowHours} ساعة',
@@ -451,6 +459,15 @@ String _valuationMethodLabel(InventoryValuationMethod method) {
     InventoryValuationMethod.lifo => 'الوارد أخيرًا صادر أولًا (LIFO)',
     InventoryValuationMethod.movingAverage => 'المتوسط المرجح',
   };
+}
+
+String _autoPrintFloorLabel(ShopSettings settings) {
+  final lines = settings.autoPrintMinLineCount ?? 0;
+  final total = settings.autoPrintMinTotal ?? 0;
+  return [
+    if (lines > 0) '$lines صنف',
+    if (total > 0) formatMoney(total),
+  ].join(' أو ');
 }
 
 String _boolLabel(bool value) => value ? 'نعم' : 'لا';

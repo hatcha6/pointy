@@ -347,6 +347,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late final TextEditingController _lowStockThresholdController;
   late final TextEditingController _cardCommissionController;
   late final TextEditingController _transferCommissionController;
+  late final TextEditingController _autoPrintMinLineCountController;
+  late final TextEditingController _autoPrintMinTotalController;
   late final TextEditingController _posCashPurchaseLimitController;
   late final TextEditingController _defaultCustomerCreditLimitController;
   late final TextEditingController _defaultPaymentTermsDaysController;
@@ -415,6 +417,14 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         widget.settings.transferCommissionPercent.toStringAsFixed(2),
       );
       _setControllerText(
+        _autoPrintMinLineCountController,
+        _formatAutoPrintFloorLines(widget.settings.autoPrintMinLineCount),
+      );
+      _setControllerText(
+        _autoPrintMinTotalController,
+        _formatAutoPrintFloorTotal(widget.settings.autoPrintMinTotal),
+      );
+      _setControllerText(
         _posCashPurchaseLimitController,
         _formatPosCashPurchaseLimit(widget.settings.posCashPurchaseLimit),
       );
@@ -461,6 +471,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _lowStockThresholdController.dispose();
     _cardCommissionController.dispose();
     _transferCommissionController.dispose();
+    _autoPrintMinLineCountController.dispose();
+    _autoPrintMinTotalController.dispose();
     _posCashPurchaseLimitController.dispose();
     _defaultCustomerCreditLimitController.dispose();
     _defaultPaymentTermsDaysController.dispose();
@@ -487,6 +499,12 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     );
     _transferCommissionController = TextEditingController(
       text: settings.transferCommissionPercent.toStringAsFixed(2),
+    );
+    _autoPrintMinLineCountController = TextEditingController(
+      text: _formatAutoPrintFloorLines(settings.autoPrintMinLineCount),
+    );
+    _autoPrintMinTotalController = TextEditingController(
+      text: _formatAutoPrintFloorTotal(settings.autoPrintMinTotal),
     );
     _posCashPurchaseLimitController = TextEditingController(
       text: _formatPosCashPurchaseLimit(settings.posCashPurchaseLimit),
@@ -524,6 +542,41 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _logoAttachment = settings.logoAttachment;
     _selectedLogoUpload = null;
     _removeLogo = false;
+  }
+
+  /// Blank = no floor, on both halves. A 0 is stored as "no floor" too (see
+  /// [ShopSettings.saleClearsAutoPrintFloor]), so it renders as an empty box
+  /// rather than a 0 the owner would read as a rule.
+  static String _formatAutoPrintFloorLines(int? lines) {
+    if (lines == null || lines <= 0) {
+      return '';
+    }
+    return '$lines';
+  }
+
+  static String _formatAutoPrintFloorTotal(double? total) {
+    if (total == null || total <= 0) {
+      return '';
+    }
+    return total == total.roundToDouble()
+        ? total.toStringAsFixed(0)
+        : total.toStringAsFixed(2);
+  }
+
+  int? _parseAutoPrintMinLineCount() {
+    final parsed = int.tryParse(_autoPrintMinLineCountController.text.trim());
+    if (parsed == null || parsed <= 0) {
+      return null;
+    }
+    return parsed;
+  }
+
+  double? _parseAutoPrintMinTotal() {
+    final parsed = double.tryParse(_autoPrintMinTotalController.text.trim());
+    if (parsed == null || parsed <= 0) {
+      return null;
+    }
+    return parsed;
   }
 
   static String _formatPosCashPurchaseLimit(double? limit) {
@@ -862,10 +915,33 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     final onlineStatus = _enableOnlineInvoices
         ? l10n.shopSettingsEnabledValue
         : l10n.shopSettingsDisabledValue;
+    final floor = _autoPrintFloorSummary(l10n);
     return [
       l10n.receiptSettingsSummary(status),
+      ?floor,
       l10n.onlineInvoiceSettingSummary(onlineStatus),
     ].join('، ');
+  }
+
+  /// The auto-print floor, as the collapsed section shows it — null when the
+  /// shop has set none, or when auto-print is off and a floor would hold back
+  /// nothing.
+  String? _autoPrintFloorSummary(AppLocalizations l10n) {
+    if (!_autoPrintReceipts) {
+      return null;
+    }
+    final lines = _parseAutoPrintMinLineCount();
+    final total = _parseAutoPrintMinTotal();
+    final parts = [
+      if (lines != null) l10n.autoPrintFloorLinesValue(lines),
+      if (total != null) formatMoney(total),
+    ];
+    if (parts.isEmpty) {
+      return null;
+    }
+    return l10n.autoPrintFloorSummary(
+      parts.join(' ${l10n.autoPrintFloorEitherJoiner} '),
+    );
   }
 
   String _registerSessionSummary(AppLocalizations l10n) {
@@ -1028,6 +1104,8 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
         headerController: _receiptHeaderController,
         footerController: _receiptFooterController,
         autoPrintReceipts: _autoPrintReceipts,
+        autoPrintMinLineCountController: _autoPrintMinLineCountController,
+        autoPrintMinTotalController: _autoPrintMinTotalController,
         enableOnlineInvoices: _enableOnlineInvoices,
         enabled: !widget.viewModel.isSaving,
         onAutoPrintReceiptsChanged: (value) {
@@ -1810,6 +1888,10 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       enableOnlineInvoices: _enableOnlineInvoices,
       requireOpeningCash: _requireOpeningCash,
       autoPrintReceipts: _autoPrintReceipts,
+      // Emptying either box clears that half of the floor, so both are passed
+      // even when null — a value here, not an omission.
+      autoPrintMinLineCount: _parseAutoPrintMinLineCount(),
+      autoPrintMinTotal: _parseAutoPrintMinTotal(),
       allowOverselling: _allowOverselling,
       warnLowStockBeforeSale: _warnLowStockBeforeSale,
       preventSellingAtLoss: _preventSellingAtLoss,

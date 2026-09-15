@@ -257,6 +257,8 @@ class _ReceiptSettingsFields extends StatelessWidget {
     required this.headerController,
     required this.footerController,
     required this.autoPrintReceipts,
+    required this.autoPrintMinLineCountController,
+    required this.autoPrintMinTotalController,
     required this.enableOnlineInvoices,
     required this.enabled,
     required this.onAutoPrintReceiptsChanged,
@@ -266,6 +268,11 @@ class _ReceiptSettingsFields extends StatelessWidget {
   final TextEditingController headerController;
   final TextEditingController footerController;
   final bool autoPrintReceipts;
+
+  /// The auto-print floor. Only shown while auto-print is on — with it off
+  /// there is nothing for a floor to hold back.
+  final TextEditingController autoPrintMinLineCountController;
+  final TextEditingController autoPrintMinTotalController;
   final bool enableOnlineInvoices;
   final bool enabled;
   final ValueChanged<bool> onAutoPrintReceiptsChanged;
@@ -303,6 +310,41 @@ class _ReceiptSettingsFields extends StatelessWidget {
           title: Text(l10n.autoPrintReceiptsLabel),
           onChanged: enabled ? onAutoPrintReceiptsChanged : null,
         ),
+        if (autoPrintReceipts) ...[
+          const SizedBox(height: 4),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              l10n.autoPrintFloorTitle,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: autoPrintMinLineCountController,
+            enabled: enabled,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: InputDecoration(
+              labelText: l10n.autoPrintMinLineCountLabel,
+              prefixIcon: const Icon(Icons.format_list_numbered),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: autoPrintMinTotalController,
+            enabled: enabled,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [DecimalTextInputFormatter()],
+            decoration: InputDecoration(
+              labelText: l10n.autoPrintMinTotalLabel,
+              helperText: l10n.autoPrintFloorHelp,
+              helperMaxLines: 4,
+              prefixIcon: const Icon(Icons.payments_outlined),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: enableOnlineInvoices,

@@ -3071,6 +3071,29 @@
     }
   },
   "autoPrintReceiptsLabel": "طباعة الإيصالات تلقائيًا",
+  "autoPrintFloorTitle": "لا تطبع الفواتير الصغيرة",
+  "autoPrintMinLineCountLabel": "الحد الأدنى لعدد الأصناف",
+  "autoPrintMinTotalLabel": "الحد الأدنى لإجمالي الفاتورة",
+  "autoPrintFloorHelp": "تُطبع الفاتورة تلقائيًا إذا تحقّق أي من الشرطين. اترك الحقلين فارغين لطباعة كل عملية بيع، ويبقى بإمكان الكاشير طباعة أي فاتورة يدويًا.",
+  "autoPrintFloorSummary": "الحد الأدنى للطباعة: {floor}",
+  "@autoPrintFloorSummary": {
+    "description": "Auto-print floor shown in the collapsed receipt settings summary.",
+    "placeholders": {
+      "floor": {
+        "type": "String"
+      }
+    }
+  },
+  "autoPrintFloorLinesValue": "{count} صنف",
+  "@autoPrintFloorLinesValue": {
+    "description": "Line-count half of the auto-print floor summary.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "autoPrintFloorEitherJoiner": "أو",
   "enableOnlineInvoicesLabel": "إظهار رابط وQR للفاتورة عبر الإنترنت",
   "enableOnlineInvoicesSubtitle": "بعد الدفع يظهر رابط الفاتورة الحقيقي عبر الريلاي ليتمكن العميل من حفظها كملف PDF.",
   "allowOversellingLabel": "السماح بالبيع فوق المخزون",
