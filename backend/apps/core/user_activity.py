@@ -55,9 +55,11 @@ def build_user_activity(user):
         technical_events_q()
     )
 
+    credit_orders = sales_orders.filter(sale_type=Order.SaleType.CREDIT)
+
     return {
         "summary": {
-            "sales": _sales_summary(sales_orders, sales_adjustments),
+            "sales": _sales_summary(sales_orders, sales_adjustments, credit_orders),
             "register_sessions": _register_session_summary(register_sessions),
             "cash_movements": _cash_movement_summary(cash_movements),
             "purchasing": _purchasing_summary(
@@ -68,12 +70,25 @@ def build_user_activity(user):
             "supplier_payments": _supplier_payment_summary(supplier_payments),
             "activity": _activity_summary(activity_events),
         },
+        # Two lists, not one with the debt mixed in: a credit (آجل) invoice is
+        # money still owed, and reading a cashier's history for outstanding
+        # tabs meant picking them out of a run of settled cash sales by eye.
+        # They are disjoint on purpose — an invoice appears under exactly one.
         "recent_sales": [
             _sale_order_data(order)
-            for order in sales_orders.select_related(
+            for order in sales_orders.exclude(sale_type=Order.SaleType.CREDIT)
+            .select_related("customer", "register_session")
+            .prefetch_related("payments")
+            .order_by("-created_at")[:RECENT_LIMIT]
+        ],
+        "recent_credit_sales": [
+            _sale_order_data(order)
+            for order in credit_orders.select_related(
                 "customer",
                 "register_session",
-            ).order_by("-created_at")[:RECENT_LIMIT]
+            )
+            .prefetch_related("payments")
+            .order_by("-created_at")[:RECENT_LIMIT]
         ],
         "recent_purchase_orders": [
             _purchase_order_data(order)
@@ -97,7 +112,7 @@ def build_user_activity(user):
     }
 
 
-def _sales_summary(orders, adjustments):
+def _sales_summary(orders, adjustments, credit_orders):
     order_totals = orders.aggregate(
         invoice_count=Count("id"),
         paid_invoice_count=Count("id", filter=Q(status=Order.Status.PAID)),
@@ -125,10 +140,25 @@ def _sales_summary(orders, adjustments):
         adjustment_totals["return_total"]
     )
 
+    # The debt this person issued, and how much of it is still owed. The
+    # outstanding figure sums ``Order.balance_due`` — the one definition of what
+    # an invoice still carries — over the OPEN credit only, which is a small set
+    # by nature: a settled tab is not a receivable.
+    credit_count = credit_orders.count()
+    outstanding = sum(
+        (
+            order.balance_due
+            for order in credit_orders.open_credit().prefetch_related("payments")
+        ),
+        Decimal("0.00"),
+    )
+
     return {
         "invoice_count": order_totals["invoice_count"] or 0,
         "paid_invoice_count": order_totals["paid_invoice_count"] or 0,
         "void_invoice_count": order_totals["void_invoice_count"] or 0,
+        "credit_invoice_count": credit_count,
+        "credit_outstanding_total": _money(outstanding),
         "customer_count": order_totals["customer_count"] or 0,
         "net_sales": _money(net_sales),
         "void_total": _money(order_totals["void_total"]),
@@ -286,6 +316,14 @@ def _sale_order_data(order):
         "id": order.pk,
         "receipt_number": order.receipt_number,
         "status": order.status,
+        "sale_type": order.sale_type,
+        # Only meaningful on a credit row, but cheap on every row (``payments``
+        # is prefetched) and it keeps one shape for both lists.
+        "amount_paid": _money(order.amount_paid),
+        "balance_due": _money(order.balance_due),
+        "payment_status": order.payment_status,
+        "due_date": order.due_date.isoformat() if order.due_date else None,
+        "is_overdue": order.is_overdue,
         "customer_name": order.customer.full_name if order.customer_id else "",
         "register_session": order.register_session_id,
         "register_session_number": (

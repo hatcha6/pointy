@@ -82,6 +82,16 @@ class _Router extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repo = _FakeUserRepository(_screen() == 'empty' ? [] : _seedUsers());
+    if (_screen() == 'details') {
+      return UserDetailsScreen(
+        viewModel: UserDetailsViewModel(
+          repo,
+          initialUser: PosUser.fromJson(_seedUsers()[2]),
+        ),
+        capabilities: _capabilities,
+        onManagePermissions: (_) async => false,
+      );
+    }
     if (_screen() == 'permissions') {
       return UserPermissionsScreen(
         viewModel: UserPermissionsViewModel(
@@ -271,13 +281,90 @@ class _FakeUserRepository extends UserRepository {
   @override
   Future<Result<UserActivityOverview>> loadUserActivity(int id) async {
     final map = _users.firstWhere((u) => (u['id'] as num).toInt() == id);
-    return Ok(UserActivityOverview.fromJson({'user': map}));
+    return Ok(
+      UserActivityOverview.fromJson({
+        'user': map,
+        'summary': {
+          'sales': {
+            'invoice_count': 128,
+            'paid_invoice_count': 119,
+            'credit_invoice_count': 9,
+            'credit_outstanding_total': '820.00',
+            'net_sales': '14350.00',
+          },
+        },
+        'recent_sales': [
+          _previewSale(id: 901, number: '1042', total: '47.00'),
+          _previewSale(id: 902, number: '1041', total: '128.50'),
+        ],
+        // The point of the split: debt reads apart from settled cash sales.
+        'recent_credit_sales': [
+          _previewSale(
+            id: 801,
+            number: '1039',
+            total: '400.00',
+            saleType: 'credit',
+            amountPaid: '150.00',
+            balanceDue: '250.00',
+            paymentStatus: 'partial',
+            isOverdue: true,
+          ),
+          _previewSale(
+            id: 802,
+            number: '1035',
+            total: '320.00',
+            saleType: 'credit',
+            balanceDue: '320.00',
+            paymentStatus: 'unpaid',
+            dueDate: '2026-10-01',
+          ),
+          _previewSale(
+            id: 803,
+            number: '1028',
+            total: '250.00',
+            saleType: 'credit',
+            balanceDue: '250.00',
+            paymentStatus: 'unpaid',
+          ),
+        ],
+      }),
+    );
   }
 
   @override
   Future<Result<PermissionCatalog>> loadPermissionCatalog() async {
     return Ok(PermissionCatalog.fromJson(_catalogJson));
   }
+}
+
+Map<String, Object?> _previewSale({
+  required int id,
+  required String number,
+  required String total,
+  String saleType = 'standard',
+  String amountPaid = '0.00',
+  String balanceDue = '0.00',
+  String paymentStatus = 'paid',
+  String? dueDate,
+  bool isOverdue = false,
+}) {
+  return {
+    'id': id,
+    'receipt_number': number,
+    'status': saleType == 'credit' ? 'open' : 'paid',
+    'sale_type': saleType,
+    'customer_name': 'سارة أحمد',
+    'register_session_number': 'RS-7',
+    'subtotal': total,
+    'discount_total': '0.00',
+    'total': total,
+    'amount_paid': amountPaid,
+    'balance_due': balanceDue,
+    'payment_status': paymentStatus,
+    'due_date': dueDate,
+    'is_overdue': isOverdue,
+    'created_at': '2026-09-15T09:00:00Z',
+  };
 }
 
 // ---------------------------------------------------------------------------

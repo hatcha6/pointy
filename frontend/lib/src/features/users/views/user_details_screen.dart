@@ -127,6 +127,11 @@ class _UserDetailsBody extends StatelessWidget {
                 SizedBox(height: spacing.md),
                 _RecentSalesSection(sales: overview.recentSales),
                 SizedBox(height: spacing.md),
+                _CreditSalesSection(
+                  sales: overview.recentCreditSales,
+                  summary: overview.sales,
+                ),
+                SizedBox(height: spacing.md),
                 _RecentPurchasesSection(
                   purchaseOrders: overview.recentPurchaseOrders,
                 ),
@@ -392,6 +397,75 @@ class _RecentSalesSection extends StatelessWidget {
                 if (sale.createdAt != null) formatDateTime(sale.createdAt!),
               ]),
               trailing: formatMoney(sale.total),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The آجل invoices this person issued, apart from their cash sales.
+///
+/// A debt is not a settled sale, and picking آجل rows out of a run of cash
+/// invoices by eye was the only way to answer "what has this cashier left on
+/// tab?". Each row leads with what is still owed rather than the invoice total,
+/// because that is the number being looked for; the section carries the full
+/// count and outstanding total, since the list itself is capped like every
+/// other on this screen and must not read as the whole story.
+class _CreditSalesSection extends StatelessWidget {
+  const _CreditSalesSection({required this.sales, required this.summary});
+
+  final List<UserRecentSale> sales;
+  final UserSalesActivitySummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final colors = context.pointyColors;
+
+    return PointyDetailSection(
+      title: l10n.userDetailsCreditSalesTitle,
+      icon: Icons.schedule_send_outlined,
+      child: _EmptyAwareColumn(
+        isEmpty: sales.isEmpty,
+        emptyText: l10n.userActivityEmptyCreditSales,
+        children: [
+          if (summary.creditInvoiceCount > 0) ...[
+            Text(
+              l10n.userCreditOutstandingSummary(
+                summary.creditInvoiceCount,
+                formatMoney(summary.creditOutstandingTotal),
+              ),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: summary.creditOutstandingTotal > 0
+                    ? colors.warning
+                    : colors.mutedInk,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          for (final sale in sales)
+            _ActivityTile(
+              icon: sale.isOverdue
+                  ? Icons.warning_amber_rounded
+                  : Icons.schedule_outlined,
+              title: sale.receiptNumber.isEmpty
+                  ? l10n.userActivityReceiptFallback(sale.id)
+                  : sale.receiptNumber,
+              subtitle: _joinParts([
+                sale.customerName.isEmpty
+                    ? l10n.customerEmptyValue
+                    : sale.customerName,
+                if (sale.isOverdue)
+                  l10n.invoiceOverdueShortBadge
+                else if (sale.dueDate != null)
+                  l10n.invoiceDueOnLabel(formatDate(sale.dueDate!)),
+                if (sale.createdAt != null) formatDateTime(sale.createdAt!),
+              ]),
+              trailing: sale.balanceDue > 0
+                  ? l10n.userCreditRemainingValue(formatMoney(sale.balanceDue))
+                  : formatMoney(sale.total),
             ),
         ],
       ),

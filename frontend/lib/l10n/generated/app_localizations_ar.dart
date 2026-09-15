@@ -2812,6 +2812,22 @@ class AppLocalizationsAr extends AppLocalizations {
   String get userDetailsRecentSalesTitle => 'آخر فواتير العملاء';
 
   @override
+  String get userDetailsCreditSalesTitle => 'الفواتير الآجلة';
+
+  @override
+  String get invoiceOverdueShortBadge => 'متأخرة';
+
+  @override
+  String userCreditOutstandingSummary(int count, String amount) {
+    return '$count فاتورة آجلة • المتبقّي $amount';
+  }
+
+  @override
+  String userCreditRemainingValue(String amount) {
+    return 'المتبقّي $amount';
+  }
+
+  @override
   String get userDetailsRecentPurchasesTitle => 'آخر فواتير الموردين';
 
   @override
@@ -2871,6 +2887,10 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get userActivityEmptyRecentSales =>
       'لا توجد فواتير عملاء لهذا المستخدم.';
+
+  @override
+  String get userActivityEmptyCreditSales =>
+      'لا توجد فواتير آجلة لهذا المستخدم.';
 
   @override
   String get userActivityEmptyRecentPurchases =>

@@ -4935,6 +4935,30 @@ abstract class AppLocalizations {
   /// **'آخر فواتير العملاء'**
   String get userDetailsRecentSalesTitle;
 
+  /// No description provided for @userDetailsCreditSalesTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير الآجلة'**
+  String get userDetailsCreditSalesTitle;
+
+  /// No description provided for @invoiceOverdueShortBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'متأخرة'**
+  String get invoiceOverdueShortBadge;
+
+  /// How many credit invoices a user issued and how much of it is still owed.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} فاتورة آجلة • المتبقّي {amount}'**
+  String userCreditOutstandingSummary(int count, String amount);
+
+  /// Remaining balance on one credit invoice row.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقّي {amount}'**
+  String userCreditRemainingValue(String amount);
+
   /// No description provided for @userDetailsRecentPurchasesTitle.
   ///
   /// In ar, this message translates to:
@@ -5030,6 +5054,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا توجد فواتير عملاء لهذا المستخدم.'**
   String get userActivityEmptyRecentSales;
+
+  /// No description provided for @userActivityEmptyCreditSales.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد فواتير آجلة لهذا المستخدم.'**
+  String get userActivityEmptyCreditSales;
 
   /// No description provided for @userActivityEmptyRecentPurchases.
   ///

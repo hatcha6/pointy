@@ -1715,6 +1715,29 @@
   "userActivityLoadError": "تعذر تحميل نشاط المستخدم.",
   "userDetailsOverviewTitle": "ملخص المستخدم",
   "userDetailsRecentSalesTitle": "آخر فواتير العملاء",
+  "userDetailsCreditSalesTitle": "الفواتير الآجلة",
+  "invoiceOverdueShortBadge": "متأخرة",
+  "userCreditOutstandingSummary": "{count} فاتورة آجلة • المتبقّي {amount}",
+  "@userCreditOutstandingSummary": {
+    "description": "How many credit invoices a user issued and how much of it is still owed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "userCreditRemainingValue": "المتبقّي {amount}",
+  "@userCreditRemainingValue": {
+    "description": "Remaining balance on one credit invoice row.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "userDetailsRecentPurchasesTitle": "آخر فواتير الموردين",
   "userDetailsRecentSessionsTitle": "آخر جلسات الدرج",
   "userDetailsRecentActivityTitle": "آخر النشاطات",
@@ -1797,6 +1820,7 @@
     }
   },
   "userActivityEmptyRecentSales": "لا توجد فواتير عملاء لهذا المستخدم.",
+  "userActivityEmptyCreditSales": "لا توجد فواتير آجلة لهذا المستخدم.",
   "userActivityEmptyRecentPurchases": "لا توجد فواتير موردين لهذا المستخدم.",
   "userActivityEmptyRecentSessions": "لا توجد جلسات درج لهذا المستخدم.",
   "userActivityEmptyRecentActivity": "لا يوجد نشاط مسجل لهذا المستخدم.",

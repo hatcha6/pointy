@@ -10,6 +10,7 @@ class UserActivityOverview {
     required this.supplierPayments,
     required this.activity,
     required this.recentSales,
+    required this.recentCreditSales,
     required this.recentPurchaseOrders,
     required this.recentRegisterSessions,
     required this.recentActivity,
@@ -22,7 +23,15 @@ class UserActivityOverview {
   final UserPurchasingActivitySummary purchasing;
   final UserSupplierPaymentActivitySummary supplierPayments;
   final UserAuditActivitySummary activity;
+
+  /// Everything but the credit invoices — those are [recentCreditSales]. The
+  /// two are disjoint server-side, so a debt is never counted on this screen
+  /// twice.
   final List<UserRecentSale> recentSales;
+
+  /// The آجل invoices this person issued, newest first. Read apart from the
+  /// cash sales because a debt is money still owed, not a settled sale.
+  final List<UserRecentSale> recentCreditSales;
   final List<UserRecentPurchaseOrder> recentPurchaseOrders;
   final List<UserRecentRegisterSession> recentRegisterSessions;
   final List<UserActivityEvent> recentActivity;
@@ -52,6 +61,10 @@ class UserActivityOverview {
           .whereType<Map<String, Object?>>()
           .map(UserRecentSale.fromJson)
           .toList(growable: false),
+      recentCreditSales: _listFromJson(json['recent_credit_sales'])
+          .whereType<Map<String, Object?>>()
+          .map(UserRecentSale.fromJson)
+          .toList(growable: false),
       recentPurchaseOrders: _listFromJson(json['recent_purchase_orders'])
           .whereType<Map<String, Object?>>()
           .map(UserRecentPurchaseOrder.fromJson)
@@ -73,6 +86,8 @@ class UserSalesActivitySummary {
     required this.invoiceCount,
     required this.paidInvoiceCount,
     required this.voidInvoiceCount,
+    required this.creditInvoiceCount,
+    required this.creditOutstandingTotal,
     required this.customerCount,
     required this.returnCount,
     required this.netSales,
@@ -84,6 +99,12 @@ class UserSalesActivitySummary {
   final int invoiceCount;
   final int paidInvoiceCount;
   final int voidInvoiceCount;
+
+  /// How many آجل invoices this person issued in total, and how much of that
+  /// is still owed. The credit list on screen shows only the newest few, so
+  /// these are what keep it from reading as the whole story.
+  final int creditInvoiceCount;
+  final double creditOutstandingTotal;
   final int customerCount;
   final int returnCount;
   final double netSales;
@@ -96,6 +117,8 @@ class UserSalesActivitySummary {
       invoiceCount: _intFromJson(json['invoice_count']),
       paidInvoiceCount: _intFromJson(json['paid_invoice_count']),
       voidInvoiceCount: _intFromJson(json['void_invoice_count']),
+      creditInvoiceCount: _intFromJson(json['credit_invoice_count']),
+      creditOutstandingTotal: _moneyFromJson(json['credit_outstanding_total']),
       customerCount: _intFromJson(json['customer_count']),
       returnCount: _intFromJson(json['return_count']),
       netSales: _moneyFromJson(json['net_sales']),
@@ -251,6 +274,12 @@ class UserRecentSale {
     required this.total,
     this.customerName = '',
     this.registerSessionNumber = '',
+    this.saleType = '',
+    this.amountPaid = 0,
+    this.balanceDue = 0,
+    this.paymentStatus = '',
+    this.dueDate,
+    this.isOverdue = false,
     this.createdAt,
   });
 
@@ -260,6 +289,18 @@ class UserRecentSale {
   final String customerName;
   final String registerSessionNumber;
   final double total;
+
+  /// `standard` | `credit` | `quotation`.
+  final String saleType;
+
+  /// What is still owed on this invoice, and how it stands. Carried on every
+  /// row but only meaningful on a credit (آجل) one — a cash sale is settled at
+  /// the counter.
+  final double amountPaid;
+  final double balanceDue;
+  final String paymentStatus;
+  final DateTime? dueDate;
+  final bool isOverdue;
   final DateTime? createdAt;
 
   factory UserRecentSale.fromJson(Map<String, Object?> json) {
@@ -270,6 +311,12 @@ class UserRecentSale {
       customerName: json['customer_name']?.toString() ?? '',
       registerSessionNumber: json['register_session_number']?.toString() ?? '',
       total: _moneyFromJson(json['total']),
+      saleType: json['sale_type']?.toString() ?? '',
+      amountPaid: _moneyFromJson(json['amount_paid']),
+      balanceDue: _moneyFromJson(json['balance_due']),
+      paymentStatus: json['payment_status']?.toString() ?? '',
+      dueDate: _dateTimeFromJson(json['due_date']),
+      isOverdue: json['is_overdue'] == true,
       createdAt: _dateTimeFromJson(json['created_at']),
     );
   }
