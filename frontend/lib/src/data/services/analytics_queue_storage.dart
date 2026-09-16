@@ -10,6 +10,16 @@ import '../models/analytics_event.dart';
 /// delivered, drop the oldest when full. It used to be `saveEvents(wholeList)`,
 /// which meant every one of those operations rewrote every pending event —
 /// see [SqliteAnalyticsQueue] for what that cost.
+/// What the queue can say about itself, cheaply.
+class AnalyticsQueueHealth {
+  const AnalyticsQueueHealth({this.depth = 0, this.oldestEventAt});
+
+  final int depth;
+
+  /// When the oldest queued event happened, or null when nothing is queued.
+  final DateTime? oldestEventAt;
+}
+
 abstract class AnalyticsQueueStorage {
   /// Everything still pending, oldest first.
   /// The most recent [limit] queued events, oldest first. A null [limit] reads
@@ -23,8 +33,18 @@ abstract class AnalyticsQueueStorage {
   /// Drops the events a flush delivered.
   Future<void> removeEvents(Iterable<String> clientEventIds);
 
-  /// Keeps only the [maxEvents] most recent, dropping the oldest.
-  Future<void> trimToMostRecent(int maxEvents);
+  /// Keeps only the [maxEvents] most recent, dropping the oldest. Returns how
+  /// many it discarded — a device shedding history is the thing an export
+  /// cannot otherwise see.
+  Future<int> trimToMostRecent(int maxEvents);
+
+  /// How deep the backlog is, and how old its tail is.
+  ///
+  /// The pair that answers "is this device delivering today's telemetry or last
+  /// month's". One field export read a till as sending no frontend events at
+  /// all; it was in fact delivering steadily, three weeks behind, and an
+  /// `occurred_at` window excluded every row it sent.
+  Future<AnalyticsQueueHealth> readHealth();
 
   /// Drops everything pending.
   Future<void> clearEvents();
@@ -73,9 +93,25 @@ class LocalAnalyticsQueueStorage implements AnalyticsQueueStorage {
   }
 
   @override
-  Future<void> trimToMostRecent(int maxEvents) async {
+  Future<int> trimToMostRecent(int maxEvents) async {
     final queue = await AppAnalyticsQueue.instance();
-    await queue.trimToMostRecent(maxEvents);
+    return queue.trimToMostRecent(maxEvents);
+  }
+
+  @override
+  Future<AnalyticsQueueHealth> readHealth() async {
+    final queue = await AppAnalyticsQueue.instance();
+    final depth = await queue.count();
+    if (depth == 0) {
+      return const AnalyticsQueueHealth();
+    }
+    final oldest = await queue.oldestPayload();
+    return AnalyticsQueueHealth(
+      depth: depth,
+      oldestEventAt: oldest == null
+          ? null
+          : decodeAnalyticsEvent(oldest)?.occurredAt,
+    );
   }
 
   @override
@@ -150,12 +186,25 @@ class KeyValueAnalyticsQueueStorage implements AnalyticsQueueStorage {
   }
 
   @override
-  Future<void> trimToMostRecent(int maxEvents) async {
+  Future<int> trimToMostRecent(int maxEvents) async {
     final current = await loadEvents();
     if (current.length <= maxEvents) {
-      return;
+      return 0;
     }
     await _save(current.sublist(current.length - maxEvents));
+    return current.length - maxEvents;
+  }
+
+  @override
+  Future<AnalyticsQueueHealth> readHealth() async {
+    final current = await loadEvents();
+    if (current.isEmpty) {
+      return const AnalyticsQueueHealth();
+    }
+    return AnalyticsQueueHealth(
+      depth: current.length,
+      oldestEventAt: current.first.occurredAt,
+    );
   }
 
   @override
@@ -228,11 +277,24 @@ class MemoryAnalyticsQueueStorage implements AnalyticsQueueStorage {
   }
 
   @override
-  Future<void> trimToMostRecent(int maxEvents) async {
+  Future<int> trimToMostRecent(int maxEvents) async {
     if (_events.length <= maxEvents) {
-      return;
+      return 0;
     }
-    _events.removeRange(0, _events.length - maxEvents);
+    final dropped = _events.length - maxEvents;
+    _events.removeRange(0, dropped);
+    return dropped;
+  }
+
+  @override
+  Future<AnalyticsQueueHealth> readHealth() async {
+    if (_events.isEmpty) {
+      return const AnalyticsQueueHealth();
+    }
+    return AnalyticsQueueHealth(
+      depth: _events.length,
+      oldestEventAt: _events.first.occurredAt,
+    );
   }
 
   @override

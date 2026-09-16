@@ -18,6 +18,7 @@ class AnalyticsEngine {
     this.maxBatchSize = 50,
     this.maxQueueSize = 2000,
     this.maxRequestsPerWindow = 6,
+    this.queueHealthInterval = const Duration(hours: 1),
     this.frameTimingWindow = const Duration(seconds: 10),
     this.queuePersistInterval = const Duration(seconds: 2),
     this.errorRepeatWindow = const Duration(minutes: 1),
@@ -45,6 +46,22 @@ class AnalyticsEngine {
   /// four minutes. Sized so only a backlog ever meets it.
   final int maxRequestsPerWindow;
 
+  /// How often the queue reports on itself.
+  ///
+  /// Telemetry about telemetry is dangerous here — a client's rejection loop
+  /// once made the failure to store telemetry 50% of the stored telemetry — so
+  /// this is one small event an hour and cannot be provoked into more. It earns
+  /// that by being the only way to see the failure it describes: a till that
+  /// cannot deliver looks, from an export, exactly like a till with nothing to
+  /// say. One shop's busiest register was read as sending no frontend telemetry
+  /// at all for a week; it was delivering steadily, three weeks behind, and
+  /// every row it sent fell outside the export's window.
+  ///
+  /// It rides the front of the queue rather than the back, because delivery is
+  /// newest-first: a backlogged device ships its own diagnosis before it ships
+  /// its history.
+  final Duration queueHealthInterval;
+
   /// Frame timing is the highest-volume telemetry stream. Instead of one event
   /// per engine callback (which floods ingestion on a busy till), raw frame
   /// counts accumulate and emit as a single sample per window. Aggregating —
@@ -69,6 +86,12 @@ class AnalyticsEngine {
   DateTime? _requestWindowStartedAt;
   int _requestsInWindow = 0;
   int _consecutiveFlushFailures = 0;
+
+  // -- what the queue reports about itself, since the last health event -------
+  DateTime? _lastQueueHealthAt;
+  int _droppedSinceHealth = 0;
+  int _uploadFailuresSinceHealth = 0;
+  int _deliveredSinceHealth = 0;
   DateTime? _retryFlushAfter;
   bool _isCollecting = true;
   Timer? _flushTimer;
@@ -154,6 +177,10 @@ class AnalyticsEngine {
     _flushTimer = Timer.periodic(flushInterval, (_) {
       unawaited(_flushIfDue());
     });
+    // Before `app.started`, so the very first thing a recovering device has to
+    // say is how far behind it is. It covers the whole time the app was shut,
+    // which no periodic tick can.
+    await _recordQueueHealthIfDue(force: true, onlyWhenBacklogged: true);
     await trackUsage(AnalyticsEventName.appStarted, flushImmediately: true);
   }
 
@@ -539,10 +566,76 @@ class AnalyticsEngine {
   /// explicit caller (the post-login backlog, teardown) has new information and
   /// should not wait behind a failure that predates it.
   Future<void> _flushIfDue() async {
+    // Before the backoff gate, deliberately. A device that cannot upload is
+    // exactly the device whose queue is worth describing, and putting this
+    // after the early return would silence it in the only case that matters.
+    await _recordQueueHealthIfDue();
     if (_isFlushBackedOff()) {
       return;
     }
     await flush();
+  }
+
+  /// One row an hour saying how far behind this device is.
+  ///
+  /// Recorded, not sent: it joins the queue like anything else and ships on the
+  /// next successful flush. That is the point — it survives the trim (which
+  /// keeps the newest) and leads the batch (which sends newest first), so the
+  /// first thing a recovering device delivers is the account of why it was
+  /// quiet.
+  Future<void> _recordQueueHealthIfDue({
+    bool force = false,
+    bool onlyWhenBacklogged = false,
+  }) async {
+    if (!_isCollecting) {
+      return;
+    }
+    final now = _clock();
+    final last = _lastQueueHealthAt;
+    if (!force && last != null && now.difference(last) < queueHealthInterval) {
+      return;
+    }
+    if (onlyWhenBacklogged && (await _storage.readHealth()).depth == 0) {
+      // Nothing to report, and an empty queue at startup is the ordinary case.
+      // The hourly tick gives the positive heartbeat within the hour anyway;
+      // the reason to speak at startup is a backlog built up while the app was
+      // shut, which no tick can have been running to see.
+      return;
+    }
+    _lastQueueHealthAt = now;
+    // Snapshot rather than zero afterwards: the startup trim runs unawaited and
+    // a flush can land mid-await, so assigning 0 at the end would silently
+    // discard whatever was counted while this row was being written.
+    final dropped = _droppedSinceHealth;
+    final failures = _uploadFailuresSinceHealth;
+    final delivered = _deliveredSinceHealth;
+    try {
+      final health = await _storage.readHealth();
+      final oldestAt = health.oldestEventAt;
+      await trackPerformance(
+        name: analyticsEventNameToJson(AnalyticsEventName.telemetryQueueHealth),
+        duration: Duration.zero,
+        metrics: {
+          'queue_depth': health.depth,
+          // The number the whole event exists for. Three weeks here is a till
+          // whose telemetry is real and whose dates are a lie about when.
+          'oldest_event_age_s': oldestAt == null
+              ? 0
+              : now.difference(oldestAt).inSeconds,
+          'dropped_since_last': dropped,
+          'upload_failures_since_last': failures,
+          'delivered_since_last': delivered,
+        },
+      );
+    } on Exception {
+      // Telemetry about telemetry must never be the reason a till stops
+      // recording sales. A failed read is simply a missed hour.
+      return;
+    } finally {
+      _droppedSinceHealth -= dropped;
+      _uploadFailuresSinceHealth -= failures;
+      _deliveredSinceHealth -= delivered;
+    }
   }
 
   bool _isFlushBackedOff() {
@@ -678,6 +771,7 @@ class AnalyticsEngine {
       switch (result) {
         case Ok<AnalyticsIngestResult>():
           _recordFlushSuccess();
+          _deliveredSinceHealth += batch.length;
           final submittedIds = batch
               .map((event) => event.clientEventId)
               .toSet();
@@ -690,6 +784,7 @@ class AnalyticsEngine {
           _pendingRemovals.addAll(submittedIds);
           await flushPendingWrites();
         case Error<AnalyticsIngestResult>():
+          _uploadFailuresSinceHealth += 1;
           _recordFlushFailure();
           await flushPendingWrites();
       }
@@ -793,7 +888,7 @@ class AnalyticsEngine {
         await _storage.removeEvents(removals);
       }
       if (trim) {
-        await _storage.trimToMostRecent(maxQueueSize);
+        _droppedSinceHealth += await _storage.trimToMostRecent(maxQueueSize);
       }
     } catch (error, stackTrace) {
       // Local storage is best-effort: telemetry that cannot be written is
@@ -809,7 +904,7 @@ class AnalyticsEngine {
   /// fail startup.
   Future<void> _trimStoredEvents() async {
     try {
-      await _storage.trimToMostRecent(maxQueueSize);
+      _droppedSinceHealth += await _storage.trimToMostRecent(maxQueueSize);
     } catch (error) {
       debugPrint('Analytics queue trim failed: $error');
     }

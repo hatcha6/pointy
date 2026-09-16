@@ -12,6 +12,7 @@ void main() {
   _registerPacingTests();
   _registerBacklogDrainTests();
   _registerPortedGuardTests();
+  _registerQueueHealthTests();
   test(
     'analytics engine persists failed events and flushes them later',
     () async {
@@ -475,7 +476,7 @@ class _CountingQueueStorage extends MemoryAnalyticsQueueStorage {
   }
 
   @override
-  Future<void> trimToMostRecent(int maxEvents) {
+  Future<int> trimToMostRecent(int maxEvents) {
     writes += 1;
     return super.trimToMostRecent(maxEvents);
   }
@@ -520,7 +521,8 @@ void _registerBacklogDrainTests() {
       );
     });
 
-    test('a restore reads only as deep as the queue is allowed to be', () async {
+    test('a restore reads only as deep as the queue is allowed to be',
+        () async {
       final storage = MemoryAnalyticsQueueStorage(installationId: 'install-1');
       // Twelve on disk against a cap of four: the restore must take the newest
       // four and the table must be cut to match, rather than carrying eight
@@ -709,5 +711,98 @@ void _registerPacingTests() {
       reason: 'pacing must not mean the backlog never ships',
     );
     engine.dispose();
+  });
+}
+
+void _registerQueueHealthTests() {
+  group('a queue that cannot deliver says so', () {
+    /// A draft dated [age] ago, to stand in for the tail of a real backlog.
+    AnalyticsEventDraft stale(Duration age) {
+      return AnalyticsEventDraft.usage(
+        AnalyticsEventName.posCheckoutCompleted,
+        occurredAt: DateTime.utc(2026, 9, 16).subtract(age),
+      );
+    }
+
+    AnalyticsEngine engineOver(
+      MemoryAnalyticsQueueStorage storage,
+      _FakeAnalyticsSink sink,
+    ) {
+      return AnalyticsEngine(
+        sink,
+        storage: storage,
+        flushInterval: const Duration(hours: 1),
+        queueHealthInterval: const Duration(hours: 1),
+        clock: () => DateTime.utc(2026, 9, 16),
+      );
+    }
+
+    AnalyticsEventDraft? healthRowIn(List<AnalyticsEventDraft> events) {
+      for (final event in events) {
+        if (event.name == 'telemetry.queue.health') {
+          return event;
+        }
+      }
+      return null;
+    }
+
+    test('a backlog dates itself at startup', () async {
+      // The blind spot this closes, and it is a Windows-till blind spot: the
+      // register it was measured on is one of these. It read as sending no
+      // frontend telemetry for a week; it was delivering steadily, three weeks
+      // behind, and every row it sent fell outside the export's window.
+      final storage = MemoryAnalyticsQueueStorage(
+        installationId: 'install-1',
+        events: [
+          stale(const Duration(days: 21)),
+          stale(const Duration(days: 1))
+        ],
+      );
+      final engine = engineOver(storage, _FakeAnalyticsSink(shouldFail: true));
+
+      await engine.start();
+      await engine.flushPendingWrites();
+      final health = healthRowIn(await storage.loadEvents());
+
+      expect(health, isNotNull);
+      expect(health!.metrics['queue_depth'], 2);
+      expect(
+        health.metrics['oldest_event_age_s'],
+        const Duration(days: 21).inSeconds,
+        reason: 'three weeks behind is the whole signal',
+      );
+    });
+
+    test('a healthy queue says nothing at startup', () async {
+      // Telemetry about telemetry has taken this product down before, so the
+      // ordinary case has to cost nothing.
+      final storage = MemoryAnalyticsQueueStorage(installationId: 'install-1');
+      final engine = engineOver(storage, _FakeAnalyticsSink());
+
+      await engine.start();
+      await engine.trackUsage(AnalyticsEventName.posCheckoutCompleted);
+      await engine.flushPendingWrites();
+
+      expect(healthRowIn(await storage.loadEvents()), isNull);
+    });
+
+    test('it is recorded even while the device cannot upload', () async {
+      // Recorded ahead of the backoff gate, because a device that cannot upload
+      // is exactly the device worth describing.
+      final storage = MemoryAnalyticsQueueStorage(
+        installationId: 'install-1',
+        events: [stale(const Duration(days: 9))],
+      );
+      final sink = _FakeAnalyticsSink(shouldFail: true);
+      final engine = engineOver(storage, sink);
+      engine.setCurrentUser(1);
+
+      await engine.start();
+      await engine.flush();
+      await engine.flushPendingWrites();
+
+      expect(sink.acceptedEvents, isEmpty, reason: 'nothing got through');
+      expect(healthRowIn(await storage.loadEvents()), isNotNull);
+    });
   });
 }

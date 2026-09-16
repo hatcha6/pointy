@@ -123,11 +123,16 @@ class SqliteAnalyticsQueue {
 
   /// Keeps only the [maxEvents] newest rows, dropping the oldest first — the
   /// same "a full queue sheds history, not news" rule the in-memory queue uses.
-  Future<void> trimToMostRecent(int maxEvents) async {
+  ///
+  /// Returns how many rows it discarded, because a device quietly shedding
+  /// history is the difference between "this till is idle" and "this till has
+  /// been unable to deliver for three weeks", and the two looked identical from
+  /// an export.
+  Future<int> trimToMostRecent(int maxEvents) async {
     if (maxEvents < 0) {
-      return;
+      return 0;
     }
-    await _database.guard(
+    return _database.guard(
       () => _database.db.rawDelete(
         'DELETE FROM $table WHERE $_columnSeq NOT IN '
         '(SELECT $_columnSeq FROM $table ORDER BY $_columnSeq DESC LIMIT ?)',
@@ -136,11 +141,32 @@ class SqliteAnalyticsQueue {
     );
   }
 
+  /// The oldest payload still queued, or null when the queue is empty.
+  ///
+  /// One row, by index on the primary key. It is read to date the tail of the
+  /// backlog — the single number that says whether a device is delivering this
+  /// week's telemetry or last month's.
+  Future<String?> oldestPayload() async {
+    final rows = await _database.guard(
+      () => _database.db.query(
+        table,
+        columns: <String>[_columnPayload],
+        orderBy: '$_columnSeq ASC',
+        limit: 1,
+      ),
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    return rows.first[_columnPayload] as String?;
+  }
+
   Future<void> clear() async {
     await _database.guard(() => _database.db.delete(table));
   }
 
-  @visibleForTesting
+  /// How many events are waiting. Cheap, indexed, and the other half of the
+  /// backlog question.
   Future<int> count() async {
     final rows = await _database.guard(
       () => _database.db.rawQuery('SELECT COUNT(*) AS n FROM $table'),
