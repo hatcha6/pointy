@@ -13,14 +13,38 @@ class AnalyticsInteractionTracker extends StatefulWidget {
     super.key,
     required this.analyticsEngine,
     required this.child,
-    this.scrollUpdateSampleInterval = const Duration(milliseconds: 250),
     this.keystrokeIdleTimeout = const Duration(milliseconds: 400),
+    this.inputIdleTimeout = const Duration(seconds: 4),
+    this.inputMaxRunDuration = const Duration(seconds: 60),
+    this.scrollIdleTimeout = const Duration(milliseconds: 1200),
+    this.scrollMaxRunDuration = const Duration(seconds: 30),
     this.clock,
+    this.scheduler,
   });
 
   final AnalyticsEngine analyticsEngine;
   final Widget child;
-  final Duration scrollUpdateSampleInterval;
+
+  /// How long raw input on one screen may pause before the run counts as over.
+  ///
+  /// Pointer downs and ups, wheel ticks and focus moves were 46,793 rows in one
+  /// field week — 28% of everything the clients sent — and individually none of
+  /// them says anything: a `pointer_down` at (154, 130) on `register_sessions`
+  /// is not a finding, it is a co-ordinate. What the run says instead is how
+  /// much the till was touched, where, and whether the same spot was hit over
+  /// and over because nothing happened the first time.
+  final Duration inputIdleTimeout;
+  final Duration inputMaxRunDuration;
+
+  /// How long a scroll may pause before it counts as a separate gesture.
+  ///
+  /// One flick of a product grid used to produce a start, a direction, several
+  /// updates and an end — five rows describing one movement of one thumb,
+  /// 28,143 of them in a week, and the thing anyone actually wants to know
+  /// (how far did they have to scroll to find it, did they hit the end) was
+  /// spread across all five and joinable from none of them.
+  final Duration scrollIdleTimeout;
+  final Duration scrollMaxRunDuration;
 
   /// How long a keyboard run may pause before it counts as finished.
   ///
@@ -31,6 +55,10 @@ class AnalyticsInteractionTracker extends StatefulWidget {
   /// draw it.
   final Duration keystrokeIdleTimeout;
   final DateTime Function()? clock;
+
+  /// Injected together with [clock] so a test drives run boundaries by hand
+  /// instead of racing a real timer.
+  final Timer Function(Duration, void Function())? scheduler;
 
   static AnalyticsEngine? maybeOf(BuildContext context) {
     final scope = context
@@ -120,6 +148,160 @@ class _KeystrokeRun {
   }
 }
 
+/// What a run of raw input on one screen adds up to.
+///
+/// The counters are the point. A tap is worth a row only in aggregate; what a
+/// run can say that a stream of taps cannot is *how many of those taps landed
+/// on the same spot as the one before it* — 21.7% of them did in the field,
+/// with 558 runs of three or more. That is a control that did not respond, and
+/// it was invisible in 28,531 individual rows because nothing joined them.
+class _InputRun {
+  _InputRun({required this.screen});
+
+  /// Stamped at emission because the run may outlive the navigation that
+  /// started it, and the enricher would bill it to wherever the user ended up.
+  final String? screen;
+
+  int presses = 0;
+  int releases = 0;
+  int cancels = 0;
+  int wheelTicks = 0;
+  int focusChanges = 0;
+  int repeatPresses = 0;
+  int maxRepeatRun = 0;
+  int _currentRepeatRun = 0;
+  double wheelDistance = 0;
+  final Set<String> kinds = {};
+  double viewportWidth = 0;
+  double viewportHeight = 0;
+
+  /// Where the presses landed, as a coarse grid over the viewport.
+  ///
+  /// Raw coordinates were never once used in a field analysis and cost two
+  /// numbers on every event; throwing them away entirely would still be
+  /// irreversible, and this keeps the question askable for twelve integers a
+  /// run instead.
+  static const int gridColumns = 4;
+  static const int gridRows = 3;
+  final List<int> grid = List<int>.filled(gridColumns * gridRows, 0);
+
+  double? _lastPressX;
+  double? _lastPressY;
+  DateTime? _lastPressAt;
+
+  /// How near, and how soon, a second press has to be to count as a repeat.
+  static const double repeatRadius = 24;
+  static const Duration repeatWindow = Duration(milliseconds: 1200);
+
+  void absorbPress({
+    required double x,
+    required double y,
+    required DateTime at,
+    required String kind,
+  }) {
+    presses += 1;
+    kinds.add(kind);
+    final lastX = _lastPressX;
+    final lastY = _lastPressY;
+    final lastAt = _lastPressAt;
+    final near =
+        lastX != null &&
+        lastY != null &&
+        lastAt != null &&
+        at.difference(lastAt) <= repeatWindow &&
+        (x - lastX).abs() <= repeatRadius &&
+        (y - lastY).abs() <= repeatRadius;
+    if (near) {
+      repeatPresses += 1;
+      _currentRepeatRun = _currentRepeatRun == 0 ? 2 : _currentRepeatRun + 1;
+    } else {
+      _currentRepeatRun = 1;
+    }
+    if (_currentRepeatRun > maxRepeatRun) {
+      maxRepeatRun = _currentRepeatRun;
+    }
+    _lastPressX = x;
+    _lastPressY = y;
+    _lastPressAt = at;
+    _recordOnGrid(x, y);
+  }
+
+  void absorbViewport(double width, double height) {
+    if (width > 0) {
+      viewportWidth = width;
+    }
+    if (height > 0) {
+      viewportHeight = height;
+    }
+  }
+
+  void _recordOnGrid(double x, double y) {
+    if (viewportWidth <= 0 || viewportHeight <= 0) {
+      return;
+    }
+    final column = ((x / viewportWidth) * gridColumns).floor().clamp(
+      0,
+      gridColumns - 1,
+    );
+    final row = ((y / viewportHeight) * gridRows).floor().clamp(0, gridRows - 1);
+    grid[row * gridColumns + column] += 1;
+  }
+}
+
+/// What one scroll gesture adds up to.
+class _ScrollRun {
+  _ScrollRun({
+    required this.screen,
+    required this.axis,
+    required this.depth,
+    required this.startPixels,
+  }) : endPixels = startPixels;
+
+  final String? screen;
+  final String axis;
+  final int depth;
+  final double startPixels;
+
+  double endPixels;
+  double distance = 0;
+  int updates = 0;
+  int reversals = 0;
+  String? lastDirection;
+  int overscrolls = 0;
+  double maxOverscroll = 0;
+  int wheelTicks = 0;
+  double maxScrollExtent = 0;
+  double viewportDimension = 0;
+  bool ended = false;
+
+  double get netDelta => endPixels - startPixels;
+
+  /// Whether the gesture ran the list out. A cashier who reaches the bottom of
+  /// a catalog did not find what they wanted where they expected it.
+  bool get reachedEnd => maxScrollExtent > 0 && endPixels >= maxScrollExtent;
+
+  void absorbMetrics(ScrollMetrics metrics) {
+    endPixels = metrics.pixels;
+    if (metrics.maxScrollExtent > maxScrollExtent) {
+      maxScrollExtent = metrics.maxScrollExtent;
+    }
+    if (metrics.viewportDimension > viewportDimension) {
+      viewportDimension = metrics.viewportDimension;
+    }
+  }
+
+  void absorbDirection(String direction) {
+    // `idle` is the settling between movements, not a change of mind.
+    if (direction == 'idle') {
+      return;
+    }
+    if (lastDirection != null && lastDirection != direction) {
+      reversals += 1;
+    }
+    lastDirection = direction;
+  }
+}
+
 /// The name of the widget that currently holds focus, or null.
 ///
 /// [context] is an Element, and reading `.widget` off one the framework has
@@ -177,7 +359,8 @@ class _AnalyticsInteractionTrackerState
     with WidgetsBindingObserver {
   late DateTime Function() _clock;
   late final BurstCoalescer<_KeystrokeRun> _keystrokes;
-  DateTime? _lastScrollUpdateAt;
+  late final BurstCoalescer<_InputRun> _input;
+  late final BurstCoalescer<_ScrollRun> _scrolls;
   String? _lastFocusTarget;
 
   @override
@@ -187,7 +370,22 @@ class _AnalyticsInteractionTrackerState
     _keystrokes = BurstCoalescer<_KeystrokeRun>(
       idleTimeout: widget.keystrokeIdleTimeout,
       clock: () => _clock(),
+      scheduler: widget.scheduler,
       onSettled: _emitKeystrokeRun,
+    );
+    _input = BurstCoalescer<_InputRun>(
+      idleTimeout: widget.inputIdleTimeout,
+      maxRunDuration: widget.inputMaxRunDuration,
+      clock: () => _clock(),
+      scheduler: widget.scheduler,
+      onSettled: _emitInputRun,
+    );
+    _scrolls = BurstCoalescer<_ScrollRun>(
+      idleTimeout: widget.scrollIdleTimeout,
+      maxRunDuration: widget.scrollMaxRunDuration,
+      clock: () => _clock(),
+      scheduler: widget.scheduler,
+      onSettled: _emitScrollRun,
     );
     WidgetsBinding.instance.addObserver(this);
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
@@ -204,8 +402,11 @@ class _AnalyticsInteractionTrackerState
 
   @override
   void dispose() {
-    // Emit whatever is half-typed rather than losing it.
+    // Emit whatever is half-typed, half-scrolled or half-tapped rather than
+    // losing it. Coalescing only pays if the tail of a run still arrives.
     _keystrokes.dispose();
+    _input.dispose();
+    _scrolls.dispose();
     FocusManager.instance.removeListener(_handleFocusChanged);
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     WidgetsBinding.instance.removeObserver(this);
@@ -215,7 +416,11 @@ class _AnalyticsInteractionTrackerState
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) {
+      // The last reliable moment before the process may be suspended.
       _keystrokes.settleAll();
+      _input.settleAll();
+      _scrolls.settleAll();
+      widget.analyticsEngine.flushFrameSummaries();
     }
     unawaited(
       widget.analyticsEngine.trackUsage(
@@ -245,39 +450,48 @@ class _AnalyticsInteractionTrackerState
   }
 
   void _recordPointer(String action, PointerEvent event) {
-    _recordInteraction(
-      action,
-      target: 'pointer',
-      attributes: {'kind': event.kind.name, 'event': pointerEventName(event)},
-      metrics: {
-        'x': _round(event.position.dx),
-        'y': _round(event.position.dy),
-        'local_x': _round(event.localPosition.dx),
-        'local_y': _round(event.localPosition.dy),
-        'buttons': event.buttons,
-        'device': event.device,
-        ..._viewportMetrics(),
-      },
-    );
+    final viewport = MediaQuery.maybeSizeOf(context);
+    _addToInputRun((run) {
+      if (viewport != null) {
+        run.absorbViewport(viewport.width, viewport.height);
+      }
+      switch (action) {
+        case 'pointer_down':
+          run.absorbPress(
+            x: event.position.dx,
+            y: event.position.dy,
+            at: _clock(),
+            kind: event.kind.name,
+          );
+        case 'pointer_up':
+          run.releases += 1;
+        case 'pointer_cancel':
+          run.cancels += 1;
+      }
+    });
   }
 
   void _recordPointerSignal(PointerSignalEvent event) {
     if (event is PointerScrollEvent) {
-      _recordInteraction(
-        'pointer_scroll',
-        target: 'pointer',
-        attributes: {'kind': event.kind.name},
-        metrics: {
-          'x': _round(event.position.dx),
-          'y': _round(event.position.dy),
-          'scroll_dx': _round(event.scrollDelta.dx),
-          'scroll_dy': _round(event.scrollDelta.dy),
-          ..._viewportMetrics(),
-        },
-      );
+      final distance = event.scrollDelta.dy.abs() + event.scrollDelta.dx.abs();
+      // A wheel tick is counted on the gesture it drives when one is open, so
+      // it is not also counted as loose input. It produces a ScrollUpdate of
+      // its own, which is what opens that gesture.
+      final gesture = _openScrollRun();
+      if (gesture != null) {
+        gesture.wheelTicks += 1;
+        return;
+      }
+      _addToInputRun((run) {
+        run.wheelTicks += 1;
+        run.wheelDistance += distance;
+        run.kinds.add(event.kind.name);
+      });
       return;
     }
 
+    // Everything else a pointer can signal — one such event in a whole field
+    // week — is rare enough to keep whole.
     _recordInteraction(
       'pointer_signal',
       target: 'pointer',
@@ -291,33 +505,159 @@ class _AnalyticsInteractionTrackerState
   }
 
   bool _handleScrollNotification(ScrollNotification notification) {
-    final action = _scrollAction(notification);
-    if (action == 'scroll_update' && !_shouldRecordScrollUpdate()) {
+    final metrics = notification.metrics;
+    final key = _scrollRunKey(notification);
+    _scrolls.add(
+      key,
+      start: () => _ScrollRun(
+        screen: widget.analyticsEngine.currentScreen,
+        axis: metrics.axis.name,
+        depth: notification.depth,
+        startPixels: metrics.pixels,
+      )..absorbMetrics(metrics),
+      merge: (run) => run..absorbMetrics(metrics),
+    );
+
+    final run = _scrolls.valueOf(key);
+    if (run == null) {
       return false;
     }
+    if (notification is ScrollUpdateNotification) {
+      run.updates += 1;
+      // Summed on every update, never sampled: a throttle that dropped four
+      // updates out of five would leave the distance short by exactly the
+      // amount it dropped, and distance is the reason this event exists.
+      final delta = notification.scrollDelta;
+      if (delta != null) {
+        run.distance += delta.abs();
+      }
+    } else if (notification is OverscrollNotification) {
+      run.overscrolls += 1;
+      final overscroll = notification.overscroll.abs();
+      if (overscroll > run.maxOverscroll) {
+        run.maxOverscroll = overscroll;
+      }
+    } else if (notification is UserScrollNotification) {
+      run.absorbDirection(notification.direction.name);
+    } else if (notification is ScrollEndNotification) {
+      // The real boundary. Settling here rather than waiting out the idle
+      // timer keeps one flick as one gesture.
+      run.ended = true;
+      _scrolls.settle(key);
+    }
+    return false;
+  }
 
-    _recordInteraction(
-      action,
-      target: 'scrollable',
-      attributes: {
-        'axis': notification.metrics.axis.name,
-        'depth': notification.depth,
-        if (notification is UserScrollNotification)
-          'direction': notification.direction.name,
+  /// The gesture currently being scrolled, if any — used to attribute a wheel
+  /// tick to the movement it caused rather than to loose input.
+  _ScrollRun? _openScrollRun() => _scrolls.anyOpenValue();
+
+  String _scrollRunKey(ScrollNotification notification) {
+    return '${notification.metrics.axis.name}:${notification.depth}';
+  }
+
+  /// Folds one raw input sample into the open run for the current screen.
+  ///
+  /// Keyed by screen so a navigation starts a fresh run instead of smearing
+  /// one across two places.
+  void _addToInputRun(void Function(_InputRun run) absorb) {
+    final screen = widget.analyticsEngine.currentScreen;
+    final key = screen ?? '';
+    _input.add(
+      key,
+      start: () {
+        final run = _InputRun(screen: screen);
+        final viewport = MediaQuery.maybeSizeOf(context);
+        if (viewport != null) {
+          run.absorbViewport(viewport.width, viewport.height);
+        }
+        absorb(run);
+        return run;
       },
-      metrics: {
-        'pixels': _round(notification.metrics.pixels),
-        'min_scroll_extent': _round(notification.metrics.minScrollExtent),
-        'max_scroll_extent': _round(notification.metrics.maxScrollExtent),
-        'viewport_dimension': _round(notification.metrics.viewportDimension),
-        if (notification is ScrollUpdateNotification &&
-            notification.scrollDelta != null)
-          'scroll_delta': _round(notification.scrollDelta!),
-        if (notification is OverscrollNotification)
-          'overscroll': _round(notification.overscroll),
+      merge: (run) {
+        absorb(run);
+        return run;
       },
     );
-    return false;
+  }
+
+  void _emitInputRun(String key, CoalescedBurst<_InputRun> burst) {
+    final run = burst.value;
+    _recordInteraction(
+      'input_activity',
+      target: 'input',
+      attributes: {
+        if (run.screen != null && run.screen!.isNotEmpty) 'screen': run.screen,
+        'kinds': run.kinds.toList(growable: false)..sort(),
+        // Kept as a histogram rather than as points: enough to draw a heat map
+        // of a screen, not enough to reconstruct a gesture.
+        'press_grid': run.grid,
+      },
+      metrics: {
+        'sample_count': burst.count,
+        'press_count': run.presses,
+        'release_count': run.releases,
+        'cancel_count': run.cancels,
+        'wheel_count': run.wheelTicks,
+        'wheel_distance': _round(run.wheelDistance),
+        'focus_change_count': run.focusChanges,
+        // The finding the raw stream could not produce: a tap that landed
+        // where the last one did, because the last one did nothing.
+        'repeat_press_count': run.repeatPresses,
+        'max_repeat_run': run.maxRepeatRun,
+        'duration_ms': burst.duration.inMilliseconds,
+        'grid_columns': _InputRun.gridColumns,
+        'grid_rows': _InputRun.gridRows,
+        if (run.viewportWidth > 0) 'viewport_width': _round(run.viewportWidth),
+        if (run.viewportHeight > 0)
+          'viewport_height': _round(run.viewportHeight),
+      },
+    );
+  }
+
+  void _emitScrollRun(String key, CoalescedBurst<_ScrollRun> burst) {
+    final run = burst.value;
+    // Touching a scrollable opens and closes a scroll even when the finger
+    // never moves — a tap on a list row is a start and an end with nothing in
+    // between. Those are the rows this change exists to stop sending.
+    if (run.distance == 0 && run.overscrolls == 0 && run.wheelTicks == 0) {
+      return;
+    }
+    _recordInteraction(
+      'scrolled',
+      target: 'scrollable',
+      attributes: {
+        if (run.screen != null && run.screen!.isNotEmpty) 'screen': run.screen,
+        'axis': run.axis,
+        'depth': run.depth,
+        'direction': run.netDelta == 0
+            ? 'none'
+            : (run.netDelta > 0 ? 'forward' : 'reverse'),
+        'reached_end': run.reachedEnd,
+        // False means the gesture was cut off — by a navigation, by the app
+        // going away, by the run outliving its cap — not that it is still
+        // going. Worth knowing before trusting a distance.
+        'completed': run.ended,
+      },
+      metrics: {
+        'sample_count': burst.count,
+        'update_count': run.updates,
+        // How far the thumb travelled, which is not the same as how far the
+        // list moved: a search that scrolls down and back covers ground and
+        // ends where it started.
+        'distance': _round(run.distance),
+        'net_delta': _round(run.netDelta),
+        'reversal_count': run.reversals,
+        'overscroll_count': run.overscrolls,
+        'max_overscroll': _round(run.maxOverscroll),
+        'wheel_count': run.wheelTicks,
+        'start_pixels': _round(run.startPixels),
+        'end_pixels': _round(run.endPixels),
+        'max_scroll_extent': _round(run.maxScrollExtent),
+        'viewport_dimension': _round(run.viewportDimension),
+        'duration_ms': burst.duration.inMilliseconds,
+      },
+    );
   }
 
   bool _handleKeyEvent(KeyEvent event) {
@@ -400,15 +740,14 @@ class _AnalyticsInteractionTrackerState
     _lastFocusTarget = target;
     // Typing into a different field is a different entry.
     _keystrokes.settleAll();
-    final attributes = <String, Object?>{'has_focus': target != null};
-    if (target != null) {
-      attributes['widget_type'] = target;
-    }
-    _recordInteraction(
-      'focus_changed',
-      target: 'focus',
-      attributes: attributes,
-    );
+    // Counted, not reported. 12,200 of these arrived in one field week and
+    // 12,170 of them named `FocusScope`, `Focus`, or an obfuscated private
+    // symbol — the framework wrapper that took focus, never the field. Only 30
+    // recorded a *loss*, so there was not even a dwell time to be had. The
+    // rate is the whole of what that stream supported, and the run carries it.
+    // If field-level attribution is ever wanted, the fix is to give the widgets
+    // stable names (see CODE_PROTECTION_PLAN.md P0.1), not to ship the symbols.
+    _addToInputRun((run) => run.focusChanges += 1);
   }
 
   void _recordInteraction(
@@ -427,21 +766,6 @@ class _AnalyticsInteractionTrackerState
     );
   }
 
-  bool _shouldRecordScrollUpdate() {
-    if (widget.scrollUpdateSampleInterval == Duration.zero) {
-      return true;
-    }
-
-    final now = _clock();
-    final lastUpdate = _lastScrollUpdateAt;
-    if (lastUpdate != null &&
-        now.difference(lastUpdate) < widget.scrollUpdateSampleInterval) {
-      return false;
-    }
-    _lastScrollUpdateAt = now;
-    return true;
-  }
-
   Map<String, num> _viewportMetrics() {
     final size = MediaQuery.maybeSizeOf(context);
     if (size == null) {
@@ -451,25 +775,6 @@ class _AnalyticsInteractionTrackerState
       'viewport_width': _round(size.width),
       'viewport_height': _round(size.height),
     };
-  }
-
-  String _scrollAction(ScrollNotification notification) {
-    if (notification is ScrollStartNotification) {
-      return 'scroll_start';
-    }
-    if (notification is ScrollUpdateNotification) {
-      return 'scroll_update';
-    }
-    if (notification is OverscrollNotification) {
-      return 'scroll_overscroll';
-    }
-    if (notification is ScrollEndNotification) {
-      return 'scroll_end';
-    }
-    if (notification is UserScrollNotification) {
-      return 'scroll_direction';
-    }
-    return 'scroll';
   }
 
   String _keyCategory(LogicalKeyboardKey key) {
