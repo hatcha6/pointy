@@ -6,6 +6,8 @@ from decimal import Decimal
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.contrib.auth.models import Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -478,6 +480,34 @@ class DeviceManagementTests(CompanionTestCase):
     def test_till_key_is_required(self):
         response = self.till.get(reverse("companion:device-list"))
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_listing_phones_does_not_cost_a_query_per_phone(self):
+        """``is_live`` reads the register session, and this response is the only
+        way a till learns that a phone's shift ended — nothing emits an event
+        for it. So it is worth one join rather than one query per device."""
+        self.pair_phone()
+        url = reverse("companion:device-list")
+
+        with CaptureQueriesContext(connection) as one_phone:
+            self.assertEqual(
+                len(self.till.get(url, {"till_key": TILL}).data), 1
+            )
+
+        CompanionDevice.objects.create(
+            till_key=TILL,
+            token_hash="second-phone-token-hash",
+            paired_by=self.user,
+        )
+        with CaptureQueriesContext(connection) as two_phones:
+            self.assertEqual(
+                len(self.till.get(url, {"till_key": TILL}).data), 2
+            )
+
+        self.assertEqual(
+            len(two_phones.captured_queries),
+            len(one_phone.captured_queries),
+            "a second phone should not cost a second round trip",
+        )
 
 
 class HousekeepingTests(CompanionTestCase):

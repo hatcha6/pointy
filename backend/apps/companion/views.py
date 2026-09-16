@@ -103,7 +103,17 @@ class CompanionDeviceListView(views.APIView):
 
     def get(self, request):
         till_key = _required_till_key(request)
-        devices = CompanionDevice.objects.live().filter(till_key=till_key)
+        # Two joins, two N+1s: ``is_live`` reads ``register_session.status`` and
+        # the serializer reads ``paired_by.username``. This response is now the
+        # *only* way a till learns that its phone's shift ended — nothing emits
+        # an event for that, because the revocation is lazy and happens when the
+        # phone next calls, while ``is_live`` is computed per response. Asking is
+        # the whole signal, so it is worth asking once.
+        devices = (
+            CompanionDevice.objects.live()
+            .select_related("register_session", "paired_by")
+            .filter(till_key=till_key)
+        )
         return Response(
             CompanionDeviceSerializer(devices, many=True, context={"request": request}).data
         )

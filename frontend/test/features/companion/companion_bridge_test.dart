@@ -11,8 +11,8 @@ import 'package:pointy_frontend/src/features/companion/companion_bridge.dart';
 
 const tillKey = 'device-test';
 
-CompanionDevice device({bool paused = false}) =>
-    CompanionDevice(id: 1, label: 'iPhone', isPaused: paused, isLive: true);
+CompanionDevice device({bool paused = false, bool live = true}) =>
+    CompanionDevice(id: 1, label: 'iPhone', isPaused: paused, isLive: live);
 
 String scanFrame(int id, String value) => jsonEncode({
   'id': id,
@@ -37,8 +37,11 @@ class FakeCompanionRepository extends CompanionRepository {
 
   StreamController<SseEvent> get latest => controllers.last;
 
+  int deviceLoads = 0;
+
   @override
   Future<Result<List<CompanionDevice>>> loadDevices(String key) async {
+    deviceLoads++;
     return Ok(devices);
   }
 
@@ -226,5 +229,90 @@ void main() {
     await settle();
 
     expect(bridge.status.value.isPaused, isTrue);
+  });
+
+  group('how often the roster is re-read', () {
+    /// A bridge whose two refresh rates are far enough apart that a test can
+    /// tell which one it chose: anything using the pairing rate fires many
+    /// times inside [settle], anything using the paired rate fires not at all.
+    CompanionBridge rateBridge() => CompanionBridge(
+      repository: repository,
+      tillKey: tillKey,
+      pollInterval: const Duration(milliseconds: 20),
+      pairingRefreshInterval: const Duration(milliseconds: 20),
+      pairedRefreshInterval: const Duration(seconds: 5),
+      retryBackoff: Duration.zero,
+    );
+
+    Future<void> waitForSeveralTicks() =>
+        Future<void>.delayed(const Duration(milliseconds: 150));
+
+    test('an idle till asks once and then stops asking', () async {
+      // The bug this pins: one shop polled this endpoint 9,481 times in a week
+      // for a single pairing, and between 03:00 and 07:00 — shop shut, tills
+      // idle — those polls were 100% of the backend's traffic. Nothing can add
+      // a phone except a pairing this till issues, so there is nothing to see.
+      repository.devices = [];
+      bridge.dispose();
+      bridge = rateBridge();
+
+      await bridge.start();
+      await waitForSeveralTicks();
+
+      expect(repository.deviceLoads, 1, reason: 'the one read at startup');
+    });
+
+    test('the pairing sheet is what starts it asking', () async {
+      repository.devices = [];
+      bridge.dispose();
+      bridge = rateBridge();
+      await bridge.start();
+
+      bridge.boost();
+      await waitForSeveralTicks();
+
+      expect(repository.deviceLoads, greaterThan(2));
+    });
+
+    test('closing the pairing sheet stops it again', () async {
+      repository.devices = [];
+      bridge.dispose();
+      bridge = rateBridge();
+      await bridge.start();
+      bridge.boost();
+      await waitForSeveralTicks();
+
+      bridge.endBoost();
+      final afterSheet = repository.deviceLoads;
+      await waitForSeveralTicks();
+
+      expect(repository.deviceLoads, afterSheet);
+    });
+
+    test('a paired phone is watched slowly, not at the pairing rate', () async {
+      // Slowly, but not never: a device whose register session closed stops
+      // being live on the server without anything being emitted, so asking is
+      // the only way the till finds out.
+      bridge.dispose();
+      bridge = rateBridge();
+
+      await bridge.start();
+      await waitForSeveralTicks();
+
+      expect(repository.deviceLoads, 1);
+    });
+
+    test('a phone whose shift ended holds nothing open', () async {
+      repository.devices = [device(live: false)];
+      bridge.dispose();
+      bridge = rateBridge();
+
+      await bridge.start();
+      await waitForSeveralTicks();
+
+      expect(bridge.status.value.hasDevice, isFalse);
+      expect(repository.streamOpens, 0, reason: 'it cannot scan any more');
+      expect(repository.deviceLoads, 1, reason: 'and nothing more can change');
+    });
   });
 }
