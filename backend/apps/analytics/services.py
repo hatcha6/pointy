@@ -345,6 +345,17 @@ def filter_events_for_export(queryset, filters):
         queryset = queryset.filter(occurred_at__gte=occurred_at_after)
     if occurred_at_before := filters.get("occurred_at_before"):
         queryset = queryset.filter(occurred_at__lte=occurred_at_before)
+    # When the row *arrived*, as opposed to when it happened. The two are the
+    # same thing for a healthy device and nothing like it for a backlogged one:
+    # a till draining a three-week queue delivers today and is dated August, so
+    # an `occurred_at` window silently excludes the device that most needs
+    # looking at. One field export missed 63% of a shop's sales that way and
+    # read as "this till sends no frontend telemetry". Indexed already, via
+    # TimeStampedModel.
+    if created_at_after := filters.get("created_at_after"):
+        queryset = queryset.filter(created_at__gte=created_at_after)
+    if created_at_before := filters.get("created_at_before"):
+        queryset = queryset.filter(created_at__lte=created_at_before)
     if platform := filters.get("platform"):
         queryset = queryset.filter(platform=platform)
     if session_id := filters.get("session_id"):

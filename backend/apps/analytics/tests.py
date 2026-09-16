@@ -3,6 +3,7 @@ import io
 import json
 import unittest
 import zipfile
+from datetime import timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -461,6 +462,67 @@ class AnalyticsEventApiTests(TestCase):
         self.assertIn("frontend.interaction", technical_names)
         self.assertNotIn("sales.checkout.completed", technical_names)
         self.assertNotIn("sale.void.risk", technical_names)
+
+    def test_a_backlogged_device_is_found_by_when_its_events_arrived(self):
+        """The window that finds a till whose dates are telling the truth about
+        a past nobody asked for.
+
+        A device that cannot deliver holds its queue and ships it later, so its
+        rows arrive today carrying last month's ``occurred_at``. Exporting by
+        occurrence therefore excludes precisely the device worth looking at —
+        one field export read a shop's busiest till as sending no frontend
+        telemetry for a week, when it was delivering steadily, three weeks
+        behind.
+        """
+        stale = self._create_event(
+            name="frontend.interaction",
+            occurred_at=self._occurred_at(1),
+        )
+        # `created_at` is auto_now_add, so arrival has to be set past the ORM.
+        AnalyticsEvent.objects.filter(pk=stale.pk).update(
+            created_at=self._occurred_at(25)
+        )
+        self._create_event(
+            name="sales.checkout.completed",
+            occurred_at=self._occurred_at(25),
+        )
+
+        by_occurrence = self._list_event_names(
+            {"occurred_at_after": self._occurred_at(24).isoformat()}
+        )
+        self.assertNotIn(
+            "frontend.interaction",
+            by_occurrence,
+            "this is the blind spot: the backlogged device is invisible",
+        )
+
+        by_arrival = self._list_event_names(
+            {"created_at_after": self._occurred_at(24).isoformat()}
+        )
+        self.assertIn("frontend.interaction", by_arrival)
+        self.assertIn("sales.checkout.completed", by_arrival)
+
+    def test_the_arrival_window_also_excludes_what_arrived_earlier(self):
+        """A filter that only ever widens is not a filter."""
+        early = self._create_event(
+            name="frontend.frame_timing", occurred_at=self._occurred_at(1)
+        )
+        AnalyticsEvent.objects.filter(pk=early.pk).update(
+            created_at=self._occurred_at(2)
+        )
+
+        self.assertNotIn(
+            "frontend.frame_timing",
+            self._list_event_names(
+                {"created_at_after": self._occurred_at(20).isoformat()}
+            ),
+        )
+        self.assertIn(
+            "frontend.frame_timing",
+            self._list_event_names(
+                {"created_at_before": self._occurred_at(20).isoformat()}
+            ),
+        )
 
     def test_manager_list_rejects_invalid_filter_ranges(self):
         invalid_queries = (
@@ -1157,6 +1219,75 @@ class AnalyticsExportCopyEngineTests(TestCase):
 
         self.assertNotIn("ORDER BY", sql.upper())
         self.assertEqual(columns, ANALYTICS_EXPORT_CSV_FIELDS)
+
+
+class AnalyticsExportByArrivalTests(TestCase):
+    """The export has to offer the arrival window too, not only the list.
+
+    They are separate code — the list endpoint filters through the FilterSet,
+    the export through ``filter_events_for_export`` — and the request serializer
+    drops any field it does not declare, so all three have to agree or the
+    parameter is silently ignored and the export comes back looking correct.
+    """
+
+    def setUp(self):
+        ensure_role_groups()
+        User = get_user_model()
+        self.manager = User.objects.create_user(
+            username="arrival-export-manager", password="pass"
+        )
+        self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.manager)
+
+    def _event(self, *, name, occurred_at, created_at):
+        event = AnalyticsEvent.objects.create(
+            event_type=AnalyticsEvent.EventType.USAGE,
+            name=name,
+            severity=AnalyticsEvent.Severity.INFO,
+            source=AnalyticsEvent.Source.FRONTEND,
+            occurred_at=occurred_at,
+        )
+        AnalyticsEvent.objects.filter(pk=event.pk).update(created_at=created_at)
+        return event
+
+    def _exported_names(self, **params):
+        # Scoped to frontend rows: the export request is itself recorded by the
+        # middleware, so an unscoped export always contains its own footprint.
+        response = self.client.get(
+            reverse("analytics-event-export"),
+            {"format": "csv", "source": "frontend", **params},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        archive = zipfile.ZipFile(io.BytesIO(b"".join(response.streaming_content)))
+        rows = csv.DictReader(
+            io.StringIO(archive.read("analytics_events.csv").decode())
+        )
+        return [row["name"] for row in rows]
+
+    def test_exporting_by_arrival_catches_the_backlogged_device(self):
+        moment = timezone.now()
+        self._event(
+            name="frontend.interaction",
+            occurred_at=moment - timedelta(days=21),
+            created_at=moment,
+        )
+        self._event(
+            name="app.started",
+            occurred_at=moment - timedelta(days=21),
+            created_at=moment - timedelta(days=21),
+        )
+
+        since = (moment - timedelta(days=1)).isoformat()
+        self.assertEqual(
+            self._exported_names(occurred_at_after=since),
+            [],
+            "occurrence excludes both — the shape of the original blind spot",
+        )
+        self.assertEqual(
+            self._exported_names(created_at_after=since),
+            ["frontend.interaction"],
+        )
 
 
 @unittest.skipUnless(

@@ -174,6 +174,9 @@ class AnalyticsEventExportQuerySerializer(serializers.Serializer):
     date_to = serializers.DateTimeField(required=False)
     occurred_at_after = serializers.DateTimeField(required=False)
     occurred_at_before = serializers.DateTimeField(required=False)
+    #: By arrival rather than by occurrence. See ``filter_events_for_export``.
+    created_at_after = serializers.DateTimeField(required=False)
+    created_at_before = serializers.DateTimeField(required=False)
     platform = serializers.CharField(max_length=48, required=False)
     session_id = serializers.CharField(max_length=96, required=False)
     device_id = serializers.CharField(max_length=96, required=False)
@@ -193,6 +196,13 @@ class AnalyticsEventExportQuerySerializer(serializers.Serializer):
         if date_from and date_to and date_from > date_to:
             raise serializers.ValidationError(
                 "date_from/occurred_at_after must be before date_to/occurred_at_before."
+            )
+
+        received_from = attrs.get("created_at_after")
+        received_to = attrs.get("created_at_before")
+        if received_from and received_to and received_from > received_to:
+            raise serializers.ValidationError(
+                "created_at_after must be before created_at_before."
             )
 
         risk_score_min = attrs.get("risk_score_min")

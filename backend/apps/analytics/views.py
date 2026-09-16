@@ -253,6 +253,14 @@ class AnalyticsEventFilter(django_filters.FilterSet):
         field_name="occurred_at",
         lookup_expr="lte",
     )
+    created_at_after = django_filters.IsoDateTimeFilter(
+        field_name="created_at",
+        lookup_expr="gte",
+    )
+    created_at_before = django_filters.IsoDateTimeFilter(
+        field_name="created_at",
+        lookup_expr="lte",
+    )
     date_from = django_filters.IsoDateTimeFilter(
         field_name="occurred_at",
         lookup_expr="gte",
@@ -289,6 +297,8 @@ class AnalyticsEventFilter(django_filters.FilterSet):
             "user",
             "occurred_at_after",
             "occurred_at_before",
+            "created_at_after",
+            "created_at_before",
             "date_from",
             "date_to",
             "risk_score_min",
