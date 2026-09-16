@@ -49,6 +49,10 @@ NO_FFMPEG = "no_ffmpeg"
 BUSY = "busy"
 FAILED = "failed"
 
+#: What ``reason`` says when nothing named the failure. A row that reaches this
+#: is the most interesting kind: it means the vocabulary has a hole in it.
+UNKNOWN_REASON = "unknown"
+
 #: Seconds a repeated failure for one camera is folded into a count instead of a
 #: row. A camera that has been unplugged is one fact, however many times a wall
 #: of tiles rediscovers it.
@@ -79,6 +83,13 @@ class StreamReport:
     quality: str = ""
     outcome: str = OK
     error_kind: str = ""
+    #: Why, in the closed vocabulary of ``streaming.StreamFailure``. The
+    #: exception class was never enough: one shop's entire week of failures
+    #: arrived as ``StreamError`` and every row said only ``failed``.
+    reason: str = ""
+    #: The recorder's own first line when our vocabulary does not cover it,
+    #: already stripped of credentials by ``transcode.redact_secrets``.
+    detail: str = ""
 
     #: Set when the first frame came from the warm-frame cache rather than the
     #: recorder, which is the whole question about whether that cache works.
@@ -99,6 +110,11 @@ class StreamReport:
     #: recorder sending damaged video writes a stream of them, which is exactly
     #: the signal behind a picture that looks wrong rather than absent.
     decoder_complaints: int = 0
+    #: Frames the sampled-stills path decoded and threw away because they
+    #: arrived faster than a dashboard tile can use. Non-zero means this
+    #: recorder's keyframe interval is shorter than the rate we ask for, which
+    #: is the one case where that path is paying for pictures nobody sees.
+    skipped_frames: int = 0
 
     def first_frame(self):
         """Cheap enough for the frame path: one comparison and one assignment."""
@@ -127,6 +143,8 @@ class StreamReport:
             metrics["requested_fps"] = self.requested_fps
         if self.source_fps:
             metrics["source_fps"] = round(float(self.source_fps), 2)
+        if self.skipped_frames:
+            metrics["skipped_frames"] = self.skipped_frames
         if self.source_width and self.source_height:
             metrics["source_width"] = self.source_width
             metrics["source_height"] = self.source_height
@@ -146,10 +164,22 @@ class StreamReport:
             "warm_start": self.warm_start,
             "shared": self.shared,
         }
+        # Which camera, and on which recorder. Absent until now, which meant an
+        # export could say a shop had 93,000 stream failures but not which of
+        # its sixteen cameras they were on — recoverable only by joining request
+        # paths on timestamps, and only for the paths that log a URL.
+        if self.camera_id:
+            attributes["camera_id"] = self.camera_id
+        if self.recorder_id:
+            attributes["recorder_id"] = self.recorder_id
         if self.codec:
             attributes["codec"] = self.codec
         if self.error_kind:
             attributes["error_kind"] = self.error_kind
+        if self.reason:
+            attributes["reason"] = self.reason
+        if self.detail:
+            attributes["detail"] = self.detail[:200]
         return attributes
 
 
@@ -220,7 +250,12 @@ def _record(report: StreamReport, user):
     severity = AnalyticsEvent.Severity.INFO
 
     if report.outcome != OK:
-        folded = _failures.take((report.camera_id, report.outcome))
+        # Keyed on the reason as well as the outcome: two diagnoses inside one
+        # window are two facts, and folding the second into the first is how a
+        # recorder that changed failure mode looks like one that did not. The
+        # vocabulary is closed and small, so this cannot multiply rows the way
+        # keying on the message would.
+        folded = _failures.take((report.camera_id, report.outcome, report.reason))
         if folded is None:
             return
         if folded:

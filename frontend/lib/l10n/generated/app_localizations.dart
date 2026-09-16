@@ -29205,6 +29205,18 @@ abstract class AppLocalizations {
   /// **'تعذّر عرض البث'**
   String get cameraStreamFailedLabel;
 
+  /// No description provided for @cameraRecorderBusyLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهاز التسجيل ممتلئ'**
+  String get cameraRecorderBusyLabel;
+
+  /// No description provided for @cameraRecorderBusyDetail.
+  ///
+  /// In ar, this message translates to:
+  /// **'يعرض جهاز التسجيل أقصى عدد من البثوث المباشرة في الوقت نفسه. أغلق كاميرا أخرى أو انتظر قليلًا.'**
+  String get cameraRecorderBusyDetail;
+
   /// No description provided for @cameraRetryAction.
   ///
   /// In ar, this message translates to:

@@ -62,11 +62,16 @@ def ffmpeg_path() -> str:
 
 
 def probe() -> dict:
-    """``{"available", "path", "version", "supports_readrate"}``, cached.
+    """``{"available", "path", "version", "supports_readrate", "supports_fps_mode"}``, cached.
 
     ``readrate`` (ffmpeg 5.1+) is what makes variable-speed playback possible;
     it is the generalisation of ``-re``. Without it playback still works, at 1x
     only, so the capability is reported rather than assumed.
+
+    ``fps_mode`` arrived in the same release and replaces ``-vsync``. The stills
+    path needs one of the two, because its whole point is to emit exactly the
+    frames it decoded and no duplicates; ``-vsync 0`` is the fallback and still
+    works everywhere, it merely warns.
     """
     global _probe_cache
     if _probe_cache is not None:
@@ -80,6 +85,7 @@ def probe() -> dict:
             "path": path,
             "version": "",
             "supports_readrate": False,
+            "supports_fps_mode": False,
         }
         if path:
             try:
@@ -96,6 +102,7 @@ def probe() -> dict:
                     major, minor = int(match.group(1)), int(match.group(2))
                     result["version"] = f"{major}.{minor}"
                     result["supports_readrate"] = (major, minor) >= (5, 1)
+                    result["supports_fps_mode"] = (major, minor) >= (5, 1)
             except (OSError, subprocess.SubprocessError) as exc:
                 logger.warning("ffmpeg probe failed: %s", exc)
         _probe_cache = result
@@ -153,7 +160,11 @@ def active_process_count() -> int:
 
 
 def _base_input_args(
-    url: str, *, readrate: float | None, low_latency: bool = False
+    url: str,
+    *,
+    readrate: float | None,
+    low_latency: bool = False,
+    keyframes_only: bool = False,
 ) -> list[str]:
     args = [
         "-hide_banner",
@@ -202,6 +213,13 @@ def _base_input_args(
     elif readrate is not None:
         # No readrate support: pace at 1x, the only rate ``-re`` offers.
         args += ["-re"]
+    if keyframes_only:
+        # A decoder option, so it belongs before -i: ffmpeg discards every
+        # non-key frame at the decoder rather than after it, which is where
+        # essentially all the CPU of an H.264 stream is spent. The output rate
+        # then follows the recorder's keyframe interval — a second or two on the
+        # boxes in this market, which is the rate a dashboard tile wants anyway.
+        args += ["-skip_frame", "nokey"]
     return args + ["-i", url]
 
 
@@ -234,6 +252,54 @@ def open_mjpeg_stream(
         # -2 keeps the aspect ratio and an even height, which the JPEG encoder
         # requires for chroma-subsampled output.
         args += ["-vf", f"scale={int(width)}:-2"]
+    args += ["pipe:1"]
+    return _spawn(args, slot)
+
+
+def open_mjpeg_stills(
+    url: str, *, quality: int = 6, width: int = 0
+) -> tuple[subprocess.Popen, _Slot]:
+    """The cheap live path for a recorder that serves no still images.
+
+    Same JPEG pipe as :func:`open_mjpeg_stream`, with two differences that are
+    the entire point. It decodes **keyframes only**, which is most of an H.264
+    decode avoided; and it emits exactly the frames it decoded rather than
+    padding to a fixed rate, so a recorder with a two-second keyframe interval
+    costs one decode and one small JPEG every two seconds instead of a
+    continuous transcode.
+
+    This exists because a dashboard is a screen people leave open all day, and
+    on a recorder with a still-image endpoint that costs nothing at all. On one
+    without — Xiongmai has none — the only way to reach a frame is the video
+    stream, and the choice is between this and running a full decode per camera
+    for as long as the shop is open.
+
+    The caller owns the process and MUST call ``stop``/release the slot, exactly
+    as for :func:`open_mjpeg_stream`.
+    """
+    path = ffmpeg_path()
+    if not path:
+        raise TranscodeUnavailable(
+            "Video playback needs ffmpeg, which is not installed on this server."
+        )
+    slot = reserve_slot()
+    args = [path] + _base_input_args(
+        url, readrate=None, low_latency=True, keyframes_only=True
+    )
+    args += ["-an", "-f", "mjpeg", "-q:v", str(int(quality))]
+    # Passthrough, never a target rate: with -r, ffmpeg duplicates the last
+    # keyframe to fill the gaps, and a tile would pay an encode and a network
+    # frame for a picture it already has.
+    args += (
+        ["-fps_mode", "passthrough"]
+        if probe()["supports_fps_mode"]
+        else ["-vsync", "0"]
+    )
+    if width:
+        # ``min(w, iw)`` so this only ever shrinks. A sub-stream is often
+        # narrower than the tile already, and upscaling it would cost bytes and
+        # sharpness to deliver exactly the same picture.
+        args += ["-vf", f"scale='min({int(width)},iw)':-2"]
     args += ["pipe:1"]
     return _spawn(args, slot)
 
@@ -321,6 +387,29 @@ def open_mp4_stream(url: str) -> tuple[subprocess.Popen, _Slot]:
 #: How many of ffmpeg's last complaints to keep per pipeline.
 ERROR_LINES_KEPT = 40
 
+#: A recorder's password reaches ffmpeg inside the URL, and ffmpeg quotes the
+#: URL back in most of its error messages. Xiongmai carries the credentials
+#: twice on purpose — once in the authority, once in the path — so both shapes
+#: have to go, and they have to go before the text is stored or logged rather
+#: than on the way out. Telemetry leaves the shop; the log is read over a
+#: support call; neither is a place for a password.
+_SECRET_PATTERNS = (
+    # rtsp://user:pass@host -> rtsp://***:***@host
+    re.compile(r"(?<=//)[^/\s@]+:[^/\s@]*@"),
+    # user=admin&password=secret -> user=***&password=***
+    re.compile(r"\b(user(?:name)?|pass(?:word|wd)?|pwd|auth)=[^&\s\"']*", re.I),
+)
+
+
+def redact_secrets(text: str) -> str:
+    """Strip recorder credentials out of anything ffmpeg says back to us."""
+    if not text:
+        return ""
+    text = _SECRET_PATTERNS[0].sub("***:***@", text)
+    return _SECRET_PATTERNS[1].sub(
+        lambda m: f"{m.group(1)}=***", text
+    )
+
 
 def _drain_stderr(process: subprocess.Popen):
     """Read ffmpeg's diagnostics continuously, keeping the last few.
@@ -339,7 +428,7 @@ def _drain_stderr(process: subprocess.Popen):
     lines = process._pointy_errors
     try:
         for raw in iter(process.stderr.readline, b""):
-            line = raw.decode("utf-8", "replace").strip()
+            line = redact_secrets(raw.decode("utf-8", "replace").strip())
             if not line:
                 continue
             lines.append(line)

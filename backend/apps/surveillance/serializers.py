@@ -74,6 +74,7 @@ class RecorderSerializer(serializers.ModelSerializer):
             "is_enabled",
             "rtsp_path_template",
             "onvif_service_path",
+            "max_concurrent_streams",
             "model_name",
             "firmware",
             "serial_number",

@@ -16880,6 +16880,13 @@ class AppLocalizationsAr extends AppLocalizations {
   String get cameraStreamFailedLabel => 'تعذّر عرض البث';
 
   @override
+  String get cameraRecorderBusyLabel => 'جهاز التسجيل ممتلئ';
+
+  @override
+  String get cameraRecorderBusyDetail =>
+      'يعرض جهاز التسجيل أقصى عدد من البثوث المباشرة في الوقت نفسه. أغلق كاميرا أخرى أو انتظر قليلًا.';
+
+  @override
   String get cameraRetryAction => 'إعادة المحاولة';
 
   @override

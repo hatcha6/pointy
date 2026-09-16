@@ -28,8 +28,8 @@ from apps.core.models import ShopSettings
 from apps.core.roles import MANAGER_GROUP, SUPERVISOR_GROUP, ensure_role_groups
 from apps.sales.models import Order
 
-from . import breaker, services, telemetry, transcode
-from .views import MAX_SNAPSHOT_FPS, resolve_live_stream
+from . import breaker, budget, services, streaming, telemetry, transcode
+from .views import MAX_SNAPSHOT_FPS, LivePath, resolve_live_stream
 from . import views as views_module
 from .drivers.base import (
     RecorderTarget,
@@ -48,7 +48,9 @@ from .drivers.base import (
 )
 from .streaming import (
     FfmpegSource,
+    SampledRtspSource,
     SnapshotSource,
+    StreamFailure,
     _jpeg_frame_end,
     Frame,
     FrameBroker,
@@ -139,6 +141,55 @@ def target(**overrides):
     }
     values.update(overrides)
     return RecorderTarget(**values)
+
+
+def minimal_jpeg(entropy: bytes = b"scan") -> bytes:
+    """The smallest byte string ``_jpeg_frames`` accepts as one frame.
+
+    It has to walk the real marker structure — SOI, a table, a start-of-scan,
+    entropy data, EOI — because the demuxer deliberately does not scan for
+    ``FFD9``. A shorter fixture is rejected as corrupt, which is the demuxer
+    working, not the fixture being unlucky.
+    """
+    def segment(marker: int, payload: bytes) -> bytes:
+        return bytes([0xFF, marker]) + (len(payload) + 2).to_bytes(2, "big") + payload
+
+    return b"".join(
+        [
+            b"\xff\xd8",
+            segment(0xDB, b"\x10" * 8),
+            segment(0xDA, b"\x01\x00"),
+            entropy,
+            b"\xff\xd9",
+        ]
+    )
+
+
+class _FakeFfmpeg:
+    """Stands in for the ffmpeg process behind a sampled-stills pipeline.
+
+    ``hold_open`` keeps the pipe producing forever, which is what a live camera
+    does — a source that *ends* is legitimately retired by the broker, and a
+    retired producer would make the sharing test measure the wrong thing.
+    """
+
+    def __init__(self, output=b"", *, hold_open=False):
+        self._payload = output
+        self._hold_open = hold_open
+        self.stdout = self
+        self._sent = False
+
+    def read(self, _size=0):
+        if not self._sent:
+            self._sent = True
+            return self._payload
+        if not self._hold_open:
+            return b""
+        time.sleep(0.01)
+        return self._payload
+
+    def poll(self):
+        return None
 
 
 def close_stream(response):
@@ -487,10 +538,10 @@ class LiveStreamPolicyTests(TestCase):
     """Which live path runs, and how fast it is allowed to."""
 
     def test_the_real_path_carries_whatever_the_client_asks_for(self):
-        smooth, fps = views_module.resolve_live_stream(
+        path, fps = views_module.resolve_live_stream(
             "30", None, ffmpeg_available=True
         )
-        self.assertTrue(smooth)
+        self.assertEqual(path, views_module.LivePath.SMOOTH)
         self.assertEqual(fps, 30)
 
     def test_a_wall_of_nine_may_ask_for_thirty_each(self):
@@ -503,17 +554,17 @@ class LiveStreamPolicyTests(TestCase):
             self.assertEqual(fps, 30)
 
     def test_the_snapshot_fallback_is_capped_where_http_stops_coping(self):
-        smooth, fps = views_module.resolve_live_stream(
+        path, fps = views_module.resolve_live_stream(
             "30", None, ffmpeg_available=False
         )
-        self.assertFalse(smooth)
+        self.assertEqual(path, views_module.LivePath.SNAPSHOT)
         self.assertEqual(fps, views_module.MAX_SNAPSHOT_FPS)
 
     def test_a_client_may_force_the_snapshot_path(self):
-        smooth, fps = views_module.resolve_live_stream(
+        path, fps = views_module.resolve_live_stream(
             "30", "false", ffmpeg_available=True
         )
-        self.assertFalse(smooth)
+        self.assertEqual(path, views_module.LivePath.SNAPSHOT)
         self.assertEqual(fps, views_module.MAX_SNAPSHOT_FPS)
 
     def test_an_absurd_request_is_clamped_rather_than_refused(self):
@@ -942,6 +993,33 @@ class FfmpegStderrTests(TestCase):
             time.sleep(0.05)
         self.assertIn("Invalid data", transcode.drain_error(process))
 
+    def test_a_recorders_password_never_reaches_the_log_or_a_row(self):
+        """The RTSP URL carries the credentials twice, and ffmpeg quotes the URL
+        back in most of what it says. Redaction happens where stderr is read, so
+        the log line and the telemetry row are both covered by one guard."""
+        leaky = (
+            "rtsp://admin:Admin%40123@10.0.0.77:554/user=admin&password=Admin%40123"
+            "&channel=1&stream=1.sdp?: Server returned 401 Unauthorized"
+        )
+        process = self._spawn_echoing_stderr(leaky)
+        process.wait(timeout=10)
+        for _ in range(50):
+            if transcode.drain_error(process):
+                break
+            time.sleep(0.05)
+
+        captured = transcode.drain_error(process)
+        self.assertNotIn("Admin%40123", captured)
+        self.assertNotIn("password=Admin", captured)
+        self.assertIn("***", captured)
+        # Still useful afterwards: the host and the actual complaint survive.
+        self.assertIn("10.0.0.77", captured)
+        self.assertIn("401", captured)
+
+    def test_redaction_leaves_an_innocent_line_alone(self):
+        clean = "[h264 @ 0x7f] non-existing PPS 0 referenced"
+        self.assertEqual(transcode.redact_secrets(clean), clean)
+
     def _spawn_echoing_stderr(self, text, repeat=1):
         slot = transcode.reserve_slot()
         self.addCleanup(slot.release)
@@ -958,6 +1036,195 @@ class FfmpegStderrTests(TestCase):
         process, _slot = transcode._spawn([sys.executable, "-c", script], slot)
         self.addCleanup(lambda: transcode.stop(process))
         return process
+
+
+@override_settings(
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "surveillance-budget-tests",
+        }
+    }
+)
+class RecorderStreamBudgetTests(TestCase):
+    """How many streams one recorder will serve, and what we do at the limit.
+
+    The field measured it: a sixteen-camera wall opened seventeen streams and
+    exactly nine returned video, twice, on different days. A DVR at its session
+    cap does not say so — it accepts the connection, sends nothing, and dies on
+    a timeout — so seven tiles went black and stayed black every time the wall
+    was opened.
+    """
+
+    def setUp(self):
+        budget.reset()
+        cache.clear()
+        self.addCleanup(budget.reset)
+        self.addCleanup(cache.clear)
+        self.recorder = Recorder.objects.create(
+            host="10.0.0.90", username="admin", detected_brand="xiongmai"
+        )
+
+    def test_an_unknown_recorder_is_not_limited(self):
+        """We have measured nothing, so we refuse nothing. A budget invented
+        from no evidence would black out working cameras."""
+        seats = [budget.reserve(self.recorder) for _ in range(20)]
+        self.addCleanup(lambda: [seat.release() for seat in seats])
+        self.assertEqual(budget.in_flight(self.recorder.pk), 20)
+
+    def test_an_installer_who_knows_the_number_is_obeyed(self):
+        self.recorder.max_concurrent_streams = 2
+        seats = [budget.reserve(self.recorder) for _ in range(2)]
+        self.addCleanup(lambda: [seat.release() for seat in seats])
+        with self.assertRaises(budget.RecorderAtCapacity) as caught:
+            budget.reserve(self.recorder)
+        self.assertEqual(caught.exception.limit, 2)
+        self.assertEqual(caught.exception.in_flight, 2)
+
+    def test_a_released_slot_is_reusable(self):
+        self.recorder.max_concurrent_streams = 1
+        seat = budget.reserve(self.recorder)
+        seat.release()
+        budget.reserve(self.recorder).release()
+        self.assertEqual(budget.in_flight(self.recorder.pk), 0)
+
+    def test_releasing_twice_does_not_hand_out_a_phantom_slot(self):
+        seat = budget.reserve(self.recorder)
+        seat.release()
+        seat.release()
+        self.assertEqual(budget.in_flight(self.recorder.pk), 0)
+
+    def test_the_ceiling_is_learned_from_the_stream_that_failed(self):
+        """Nine worked; the tenth did not. Nine is the number."""
+        budget.note_refusal(self.recorder.pk, at_concurrency=9)
+        self.assertEqual(budget.limit_for(self.recorder), 9)
+
+    def test_learning_converges_downwards_rather_than_oscillating(self):
+        budget.note_refusal(self.recorder.pk, at_concurrency=9)
+        budget.note_refusal(self.recorder.pk, at_concurrency=7)
+        budget.note_refusal(self.recorder.pk, at_concurrency=11)
+        self.assertEqual(budget.limit_for(self.recorder), 7)
+
+    def test_a_single_early_failure_cannot_teach_a_silly_ceiling(self):
+        """One timeout at low concurrency is a blip, not a capacity limit, and
+        a learned ceiling of one would be a worse bug than the one this fixes."""
+        budget.note_refusal(self.recorder.pk, at_concurrency=1)
+        self.assertEqual(budget.limit_for(self.recorder), budget.LEARNED_FLOOR)
+
+    def test_the_box_beating_its_learned_ceiling_raises_it(self):
+        """Otherwise one bad evening caps a recorder for a week."""
+        budget.note_refusal(self.recorder.pk, at_concurrency=6)
+        budget.note_success(self.recorder.pk, at_concurrency=6)
+        self.assertEqual(budget.limit_for(self.recorder), 7)
+
+    def test_what_an_installer_set_beats_what_we_guessed(self):
+        budget.note_refusal(self.recorder.pk, at_concurrency=9)
+        self.recorder.max_concurrent_streams = 4
+        self.assertEqual(budget.limit_for(self.recorder), 4)
+
+    def test_only_a_failure_with_healthy_neighbours_teaches_anything(self):
+        """The first stream failing on an idle recorder means the box is down.
+        That is the breaker's job; reading it as a capacity of zero is not."""
+        lonely = streaming.budget.reserve(self.recorder)
+        streaming._note_outcome(lonely, succeeded=False, produced=0)
+        lonely.release()
+        self.assertIsNone(budget.learned_limit(self.recorder.pk))
+
+    def test_a_stream_that_delivered_frames_and_then_died_teaches_nothing(self):
+        """That is the network, or the shop unplugging something. It says
+        nothing about how many sessions the recorder accepts."""
+        first = budget.reserve(self.recorder)
+        second = budget.reserve(self.recorder)
+        streaming._note_outcome(second, succeeded=False, produced=40)
+        first.release()
+        second.release()
+        self.assertIsNone(budget.learned_limit(self.recorder.pk))
+
+
+class StreamFailureClassificationTests(TestCase):
+    """Why a stream failed, not merely that it did.
+
+    Across 93,000 failures in one week's field export the ``outcome`` column
+    held exactly one value — ``failed`` — because classification read the
+    exception class and every live failure arrives as ``StreamError``. The
+    ``auth`` / ``unreachable`` / ``busy`` vocabulary existed and was never once
+    emitted. The reason now travels on the exception, so the row and the
+    sentence the shop is shown come from the same match.
+    """
+
+    def test_ffmpegs_own_words_are_classified_and_explained_together(self):
+        cases = [
+            ("Server returned 401 Unauthorized", StreamFailure.AUTH, "password"),
+            ("Connection refused", StreamFailure.UNREACHABLE, "RTSP"),
+            ("Connection timed out", StreamFailure.TIMEOUT, "responding"),
+            ("Server returned 404 Not Found", StreamFailure.NO_CHANNEL, "footage"),
+            ("Server returned 503", StreamFailure.REFUSED, "refused"),
+        ]
+        for raw, expected_reason, expected_word in cases:
+            with self.subTest(raw=raw):
+                reason, message = streaming.classify_ffmpeg_error(raw)
+                self.assertEqual(reason, expected_reason)
+                self.assertIn(expected_word, message)
+
+    def test_something_we_have_no_word_for_is_kept_rather_than_flattened(self):
+        reason, message = streaming.classify_ffmpeg_error("nvdec: no such device")
+        self.assertEqual(reason, StreamFailure.UNKNOWN)
+        self.assertIn("nvdec", message)
+
+    def test_silence_from_ffmpeg_is_its_own_reason(self):
+        reason, _ = streaming.classify_ffmpeg_error("")
+        self.assertEqual(reason, StreamFailure.NO_VIDEO)
+
+    def test_a_reason_decides_the_outcome_a_dashboard_counts(self):
+        report = telemetry.StreamReport(camera_id=3, recorder_id=1)
+        views_module._record_failure(
+            report, StreamError("nope", reason=StreamFailure.AUTH)
+        )
+        self.assertEqual(report.outcome, telemetry.AUTH)
+        self.assertEqual(report.reason, StreamFailure.AUTH)
+
+    def test_refused_and_timed_out_share_a_bucket_but_keep_their_reason(self):
+        for reason in (StreamFailure.TIMEOUT, StreamFailure.REFUSED):
+            with self.subTest(reason=reason):
+                report = telemetry.StreamReport(camera_id=3)
+                views_module._record_failure(report, StreamError("x", reason=reason))
+                self.assertEqual(report.outcome, telemetry.UNREACHABLE)
+                self.assertEqual(report.reason, reason)
+
+    def test_an_unnamed_failure_is_recorded_as_unknown_not_as_nothing(self):
+        report = telemetry.StreamReport(camera_id=3)
+        views_module._record_failure(report, StreamError("mystery"))
+        self.assertEqual(report.outcome, telemetry.FAILED)
+        self.assertEqual(report.reason, telemetry.UNKNOWN_REASON)
+
+    def test_a_row_says_which_camera_and_which_recorder(self):
+        """Absent until now: an export could count a shop's failures but not
+        say which of its sixteen cameras they were on."""
+        attributes = telemetry.StreamReport(
+            camera_id=19, recorder_id=1, reason=StreamFailure.AUTH
+        ).as_attributes()
+        self.assertEqual(attributes["camera_id"], 19)
+        self.assertEqual(attributes["recorder_id"], 1)
+        self.assertEqual(attributes["reason"], StreamFailure.AUTH)
+
+    def test_two_diagnoses_in_one_window_are_two_rows(self):
+        """The fold exists so an unplugged camera writes one row, not a
+        thousand. It must not also fold a camera that changed failure mode."""
+        telemetry.reset()
+        self.addCleanup(telemetry.reset)
+        with patch("apps.analytics.services.record_event_buffered") as record:
+            for reason in (
+                StreamFailure.AUTH,
+                StreamFailure.AUTH,
+                StreamFailure.UNREACHABLE,
+            ):
+                report = telemetry.StreamReport(camera_id=7, outcome=telemetry.FAILED)
+                report.reason = reason
+                telemetry.record(report)
+
+        self.assertEqual(
+            record.call_count, 2, "the repeat folds, the new diagnosis does not"
+        )
 
 
 class CameraTelemetryTests(TestCase):
@@ -1450,6 +1717,9 @@ class CapabilityRoutingTests(TestCase):
             *self.manager.groups.model.objects.filter(name=MANAGER_GROUP)
         )
         self.client.force_authenticate(self.manager)
+        self.addCleanup(views_module.broker.shutdown)
+        budget.reset()
+        self.addCleanup(budget.reset)
         self.recorder = Recorder.objects.create(
             host="10.0.0.77",
             username="admin",
@@ -1467,19 +1737,50 @@ class CapabilityRoutingTests(TestCase):
     def test_the_recorder_that_started_this_declares_no_snapshot(self):
         self.assertFalse(self.recorder.driver_capabilities["snapshot"])
 
-    def test_a_snapshotless_recorder_is_routed_to_rtsp_even_when_asked_not_to(self):
-        """`smooth=false` asks for a path this hardware does not have. Honouring
-        it would only choose a guaranteed failure, so the policy overrides it."""
-        smooth, _fps = resolve_live_stream(
+    def test_a_snapshotless_recorder_gets_stills_sampled_from_its_video(self):
+        """`smooth=false` asks for a cheap live view, not for a named pipeline.
+
+        This hardware has no still-image endpoint, so "cheap" has to mean
+        keyframes sampled out of RTSP and shared between viewers — not a full
+        decode per camera, which is what the dashboard was explicitly avoiding
+        when it asked.
+        """
+        path, fps = resolve_live_stream(
             None, "false", ffmpeg_available=True, supports_snapshot=False
         )
-        self.assertTrue(smooth)
+        self.assertEqual(path, LivePath.STILL)
+        self.assertEqual(fps, views_module.still_fps())
+
+    def test_the_stills_rate_ignores_the_client_so_viewers_share_one_pipeline(self):
+        rates = {
+            resolve_live_stream(
+                asked, "false", ffmpeg_available=True, supports_snapshot=False
+            )[1]
+            for asked in ("1", "2", "5", "30", None)
+        }
+        self.assertEqual(rates, {views_module.still_fps()})
+
+    @override_settings(POINTY_SURVEILLANCE_STILL_FPS=0)
+    def test_the_sampled_path_can_be_switched_off_at_a_shop(self):
+        """Zero is the escape hatch, for a box that turns out not to mark its
+        keyframes the way ffmpeg expects: full decodes come back, no release."""
+        path, _fps = resolve_live_stream(
+            None, "false", ffmpeg_available=True, supports_snapshot=False
+        )
+        self.assertEqual(path, LivePath.SMOOTH)
+
+    def test_asking_for_smooth_on_that_box_still_gets_a_real_stream(self):
+        path, fps = resolve_live_stream(
+            "25", None, ffmpeg_available=True, supports_snapshot=False
+        )
+        self.assertEqual(path, LivePath.SMOOTH)
+        self.assertEqual(fps, 25)
 
     def test_a_recorder_with_snapshots_still_honours_the_request(self):
-        smooth, fps = resolve_live_stream(
+        path, fps = resolve_live_stream(
             "8", "false", ffmpeg_available=True, supports_snapshot=True
         )
-        self.assertFalse(smooth)
+        self.assertEqual(path, LivePath.SNAPSHOT)
         self.assertLessEqual(fps, MAX_SNAPSHOT_FPS)
 
     def test_no_snapshot_and_no_ffmpeg_is_refused_at_once(self):
@@ -1504,6 +1805,181 @@ class CapabilityRoutingTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_501_NOT_IMPLEMENTED)
         open_driver.assert_not_called()
+
+    # -- the cheap path on hardware that has no cheap path -----------------
+    def _stub_rtsp_driver(self):
+        class _RtspOnly:
+            supports_snapshot = False
+
+            def __init__(self):
+                self.closed = False
+
+            def live_rtsp_url(self, channel, *, quality="sub"):
+                return f"rtsp://box/ch{channel}?stream=1"
+
+            def snapshot(self, channel, *, quality="sub"):
+                raise RecorderCapabilityError("no snapshot endpoint")
+
+            def close(self):
+                self.closed = True
+
+        return _RtspOnly()
+
+    def test_a_dashboard_tile_gets_stills_sampled_from_the_video_stream(self):
+        """`smooth=false` from a dashboard must not become a full decode."""
+        frame = minimal_jpeg(b"tile")
+
+        def fake_stills(url, *, quality=6, width=0):
+            self.assertIn("rtsp://", url)
+            return _FakeFfmpeg(frame * 4), object()
+
+        with patch.object(
+            services, "open_driver", return_value=self._stub_rtsp_driver()
+        ), patch.object(transcode, "ffmpeg_available", return_value=True), patch.object(
+            transcode, "open_mjpeg_stills", side_effect=fake_stills
+        ) as stills, patch.object(
+            transcode, "open_mjpeg_stream"
+        ) as full_decode, patch.object(transcode, "stop"):
+            response = self.client.get(
+                reverse("surveillance-camera-live", args=[self.camera.pk]),
+                {"fps": 2, "smooth": "false", "width": 320},
+            )
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            chunks = iter(response.streaming_content)
+            self.assertIn(b"\xff\xd8", next(chunks))
+            close_stream(response)
+
+        stills.assert_called_once()
+        full_decode.assert_not_called()
+
+    def test_every_viewer_of_one_camera_shares_a_single_pipeline(self):
+        """The whole point. Three tills on the dashboard cost one decode."""
+        frame = minimal_jpeg(b"shared")
+        opened = []
+
+        def fake_stills(url, *, quality=6, width=0):
+            opened.append(width)
+            return _FakeFfmpeg(frame * 200, hold_open=True), object()
+
+        responses = []
+        with patch.object(
+            services, "open_driver", side_effect=lambda *a, **k: self._stub_rtsp_driver()
+        ), patch.object(transcode, "ffmpeg_available", return_value=True), patch.object(
+            transcode, "open_mjpeg_stills", side_effect=fake_stills
+        ), patch.object(transcode, "stop"):
+            # Three tills, three slightly different tile widths — the shape a
+            # 1024-wide dashboard and a 1280-wide one actually produce.
+            for width in (300, 320, 331):
+                response = self.client.get(
+                    reverse("surveillance-camera-live", args=[self.camera.pk]),
+                    {"fps": 2, "smooth": "false", "width": width},
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertIn(b"\xff\xd8", next(iter(response.streaming_content)))
+                responses.append(response)
+            for response in responses:
+                close_stream(response)
+
+        self.assertEqual(
+            len(opened),
+            1,
+            f"one ffmpeg for three viewers, got {len(opened)}: {opened}",
+        )
+
+    def test_the_stills_pipeline_decodes_keyframes_only(self):
+        """Where the saving actually is: the decode, not the encode."""
+        with patch.object(transcode, "ffmpeg_path", return_value="/usr/bin/ffmpeg"), \
+                patch.object(transcode, "reserve_slot", return_value=object()), \
+                patch.object(transcode, "_spawn", side_effect=lambda args, slot: (args, slot)):
+            args, _ = transcode.open_mjpeg_stills("rtsp://box/ch1", width=320)
+
+        self.assertIn("-skip_frame", args)
+        self.assertEqual(args[args.index("-skip_frame") + 1], "nokey")
+        self.assertLess(
+            args.index("-skip_frame"),
+            args.index("-i"),
+            "-skip_frame is a decoder option; after -i it silently does nothing",
+        )
+        self.assertNotIn("-r", args, "a target rate would duplicate keyframes")
+        self.assertIn(
+            "scale='min(320,iw)':-2",
+            args,
+            "a sub-stream narrower than the tile must not be upscaled",
+        )
+
+    def test_a_full_recorder_refuses_in_words_instead_of_a_black_tile(self):
+        """What the wall did in the field: seventeen tiles opened, nine showed a
+        picture, seven sat black for three seconds and then retried forever. A
+        recorder at its session cap is answering — it just has no slot — so the
+        tile should be told to wait, not left to guess."""
+        self.recorder.max_concurrent_streams = 1
+        self.recorder.save(update_fields=["max_concurrent_streams"])
+        second = Camera.objects.create(
+            recorder=self.recorder, channel=2, name="الباب"
+        )
+        frame = minimal_jpeg(b"held")
+
+        with patch.object(
+            services, "open_driver", side_effect=lambda *a, **k: self._stub_rtsp_driver()
+        ), patch.object(transcode, "ffmpeg_available", return_value=True), patch.object(
+            transcode,
+            "open_mjpeg_stills",
+            side_effect=lambda *a, **k: (_FakeFfmpeg(frame * 50, hold_open=True), object()),
+        ), patch.object(transcode, "stop"):
+            held = self.client.get(
+                reverse("surveillance-camera-live", args=[self.camera.pk]),
+                {"smooth": "false"},
+            )
+            self.assertEqual(held.status_code, status.HTTP_200_OK)
+            self.assertIn(b"\xff\xd8", next(iter(held.streaming_content)))
+
+            refused = self.client.get(
+                reverse("surveillance-camera-live", args=[second.pk]),
+                {"smooth": "false"},
+            )
+            close_stream(held)
+
+        self.assertEqual(refused.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(refused.data["code"], "recorder_at_capacity")
+        self.assertEqual(refused.data["retry_after"], budget.RETRY_AFTER_SECONDS)
+        self.assertIn("Retry-After", refused)
+
+    def test_running_out_of_slots_does_not_trip_the_breaker(self):
+        """A full recorder is not a broken one. Pausing it would take down the
+        streams that are working to protect the one that is not."""
+        self.recorder.max_concurrent_streams = 1
+        self.recorder.save(update_fields=["max_concurrent_streams"])
+        seat = budget.reserve(self.recorder)
+        self.addCleanup(seat.release)
+
+        with patch.object(
+            services, "open_driver", side_effect=lambda *a, **k: self._stub_rtsp_driver()
+        ), patch.object(transcode, "ffmpeg_available", return_value=True):
+            response = self.client.get(
+                reverse("surveillance-camera-live", args=[self.camera.pk]),
+                {"smooth": "false"},
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        breaker.check(self.recorder.pk)  # would raise if the refusal counted
+
+    def test_keyframes_arriving_faster_than_the_tile_needs_are_dropped(self):
+        """A recorder with a very short keyframe interval must not be allowed to
+        turn a 2fps tile into a 10fps one. The drop is counted, because a
+        non-zero count is the signal that this recorder could be asked for
+        less."""
+        frame = minimal_jpeg(b"burst")
+        source = SampledRtspSource("rtsp://box/ch1", fps=0.5)
+
+        with patch.object(
+            transcode,
+            "open_mjpeg_stills",
+            return_value=(_FakeFfmpeg(frame * 3), object()),
+        ), patch.object(transcode, "stop"):
+            produced = list(source.frames(lambda: False))
+
+        self.assertEqual(len(produced), 1, "one frame per two seconds, as asked")
+        self.assertEqual(source.stats["skipped_frames"], 2)
 
     def test_a_capability_refusal_costs_no_retries_and_no_sleeps(self):
         """The 6,017 ms in the field was 1s + 2s + 3s of backoff, spent

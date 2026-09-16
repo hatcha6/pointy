@@ -29,7 +29,7 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 
 from django.conf import settings
 
-from . import transcode
+from . import budget, transcode
 from .drivers.base import (
     RecorderCapabilityError,
     RecorderError,
@@ -100,7 +100,94 @@ class Frame:
 
 
 class StreamError(RuntimeError):
-    """The stream could not be started or has died."""
+    """The stream could not be started or has died.
+
+    ``reason`` is the machine-readable half, and it exists because the field
+    could not be diagnosed without it: 93,000 failures at one shop all arrived
+    as this one class, so every row said ``failed`` and nothing said *why*. The
+    sentence in the exception was always specific enough — it is only the
+    classification that was thrown away.
+
+    ``detail`` is the recorder's or ffmpeg's own first line, already stripped of
+    credentials, for the case where our vocabulary does not cover what happened.
+    """
+
+    def __init__(self, message, *, reason: str = "", detail: str = ""):
+        super().__init__(message)
+        self.reason = reason
+        self.detail = detail
+
+
+#: Why a stream failed, in terms an installer would act on. Deliberately a small
+#: closed set: an unbounded string is a log line, and we already had those.
+class StreamFailure:
+    AUTH = "auth"
+    UNREACHABLE = "unreachable"
+    TIMEOUT = "timeout"
+    REFUSED = "refused"
+    NO_CHANNEL = "no_channel"
+    NO_VIDEO = "no_video"
+    UNREADABLE = "unreadable"
+    STALLED = "stalled"
+    BUSY = "busy"
+    UNSUPPORTED = "unsupported"
+    UNKNOWN = "unknown"
+
+
+#: Driver exceptions to the same vocabulary, so a snapshot failure and an ffmpeg
+#: failure are counted in one place rather than two.
+_RECORDER_ERROR_REASONS = {
+    "RecorderUnreachable": StreamFailure.UNREACHABLE,
+    "RecorderAuthError": StreamFailure.AUTH,
+    "RecorderCapabilityError": StreamFailure.UNSUPPORTED,
+}
+
+
+def _reason_for_recorder_error(exc) -> str:
+    return _RECORDER_ERROR_REASONS.get(
+        exc.__class__.__name__, StreamFailure.UNKNOWN
+    )
+
+
+@contextmanager
+def _recorder_slot(recorder_id, limit=None):
+    """Hold one of this recorder's live-session slots for a pipeline's life.
+
+    A no-op where the caller did not name a recorder — playback, export, and
+    anything constructed in a test — so the budget only ever governs the live
+    paths it was measured on.
+    """
+    if recorder_id is None:
+        yield None
+        return
+    try:
+        seat = budget.reserve(recorder_id, limit=limit)
+    except budget.RecorderAtCapacity as exc:
+        # Deliberately the same class the rest of the stack already handles, so
+        # a refusal reaches the client as a first-class "busy" rather than as a
+        # new failure mode every caller has to learn.
+        raise StreamError(str(exc), reason=StreamFailure.BUSY) from exc
+    try:
+        yield seat
+    finally:
+        seat.release()
+
+
+def _note_outcome(seat, *, succeeded: bool, produced: int = 0) -> None:
+    """Teach the budget what this recorder just proved it can or cannot do.
+
+    Only a *cold* failure is evidence about capacity: a stream that delivered
+    frames and then died says something about the network, not about how many
+    sessions the box will accept. And only a failure with neighbours is evidence
+    at all — the first stream failing on an idle recorder means the recorder is
+    down, which is the breaker's job, not this one's.
+    """
+    if seat is None:
+        return
+    if succeeded:
+        budget.note_success(seat.recorder_id, seat.at_start + 1)
+    elif produced == 0 and seat.at_start >= 1:
+        budget.note_refusal(seat.recorder_id, seat.at_start)
 
 
 # ---------------------------------------------------------------------------
@@ -137,14 +224,18 @@ class SnapshotSource:
                     # code spent 1s + 2s + 3s discovering that on every single
                     # attempt — six seconds per failure, 18,160 times in three
                     # days at one shop, each holding a worker thread.
-                    raise StreamError(str(exc)) from exc
+                    raise StreamError(
+                        str(exc), reason=StreamFailure.UNSUPPORTED
+                    ) from exc
                 except RecorderError as exc:
                     consecutive_failures += 1
                     # A single miss is a busy encoder, not an outage. Give up
                     # only once the box has refused several in a row, so a
                     # momentarily loaded DVR does not blank the wall.
                     if consecutive_failures >= 4:
-                        raise StreamError(str(exc)) from exc
+                        raise StreamError(
+                            str(exc), reason=_reason_for_recorder_error(exc)
+                        ) from exc
                     time.sleep(min(1.0 * consecutive_failures, 3.0))
                     continue
                 if payload[:2] == JPEG_SOI:
@@ -182,6 +273,8 @@ class FfmpegSource:
         speed=None,
         anchor: datetime | None = None,
         label="",
+        recorder_id=None,
+        recorder_limit=None,
     ):
         self.url = url
         self.fps = max(int(fps), 1)
@@ -190,12 +283,22 @@ class FfmpegSource:
         self.speed = speed
         self.anchor = anchor
         self.label = label
+        #: Set on the live paths only. Playback and export deliberately do not
+        #: take a session slot: a manager reviewing an incident is one stream,
+        #: it is not repeated by a retrying wall, and refusing it to protect
+        #: tiles nobody is looking at would be the wrong trade.
+        self.recorder_id = recorder_id
+        self.recorder_limit = recorder_limit
         #: Read by the viewer that started this producer, for telemetry. A
         #: complaining decoder is the signal behind a picture that looks wrong
         #: rather than absent, and it is invisible anywhere else.
         self.stats: dict = {}
 
     def frames(self, should_stop):
+        with _recorder_slot(self.recorder_id, self.recorder_limit) as seat:
+            yield from self._frames(should_stop, seat)
+
+    def _frames(self, should_stop, seat):
         process, slot = transcode.open_mjpeg_stream(
             self.url,
             fps=self.fps,
@@ -203,17 +306,102 @@ class FfmpegSource:
             width=self.width,
             readrate=self.speed,
         )
+        produced = 0
         try:
-            yield from _jpeg_frames(
+            for frame in _jpeg_frames(
                 process,
                 should_stop,
                 seconds_per_frame=(self.speed or 1.0) / self.fps,
                 anchor=self.anchor,
-            )
+            ):
+                produced += 1
+                if produced == 1:
+                    _note_outcome(seat, succeeded=True)
+                yield frame
+        except StreamError:
+            _note_outcome(seat, succeeded=False, produced=produced)
+            raise
         finally:
             self.stats["decoder_complaints"] = len(
                 getattr(process, "_pointy_errors", ()) or ()
             )
+            transcode.stop(process, slot)
+
+
+class SampledRtspSource:
+    """Stills for a recorder that has none of its own.
+
+    The dashboard asks for a cheap live view — a couple of frames a second, no
+    transcoding — and on every recorder with a still-image endpoint it gets
+    exactly that from :class:`SnapshotSource`. A Xiongmai box has no such
+    endpoint, so the frames can only come from the video stream, and the request
+    still has to be answered cheaply rather than by running a full decode per
+    camera for as long as the shop is open.
+
+    So: keyframes only, one process per camera shared by every viewer through
+    the broker, and a floor on the interval between frames. The recorder's
+    keyframe cadence usually sets the rate on its own; the floor is there for
+    the boxes that send a keyframe several times a second, where the tile would
+    otherwise pay for frames it cannot show.
+    """
+
+    def __init__(
+        self,
+        url,
+        *,
+        fps=2,
+        quality=6,
+        width=0,
+        label="",
+        recorder_id=None,
+        recorder_limit=None,
+    ):
+        self.url = url
+        self.fps = max(float(fps), 0.1)
+        self.quality = quality
+        self.width = width
+        self.label = label
+        self.recorder_id = recorder_id
+        self.recorder_limit = recorder_limit
+        self.stats: dict = {}
+
+    def frames(self, should_stop):
+        with _recorder_slot(self.recorder_id, self.recorder_limit) as seat:
+            yield from self._frames(should_stop, seat)
+
+    def _frames(self, should_stop, seat):
+        process, slot = transcode.open_mjpeg_stills(
+            self.url, quality=self.quality, width=self.width
+        )
+        interval = 1.0 / self.fps
+        last_yield = 0.0
+        skipped = 0
+        produced = 0
+        try:
+            for frame in _jpeg_frames(
+                process,
+                should_stop,
+                seconds_per_frame=interval,
+                anchor=None,
+            ):
+                produced += 1
+                if produced == 1:
+                    _note_outcome(seat, succeeded=True)
+                now = time.monotonic()
+                if last_yield and (now - last_yield) < interval:
+                    skipped += 1
+                    continue
+                last_yield = now
+                yield frame
+        except StreamError:
+            _note_outcome(seat, succeeded=False, produced=produced)
+            raise
+        finally:
+            self.stats["decoder_complaints"] = len(
+                getattr(process, "_pointy_errors", ()) or ()
+            )
+            if skipped:
+                self.stats["skipped_frames"] = skipped
             transcode.stop(process, slot)
 
 
@@ -348,16 +536,23 @@ def _jpeg_frames(process, should_stop, *, seconds_per_frame, anchor, on_empty=No
         if not chunk:
             if sequence == 0:
                 upstream = on_empty() if on_empty else None
+                stderr = transcode.drain_error(process)
+                reason, message = classify_ffmpeg_error(stderr)
                 raise StreamError(
                     upstream
-                    or _humanize_ffmpeg_error(transcode.drain_error(process))
-                    or "The recorder did not return any video."
+                    or message
+                    or "The recorder did not return any video.",
+                    reason=reason,
+                    detail=stderr.splitlines()[0][:200] if stderr else "",
                 )
             # Ran to the end of the requested window: a normal finish.
             return
         buffer += chunk
         if len(buffer) > MAX_FRAME_BYTES:
-            raise StreamError("The video stream sent an unreadable frame.")
+            raise StreamError(
+                "The video stream sent an unreadable frame.",
+                reason=StreamFailure.UNREADABLE,
+            )
         while True:
             start = buffer.find(JPEG_SOI)
             if start == -1:
@@ -465,20 +660,41 @@ def _jpeg_frame_end(buffer) -> int:
             break
 
 
-def _humanize_ffmpeg_error(raw: str) -> str:
-    """Turn ffmpeg's stderr into something a shop owner can act on."""
+#: ffmpeg's vocabulary, in the order a more specific match should win, mapped to
+#: our reason and the sentence a shop owner can act on.
+_FFMPEG_SIGNATURES = (
+    (("401", "unauthorized"), StreamFailure.AUTH,
+     "The recorder rejected the username or password."),
+    (("connection refused", "no route to host"), StreamFailure.UNREACHABLE,
+     "The recorder is not answering on the video port (RTSP)."),
+    (("timed out", "timeout"), StreamFailure.TIMEOUT,
+     "The recorder stopped responding while sending video."),
+    (("404", "not found"), StreamFailure.NO_CHANNEL,
+     "The recorder has no footage for that channel and time."),
+    (("immediate exit", "server returned 5"), StreamFailure.REFUSED,
+     "The recorder refused the video request."),
+)
+
+
+def classify_ffmpeg_error(raw: str) -> tuple[str, str]:
+    """``(reason, sentence)`` for a pipeline that produced no video.
+
+    Both halves come from the same match so they cannot disagree: the row and
+    the message a shop is shown are always the same diagnosis. The sentence was
+    already here; only the reason is new, and the reason is what makes a week of
+    failures countable instead of merely loggable.
+    """
     lowered = (raw or "").lower()
-    if "401" in lowered or "unauthorized" in lowered:
-        return "The recorder rejected the username or password."
-    if "connection refused" in lowered or "no route to host" in lowered:
-        return "The recorder is not answering on the video port (RTSP)."
-    if "timed out" in lowered or "timeout" in lowered:
-        return "The recorder stopped responding while sending video."
-    if "404" in lowered or "not found" in lowered:
-        return "The recorder has no footage for that channel and time."
-    if "immediate exit" in lowered or "server returned 5" in lowered:
-        return "The recorder refused the video request."
-    return raw.splitlines()[0][:200] if raw else ""
+    for needles, reason, message in _FFMPEG_SIGNATURES:
+        if any(needle in lowered for needle in needles):
+            return reason, message
+    if not raw:
+        return StreamFailure.NO_VIDEO, ""
+    return StreamFailure.UNKNOWN, raw.splitlines()[0][:200]
+
+
+def _humanize_ffmpeg_error(raw: str) -> str:
+    return classify_ffmpeg_error(raw)[1]
 
 
 # ---------------------------------------------------------------------------
@@ -492,6 +708,9 @@ class _Producer:
         self.lock = threading.Condition()
         self.latest: Frame | None = None
         self.error: str = ""
+        #: Carried alongside the message so a viewer who joined an already-dead
+        #: producer is counted under the same reason as the one who started it.
+        self.error_reason: str = ""
         self.finished = False
         self.subscribers = 0
         self.idle_since = time.monotonic()
@@ -513,6 +732,7 @@ class _Producer:
 
     def _run(self):
         error = ""
+        reason = ""
         try:
             for frame in self.source.frames(self._should_stop):
                 with self.lock:
@@ -520,10 +740,14 @@ class _Producer:
                     self.lock.notify_all()
         except Exception as exc:  # noqa: BLE001 - surfaced to every subscriber
             error = str(exc) or exc.__class__.__name__
-            logger.info("camera stream %s ended: %s", self.key, error)
+            reason = getattr(exc, "reason", "") or _reason_for_recorder_error(exc)
+            logger.info(
+                "camera stream %s ended (%s): %s", self.key, reason, error
+            )
         finally:
             with self.lock:
                 self.error = error
+                self.error_reason = reason
                 self.finished = True
                 self.lock.notify_all()
             self.broker._retire(self.key, self)
@@ -556,7 +780,8 @@ class _Producer:
                         # recorder failing to send, and both end the same way.
                         if time.monotonic() - last_progress > stall_seconds:
                             raise StreamError(
-                                "The recorder stopped sending video."
+                                "The recorder stopped sending video.",
+                                reason=StreamFailure.STALLED,
                             )
                 if self.latest is not None and self.latest.sequence > last_sequence:
                     frame = self.latest
@@ -564,7 +789,9 @@ class _Producer:
                     last_progress = time.monotonic()
                 elif self.finished:
                     if self.error:
-                        raise StreamError(self.error)
+                        raise StreamError(
+                            self.error, reason=self.error_reason
+                        )
                     return
                 else:
                     continue
@@ -703,7 +930,8 @@ class FrameBroker:
                     self._evict_idle_locked()
                 if len(self._producers) >= self.max_producers:
                     raise StreamError(
-                        "Too many camera streams are open on this server."
+                        "Too many camera streams are open on this server.",
+                        reason=StreamFailure.BUSY,
                     )
                 producer = _Producer(key, build_source(), self)
                 self._producers[key] = producer
@@ -755,6 +983,16 @@ class FrameBroker:
             producer.thread.join(timeout=5)
         with self._lock:
             self._producers.clear()
+
+    def has_producer(self, key: str) -> bool:
+        """Is someone already pulling this exact stream?
+
+        A second viewer of a running producer costs the recorder nothing, so the
+        capacity pre-check in the views must not refuse them.
+        """
+        with self._lock:
+            producer = self._producers.get(key)
+            return producer is not None and not producer.finished
 
     def active_keys(self):
         with self._lock:

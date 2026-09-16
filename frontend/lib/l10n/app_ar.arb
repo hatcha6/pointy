@@ -10865,6 +10865,8 @@
   "cameraOfflineLabel": "غير متصلة",
   "cameraConnectingLabel": "جارٍ الاتصال…",
   "cameraStreamFailedLabel": "تعذّر عرض البث",
+  "cameraRecorderBusyLabel": "جهاز التسجيل ممتلئ",
+  "cameraRecorderBusyDetail": "يعرض جهاز التسجيل أقصى عدد من البثوث المباشرة في الوقت نفسه. أغلق كاميرا أخرى أو انتظر قليلًا.",
   "cameraRetryAction": "إعادة المحاولة",
   "cameraFullScreenTooltip": "ملء الشاشة",
   "cameraExitFullScreenTooltip": "إنهاء ملء الشاشة",

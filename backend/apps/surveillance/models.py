@@ -78,6 +78,17 @@ class Recorder(TimeStampedModel):
     # the device service on a handful of different paths and the driver tries
     # them all, so this stays empty on nearly every install.
     onvif_service_path = models.CharField(max_length=120, blank=True, db_default="")
+    # How many live streams this box will serve at once, when somebody knows.
+    # Left empty on nearly every install: a DVR does not announce its session
+    # cap and nobody reads the datasheet, so the usual path is that we learn it
+    # from a stream that failed while its neighbours were fine — see
+    # apps.surveillance.budget. Setting it here overrides what we learned, for
+    # the installer who does know.
+    # ``db_default`` for the same reason as the two fields above: a zero-downtime
+    # update leaves the previous release inserting rows that name no such column.
+    max_concurrent_streams = models.PositiveSmallIntegerField(
+        null=True, blank=True, db_default=None
+    )
 
     # Identity, from the last successful probe.
     model_name = models.CharField(max_length=120, blank=True)

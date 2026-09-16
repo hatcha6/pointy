@@ -19,6 +19,7 @@ import logging
 from contextlib import closing
 from datetime import timedelta, timezone as dt_timezone
 
+from django.conf import settings
 from django.db.models import Count
 from django.core.handlers.asgi import ASGIRequest
 from django.http import Http404, HttpResponse, StreamingHttpResponse
@@ -36,7 +37,7 @@ from apps.core.permissions import HasPointyPermission
 from apps.core.streaming import aiter_in_thread
 from apps.sales.models import Order
 
-from . import breaker, services, transcode
+from . import breaker, budget, services, transcode
 from . import telemetry
 from .drivers import RecorderError, StreamQuality
 from .models import Camera, Recorder
@@ -53,8 +54,10 @@ from .streaming import (
     FfmpegSource,
     Frame,
     PipedSource,
+    SampledRtspSource,
     SnapshotSource,
     StreamError,
+    StreamFailure,
     broker,
 )
 
@@ -77,6 +80,72 @@ DEFAULT_LIVE_FPS = 15
 DEFAULT_PLAYBACK_FPS = 25
 MAX_FPS = 60
 MAX_SNAPSHOT_FPS = 8
+
+#: The rate the sampled-stills path runs at, and the only rate it runs at.
+#:
+#: Not the client's number, on purpose. A dashboard tile asking for 2 and a
+#: second one asking for 3 would key two producers for the same camera, which is
+#: the exact cost this path exists to avoid — so the rate is the server's
+#: policy, one producer per camera, and everyone shares it.
+DEFAULT_STILL_FPS = 2
+
+#: The width the sampled-stills path renders at, whatever the tile asked for.
+#:
+#: Same reasoning as the rate, for the same reason. A 1024-wide dashboard and a
+#: 1280-wide one compute tile widths a few dozen pixels apart, and any scheme
+#: that keeps the client's number — rounded, bucketed, however coarsely — splits
+#: them across two ffmpeg processes as soon as they straddle a boundary. One
+#: number for everyone is the only version that actually guarantees one decode
+#: per camera. Never an upscale: the filter takes the smaller of this and the
+#: stream's own width, so a 492-wide sub-stream is passed through untouched.
+DEFAULT_STILL_WIDTH = 640
+
+
+class LivePath:
+    """Which pipeline answers a live request, and what it costs.
+
+    Three, not two, because "cheap" and "smooth" are what a client can ask for
+    while *how* to be cheap depends on hardware the client knows nothing about.
+    A recorder with a still-image endpoint gets stills over HTTP for free; one
+    without has to have them sampled out of its video stream. Both answer the
+    same request; only the server can tell which is possible.
+    """
+
+    #: The recorder's own still-image endpoint. No transcoding at all.
+    SNAPSHOT = "snapshot"
+    #: Keyframes sampled from RTSP, shared between viewers. Cheap, not free.
+    STILL = "still"
+    #: A full decode at the rate the client asked for.
+    SMOOTH = "smooth"
+
+
+#: What each path is called in telemetry and in the stream key.
+LIVE_MODES = {
+    LivePath.SNAPSHOT: "live-snap",
+    LivePath.STILL: "live-still",
+    LivePath.SMOOTH: "live-rtsp",
+}
+
+
+def still_fps() -> int:
+    """The sampled-stills rate, or ``0`` to switch the path off entirely.
+
+    Zero is the escape hatch: a shop whose recorder turns out not to mark its
+    keyframes the way ffmpeg expects gets full decodes back without waiting for
+    a release, which is the same reason the telemetry and the ffmpeg ceiling are
+    settings rather than constants.
+    """
+    return max(
+        0, int(getattr(settings, "POINTY_SURVEILLANCE_STILL_FPS", DEFAULT_STILL_FPS))
+    )
+
+
+def still_width() -> int:
+    """The rendered width of a sampled still. ``0`` means the stream's own."""
+    return max(
+        0,
+        int(getattr(settings, "POINTY_SURVEILLANCE_STILL_WIDTH", DEFAULT_STILL_WIDTH)),
+    )
 
 
 def _parse_moment(raw, field):
@@ -117,26 +186,40 @@ def resolve_live_stream(
     Pulled out of the view because it is the whole frame-rate policy in a few
     lines, and a policy worth stating is a policy worth testing: the RTSP path
     is the default wherever ffmpeg exists and is capped only by what the client
-    asks for, while the snapshot fallback is capped at the rate an HTTP round
-    trip per frame can actually sustain.
+    asks for, while the cheap paths are capped at what they can sustain.
 
-    ``supports_snapshot`` is the correction the field forced. A Xiongmai box has
-    no still-image endpoint at all — the driver has always declared that — but
-    nothing consulted the declaration, so a client asking `smooth=false` (or any
-    client at all on a server without ffmpeg) was routed down a path the
-    recorder cannot serve. It failed every single time, six seconds at a time,
-    18,160 times in three days. A recorder that cannot answer a question should
-    never be asked it, and the app should work that out rather than the shop.
+    ``smooth=false`` is a request for a *cheap* live view, not for a particular
+    pipeline — the client is a dashboard tile that will be left open all day and
+    does not want a decode per camera running behind it. Which pipeline is cheap
+    depends on the recorder, which is knowledge the client does not have:
+
+    * a box with a still-image endpoint answers over HTTP and costs nothing;
+    * a box without one — Xiongmai has none, and the driver has always declared
+      it — can only be reached through its video stream, so the frames are
+      sampled from keyframes and shared between every viewer.
+
+    Returning ``SMOOTH`` for the second case is what the first version of this
+    fix did, and it was half right: it stopped a guaranteed failure, but it
+    answered a request for cheap with a full decode per camera, forever, on a
+    shop's mini-PC. The client asked correctly; the server owes it a cheap
+    answer, not a literal one.
+
+    The field this came from: ~93,000 requests down the snapshot path on a
+    recorder that has no snapshot endpoint, every one of them failing after six
+    seconds, none of them ever returning a frame.
     """
     fps = _parse_int(requested_fps, DEFAULT_LIVE_FPS, minimum=1, maximum=MAX_FPS)
-    if not supports_snapshot:
-        # No fallback exists on this hardware: RTSP or nothing. Honouring
-        # `smooth=false` here would only choose a guaranteed failure.
-        return True, fps
-    smooth = bool(ffmpeg_available) and requested_smooth != "false"
-    if not smooth:
-        fps = min(fps, MAX_SNAPSHOT_FPS)
-    return smooth, fps
+    if requested_smooth != "false" and ffmpeg_available:
+        return LivePath.SMOOTH, fps
+    if supports_snapshot:
+        return LivePath.SNAPSHOT, min(fps, MAX_SNAPSHOT_FPS)
+    sampled = still_fps()
+    if ffmpeg_available and sampled:
+        # Cheap was asked for and cheap is still possible, just not for free.
+        return LivePath.STILL, sampled
+    # Nothing on this hardware can answer. The caller turns this into an
+    # immediate, readable refusal rather than a six-second wait per attempt.
+    return LivePath.SMOOTH, fps
 
 
 def _multipart_chunks(frames):
@@ -211,8 +294,12 @@ class _StreamStart:
         except StreamError as exc:
             logger.info("camera stream ended mid-response: %s", exc)
             if report is not None:
-                report.outcome = telemetry.FAILED
+                reason = getattr(exc, "reason", "") or telemetry.UNKNOWN_REASON
+                report.outcome = _REASON_OUTCOMES.get(reason, telemetry.FAILED)
                 report.error_kind = exc.__class__.__name__
+                report.reason = reason
+                if getattr(exc, "detail", ""):
+                    report.detail = exc.detail
         finally:
             self.subscription.__exit__(None, None, None)
             self._finish()
@@ -254,13 +341,29 @@ def _start_stream(key, build_source, report=None):
     )
 
 
-#: Exception classes to the outcome an installer would act on. Anything else is
-#: a generic failure, which is still worth a row: an outcome we cannot name is
-#: the most interesting kind.
+#: Exception classes to the outcome an installer would act on. This map alone
+#: was never enough: every live failure that mattered arrived as ``StreamError``
+#: and fell through to ``FAILED``, so across 93,000 field failures the outcome
+#: column held exactly one value and ``auth``/``unreachable``/``busy`` were dead
+#: vocabulary. The reason on the exception is now what decides, and this is the
+#: fallback for the classes that never carried one.
 _OUTCOMES = {
     "RecorderUnreachable": telemetry.UNREACHABLE,
     "RecorderAuthError": telemetry.AUTH,
     "TranscodeUnavailable": telemetry.NO_FFMPEG,
+}
+
+#: Why a stream failed, to the outcome bucket a dashboard counts. Several
+#: reasons share a bucket on purpose — a box that refused the connection and one
+#: that stopped answering mid-handshake are the same call to the same installer —
+#: while ``reason`` keeps the distinction for anyone who needs it.
+_REASON_OUTCOMES = {
+    StreamFailure.AUTH: telemetry.AUTH,
+    StreamFailure.UNREACHABLE: telemetry.UNREACHABLE,
+    StreamFailure.TIMEOUT: telemetry.UNREACHABLE,
+    StreamFailure.REFUSED: telemetry.UNREACHABLE,
+    StreamFailure.BUSY: telemetry.BUSY,
+    StreamFailure.UNSUPPORTED: telemetry.UNSUPPORTED,
 }
 
 
@@ -268,15 +371,44 @@ def _record_failure(report, exc):
     if report is None:
         return
     name = exc.__class__.__name__
-    report.outcome = _OUTCOMES.get(name, telemetry.FAILED)
+    reason = getattr(exc, "reason", "") or ""
+    report.outcome = _REASON_OUTCOMES.get(
+        reason, _OUTCOMES.get(name, telemetry.FAILED)
+    )
     if report.outcome == telemetry.FAILED and "Too many" in str(exc):
         report.outcome = telemetry.BUSY
     report.error_kind = name
+    report.reason = reason or telemetry.UNKNOWN_REASON
+    detail = getattr(exc, "detail", "")
+    if detail:
+        report.detail = detail
     telemetry.record(report)
 
 
 def _stream_error_response(exc, *, code=status.HTTP_502_BAD_GATEWAY):
     return Response({"detail": str(exc), "code": "stream_failed"}, status=code)
+
+
+def _capacity_response(exc):
+    """503 with ``Retry-After``: the recorder is full, not broken.
+
+    The same shape as the breaker's refusal because the client already knows how
+    to read it — `mjpeg_view` takes `retry_after` over its own backoff ladder —
+    but a distinct ``code``, because "wait, something else is watching" and "this
+    box is not answering" are different things to say to a shop, and only one of
+    them means somebody should go and look at the recorder.
+    """
+    retry_after = getattr(exc, "retry_after", budget.RETRY_AFTER_SECONDS)
+    response = Response(
+        {
+            "detail": str(exc),
+            "code": "recorder_at_capacity",
+            "retry_after": retry_after,
+        },
+        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+    )
+    response["Retry-After"] = str(retry_after)
+    return response
 
 
 def _breaker_response(exc):
@@ -330,6 +462,10 @@ class RecorderViewSet(viewsets.ModelViewSet):
         # tripped the breaker no longer describes this recorder. Cleared before
         # the re-probe so the shop's next look at the wall is a real attempt.
         breaker.reset(recorder.pk)
+        # Same argument for the session ceiling: it was learned about the box at
+        # the old address, on the old firmware, behind the old switch. An
+        # explicit limit on the form wins anyway; this only drops the guess.
+        budget.forget(recorder.pk)
         self._connect(recorder)
 
     def _connect(self, recorder):
@@ -389,6 +525,7 @@ class RecorderViewSet(viewsets.ModelViewSet):
         # after fixing the thing that broke. Clear any cooldown first so the
         # answer they get is about the recorder, not about our backoff.
         breaker.reset(recorder.pk)
+        budget.forget(recorder.pk)
         result = services.probe_recorder(recorder.as_target(), recorder.brand)
         services.apply_connection_result(recorder, result)
         recorder = self.get_queryset().get(pk=recorder.pk)
@@ -505,13 +642,13 @@ class CameraLiveStreamView(_CameraViewMixin, APIView):
             request.query_params.get("quality") or camera.live_quality
         )
         capabilities = camera.recorder.driver_capabilities
-        smooth, fps = resolve_live_stream(
+        path, fps = resolve_live_stream(
             request.query_params.get("fps"),
             request.query_params.get("smooth"),
             ffmpeg_available=transcode.ffmpeg_available(),
             supports_snapshot=capabilities["snapshot"],
         )
-        if smooth and not transcode.ffmpeg_available():
+        if path != LivePath.SNAPSHOT and not transcode.ffmpeg_available():
             # The only path this recorder has, and the server cannot walk it.
             # Say so now: the alternative was a six-second wait per attempt,
             # forever, with a generic failure at the end of each one.
@@ -523,19 +660,44 @@ class CameraLiveStreamView(_CameraViewMixin, APIView):
                 code=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         width = _parse_int(request.query_params.get("width"), 0, minimum=0, maximum=1920)
+        if path == LivePath.STILL:
+            # Two tills whose tiles differ by a few pixels are asking for the
+            # same picture, and honouring both numbers would start an ffmpeg
+            # each. One width for everyone is what makes the sharing real.
+            width = still_width()
 
-        mode = "live-rtsp" if smooth else "live-snap"
+        mode = LIVE_MODES[path]
         key = services.stream_key(camera, mode=f"{mode}@{fps}x{width}", quality=quality)
+        # Resolved here, where the recorder row is already loaded, and handed to
+        # the producer as a number: the thread that holds the slot outlives this
+        # request, and should not be reaching back into the ORM to re-read it.
+        stream_limit = budget.limit_for(camera.recorder)
 
         def build_source():
             driver = services.open_driver(camera.recorder)
-            if not smooth:
+            if path == LivePath.SNAPSHOT:
                 return SnapshotSource(
                     driver, camera.channel, quality=quality, fps=fps
                 )
             url = driver.live_rtsp_url(camera.channel, quality=quality)
             driver.close()
-            return FfmpegSource(url, fps=fps, width=width, label=str(camera))
+            if path == LivePath.STILL:
+                return SampledRtspSource(
+                    url,
+                    fps=fps,
+                    width=width,
+                    label=str(camera),
+                    recorder_id=camera.recorder_id,
+                    recorder_limit=stream_limit,
+                )
+            return FfmpegSource(
+                url,
+                fps=fps,
+                width=width,
+                label=str(camera),
+                recorder_id=camera.recorder_id,
+                recorder_limit=stream_limit,
+            )
 
         report = telemetry.StreamReport(
             camera_id=camera.pk,
@@ -551,6 +713,18 @@ class CameraLiveStreamView(_CameraViewMixin, APIView):
         except breaker.RecorderCircuitOpen as exc:
             return _breaker_response(exc)
 
+        if not broker.has_producer(key):
+            # Only a cold start costs the recorder a session. Joining a stream
+            # someone else already opened costs it nothing, so sharing viewers
+            # are never refused however full the box is.
+            try:
+                budget.check(camera.recorder_id, limit=stream_limit)
+            except budget.RecorderAtCapacity as exc:
+                _record_failure(
+                    report, StreamError(str(exc), reason=StreamFailure.BUSY)
+                )
+                return _capacity_response(exc)
+
         try:
             started = _start_stream(key, build_source, report=report)
         except RecorderError as exc:
@@ -561,11 +735,17 @@ class CameraLiveStreamView(_CameraViewMixin, APIView):
             _record_failure(report, exc)
             return _stream_error_response(exc, code=status.HTTP_503_SERVICE_UNAVAILABLE)
         except StreamError as exc:
+            _record_failure(report, exc)
+            if getattr(exc, "reason", "") == StreamFailure.BUSY:
+                # Not a failure of this camera, and emphatically not evidence
+                # that the recorder is down: it is answering, we are simply out
+                # of session slots. Tripping the breaker here would take the
+                # streams that *are* working down with it.
+                return _capacity_response(exc)
             # On LIVE this means the camera produced no video at all, which is
             # exactly the loop the breaker exists to stop — 18,160 of these in
             # three days at one shop. Playback treats the same class as a normal
             # "nothing recorded then" and deliberately does not pause anything.
-            _record_failure(report, exc)
             breaker.note_failure(camera.recorder_id, exc)
             return _stream_error_response(exc)
 

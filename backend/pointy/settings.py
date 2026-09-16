@@ -74,6 +74,8 @@ env = environ.Env(
     POINTY_SURVEILLANCE_TELEMETRY=(bool, True),
     POINTY_SURVEILLANCE_LINGER_SECONDS=(float, 30.0),
     POINTY_SURVEILLANCE_MAX_FFMPEG=(int, 12),
+    POINTY_SURVEILLANCE_STILL_FPS=(int, 2),
+    POINTY_SURVEILLANCE_STILL_WIDTH=(int, 640),
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
@@ -826,6 +828,17 @@ POINTY_SURVEILLANCE_LINGER_SECONDS = env("POINTY_SURVEILLANCE_LINGER_SECONDS")
 # Concurrent ffmpeg pipelines. The comment on the constant always described this
 # as "a setting rather than a constant"; until now it was not actually settable.
 POINTY_SURVEILLANCE_MAX_FFMPEG = env("POINTY_SURVEILLANCE_MAX_FFMPEG")
+# The rate the sampled-stills live path runs at, on recorders that have no
+# still-image endpoint of their own. It is the server's number rather than the
+# client's so that every dashboard tile on every till shares one pipeline per
+# camera; raising it costs one more JPEG encode per second per camera, not one
+# more decode.
+POINTY_SURVEILLANCE_STILL_FPS = env("POINTY_SURVEILLANCE_STILL_FPS")
+# And the width it renders at. One number for every viewer, for the same reason
+# as the rate: keeping each tile's own width would split a camera across an
+# ffmpeg per distinct tile size. It only ever shrinks — a sub-stream narrower
+# than this is passed through as it is. 0 means "whatever the stream is".
+POINTY_SURVEILLANCE_STILL_WIDTH = env("POINTY_SURVEILLANCE_STILL_WIDTH")
 
 POINTY_ATTACHMENT_STORAGE_ROOT = env(
     "POINTY_ATTACHMENT_STORAGE_ROOT",

@@ -21,9 +21,16 @@ import '../../../data/services/surveillance_api_client.dart';
 /// mini-PC for hours so an unwatched corner of a screen can be smooth is the
 /// wrong trade — it is the same reason Home Assistant's picture cards default
 /// to refreshing snapshots rather than live video. A couple of frames a second
-/// through the recorder's own snapshot endpoint costs no transcoding at all,
 /// still reads as alive for a shop scene, and the full-screen player is one tap
 /// away when somebody actually wants to watch.
+///
+/// Asking for it is `smooth: false`, and that asks for *cheap* rather than for
+/// a named pipeline — how to be cheap depends on the recorder, which is not
+/// something this screen can know. A box with a still-image endpoint answers
+/// over HTTP and costs no transcoding at all. A box without one (Xiongmai has
+/// none) has the frames sampled from its video stream's keyframes instead, one
+/// pipeline per camera shared by every viewer. Both honour what was asked for;
+/// only the server can tell which is possible.
 class DashboardCamerasViewModel extends ChangeNotifier {
   DashboardCamerasViewModel(
     this._repository, {
@@ -150,10 +157,12 @@ class DashboardCamerasViewModel extends ChangeNotifier {
 
   /// Frames for one dashboard tile.
   ///
-  /// `smooth: false` is the whole point — it pins this to the recorder's
-  /// snapshot endpoint, so a dashboard left open overnight costs the server no
-  /// transcoding. [tileWidth] lets the server scale the JPEG to the tile, which
-  /// is most of the bandwidth saved.
+  /// `smooth: false` is the whole point — it asks for the cheapest live view
+  /// this recorder can give, so a dashboard left open overnight does not cost a
+  /// decode per camera. [tileWidth] is a hint about how big the picture needs
+  /// to be; a recorder that can serve stills scales to it exactly, while the
+  /// sampled path renders one size for every viewer so they can share a
+  /// pipeline, and never larger than the stream itself.
   Stream<CameraFrame> frames(Camera camera, {int tileWidth = 0}) {
     return _repository.liveFrames(
       camera.id,

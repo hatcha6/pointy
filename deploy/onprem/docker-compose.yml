@@ -67,6 +67,8 @@ x-backend-environment: &backend-environment
   # weak box: every lingering stream is an ffmpeg still burning CPU.
   POINTY_SURVEILLANCE_LINGER_SECONDS: "${POINTY_SURVEILLANCE_LINGER_SECONDS:-30}"
   POINTY_SURVEILLANCE_MAX_FFMPEG: "${POINTY_SURVEILLANCE_MAX_FFMPEG:-12}"
+  POINTY_SURVEILLANCE_STILL_FPS: "${POINTY_SURVEILLANCE_STILL_FPS:-2}"
+  POINTY_SURVEILLANCE_STILL_WIDTH: "${POINTY_SURVEILLANCE_STILL_WIDTH:-640}"
   POINTY_ATTACHMENT_STORAGE_ROOT: /var/lib/pointy/media
   # Companion camera: a staff phone paired to a till over the shop LAN, so the
   # 2-D codes a laser scanner cannot read (payment-terminal receipts) and the

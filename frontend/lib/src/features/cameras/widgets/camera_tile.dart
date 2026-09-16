@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/camera.dart';
+import '../../../data/services/api_error_detail.dart';
 import '../../../data/services/surveillance_api_client.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
@@ -136,12 +137,26 @@ class _CameraTileState extends State<CameraTile> {
                         : l10n.camerasPausedBanner,
                     busy: widget.isActive,
                   ),
-                  errorBuilder: (context, error, retry) => _TilePlaceholder(
-                    label: l10n.cameraStreamFailedLabel,
-                    detail: _detailOf(error),
-                    icon: Icons.videocam_off_outlined,
-                    onRetry: retry,
-                  ),
+                  errorBuilder: (context, error, retry) {
+                    // A recorder at its session cap is answering us; it simply
+                    // has no slot free. Saying "the stream failed" there points
+                    // a shop at a camera that is working, which is how seven
+                    // black tiles on a sixteen-camera wall read as seven broken
+                    // cameras instead of one full DVR.
+                    final busy = apiErrorCode(error) == 'recorder_at_capacity';
+                    return _TilePlaceholder(
+                      label: busy
+                          ? l10n.cameraRecorderBusyLabel
+                          : l10n.cameraStreamFailedLabel,
+                      detail: busy
+                          ? l10n.cameraRecorderBusyDetail
+                          : _detailOf(error),
+                      icon: busy
+                          ? Icons.hourglass_empty_outlined
+                          : Icons.videocam_off_outlined,
+                      onRetry: retry,
+                    );
+                  },
                 ),
                 Positioned(
                   left: 0,
