@@ -9,6 +9,11 @@ part of 'pos_view_model.dart';
 extension PosSessionPersistence on PosViewModel {
   static const _snapshotVersion = 1;
 
+  /// How long a pre-checkout snapshot write may take before the sale goes ahead
+  /// without it. Local WAL-mode SQLite answers in single-digit milliseconds; a
+  /// disk that has stopped answering must not hold up the cashier.
+  static const _persistNowDeadline = Duration(seconds: 2);
+
   /// True once there is at least one non-empty cart worth saving.
   bool get _hasPersistableContent =>
       _saleSessions.any((session) => session.cart.isNotEmpty);
@@ -22,11 +27,6 @@ extension PosSessionPersistence on PosViewModel {
   /// off rather than replacing the snapshot with an empty cart.
   static const _loadAttempts = 3;
   static const _loadRetryBackoff = Duration(milliseconds: 100);
-
-  /// How long a forced snapshot write may take before the till stops waiting
-  /// on it. Local WAL-mode SQLite answers in single-digit milliseconds; a disk
-  /// that has stopped answering must not hold up the cashier.
-  static const _persistNowDeadline = Duration(seconds: 2);
 
   /// Restores the persisted sessions for [scope] (the user id), replacing the
   /// in-memory state when a non-empty snapshot exists. Safe to call repeatedly;
@@ -124,7 +124,8 @@ extension PosSessionPersistence on PosViewModel {
 
     for (final session in rungUpMeanwhile) {
       // Renumbered onto the restored series so no two open invoices can end up
-      // sharing an id.
+      // sharing an id. Checkout attempts are deliberately not carried: a cart
+      // built in this window has no committed sale to replay against.
       final adopted = _createSaleSession()
         ..selectedCustomer = session.selectedCustomer
         ..couponCode = session.couponCode
@@ -149,25 +150,40 @@ extension PosSessionPersistence on PosViewModel {
     });
   }
 
-  /// Writes the snapshot now instead of waiting out the 500ms debounce, and
-  /// reports whether it landed.
+  /// Writes the snapshot now instead of on the 500ms debounce, and reports
+  /// whether it landed.
   ///
-  /// The last reliable moment before the process goes away — the app leaving
-  /// the foreground, the view model being torn down — is worth a forced write:
-  /// a change made inside the debounce window is otherwise only in memory, and
-  /// these tills lose power without warning.
+  /// Called immediately before a checkout POST. The idempotency key minted for
+  /// that request has to be on disk *before* the request leaves: mains power in
+  /// these shops is not dependable, and a cut in the window between the sale
+  /// committing on the backend and the till reading the response otherwise
+  /// loses the key — the cart is restored on the next launch (that is the whole
+  /// point of this file), the cashier presses checkout again, a fresh key is
+  /// minted, and the same sale is billed and stocked twice.
   ///
   /// Best-effort and bounded by design: a storage failure or a stalled write is
   /// reported to the caller, never thrown and never waited on indefinitely. A
-  /// till that cannot write its scratch state must still be able to sell.
-  /// Does nothing while this scope's snapshot has not been read back, which
-  /// would mean overwriting the only copy of the cashier's work.
-  Future<bool> persistNow() async {
+  /// till that cannot write its scratch state must still be able to take the
+  /// customer's money.
+  ///
+  /// [overwriteUnread] lets the caller write even when this scope's snapshot
+  /// has not been read back yet, which everywhere else means "leave the disk
+  /// alone, that file is the only copy of the cashier's work". Only checkout
+  /// asks for it: billing a customer twice is worse than losing held invoices
+  /// the cashier can already see are missing, so the idempotency key wins that
+  /// tie. Nothing else should.
+  Future<bool> persistNow({bool overwriteUnread = false}) async {
     final scope = _persistScope;
-    if (scope == null || !_persistScopeLoaded) {
+    if (scope == null) {
+      return false;
+    }
+    if (!_persistScopeLoaded && !overwriteUnread) {
       return false;
     }
     _persistDebounce?.cancel();
+    // Whatever was on the disk has just been superseded; stop holding back the
+    // debounced writes that follow this sale.
+    _persistScopeLoaded = true;
     try {
       await _flushPersist(scope).timeout(_persistNowDeadline);
       return true;
@@ -201,6 +217,9 @@ extension PosSessionPersistence on PosViewModel {
             'shareInvoiceAfterPayment': session.shareInvoiceAfterPayment,
             'customer': session.selectedCustomer?.toJson(),
             'cart': [for (final line in session.cart) line.toJson()],
+            // Restored with the cart so a checkout the till never saw the
+            // answer to is retried under its original key — see [persistNow].
+            'checkoutAttempts': session.checkoutAttemptsToJson(),
           },
       ],
     });
@@ -232,6 +251,7 @@ extension PosSessionPersistence on PosViewModel {
             sessionMap['printInvoiceAfterPayment'] == true;
         session.shareInvoiceAfterPayment =
             sessionMap['shareInvoiceAfterPayment'] == true;
+        session.restoreCheckoutAttempts(sessionMap['checkoutAttempts']);
         final updatedAt = DateTime.tryParse(
           sessionMap['updatedAt']?.toString() ?? '',
         );

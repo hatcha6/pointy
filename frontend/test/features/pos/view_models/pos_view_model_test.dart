@@ -346,6 +346,142 @@ void main() {
   });
 
   test(
+    'a power cut mid-checkout leaves the idempotency key with the restored cart',
+    () async {
+      // The shop loses mains power in the window between the backend committing
+      // the sale and the till reading the response. The cart is restored on the
+      // next launch — that is what the session snapshot is for — so the cashier
+      // sees the same basket and presses checkout again. That retry has to carry
+      // the ORIGINAL key, or the backend has nothing to match it against and
+      // books, bills and de-stocks the same sale a second time.
+      final storage = MemoryScopedJsonStorage();
+      final keys = <String?>[];
+
+      final firstApi = _FakePosApiService(
+        catalogPages: const {
+          1: [_coffeeVariant],
+        },
+        onCheckout: (draft, idempotencyKey) async {
+          keys.add(idempotencyKey);
+          // Committed on the backend; the answer never reaches this till.
+          throw Exception('mains cut before the response arrived');
+        },
+      );
+      final first = _viewModel(firstApi, sessionStorage: storage);
+      addTearDown(first.dispose);
+      await first.loadCurrentRegisterSession();
+      await first.resumeRegisterSession();
+      await first.restorePersistedSessions('user-1');
+      first.addVariant(_coffeeVariant);
+      // The cashier builds the basket, then collects payment — long enough for
+      // the debounced cart snapshot to land. That part already worked; the key
+      // minted moments later, inside checkout, is the part that did not.
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+
+      await first.checkoutCurrentSale(
+        payments: const [
+          SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 3.5),
+        ],
+      );
+
+      // The till reboots. Nothing waits out the debounce after checkout on
+      // purpose: the key has to have been durable before the request went out.
+      final secondApi = _FakePosApiService(
+        catalogPages: const {
+          1: [_coffeeVariant],
+        },
+        onCheckout: (draft, idempotencyKey) async {
+          keys.add(idempotencyKey);
+          return _saleOrder(
+            total: draft.payments.single.amount,
+            lines: const [],
+          );
+        },
+      );
+      final second = _viewModel(secondApi, sessionStorage: storage);
+      addTearDown(second.dispose);
+      await second.loadCurrentRegisterSession();
+      await second.resumeRegisterSession();
+      await second.restorePersistedSessions('user-1');
+      await _settle();
+
+      expect(second.cart, hasLength(1));
+
+      await second.checkoutCurrentSale(
+        payments: const [
+          SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 3.5),
+        ],
+      );
+
+      expect(keys, hasLength(2));
+      expect(keys.first, isNotNull);
+      expect(keys.first, startsWith('checkout:'));
+      // Same key: the backend replays the sale it already booked.
+      expect(keys.last, keys.first);
+      await _settle();
+    },
+  );
+
+  test(
+    'a printer that resolves differently on retry keeps the same request',
+    () async {
+      // The outage that swallowed the first response also breaks the printer
+      // lookup, so the retry resolves no invoice printer. Which printer the
+      // receipt goes to does not make it a different sale: both the key and the
+      // body have to stay put, or the retry is either a second sale (new key) or
+      // a refused conflicting reuse of the key (same key, different body).
+      final keys = <String?>[];
+      final drafts = <SaleCheckoutDraft>[];
+      var attempts = 0;
+      final apiService = _FakePosApiService(
+        shopSettings: _autoPrintSettings,
+        catalogPages: const {
+          1: [_coffeeVariant],
+        },
+        onCheckout: (draft, idempotencyKey) async {
+          keys.add(idempotencyKey);
+          drafts.add(draft);
+          attempts += 1;
+          if (attempts == 1) {
+            throw Exception('offline');
+          }
+          return _saleOrder(
+            total: draft.payments.single.amount,
+            lines: const [],
+          );
+        },
+      );
+      final printing = _DriftingPrinterRepository(apiService);
+      final viewModel = _viewModel(apiService, printingRepository: printing);
+      addTearDown(viewModel.dispose);
+
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
+      await viewModel.loadCheckoutSettings();
+      viewModel.addVariant(_coffeeVariant);
+      await _settle();
+
+      for (var i = 0; i < 2; i += 1) {
+        await viewModel.checkoutCurrentSale(
+          payments: const [
+            SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 3.5),
+          ],
+        );
+      }
+
+      expect(printing.configLoads, 2);
+      expect(keys, hasLength(2));
+      expect(keys.last, keys.first);
+      // Byte-identical bodies, so the backend replays instead of 409-ing.
+      expect(
+        jsonEncode(drafts.last.toJson()),
+        jsonEncode(drafts.first.toJson()),
+      );
+      await _settle();
+    },
+  );
+
+  test(
     'search resets catalog pagination and load more appends results',
     () async {
       final apiService = _FakePosApiService(
@@ -2121,6 +2257,50 @@ class _StubPrintingRepository extends PrintingRepository {
   }) {
     invoiceCalls += 1;
     return invoiceResult();
+  }
+}
+
+/// A printing repository whose default printer resolves once and then stops
+/// resolving — the shape a backend/storage outage takes between two checkout
+/// attempts for the same cart.
+class _DriftingPrinterRepository extends PrintingRepository {
+  _DriftingPrinterRepository(super.service)
+    : super(
+        serialTransport: const _NoopPrintTransport(),
+        bluetoothTransport: const _NoopPrintTransport(),
+        wifiTransport: const _NoopPrintTransport(),
+        fakeTransport: const _NoopPrintTransport(),
+      );
+
+  int configLoads = 0;
+
+  @override
+  Future<Map<int, PrinterConfig>> loadKitchenStationConfigs() async => const {};
+
+  @override
+  Future<Result<PrinterConfig>> loadDefaultPrinterConfig() async {
+    configLoads += 1;
+    if (configLoads > 1) {
+      return Error(Exception('printer configuration unavailable'));
+    }
+    return const Ok(
+      PrinterConfig(
+        endpoint: PrinterEndpoint(
+          kind: PrintTransportKind.wifi,
+          name: 'stub-thermal',
+          address: '10.0.0.9',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Future<PrintTransportResult> printSaleInvoice({
+    required SaleOrder order,
+    ShopSettings? shopSettings,
+    Uint8List? shopLogoBytes,
+  }) async {
+    throw Exception('printer offline');
   }
 }
 
