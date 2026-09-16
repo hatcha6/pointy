@@ -6,7 +6,9 @@ stock ledger already addresses documents as ``(voucher_type, voucher_id)`` with
 no registry table and that works, and a second copy of the lifecycle is a second
 thing that can drift out of step with the first.
 
-What genuinely needs its own table is the trail — and nothing else.
+What genuinely needs its own table is the trail — and nothing else. (And, since
+a customer-facing number must not inherit a primary key's licence to skip, the
+counter in ``numbering`` — re-exported here so Django finds the model.)
 """
 
 from django.conf import settings
@@ -14,7 +16,10 @@ from django.db import models
 
 from apps.core.models import TimeStampedModel
 from apps.documents import guards
+from apps.documents.numbering import DocumentNumberSeries
 from apps.documents.statuses import DocumentStatus
+
+__all__ = ["DocumentMixin", "DocumentEvent", "DocumentNumberSeries"]
 
 
 class DocumentMixin(models.Model):

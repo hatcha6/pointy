@@ -20,6 +20,12 @@ BACKEND_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 #: Every non-test module allowed to lift the freeze, and why. Adding a line here
 #: is a deliberate act: each one is a place where code, not a person, rewrites
 #: something a person may not. See ``apps.documents.guards``.
+# `apps/sales/models.py` used to be here, to stamp a receipt number that needed
+# the row's id. It does not need the id any more: a customer-facing number that
+# inherits a primary key's licence to skip is the bug that lost a shop 155
+# invoice numbers in a week (see apps.documents.numbering), and taking the
+# number before the insert removed both the gap and the second write the escape
+# hatch existed for. `purchasing` and `inventory` still stamp from the id.
 SYSTEM_WRITE_CALLERS = {
     "apps/documents/guards.py": "defines it",
     "apps/documents/services.py": "the in-place correction route runs the domain's own rewrite",
@@ -29,7 +35,6 @@ SYSTEM_WRITE_CALLERS = {
     "apps/holidays/management/commands/backfill_special_days.py": (
         "tags rows that predate the snapshot the tag is"
     ),
-    "apps/sales/models.py": "stamps a receipt number, which needs the row's id",
     "apps/inventory/models.py": (
         "stamps a transfer number, which needs the row's id"
     ),

@@ -6,6 +6,7 @@ from django.contrib.contenttypes.fields import GenericRelation
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Prefetch, Q, Sum
+from django.utils import timezone
 
 from apps.catalog.models import ProductVariant, VariantOptionValue
 from apps.core.models import TimeStampedModel
@@ -611,28 +612,55 @@ class Order(DocumentMixin, TimeStampedModel):
             self.doc_status = DocumentStatus.CANCELLED
 
     def save(self, *args, **kwargs):
-        from apps.documents.guards import system_write
-
         self._follow_progress_on_insert()
         update_fields = kwargs.get("update_fields")
         if not self.public_token:
             self.public_token = self._generate_public_token()
             if update_fields is not None and "public_token" not in update_fields:
-                kwargs["update_fields"] = [*update_fields, "public_token"]
-        if not self.receipt_number:
-            # The receipt number is derived from the row's own id, so it can
-            # only be stamped after the insert — two saves, one creation. An
-            # order created already paid (an import, a test fixture) would
-            # otherwise have its second save refused as an edit to a submitted
-            # document, which it is not.
-            with transaction.atomic():
-                super().save(*args, **kwargs)
-                self.receipt_number = f"R{self.created_at:%Y%m%d}{self.id:06d}"
-                with system_write():
-                    return super().save(
-                        update_fields=["receipt_number", "public_token"]
-                    )
-        return super().save(*args, **kwargs)
+                update_fields = [*update_fields, "public_token"]
+        if self.receipt_number:
+            if update_fields is not None:
+                kwargs["update_fields"] = update_fields
+            return super().save(*args, **kwargs)
+
+        # The number and the row it belongs to are written as one unit, even
+        # when the caller brought no transaction of its own. A number allocated
+        # by a write that then fails is exactly the hole this is here to close,
+        # and checkout is not the only thing that creates an order.
+        with transaction.atomic():
+            self.receipt_number = self._next_receipt_number()
+            if update_fields is not None and "receipt_number" not in update_fields:
+                update_fields = [*update_fields, "receipt_number"]
+            if update_fields is not None:
+                kwargs["update_fields"] = update_fields
+            return super().save(*args, **kwargs)
+
+    def _next_receipt_number(self) -> str:
+        """The next number in the shop's receipt series.
+
+        It used to be ``R{date}{self.id}`` — the row's own primary key, which
+        meant the receipt series inherited every gap a key is allowed to have.
+        In one field week it skipped 155 numbers across five unclean database
+        restarts, because PostgreSQL reserves 32 sequence values in WAL at a
+        time and discards the unused remainder on recovery. Nobody could
+        explain the missing invoices to a shop whose paper ledger is the thing
+        it actually trusts. See ``apps.documents.numbering``.
+
+        Taking the number before the insert rather than after it also means one
+        write per sale instead of two, and removes the ``system_write`` escape
+        the second write needed: an order created already paid used to have its
+        own numbering refused as an edit to a submitted document.
+        """
+        from apps.documents.numbering import (
+            SALE_ORDER_SERIES,
+            next_document_number,
+        )
+
+        # `created_at` is auto_now_add, so it is not set until the insert; this
+        # is the same clock it will be stamped from, and the date part of the
+        # number is unchanged from when it was read off the saved row.
+        issued_at = self.created_at or timezone.now()
+        return f"R{issued_at:%Y%m%d}{next_document_number(SALE_ORDER_SERIES):06d}"
 
     def __str__(self) -> str:
         return self.receipt_number or f"Order {self.pk}"

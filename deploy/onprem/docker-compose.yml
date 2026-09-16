@@ -170,6 +170,14 @@ services:
     shm_size: "${POINTY_POSTGRES_SHM_SIZE:-256mb}"
     volumes:
       - pointy-postgres-data:/var/lib/postgresql/data
+    # Docker's default is 10s, and a shutdown that overruns it is SIGKILLed —
+    # which is a crash, and a crash makes PostgreSQL resume its sequences from
+    # the values it had reserved in WAL rather than the ones it handed out. A
+    # busy checkpoint on a one-CPU box can take longer than 10s, so the default
+    # turns an ordinary restart into the same event as a power cut. Document
+    # numbering no longer depends on that (apps.documents.numbering), but a
+    # clean stop is worth having on its own.
+    stop_grace_period: "${POINTY_POSTGRES_STOP_GRACE:-60s}"
     mem_limit: "${POINTY_POSTGRES_MEM_LIMIT:-1g}"
     cpus: "${POINTY_POSTGRES_CPUS:-1.5}"
     healthcheck:
