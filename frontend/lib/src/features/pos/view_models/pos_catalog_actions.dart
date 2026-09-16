@@ -60,10 +60,12 @@ extension PosCatalogActions on PosViewModel {
       _notifyChanged();
     }
 
+    final elapsed = Stopwatch()..start();
     final result = await _catalogRepository.loadProducts(
       query: querySnapshot,
       page: 1,
     );
+    elapsed.stop();
     if (requestVersion != _catalogRequestVersion || querySnapshot != _query) {
       return;
     }
@@ -81,6 +83,83 @@ extension PosCatalogActions on PosViewModel {
 
     _isLoading = false;
     _notifyChanged();
+
+    _recordCatalogSearch(
+      querySnapshot,
+      queryChanged: queryChanged,
+      elapsed: elapsed.elapsed,
+      failed: result is Error<ProductPage>,
+    );
+  }
+
+  /// What the cashier was looking for, and whether the till could find it.
+  ///
+  /// The other half of the blind spot [PosBarcodeActions._recordUnmatchedScan]
+  /// covers. Searching is the fallback for everything a scan cannot do — no
+  /// barcode, a damaged label, a loose item — and it was entirely invisible: a
+  /// search that finds nothing is an ordinary 200 with an empty page, which
+  /// looks exactly like a search that was never run. So nobody could say how
+  /// often a cashier hunts for a product the shop sells but the catalog cannot
+  /// surface, which is the difference between a data problem and a search
+  /// problem.
+  ///
+  /// Only when the query actually changed: the grid reloads for a silent
+  /// refresh, a screen re-entry and a filter sync too, and counting those as
+  /// searches would turn one cashier's hunt into a handful of them.
+  void _recordCatalogSearch(
+    ProductQuery query, {
+    required bool queryChanged,
+    required Duration elapsed,
+    required bool failed,
+  }) {
+    final term = query.search.trim();
+    if (!queryChanged || term.isEmpty) {
+      return;
+    }
+    final resultCount = _products.length;
+    unawaited(
+      _analyticsEngine?.trackUsage(
+            AnalyticsEventName.catalogSearch,
+            // A search that returns nothing is not an error, but it is the
+            // reason this event exists, so it is worth being able to filter on
+            // severity alone.
+            severity: resultCount == 0
+                ? AnalyticsEventSeverity.warning
+                : AnalyticsEventSeverity.info,
+            attributes: {
+              // The term itself: without it the event says a search failed and
+              // not what for, which is the only actionable half. It names a
+              // product in the shop's own catalog.
+              'term': _truncatedSearchTerm(term),
+              'has_results': resultCount > 0,
+              'failed': failed,
+              'register_session_id': _activeRegisterSession?.id,
+              // Whether a category chip was narrowing the search. A term that
+              // finds nothing inside a category and everything outside it is a
+              // miscategorised product, not a missing one.
+              if (query.categories.isNotEmpty)
+                'category_ids': query.categories
+                    .map((category) => category.id)
+                    .toList(growable: false),
+            },
+            metrics: {
+              'result_count': resultCount,
+              'term_length': term.length,
+              'duration_ms': elapsed.inMicroseconds / 1000,
+            },
+          ) ??
+          Future<void>.value(),
+    );
+  }
+
+  /// Bounded so a wedge burst or a pasted line cannot put an unbounded string
+  /// into every event the till sends.
+  String _truncatedSearchTerm(String term) {
+    const maxLength = 64;
+    if (term.length <= maxLength) {
+      return term;
+    }
+    return term.substring(0, maxLength);
   }
 
   Future<void> loadMoreCatalog() async {

@@ -51,6 +51,17 @@ abstract class AnalyticsQueueStorage {
 
   Future<String?> loadInstallationId();
   Future<void> saveInstallationId(String installationId);
+
+  /// The version this device was running the last time it started, or null if
+  /// it has never recorded one.
+  ///
+  /// Kept so a launch can say whether it is the first one after an update. That
+  /// is the fact an export could not produce at all: a shop was found running
+  /// 0.5.2 while the tags had reached 0.5.9, and nothing in a week of telemetry
+  /// marked the moment a till changed build — so a regression and a rollout
+  /// could not be lined up against each other.
+  Future<String?> loadLastAppVersion();
+  Future<void> saveLastAppVersion(String appVersion);
 }
 
 /// The native queue: a real table, sharing the app's single SQLite connection.
@@ -60,6 +71,8 @@ class LocalAnalyticsQueueStorage implements AnalyticsQueueStorage {
   static const String legacyQueueKey = 'pointy.analytics.queue.v1';
   static const String _installationIdKey =
       'pointy.analytics.installation_id.v1';
+  static const String _lastAppVersionKey =
+      'pointy.analytics.last_app_version.v1';
 
   @override
   Future<List<AnalyticsEventDraft>> loadEvents({int? limit}) async {
@@ -133,6 +146,18 @@ class LocalAnalyticsQueueStorage implements AnalyticsQueueStorage {
     final store = await AppKeyValueStore.instance();
     await store.setString(_installationIdKey, installationId);
   }
+
+  @override
+  Future<String?> loadLastAppVersion() async {
+    final store = await AppKeyValueStore.instance();
+    return store.getString(_lastAppVersionKey);
+  }
+
+  @override
+  Future<void> saveLastAppVersion(String appVersion) async {
+    final store = await AppKeyValueStore.instance();
+    await store.setString(_lastAppVersionKey, appVersion);
+  }
 }
 
 /// Queue kept in a single key/value entry.
@@ -146,6 +171,7 @@ class KeyValueAnalyticsQueueStorage implements AnalyticsQueueStorage {
 
   static const _queueKey = LocalAnalyticsQueueStorage.legacyQueueKey;
   static const _installationIdKey = 'pointy.analytics.installation_id.v1';
+  static const _lastAppVersionKey = 'pointy.analytics.last_app_version.v1';
 
   @override
   Future<List<AnalyticsEventDraft>> loadEvents({int? limit}) async {
@@ -222,6 +248,18 @@ class KeyValueAnalyticsQueueStorage implements AnalyticsQueueStorage {
     await store.setString(_installationIdKey, installationId);
   }
 
+  @override
+  Future<String?> loadLastAppVersion() async {
+    final store = await AppKeyValueStore.instance();
+    return store.getString(_lastAppVersionKey);
+  }
+
+  @override
+  Future<void> saveLastAppVersion(String appVersion) async {
+    final store = await AppKeyValueStore.instance();
+    await store.setString(_lastAppVersionKey, appVersion);
+  }
+
   Future<void> _save(List<AnalyticsEventDraft> events) async {
     final store = await AppKeyValueStore.instance();
     await store.setStringList(
@@ -249,11 +287,14 @@ class MemoryAnalyticsQueueStorage implements AnalyticsQueueStorage {
   MemoryAnalyticsQueueStorage({
     List<AnalyticsEventDraft> events = const [],
     String? installationId,
+    String? lastAppVersion,
   }) : _events = List<AnalyticsEventDraft>.of(events),
-       _installationId = installationId;
+       _installationId = installationId,
+       _lastAppVersion = lastAppVersion;
 
   final List<AnalyticsEventDraft> _events;
   String? _installationId;
+  String? _lastAppVersion;
 
   @override
   Future<List<AnalyticsEventDraft>> loadEvents({int? limit}) async {
@@ -306,6 +347,14 @@ class MemoryAnalyticsQueueStorage implements AnalyticsQueueStorage {
   @override
   Future<void> saveInstallationId(String installationId) async {
     _installationId = installationId;
+  }
+
+  @override
+  Future<String?> loadLastAppVersion() async => _lastAppVersion;
+
+  @override
+  Future<void> saveLastAppVersion(String appVersion) async {
+    _lastAppVersion = appVersion;
   }
 }
 

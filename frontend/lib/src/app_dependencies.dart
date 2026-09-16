@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueNotifier, kIsWeb;
 
+import 'core/analytics_device_profile.dart';
 import 'core/analytics_engine.dart';
 import 'core/result.dart';
 import 'data/models/analytics_event.dart';
@@ -99,9 +100,19 @@ class PointyAppDependencies {
       analyticsRepository,
       // The installation id is only known once the engine has started; stamp it
       // on the API session then, so even a rejected request identifies its
-      // device instead of arriving anonymous.
-      onIdentityResolved: (deviceId, platform) =>
-          service.describeClient(deviceId: deviceId, platform: platform),
+      // device instead of arriving anonymous. The version arrives the same way
+      // and can arrive twice: a build with no `POINTY_VERSION` define falls
+      // back to the bundle's own version, which is resolved asynchronously.
+      onIdentityResolved: (deviceId, platform, appVersion) =>
+          service.describeClient(
+            deviceId: deviceId,
+            platform: platform,
+            appVersion: appVersion,
+          ),
+      // Reads the machine once per launch — version, RAM, CPU, screen — for
+      // `app.started`. Injected rather than imported by the engine, which also
+      // has to build for the web, where none of it exists.
+      deviceProfile: resolveAnalyticsDeviceProfile,
     );
     service.performanceRecorder = analyticsEngine.recordApiRequest;
     attendanceRepository = AttendanceRepository(service);
@@ -171,6 +182,16 @@ class PointyAppDependencies {
       scanFeedback: ScanFeedbackSounds.instance.play,
       fxRepository: fxRepository,
     );
+    // Tell the API session which drawer this till is working in, so every
+    // request carries it and the backend can stamp it onto what it records. A
+    // listener rather than a call at each assignment: the session is set from
+    // three places across the POS mixins, and one of them being forgotten later
+    // is exactly how a field gets silently dropped.
+    posViewModel.addListener(() {
+      service.describeRegisterSession(
+        posViewModel.activeRegisterSession?.id.toString(),
+      );
+    });
   }
 
   final PosApiService service;

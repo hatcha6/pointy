@@ -8,6 +8,8 @@ import '../data/repositories/analytics_repository.dart';
 import '../data/services/api_session.dart';
 import '../data/services/analytics_queue_storage.dart';
 import 'result.dart';
+import 'analytics_device_profile.dart';
+import 'app_version.dart';
 
 class AnalyticsEngine {
   AnalyticsEngine(
@@ -24,13 +26,46 @@ class AnalyticsEngine {
     this.errorRepeatWindow = const Duration(minutes: 1),
     this.initialFlushBackoff = const Duration(seconds: 30),
     this.maxFlushBackoff = const Duration(minutes: 30),
-    void Function(String deviceId, String platform)? onIdentityResolved,
+    this.deviceProfileTimeout = const Duration(seconds: 5),
+    void Function(String deviceId, String platform, String appVersion)?
+    onIdentityResolved,
+    String appVersion = kAppVersion,
+    Future<AnalyticsDeviceProfile> Function()? deviceProfile,
+    Duration Function()? uptime,
   }) : _onIdentityResolved = onIdentityResolved,
+       _appVersion = appVersion,
+       _deviceProfile = deviceProfile,
+       _uptime = uptime ?? _processUptime,
        _storage = storage ?? defaultAnalyticsQueueStorage,
        _clock = clock ?? (() => DateTime.now().toUtc());
 
   final AnalyticsEventSink _sink;
-  final void Function(String deviceId, String platform)? _onIdentityResolved;
+  final void Function(String deviceId, String platform, String appVersion)?
+  _onIdentityResolved;
+
+  /// Not final: [start] replaces it with whatever the device profile resolves,
+  /// so a build with no `POINTY_VERSION` define still names itself.
+  String _appVersion;
+  String _versionSource = kAppVersion.isEmpty ? 'unknown' : 'define';
+
+  /// Reads the machine — version, RAM, CPU, screen. Injected because it uses
+  /// `dart:io` and platform channels, neither of which belong in an engine that
+  /// also runs on the web and is covered by plain unit tests.
+  final Future<AnalyticsDeviceProfile> Function()? _deviceProfile;
+
+  /// How long this process has been alive. Overridable so a test can state a
+  /// startup time instead of racing one.
+  final Duration Function() _uptime;
+
+  AnalyticsDeviceProfile _profile = AnalyticsDeviceProfile.unknown;
+
+  /// How long [start] will wait for the device profile.
+  ///
+  /// It is read through platform channels, and a channel that never answers
+  /// must cost a payload, not a launch. On expiry the launch is recorded with
+  /// what is already known rather than not at all.
+  final Duration deviceProfileTimeout;
+
   final AnalyticsQueueStorage _storage;
   final DateTime Function() _clock;
   final Duration flushInterval;
@@ -159,21 +194,42 @@ class AnalyticsEngine {
   }
 
   Future<void> _start() async {
+    // Started first and awaited last. Reading the machine goes through platform
+    // channels and a file or two, and the queue's own disk work has no reason
+    // to wait behind it.
+    final profileFuture = _resolveDeviceProfile();
+
     // Bounded, and newest-first underneath: a till that has been unable to
     // deliver can hold far more than [maxQueueSize] on disk, and reading the
     // lot meant decoding every one of them at startup only to drop most.
     _queue
       ..clear()
       ..addAll(await _storage.loadEvents(limit: maxQueueSize));
+    // Read before anything of this launch's own is queued, so it describes what
+    // the device arrived holding rather than what it has said since.
+    final backlogAtStart = _queue.length;
     // Make the table agree now rather than on the next `track`. Until this ran,
     // a device could carry weeks of history it would never deliver and never
     // discard — one till in the field was still shipping a day from three weeks
     // earlier when the export was taken.
     unawaited(_trimStoredEvents());
-    _installationId = await _loadOrCreateInstallationId();
+    final knownInstallationId = await _storage.loadInstallationId();
+    final isFirstRun =
+        knownInstallationId == null || knownInstallationId.isEmpty;
+    _installationId = isFirstRun
+        ? await _createInstallationId()
+        : knownInstallationId;
     _sessionId = generateAnalyticsEventId();
     _isStarted = true;
-    _onIdentityResolved?.call(_installationId ?? '', _platformName());
+    // Announced now with what is already known rather than after the profile:
+    // a request made during startup should name its device even if reading the
+    // machine turns out to be slow. Announced again below when the resolved
+    // version differs, which costs one idempotent call.
+    _onIdentityResolved?.call(
+      _installationId ?? '',
+      _platformName(),
+      _appVersion,
+    );
     _flushTimer = Timer.periodic(flushInterval, (_) {
       unawaited(_flushIfDue());
     });
@@ -181,13 +237,135 @@ class AnalyticsEngine {
     // say is how far behind it is. It covers the whole time the app was shut,
     // which no periodic tick can.
     await _recordQueueHealthIfDue(force: true, onlyWhenBacklogged: true);
-    await trackUsage(AnalyticsEventName.appStarted, flushImmediately: true);
+
+    _applyDeviceProfile(await profileFuture);
+    final profile = _profile;
+    final previousVersion = await _rememberAppVersion();
+
+    await trackUsage(
+      AnalyticsEventName.appStarted,
+      attributes: {
+        'start_type': _startType(
+          isFirstRun: isFirstRun,
+          previousVersion: previousVersion,
+        ),
+        // Also a column, and repeated here on purpose: this is the one event
+        // whose whole job is to describe the build and the machine, and it
+        // should be readable without joining back to its own row.
+        'app_version': _appVersion,
+        'version_source': _versionSource,
+        'platform': _platformName(),
+        if (previousVersion != null &&
+            previousVersion.isNotEmpty &&
+            previousVersion != _appVersion)
+          'previous_version': previousVersion,
+        ...profile.attributes,
+      },
+      metrics: {
+        // Process start to a running app with live telemetry. It covers the
+        // preference repair, the key/value store and the queue read — the disk
+        // work that actually makes a cold till slow in the morning — and it did
+        // not exist at all before: `app.started` carried an empty payload, so
+        // "the tills take forever to open" had no number attached to it. It
+        // matters most here: these are the oldest machines in the fleet.
+        'duration_ms': _uptime().inMicroseconds / 1000,
+        'backlog_at_start': backlogAtStart,
+        ...profile.metrics,
+      },
+      flushImmediately: true,
+    );
+  }
+
+  /// Reads the machine, or gives up and lets the launch be recorded anyway.
+  Future<AnalyticsDeviceProfile> _resolveDeviceProfile() async {
+    final resolve = _deviceProfile;
+    if (resolve == null) {
+      return AnalyticsDeviceProfile.unknown;
+    }
+    try {
+      return await resolve().timeout(deviceProfileTimeout);
+    } catch (_) {
+      // Anything at all: a channel that never answers, a plugin missing from a
+      // build, a getter that throws on one platform. Telemetry is never the
+      // reason a till fails to start.
+      return AnalyticsDeviceProfile.unknown;
+    }
+  }
+
+  void _applyDeviceProfile(AnalyticsDeviceProfile profile) {
+    _profile = profile;
+    if (profile.appVersion.isEmpty) {
+      return;
+    }
+    _versionSource = profile.versionSource;
+    if (profile.appVersion == _appVersion) {
+      return;
+    }
+    _appVersion = profile.appVersion;
+    _onIdentityResolved?.call(
+      _installationId ?? '',
+      _platformName(),
+      _appVersion,
+    );
+  }
+
+  /// Reads what this device reported last time, and records what it reports now.
+  ///
+  /// Written before `app.started` rather than after, so a launch that crashes
+  /// between the two is still counted as having happened on this build. The
+  /// cost of that ordering is that a crash loop reports one update and then
+  /// ordinary starts, which is the right way round: an update that is crashing
+  /// should be visible once, not once per attempt.
+  Future<String?> _rememberAppVersion() async {
+    try {
+      final previous = await _storage.loadLastAppVersion();
+      if (_appVersion.isNotEmpty && _appVersion != previous) {
+        await _storage.saveLastAppVersion(_appVersion);
+      }
+      return previous;
+    } on Exception {
+      return null;
+    }
+  }
+
+  /// Which kind of launch this is.
+  ///
+  /// There is no warm process start to report: when the app is merely resumed
+  /// the engine is already running and no `app.started` is emitted at all, so
+  /// every event that reaches here is a cold one. The axis that does vary — and
+  /// that no export could see — is whether this is the first launch ever, the
+  /// first after an update, or another ordinary morning. A shop was found
+  /// running 0.5.2 while the tags had reached 0.5.9, and nothing in a week of
+  /// telemetry marked the moment a till changed build.
+  String _startType({
+    required bool isFirstRun,
+    required String? previousVersion,
+  }) {
+    if (isFirstRun) {
+      return 'first_run';
+    }
+    if (previousVersion == null || previousVersion.isEmpty) {
+      // Started before, but never recorded a version: this is the first launch
+      // after the build that began recording one. Unknown is the truth, and
+      // calling it an update would invent one for the whole fleet at once.
+      return 'cold';
+    }
+    if (_appVersion.isNotEmpty && previousVersion != _appVersion) {
+      return 'update';
+    }
+    return 'cold';
   }
 
   /// The stable per-install identifier, once [start] has resolved it.
   String? get installationId => _installationId;
 
   String get platformName => _platformName();
+
+  /// The version this launch is reporting, once [start] has resolved it.
+  String get appVersion => _appVersion;
+
+  /// Where [appVersion] came from: `define`, `package` or `unknown`.
+  String get appVersionSource => _versionSource;
 
   /// Turn collection on or off for this device.
   ///
@@ -405,6 +583,8 @@ class AnalyticsEngine {
         attributes: {
           'method': performance.method,
           'path': performance.path,
+          // What joins this row to the backend rows the same request caused.
+          if (performance.traceId.isNotEmpty) 'trace_id': performance.traceId,
           'status_family': statusCode == null
               ? 'network_error'
               : '${statusCode ~/ 100}xx',
@@ -829,15 +1009,16 @@ class AnalyticsEngine {
       installationId: event.installationId ?? _installationId,
       deviceId: event.deviceId ?? _installationId,
       platform: event.platform ?? _platformName(),
+      // Never stamped on this branch at all, which made its tills the least
+      // identifiable machines in the fleet — and they are the ones running the
+      // oldest Windows, so a finding about them could not be tied to a build.
+      appVersion:
+          event.appVersion ?? (_appVersion.isEmpty ? null : _appVersion),
       attributes: {...contextAttributes, ...event.attributes},
     );
   }
 
-  Future<String> _loadOrCreateInstallationId() async {
-    final existingInstallationId = await _storage.loadInstallationId();
-    if (existingInstallationId != null && existingInstallationId.isNotEmpty) {
-      return existingInstallationId;
-    }
+  Future<String> _createInstallationId() async {
     final installationId = generateAnalyticsEventId();
     await _storage.saveInstallationId(installationId);
     return installationId;
@@ -948,3 +1129,6 @@ class AnalyticsEngine {
     return AnalyticsEventSeverity.info;
   }
 }
+
+/// How long this process has been alive, for the launch event's duration.
+Duration _processUptime() => kProcessUptime.elapsed;

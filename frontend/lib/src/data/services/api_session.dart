@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../../core/app_version.dart';
+import '../models/analytics_event.dart' show generateAnalyticsEventId;
 
 typedef ApiPerformanceRecorder =
     void Function(ApiRequestPerformance performance);
@@ -33,6 +34,7 @@ class ApiRequestPerformance {
     this.requestSizeBytes = 0,
     this.responseSizeBytes = 0,
     this.errorMessage = '',
+    this.traceId = '',
   });
 
   final String method;
@@ -42,6 +44,10 @@ class ApiRequestPerformance {
   final int requestSizeBytes;
   final int responseSizeBytes;
   final String errorMessage;
+
+  /// The `X-Request-ID` this request carried, so the client's own row can be
+  /// joined to the backend rows it caused.
+  final String traceId;
 
   bool get failed => statusCode == null || statusCode! >= 400;
 }
@@ -512,6 +518,21 @@ class PosApiSession {
   String _deviceId = '';
   String _clientPlatform = '';
   String _appVersion = '';
+  String _registerSessionId = '';
+
+  /// The trace id [_send] minted for the request it is about to issue.
+  ///
+  /// Handed over through a field rather than an argument because the headers
+  /// are built inside a closure [_send] never sees. That is safe in spite of
+  /// how it looks: [_send] assigns this and then calls the closure, which calls
+  /// [headers] *synchronously*, with no `await` in between — so on Dart's
+  /// single-threaded loop no other send can interleave between the two.
+  String _pendingTraceId = '';
+
+  /// The trace id carried by the request most recently issued, for the caller
+  /// that also reports its timing.
+  String get lastTraceId => _lastTraceId;
+  String _lastTraceId = '';
 
   void describeClient({
     required String deviceId,
@@ -523,13 +544,37 @@ class PosApiSession {
     _appVersion = appVersion.trim();
   }
 
+  /// Which register session this till is working in, or empty when none is
+  /// open.
+  ///
+  /// Sent on every request so the backend can stamp it onto the events it
+  /// records. The client is the one that knows: a cashier can close the drawer
+  /// between an action and the row being written, and asking the database
+  /// afterwards would answer about *then* rather than about the action.
+  void describeRegisterSession(String? registerSessionId) {
+    _registerSessionId = (registerSessionId ?? '').trim();
+  }
+
   Map<String, String> headers({
     bool includeCsrf = false,
     String? idempotencyKey,
   }) {
     final normalizedIdempotencyKey = idempotencyKey?.trim() ?? '';
+    // One id per request, on every request. The backend reads it into
+    // `trace_id` and stamps it onto everything recorded while that request
+    // runs, which is what turns "the sale row" and "the request that made it"
+    // into one thing you can follow. It was empty on all 417,527 rows of the
+    // last field export, so nothing could be followed anywhere.
+    final traceId = _pendingTraceId.isNotEmpty
+        ? _pendingTraceId
+        : generateAnalyticsEventId();
+    _pendingTraceId = '';
+    _lastTraceId = traceId;
     return {
       'Content-Type': 'application/json',
+      'X-Request-ID': traceId,
+      if (_registerSessionId.isNotEmpty)
+        'X-Pointy-Register-Session': _registerSessionId,
       if (_deviceId.isNotEmpty) 'X-Pointy-Device-Id': _deviceId,
       if (_clientPlatform.isNotEmpty) 'X-Pointy-Platform': _clientPlatform,
       if (_appVersion.isNotEmpty) 'X-Pointy-App-Version': _appVersion,
@@ -600,8 +645,22 @@ class PosApiSession {
     // a request that got no answer waited on the operating system: Windows
     // retries an unanswered TCP SYN at 3s, 6s and 12s, which is the 21-second
     // wall the sign-in path stopped at in the field.
-    Future<http.Response> attempt() =>
-        timeout == null ? request() : request().timeout(timeout);
+    // One id per attempt, and this send's own copy of it.
+    //
+    // `headers()` is what actually stamps the id on the wire, and it reads it
+    // off a field because it is built inside a closure this method never sees.
+    // That hand-over is safe — `request()` calls `headers()` synchronously,
+    // with no `await` in between — but the field itself is shared, so a
+    // concurrent send would overwrite it before this one records its timing.
+    // Hence the local: it is assigned in the same synchronous step and cannot
+    // be disturbed afterwards.
+    var traceId = '';
+    Future<http.Response> attempt() {
+      _pendingTraceId = generateAnalyticsEventId();
+      traceId = _pendingTraceId;
+      return timeout == null ? request() : request().timeout(timeout);
+    }
+
     if (method != 'GET') {
       // A write is about to change server state: GETs issued from here on
       // must not join responses computed before it.
@@ -620,6 +679,7 @@ class PosApiSession {
         statusCode: response.statusCode,
         requestSizeBytes: requestSizeBytes,
         responseSizeBytes: response.bodyBytes.length,
+        traceId: traceId,
       );
       return response;
     } on Exception catch (exception) {
@@ -641,6 +701,7 @@ class PosApiSession {
             statusCode: response.statusCode,
             requestSizeBytes: requestSizeBytes,
             responseSizeBytes: response.bodyBytes.length,
+            traceId: traceId,
           );
           return response;
         } on Exception {
@@ -657,6 +718,11 @@ class PosApiSession {
         duration: stopwatch.elapsed,
         requestSizeBytes: requestSizeBytes,
         errorMessage: exception.toString(),
+        // Recorded even though this one failed. A timeout proves nothing about
+        // what the server did, and the trace id is the only thing that can join
+        // "the till gave up at 30s" to the row where the backend answered at
+        // 32s — which is the difference between a lost sale and a slow one.
+        traceId: traceId,
       );
       if (wasLocal) {
         onLocalTargetUnreachable?.call();
@@ -673,6 +739,7 @@ class PosApiSession {
     int requestSizeBytes = 0,
     int responseSizeBytes = 0,
     String errorMessage = '',
+    String traceId = '',
   }) {
     if (path.startsWith('analytics-events/')) {
       return;
@@ -686,6 +753,7 @@ class PosApiSession {
         requestSizeBytes: requestSizeBytes,
         responseSizeBytes: responseSizeBytes,
         errorMessage: errorMessage,
+        traceId: traceId,
       ),
     );
   }
