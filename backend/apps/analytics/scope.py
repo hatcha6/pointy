@@ -13,6 +13,7 @@ TECHNICAL_EVENT_NAMES = frozenset(
         "app.lifecycle_changed",
         "app.started",
         "backend.request",
+        "frontend.frame_summary",
         "frontend.frame_timing",
         "frontend.http_request",
         "frontend.interaction",

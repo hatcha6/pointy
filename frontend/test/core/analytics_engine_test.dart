@@ -9,6 +9,7 @@ import 'package:pointy_frontend/src/data/services/api_session.dart';
 import 'package:pointy_frontend/src/data/services/analytics_queue_storage.dart';
 
 void main() {
+  _registerFrameSummaryTests();
   _registerRunawayTests();
   _registerBacklogDrainTests();
   _registerQueueHealthTests();
@@ -419,16 +420,19 @@ void main() {
     await engine.start();
     engine.setCurrentUser(3);
 
-    // Frames rendered while the dashboard was up...
+    // Frames rendered while the dashboard was up. Late ones, deliberately: a
+    // window that stuttered is the only kind still reported on its own, and
+    // this test is about which screen gets charged, not about which windows
+    // are worth sending.
     engine.setCurrentScreen('dashboard');
-    engine.recordFrameTimings([_frame(totalUs: 9000), _frame(totalUs: 9000)]);
+    engine.recordFrameTimings([_frame(totalUs: 45000), _frame(totalUs: 45000)]);
 
     // ...then the user navigates before the 10s window would have expired.
     now = now.add(const Duration(seconds: 3));
     engine.setCurrentScreen('pos');
-    engine.recordFrameTimings([_frame(totalUs: 9000)]);
+    engine.recordFrameTimings([_frame(totalUs: 45000)]);
     now = now.add(const Duration(seconds: 11));
-    engine.recordFrameTimings([_frame(totalUs: 9000)]);
+    engine.recordFrameTimings([_frame(totalUs: 45000)]);
     await engine.flush();
 
     final frameEvents = sink.acceptedEvents
@@ -1055,6 +1059,146 @@ void _registerQueueHealthTests() {
 
       expect(sink.submittedBatches, isNotEmpty);
       expect(healthRowIn(sink.submittedBatches.first), isNotNull);
+    });
+  });
+}
+
+/// The second-largest stream in the corpus described frames nobody saw.
+///
+/// 41,381 `frontend.frame_timing` rows arrived in one field week and 34,579 of
+/// them — 83.6% — reported zero janky and zero dropped frames. Their entire
+/// content was "the app rendered normally". They cannot simply be dropped,
+/// though: without them a jank *rate* has no denominator, and comparing two
+/// tills silently becomes comparing how busy they were.
+void _registerFrameSummaryTests() {
+  group('the frames nobody noticed leave as one roll-up', () {
+    late _FakeAnalyticsSink sink;
+    late DateTime now;
+    late AnalyticsEngine engine;
+
+    AnalyticsEngine build({Duration summary = const Duration(minutes: 5)}) {
+      return AnalyticsEngine(
+        sink,
+        storage: MemoryAnalyticsQueueStorage(installationId: 'frames'),
+        flushInterval: const Duration(hours: 1),
+        clock: () => now,
+        frameTimingWindow: const Duration(seconds: 10),
+        frameSummaryInterval: summary,
+      )..setCurrentUser(3);
+    }
+
+    setUp(() {
+      sink = _FakeAnalyticsSink();
+      now = DateTime.utc(2026, 9, 16, 9);
+    });
+
+    List<AnalyticsEventDraft> named(String name) {
+      return sink.acceptedEvents
+          .where((event) => event.name == name)
+          .toList(growable: false);
+    }
+
+    /// Closes a window of [frames] smooth frames by crossing the boundary.
+    Future<void> quietWindow({int frames = 10}) async {
+      for (var i = 0; i < frames; i += 1) {
+        engine.recordFrameTimings([_frame(totalUs: 8000)]);
+      }
+      now = now.add(const Duration(seconds: 11));
+      engine.recordFrameTimings([_frame(totalUs: 8000)]);
+    }
+
+    test('a window nobody would have noticed is not sent', () async {
+      engine = build();
+      await engine.start();
+
+      await quietWindow();
+      await quietWindow();
+      await engine.flush();
+
+      expect(named('frontend.frame_timing'), isEmpty);
+      engine.dispose();
+    });
+
+    test('the roll-up keeps what the quiet windows took with them', () async {
+      engine = build(summary: const Duration(seconds: 30));
+      await engine.start();
+
+      await quietWindow(frames: 10);
+      await quietWindow(frames: 10);
+      await quietWindow(frames: 10);
+      await engine.flush();
+
+      final summaries = named('frontend.frame_summary');
+      expect(summaries, hasLength(1));
+      final summary = summaries.single;
+      // The denominator, in both the units anyone divides by.
+      expect(summary.metrics['window_count'], 3);
+      expect(summary.metrics['suppressed_window_count'], 3);
+      expect(summary.metrics['reported_window_count'], 0);
+      expect(summary.metrics['frame_count'], 33);
+      expect(summary.metrics['janky_frame_count'], 0);
+      expect(summary.metrics['average_total_ms'], 8);
+      engine.dispose();
+    });
+
+    test('a stutter still gets a row of its own, and is counted too', () async {
+      engine = build(summary: const Duration(seconds: 30));
+      await engine.start();
+
+      // Raster overran the budget: this is the counter that means a person saw
+      // the app hesitate.
+      engine.recordFrameTimings([_frame(totalUs: 45000)]);
+      now = now.add(const Duration(seconds: 11));
+      engine.recordFrameTimings([_frame(totalUs: 8000)]);
+      await quietWindow();
+      await quietWindow();
+      await engine.flush();
+
+      expect(named('frontend.frame_timing'), hasLength(1));
+      final summary = named('frontend.frame_summary').single;
+      expect(summary.metrics['reported_window_count'], 1);
+      expect(
+        summary.metrics['window_count'],
+        greaterThan(summary.metrics['reported_window_count']!),
+        reason: 'the reported window appears twice in the corpus — once as '
+            'itself and once in the roll-up — so both counts have to be there '
+            'for anyone to avoid double-counting it',
+      );
+      engine.dispose();
+    });
+
+    test('teardown does not lose the period', () async {
+      // A till is shut at the end of a shift. The windows accumulated since
+      // the last roll-up are most of a day's denominator.
+      engine = build(summary: const Duration(hours: 1));
+      await engine.start();
+
+      await quietWindow();
+      await engine.flush();
+      expect(named('frontend.frame_summary'), isEmpty);
+
+      engine.dispose();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(named('frontend.frame_summary'), hasLength(1));
+    });
+
+    test('each screen is rolled up on its own', () async {
+      engine = build(summary: const Duration(seconds: 30));
+      await engine.start();
+
+      engine.setCurrentScreen('pos');
+      await quietWindow();
+      engine.setCurrentScreen('products');
+      await quietWindow();
+      await quietWindow();
+      await engine.flush();
+
+      final screens = named('frontend.frame_summary')
+          .map((event) => event.attributes['screen'])
+          .toSet();
+      expect(screens, {'pos', 'products'});
+      engine.dispose();
     });
   });
 }

@@ -97,6 +97,25 @@ class BurstCoalescer<S> {
   bool isOpen(String key) => _open.containsKey(key);
 
   /// Ends [key]'s run now and emits it. Safe to call when nothing is open.
+  /// The accumulator of [key]'s open run, or null when none is open.
+  ///
+  /// For a caller that folds a sample in through [add] and then needs to record
+  /// something about the sample that only the run can hold — a scroll's delta
+  /// belongs to the gesture, not to the notification.
+  S? valueOf(String key) => _open[key]?.value;
+
+  /// The accumulator of any open run, for a caller that has no key to hand.
+  ///
+  /// A mouse wheel arrives as a pointer signal with no scrollable attached, so
+  /// the gesture it is driving has to be found rather than looked up. There is
+  /// at most one scroll in flight on a till, so "any" is "the one".
+  S? anyOpenValue() {
+    for (final burst in _open.values) {
+      return burst.value;
+    }
+    return null;
+  }
+
   void settle(String key) {
     _timers.remove(key)?.cancel();
     final burst = _open.remove(key);

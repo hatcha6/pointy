@@ -24,6 +24,7 @@ class AnalyticsEngine {
     this.maxQueueSize = 2000,
     this.minImmediateFlushGap = const Duration(seconds: 30),
     this.frameTimingWindow = const Duration(seconds: 10),
+    this.frameSummaryInterval = const Duration(minutes: 5),
     this.queuePersistInterval = const Duration(seconds: 2),
     this.errorRepeatWindow = const Duration(minutes: 1),
     this.initialFlushBackoff = const Duration(seconds: 30),
@@ -97,6 +98,13 @@ class AnalyticsEngine {
   /// short-circuit the batching (an error storm must not become a request
   /// storm).
   final Duration minImmediateFlushGap;
+
+  /// How often the frames nobody noticed are reported, as one roll-up.
+  ///
+  /// The windows themselves are still measured every [frameTimingWindow]; this
+  /// is only how often the quiet ones are *reported*. See [_emitFrameTimings]
+  /// for why they stopped being reported one by one.
+  final Duration frameSummaryInterval;
 
   /// Frame timing is the highest-volume telemetry stream. Instead of one event
   /// per engine callback (which floods ingestion on a busy till), raw frame
@@ -198,6 +206,12 @@ class AnalyticsEngine {
   int _frameCount = 0;
   DateTime? _frameWindowStartedAt;
 
+  /// Every measured window, quiet ones included, kept per screen until the
+  /// roll-up goes out. This is the denominator: without it "6,802 windows had
+  /// jank" is a number with nothing to divide by.
+  final Map<String, _FrameTotals> _frameTotals = {};
+  DateTime? _frameSummaryStartedAt;
+
   int get pendingEventCount => _queue.length;
 
   /// The stable per-install identifier, once [start] has resolved it. Also sent
@@ -206,6 +220,10 @@ class AnalyticsEngine {
   String? get installationId => _installationId;
 
   String get platformName => _platformName();
+
+  /// The screen the app is on, for a caller that has to stamp it at the moment
+  /// a run *starts* rather than when it is emitted.
+  String? get currentScreen => _currentScreen;
 
   /// The version this launch is reporting, once [start] has resolved it.
   String get appVersion => _appVersion;
@@ -411,6 +429,8 @@ class AnalyticsEngine {
     _flushTimer = null;
     _queue.clear();
     _resetFrameAccumulator();
+    _frameTotals.clear();
+    _frameSummaryStartedAt = null;
     try {
       await _storage.clearEvents();
     } on Exception {
@@ -691,6 +711,22 @@ class AnalyticsEngine {
   /// The counts are summed across every callback in the window, so the derived
   /// janky/slow ratios are identical to reporting each callback separately —
   /// only the request count drops.
+  /// Closes the open window: always counted, reported only when it says
+  /// something.
+  ///
+  /// 41,381 of these rows arrived in one field week and **34,579 of them —
+  /// 83.6% — described frames nobody could have noticed**: zero janky, zero
+  /// dropped. They were the second-largest stream in the corpus and the whole
+  /// of their content was "the app rendered normally". A window is reported
+  /// individually when a frame was actually late; the rest are folded into
+  /// [_frameTotals] and leave as one roll-up per screen per
+  /// [frameSummaryInterval].
+  ///
+  /// The roll-up is not a nicety. Dropping the quiet windows and keeping only
+  /// the bad ones would leave a jank *rate* with no denominator, and every
+  /// comparison between two tills or two releases would silently become a
+  /// comparison of how busy they were. So every window is counted whether or
+  /// not it is reported.
   void _emitFrameTimings({String? screen}) {
     screen ??= _currentScreen;
     final frameCount = _frameCount;
@@ -706,7 +742,46 @@ class AnalyticsEngine {
     final slowFrames = _frameSlowCount;
     final jankyFrames = _frameJankyCount;
     final droppedFrames = _frameDroppedCount;
+    final windowStartedAt = _frameWindowStartedAt;
     _resetFrameAccumulator();
+
+    final screenKey = screen ?? '';
+    final totals = _frameTotals.putIfAbsent(screenKey, _FrameTotals.new)
+      ..absorb(
+        frames: frameCount,
+        buildMicros: buildMicros,
+        rasterMicros: rasterMicros,
+        totalMicros: totalMicros,
+        maxTotalMicros: maxTotalMicros,
+        maxBuildMicros: maxBuildMicros,
+        maxRasterMicros: maxRasterMicros,
+        slowFrames: slowFrames,
+        jankyFrames: jankyFrames,
+        droppedFrames: droppedFrames,
+      );
+
+    // The two counters mean different things and both have to be able to raise
+    // a window: `dropped` is the one that means a person saw a stutter, and
+    // `janky` catches a long frame that the phase-level test forgives.
+    final noticeable = droppedFrames > 0 || jankyFrames > 0;
+    // Classified before the roll-up can go out, not after: flushing hands the
+    // totals away, and an increment applied to them afterwards would be
+    // counted nowhere.
+    if (noticeable) {
+      totals.reported += 1;
+    } else {
+      totals.suppressed += 1;
+    }
+
+    final now = _clock();
+    _frameSummaryStartedAt ??= windowStartedAt ?? now;
+    if (now.difference(_frameSummaryStartedAt!) >= frameSummaryInterval) {
+      flushFrameSummaries();
+    }
+
+    if (!noticeable) {
+      return;
+    }
 
     unawaited(
       trackPerformance(
@@ -740,6 +815,70 @@ class AnalyticsEngine {
         },
       ),
     );
+  }
+
+  /// Emits one roll-up per screen and starts the next period.
+  ///
+  /// Called on the interval, and at every point where the accumulated windows
+  /// would otherwise be lost: leaving the foreground, turning collection off,
+  /// teardown. A period that measured nothing emits nothing.
+  void flushFrameSummaries() {
+    final periodStartedAt = _frameSummaryStartedAt;
+    _frameSummaryStartedAt = null;
+    if (_frameTotals.isEmpty) {
+      return;
+    }
+    final entries = Map<String, _FrameTotals>.from(_frameTotals);
+    _frameTotals.clear();
+    final now = _clock();
+    final period = periodStartedAt == null
+        ? Duration.zero
+        : now.difference(periodStartedAt);
+
+    for (final entry in entries.entries) {
+      final totals = entry.value;
+      if (totals.frames == 0) {
+        continue;
+      }
+      unawaited(
+        trackPerformance(
+          name: analyticsEventNameToJson(
+            AnalyticsEventName.frontendFrameSummary,
+          ),
+          duration: period,
+          severity: totals.droppedFrames > 0
+              ? AnalyticsEventSeverity.warning
+              : AnalyticsEventSeverity.info,
+          attributes: {
+            'sample': 'frame_summary',
+            if (entry.key.isNotEmpty) 'screen': entry.key,
+          },
+          metrics: {
+            // The denominator, in both the units anyone divides by.
+            'window_count': totals.windows,
+            'frame_count': totals.frames,
+            // How many of those windows were worth a row of their own, and how
+            // many this event stands in for. Reading the corpus without these
+            // would over-count jank: the reported windows appear twice, once
+            // here and once as themselves.
+            'reported_window_count': totals.reported,
+            'suppressed_window_count': totals.suppressed,
+            'slow_frame_count': totals.slowFrames,
+            'janky_frame_count': totals.jankyFrames,
+            'dropped_frame_count': totals.droppedFrames,
+            // Frame-weighted, not window-averaged: a window with 400 frames
+            // and one with 3 are not two equal opinions about how fast this
+            // screen renders.
+            'average_build_ms': totals.buildMicros / totals.frames / 1000,
+            'average_raster_ms': totals.rasterMicros / totals.frames / 1000,
+            'average_total_ms': totals.totalMicros / totals.frames / 1000,
+            'max_total_ms': totals.maxTotalMicros / 1000,
+            'max_build_ms': totals.maxBuildMicros / 1000,
+            'max_raster_ms': totals.maxRasterMicros / 1000,
+          },
+        ),
+      );
+    }
   }
 
   void _resetFrameAccumulator() {
@@ -1046,8 +1185,10 @@ class AnalyticsEngine {
     _persistTimer = null;
     // Fold the open frame-timing window into the queue so its ~last window
     // isn't lost (the queue is persisted, so it survives even if this flush
-    // can't finish during teardown).
+    // can't finish during teardown), then the roll-up the quiet windows are
+    // waiting in — otherwise a shift's worth of denominator dies with the app.
     _emitFrameTimings();
+    flushFrameSummaries();
     if (_isStarted) {
       unawaited(flush());
     } else if (_hasPendingWrites) {
@@ -1203,3 +1344,51 @@ class AnalyticsEngine {
 
 /// How long this process has been alive, for the launch event's duration.
 Duration _processUptime() => kProcessUptime.elapsed;
+
+/// Every frame window measured in one roll-up period, for one screen.
+class _FrameTotals {
+  int windows = 0;
+  int reported = 0;
+  int suppressed = 0;
+  int frames = 0;
+  int buildMicros = 0;
+  int rasterMicros = 0;
+  int totalMicros = 0;
+  int maxTotalMicros = 0;
+  int maxBuildMicros = 0;
+  int maxRasterMicros = 0;
+  int slowFrames = 0;
+  int jankyFrames = 0;
+  int droppedFrames = 0;
+
+  void absorb({
+    required int frames,
+    required int buildMicros,
+    required int rasterMicros,
+    required int totalMicros,
+    required int maxTotalMicros,
+    required int maxBuildMicros,
+    required int maxRasterMicros,
+    required int slowFrames,
+    required int jankyFrames,
+    required int droppedFrames,
+  }) {
+    windows += 1;
+    this.frames += frames;
+    this.buildMicros += buildMicros;
+    this.rasterMicros += rasterMicros;
+    this.totalMicros += totalMicros;
+    this.slowFrames += slowFrames;
+    this.jankyFrames += jankyFrames;
+    this.droppedFrames += droppedFrames;
+    if (maxTotalMicros > this.maxTotalMicros) {
+      this.maxTotalMicros = maxTotalMicros;
+    }
+    if (maxBuildMicros > this.maxBuildMicros) {
+      this.maxBuildMicros = maxBuildMicros;
+    }
+    if (maxRasterMicros > this.maxRasterMicros) {
+      this.maxRasterMicros = maxRasterMicros;
+    }
+  }
+}
