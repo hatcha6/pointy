@@ -60,6 +60,13 @@ class DocumentNumberSeries(models.Model):
 #: in the shop's own ledger.
 SALE_ORDER_SERIES = "sale_order"
 
+#: What a supplier is quoted and invoices against.
+PURCHASE_ORDER_SERIES = "purchase_order"
+
+#: Internal, but an audit document all the same: a transfer number is how a
+#: count discrepancy is traced back to the movement that caused it.
+STOCK_TRANSFER_SERIES = "stock_transfer"
+
 
 def next_document_number(key: str) -> int:
     """The next number in [key], reserved for this transaction only.

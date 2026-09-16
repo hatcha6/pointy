@@ -20,23 +20,20 @@ BACKEND_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 #: Every non-test module allowed to lift the freeze, and why. Adding a line here
 #: is a deliberate act: each one is a place where code, not a person, rewrites
 #: something a person may not. See ``apps.documents.guards``.
-# `apps/sales/models.py` used to be here, to stamp a receipt number that needed
-# the row's id. It does not need the id any more: a customer-facing number that
-# inherits a primary key's licence to skip is the bug that lost a shop 155
-# invoice numbers in a week (see apps.documents.numbering), and taking the
-# number before the insert removed both the gap and the second write the escape
-# hatch existed for. `purchasing` and `inventory` still stamp from the id.
+# Three entries used to live here — sales, purchasing and inventory — each to
+# stamp a document number that needed the row's id, and each therefore needing a
+# second write the freeze would otherwise refuse. None of them needs the id any
+# more. A document number that inherits a primary key's licence to skip is the
+# bug that lost a shop 155 invoice numbers in one week (see
+# apps.documents.numbering); taking the number before the insert removed the
+# gap, the second write, and the reason to lift the freeze at all.
 SYSTEM_WRITE_CALLERS = {
     "apps/documents/guards.py": "defines it",
     "apps/documents/services.py": "the in-place correction route runs the domain's own rewrite",
-    "apps/purchasing/models.py": "stamps an order's number, which needs the row's id",
     "apps/migration/loaders/purchasing.py": "an import reconstructs and replays historical documents",
     "apps/migration/loaders/sales.py": "an import reconstructs and replays historical documents",
     "apps/holidays/management/commands/backfill_special_days.py": (
         "tags rows that predate the snapshot the tag is"
-    ),
-    "apps/inventory/models.py": (
-        "stamps a transfer number, which needs the row's id"
     ),
 }
 

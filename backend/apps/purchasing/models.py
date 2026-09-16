@@ -544,20 +544,50 @@ class PurchaseOrder(DocumentMixin, TimeStampedModel):
             for code in (self.discount_codes or [])
             if normalize_coupon_code(code)
         ]
-        if not self.order_number:
-            # The number is derived from the row's own id, so it can only be
-            # stamped once the insert has happened — two saves, one creation.
-            # An order created already submitted (the POS cash purchase, the
-            # importer) would otherwise have its second save refused as an edit
-            # to a submitted document, which it is not.
-            from apps.documents.guards import system_write
+        if self.order_number:
+            return super().save(*args, **kwargs)
 
-            with transaction.atomic():
-                super().save(*args, **kwargs)
-                self.order_number = f"P{self.created_at:%Y%m%d}{self.id:06d}"
-                with system_write():
-                    return super().save(update_fields=["order_number"])
-        return super().save(*args, **kwargs)
+        # The number and the row it belongs to are written as one unit, even
+        # when the caller brought no transaction of its own. A number taken by
+        # a write that then fails is a hole in the series, which is the thing
+        # this is here to avoid.
+        with transaction.atomic():
+            self.order_number = self._next_order_number()
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None and "order_number" not in update_fields:
+                kwargs["update_fields"] = [*update_fields, "order_number"]
+            return super().save(*args, **kwargs)
+
+    def _next_order_number(self) -> str:
+        """The next number in the shop's purchase-order series.
+
+        It used to be ``P{date}{self.id}`` — the row's own primary key, which
+        meant the series inherited every gap a key is allowed to have. A
+        rolled-back insert keeps the value it took, and PostgreSQL crash
+        recovery resumes a sequence from the 32 values it had reserved in WAL
+        rather than the ones it handed out; that is what skipped 155 receipt
+        numbers in one field week. A supplier reconciling against these numbers
+        has the same question a shop had about its invoices. See
+        ``apps.documents.numbering``.
+
+        Taking the number before the insert also costs one write per order
+        instead of two, and removes the ``system_write`` escape the second write
+        needed: an order created already submitted (the POS cash purchase, the
+        importer) used to have its own numbering refused as an edit to a
+        submitted document.
+        """
+        from apps.documents.numbering import (
+            PURCHASE_ORDER_SERIES,
+            next_document_number,
+        )
+
+        # `created_at` is auto_now_add, so it is not set until the insert; this
+        # is the same clock it will be stamped from, and the date part of the
+        # number is unchanged from when it was read off the saved row.
+        issued_at = self.created_at or timezone.now()
+        return (
+            f"P{issued_at:%Y%m%d}{next_document_number(PURCHASE_ORDER_SERIES):06d}"
+        )
 
     def __str__(self) -> str:
         return self.order_number or f"Purchase order {self.pk}"

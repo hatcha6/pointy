@@ -790,21 +790,46 @@ class StockTransfer(DocumentMixin, TimeStampedModel):
         ]
 
     def save(self, *args, **kwargs):
-        if not self.transfer_number:
-            # Derived from the row's own id, so it can only be stamped once the
-            # insert has happened — two saves, one creation. Exactly what
-            # ``PurchaseOrder`` does, and for the same reason: a blank number is
-            # not a number, and two blanks collide on the unique index.
-            from django.db import transaction
+        if self.transfer_number:
+            return super().save(*args, **kwargs)
 
-            from apps.documents.guards import system_write
+        from django.db import transaction
 
-            with transaction.atomic():
-                super().save(*args, **kwargs)
-                self.transfer_number = f"T{self.created_at:%Y%m%d}{self.id:06d}"
-                with system_write():
-                    return super().save(update_fields=["transfer_number"])
-        return super().save(*args, **kwargs)
+        # The number and the row it belongs to are written as one unit, even
+        # when the caller brought no transaction of its own. Exactly what
+        # ``PurchaseOrder`` does, and for the same reason.
+        with transaction.atomic():
+            self.transfer_number = self._next_transfer_number()
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None and "transfer_number" not in update_fields:
+                kwargs["update_fields"] = [*update_fields, "transfer_number"]
+            return super().save(*args, **kwargs)
+
+    def _next_transfer_number(self) -> str:
+        """The next number in the shop's stock-transfer series.
+
+        It used to be ``T{date}{self.id}`` — the row's own primary key, which
+        meant the series inherited every gap a key is allowed to have (a
+        rolled-back insert, and PostgreSQL resuming a sequence after a crash
+        from the 32 values it had reserved in WAL). Internal, but an audit
+        document all the same: a transfer number is how a count discrepancy is
+        traced back to the movement that caused it, and a series with holes in
+        it makes "no transfer was recorded" and "the number was never issued"
+        the same observation. See ``apps.documents.numbering``.
+        """
+        from django.utils import timezone
+
+        from apps.documents.numbering import (
+            STOCK_TRANSFER_SERIES,
+            next_document_number,
+        )
+
+        # `created_at` is auto_now_add, so it is not set until the insert; this
+        # is the same clock it will be stamped from.
+        issued_at = self.created_at or timezone.now()
+        return (
+            f"T{issued_at:%Y%m%d}{next_document_number(STOCK_TRANSFER_SERIES):06d}"
+        )
 
     def __str__(self) -> str:
         return f"{self.transfer_number or self.pk}: {self.source_id}->{self.destination_id}"
