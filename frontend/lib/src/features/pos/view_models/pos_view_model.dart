@@ -225,7 +225,11 @@ class PosViewModel extends ChangeNotifier {
 
   // Local persistence of in-progress sale sessions (see pos_persistence.dart).
   String? _persistScope;
-  bool _sessionsRestored = false;
+  // Set once the snapshot for [_persistScope] has actually been read back off
+  // the disk. Until then nothing is written for that scope: a till that has
+  // just started has an empty cart, and flushing it would erase the very
+  // invoices the read is on its way to return.
+  bool _persistScopeLoaded = false;
   Timer? _persistDebounce;
 
   CatalogRepository get catalogRepository => _catalogRepository;
@@ -530,6 +534,9 @@ class PosViewModel extends ChangeNotifier {
     _disposed = true;
     // Emit any run still open rather than losing what the cashier just did.
     _cartQuantityRuns.dispose();
+    // Same for the cart: a change made inside the last debounce window is
+    // still only in memory, and this object is about to stop existing.
+    unawaited(persistNow());
     _persistDebounce?.cancel();
     _searchFocusController.dispose();
     _searchResetController.dispose();

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -6,6 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pointy_frontend/src/core/analytics_engine.dart';
+import 'package:pointy_frontend/src/core/storage/app_key_value_store.dart';
+import 'package:pointy_frontend/src/core/storage/local_database.dart';
+import 'package:pointy_frontend/src/core/storage/sqlite_key_value_store.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/analytics_event.dart';
 import 'package:pointy_frontend/src/data/models/cart_line.dart';
@@ -36,6 +40,7 @@ import 'package:pointy_frontend/src/data/services/unit_of_measure_api_client.dar
 import 'package:pointy_frontend/src/data/services/local_scoped_json_storage.dart';
 import 'package:pointy_frontend/src/data/services/print_transport.dart';
 import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:pointy_frontend/src/shared/barcode/scan_feedback_sounds.dart';
 import 'package:pointy_frontend/src/shared/unit_options.dart';
 
@@ -1491,6 +1496,282 @@ void main() {
       expect(viewModel.cart, isEmpty);
     });
   });
+  test('closing the till inside the debounce window still saves', () async {
+    final storage = _SlowScopedJsonStorage();
+    final vm = _viewModel(
+      _FakePosApiService(
+        catalogPages: const {
+          1: [_coffeeVariant],
+        },
+      ),
+      sessionStorage: storage,
+    );
+    await vm.restorePersistedSessions('user-1');
+    vm.addVariant(_coffeeVariant);
+
+    // The app is closed (or Android kills it) a few milliseconds later, well
+    // inside the 500ms the debounced write was waiting out.
+    vm.dispose();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    expect(
+      storage.peek('user-1'),
+      isNotNull,
+      reason: 'the last thing the cashier scanned was never written',
+    );
+  });
+
+  test(
+    'the open invoices really survive a power cut, through the SQLite file',
+    () async {
+      // End to end over the production storage class and a real
+      // `pointy_store.db`, closed and reopened in between — the memory double
+      // the other tests use cannot show that the bytes reached the disk.
+      sqfliteFfiInit();
+      final tempDir = Directory.systemTemp.createTempSync('pos_sessions_db');
+      addTearDown(() {
+        if (tempDir.existsSync()) {
+          tempDir.deleteSync(recursive: true);
+        }
+      });
+      final path = '${tempDir.path}${Platform.pathSeparator}pointy_store.db';
+      Future<LocalDatabase> openStore() => LocalDatabase.open(
+        factory: databaseFactoryFfi,
+        path: path,
+        schema: const <String>[SqliteKeyValueStore.schema],
+      );
+
+      var database = await openStore();
+      AppKeyValueStore.debugOverride(SqliteKeyValueStore(database));
+      addTearDown(AppKeyValueStore.reset);
+
+      const storage = SharedPreferencesScopedJsonStorage(
+        'pointy.pos.sessions.v1',
+      );
+      final api = _FakePosApiService(
+        catalogPages: const {
+          1: [_coffeeVariant, _teaVariant],
+        },
+      );
+
+      // Cashier 7 is mid-shift: one invoice open, one held behind it.
+      final before = _viewModel(api, sessionStorage: storage);
+      addTearDown(before.dispose);
+      await before.loadCurrentRegisterSession();
+      await before.resumeRegisterSession();
+      await before.restorePersistedSessions('7');
+      before.addVariant(_coffeeVariant);
+      before.startNewSaleSession();
+      before.addVariant(_teaVariant);
+      before.addVariant(_teaVariant);
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+
+      // The mains go. Anything not committed to the file is gone with them.
+      await database.close();
+      database = await openStore();
+      AppKeyValueStore.debugOverride(SqliteKeyValueStore(database));
+      addTearDown(() async => database.close());
+
+      // Cashier 8 signs in on the same till first, and sees their own nothing.
+      final other = _viewModel(api, sessionStorage: storage);
+      addTearDown(other.dispose);
+      await other.restorePersistedSessions('8');
+      await _settle();
+      expect(other.cart, isEmpty);
+      expect(other.openSaleSessionCount, 1);
+
+      // Then cashier 7 comes back: sign in, then tap "continue selling".
+      final after = _viewModel(api, sessionStorage: storage);
+      addTearDown(after.dispose);
+      await after.loadCurrentRegisterSession();
+      await after.restorePersistedSessions('7');
+      await _settle();
+      await after.resumeRegisterSession();
+
+      expect(after.openSaleSessionCount, 2);
+      final restored = <int, double>{};
+      for (final session in after.saleSessions) {
+        after.switchSaleSession(session.id);
+        for (final line in after.cart) {
+          restored[line.variant.id] = line.quantity;
+        }
+      }
+      expect(restored, {_coffeeVariant.id: 1.0, _teaVariant.id: 2.0});
+
+      // And it is on the disk under this cashier's own key, and only theirs.
+      final keys = await SqliteKeyValueStore(database).getKeys();
+      expect(keys, contains('pointy.pos.sessions.v1.7'));
+      expect(keys, isNot(contains('pointy.pos.sessions.v1.8')));
+    },
+  );
+
+  test(
+    'resuming the open drawer keeps the invoices the power cut interrupted',
+    () async {
+      final storage = _SlowScopedJsonStorage();
+      final api = _FakePosApiService(
+        catalogPages: const {
+          1: [_coffeeVariant, _teaVariant],
+        },
+      );
+
+      // Mid-shift: one invoice being rung up and one held behind it.
+      final before = _viewModel(api, sessionStorage: storage);
+      addTearDown(before.dispose);
+      await before.loadCurrentRegisterSession();
+      await before.resumeRegisterSession();
+      await before.restorePersistedSessions('user-1');
+      before.addVariant(_coffeeVariant);
+      before.startNewSaleSession();
+      before.addVariant(_teaVariant);
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      expect(before.openSaleSessionCount, 2);
+
+      // The power comes back. Sign-in reads the open drawer and the snapshot,
+      // in that order, and then the cashier taps "متابعة البيع" on the gate.
+      final after = _viewModel(api, sessionStorage: storage);
+      addTearDown(after.dispose);
+      await after.loadCurrentRegisterSession();
+      await after.restorePersistedSessions('user-1');
+      expect(after.openSaleSessionCount, 2);
+
+      await after.resumeRegisterSession();
+
+      expect(
+        after.openSaleSessionCount,
+        2,
+        reason: 'resuming the drawer threw away the restored invoices',
+      );
+      expect(after.cart, isNotEmpty);
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      expect(
+        storage.peek('user-1'),
+        isNotNull,
+        reason: 'and cleared them off the disk as well',
+      );
+    },
+  );
+
+  group('a restore that is still in flight', () {
+    test(
+      'an item rung up while the snapshot is still loading is not thrown away',
+      () async {
+        final storage = _SlowScopedJsonStorage();
+        final api = _FakePosApiService(
+          catalogPages: const {
+            1: [_coffeeVariant, _teaVariant],
+          },
+        );
+
+        // The shift before the power cut: one held invoice with coffee on it.
+        final before = _viewModel(api, sessionStorage: storage);
+        addTearDown(before.dispose);
+        await before.restorePersistedSessions('user-1');
+        before.addVariant(_coffeeVariant);
+        await Future<void>.delayed(const Duration(milliseconds: 700));
+
+        // Power back. The disk is slow, and the cashier does not wait for it.
+        storage.loadDelay = const Duration(milliseconds: 300);
+        final after = _viewModel(api, sessionStorage: storage);
+        addTearDown(after.dispose);
+        final restoring = after.restorePersistedSessions('user-1');
+        after.addVariant(_teaVariant);
+        await restoring;
+        await _settle();
+
+        final ids = <int>{};
+        for (final session in after.saleSessions) {
+          after.switchSaleSession(session.id);
+          ids.addAll(after.cart.map((line) => line.variant.id));
+        }
+        expect(ids, contains(_coffeeVariant.id));
+        expect(
+          ids,
+          contains(_teaVariant.id),
+          reason: 'the item rung up during the restore was discarded',
+        );
+      },
+    );
+
+    test('a snapshot that cannot be read is never written over', () async {
+      final storage = _SlowScopedJsonStorage();
+      final api = _FakePosApiService(
+        catalogPages: const {
+          1: [_coffeeVariant, _teaVariant],
+        },
+      );
+
+      final before = _viewModel(api, sessionStorage: storage);
+      addTearDown(before.dispose);
+      await before.restorePersistedSessions('user-1');
+      before.addVariant(_coffeeVariant);
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      final saved = storage.peek('user-1');
+      expect(saved, isNotNull);
+
+      // The read fails. Whatever happens next, the held invoice on disk is the
+      // only copy left — it must still be there for the next attempt.
+      storage.failLoads = true;
+      final after = _viewModel(api, sessionStorage: storage);
+      addTearDown(after.dispose);
+      await after.restorePersistedSessions('user-1');
+      after.addVariant(_teaVariant);
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+
+      expect(
+        storage.peek('user-1'),
+        saved,
+        reason: 'an unreadable snapshot was overwritten by the empty cart',
+      );
+
+      // ...and the next attempt, once the disk answers again, gets it back.
+      storage.failLoads = false;
+      final retry = _viewModel(api, sessionStorage: storage);
+      addTearDown(retry.dispose);
+      await retry.restorePersistedSessions('user-1');
+      await _settle();
+      expect(retry.cart.single.variant.id, _coffeeVariant.id);
+    });
+
+    test('signing in as someone else never clears their saved work', () async {
+      final storage = _SlowScopedJsonStorage();
+      final api = _FakePosApiService(
+        catalogPages: const {
+          1: [_coffeeVariant, _teaVariant],
+        },
+      );
+
+      // Each cashier leaves a held invoice behind on this till.
+      final theirs = _viewModel(api, sessionStorage: storage);
+      addTearDown(theirs.dispose);
+      await theirs.restorePersistedSessions('user-2');
+      theirs.addVariant(_teaVariant);
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      final theirSnapshot = storage.peek('user-2');
+      expect(theirSnapshot, isNotNull);
+
+      // The next shift signs in on the same view model, and the disk is slow
+      // enough that the debounce would fire before the snapshot is read.
+      final till = _viewModel(api, sessionStorage: storage);
+      addTearDown(till.dispose);
+      await till.restorePersistedSessions('user-1');
+      till.addVariant(_coffeeVariant);
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+
+      storage.loadDelay = const Duration(milliseconds: 900);
+      await till.restorePersistedSessions('user-2');
+      await _settle();
+
+      expect(
+        storage.clearedScopes,
+        isNot(contains('user-2')),
+        reason: "the incoming cashier's saved work was cleared before it "
+            'had been read',
+      );
+      expect(till.cart.single.variant.id, _teaVariant.id);
+      expect(storage.peek('user-1'), isNotNull);
+    });
+  });
 }
 
 PosViewModel _viewModel(
@@ -2397,4 +2678,37 @@ void _registerTillBlindSpotTests() {
       );
     });
   });
+}
+
+/// A [ScopedJsonStorage] whose reads can be made slow or made to fail, so the
+/// window between "the cashier is back at the till" and "the snapshot has been
+/// read off the disk" can actually be exercised.
+class _SlowScopedJsonStorage implements ScopedJsonStorage {
+  final Map<String, String> _store = {};
+
+  Duration loadDelay = Duration.zero;
+  bool failLoads = false;
+  final List<String> clearedScopes = [];
+
+  String? peek(String scope) => _store[scope];
+
+  @override
+  Future<String?> load(String scope) async {
+    if (loadDelay > Duration.zero) {
+      await Future<void>.delayed(loadDelay);
+    }
+    if (failLoads) {
+      throw Exception('the disk did not answer');
+    }
+    return _store[scope];
+  }
+
+  @override
+  Future<void> save(String scope, String json) async => _store[scope] = json;
+
+  @override
+  Future<void> clear(String scope) async {
+    clearedScopes.add(scope);
+    _store.remove(scope);
+  }
 }

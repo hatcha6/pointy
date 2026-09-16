@@ -50,6 +50,9 @@ extension PosRegisterSessionActions on PosViewModel {
     switch (result) {
       case Ok<RegisterSession>():
         _activateRegisterSession(result.value);
+        // A drawer opened from scratch starts on a clean invoice; the previous
+        // shift's carts were already cleared when it was counted and closed.
+        _resetSaleSessions();
         _trackRegisterSessionStarted(result.value, openingCash: openingCash);
         await loadCatalog();
         _isStartingRegisterSession = false;
@@ -197,10 +200,18 @@ extension PosRegisterSessionActions on PosViewModel {
     }
   }
 
+  /// Makes [session] the drawer this till is selling into.
+  ///
+  /// Deliberately does NOT touch the open invoices. Carts belong to the
+  /// cashier, not to the drawer: a sale is attributed to whichever session is
+  /// open when it is paid for, so one can outlive the other. Resetting here
+  /// used to be harmless because nothing survived a restart — now it would
+  /// throw away the invoices restored after a power cut at the exact moment
+  /// the cashier taps "continue selling". A brand-new drawer still starts
+  /// clean; see [startRegisterSession].
   void _activateRegisterSession(RegisterSession session) {
     _activeRegisterSession = session;
     _availableRegisterSession = null;
-    _resetSaleSessions();
   }
 
   void _trackRegisterSessionStarted(
