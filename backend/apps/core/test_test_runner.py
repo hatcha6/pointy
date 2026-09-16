@@ -13,8 +13,10 @@ from django.conf import settings
 from django.test import SimpleTestCase
 
 from apps.core.test_runner import (
+    FAST_PASSWORD_HASHER,
     REQUIRE_POSTGRES_ENV,
     describe_test_database,
+    fast_password_hashers,
     postgres_requirement_error,
     require_postgres_requested,
     sqlite_warning,
@@ -90,3 +92,41 @@ class DescribeTestDatabaseTests(SimpleTestCase):
         banner = describe_test_database("postgresql", "test_pointy")
         self.assertIn("postgresql", banner)
         self.assertIn("test_pointy", banner)
+
+
+class FastPasswordHashingTests(SimpleTestCase):
+    """The cheap hasher the runner installs for the duration of a run.
+
+    PBKDF2 is meant to be slow, and at Django's work factor one
+    ``create_user(password=...)`` costs about 100 ms. There are 238 of those
+    call sites in this suite and most sit in a ``setUp``, so the default
+    settings spend minutes on hashes no assertion ever reads — `apps.employees`
+    alone went from 11.5s to 1.1s.
+    """
+
+    def test_the_cheap_hasher_is_installed_while_the_suite_runs(self):
+        # Asserted against live settings rather than the helper: the point is
+        # that the runner actually applied it, not that it could have.
+        self.assertEqual(settings.PASSWORD_HASHERS[0], FAST_PASSWORD_HASHER)
+
+    def test_the_real_hashers_are_kept_so_stored_passwords_still_verify(self):
+        """Prepended, never substituted. A password already hashed with PBKDF2 —
+        a fixture, a dump restored into a test — has to keep verifying."""
+        hashers = fast_password_hashers(
+            ["django.contrib.auth.hashers.PBKDF2PasswordHasher"]
+        )
+        self.assertEqual(hashers[0], FAST_PASSWORD_HASHER)
+        self.assertIn("django.contrib.auth.hashers.PBKDF2PasswordHasher", hashers)
+
+    def test_applying_it_twice_does_not_stack_it(self):
+        """``--parallel`` sets each worker up in its own process, and a caller
+        driving the runner by hand may set up twice."""
+        once = fast_password_hashers(["django.contrib.auth.hashers.PBKDF2PasswordHasher"])
+        self.assertEqual(fast_password_hashers(once), once)
+
+    def test_a_password_set_under_it_still_checks_out(self):
+        from django.contrib.auth.hashers import check_password, make_password
+
+        encoded = make_password("pass1234")
+        self.assertTrue(check_password("pass1234", encoded))
+        self.assertFalse(check_password("wrong", encoded))

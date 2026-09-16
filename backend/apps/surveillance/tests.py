@@ -771,7 +771,9 @@ class ApiTests(TestCase):
             response = self.client.get(
                 reverse("surveillance-camera-live", args=[self.camera.pk]),
                 # The snapshot path explicitly: this stub answers HTTP, not RTSP.
-                {"fps": 1, "smooth": "false"},
+                # The rate is the snapshot ceiling rather than 1 so teardown does
+                # not wait out a full second of the producer's inter-frame sleep.
+                {"fps": MAX_SNAPSHOT_FPS, "smooth": "false"},
             )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("multipart/x-mixed-replace", response["Content-Type"])
@@ -1415,12 +1417,21 @@ class RecorderCircuitBreakerTests(TestCase):
     def tearDown(self):
         cache.clear()
 
+    #: Not 1, and the number matters to the clock rather than to the assertions.
+    #: ``SnapshotSource`` sleeps out the rest of its interval between frames and
+    #: does not check ``should_stop`` while it does, so at 1fps every test here
+    #: paid a full second in teardown waiting for the producer thread to wake up
+    #: and notice it had been shut down — six seconds across this class, half
+    #: the app's entire suite. Nothing below asserts a frame rate; the dial
+    #: counts these tests do assert are per producer, not per frame.
+    LIVE_FPS = MAX_SNAPSHOT_FPS
+
     def _live(self, camera=None):
         return self.client.get(
             reverse(
                 "surveillance-camera-live", args=[(camera or self.camera).pk]
             ),
-            {"fps": 1, "smooth": "false"},
+            {"fps": self.LIVE_FPS, "smooth": "false"},
         )
 
     def test_unreachable_recorder_trips_the_breaker_and_stops_dialling(self):

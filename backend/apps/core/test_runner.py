@@ -25,12 +25,30 @@ requires Postgres say so and get an error instead of a false pass.
 import os
 import sys
 
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connections
 from django.test.runner import DiscoverRunner
 
 #: Set truthy to turn "this is not Postgres" from a warning into a hard error.
 REQUIRE_POSTGRES_ENV = "POINTY_REQUIRE_POSTGRES"
+
+#: Password hashing during tests.
+#:
+#: PBKDF2 is deliberately expensive — that is the whole point of it — and at
+#: Django's default work factor one ``create_user(password=...)`` costs about
+#: **100 ms** on this hardware. There are 238 such call sites in this suite and
+#: most of them sit in a ``setUp`` that runs once per test method, so the suite
+#: spends minutes computing hashes that no assertion ever looks at.
+#:
+#: MD5 is catastrophic for storing a real password and perfect for this: the
+#: tests care whether ``check_password`` says yes, not how long it took to find
+#: out. Nothing in the suite asserts on an algorithm — only on
+#: ``check_password`` — which is what makes this safe to do globally.
+#:
+#: It goes **first**, not instead: the real hashers stay in the list so any
+#: password already hashed with one still verifies.
+FAST_PASSWORD_HASHER = "django.contrib.auth.hashers.MD5PasswordHasher"
 
 _TRUTHY = {"1", "true", "yes", "on"}
 
@@ -96,8 +114,39 @@ def _emit(message):
     print(message, file=sys.stderr, flush=True)
 
 
+def fast_password_hashers(configured):
+    """``configured`` with the cheap hasher in front, unless it already is.
+
+    Idempotent because ``setup_test_environment`` is not guaranteed to run
+    exactly once — ``--parallel`` sets each worker up in its own process, and a
+    caller driving the runner by hand may set up twice.
+    """
+    configured = list(configured)
+    if configured and configured[0] == FAST_PASSWORD_HASHER:
+        return configured
+    return [FAST_PASSWORD_HASHER] + [
+        hasher for hasher in configured if hasher != FAST_PASSWORD_HASHER
+    ]
+
+
 class PointyTestRunner(DiscoverRunner):
     """``DiscoverRunner`` that names its database and can insist on Postgres."""
+
+    def setup_test_environment(self, **kwargs):
+        super().setup_test_environment(**kwargs)
+        self._real_password_hashers = settings.PASSWORD_HASHERS
+        settings.PASSWORD_HASHERS = fast_password_hashers(
+            settings.PASSWORD_HASHERS
+        )
+
+    def teardown_test_environment(self, **kwargs):
+        # Restored rather than left changed: a caller that drives the runner
+        # in-process — the upgrade rehearsal harness does — must not inherit a
+        # settings module that hashes passwords with MD5 afterwards.
+        hashers = getattr(self, "_real_password_hashers", None)
+        if hashers is not None:
+            settings.PASSWORD_HASHERS = hashers
+        super().teardown_test_environment(**kwargs)
 
     def setup_databases(self, **kwargs):
         result = super().setup_databases(**kwargs)

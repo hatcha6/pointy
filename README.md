@@ -592,6 +592,62 @@ To pin it to Postgres and fail rather than fall back:
 make backend-test-pg
 ```
 
+### Making a run faster
+
+Two flags, both opt-in, neither of them what `backend-test` does by default:
+
+```sh
+make backend-test-keepdb TEST_LABELS=apps.surveillance   # reuse the test database
+make backend-test-slowest TEST_LABELS=apps.sales         # print the slowest tests
+```
+
+`--keepdb` skips building the database and replaying every migration. It is
+**only useful on Postgres** — Django's sqlite test database is always
+`:memory:` whatever `DATABASE_URL` says, so there is nothing to keep and the
+flag does nothing. It is not the default on purpose either: a kept database is
+only as correct as the last time it was built, and a migration edited in place
+leaves a schema that no longer matches the tree while the run still goes green.
+Iterate with it, prove with `make backend-test-pg`.
+
+`--durations` is the profiler. Anything an order of magnitude above its
+neighbours is usually a real `sleep` or an expensive fixture rather than the
+work under test — which is how the surveillance suite turned out to be spending
+six of its twelve seconds waiting for a producer thread to wake up between
+frames at 1fps.
+
+### Where the rest of the time goes
+
+About **16–23 seconds of every `manage.py test` invocation** is Django rendering
+historical model classes out of this project's 283 migrations — `ModelState.render`,
+29,184 calls, before a single test runs. It is paid once per process, so `make
+backend-test` pays it once and splitting a run across eight `manage.py test`
+invocations pays it eight times. `--keepdb` does not touch it: the cost is
+Python rebuilding model state, not DDL.
+
+The only real fix is squashing migrations, which is a decision rather than a
+tidy-up — this project ships expand/contract migrations for zero-downtime
+updates, so a squash has to preserve that. `MIGRATION_MODULES = None` (the
+"nomigrations" trick) would remove the cost and is **not safe here**: it would
+skip the trigram extension, the data migrations, and the `post_migrate` role
+setup the suite depends on.
+
+Password hashing during tests is handled for you: `PointyTestRunner` puts MD5 in
+front of the real hashers for the duration of the run. PBKDF2 at Django's work
+factor costs about 100 ms per `create_user(password=...)`, this suite has 238
+such call sites and most are in a `setUp`, so the default settings spend minutes
+on hashes no assertion reads. Measured on the suites that run without Redis:
+`apps.employees` 11.5s → 1.1s, `apps.fx` 9.3s → 1.6s, `apps.documents` 4.4s →
+1.5s.
+
+**`--parallel` is not safe here yet.** Each worker gets its own database, but
+they all share one Redis, and about ten test modules exercise the cache
+directly — `test_caching`, `test_state_version`, the price-checker and
+discount-preview cache tests. One worker's `cache.clear()` lands in another
+worker's test. Making it safe means giving each worker its own cache key prefix
+in `init_worker`; until that exists and has been proven on a box with Redis and
+Postgres, parallel runs will fail intermittently and for reasons that have
+nothing to do with the change under test.
+
 Relay-only checks are:
 
 ```sh

@@ -130,7 +130,8 @@ ENDURANCE_WORKERS ?= 4
 .PHONY: help setup install docker-check postgres postgres-stop postgres-logs postgres-ping redis redis-local redis-stop redis-logs redis-ping \
 	backend-venv backend-install backend-env backend-migrate backend-migrations backend-dev-migrate backend-run backend-run-remote \
 	backend-load-test backend-stress-test backend-endurance-test \
-	backend-shell backend-superuser backend-test backend-test-pg backend-check backend-celery backend-celery-beat \
+	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
+	backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
@@ -256,6 +257,28 @@ backend-test: backend-env backend-install ## Run backend tests.
 
 backend-test-pg: backend-env backend-install postgres ## Run backend tests, refusing to fall back to sqlite.
 	DATABASE_URL="$(TEST_DATABASE_URL)" POINTY_REQUIRE_POSTGRES=1 $(MANAGE) test apps
+
+# The inner dev loop. --keepdb skips creating the database and replaying every
+# migration, which on Postgres is most of the wall clock of a short run.
+#
+# The catch is the one this repo cares about: a kept database is only as correct
+# as the last time it was built. Django applies *new* migrations to it, but a
+# migration edited in place, or reverted, leaves a schema that no longer matches
+# the tree — and the run goes green anyway. So this is deliberately not what
+# `backend-test` does. Reach for it while iterating; prove it with `make
+# backend-test-pg`, which builds the database from nothing every time.
+#
+#   make backend-test-keepdb TEST_LABELS=apps.surveillance
+TEST_LABELS ?= apps
+backend-test-keepdb: backend-env backend-install ## Run backend tests reusing the existing test database (fast, see notes).
+	$(MANAGE) test --keepdb $(TEST_LABELS)
+
+# Which tests are actually costing the time. Django prints the slowest N after
+# the run; anything an order of magnitude above its neighbours is usually a real
+# sleep or an expensive fixture rather than the work under test.
+TEST_DURATIONS ?= 15
+backend-test-slowest: backend-env backend-install ## Run backend tests and print the slowest ones.
+	$(MANAGE) test --durations=$(TEST_DURATIONS) $(TEST_LABELS)
 
 backend-check: backend-env backend-install ## Run Django system checks.
 	$(MANAGE) check
