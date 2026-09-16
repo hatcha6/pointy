@@ -34,8 +34,21 @@ class CompanionStatus {
   final CompanionLinkState state;
   final List<CompanionDevice> devices;
 
-  bool get hasDevice => devices.isNotEmpty;
-  bool get isPaused => devices.isNotEmpty && devices.every((d) => d.isPaused);
+  /// The phones that can still act.
+  ///
+  /// A device whose register session closed, or that has been idle past its
+  /// expiry, stays in [devices] on purpose — the pairing sheet says so rather
+  /// than pretending the phone was never there — but it cannot scan, so nothing
+  /// should hold a transport open for it or offer to photograph with it.
+  Iterable<CompanionDevice> get liveDevices => devices.where((d) => d.isLive);
+
+  bool get hasDevice => devices.any((d) => d.isLive);
+
+  bool get isPaused {
+    final live = liveDevices.toList();
+    return live.isNotEmpty && live.every((d) => d.isPaused);
+  }
+
   bool get isConnected =>
       state == CompanionLinkState.live || state == CompanionLinkState.polling;
 
@@ -68,7 +81,8 @@ class CompanionBridge {
     required CompanionRepository repository,
     required this.tillKey,
     this.pollInterval = const Duration(seconds: 2),
-    this.deviceRefreshInterval = const Duration(minutes: 2),
+    this.pairingRefreshInterval = const Duration(seconds: 15),
+    this.pairedRefreshInterval = const Duration(minutes: 15),
     this.retryBackoff = const Duration(milliseconds: 250),
     this.streamRetryInterval = const Duration(minutes: 1),
   }) : _repository = repository;
@@ -76,7 +90,24 @@ class CompanionBridge {
   final CompanionRepository _repository;
   final String tillKey;
   final Duration pollInterval;
-  final Duration deviceRefreshInterval;
+
+  /// How often to re-read the roster while the pairing sheet is open.
+  ///
+  /// Short, because a person is watching a QR code that expires in two minutes
+  /// and this is the one moment where a missed update is the feature failing in
+  /// front of them. It costs about eight requests per pairing attempt, spent
+  /// only while somebody is actually waiting for a phone to appear.
+  final Duration pairingRefreshInterval;
+
+  /// How often to re-read it while a phone is paired.
+  ///
+  /// The one state where a refresh still learns something the event stream
+  /// cannot tell it. A device whose register session closed, or that has been
+  /// idle past its expiry, stops being live on the server with nothing emitted:
+  /// the revocation is lazy and happens when the *phone* next calls, but
+  /// ``is_live`` is computed per response, so asking is how the till finds out.
+  /// Fifteen minutes because those are shift-scale events.
+  final Duration pairedRefreshInterval;
 
   /// Multiplied by the consecutive-failure count between stream attempts.
   final Duration retryBackoff;
@@ -105,6 +136,7 @@ class CompanionBridge {
   StreamSubscription<SseEvent>? _subscription;
   Timer? _pollTimer;
   Timer? _deviceTimer;
+  Duration? _deviceInterval;
   Timer? _retryTimer;
   int _cursor = 0;
   int _failures = 0;
@@ -121,11 +153,9 @@ class CompanionBridge {
   Future<void> start() async {
     if (_started || _disposed) return;
     _started = true;
+    // One read, and then only as much polling as there is something to see —
+    // `refreshDevices` schedules that for us.
     await refreshDevices();
-    _deviceTimer = Timer.periodic(
-      deviceRefreshInterval,
-      (_) => refreshDevices(),
-    );
   }
 
   /// Hold the channel open even with no phone paired — while the pairing sheet
@@ -134,11 +164,13 @@ class CompanionBridge {
     if (_disposed) return;
     _boosted = true;
     _ensureTransport();
+    _ensureDeviceRefresh();
   }
 
   void endBoost() {
     _boosted = false;
     _ensureTransport();
+    _ensureDeviceRefresh();
   }
 
   Future<void> refreshDevices() async {
@@ -148,7 +180,42 @@ class CompanionBridge {
     if (result case Ok(value: final devices)) {
       status.value = status.value.copyWith(devices: devices);
       _ensureTransport();
+      _ensureDeviceRefresh();
     }
+  }
+
+  // -- how often to ask ------------------------------------------------------
+
+  /// How often the roster is worth re-reading, or ``null`` for "not at all".
+  ///
+  /// The rule is that a poll has to be able to *see* something. The roster can
+  /// only grow through a pairing this till created — a single-use code, alive
+  /// for two minutes, issued from the pairing sheet — and that arrives as a
+  /// `device_state` frame on the stream the sheet holds open. So with no phone
+  /// paired and no sheet on screen there is nothing a request could discover,
+  /// and the honest number of requests is zero.
+  ///
+  /// It was two minutes in every state, forever. One shop's week: **9,481
+  /// polls, one pairing** — and between 03:00 and 07:00, with the shop shut and
+  /// the tills idle, those polls were 100% of the backend's traffic.
+  Duration? _wantedRefreshInterval() {
+    if (_disposed) return null;
+    if (status.value.hasDevice) return pairedRefreshInterval;
+    if (_boosted) return pairingRefreshInterval;
+    return null;
+  }
+
+  void _ensureDeviceRefresh() {
+    final wanted = _wantedRefreshInterval();
+    // Unchanged is the common case — `refreshDevices` runs this on every tick —
+    // and rescheduling then would reset the clock on every pass and starve the
+    // timer it is supposed to be keeping.
+    if (wanted == _deviceInterval) return;
+    _deviceTimer?.cancel();
+    _deviceTimer = null;
+    _deviceInterval = wanted;
+    if (wanted == null) return;
+    _deviceTimer = Timer.periodic(wanted, (_) => refreshDevices());
   }
 
   // -- transport ------------------------------------------------------------
@@ -328,6 +395,7 @@ class CompanionBridge {
     _teardownTransport();
     _deviceTimer?.cancel();
     _deviceTimer = null;
+    _deviceInterval = null;
     unawaited(_scans.close());
     unawaited(_events.close());
     status.dispose();
