@@ -229,8 +229,9 @@ extension PosCheckoutActions on PosViewModel {
     // point can be interrupted by a mains cut, and the cart comes back on the
     // next launch — without the key beside it the cashier's retry would book a
     // second sale. Best-effort: a till that can't write its scratch state still
-    // has to be able to take the money.
-    await persistNow();
+    // has to be able to take the money, and this is the one write allowed to
+    // land on a snapshot that could not be read (see [persistNow]).
+    await persistNow(overwriteUnread: true);
 
     final result = await _saleRepository.checkout(
       checkoutDraft,

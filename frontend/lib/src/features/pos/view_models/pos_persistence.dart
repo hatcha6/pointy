@@ -18,30 +18,99 @@ extension PosSessionPersistence on PosViewModel {
   bool get _hasPersistableContent =>
       _saleSessions.any((session) => session.cart.isNotEmpty);
 
+  /// How many times the snapshot read is attempted before the till gives up on
+  /// it for this sign-in, and how long it waits between tries.
+  ///
+  /// A read that fails is not the same as a scope with nothing saved: the
+  /// invoices are still on the disk, and the only thing that can destroy them
+  /// is this till writing over them. So a failed read leaves persistence shut
+  /// off rather than replacing the snapshot with an empty cart.
+  static const _loadAttempts = 3;
+  static const _loadRetryBackoff = Duration(milliseconds: 100);
+
   /// Restores the persisted sessions for [scope] (the user id), replacing the
   /// in-memory state when a non-empty snapshot exists. Safe to call repeatedly;
-  /// only re-runs when the scope changes (e.g. a different cashier signs in).
+  /// only re-runs when the scope changes (e.g. a different cashier signs in) or
+  /// when an earlier attempt could not read the disk.
   Future<void> restorePersistedSessions(String scope) async {
-    if (_sessionsRestored && _persistScope == scope) {
+    if (_persistScope == scope && _persistScopeLoaded) {
       return;
     }
     final scopeChanged = _persistScope != null && _persistScope != scope;
     _persistScope = scope;
-    _sessionsRestored = true;
+    // Hold back every write for this scope until its snapshot has been read —
+    // including the one the reset below would otherwise schedule, which would
+    // clear the incoming cashier's held invoices before anyone had looked at
+    // them.
+    _persistScopeLoaded = false;
+    _persistDebounce?.cancel();
     if (scopeChanged) {
       // Different user on this device — never inherit the previous cart.
       _resetSaleSessions();
       _notifyChanged();
     }
 
-    final raw = await _sessionStorage.load(scope);
-    if (raw == null || raw.isEmpty) {
+    final String? raw;
+    try {
+      raw = await _readSnapshot(scope);
+    } on Object catch (error) {
+      // Leave the snapshot alone and persistence off: it is the only copy of
+      // that work, and the next sign-in gets another go at reading it.
+      debugPrint('POS snapshot unreadable for scope $scope: $error');
       return;
     }
-    final restored = _decodeSnapshot(raw);
-    if (restored == null || restored.sessions.every((s) => s.cart.isEmpty)) {
+    if (_persistScope != scope) {
+      // Someone else signed in while the disk was answering. That restore owns
+      // the state now; this one must not write anything into it.
       return;
     }
+
+    final restored = (raw == null || raw.isEmpty) ? null : _decodeSnapshot(raw);
+    final hasSaleToRestore =
+        restored != null && restored.sessions.any((s) => s.cart.isNotEmpty);
+    if (hasSaleToRestore) {
+      _adoptSnapshot(restored);
+    }
+    // The disk has answered, so what is in memory is now the whole truth for
+    // this cashier and is safe to write back.
+    _persistScopeLoaded = true;
+    _notifyChanged();
+    if (hasSaleToRestore) {
+      // Discount totals were not persisted — reconcile them with the server.
+      unawaited(refreshDiscountPreview());
+    }
+  }
+
+  Future<String?> _readSnapshot(String scope) async {
+    Object lastError = StateError('no read attempted');
+    for (var attempt = 0; attempt < _loadAttempts; attempt++) {
+      if (attempt > 0) {
+        await Future<void>.delayed(_loadRetryBackoff * attempt);
+        if (_persistScope != scope) {
+          return null;
+        }
+      }
+      try {
+        return await _sessionStorage.load(scope);
+      } on Object catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  }
+
+  /// Installs [restored] as the open invoices, carrying over anything the
+  /// cashier rang up while the disk was still answering.
+  ///
+  /// The till is usable the moment it draws, which on a contended disk is well
+  /// before the snapshot comes back — long enough to scan a few items into.
+  /// Those items are the newest thing in the shop and memory holds the only
+  /// copy, so they become their own invoice instead of being dropped.
+  void _adoptSnapshot(_PosSessionSnapshot restored) {
+    final rungUpMeanwhile = [
+      for (final session in _saleSessions)
+        if (session.cart.isNotEmpty) session,
+    ];
 
     _saleSessions
       ..clear()
@@ -52,14 +121,27 @@ extension PosSessionPersistence on PosViewModel {
         restored.sessions.any((s) => s.id == restored.activeSessionId)
         ? restored.activeSessionId
         : restored.sessions.first.id;
-    _notifyChanged();
-    // Discount totals were not persisted — reconcile them with the server.
-    unawaited(refreshDiscountPreview());
+
+    for (final session in rungUpMeanwhile) {
+      // Renumbered onto the restored series so no two open invoices can end up
+      // sharing an id. Checkout attempts are deliberately not carried: a cart
+      // built in this window has no committed sale to replay against.
+      final adopted = _createSaleSession()
+        ..selectedCustomer = session.selectedCustomer
+        ..couponCode = session.couponCode
+        ..printInvoiceAfterPayment = session.printInvoiceAfterPayment
+        ..shareInvoiceAfterPayment = session.shareInvoiceAfterPayment;
+      adopted.cart.addAll(session.cart);
+      _saleSessions.add(adopted);
+      // Whatever the cashier has in their hands right now is what they are
+      // working on — not the invoice the disk just handed back.
+      _activeSaleSessionId = adopted.id;
+    }
   }
 
   void _schedulePersist() {
     final scope = _persistScope;
-    if (scope == null) {
+    if (scope == null || !_persistScopeLoaded) {
       return;
     }
     _persistDebounce?.cancel();
@@ -83,12 +165,25 @@ extension PosSessionPersistence on PosViewModel {
   /// reported to the caller, never thrown and never waited on indefinitely. A
   /// till that cannot write its scratch state must still be able to take the
   /// customer's money.
-  Future<bool> persistNow() async {
+  ///
+  /// [overwriteUnread] lets the caller write even when this scope's snapshot
+  /// has not been read back yet, which everywhere else means "leave the disk
+  /// alone, that file is the only copy of the cashier's work". Only checkout
+  /// asks for it: billing a customer twice is worse than losing held invoices
+  /// the cashier can already see are missing, so the idempotency key wins that
+  /// tie. Nothing else should.
+  Future<bool> persistNow({bool overwriteUnread = false}) async {
     final scope = _persistScope;
     if (scope == null) {
       return false;
     }
+    if (!_persistScopeLoaded && !overwriteUnread) {
+      return false;
+    }
     _persistDebounce?.cancel();
+    // Whatever was on the disk has just been superseded; stop holding back the
+    // debounced writes that follow this sale.
+    _persistScopeLoaded = true;
     try {
       await _flushPersist(scope).timeout(_persistNowDeadline);
       return true;
@@ -157,6 +252,14 @@ extension PosSessionPersistence on PosViewModel {
         session.shareInvoiceAfterPayment =
             sessionMap['shareInvoiceAfterPayment'] == true;
         session.restoreCheckoutAttempts(sessionMap['checkoutAttempts']);
+        final updatedAt = DateTime.tryParse(
+          sessionMap['updatedAt']?.toString() ?? '',
+        );
+        if (updatedAt != null) {
+          // Kept so the invoice the cashier was last on is still the one the
+          // till returns to after the next checkout.
+          session.updatedAt = updatedAt;
+        }
         final customerJson = sessionMap['customer'];
         if (customerJson is Map) {
           session.selectedCustomer = Customer.fromJson(

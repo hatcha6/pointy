@@ -14,6 +14,7 @@ import 'data/services/connection_status_controller.dart';
 import 'data/services/pos_api_service.dart';
 import 'features/companion/companion_bridge.dart';
 import 'features/companion/companion_scope.dart';
+import 'features/pos/view_models/pos_view_model.dart';
 import 'shared/documents/document_trail_scope.dart';
 import 'features/auth/view_models/auth_view_model.dart';
 import 'features/auth/views/auth_gate.dart';
@@ -87,6 +88,11 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
       // leaving the foreground is the last reliable moment to get it on disk:
       // the process may be suspended or killed before the timer would fire.
       unawaited(_dependencies.analyticsEngine.flushPendingWrites());
+      // The open and held invoices are on the same kind of short delay, and
+      // are worth a great deal more than the telemetry — a cashier who closes
+      // the till app, or an Android system that kills it while backgrounded,
+      // must not lose the item scanned a moment ago.
+      unawaited(_dependencies.posViewModel.persistNow());
       // Nobody is looking: stop asking what changed until they are.
       _dependencies.serverStateWatcher.pause();
     }
