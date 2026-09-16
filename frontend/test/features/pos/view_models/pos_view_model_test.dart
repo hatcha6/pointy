@@ -41,6 +41,7 @@ import 'package:pointy_frontend/src/shared/unit_options.dart';
 
 void main() {
   _registerQuantityCoalescingTests();
+  _registerTillBlindSpotTests();
   _registerAutoPrintFloorTests();
   test(
     'cart totals update and checkout locks mutations until success',
@@ -2465,6 +2466,198 @@ void _registerAutoPrintFloorTests() {
       await _settle();
 
       expect(printing.invoiceCalls, 1);
+    });
+  });
+}
+
+/// The two things a cashier does most that left no trace at all.
+///
+/// A scan that matches nothing makes no request worth logging, and a search
+/// that finds nothing is an ordinary 200 with an empty page — so from an export
+/// both are indistinguishable from never having happened. The field export
+/// therefore showed a shop with a tidy catalog and no way to tell how often the
+/// till failed the person standing at it.
+void _registerTillBlindSpotTests() {
+  AnalyticsEngine engineWith(_FakeAnalyticsSink sink, String installationId) {
+    return AnalyticsEngine(
+      sink,
+      storage: MemoryAnalyticsQueueStorage(installationId: installationId),
+      flushInterval: const Duration(hours: 1),
+    )..setCurrentUser(1);
+  }
+
+  group('a scan that finds nothing is recorded', () {
+    test('the code that missed is written down, with how it was entered',
+        () async {
+      final sink = _FakeAnalyticsSink();
+      final engine = engineWith(sink, 'scan-miss');
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_coffeeVariant],
+          },
+        ),
+        analyticsEngine: engine,
+      );
+      addTearDown(viewModel.dispose);
+      addTearDown(engine.dispose);
+
+      expect(await viewModel.addVariantByBarcode('1000001'), isTrue);
+      expect(
+        await viewModel.addVariantByBarcode(
+          '5000009',
+          source: 'hardware_scanner',
+        ),
+        isFalse,
+      );
+      await _settle();
+      await engine.flush();
+
+      final misses = sink.acceptedEvents
+          .where((event) => event.name == 'pos.scan.unmatched')
+          .toList(growable: false);
+
+      expect(misses, hasLength(1), reason: 'the hit must not be recorded too');
+      // The list of codes here is directly actionable: these are the products
+      // whose barcode needs adding, in the order the shop meets them.
+      expect(misses.single.attributes['barcode'], '5000009');
+      expect(misses.single.attributes['source'], 'hardware_scanner');
+      expect(misses.single.attributes['is_numeric'], isTrue);
+      expect(misses.single.metrics['barcode_length'], 7);
+      expect(misses.single.severity, AnalyticsEventSeverity.warning);
+    });
+
+    test('every attempt counts, because trying five times is the finding',
+        () async {
+      final sink = _FakeAnalyticsSink();
+      final engine = engineWith(sink, 'scan-retry');
+      final viewModel = _viewModel(
+        _FakePosApiService(catalogPages: const {1: []}),
+        analyticsEngine: engine,
+      );
+      addTearDown(viewModel.dispose);
+      addTearDown(engine.dispose);
+
+      await viewModel.addVariantByBarcode('5000009');
+      await viewModel.addVariantByBarcode('5000009');
+      await viewModel.addVariantByBarcode('5000009');
+      await _settle();
+      await engine.flush();
+
+      expect(
+        sink.acceptedEvents
+            .where((event) => event.name == 'pos.scan.unmatched')
+            .length,
+        3,
+        reason: 'a cashier scanning the same missing item three times is a '
+            'stronger signal than one that did, not a duplicate to collapse',
+      );
+    });
+  });
+
+  group('what the cashier searched for is recorded', () {
+    test('a search that finds nothing says what it was looking for', () async {
+      final sink = _FakeAnalyticsSink();
+      final engine = engineWith(sink, 'search-miss');
+      final apiService = _FakePosApiService(
+        onFetchProducts: (query, page) =>
+            const ProductPage(products: [], hasMore: false),
+      );
+      final viewModel = _viewModel(apiService, analyticsEngine: engine);
+      addTearDown(viewModel.dispose);
+      addTearDown(engine.dispose);
+
+      await viewModel.updateSearch('قهوة');
+      await _settle();
+      await engine.flush();
+
+      final searches = sink.acceptedEvents
+          .where((event) => event.name == 'catalog.search')
+          .toList(growable: false);
+
+      expect(searches, hasLength(1));
+      expect(searches.single.attributes['term'], 'قهوة');
+      expect(searches.single.attributes['has_results'], isFalse);
+      expect(searches.single.metrics['result_count'], 0);
+      expect(searches.single.metrics['term_length'], 4);
+      expect(searches.single.metrics['duration_ms'], isNotNull);
+      expect(searches.single.severity, AnalyticsEventSeverity.warning);
+    });
+
+    test('a search that lands is recorded too, so the miss rate has a floor',
+        () async {
+      final sink = _FakeAnalyticsSink();
+      final engine = engineWith(sink, 'search-hit');
+      final viewModel = _viewModel(
+        _FakePosApiService(
+          catalogPages: const {
+            1: [_coffeeVariant],
+          },
+        ),
+        analyticsEngine: engine,
+      );
+      addTearDown(viewModel.dispose);
+      addTearDown(engine.dispose);
+
+      await viewModel.updateSearch('coffee');
+      await _settle();
+      await engine.flush();
+
+      final search = sink.acceptedEvents.firstWhere(
+        (event) => event.name == 'catalog.search',
+      );
+
+      expect(search.attributes['has_results'], isTrue);
+      expect(search.metrics['result_count'], greaterThan(0));
+      expect(search.severity, AnalyticsEventSeverity.info);
+    });
+
+    test('browsing is not a search', () async {
+      // The grid reloads for a silent refresh, a screen re-entry and a filter
+      // sync too. Counting those would turn one cashier hunt into several, and
+      // the resulting miss rate would be measured against an invented total.
+      final sink = _FakeAnalyticsSink();
+      final engine = engineWith(sink, 'search-browse');
+      final viewModel = _viewModel(
+        _FakePosApiService(),
+        analyticsEngine: engine,
+      );
+      addTearDown(viewModel.dispose);
+      addTearDown(engine.dispose);
+
+      await viewModel.loadCatalog();
+      await viewModel.refreshVisibleCatalog();
+      await viewModel.loadMoreCatalog();
+      await _settle();
+      await engine.flush();
+
+      expect(
+        sink.acceptedEvents.where((event) => event.name == 'catalog.search'),
+        isEmpty,
+      );
+    });
+
+    test('re-running the same search does not re-record it', () async {
+      final sink = _FakeAnalyticsSink();
+      final engine = engineWith(sink, 'search-repeat');
+      final viewModel = _viewModel(
+        _FakePosApiService(),
+        analyticsEngine: engine,
+      );
+      addTearDown(viewModel.dispose);
+      addTearDown(engine.dispose);
+
+      await viewModel.updateSearch('coffee');
+      await viewModel.updateSearch('coffee');
+      await _settle();
+      await engine.flush();
+
+      expect(
+        sink.acceptedEvents
+            .where((event) => event.name == 'catalog.search')
+            .length,
+        1,
+      );
     });
   });
 }

@@ -669,7 +669,7 @@ void _registerRunawayTests() {
           _FakeAnalyticsSink(),
           storage: MemoryAnalyticsQueueStorage(installationId: 'install-9'),
           flushInterval: const Duration(hours: 1),
-          onIdentityResolved: (deviceId, platform) =>
+          onIdentityResolved: (deviceId, platform, appVersion) =>
               identities.add('$deviceId/$platform'),
         );
 

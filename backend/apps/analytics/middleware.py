@@ -10,6 +10,7 @@ from django.core.validators import validate_ipv46_address
 from django.db import connections
 from django.dispatch import receiver
 
+from . import context
 from .models import AnalyticsEvent
 from .services import record_event, record_event_buffered
 
@@ -57,7 +58,14 @@ class BackendPerformanceAnalyticsMiddleware:
     def __call__(self, request):
         if not _is_enabled_for_request(request):
             return self.get_response(request)
+        # Publish who this request is *before* the view runs, so anything
+        # recorded deeper in the stack inherits it. Without this a sale knew its
+        # cashier and not its till: 3,845 of them in one field export, not one
+        # able to say which of two registers rang it up.
+        with context.request_identity(_client_identity(request)):
+            return self._handle(request)
 
+    def _handle(self, request):
         started_at = time.perf_counter()
         recorder = _QueryRecorder()
         try:
@@ -386,6 +394,7 @@ _DEVICE_ID_MAX = 64
 _PLATFORM_MAX = 32
 _APP_VERSION_MAX = 40
 _USER_AGENT_MAX = 512
+_REGISTER_SESSION_MAX = 32
 
 
 def _client_identity(request):
@@ -410,6 +419,14 @@ def _client_identity(request):
     identity = {  # noqa: E501 - keys mirror AnalyticsEvent's identity columns
         "session_id": getattr(getattr(request, "session", None), "session_key", "") or "",
         "trace_id": str(headers.get("X-Request-ID", "") or "")[:_DEVICE_ID_MAX],
+        # Not a column: it rides in ``attributes``, which is where the POS
+        # already puts it on the events that do record it. The client knows its
+        # open session and says so, which is cheaper and more honest than the
+        # backend guessing from the user — a cashier can have closed the drawer
+        # between the action and the row being written.
+        "register_session_id": str(
+            headers.get("X-Pointy-Register-Session", "") or ""
+        )[:_REGISTER_SESSION_MAX],
         "device_id": device_id,
         "installation_id": device_id,
         "platform": platform,
@@ -451,7 +468,7 @@ def _safe_record_event(
             user=user,
             attributes=attributes,
             metrics=metrics,
-            **_client_identity(request),
+            **context.identity_columns(_client_identity(request)),
         )
     except Exception:
         return

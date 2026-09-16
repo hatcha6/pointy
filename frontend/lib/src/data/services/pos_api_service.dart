@@ -223,6 +223,11 @@ class PosApiService {
     );
   }
 
+  /// Which register session this till is working in, or null when none is open.
+  void describeRegisterSession(String? registerSessionId) {
+    _session.describeRegisterSession(registerSessionId);
+  }
+
   late final AttendanceApiClient _attendance;
   late final MigrationApiClient _migration;
   late final AuthApiClient _auth;

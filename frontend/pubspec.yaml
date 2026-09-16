@@ -81,6 +81,9 @@ dependencies:
   record: ^6.2.1
   # Client self-update: read the running app version + a temp dir for the download.
   package_info_plus: ^8.0.0
+  # `calloc` for the one kernel32 call that reads the machine's RAM
+  # (lib/src/core/analytics_host_facts_io.dart). Pure Dart; no native build.
+  ffi: ^2.1.0
   path_provider: ^2.1.4
   wakelock_plus: ^1.3.3
   flutter_tts: ^4.2.5

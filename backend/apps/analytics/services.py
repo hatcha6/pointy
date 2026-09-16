@@ -10,6 +10,7 @@ from django.db import transaction
 from django.db.models import F, Max, Q
 from django.utils import timezone
 
+from . import context
 from .models import AnalyticsEvent
 
 
@@ -461,6 +462,22 @@ def build_event(
     metrics=None,
     **kwargs,
 ) -> AnalyticsEvent:
+    """The one place an event is constructed, and so the one place identity
+    can be filled in without every caller remembering to.
+
+    A field export held 3,845 sales and not one could say which of the shop's
+    two tills rang it up — the device, the install and the trace were all known
+    to the request and none of them reached the row. The caller still wins
+    wherever it speaks: telemetry arriving through ingest carries the client's
+    own identity, and overwriting that with the identity of the request that
+    delivered it would be a lie about where it came from.
+    """
+    attributes = dict(attributes or {})
+    register_session_id = context.current_register_session_id()
+    if register_session_id and not attributes.get(
+        context.REGISTER_SESSION_ATTRIBUTE
+    ):
+        attributes[context.REGISTER_SESSION_ATTRIBUTE] = register_session_id
     return AnalyticsEvent(
         name=name,
         event_type=event_type,
@@ -468,9 +485,9 @@ def build_event(
         source=source,
         occurred_at=occurred_at or timezone.now(),
         received_by=user if getattr(user, "is_authenticated", False) else None,
-        attributes=attributes or {},
+        attributes=attributes,
         metrics=metrics or {},
-        **kwargs,
+        **{**context.identity_defaults(kwargs), **kwargs},
     )
 
 
@@ -502,6 +519,20 @@ def record_domain_event(
     metrics=None,
     **kwargs,
 ):
+    # Captured now, not inside the callback. ``on_commit`` runs after the
+    # response has been returned and the request's context has been reset, so
+    # reading the ambient identity in there would find nothing — the events that
+    # most need a device are precisely the ones written this way.
+    identity = context.identity_defaults(kwargs)
+    register_session_id = context.current_register_session_id()
+    resolved_attributes = dict(attributes or {})
+    if register_session_id and not resolved_attributes.get(
+        context.REGISTER_SESSION_ATTRIBUTE
+    ):
+        resolved_attributes[context.REGISTER_SESSION_ATTRIBUTE] = (
+            register_session_id
+        )
+
     def create_event():
         try:
             record_event(
@@ -511,9 +542,9 @@ def record_domain_event(
                 source=source,
                 user=user,
                 occurred_at=occurred_at,
-                attributes=_json_safe(attributes or {}),
+                attributes=_json_safe(resolved_attributes),
                 metrics=_json_safe(metrics or {}),
-                **kwargs,
+                **{**identity, **kwargs},
             )
         except Exception:
             return

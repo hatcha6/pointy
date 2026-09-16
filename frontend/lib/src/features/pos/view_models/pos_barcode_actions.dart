@@ -37,6 +37,7 @@ extension PosBarcodeActions on PosViewModel {
       case Ok<BarcodeResolution?>(:final value):
         if (value == null) {
           _barcodeScanStatus = BarcodeScanStatus.notFound;
+          _recordUnmatchedScan(normalizedBarcode, source: source);
         } else {
           final variant = value.variant;
           final matchedUnit = value.unit;
@@ -120,6 +121,39 @@ extension PosBarcodeActions on PosViewModel {
 
     _notifyChanged();
     return _barcodeScanStatus == BarcodeScanStatus.found;
+  }
+
+  /// A scan that matched nothing in the catalog.
+  ///
+  /// The biggest blind spot at the till. A cashier scans, the till says it does
+  /// not know the code, and the sale goes through by hand or the customer walks
+  /// — and none of it leaves a trace, because a barcode that resolves to no
+  /// product makes no request anyone would think to log. An export therefore
+  /// shows a shop with a tidy catalog and no hint that a tenth of its scans
+  /// miss.
+  ///
+  /// It is also the rare telemetry that is directly actionable: the codes
+  /// gathered here are precisely the products whose barcode needs adding, in
+  /// the order the shop actually encounters them.
+  void _recordUnmatchedScan(String barcode, {required String source}) {
+    unawaited(
+      _analyticsEngine?.trackUsage(
+            AnalyticsEventName.posScanUnmatched,
+            severity: AnalyticsEventSeverity.warning,
+            attributes: {
+              // The code itself, because the whole value of the event is the
+              // list of codes to add. It describes a product, not a person.
+              'barcode': barcode,
+              // `hardware_scanner` separates a real scanner miss from a cashier
+              // typing a code in by hand, which are different problems.
+              'source': source,
+              'register_session_id': _activeRegisterSession?.id,
+              'is_numeric': int.tryParse(barcode) != null,
+            },
+            metrics: {'barcode_length': barcode.length},
+          ) ??
+          Future<void>.value(),
+    );
   }
 
   void clearBarcodeScanStatus() {

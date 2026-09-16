@@ -45,6 +45,8 @@ enum AnalyticsEventName {
   posCheckoutCompleted,
   posCheckoutFailed,
   posCheckoutStockRejected,
+  posScanUnmatched,
+  catalogSearch,
   cameraFirstPaint,
 }
 
@@ -980,6 +982,8 @@ String analyticsEventNameToJson(AnalyticsEventName name) {
     AnalyticsEventName.posCheckoutFailed => 'pos.checkout.failed',
     AnalyticsEventName.posCheckoutStockRejected =>
       'pos.checkout.stock_rejected',
+    AnalyticsEventName.posScanUnmatched => 'pos.scan.unmatched',
+    AnalyticsEventName.catalogSearch => 'catalog.search',
     AnalyticsEventName.cameraFirstPaint => 'camera.first_paint',
   };
 }
