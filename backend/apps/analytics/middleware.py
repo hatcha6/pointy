@@ -103,9 +103,10 @@ class BackendPerformanceAnalyticsMiddleware:
             **_request_attributes(request, status_code=status_code),
             **_client_error_attributes(response, status_code=status_code),
         }
-        if _should_record_request_event(
+        recorded_request = _should_record_request_event(
             request, status_code=status_code, severity=severity
-        ):
+        )
+        if recorded_request:
             _safe_record_event(
                 name="backend.request",
                 event_type=AnalyticsEvent.EventType.PERFORMANCE,
@@ -117,20 +118,35 @@ class BackendPerformanceAnalyticsMiddleware:
                 buffered=True,
             )
         if status_code >= 500:
-            _safe_record_event(
-                name="backend.response_error",
-                event_type=AnalyticsEvent.EventType.ERROR,
-                severity=AnalyticsEvent.Severity.ERROR,
-                user=getattr(request, "user", None),
-                request=request,
-                # A 500 with no cause attached is a row that only says
-                # "something broke"; attach whatever the signal captured.
-                attributes={
-                    **attributes,
-                    **getattr(request, _EXCEPTION_ATTR, {}),
-                },
-                metrics=metrics,
-            )
+            captured = getattr(request, _EXCEPTION_ATTR, {})
+            # Only when this row would say something the request row does not.
+            #
+            # Every 5xx used to write both, and for a 5xx that raised nothing
+            # the second row was a byte-for-byte copy of the first: same
+            # attributes, same metrics, same moment. One shop's week was 95,345
+            # request rows at 5xx and 95,356 response-error rows — 45.7% of the
+            # entire export, almost all of it one broken camera counted twice.
+            # Thirteen of those 95,356 carried an exception. The rest were
+            # duplicates of a row that already had the status, the duration and
+            # the view name on it.
+            #
+            # ``not recorded_request`` is the case that keeps this honest: the
+            # ingest endpoint is excluded from request rows outright (recording
+            # telemetry about delivering telemetry is how a rejection loop
+            # became half the database), so for ingest this *is* the only row,
+            # and it stays whether or not anything was raised.
+            if captured or not recorded_request:
+                _safe_record_event(
+                    name="backend.response_error",
+                    event_type=AnalyticsEvent.EventType.ERROR,
+                    severity=AnalyticsEvent.Severity.ERROR,
+                    user=getattr(request, "user", None),
+                    request=request,
+                    # A 500 with no cause attached is a row that only says
+                    # "something broke"; attach whatever the signal captured.
+                    attributes={**attributes, **captured},
+                    metrics=metrics,
+                )
         return response
 
 

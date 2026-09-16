@@ -22,9 +22,20 @@ def healthy_view(request):
     return HttpResponse("fine")
 
 
+def refusing_view(request):
+    """A 5xx that raises nothing — a proxy timeout handed back as a response.
+
+    The shape that mattered in the field: the camera live view returns 502 when
+    the recorder does not answer, and returns it *normally*.
+    """
+    return HttpResponse("upstream said no", status=502)
+
+
 urlpatterns = [
     path("api/boom/", boom_view),
     path("api/fine/", healthy_view),
+    path("api/refused/", refusing_view),
+    path("api/analytics-events/ingest/", refusing_view),
 ]
 
 
@@ -69,3 +80,63 @@ class ViewExceptionCaptureTests(TestCase):
             "error_type",
             AnalyticsEvent.objects.get(name="backend.request").attributes,
         )
+
+
+@override_settings(ROOT_URLCONF=__name__, DEBUG=False)
+class OneRowPerFailedRequestTests(TestCase):
+    """A 5xx that raised nothing does not need saying twice.
+
+    Both rows were written for every 5xx, and when nothing was raised the
+    second was a byte-for-byte copy of the first — same attributes, same
+    metrics, same moment. One shop's week: 95,345 request rows at 5xx and
+    95,356 response-error rows, 45.7% of the whole export, and thirteen of
+    those 95,356 carried an exception. The rest said nothing the request row
+    had not already said.
+    """
+
+    def test_a_5xx_with_no_exception_is_recorded_once(self):
+        response = self.client.get("/api/refused/")
+
+        self.assertEqual(response.status_code, 502)
+        request_rows = AnalyticsEvent.objects.filter(name="backend.request")
+        self.assertEqual(request_rows.count(), 1)
+        self.assertFalse(
+            AnalyticsEvent.objects.filter(name="backend.response_error").exists()
+        )
+
+    def test_the_surviving_row_still_says_it_failed(self):
+        """Dropping the duplicate must not cost the diagnosis: everything the
+        second row carried for a raise-less 5xx was already on the first."""
+        self.client.get("/api/refused/")
+
+        event = AnalyticsEvent.objects.get(name="backend.request")
+        self.assertEqual(event.severity, AnalyticsEvent.Severity.ERROR)
+        self.assertEqual(event.attributes["status_family"], "5xx")
+        self.assertEqual(event.metrics["status_code"], 502)
+
+    def test_a_5xx_that_raised_still_writes_both(self):
+        """The exception row is the one that carries a traceback, so it stays."""
+        try:
+            self.client.get("/api/boom/")
+        except RuntimeError:
+            pass
+
+        self.assertTrue(
+            AnalyticsEvent.objects.filter(name="backend.request").exists()
+        )
+        self.assertTrue(
+            AnalyticsEvent.objects.filter(name="backend.response_error").exists()
+        )
+
+    def test_an_ingest_failure_is_still_recorded(self):
+        """Ingest writes no request row at all — recording telemetry about
+        delivering telemetry is how a rejection loop became half the database —
+        so for that path the error row is the only row, raised or not."""
+        response = self.client.post("/api/analytics-events/ingest/")
+
+        self.assertEqual(response.status_code, 502)
+        self.assertFalse(
+            AnalyticsEvent.objects.filter(name="backend.request").exists()
+        )
+        error = AnalyticsEvent.objects.get(name="backend.response_error")
+        self.assertEqual(error.metrics["status_code"], 502)
