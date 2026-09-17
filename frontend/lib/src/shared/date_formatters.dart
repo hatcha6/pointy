@@ -26,6 +26,14 @@ String formatClockTime(DateTime dateTime) {
   return DateFormat('HH:mm').format(dateTime.toUtc());
 }
 
+/// An expiry as a shop says it out loud: month and year.
+///
+/// A pack expires in a month, not on a day — the day on the foil is the last
+/// one, and a receipt that prints "08/2027" is what a pharmacy customer reads.
+String formatExpiry(DateTime dateTime) {
+  return DateFormat('MM/yyyy').format(dateTime.toLocal());
+}
+
 String formatMonthYear(DateTime dateTime) {
   return DateFormat('yyyy/MM').format(dateTime);
 }

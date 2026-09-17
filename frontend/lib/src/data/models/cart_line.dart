@@ -11,6 +11,11 @@ class CartLine {
     this.unitLabel = '',
     this.unitFactor = 1,
     this.unitPriceOverride,
+    this.stockUnitId,
+    this.stockUnitCode = '',
+    this.stockBatchId,
+    this.stockBatchCode = '',
+    this.stockBatchExpiry,
     this.lineKey = '',
   });
 
@@ -27,6 +32,11 @@ class CartLine {
     String unitLabel = '',
     double unitFactor = 1,
     double? unitPriceOverride,
+    int? stockUnitId,
+    String stockUnitCode = '',
+    int? stockBatchId,
+    String stockBatchCode = '',
+    DateTime? stockBatchExpiry,
   }) {
     _sequence += 1;
     return CartLine(
@@ -38,6 +48,11 @@ class CartLine {
       unitLabel: unitLabel,
       unitFactor: unitFactor,
       unitPriceOverride: unitPriceOverride,
+      stockUnitId: stockUnitId,
+      stockUnitCode: stockUnitCode,
+      stockBatchId: stockBatchId,
+      stockBatchCode: stockBatchCode,
+      stockBatchExpiry: stockBatchExpiry,
       lineKey: 'cart-$_sequence',
     );
   }
@@ -68,10 +83,42 @@ class CartLine {
   /// variant price (base unit).
   final double? unitPriceOverride;
 
+  /// The identified article this line rings up, when the product has them.
+  ///
+  /// A serialized line is **one specific handset**, which is why quantity is
+  /// locked to 1 and why [mergeSignature] includes the id: adding a second of
+  /// the same model creates a second line with its own article, never a
+  /// quantity of two on the first.
+  final int? stockUnitId;
+
+  /// The identifier as scanned, kept so the line can render it and the checkout
+  /// can send it without a second lookup.
+  final String stockUnitCode;
+
+  /// The lot this line was pinned to, when the cashier or a lot barcode chose
+  /// one. Null on the ordinary path, where FEFO picks at checkout and the badge
+  /// shows what it picked.
+  final int? stockBatchId;
+  final String stockBatchCode;
+  final DateTime? stockBatchExpiry;
+
   /// Stable identity for this line within the cart, independent of the variant.
   final String lineKey;
 
   bool get isBaseUnit => unitCode.isEmpty || unitFactor == 1;
+
+  /// Does this line name one specific article of stock?
+  bool get isSerialized => stockUnitId != null;
+
+  /// Has a lot been pinned to this line rather than left to FEFO?
+  bool get hasPinnedBatch => stockBatchId != null;
+
+  /// Whether the cart may change this line's quantity at all.
+  ///
+  /// One article is one article. The `+`/`−` hotkeys and the quantity sheet are
+  /// both suppressed for these lines — a serialized line whose quantity said 2
+  /// would be a claim to hold two handsets with the same IMEI.
+  bool get allowsQuantityEdit => !isSerialized;
 
   /// Quantity converted to the product's base unit (for stock-style display).
   double get baseQuantity => quantity * unitFactor;
@@ -104,6 +151,11 @@ class CartLine {
     double? unitFactor,
     // Sentinel so the override can be cleared back to null (switching to base).
     Object? unitPriceOverride = _noChange,
+    Object? stockUnitId = _noChange,
+    String? stockUnitCode,
+    Object? stockBatchId = _noChange,
+    String? stockBatchCode,
+    Object? stockBatchExpiry = _noChange,
     String? lineKey,
   }) {
     return CartLine(
@@ -117,6 +169,17 @@ class CartLine {
       unitPriceOverride: identical(unitPriceOverride, _noChange)
           ? this.unitPriceOverride
           : unitPriceOverride as double?,
+      stockUnitId: identical(stockUnitId, _noChange)
+          ? this.stockUnitId
+          : stockUnitId as int?,
+      stockUnitCode: stockUnitCode ?? this.stockUnitCode,
+      stockBatchId: identical(stockBatchId, _noChange)
+          ? this.stockBatchId
+          : stockBatchId as int?,
+      stockBatchCode: stockBatchCode ?? this.stockBatchCode,
+      stockBatchExpiry: identical(stockBatchExpiry, _noChange)
+          ? this.stockBatchExpiry
+          : stockBatchExpiry as DateTime?,
       lineKey: lineKey ?? this.lineKey,
     );
   }
@@ -133,6 +196,11 @@ class CartLine {
       'unit_label': unitLabel,
       'unit_factor': unitFactor,
       'unit_price_override': unitPriceOverride,
+      'stock_unit_id': stockUnitId,
+      'stock_unit_code': stockUnitCode,
+      'stock_batch_id': stockBatchId,
+      'stock_batch_code': stockBatchCode,
+      'stock_batch_expiry': stockBatchExpiry?.toIso8601String(),
       'line_key': lineKey,
     };
   }
@@ -165,12 +233,29 @@ class CartLine {
       unitLabel: json['unit_label']?.toString() ?? '',
       unitFactor: _doubleFromJson(json['unit_factor'], fallback: 1),
       unitPriceOverride: override == null ? null : _doubleFromJson(override),
+      stockUnitId: _intOrNull(json['stock_unit_id']),
+      stockUnitCode: json['stock_unit_code']?.toString() ?? '',
+      stockBatchId: _intOrNull(json['stock_batch_id']),
+      stockBatchCode: json['stock_batch_code']?.toString() ?? '',
+      stockBatchExpiry: DateTime.tryParse(
+        json['stock_batch_expiry']?.toString() ?? '',
+      ),
       lineKey: lineKey,
     );
   }
 }
 
 const Object _noChange = Object();
+
+int? _intOrNull(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is int) {
+    return value;
+  }
+  return int.tryParse(value.toString());
+}
 
 double _doubleFromJson(Object? value, {double fallback = 0}) {
   if (value is num) {

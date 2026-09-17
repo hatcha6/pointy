@@ -236,6 +236,13 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         source="variant.product.tracks_expiry",
         read_only=True,
     )
+    # How closely this line's goods are identified, so the receiving sheet knows
+    # whether to ask for serials, lots, both, or neither. Read off the product
+    # the line already carries — a receiver must not have to know.
+    tracking_mode = serializers.CharField(
+        source="variant.product.tracking_mode",
+        read_only=True,
+    )
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     discount_amount = serializers.DecimalField(
         max_digits=10,
@@ -321,6 +328,7 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "variant_sku",
             "variant_name",
             "tracks_expiry",
+            "tracking_mode",
             "quantity",
             "unit",
             "unit_factor",
@@ -360,6 +368,7 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "product_name",
             "variant_sku",
             "tracks_expiry",
+            "tracking_mode",
             "unit_factor",
             "unit_label",
             "base_quantity",

@@ -344,6 +344,7 @@ class PurchaseOrderLine {
     this.variantName,
     this.variantSku,
     this.tracksExpiry = false,
+    this.trackingMode = TrackingMode.quantity,
     this.expiryDate,
     this.previousUnitCost,
     this.unitCostChange,
@@ -362,6 +363,10 @@ class PurchaseOrderLine {
   final String? variantName;
   final String? variantSku;
   final bool tracksExpiry;
+
+  /// How closely these goods are identified, so the receiving sheet knows
+  /// whether to ask for serials, lots, both, or neither.
+  final TrackingMode trackingMode;
   final DateTime? expiryDate;
   final double quantity;
   final double adjustedQuantity;
@@ -460,6 +465,7 @@ class PurchaseOrderLine {
       variantName: json['variant_name']?.toString(),
       variantSku: json['variant_sku']?.toString(),
       tracksExpiry: _boolFromJson(json['tracks_expiry']),
+      trackingMode: TrackingMode.fromWire(json['tracking_mode']),
       expiryDate: _dateTimeFromJson(json['expiry_date']),
       quantity: quantity,
       adjustedQuantity: _quantityFromJson(json['adjusted_quantity']),
@@ -530,6 +536,7 @@ class PurchaseOrderLine {
       variantName: variantName,
       variantSku: variantSku,
       tracksExpiry: tracksExpiry,
+      trackingMode: trackingMode,
       expiryDate: expiryDate,
       quantity: quantity,
       adjustedQuantity: adjustedQuantity,
@@ -578,6 +585,7 @@ class PurchaseReceiveLineDraft {
     required this.quantityDamaged,
     this.quantityRejected = 0,
     this.expiryDate,
+    this.capture,
   });
 
   final int purchaseLineId;
@@ -586,7 +594,13 @@ class PurchaseReceiveLineDraft {
   final double quantityRejected;
   final DateTime? expiryDate;
 
+  /// The identifiers and lots the receiver wrote down with the goods in front
+  /// of them. Null — and absent from the payload — for every delivery of
+  /// everything a shop counts rather than names.
+  final ReceiptLineCapture? capture;
+
   Map<String, Object?> toJson() {
+    final captured = capture?.toJson() ?? const <String, Object?>{};
     return {
       'purchase_line': purchaseLineId,
       // 3dp strings, matching the backend's decimal quantities.
@@ -595,6 +609,7 @@ class PurchaseReceiveLineDraft {
       if (quantityRejected > 0)
         'quantity_rejected': quantityRejected.toStringAsFixed(3),
       if (expiryDate != null) 'expiry_date': _dateOnlyString(expiryDate!),
+      ...captured,
     };
   }
 }

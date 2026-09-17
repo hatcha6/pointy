@@ -86,6 +86,8 @@ import 'features/settings/view_models/prep_stations_view_model.dart';
 import 'features/settings/view_models/price_checkers_view_model.dart';
 import 'features/settings/view_models/sales_channels_view_model.dart';
 import 'features/inventory/view_models/transfers_view_model.dart';
+import 'features/inventory/views/stock_batches_screen.dart';
+import 'features/inventory/views/stock_units_screen.dart';
 import 'features/settings/view_models/warehouses_view_model.dart';
 import 'features/settings/view_models/shop_settings_view_model.dart';
 import 'features/settings/view_models/messaging_settings_view_model.dart';
@@ -281,6 +283,8 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.catalog => catalogRouteBuilder,
       AppNavigationDestination.categories => categoryRouteBuilder,
       AppNavigationDestination.stockCount => stockCountRouteBuilder,
+      AppNavigationDestination.stockUnits => stockUnitsRouteBuilder,
+      AppNavigationDestination.stockBatches => stockBatchesRouteBuilder,
       AppNavigationDestination.registerSessions => registerSessionsRouteBuilder,
       AppNavigationDestination.cameras => camerasRouteBuilder,
       AppNavigationDestination.employees => employeePayrollRouteBuilder,
@@ -1145,6 +1149,20 @@ class _AuthenticatedRoutes implements AppNavigation {
         capabilities: capabilities,
         navigation: this,
       ),
+    );
+  }
+
+  Widget stockUnitsRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'stock_units',
+      StockUnitsScreen(viewModel: dependencies.trackedStockViewModel),
+    );
+  }
+
+  Widget stockBatchesRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'stock_batches',
+      StockBatchesScreen(viewModel: dependencies.trackedStockViewModel),
     );
   }
 

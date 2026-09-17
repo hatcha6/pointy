@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/cart_line.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/units.dart';
@@ -17,6 +18,7 @@ class CartLineTile extends StatelessWidget {
     this.onEditQuantity,
     this.onEditNote,
     this.onSwitchUnit,
+    this.onPickBatch,
     this.selected = false,
     this.onSelect,
   });
@@ -42,6 +44,17 @@ class CartLineTile extends StatelessWidget {
   /// Opens the unit switcher for this line. Null when the product has only its
   /// base unit.
   final VoidCallback? onSwitchUnit;
+
+  /// Opens the lot picker for this line. Null for everything that is not
+  /// lot-tracked — which is every product in most shops.
+  final VoidCallback? onPickBatch;
+
+  /// Whether this line has an identity worth printing on the row: a handset's
+  /// IMEI, or the lot a pharmacy is required to name.
+  bool get _showsIdentityRow =>
+      line.stockUnitCode.isNotEmpty ||
+      line.stockBatchCode.isNotEmpty ||
+      onPickBatch != null;
 
   bool get _showsUnitRow =>
       onSwitchUnit != null || (!line.isBaseUnit && line.unitLabel.isNotEmpty);
@@ -70,18 +83,25 @@ class CartLineTile extends StatelessWidget {
       // Every line's quantity is tap-to-type editable so the cashier can enter a
       // fraction of any product; which sheet opens depends on the product's
       // units (weight entry, or the unit + quantity picker).
-      onQuantityTap: onEditQuantity,
+      // One article is one article: a serialized line has no quantity to edit,
+      // and offering the sheet would be offering something the cart refuses.
+      onQuantityTap: line.allowsQuantityEdit ? onEditQuantity : null,
     );
 
     final hasNoteRow = onEditNote != null || line.notes.trim().isNotEmpty;
     final Widget content;
-    if (line.modifiers.isEmpty && !hasNoteRow && !_showsUnitRow) {
+    if (line.modifiers.isEmpty &&
+        !hasNoteRow &&
+        !_showsUnitRow &&
+        !_showsIdentityRow) {
       content = tile;
     } else {
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           tile,
+          if (_showsIdentityRow)
+            _CartLineIdentity(line: line, onPickBatch: onPickBatch),
           if (_showsUnitRow)
             _CartLineUnit(line: line, onSwitchUnit: onSwitchUnit),
           if (line.modifiers.isNotEmpty) _CartLineModifiers(line: line),
@@ -283,6 +303,122 @@ class _CartLineNote extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The identity this line rings up: the article's own number, or the lot it was
+/// drawn from and when that lot expires.
+///
+/// A serialized code is text — there is nothing to choose, the cashier scanned
+/// *this* handset. A lot is a chip the cashier can tap, because a customer who
+/// asks for a longer expiry is asking for a different lot, and refusing them
+/// would mean voiding the line and starting again.
+class _CartLineIdentity extends StatelessWidget {
+  const _CartLineIdentity({required this.line, this.onPickBatch});
+
+  final CartLine line;
+  final VoidCallback? onPickBatch;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+    final unitCode = line.stockUnitCode.trim();
+    final batchCode = line.stockBatchCode.trim();
+    final expiry = line.stockBatchExpiry;
+
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 12, end: 12, bottom: 6),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (unitCode.isNotEmpty)
+            _IdentityChip(
+              icon: Icons.tag_outlined,
+              label: unitCode,
+              tone: colors.primaryStrong,
+            ),
+          if (batchCode.isNotEmpty || onPickBatch != null)
+            InkWell(
+              onTap: onPickBatch,
+              borderRadius: BorderRadius.circular(8),
+              child: _IdentityChip(
+                icon: Icons.inventory_2_outlined,
+                label: batchCode.isNotEmpty
+                    ? l10n.posCartLineBatchBadge(batchCode)
+                    : l10n.posCartLineBatchAuto,
+                tone: batchCode.isNotEmpty
+                    ? colors.primaryStrong
+                    : theme.hintColor,
+                trailing: onPickBatch == null ? null : Icons.expand_more,
+              ),
+            ),
+          if (expiry != null)
+            _IdentityChip(
+              icon: Icons.event_outlined,
+              label: l10n.posCartLineExpiryBadge(formatExpiry(expiry)),
+              tone: _expiryTone(context, expiry),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Red inside a month, amber inside three, ordinary after that. The cashier
+  /// is the last person who can catch a pack that is about to turn, and a date
+  /// that reads the same as every other date is a date nobody reads.
+  Color _expiryTone(BuildContext context, DateTime expiry) {
+    final colors = context.pointyColors;
+    final now = DateTime.now();
+    final days = DateTime(
+      expiry.year,
+      expiry.month,
+      expiry.day,
+    ).difference(DateTime(now.year, now.month, now.day)).inDays;
+    if (days < 30) {
+      return colors.danger;
+    }
+    if (days < 90) {
+      return colors.warning;
+    }
+    return colors.primaryStrong;
+  }
+}
+
+class _IdentityChip extends StatelessWidget {
+  const _IdentityChip({
+    required this.icon,
+    required this.label,
+    required this.tone,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color tone;
+  final IconData? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: tone),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: tone,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+        if (trailing != null) Icon(trailing, size: 14, color: tone),
+      ],
     );
   }
 }

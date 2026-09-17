@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import django_filters
-from django.db.models import Prefetch, Sum
+from django.db.models import Prefetch, Q, Sum
 from django.utils import timezone
 from rest_framework import mixins, serializers, viewsets
 from rest_framework.decorators import action
@@ -33,6 +33,19 @@ from .tracked_serializers import (
     StockUnitLookupSerializer,
     StockUnitSerializer,
 )
+
+
+def _selling_warehouse_id(request):
+    """Where the till asking this question actually sells from.
+
+    The client does not know its own warehouse — the register profile does, and
+    the backend already resolves it for every checkout. A picker that guessed
+    would offer the cashier goods sitting in another branch, which is offering
+    something they cannot hand over.
+    """
+    from apps.sales.registers import selling_warehouse_id
+
+    return selling_warehouse_id(request)
 
 
 class StockUnitFilter(django_filters.FilterSet):
@@ -112,12 +125,23 @@ class StockUnitViewSet(
     search_fields = ("code", "secondary_code", "supplier_code")
 
     def get_queryset(self):
-        return StockUnit.objects.select_related(
+        query = StockUnit.objects.select_related(
             "variant",
             "variant__product",
             "warehouse",
             "batch",
         ).order_by(*self.ordering)
+        if self.request.query_params.get("for_sale") in ("1", "true", "True"):
+            # The till's own shelf: in stock, identified, here. Everything the
+            # picker must not offer is excluded by the query rather than by the
+            # widget, so a stale list cannot become a sale of something that is
+            # not there.
+            query = query.filter(
+                warehouse_id=_selling_warehouse_id(self.request),
+                status=StockUnit.Status.IN_STOCK,
+                is_identified=True,
+            )
+        return query
 
     @action(detail=True, methods=["get"])
     def history(self, request, pk=None):
@@ -303,19 +327,42 @@ class StockBatchViewSet(
     ordering = ("expiry_date", "id")
 
     def get_queryset(self):
-        return (
+        for_sale = self.request.query_params.get("for_sale") in (
+            "1",
+            "true",
+            "True",
+        )
+        warehouse_id = _selling_warehouse_id(self.request) if for_sale else None
+        balances = StockBatchBalance.objects.select_related("warehouse")
+        if for_sale:
+            balances = balances.filter(warehouse_id=warehouse_id)
+        query = (
             StockBatch.objects.select_related(
                 "variant", "variant__product", "supplier"
             )
-            .prefetch_related(
-                Prefetch(
-                    "balances",
-                    queryset=StockBatchBalance.objects.select_related("warehouse"),
+            .prefetch_related(Prefetch("balances", queryset=balances))
+            .annotate(
+                on_hand=Sum(
+                    "balances__remaining_quantity",
+                    filter=(
+                        Q(balances__warehouse_id=warehouse_id)
+                        if for_sale
+                        else None
+                    ),
                 )
             )
-            .annotate(on_hand=Sum("balances__remaining_quantity"))
             .order_by(*self.ordering)
         )
+        if for_sale:
+            # Sellable, here, and not empty. A lot whose goods are all in
+            # another branch is not on this shelf.
+            query = query.filter(
+                status=StockBatch.Status.ACTIVE,
+                is_locked=False,
+                balances__warehouse_id=warehouse_id,
+                balances__remaining_quantity__gt=0,
+            ).distinct()
+        return query
 
     @action(detail=True, methods=["get"])
     def balances(self, request, pk=None):

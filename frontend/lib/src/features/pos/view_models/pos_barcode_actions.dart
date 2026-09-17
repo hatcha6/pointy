@@ -36,6 +36,18 @@ extension PosBarcodeActions on PosViewModel {
     switch (result) {
       case Ok<BarcodeResolution?>(:final value):
         if (value == null) {
+          // The catalog had no answer. Before calling it a miss, ask the server
+          // about the three codes only it can resolve: an identified article's
+          // own number, a lot barcode, and a GS1 symbol that names a trade
+          // item, a lot, an expiry and a serial at once.
+          //
+          // Deliberately on the *miss* path. A shop that sells Coca-Cola
+          // resolves every scan locally on the first try and never sends this
+          // request at all, which is the constraint this whole feature is
+          // written under.
+          if (await _addTrackedScan(normalizedBarcode, source: source)) {
+            break;
+          }
           _barcodeScanStatus = BarcodeScanStatus.notFound;
           _recordUnmatchedScan(normalizedBarcode, source: source);
         } else {
@@ -121,6 +133,66 @@ extension PosBarcodeActions on PosViewModel {
 
     _notifyChanged();
     return _barcodeScanStatus == BarcodeScanStatus.found;
+  }
+
+  /// Ring up what the server made of a scan the catalog could not place.
+  ///
+  /// Returns false — silently — for everything that is not identified stock, so
+  /// the caller falls through to its ordinary "unknown barcode" handling.
+  Future<bool> _addTrackedScan(String code, {required String source}) async {
+    final repository = _trackedStockRepository;
+    if (repository == null) {
+      return false;
+    }
+    final result = await repository.resolveScan(code);
+    if (result is! Ok<TrackedScan>) {
+      return false;
+    }
+    final scan = result.value;
+    _trackedScanWarnings = scan.warnings;
+    if (!scan.found) {
+      // A GS1 symbol the shop could read but not place still has something to
+      // say — an unregistered GTIN, or a reader that strips its separators —
+      // and saying it is more useful than "unknown barcode".
+      return false;
+    }
+    final variant = scan.variant;
+    if (variant == null) {
+      return false;
+    }
+    if (scan.batch != null && !scan.batch!.isSellable) {
+      _barcodeScanStatus = BarcodeScanStatus.notFound;
+      _lastScannedProductName = variant.displayLabel;
+      return true;
+    }
+
+    _addVariantToCartAndTrack(
+      variant,
+      quantity: 1,
+      source: source,
+      stockUnit: scan.unit,
+      stockBatch: scan.batch,
+    );
+    _activeCartLineKey = _cart.isEmpty ? null : _cart.last.lineKey;
+    _lastScannedProductName = _trackedScanLabel(scan, variant.displayLabel);
+    _barcodeScanStatus = BarcodeScanStatus.found;
+    unawaited(refreshDiscountPreview());
+    return true;
+  }
+
+  /// What the status line says after a tracked scan: the product, then the
+  /// thing that makes this particular article distinguishable from the next one
+  /// on the shelf.
+  String _trackedScanLabel(TrackedScan scan, String productLabel) {
+    final unit = scan.unit;
+    if (unit != null) {
+      return '$productLabel — ${unit.code}';
+    }
+    final batch = scan.batch;
+    if (batch != null && batch.label.isNotEmpty) {
+      return '$productLabel — ${batch.label}';
+    }
+    return productLabel;
   }
 
   /// A scan that matched nothing in the catalog.

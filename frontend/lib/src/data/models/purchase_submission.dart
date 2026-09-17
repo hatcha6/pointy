@@ -1,5 +1,7 @@
 import 'product_variant.dart';
 import 'query.dart';
+import 'receipt_capture.dart';
+import 'tracking_mode.dart';
 
 part 'purchase_submission_order.dart';
 part 'purchase_submission_adjustments.dart';

@@ -35,8 +35,13 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
         ),
   };
   final TextEditingController _noteController = TextEditingController();
+
+  /// What the receiver captured per line, with the goods in front of them.
+  /// Empty for every delivery of everything a shop counts rather than names.
+  final Map<int, ReceiptLineCapture> _captures = {};
   bool _showQuantityError = false;
   bool _showExpiryError = false;
+  bool _showCaptureError = false;
 
   @override
   void dispose() {
@@ -80,9 +85,14 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
                     damagedController: _damagedControllers[line.id]!,
                     rejectedController: _rejectedControllers[line.id]!,
                     expiryController: _expiryControllers[line.id],
+                    capture: _captures[line.id],
+                    onCapture: line.trackingMode.isTracked
+                        ? () => _captureFor(line)
+                        : null,
                     onChanged: () => setState(() {
                       _showQuantityError = false;
                       _showExpiryError = false;
+                      _showCaptureError = false;
                     }),
                   ),
               if (_showQuantityError) ...[
@@ -101,6 +111,16 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
                   alignment: AlignmentDirectional.centerStart,
                   child: Text(
                     l10n.purchaseLineExpiryDateRequired,
+                    style: TextStyle(color: colors.danger),
+                  ),
+                ),
+              ],
+              if (_showCaptureError) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    l10n.purchaseReceiveCaptureRequired,
                     style: TextStyle(color: colors.danger),
                   ),
                 ),
@@ -134,6 +154,64 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
     );
   }
 
+  /// Open the right capture sheet for this line's mode.
+  ///
+  /// ``serial_batch`` asks for both, in the order a receiver actually works: the
+  /// lot header once — it is printed once on the carton — then the scan loop for
+  /// each pack beneath it.
+  Future<void> _captureFor(PurchaseOrderLine line) async {
+    final mode = line.trackingMode;
+    final received =
+        double.tryParse(_receivedControllers[line.id]!.text.trim()) ?? 0;
+    final damaged =
+        double.tryParse(_damagedControllers[line.id]!.text.trim()) ?? 0;
+    if (received + damaged <= 0) {
+      return;
+    }
+    final existing = _captures[line.id];
+    final label = line.displayName.isEmpty
+        ? AppLocalizations.of(context)!.purchaseOrderUnknownProduct
+        : line.displayName;
+
+    var batches = existing?.batches ?? const <ReceiptBatchCapture>[];
+    if (mode.tracksLots) {
+      final captured = await showBatchCaptureSheet(
+        context,
+        productLabel: label,
+        expectedQuantity: received,
+        initial: batches,
+        suggestedExpiry: line.expiryDate,
+      );
+      if (captured == null || !mounted) {
+        return;
+      }
+      batches = captured;
+    }
+
+    var units = existing?.units ?? const <ReceiptUnitCapture>[];
+    if (mode.tracksUnits) {
+      final captured = await showUnitCaptureSheet(
+        context,
+        productLabel: label,
+        // Damaged goods are units too, in the same table and in the same
+        // capture — two disjoint sets, neither overwriting the other.
+        expectedCount: (received + damaged).round(),
+        lineUnitCost: line.unitCost,
+        initial: units,
+        allowCaptureLater: false,
+      );
+      if (captured == null || !mounted) {
+        return;
+      }
+      units = captured;
+    }
+
+    setState(() {
+      _captures[line.id] = ReceiptLineCapture(units: units, batches: batches);
+      _showCaptureError = false;
+    });
+  }
+
   void _submit() {
     final lines = <PurchaseReceiveLineDraft>[];
     for (final line in _receivableLines) {
@@ -165,6 +243,15 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
         }
       }
       if (received > 0 || damaged > 0 || rejected > 0) {
+        final capture = _captures[line.id];
+        // Identifiers are captured where the goods physically are. A line that
+        // needs them and has not got them is refused here rather than by the
+        // backend, so the receiver finds out while the boxes are still open.
+        if (line.trackingMode.isTracked &&
+            (capture == null || capture.isEmpty)) {
+          setState(() => _showCaptureError = true);
+          return;
+        }
         lines.add(
           PurchaseReceiveLineDraft(
             purchaseLineId: line.id,
@@ -172,6 +259,7 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
             quantityDamaged: damaged,
             quantityRejected: rejected,
             expiryDate: expiryDate,
+            capture: capture,
           ),
         );
       }
@@ -182,6 +270,7 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
     }
     _showQuantityError = false;
     _showExpiryError = false;
+    _showCaptureError = false;
     Navigator.of(context).pop(
       _PurchaseReceiveDialogResult(
         lines: lines,
@@ -198,6 +287,8 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
     required this.damagedController,
     required this.rejectedController,
     this.expiryController,
+    this.capture,
+    this.onCapture,
     required this.onChanged,
   });
 
@@ -206,6 +297,13 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
   final TextEditingController damagedController;
   final TextEditingController rejectedController;
   final TextEditingController? expiryController;
+
+  /// What has been captured for this line so far, so the row can say whether
+  /// the identifiers are still owed. Null for an untracked line.
+  final ReceiptLineCapture? capture;
+
+  /// Opens the capture sheet. Null when this line's goods have no identity.
+  final VoidCallback? onCapture;
   final VoidCallback onChanged;
 
   @override
@@ -342,6 +440,15 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
               onChanged: (_) => onChanged(),
             ),
           ],
+          if (onCapture != null) ...[
+            const SizedBox(height: 8),
+            _CaptureRow(
+              line: line,
+              capture: capture,
+              expectedCount: (received + damaged),
+              onCapture: onCapture!,
+            ),
+          ],
         ],
       ),
     );
@@ -365,6 +472,74 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
     }
     controller.text = _formatReceiveDate(selected);
     onChanged();
+  }
+}
+
+/// Whether this line still owes its identifiers, and the button that captures
+/// them.
+///
+/// Reads as a residual rather than a tick, because that is the question the
+/// receiver is actually answering: *how many of these forty boxes have I
+/// scanned?*
+class _CaptureRow extends StatelessWidget {
+  const _CaptureRow({
+    required this.line,
+    required this.capture,
+    required this.expectedCount,
+    required this.onCapture,
+  });
+
+  final PurchaseOrderLine line;
+  final ReceiptLineCapture? capture;
+  final double expectedCount;
+  final VoidCallback onCapture;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colors = context.pointyColors;
+    final mode = line.trackingMode;
+    final captured = capture;
+    final done = mode.tracksUnits
+        ? (captured?.units.length ?? 0) >= expectedCount.round()
+        : (captured?.capturedBatchQuantity ?? 0) >= expectedCount;
+
+    return Row(
+      children: [
+        Icon(
+          done ? Icons.check_circle_outline : Icons.error_outline,
+          size: 18,
+          color: done ? colors.primaryStrong : colors.warning,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            mode.tracksUnits
+                ? l10n.purchaseReceiveUnitsCaptured(
+                    captured?.units.length ?? 0,
+                    expectedCount.round(),
+                  )
+                : l10n.purchaseReceiveLotsCaptured(
+                    formatQuantity(captured?.capturedBatchQuantity ?? 0),
+                    formatQuantity(expectedCount),
+                  ),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: done ? colors.primaryStrong : colors.warning,
+            ),
+          ),
+        ),
+        TextButton.icon(
+          onPressed: expectedCount > 0 ? onCapture : null,
+          icon: const Icon(Icons.qr_code_scanner_outlined, size: 18),
+          label: Text(
+            mode.tracksUnits
+                ? l10n.purchaseReceiveCaptureUnits
+                : l10n.purchaseReceiveCaptureLots,
+          ),
+        ),
+      ],
+    );
   }
 }
 

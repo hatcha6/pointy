@@ -1172,3 +1172,83 @@ class IdentifiedStockBlocksACostEditTests(TestCase):
             str(detail["code"]), "purchase_order_has_identified_stock"
         )
         self.assertEqual([str(code) for code in detail["stock_units"]], ["LC-SER-1"])
+
+
+class SaleLineIdentifierTests(TestCase):
+    """A receipt that does not name the IMEI cannot settle a warranty claim.
+
+    And a receipt that does not name the lot cannot answer a recall. Both come
+    off rows the sale already wrote, so neither can drift from what actually
+    left the shop.
+    """
+
+    def test_a_serialized_line_names_its_own_handsets(self):
+        from apps.sales.tracked_lines import order_line_identifiers
+
+        product = tracked_product(
+            name="iPhone",
+            sku="RCPT-1",
+            mode=Product.TrackingMode.SERIAL,
+            unit_price="1500.00",
+        )
+        receive(
+            variant=product.default_variant,
+            quantity=2,
+            unit_cost="1000.00",
+            units=[{"code": IMEI_A}, {"code": IMEI_B}],
+        )
+        order = _sell(product.default_variant, 2, price="1500.00")
+
+        rows = order_line_identifiers(order.lines.get())
+        self.assertEqual({row["kind"] for row in rows}, {"unit"})
+        self.assertEqual(
+            sorted(row["code"] for row in rows), sorted([IMEI_A, IMEI_B])
+        )
+
+    def test_a_lot_line_names_every_cohort_the_pick_drew_from(self):
+        from apps.sales.tracked_lines import order_line_identifiers
+
+        product = tracked_product(
+            name="أموكسيسيلين",
+            sku="RCPT-2",
+            mode=Product.TrackingMode.BATCH,
+            unit_price="20.00",
+        )
+        today = timezone.localdate()
+        for code, quantity, days in (("SOON", 3, 30), ("LATE", 5, 400)):
+            receive(
+                variant=product.default_variant,
+                quantity=quantity,
+                unit_cost="14.00",
+                batches=[
+                    {
+                        "code": code,
+                        "quantity": Decimal(quantity),
+                        "expiry_date": today + timedelta(days=days),
+                    }
+                ],
+            )
+        order = _sell(product.default_variant, 4, price="20.00")
+
+        rows = order_line_identifiers(order.lines.get())
+        self.assertEqual(
+            [(row["code"], row["quantity"]) for row in rows],
+            [("SOON", "3.000"), ("LATE", "1.000")],
+        )
+        self.assertTrue(all(row["expiry_date"] for row in rows))
+
+    def test_an_untracked_line_names_nothing_and_asks_nothing(self):
+        from apps.sales.tracked_lines import order_line_identifiers
+
+        product = tracked_product(
+            name="كوكا كولا",
+            sku="RCPT-3",
+            mode=Product.TrackingMode.QUANTITY,
+            unit_price="3.00",
+        )
+        receive(variant=product.default_variant, quantity=10, unit_cost="1.00")
+        order = _sell(product.default_variant, 2, price="3.00")
+        line = order.lines.select_related("variant", "variant__product").get()
+
+        with self.assertNumQueries(0):
+            self.assertEqual(order_line_identifiers(line), [])

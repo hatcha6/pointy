@@ -28,11 +28,15 @@ import '../../../data/models/register_session.dart';
 import '../../../data/models/register_session_summary.dart';
 import '../../../data/models/sale_order.dart';
 import '../../../data/models/shop_settings.dart';
+import '../../../data/models/stock_batch.dart';
+import '../../../data/models/stock_unit.dart';
+import '../../../data/models/tracked_scan.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/register_session_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../data/services/api_error_detail.dart';
 import '../../../data/services/order_document_service.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
@@ -85,6 +89,10 @@ enum PosProductSelectionStatus {
   unavailable,
   error,
   weighVariant,
+
+  /// The product identifies every article, so the cashier picks *which* one.
+  /// A scan skips this entirely — it already named the article.
+  chooseStockUnit,
 }
 
 class PosProductSelectionResult {
@@ -93,6 +101,7 @@ class PosProductSelectionResult {
     this.variants = const [],
     this.weighedVariant,
     this.modifierVariant,
+    this.stockUnitVariant,
   });
 
   const PosProductSelectionResult.added()
@@ -123,10 +132,17 @@ class PosProductSelectionResult {
         modifierVariant: variant,
       );
 
+  const PosProductSelectionResult.chooseStockUnit(ProductVariant variant)
+    : this._(
+        status: PosProductSelectionStatus.chooseStockUnit,
+        stockUnitVariant: variant,
+      );
+
   final PosProductSelectionStatus status;
   final List<ProductVariant> variants;
   final ProductVariant? weighedVariant;
   final ProductVariant? modifierVariant;
+  final ProductVariant? stockUnitVariant;
 }
 
 class PosSaleSessionSummary {
@@ -160,6 +176,7 @@ class PosViewModel extends ChangeNotifier {
     this._saleRepository,
     this._shopSettingsRepository,
     this._printingRepository, {
+    TrackedStockRepository? trackedStockRepository,
     AnalyticsEngine? analyticsEngine,
     ScopedJsonStorage sessionStorage = const SharedPreferencesScopedJsonStorage(
       'pointy.pos.sessions.v1',
@@ -167,7 +184,8 @@ class PosViewModel extends ChangeNotifier {
     ScanFeedbackPlayer? scanFeedback,
     Duration checkoutPrintDeadline = const Duration(seconds: 20),
     this.cartQuantityIdleTimeout = const Duration(milliseconds: 700),
-  }) : _analyticsEngine = analyticsEngine,
+  }) : _trackedStockRepository = trackedStockRepository,
+       _analyticsEngine = analyticsEngine,
        _sessionStorage = sessionStorage,
        _scanFeedback = scanFeedback,
        _checkoutPrintDeadline = checkoutPrintDeadline;
@@ -191,6 +209,17 @@ class PosViewModel extends ChangeNotifier {
   final SaleRepository _saleRepository;
   final ShopSettingsRepository _shopSettingsRepository;
   final PrintingRepository _printingRepository;
+
+  /// Identified stock, when the shop has any.
+  ///
+  /// Nullable so a till built before this existed — and every test fixture —
+  /// keeps working untouched; a null repository simply means a scan that misses
+  /// the catalog stays a miss, which is exactly what it was before.
+  final TrackedStockRepository? _trackedStockRepository;
+
+  /// Exposed so the panes can open a picker. Null in a shop that has no
+  /// identified stock, which is what hides every one of those surfaces.
+  TrackedStockRepository? get trackedStockRepository => _trackedStockRepository;
   final AnalyticsEngine? _analyticsEngine;
   final ScopedJsonStorage _sessionStorage;
   // Audible scan feedback (null = silent, e.g. unit tests).
@@ -274,6 +303,7 @@ class PosViewModel extends ChangeNotifier {
   bool _isCreatingCashMovement = false;
   bool _isCheckingOut = false;
   BarcodeScanStatus _barcodeScanStatus = BarcodeScanStatus.idle;
+  List<TrackedScanWarning> _trackedScanWarnings = const [];
   bool _hasMoreProducts = true;
   int _nextProductPage = 1;
   String? _errorMessage;
@@ -411,6 +441,25 @@ class PosViewModel extends ChangeNotifier {
   BarcodeScanStatus get barcodeScanStatus => _barcodeScanStatus;
   bool get isResolvingBarcode =>
       _barcodeScanStatus == BarcodeScanStatus.resolving;
+
+  /// What the last tracked scan could read but does not trust.
+  ///
+  /// The one worth interrupting a cashier over is a reader that strips the GS1
+  /// group separator: every scan of every pack will be wrong until it is fixed,
+  /// and the fix is a scanner setting rather than anything in this app.
+  List<TrackedScanWarning> get trackedScanWarnings => _trackedScanWarnings;
+  TrackedScanWarning? get scannerConfigurationWarning => _trackedScanWarnings
+      .where((warning) => warning.isScannerConfiguration)
+      .firstOrNull;
+
+  void clearTrackedScanWarnings() {
+    if (_trackedScanWarnings.isEmpty) {
+      return;
+    }
+    _trackedScanWarnings = const [];
+    _notifyChanged();
+  }
+
   bool get printInvoiceAfterPayment => _printInvoiceAfterPayment;
   bool get shareInvoiceAfterPayment => _shareInvoiceAfterPayment;
   Customer? get selectedCustomer => _selectedCustomer;
@@ -537,6 +586,7 @@ class PosViewModel extends ChangeNotifier {
   /// to hand over a slip the customer asked for.
   bool get shouldShowPrintInvoiceCheckbox =>
       _checkoutSettings != null && !cartWouldAutoPrintReceipt();
+
   /// Sharing is not printing: a floor decides what the printer does, and has
   /// nothing to say about sending the customer a link. So this keeps the rule
   /// it always had — the box shows whenever the shop is not auto-printing.

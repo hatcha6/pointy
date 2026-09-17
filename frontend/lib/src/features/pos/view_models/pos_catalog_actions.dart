@@ -304,6 +304,13 @@ extension PosCatalogActions on PosViewModel {
         }
         if (variants.length == 1) {
           final variant = variants.single;
+          // An identified article is not chosen by tapping a product — it is
+          // chosen by scanning it, or by picking it out of the ones on the
+          // shelf. Selling "one iPhone 13 Pro" without saying which one is the
+          // thing this whole feature exists to make impossible.
+          if (variant.trackingMode.tracksUnits) {
+            return PosProductSelectionResult.chooseStockUnit(variant);
+          }
           final defaultUnit = defaultSaleUnitOption(product, variant.unitPrice);
           if (defaultUnit.allowsFractional) {
             // Weighed/measured items still need a quantity before pricing.

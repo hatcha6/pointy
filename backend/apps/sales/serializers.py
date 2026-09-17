@@ -24,6 +24,7 @@ from apps.discounts.cache import (
 )
 from apps.discounts.models import DiscountRule
 from apps.discounts.services import rounding_metadata_payload
+from .tracked_lines import order_line_identifiers
 from .models import (
     Order,
     OrderExchange,
@@ -313,6 +314,12 @@ class OrderLineSerializer(serializers.ModelSerializer):
     )
     returned_quantity = serializers.FloatField(read_only=True)
     returnable_quantity = serializers.FloatField(read_only=True)
+    # What identified stock this line actually issued. Empty for every line of
+    # everything a shop counts rather than identifies — which is the constraint
+    # this whole feature is written under — and the warranty document for the
+    # lines where it is not: a receipt that does not name the IMEI is a receipt
+    # that cannot settle a warranty claim two years later.
+    identifiers = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderLine
@@ -336,9 +343,22 @@ class OrderLineSerializer(serializers.ModelSerializer):
             "line_total",
             "line_cost",
             "line_profit",
+            "identifiers",
             "notes",
         ]
         read_only_fields = ("unit_price", "unit_cost", "discount_total")
+
+    def get_identifiers(self, line):
+        """The serials and lots this line moved, for the printed document.
+
+        Read from the units the sale stamped and from the allocations the
+        ledger wrote, in that order, because they answer two different
+        questions: a serialized line names *its own articles*, while a
+        lot-tracked line names the cohorts the FEFO pick actually drew from —
+        which may be two of them for one line, and is what a pharmacy is
+        legally required to print.
+        """
+        return order_line_identifiers(line)
 
     def get_unit(self, line):
         return line.unit or line.variant.product.unit

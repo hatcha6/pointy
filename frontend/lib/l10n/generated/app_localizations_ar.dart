@@ -13465,6 +13465,270 @@ class AppLocalizationsAr extends AppLocalizations {
       'تُحتسب العمولة على إجمالي فاتورة المهمة (للمهام التي صدرت لها فاتورة).';
 
   @override
+  String posCartLineBatchBadge(String code) {
+    return 'دفعة $code';
+  }
+
+  @override
+  String get posCartLineBatchAuto => 'دفعة تلقائية';
+
+  @override
+  String posCartLineExpiryBadge(String date) {
+    return 'ص: $date';
+  }
+
+  @override
+  String posUnitPickerTitle(String product) {
+    return 'اختر الجهاز — $product';
+  }
+
+  @override
+  String get posUnitPickerSearchHint => 'امسح أو اكتب الرقم التسلسلي / IMEI';
+
+  @override
+  String get posUnitPickerEmpty =>
+      'لا توجد أجهزة متاحة لهذا الصنف في هذا المستودع.';
+
+  @override
+  String get posUnitPickerLoadFailed => 'تعذّر تحميل الأجهزة.';
+
+  @override
+  String posUnitPickerDaysInStock(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days يوم في المخزون',
+      many: '$days يومًا في المخزون',
+      few: '$days أيام في المخزون',
+      two: 'يومان في المخزون',
+      one: 'يوم واحد في المخزون',
+      zero: 'وصل اليوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get posUnitPickerConsignment => 'أمانة';
+
+  @override
+  String posBatchPickerTitle(String product) {
+    return 'اختر الدفعة — $product';
+  }
+
+  @override
+  String get posBatchPickerEmpty =>
+      'لا توجد دفعات صالحة لهذا الصنف في هذا المستودع.';
+
+  @override
+  String get posBatchPickerLoadFailed => 'تعذّر تحميل الدفعات.';
+
+  @override
+  String posBatchPickerDaysLeft(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days يوم متبقٍ',
+      many: '$days يومًا متبقيًا',
+      few: '$days أيام متبقية',
+      two: 'يومان متبقيان',
+      one: 'يوم متبقٍ',
+      zero: 'ينتهي اليوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get posBatchPickerExpired => 'منتهية الصلاحية';
+
+  @override
+  String get posBatchPickerNoExpiry => 'بدون تاريخ صلاحية';
+
+  @override
+  String get stockBatchNoCode => 'بدون رقم دفعة';
+
+  @override
+  String unitCaptureProgress(int captured, int expected) {
+    return '$captured / $expected';
+  }
+
+  @override
+  String get unitCaptureHint =>
+      'امسح أو اكتب الرقم التسلسلي / IMEI ثم اضغط Enter';
+
+  @override
+  String get unitCaptureEmpty => 'لم يتم تسجيل أي معرّف بعد.';
+
+  @override
+  String unitCaptureDuplicate(String code) {
+    return 'المعرّف $code مسجّل بالفعل في هذا الإدخال.';
+  }
+
+  @override
+  String unitCaptureTooMany(int expected) {
+    return 'تم تسجيل الكمية المستلمة كاملة ($expected).';
+  }
+
+  @override
+  String get unitCaptureSplitCosts => 'توزيع تكلفة السطر على كل وحدة';
+
+  @override
+  String unitCaptureCostResidual(String amount) {
+    return 'المتبقي: $amount';
+  }
+
+  @override
+  String get unitCaptureConfirm => 'تأكيد المعرّفات';
+
+  @override
+  String unitCaptureConfirmLater(int remaining) {
+    return 'حفظ وإكمال $remaining لاحقًا';
+  }
+
+  @override
+  String batchCaptureProgress(String captured, String expected) {
+    return '$captured / $expected';
+  }
+
+  @override
+  String get batchCaptureLotCode => 'رقم الدفعة';
+
+  @override
+  String get batchCaptureQuantity => 'الكمية';
+
+  @override
+  String get batchCaptureExpiry => 'تاريخ الصلاحية';
+
+  @override
+  String batchCaptureExpiryShortcut(int months) {
+    return '+$monthsش';
+  }
+
+  @override
+  String get batchCaptureAddLot => 'إضافة دفعة أخرى';
+
+  @override
+  String get batchCaptureConfirm => 'تأكيد الدفعات';
+
+  @override
+  String get purchaseReceiveCaptureRequired =>
+      'أدخل معرّفات أو دفعات الأصناف المتتبَّعة قبل تأكيد الاستلام.';
+
+  @override
+  String get purchaseReceiveCaptureUnits => 'إدخال المعرّفات';
+
+  @override
+  String get purchaseReceiveCaptureLots => 'إدخال الدفعات';
+
+  @override
+  String purchaseReceiveUnitsCaptured(int captured, int expected) {
+    return 'المعرّفات: $captured من $expected';
+  }
+
+  @override
+  String purchaseReceiveLotsCaptured(String captured, String expected) {
+    return 'الدفعات: $captured من $expected';
+  }
+
+  @override
+  String get stockUnitsTitle => 'الأجهزة المسلسلة';
+
+  @override
+  String get stockUnitsDrawerLabel => 'الأجهزة المسلسلة';
+
+  @override
+  String get stockUnitsSearchHint => 'امسح أو اكتب معرّفًا للبحث';
+
+  @override
+  String get stockUnitsEmptyTitle => 'لا توجد أجهزة مسجّلة';
+
+  @override
+  String get stockUnitsEmptyBody =>
+      'ستظهر هنا الأجهزة بمجرد إدخال معرّفاتها عند الاستلام.';
+
+  @override
+  String get stockUnitsAwaitingIdentifier => 'بانتظار المعرّف';
+
+  @override
+  String stockUnitsMissingIdentifiers(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count وحدة بانتظار معرّفاتها',
+      many: '$count وحدة بانتظار معرّفاتها',
+      few: '$count وحدات بانتظار معرّفاتها',
+      two: 'وحدتان بانتظار معرّفيهما',
+      one: 'وحدة واحدة بانتظار معرّفها',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stockUnitStatusInStock => 'في المخزون';
+
+  @override
+  String get stockUnitStatusReserved => 'محجوزة';
+
+  @override
+  String get stockUnitStatusSold => 'مباعة';
+
+  @override
+  String get stockUnitStatusDamaged => 'تالفة';
+
+  @override
+  String get stockUnitStatusWrittenOff => 'مشطوبة';
+
+  @override
+  String get stockUnitHistoryEmpty => 'لا توجد حركات مسجّلة لهذه الوحدة.';
+
+  @override
+  String get stockBatchesTitle => 'الدفعات وتواريخ الصلاحية';
+
+  @override
+  String get stockBatchesDrawerLabel => 'الدفعات والصلاحية';
+
+  @override
+  String get stockBatchesEmptyTitle => 'لا توجد دفعات مسجّلة';
+
+  @override
+  String get stockBatchesEmptyBody =>
+      'ستظهر هنا الدفعات بمجرد تسجيلها عند الاستلام.';
+
+  @override
+  String get stockBatchesFilterAll => 'الكل';
+
+  @override
+  String get stockBatchesFilterActive => 'سارية';
+
+  @override
+  String get stockBatchesFilterQuarantined => 'محجورة';
+
+  @override
+  String get stockBatchesFilterExpired => 'منتهية';
+
+  @override
+  String get stockBatchQuarantinedBadge => 'محجورة';
+
+  @override
+  String get stockBatchQuarantineAction => 'حجر الدفعة';
+
+  @override
+  String get stockBatchReleaseAction => 'رفع الحجر';
+
+  @override
+  String get stockBatchQuarantineTitle => 'حجر الدفعة؟';
+
+  @override
+  String stockBatchQuarantineBody(String code) {
+    return 'سيتوقف بيع الدفعة $code في كل الفروع فورًا. البضاعة تبقى في المخزون حتى تُشطب.';
+  }
+
+  @override
+  String get stockBatchQuarantineConfirm => 'تأكيد الحجر';
+
+  @override
+  String get stockBatchQuarantineFailed => 'تعذّر تغيير حالة الحجر.';
+
+  @override
   String get stockCountDrawerLabel => 'جرد المخزون';
 
   @override

@@ -1,11 +1,13 @@
 # Serialized & Batch Inventory (IMEI / Serial / Lot / Expiry) — Architecture Plan
 
-**Date:** 2026-09-10 (Expanded 2026-09-17, Phase A shipped 2026-09-17)
-**Status:** **Phase A shipped** — the shared allocation core and ledger are in
-`main`, backend only, no client (§15). Phases B–E remain proposed. Two things in
-this document were changed by building it, and both are marked **CORRECTED** or
-**DEFERRED** in place rather than quietly rewritten: the batch bin's treatment of
-a quarantined lot (§5.3) and landed-cost re-stamping on identified stock (§5.5).
+**Date:** 2026-09-10 (Expanded 2026-09-17, Phases A & B shipped 2026-09-17)
+**Status:** **Phases A and B shipped** — the shared allocation core and ledger,
+and the shop operating both from the client (§15). Phases C–E remain proposed.
+Three things in this document were changed by building it, and each is marked
+**CORRECTED** or **DEFERRED** in place rather than quietly rewritten: the batch
+bin's treatment of a quarantined lot (§5.3), landed-cost re-stamping on
+identified stock (§5.5), and the till's own knowledge of its warehouse (§15,
+Phase B).
 **Roadmap slot:** Promotes and unifies Gap #13 ("Serial-number tracking", sized M)
 and Gap #14 ("Batch & lot tracking with FEFO/expiry", sized M). This plan combines
 them because they share 80% of the underlying ledger allocation architecture,
@@ -2789,7 +2791,7 @@ recall report at once.
   inventing identifiers for goods nobody has seen, because §6.1's first line says
   identifiers are captured where the goods physically are.
 
-**Phase B — the shop operates both (≈2 weeks).**
+**Phase B — the shop operates both (≈2 weeks). SHIPPED 2026-09-17.**
 Units list + Batches list & detail, receiving capture sheet (IMEI scan loop & multi-lot split),
 POS barcode resolution **and the GS1 DataMatrix parser — confirmed core, not
 conditional (§17.9): Libyan pharmacy stock carries these codes widely, and the
@@ -2800,6 +2802,33 @@ carton & shelf label printing, and **the companion camera as a DataMatrix
 scanner** (§6.3) — which is what lets a pharmacy with only 1D lasers use any of
 this on the day it installs rather than after it buys hardware.
 **This phase closes both the phone-shop deal and the pharmacy/grocery deal.**
+
+*What actually landed, and where it differs from the paragraph above.*
+
+- **The GS1 parser is `apps/catalog/gs1.py`**, pure and driven by an AI length
+  table rather than by splitting on a character — and its most valuable test is
+  the one about a reader that strips `GS`, which a parser that split would have
+  imported as a lot number with a date glued to its tail.
+- **One scan, one answer, on the miss path.** `GET /api/resolve-barcode/` is
+  reached only when the till's own catalog had nothing — a plain barcode, a
+  carton barcode and a weighing-scale label still resolve locally on the first
+  try, so a shop that sells Coca-Cola never sends the request at all.
+- **CORRECTED — the till does not know its own warehouse.** §6.3.1 says the
+  picker lists what is in "this till's warehouse", and the client has no idea
+  which that is: the register profile does, and the backend already resolves it
+  for every checkout. So the pickers send `for_sale=1` and the server scopes
+  them, rather than the client guessing and offering goods from another branch.
+- **Quantity is locked to 1 in the cart itself**, not only in the widget: the
+  `+`/`−` hotkeys ride the scan listener, so a refusal that lived only in the
+  tile would be one the keyboard walked straight past.
+- **Receipt identifiers come off rows the sale already wrote** — the units it
+  stamped and the allocations the ledger wrote — so a printed warranty document
+  cannot drift from what actually left the shop.
+- **DEFERRED, and honestly out:** the shelf/carton label PDF for lots, the unit
+  and batch *detail* screens (a list row opens the life timeline instead), the
+  companion camera as a DataMatrix scanner, and the price-checker's identifier
+  lookup. All four are additive surfaces over an API that already exists; none
+  is load-bearing for the two deals this phase is about.
 
 **Phase C — the used-goods trade & consignment (≈2.5 weeks).**
 Per-unit pricing everywhere, per-unit cost split, counter purchase and trade-in,

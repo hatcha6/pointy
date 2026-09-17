@@ -97,6 +97,12 @@ enum AppCapability {
   createStockMovement,
   countStock,
   applyStockCount,
+
+  /// The two lists a shop that identifies its stock works from. Separate
+  /// capabilities, because a pharmacy needs lots and a phone shop needs
+  /// serials, and neither should have to see the other's screen.
+  viewStockUnits,
+  viewStockBatches,
   useAiAssistant,
 
   /// The in-app learning library.
@@ -231,6 +237,15 @@ class AuthorizationCapabilities {
       // separate, stronger permission (managers get it via their domain).
       if (_hasAny(user, const ['add_stockcount', 'inventory.add_stockcount'])) {
         capabilities.add(AppCapability.countStock);
+      }
+      if (_hasAny(user, const ['view_stockunit', 'inventory.view_stockunit'])) {
+        capabilities.add(AppCapability.viewStockUnits);
+      }
+      if (_hasAny(user, const [
+        'view_stockbatch',
+        'inventory.view_stockbatch',
+      ])) {
+        capabilities.add(AppCapability.viewStockBatches);
       }
       if (_hasAny(user, const [
         'apply_stockcount',
@@ -889,6 +904,8 @@ class AuthorizationCapabilities {
   bool get canChangeDiscountRule => allows(AppCapability.changeDiscountRule);
   bool get canDeleteDiscountRule => allows(AppCapability.deleteDiscountRule);
   bool get canViewStock => allows(AppCapability.viewStock);
+  bool get canViewStockUnits => allows(AppCapability.viewStockUnits);
+  bool get canViewStockBatches => allows(AppCapability.viewStockBatches);
   bool get canCreateStockMovement => allows(AppCapability.createStockMovement);
   bool get canCountStock => allows(AppCapability.countStock);
   bool get canApplyStockCount => allows(AppCapability.applyStockCount);

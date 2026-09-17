@@ -25,6 +25,7 @@ import '../../../data/models/cart_line.dart';
 import '../../../data/models/product.dart';
 import 'cart_line_note_sheet.dart';
 import 'cart_line_tile.dart';
+import 'pos_batch_picker_sheet.dart';
 import 'unit_quantity_sheet.dart';
 import 'weight_entry_sheet.dart';
 import 'cart_totals.dart';
@@ -871,6 +872,14 @@ class _CartScrollContentState extends State<_CartScrollContent> {
                                   !_viewModel.enableKitchenOperations
                               ? null
                               : () => _editLineNote(context, line),
+                          // Only lot-tracked lines offer a lot to change, and
+                          // only when the shop actually has identified stock.
+                          onPickBatch:
+                              widget.isCartLocked ||
+                                  !line.variant.trackingMode.tracksLots ||
+                                  _viewModel.trackedStockRepository == null
+                              ? null
+                              : () => _editLineBatch(context, line),
                         ),
                       );
                     },
@@ -884,6 +893,29 @@ class _CartScrollContentState extends State<_CartScrollContent> {
         ],
       ),
     );
+  }
+
+  /// Pin a different lot to this line.
+  ///
+  /// The customer who asks for a longer expiry is asking for a different lot,
+  /// and refusing them would mean voiding the line and starting again. Picking
+  /// the one the till would have chosen anyway clears the pin rather than
+  /// setting it, so the line goes back to first-expiring-first-out.
+  Future<void> _editLineBatch(BuildContext context, CartLine line) async {
+    final repository = _viewModel.trackedStockRepository;
+    if (repository == null) {
+      return;
+    }
+    final batch = await showPosBatchPickerSheet(
+      context,
+      repository: repository,
+      variantId: line.variant.id,
+      productLabel: line.variant.displayLabel,
+    );
+    if (batch == null || !context.mounted) {
+      return;
+    }
+    _viewModel.setCartLineBatch(line.lineKey, batch);
   }
 
   Future<void> _editLineQuantity(BuildContext context, CartLine line) async {

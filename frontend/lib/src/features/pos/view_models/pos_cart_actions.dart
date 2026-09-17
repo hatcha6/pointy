@@ -46,6 +46,8 @@ extension PosCartActions on PosViewModel {
     double quantity = 1,
     List<CartLineModifier> modifiers = const [],
     UnitOption? unit,
+    StockUnit? stockUnit,
+    StockBatch? stockBatch,
     String source = 'cart_quantity_button',
   }) {
     if (_addVariantToCartAndTrack(
@@ -53,14 +55,18 @@ extension PosCartActions on PosViewModel {
       quantity: quantity,
       modifiers: modifiers,
       unit: unit,
+      stockUnit: stockUnit,
+      stockBatch: stockBatch,
       source: source,
     )) {
       if (_activeLineAddSources.contains(source)) {
-        _activeCartLineKey = _mergeableLineFor(
-          variant,
-          modifiers,
-          _unitCodeFor(unit),
-        )?.lineKey;
+        _activeCartLineKey = stockUnit != null
+            ? _cart.lastOrNull?.lineKey
+            : _mergeableLineFor(
+                variant,
+                modifiers,
+                _unitCodeFor(unit),
+              )?.lineKey;
         // A grid tap, variant pick, or camera scan is a discrete "add" gesture:
         // hand keyboard focus back to the search field so the cashier can look
         // up or scan the next item without reaching for the mouse. The field
@@ -77,6 +83,8 @@ extension PosCartActions on PosViewModel {
     required double quantity,
     List<CartLineModifier> modifiers = const [],
     UnitOption? unit,
+    StockUnit? stockUnit,
+    StockBatch? stockBatch,
     required String source,
   }) {
     final unitCode = _unitCodeFor(unit);
@@ -87,8 +95,14 @@ extension PosCartActions on PosViewModel {
       quantity: quantity,
       modifiers: modifiers,
       unit: unit,
+      stockUnit: stockUnit,
+      stockBatch: stockBatch,
     )) {
-      final updatedLine = _mergeableLineFor(variant, modifiers, unitCode);
+      // An identified article never merges, so the line it created is the last
+      // one; anything else is found by its merge key as before.
+      final updatedLine = stockUnit != null
+          ? _cart.lastOrNull
+          : _mergeableLineFor(variant, modifiers, unitCode);
       if (updatedLine != null) {
         _trackCartLineAdded(
           updatedLine,
@@ -123,7 +137,12 @@ extension PosCartActions on PosViewModel {
               line.variant.id == variant.id &&
               line.notes.isEmpty &&
               line.modifierSignature == signature &&
-              line.unitCode == unitCode,
+              line.unitCode == unitCode &&
+              // One article is one article. A serialized line names a specific
+              // handset, so a second handset of the same model is a second
+              // line — never a quantity of two, which would be a claim to hold
+              // two devices with the same IMEI.
+              !line.isSerialized,
         )
         .firstOrNull;
   }
@@ -152,6 +171,13 @@ extension PosCartActions on PosViewModel {
       return;
     }
     final line = _cart[index];
+    // One article is one article. A serialized line's quantity is not the
+    // cashier's to change: raising it would be a claim to hold two devices with
+    // the same identifier, and the cart's own `+`/`-` hotkeys ride the scan
+    // listener, so the refusal has to live here rather than only in the widget.
+    if (!line.allowsQuantityEdit) {
+      return;
+    }
     final updatedLine = line.copyWith(quantity: line.quantity + 1);
     _cart[index] = updatedLine;
     _trackCartLineQuantityChanged(
@@ -200,6 +226,29 @@ extension PosCartActions on PosViewModel {
     unawaited(refreshDiscountPreview());
   }
 
+  /// Pin a lot to a cart line, or clear the pin and let the till pick again.
+  ///
+  /// Clearing is not the same as picking nothing: it hands the choice back to
+  /// first-expiring-first-out at checkout, which is the answer a pharmacy wants
+  /// nine times out of ten.
+  void setCartLineBatch(String lineKey, StockBatch? batch) {
+    if (_isCheckingOut) {
+      return;
+    }
+    final index = _cart.indexWhere((line) => line.lineKey == lineKey);
+    if (index == -1) {
+      return;
+    }
+    _cart[index] = _cart[index].copyWith(
+      stockBatchId: batch?.id,
+      stockBatchCode: batch?.label ?? '',
+      stockBatchExpiry: batch?.expiryDate,
+    );
+    _touchActiveSaleSession();
+    _notifyChanged();
+    unawaited(refreshDiscountPreview());
+  }
+
   void setCartLineQuantity(
     String lineKey,
     double quantity, {
@@ -213,6 +262,13 @@ extension PosCartActions on PosViewModel {
       return;
     }
     final line = _cart[index];
+    // One article is one article. A serialized line's quantity is not the
+    // cashier's to change: raising it would be a claim to hold two devices with
+    // the same identifier, and the cart's own `+`/`-` hotkeys ride the scan
+    // listener, so the refusal has to live here rather than only in the widget.
+    if (!line.allowsQuantityEdit) {
+      return;
+    }
     if (line.quantity == quantity) {
       return;
     }
@@ -363,6 +419,8 @@ extension PosCartActions on PosViewModel {
     double quantity = 1,
     List<CartLineModifier> modifiers = const [],
     UnitOption? unit,
+    StockUnit? stockUnit,
+    StockBatch? stockBatch,
   }) {
     if (_isCheckingOut || quantity <= 0) {
       return false;
@@ -370,25 +428,39 @@ extension PosCartActions on PosViewModel {
 
     final signature = _modifierSignature(modifiers);
     final unitCode = _unitCodeFor(unit);
-    final index = _cart.indexWhere(
-      (line) =>
-          line.variant.id == variant.id &&
-          line.notes.isEmpty &&
-          line.modifierSignature == signature &&
-          line.unitCode == unitCode,
-    );
+    final index = stockUnit != null
+        // An identified article never merges into anything, and nothing merges
+        // into it: the line IS the handset.
+        ? -1
+        : _cart.indexWhere(
+            (line) =>
+                line.variant.id == variant.id &&
+                line.notes.isEmpty &&
+                line.modifierSignature == signature &&
+                line.unitCode == unitCode &&
+                !line.isSerialized &&
+                // A line pinned to a lot only merges with one pinned to the
+                // same lot; leaving that to FEFO and pinning it are two
+                // different instructions.
+                line.stockBatchId == stockBatch?.id,
+          );
     if (index == -1) {
       _cart.add(
         CartLine.create(
           variant: variant,
-          quantity: quantity,
+          quantity: stockUnit == null ? quantity : 1,
           modifiers: modifiers,
           unitCode: unitCode,
           unitLabel: unit?.label ?? '',
           unitFactor: unit?.factorToBase ?? 1,
-          unitPriceOverride: (unit == null || unit.isBase)
-              ? null
-              : unit.unitPrice,
+          unitPriceOverride:
+              stockUnit?.listPrice ??
+              ((unit == null || unit.isBase) ? null : unit.unitPrice),
+          stockUnitId: stockUnit?.id,
+          stockUnitCode: stockUnit?.code ?? '',
+          stockBatchId: stockBatch?.id,
+          stockBatchCode: stockBatch?.label ?? '',
+          stockBatchExpiry: stockBatch?.expiryDate,
         ),
       );
     } else {

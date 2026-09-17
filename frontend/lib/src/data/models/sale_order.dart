@@ -96,6 +96,8 @@ class SaleCheckoutDraft {
               notes: line.notes,
               modifiers: line.modifiers,
               unit: line.unitCode,
+              stockUnitId: line.stockUnitId,
+              stockBatchId: line.stockBatchId,
             ),
           )
           .toList(growable: false),
@@ -346,6 +348,8 @@ class SaleCheckoutLineDraft {
     this.notes = '',
     this.modifiers = const [],
     this.unit = '',
+    this.stockUnitId,
+    this.stockBatchId,
   });
 
   final int variantId;
@@ -356,6 +360,15 @@ class SaleCheckoutLineDraft {
   /// Selected unit code; blank = the product's base unit. The backend resolves
   /// the price and stock conversion from it.
   final String unit;
+
+  /// The identified article this line rings up, when one was scanned or picked.
+  /// Absent on every line of everything a shop counts rather than names.
+  final int? stockUnitId;
+
+  /// The lot the cashier pinned, when they pinned one. Absent on the ordinary
+  /// path, where the backend picks first-expiring-first-out and reports what it
+  /// picked back on the sale line.
+  final int? stockBatchId;
 
   Map<String, Object?> toJson() {
     final normalizedNotes = notes.trim();
@@ -369,6 +382,8 @@ class SaleCheckoutLineDraft {
         'modifiers': modifiers
             .map((modifier) => modifier.toCheckoutJson())
             .toList(growable: false),
+      if (stockUnitId != null) 'stock_units': [stockUnitId],
+      if (stockBatchId != null) 'stock_batches': [stockBatchId],
     };
   }
 }
@@ -772,6 +787,7 @@ class SaleOrderLine {
     this.profit,
     this.subtotal = 0,
     this.discountTotal = 0,
+    this.identifiers = const [],
   });
 
   final int id;
@@ -792,6 +808,15 @@ class SaleOrderLine {
   final double total;
   final double? profit;
 
+  /// What identified stock this line actually issued: the handset's IMEI, or
+  /// the lots a pharmacy is required to name.
+  ///
+  /// Empty for every line of everything a shop counts rather than identifies.
+  /// Where it is not empty it belongs on the printed document — a receipt that
+  /// does not name the IMEI cannot settle a warranty claim two years later, and
+  /// one that does not name the lot cannot answer a recall.
+  final List<SaleLineIdentifier> identifiers;
+
   factory SaleOrderLine.fromJson(Map<String, Object?> json) {
     return SaleOrderLine(
       id: _intFromJson(json['id']),
@@ -811,6 +836,44 @@ class SaleOrderLine {
       profit: _nullableMoneyFromJson(
         json['profit'] ?? json['line_profit'] ?? json['gross_profit'],
       ),
+      identifiers: switch (json['identifiers']) {
+        final List<Object?> rows =>
+          rows
+              .whereType<Map<String, Object?>>()
+              .map(SaleLineIdentifier.fromJson)
+              .toList(growable: false),
+        _ => const [],
+      },
+    );
+  }
+}
+
+/// One identified thing a sale line moved.
+class SaleLineIdentifier {
+  const SaleLineIdentifier({
+    required this.kind,
+    required this.code,
+    this.batchCode = '',
+    this.expiryDate,
+    this.quantity = 1,
+  });
+
+  /// ``unit`` for an article with its own number, ``batch`` for a cohort.
+  final String kind;
+  final String code;
+  final String batchCode;
+  final DateTime? expiryDate;
+  final double quantity;
+
+  bool get isUnit => kind == 'unit';
+
+  factory SaleLineIdentifier.fromJson(Map<String, Object?> json) {
+    return SaleLineIdentifier(
+      kind: json['kind']?.toString() ?? '',
+      code: json['code']?.toString() ?? '',
+      batchCode: json['batch_code']?.toString() ?? '',
+      expiryDate: DateTime.tryParse(json['expiry_date']?.toString() ?? ''),
+      quantity: double.tryParse(json['quantity']?.toString() ?? '') ?? 1,
     );
   }
 }

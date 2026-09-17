@@ -3,6 +3,7 @@ import 'modifier_group.dart';
 import 'product_category.dart';
 import 'product_unit.dart';
 import 'product_variant.dart';
+import 'tracking_mode.dart';
 import 'variant_option.dart';
 
 class Product {
@@ -16,6 +17,7 @@ class Product {
     this.isArchived = false,
     this.archivedAt,
     this.tracksExpiry = false,
+    this.trackingMode = TrackingMode.quantity,
     this.isService = false,
     this.isPrepared = false,
     this.unit = 'piece',
@@ -44,6 +46,11 @@ class Product {
   final bool isArchived;
   final DateTime? archivedAt;
   final bool tracksExpiry;
+
+  /// How closely this product's stock is identified. [TrackingMode.quantity]
+  /// for everything a shop counts rather than names, which is the default and
+  /// what every product is until somebody says otherwise.
+  final TrackingMode trackingMode;
   final bool isService;
   final bool isPrepared;
 
@@ -132,6 +139,7 @@ class Product {
       isArchived: (json['is_archived'] as bool?) ?? false,
       archivedAt: _dateTimeFromJson(json['archived_at']),
       tracksExpiry: (json['tracks_expiry'] as bool?) ?? false,
+      trackingMode: TrackingMode.fromWire(json['tracking_mode']),
       isService: (json['is_service'] as bool?) ?? false,
       isPrepared: (json['is_prepared'] as bool?) ?? false,
       unit: json['unit']?.toString() ?? 'piece',
@@ -174,6 +182,7 @@ class Product {
       isArchived: isArchived,
       archivedAt: archivedAt,
       tracksExpiry: tracksExpiry,
+      trackingMode: trackingMode,
       isService: isService,
       isPrepared: isPrepared,
       unit: unit,
@@ -212,6 +221,7 @@ class Product {
       description: detail?.description ?? '',
       isActive: variant.isSellable,
       tracksExpiry: detail?.tracksExpiry ?? variant.tracksExpiry,
+      trackingMode: detail?.trackingMode ?? variant.trackingMode,
       unit: variant.unit,
       pricingCurrency: detail?.pricingCurrency ?? variant.pricingCurrency,
       defaultSaleUnit: detail?.defaultSaleUnit ?? '',
@@ -237,6 +247,7 @@ class Product {
       'name': name,
       'quantity_on_hand': quantityOnHand,
       'tracks_expiry': tracksExpiry,
+      'tracking_mode': trackingMode.wire,
       'is_service': isService,
       'is_prepared': isPrepared,
       'unit': unit,
@@ -271,6 +282,7 @@ class Product {
       isArchived: isArchived ?? this.isArchived,
       archivedAt: archivedAt ?? this.archivedAt,
       tracksExpiry: tracksExpiry ?? this.tracksExpiry,
+      trackingMode: trackingMode,
       isService: isService,
       isPrepared: isPrepared,
       unit: unit,

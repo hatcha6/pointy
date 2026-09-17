@@ -1,5 +1,6 @@
 import 'attachment_summary.dart';
 import 'product.dart';
+import 'tracking_mode.dart';
 import 'variant_option_value.dart';
 
 class ProductVariant {
@@ -17,6 +18,7 @@ class ProductVariant {
     this.isActive = true,
     this.isDefault = false,
     this.tracksExpiry = false,
+    this.trackingMode = TrackingMode.quantity,
     this.isService = false,
     this.isPrepared = false,
     this.unit = 'piece',
@@ -42,6 +44,12 @@ class ProductVariant {
   final bool isActive;
   final bool isDefault;
   final bool tracksExpiry;
+
+  /// Denormalised from the product, because every stock path asks it and the
+  /// till already holds the variant. Reading it from here is what makes §11's
+  /// promise — a cart with no tracked line pays zero extra queries — true on
+  /// the client too.
+  final TrackingMode trackingMode;
   final bool isService;
   final bool isPrepared;
   final String unit;
@@ -184,6 +192,9 @@ class ProductVariant {
         json['tracks_expiry'],
         fallback: productDetail?.tracksExpiry ?? false,
       ),
+      trackingMode: json.containsKey('tracking_mode')
+          ? TrackingMode.fromWire(json['tracking_mode'])
+          : productDetail?.trackingMode ?? TrackingMode.quantity,
       isService: json['is_service'] == true,
       isPrepared: json['is_prepared'] == true,
       unit: json['unit']?.toString() ?? 'piece',
@@ -237,6 +248,7 @@ class ProductVariant {
       'is_active': isActive,
       'is_default': isDefault,
       'tracks_expiry': tracksExpiry,
+      'tracking_mode': trackingMode.wire,
       'is_service': isService,
       'is_prepared': isPrepared,
       'unit': unit,
@@ -265,6 +277,7 @@ class ProductVariant {
       isActive: isActive,
       isDefault: isDefault,
       tracksExpiry: tracksExpiry,
+      trackingMode: trackingMode,
       isService: isService,
       isPrepared: isPrepared,
       unit: unit,

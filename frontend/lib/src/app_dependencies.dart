@@ -47,6 +47,8 @@ import 'data/repositories/sale_repository.dart';
 import 'data/repositories/sales_channel_repository.dart';
 import 'data/repositories/shop_settings_repository.dart';
 import 'data/repositories/stock_count_repository.dart';
+import 'data/repositories/tracked_stock_repository.dart';
+import 'features/inventory/view_models/tracked_stock_view_model.dart';
 import 'data/repositories/fx_repository.dart';
 import 'data/repositories/subscription_repository.dart';
 import 'data/repositories/user_repository.dart';
@@ -166,6 +168,8 @@ class PointyAppDependencies {
     paymentsRepository = PaymentsRepository(service);
     treasuryRepository = TreasuryRepository(service);
     stockCountRepository = StockCountRepository(service);
+    trackedStockRepository = TrackedStockRepository(service);
+    trackedStockViewModel = TrackedStockViewModel(trackedStockRepository);
     subscriptionRepository = SubscriptionRepository(service);
     fxRepository = FxRepository(service);
     dashboardFxViewModel = DashboardFxViewModel(fxRepository);
@@ -200,6 +204,7 @@ class PointyAppDependencies {
       saleRepository,
       shopSettingsRepository,
       printingRepository,
+      trackedStockRepository: trackedStockRepository,
       analyticsEngine: analyticsEngine,
       scanFeedback: ScanFeedbackSounds.instance.play,
     );
@@ -388,6 +393,8 @@ class PointyAppDependencies {
   late final PaymentsRepository paymentsRepository;
   late final TreasuryRepository treasuryRepository;
   late final StockCountRepository stockCountRepository;
+  late final TrackedStockRepository trackedStockRepository;
+  late final TrackedStockViewModel trackedStockViewModel;
   late final SubscriptionRepository subscriptionRepository;
   late final FxRepository fxRepository;
   late final MessagingRepository messagingRepository;

@@ -23,6 +23,7 @@ import '../../../shared/tutor/anchors.dart';
 import '../../../shared/tutor/tutor_target.dart';
 import '../view_models/pos_view_model.dart';
 import 'modifier_sheet.dart';
+import 'pos_unit_picker_sheet.dart';
 import 'pos_variant_picker_sheet.dart';
 import 'weight_entry_sheet.dart';
 
@@ -284,6 +285,25 @@ class _PosCatalogGrid extends StatelessWidget {
               source: 'variant_picker',
             );
           }
+        }
+      case PosProductSelectionStatus.chooseStockUnit:
+        final variant = result.stockUnitVariant;
+        final repository = viewModel.trackedStockRepository;
+        if (variant == null || repository == null) {
+          return;
+        }
+        final unit = await showPosUnitPickerSheet(
+          context,
+          repository: repository,
+          variantId: variant.id,
+          productLabel: variant.displayLabel,
+        );
+        if (unit != null && context.mounted) {
+          viewModel.addVariant(
+            variant,
+            stockUnit: unit,
+            source: 'variant_picker',
+          );
         }
       case PosProductSelectionStatus.unavailable:
         messenger

@@ -304,6 +304,15 @@ class EscPosReceiptEncoder {
       for (final wrappedDetail in _wrap(lineDetails, itemWidth)) {
         bytes.addAll(_text(generator, wrappedDetail, styles: itemStyles));
       }
+      // The identifiers this line actually issued. On a 58mm roll each one
+      // wraps onto its own line rather than truncating: a receipt that prints
+      // half an IMEI is worse than one that prints none, because it looks like
+      // a warranty document and is not.
+      for (final identifier in _lineIdentifiers(line)) {
+        for (final wrapped in _wrap(identifier, itemWidth)) {
+          bytes.addAll(_text(generator, wrapped, styles: itemStyles));
+        }
+      }
     }
 
     bytes.addAll(generator.hr());
@@ -1313,3 +1322,44 @@ String _saleStatusText(String paymentStatus) {
 }
 
 String _two(int value) => value.toString().padLeft(2, '0');
+
+/// The printable identity lines for one sale line.
+///
+/// Empty for everything a shop counts rather than names, which is why nothing
+/// about an ordinary receipt changes. Where it is not empty it is the warranty
+/// document (a serial) or the traceability record (a lot and its expiry) that
+/// the customer is entitled to walk out with.
+List<String> _lineIdentifiers(Map<String, Object?> line) {
+  final rows = line['identifiers'];
+  if (rows is! List<Object?> || rows.isEmpty) {
+    return const [];
+  }
+  final printed = <String>[];
+  for (final raw in rows) {
+    if (raw is! Map<String, Object?>) {
+      continue;
+    }
+    final code = _string(raw['code'], fallback: '');
+    final expiry = _string(raw['expiry_date'], fallback: '');
+    if (code.isEmpty && expiry.isEmpty) {
+      continue;
+    }
+    final isUnit = _string(raw['kind'], fallback: '') == 'unit';
+    final parts = <String>[
+      if (code.isNotEmpty) isUnit ? code : 'دفعة: $code',
+      if (expiry.isNotEmpty) 'ص: ${_expiryMonth(expiry)}',
+    ];
+    printed.add(parts.join(' — '));
+  }
+  return printed;
+}
+
+/// ``2027-08-31`` as ``08/2027``: a pack expires in a month, and that is what a
+/// pharmacy customer reads off the foil.
+String _expiryMonth(String isoDate) {
+  final parts = isoDate.split('-');
+  if (parts.length < 2) {
+    return isoDate;
+  }
+  return '${parts[1]}/${parts[0]}';
+}

@@ -750,6 +750,10 @@ class _FakeCatalogRepository extends CatalogRepository {
   Future<Result<ProductPage>> loadProducts({
     required ProductQuery query,
     int page = 1,
+    // The real repository grew a cache-bypass; a fake that serves from a list
+    // has no cache to bypass, so it accepts the flag and ignores it rather than
+    // failing to override.
+    bool bypassCache = false,
   }) async {
     if (empty || page > 1) {
       return const Ok(ProductPage(products: [], hasMore: false));

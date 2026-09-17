@@ -118,6 +118,7 @@ from apps.core.relay_views import (
     RelayPairingView,
 )
 from apps.inventory.tracked_views import StockBatchViewSet, StockUnitViewSet
+from apps.catalog.views import ResolveBarcodeView
 from apps.inventory.views import (
     StockCountViewSet,
     StockItemViewSet,
@@ -325,6 +326,13 @@ urlpatterns = [
         name="report-period-lock",
     ),
     path("api/dashboard/", DashboardView.as_view(), name="dashboard"),
+    # The scan the till cannot answer for itself: a serial, a lot barcode,
+    # or a GS1 symbol that names all of it at once.
+    path(
+        "api/resolve-barcode/",
+        ResolveBarcodeView.as_view(),
+        name="resolve-barcode",
+    ),
     # The "what changed" counters clients poll while idle. Redis-only, 304 on
     # an unchanged vector — see apps.core.state_views.
     path("api/state/", state_view, name="state"),

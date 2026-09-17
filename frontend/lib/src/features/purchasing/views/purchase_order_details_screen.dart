@@ -28,6 +28,9 @@ import '../../printing/views/print_audit_sheet.dart';
 import '../view_models/purchase_order_details_view_model.dart';
 import 'purchase_order_filter_sheet.dart';
 
+import '../../../data/models/receipt_capture.dart';
+import '../../inventory/views/batch_capture_sheet.dart';
+import '../../inventory/views/unit_capture_sheet.dart';
 part 'purchase_order_actions_panel.dart';
 part 'purchase_order_adjustment_dialogs.dart';
 part 'purchase_order_receive_dialog.dart';

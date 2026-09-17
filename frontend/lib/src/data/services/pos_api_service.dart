@@ -68,10 +68,13 @@ import '../models/prep_station.dart';
 import '../models/exchange_rate.dart';
 import '../models/sales_channel.dart';
 import '../models/shop_settings.dart';
+import '../models/stock_batch.dart';
 import '../models/stock_count.dart';
 import '../models/stock_count_draft.dart';
 import '../models/stock_count_line.dart';
 import '../models/stock_item.dart';
+import '../models/stock_unit.dart';
+import '../models/tracked_scan.dart';
 import '../models/stock_movement.dart';
 import '../models/stock_movement_page.dart';
 import '../models/system_backup.dart';
@@ -134,6 +137,7 @@ import 'sales_channel_api_client.dart';
 import 'server_state_api_client.dart';
 import 'shop_settings_api_client.dart';
 import 'stock_count_api_client.dart';
+import 'tracked_stock_api_client.dart';
 import 'user_api_client.dart';
 import '../../core/app_version.dart';
 import '../../core/server_state.dart';
@@ -185,6 +189,7 @@ class PosApiService {
     _crm = CrmApiClient(_session);
     _priceChecker = PriceCheckerApiClient(_session);
     _stockCounts = StockCountApiClient(_session);
+    _trackedStock = TrackedStockApiClient(_session);
     _ai = AiApiClient(_session);
     _companion = CompanionApiClient(_session);
     _surveillance = SurveillanceApiClient(_session);
@@ -264,6 +269,7 @@ class PosApiService {
   late final CrmApiClient _crm;
   late final PriceCheckerApiClient _priceChecker;
   late final StockCountApiClient _stockCounts;
+  late final TrackedStockApiClient _trackedStock;
   late final AiApiClient _ai;
   late final CompanionApiClient _companion;
   late final SurveillanceApiClient _surveillance;
@@ -1171,6 +1177,115 @@ class PosApiService {
     StockCountLineDraft draft,
   ) {
     return _stockCounts.countLine(countId, draft);
+  }
+
+  // --- identified stock (serials, lots) ---------------------------------
+  // Absent from every request a shop that counts rather than identifies ever
+  // makes: the till resolves a plain barcode locally, and only asks the server
+  // when its own catalog had no answer.
+
+  Future<TrackedScan> resolveTrackedScan(
+    String code, {
+    bool activeOnly = true,
+  }) {
+    return _trackedStock.resolveScan(code, activeOnly: activeOnly);
+  }
+
+  Future<StockUnitPage> fetchStockUnits({
+    int? variantId,
+    int? productId,
+    int? warehouseId,
+    String status = '',
+    String code = '',
+    bool? isIdentified,
+    bool? inStock,
+    bool forSale = false,
+    int page = 1,
+  }) {
+    return _trackedStock.fetchUnits(
+      variantId: variantId,
+      productId: productId,
+      warehouseId: warehouseId,
+      status: status,
+      code: code,
+      isIdentified: isIdentified,
+      inStock: inStock,
+      forSale: forSale,
+      page: page,
+    );
+  }
+
+  Future<StockUnit> fetchStockUnit(int unitId) {
+    return _trackedStock.fetchUnit(unitId);
+  }
+
+  Future<List<StockAllocationEntry>> fetchStockUnitHistory(int unitId) {
+    return _trackedStock.fetchUnitHistory(unitId);
+  }
+
+  Future<StockUnitLookup> lookupStockUnit(String code) {
+    return _trackedStock.lookupUnit(code);
+  }
+
+  Future<StockUnitSummary> fetchStockUnitSummary({int? warehouseId}) {
+    return _trackedStock.fetchUnitSummary(warehouseId: warehouseId);
+  }
+
+  Future<StockUnit> identifyStockUnit(
+    int unitId, {
+    required String code,
+    String secondaryCode = '',
+    String identifierKind = '',
+  }) {
+    return _trackedStock.identifyUnit(
+      unitId,
+      code: code,
+      secondaryCode: secondaryCode,
+      identifierKind: identifierKind,
+    );
+  }
+
+  Future<StockUnit> updateStockUnit(int unitId, Map<String, Object?> changes) {
+    return _trackedStock.updateUnit(unitId, changes);
+  }
+
+  Future<StockBatchPage> fetchStockBatches({
+    int? variantId,
+    int? productId,
+    int? warehouseId,
+    String status = '',
+    bool? isExpired,
+    bool forSale = false,
+    int page = 1,
+  }) {
+    return _trackedStock.fetchBatches(
+      variantId: variantId,
+      productId: productId,
+      warehouseId: warehouseId,
+      status: status,
+      isExpired: isExpired,
+      forSale: forSale,
+      page: page,
+    );
+  }
+
+  Future<StockBatch> fetchStockBatch(int batchId) {
+    return _trackedStock.fetchBatch(batchId);
+  }
+
+  Future<List<StockAllocationEntry>> fetchStockBatchHistory(int batchId) {
+    return _trackedStock.fetchBatchHistory(batchId);
+  }
+
+  Future<StockBatch> setStockBatchQuarantine(
+    int batchId, {
+    required bool locked,
+  }) {
+    return _trackedStock.setBatchQuarantine(batchId, locked: locked);
+  }
+
+  Future<StockBatchPage> fetchExpiryWatchlist({int days = 30}) {
+    return _trackedStock.fetchExpiryWatchlist(days: days);
   }
 
   Future<List<StockCountLine>> fetchStockCountReconciliation(int countId) {

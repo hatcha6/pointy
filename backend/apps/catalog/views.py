@@ -26,6 +26,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.attachments.image_normalization import normalize_uploaded_image
 from apps.attachments.image_search import (
@@ -48,6 +49,8 @@ from apps.attachments.serializers import (
 from apps.core import caching
 from apps.core.aggregates import related_count
 from apps.core.permissions import HasPointyPermission
+from apps.catalog.tracked_resolution import resolve as resolve_tracked_scan
+from apps.catalog.tracked_serializers import serialize_tracked_resolution
 from .cache import attach_catalog_version, catalog_etag, catalog_version
 from .identity import (
     BARCODE_FIELD,
@@ -1242,3 +1245,35 @@ class ScaleBarcodeRuleViewSet(viewsets.ModelViewSet):
     queryset = ScaleBarcodeRule.objects.all()
     filterset_fields = ("is_active", "value_kind")
     ordering_fields = ("sequence", "name", "created_at")
+
+
+class ResolveBarcodeView(APIView):
+    """One scan, resolved against everything the shop can identify.
+
+    The till's own resolver already handles a variant barcode, a carton barcode
+    and a weighing-scale label without leaving the client, because those are
+    answerable from the catalog it already holds. This is the part it cannot do
+    for itself: a live unit's identifier, a lot barcode, and a GS1 element
+    string that names a trade item, a lot, an expiry and a serial at once.
+
+    Shaped as a *miss-path*. A shop that sells Coca-Cola never reaches it — its
+    scans resolve locally on the first try — so nothing here is on the hot path
+    of a till that does not track identity.
+    """
+
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    # Keyed by the HTTP method in upper case: an ``APIView`` has no DRF
+    # ``action``, so ``HasPointyPermission`` falls through to ``request.method``.
+    permission_map = {"GET": ("catalog.view_productvariant",)}
+
+    def get(self, request):
+        code = request.query_params.get("code") or request.query_params.get(
+            "barcode", ""
+        )
+        active_only = request.query_params.get("active_only", "1") not in (
+            "0",
+            "false",
+            "False",
+        )
+        resolution = resolve_tracked_scan(code, active_only=active_only)
+        return Response(serialize_tracked_resolution(resolution, request=request))

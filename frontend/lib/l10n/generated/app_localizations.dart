@@ -23307,6 +23307,396 @@ abstract class AppLocalizations {
   /// **'تُحتسب العمولة على إجمالي فاتورة المهمة (للمهام التي صدرت لها فاتورة).'**
   String get operationsCommissionBaseOrderTotalHelper;
 
+  /// Badge on a POS cart line naming the lot it draws from.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة {code}'**
+  String posCartLineBatchBadge(String code);
+
+  /// Badge on a POS cart line whose lot the backend will pick FEFO at checkout.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة تلقائية'**
+  String get posCartLineBatchAuto;
+
+  /// Expiry badge on a POS cart line (ص = صلاحية).
+  ///
+  /// In ar, this message translates to:
+  /// **'ص: {date}'**
+  String posCartLineExpiryBadge(String date);
+
+  /// Title of the POS sheet that picks which identified article to sell.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الجهاز — {product}'**
+  String posUnitPickerTitle(String product);
+
+  /// Search hint in the POS unit picker.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح أو اكتب الرقم التسلسلي / IMEI'**
+  String get posUnitPickerSearchHint;
+
+  /// Empty state of the POS unit picker.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد أجهزة متاحة لهذا الصنف في هذا المستودع.'**
+  String get posUnitPickerEmpty;
+
+  /// Error state of the POS unit picker.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الأجهزة.'**
+  String get posUnitPickerLoadFailed;
+
+  /// How long an identified article has been on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'{days, plural, zero{وصل اليوم} one{يوم واحد في المخزون} two{يومان في المخزون} few{{days} أيام في المخزون} many{{days} يومًا في المخزون} other{{days} يوم في المخزون}}'**
+  String posUnitPickerDaysInStock(int days);
+
+  /// Badge marking a consigned article in the picker.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمانة'**
+  String get posUnitPickerConsignment;
+
+  /// Title of the POS lot picker sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الدفعة — {product}'**
+  String posBatchPickerTitle(String product);
+
+  /// Empty state of the POS lot picker.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد دفعات صالحة لهذا الصنف في هذا المستودع.'**
+  String get posBatchPickerEmpty;
+
+  /// Error state of the POS lot picker.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الدفعات.'**
+  String get posBatchPickerLoadFailed;
+
+  /// Days remaining before a lot expires.
+  ///
+  /// In ar, this message translates to:
+  /// **'{days, plural, zero{ينتهي اليوم} one{يوم متبقٍ} two{يومان متبقيان} few{{days} أيام متبقية} many{{days} يومًا متبقيًا} other{{days} يوم متبقٍ}}'**
+  String posBatchPickerDaysLeft(int days);
+
+  /// Label for an expired lot.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتهية الصلاحية'**
+  String get posBatchPickerExpired;
+
+  /// Label for a lot that never expires.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون تاريخ صلاحية'**
+  String get posBatchPickerNoExpiry;
+
+  /// Shown where a lot's code was generated rather than printed on a box.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون رقم دفعة'**
+  String get stockBatchNoCode;
+
+  /// Residual counter on the identifier capture sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'{captured} / {expected}'**
+  String unitCaptureProgress(int captured, int expected);
+
+  /// Hint of the identifier capture field.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح أو اكتب الرقم التسلسلي / IMEI ثم اضغط Enter'**
+  String get unitCaptureHint;
+
+  /// Empty state of the identifier capture sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم تسجيل أي معرّف بعد.'**
+  String get unitCaptureEmpty;
+
+  /// Refusal when the same identifier is scanned twice into one capture.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعرّف {code} مسجّل بالفعل في هذا الإدخال.'**
+  String unitCaptureDuplicate(String code);
+
+  /// Refusal when more identifiers are scanned than were accepted.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل الكمية المستلمة كاملة ({expected}).'**
+  String unitCaptureTooMany(int expected);
+
+  /// Toggle that enables per-unit cost entry.
+  ///
+  /// In ar, this message translates to:
+  /// **'توزيع تكلفة السطر على كل وحدة'**
+  String get unitCaptureSplitCosts;
+
+  /// Live residual of the per-unit cost split; must reach zero.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقي: {amount}'**
+  String unitCaptureCostResidual(String amount);
+
+  /// Confirm button of the identifier capture sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد المعرّفات'**
+  String get unitCaptureConfirm;
+
+  /// Confirm button when the shop allows capturing identifiers later.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ وإكمال {remaining} لاحقًا'**
+  String unitCaptureConfirmLater(int remaining);
+
+  /// Residual counter on the multi-lot capture sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'{captured} / {expected}'**
+  String batchCaptureProgress(String captured, String expected);
+
+  /// Lot code field label.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الدفعة'**
+  String get batchCaptureLotCode;
+
+  /// Per-lot quantity field label.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية'**
+  String get batchCaptureQuantity;
+
+  /// Expiry field label on the lot capture sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الصلاحية'**
+  String get batchCaptureExpiry;
+
+  /// Quick expiry shortcut, in months.
+  ///
+  /// In ar, this message translates to:
+  /// **'+{months}ش'**
+  String batchCaptureExpiryShortcut(int months);
+
+  /// Adds another lot row to the capture sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة دفعة أخرى'**
+  String get batchCaptureAddLot;
+
+  /// Confirm button of the lot capture sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الدفعات'**
+  String get batchCaptureConfirm;
+
+  /// Refusal when a tracked receipt line has no captured identifiers.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل معرّفات أو دفعات الأصناف المتتبَّعة قبل تأكيد الاستلام.'**
+  String get purchaseReceiveCaptureRequired;
+
+  /// Opens the identifier capture sheet from the receiving dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدخال المعرّفات'**
+  String get purchaseReceiveCaptureUnits;
+
+  /// Opens the lot capture sheet from the receiving dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدخال الدفعات'**
+  String get purchaseReceiveCaptureLots;
+
+  /// Identifier residual on a receiving line.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعرّفات: {captured} من {expected}'**
+  String purchaseReceiveUnitsCaptured(int captured, int expected);
+
+  /// Lot quantity residual on a receiving line.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعات: {captured} من {expected}'**
+  String purchaseReceiveLotsCaptured(String captured, String expected);
+
+  /// Title of the identified-articles list.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجهزة المسلسلة'**
+  String get stockUnitsTitle;
+
+  /// Navigation label for the identified-articles list.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجهزة المسلسلة'**
+  String get stockUnitsDrawerLabel;
+
+  /// Search hint on the identified-articles list.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح أو اكتب معرّفًا للبحث'**
+  String get stockUnitsSearchHint;
+
+  /// Empty title of the identified-articles list.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد أجهزة مسجّلة'**
+  String get stockUnitsEmptyTitle;
+
+  /// Empty body of the identified-articles list.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستظهر هنا الأجهزة بمجرد إدخال معرّفاتها عند الاستلام.'**
+  String get stockUnitsEmptyBody;
+
+  /// Row label for a unit that still owes its identifier.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار المعرّف'**
+  String get stockUnitsAwaitingIdentifier;
+
+  /// The capture-later worklist count.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{وحدة واحدة بانتظار معرّفها} two{وحدتان بانتظار معرّفيهما} few{{count} وحدات بانتظار معرّفاتها} many{{count} وحدة بانتظار معرّفاتها} other{{count} وحدة بانتظار معرّفاتها}}'**
+  String stockUnitsMissingIdentifiers(int count);
+
+  /// Unit status filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'في المخزون'**
+  String get stockUnitStatusInStock;
+
+  /// Unit status filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'محجوزة'**
+  String get stockUnitStatusReserved;
+
+  /// Unit status filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'مباعة'**
+  String get stockUnitStatusSold;
+
+  /// Unit status filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'تالفة'**
+  String get stockUnitStatusDamaged;
+
+  /// Unit status filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشطوبة'**
+  String get stockUnitStatusWrittenOff;
+
+  /// Empty state of a unit's life timeline.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد حركات مسجّلة لهذه الوحدة.'**
+  String get stockUnitHistoryEmpty;
+
+  /// Title of the lots list.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعات وتواريخ الصلاحية'**
+  String get stockBatchesTitle;
+
+  /// Navigation label for the lots list.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعات والصلاحية'**
+  String get stockBatchesDrawerLabel;
+
+  /// Empty title of the lots list.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد دفعات مسجّلة'**
+  String get stockBatchesEmptyTitle;
+
+  /// Empty body of the lots list.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستظهر هنا الدفعات بمجرد تسجيلها عند الاستلام.'**
+  String get stockBatchesEmptyBody;
+
+  /// Lot list filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get stockBatchesFilterAll;
+
+  /// Lot list filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'سارية'**
+  String get stockBatchesFilterActive;
+
+  /// Lot list filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'محجورة'**
+  String get stockBatchesFilterQuarantined;
+
+  /// Lot list filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتهية'**
+  String get stockBatchesFilterExpired;
+
+  /// Badge on a quarantined lot.
+  ///
+  /// In ar, this message translates to:
+  /// **'محجورة'**
+  String get stockBatchQuarantinedBadge;
+
+  /// Stops a lot being sold, everywhere.
+  ///
+  /// In ar, this message translates to:
+  /// **'حجر الدفعة'**
+  String get stockBatchQuarantineAction;
+
+  /// Lets a quarantined lot be sold again.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفع الحجر'**
+  String get stockBatchReleaseAction;
+
+  /// Title of the quarantine confirmation.
+  ///
+  /// In ar, this message translates to:
+  /// **'حجر الدفعة؟'**
+  String get stockBatchQuarantineTitle;
+
+  /// Explains that quarantine is a stop-sale, not a write-off.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتوقف بيع الدفعة {code} في كل الفروع فورًا. البضاعة تبقى في المخزون حتى تُشطب.'**
+  String stockBatchQuarantineBody(String code);
+
+  /// Confirms quarantining a lot.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الحجر'**
+  String get stockBatchQuarantineConfirm;
+
+  /// Quarantine failure toast.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تغيير حالة الحجر.'**
+  String get stockBatchQuarantineFailed;
+
   /// No description provided for @stockCountDrawerLabel.
   ///
   /// In ar, this message translates to:

@@ -211,6 +211,20 @@ List<NavCatalogGroup> appNavigationCatalog(AppLocalizations l10n) {
           label: l10n.stockCountDrawerLabel,
           keywords: const ['stock count', 'stocktake', 'جرد'],
         ),
+        NavCatalogEntry(
+          destination: AppNavigationDestination.stockUnits,
+          icon: Icons.qr_code_2_outlined,
+          selectedIcon: Icons.qr_code_2,
+          label: l10n.stockUnitsDrawerLabel,
+          keywords: const ['serial', 'imei', 'units', 'مسلسل', 'أجهزة', 'شاصي'],
+        ),
+        NavCatalogEntry(
+          destination: AppNavigationDestination.stockBatches,
+          icon: Icons.inventory_2_outlined,
+          selectedIcon: Icons.inventory_2,
+          label: l10n.stockBatchesDrawerLabel,
+          keywords: const ['batch', 'lot', 'expiry', 'دفعات', 'صلاحية', 'لوط'],
+        ),
       ],
     ),
     NavCatalogGroup(
