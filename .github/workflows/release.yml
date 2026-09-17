@@ -691,6 +691,14 @@ jobs:
             exit 1
           fi
 
+          # STRICT parse of the exact file that goes in the zip, with the
+          # .env.example that ships beside it. yq renders this file and yq
+          # tolerates a duplicate mapping key - v0.6.1 shipped `stop_grace_period`
+          # twice in `postgres` and the first thing to notice was `docker compose`
+          # on a shop's machine, mid live-update. Render-then-grep is not a parse.
+          bash "${GITHUB_WORKSPACE}/scripts/check_compose_parses.sh" \
+            "${BUNDLE}/docker-compose.yml" "${BUNDLE}/.env.example"
+
           echo "==> Zipping the server half…"
           zip -r -q "dist/${BUNDLE}.zip" "${BUNDLE}"
           ls -lh dist "${BUNDLE}/images"

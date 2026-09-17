@@ -114,6 +114,20 @@ else
   bad "the WSL bootstrap has ${ps1_high} non-ASCII byte(s); CP1256 can turn them into string delimiters"
 fi
 
+echo "== The compose file we ship actually parses =="
+# Not a grep. `docker compose config` resolves anchors, merge keys and every
+# ${VAR}, and is strict about duplicate mapping keys - which is the one thing
+# that got past every other check here and reached a shop mid-update.
+compose_parse_output="$(bash scripts/check_compose_parses.sh "$COMPOSE" deploy/onprem/.env.example 2>&1)"
+case "$?" in
+  0) ok "the on-prem compose parses strictly (no duplicate keys)" ;;
+  2) bad "could not parse the compose: docker compose is unavailable here.
+        This is deliberately a FAILURE, not a skip - a check that quietly does
+        nothing is how the duplicate key shipped in the first place." ;;
+  *) bad "the on-prem compose does not parse:
+$(printf '%s' "$compose_parse_output" | sed 's/^/        /')" ;;
+esac
+
 echo "== A shop can actually boot what we ship =="
 # Every ${VAR:?} in compose is a variable the stack refuses to start without.
 # If one is added to compose but not to .env.example, the release installs

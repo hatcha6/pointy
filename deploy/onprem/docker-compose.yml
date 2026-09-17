@@ -191,7 +191,6 @@ services:
       # interval tick — this gates the whole stack (pgbouncer + backend wait on
       # it), so it is the biggest lever on cold-boot/reboot time-to-serving.
       start_interval: 1s
-    stop_grace_period: 60s
     logging: *pointy-logging
 
   # Connection pooler (transaction mode). Multiplexes every app/worker/thread
