@@ -19,12 +19,18 @@ from apps.discounts.models import (
     normalize_coupon_code,
 )
 from apps.discounts.services import DiscountUsageLimitExceeded, persist_applied_discounts
-from apps.inventory.models import StockBatch, StockLedgerEntry, StockMovement
+from apps.inventory import tracking
+from apps.inventory.models import (
+    StockLedgerEntry,
+    StockMovement,
+    StockUnit,
+)
 from apps.sales.registers import selling_warehouse_id
 from apps.inventory.services import (
     build_stock_movement,
     consume_expiring_stock_batches,
     create_expiring_stock_batch,
+    discard_expiring_stock_batches,
     create_stock_movement,
     create_stock_movements,
     lock_stock_item,
@@ -590,11 +596,13 @@ def _reverse_received_stock(purchase_order, *, snapshots, created_by):
             voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RETURN,
             voucher_id=purchase_order.pk,
         )
-    # Expiry batches are cut from receipt lines and PROTECT them, so they go
-    # first; the edited order records its own receipt, batches included.
-    StockBatch.objects.filter(
-        source_receipt_line__receipt__purchase_order=purchase_order
-    ).delete()
+    # Expiry cohorts are keyed on the receipt lines that brought them in and
+    # PROTECT them, so they go first; the edited order records its own receipt,
+    # cohorts included.
+    receipt_lines = list(
+        PurchaseReceiptLine.objects.filter(receipt__purchase_order=purchase_order)
+    )
+    discard_expiring_stock_batches(receipt_lines=receipt_lines)
     PurchaseReceiptLine.objects.filter(
         receipt__purchase_order=purchase_order
     ).delete()
@@ -848,6 +856,7 @@ def _write_purchase_order_with_lines(
         if rebuild_expected:
             if purchase_order.status != PurchaseOrder.Status.SUBMITTED:
                 _require_receiving_permission(request)
+            _refuse_cost_edit_on_identified_stock(purchase_order)
             created_by = purchase_created_by(request)
             snapshots = _receiving_snapshots(
                 purchase_order,
@@ -923,6 +932,44 @@ def _write_purchase_order_with_lines(
     if purchase_order.status != PurchaseOrder.Status.DRAFT:
         schedule_supplier_refresh(purchase_order.supplier_id)
     return purchase_order
+
+
+
+def _refuse_cost_edit_on_identified_stock(purchase_order):
+    """Refuse an edit that would un-receive identified stock.
+
+    Editing a received order un-records the whole delivery and re-records it,
+    which is exactly right for a quantity in a bin and exactly wrong for forty
+    handsets: the identifiers were captured at the receiving bay and are not in
+    this payload, so the re-record would either refuse for want of them or
+    invent a second set — and the shop would own eighty units it never bought.
+
+    §5.5 of the plan wants landed cost to *re-stamp* those units and repost
+    rather than recreate them; until it does, this refuses rather than
+    duplicating, and names the units so the owner knows what is in the way.
+    The correction that still works is a purchase return, which moves the
+    articles it names.
+    """
+    from apps.inventory.models import StockUnit
+
+    units = list(
+        StockUnit.objects.filter(
+            source_receipt_line__receipt__purchase_order=purchase_order,
+            status__in=StockUnit.LIVE_STATUSES,
+        ).values_list("code", flat=True)[:10]
+    )
+    if not units:
+        return
+    raise serializers.ValidationError(
+        {
+            "code": "purchase_order_has_identified_stock",
+            "detail": (
+                "لا يمكن تعديل تكلفة هذا الأمر لأن بضاعته مسجّلة بمعرّفات. "
+                "استخدم مرتجع مشتريات بدلًا من ذلك."
+            ),
+            "stock_units": units,
+        }
+    )
 
 
 def replace_purchase_order_landed_cost_entries(purchase_order, entries_data):
@@ -1292,9 +1339,22 @@ def fresh_purchase_receipt_lines(locked_order, lines_data, *, locked_lines):
                 "allowed_over_receipt_quantity": allowed_over_receipt_quantity,
                 "expiry_date": expiry_date,
                 "notes": line_data.get("notes", ""),
+                # Captured identifiers travel with the line, not beside it: this
+                # function re-reads every quantity off the locked row, and a
+                # payload key it forgets to carry is a payload key the receipt
+                # silently drops.
+                "units": line_data.get("units") or [],
+                "batches": line_data.get("batches") or [],
             }
         )
     return fresh_lines
+
+
+
+def _shop_settings():
+    from apps.core.models import ShopSettings
+
+    return ShopSettings.load()
 
 
 def apply_receipt_stock_changes(
@@ -1308,6 +1368,7 @@ def apply_receipt_stock_changes(
     created_by,
     stock_items=None,
     warehouse=None,
+    capture=None,
 ):
     """Adjust one received line's stock and return its unsaved movements.
 
@@ -1352,6 +1413,14 @@ def apply_receipt_stock_changes(
                 # Net of discounts and landed costs: what this stock actually
                 # cost to put on the shelf is what it is worth on it.
                 unit_cost=line.effective_base_unit_cost,
+                tracked_plan=(
+                    capture.take(
+                        quantity=accepted_expected_base,
+                        rate=line.effective_base_unit_cost,
+                    )
+                    if capture is not None
+                    else None
+                ),
             )
         )
 
@@ -1370,6 +1439,14 @@ def apply_receipt_stock_changes(
                 created_by=created_by,
                 before=before,
                 unit_cost=line.effective_base_unit_cost,
+                tracked_plan=(
+                    capture.take(
+                        quantity=accepted_overage_base,
+                        rate=line.effective_base_unit_cost,
+                    )
+                    if capture is not None
+                    else None
+                ),
             )
         )
 
@@ -1495,6 +1572,13 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
         warehouse=locked_order.warehouse_id,
     )
 
+    # Identified stock the delivery brought in, per line. Built before the
+    # movements so a line whose identifiers do not add up refuses the whole
+    # receipt rather than half-landing it, and applied after the receipt lines
+    # exist so every unit can name the line that brought it.
+    captures = []
+    damaged_units = []
+    capture_later = bool(_shop_settings().serialized_capture_later_allowed)
     for line_data in lines_data:
         line = line_data["line"]
         accepted_quantity = line_data.get("accepted_quantity", 0)
@@ -1518,6 +1602,16 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
             damaged_quantity,
             cancelled_quantity,
         )
+        capture = tracking.ReceiptCapture(
+            variant=line.variant,
+            warehouse=locked_order.warehouse_id,
+            units=line_data.get("units"),
+            batches=line_data.get("batches"),
+            supplier=locked_order.supplier,
+            purchase_line=line,
+            capture_later=capture_later,
+            key=f"PO{locked_order.pk}L{line.pk}",
+        )
         stock_movements.extend(
             apply_receipt_stock_changes(
                 locked_order=locked_order,
@@ -1529,6 +1623,7 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
                 created_by=created_by,
                 stock_items=stock_items,
                 warehouse=locked_order.warehouse_id,
+                capture=capture if capture.is_tracked else None,
             )
         )
         receipt_line = PurchaseReceiptLine.objects.create(
@@ -1551,7 +1646,26 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
             expiry_date=expiry_date,
             # Batches are consumed in base units by FEFO, so store base units.
             quantity=line.to_base_quantity(accepted_quantity),
+            warehouse=locked_order.warehouse_id,
+            unit_cost=line.effective_base_unit_cost,
         )
+        if capture.is_tracked:
+            capture.bind_receipt_line(receipt_line)
+            damaged_units.extend(
+                capture.create_damaged_units(
+                    quantity=line.to_base_quantity(damaged_quantity),
+                    rate=line.effective_base_unit_cost,
+                )
+            )
+            captures.append(capture)
+
+    # The units and balances have to exist before the valuation pass writes the
+    # allocations that name them.
+    for capture in captures:
+        for plan in capture.plans:
+            tracking.apply_receipt(plan)
+    if damaged_units:
+        StockUnit.objects.bulk_create(damaged_units)
 
     # One insert and one valuation pass for the whole delivery.
     save_stock_item_quantities_bulk(stock_items.values())

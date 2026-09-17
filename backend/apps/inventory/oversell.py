@@ -16,13 +16,25 @@ codebase rather than two.
 from .models import Warehouse
 
 
-def may_oversell(warehouse=None, *, settings=None) -> bool:
+def may_oversell(warehouse=None, *, settings=None, variant=None) -> bool:
     """Whether a write may drive this place's stock below zero.
 
     Resolve it **once per document**, not once per line: a cart, a receipt or a
     job consumes from a single location, and asking per line would put a query
     on the cashier's critical path for an answer that cannot change mid-cart.
+
+    ``variant`` is the one input that comes *ahead* of every other. Identified
+    stock cannot go negative under any setting, because a negative serialized
+    balance is a claim to hold an article with no identifier — and the moment
+    one exists, the picker, the recall report and the bin all disagree about
+    what is on the shelf. ERPNext allowed it, then removed the special case in
+    v15; this refuses by construction instead.
     """
+    if variant is not None:
+        from .tracking import is_tracked
+
+        if is_tracked(variant):
+            return False
     if settings is None:
         from apps.core.models import ShopSettings
 

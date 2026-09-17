@@ -27,7 +27,8 @@ from apps.discounts.services import (
 )
 from apps.catalog.services import preload_line_variants
 from apps.catalog.units import quantize_quantity
-from apps.inventory.models import StockLedgerEntry, StockMovement
+from apps.inventory import tracking
+from apps.inventory.models import StockLedgerEntry, StockMovement, StockUnit
 from apps.inventory.oversell import may_oversell
 from apps.sales.registers import selling_warehouse_id
 from apps.inventory.services import (
@@ -834,6 +835,9 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None, warehouse=None)
     settings = settings or ShopSettings.load()
     quantities_by_variant = {}
     variants_by_id = {}
+    # Which identified articles the till named, per variant. Empty for every
+    # untracked cart, and read only when the variant's mode says so.
+    selections_by_variant = {}
     for line_data in lines_data:
         variant = line_data["variant"]
         if variant.product.is_service or variant.product.is_prepared:
@@ -849,6 +853,12 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None, warehouse=None)
         quantities_by_variant[variant.pk] = (
             quantities_by_variant.get(variant.pk, Decimal("0")) + base_quantity
         )
+        selection = selections_by_variant.setdefault(
+            variant.pk, {"unit_ids": [], "unit_codes": [], "batch_ids": []}
+        )
+        selection["unit_ids"].extend(line_data.get("stock_units") or [])
+        selection["unit_codes"].extend(line_data.get("stock_unit_codes") or [])
+        selection["batch_ids"].extend(line_data.get("stock_batches") or [])
 
     stock_adjustments = []
     shortages = []
@@ -866,11 +876,33 @@ def prepare_sale_stock_adjustments(lines_data, *, settings=None, warehouse=None)
         variant = variants_by_id[variant_id]
         quantity = quantities_by_variant[variant_id]
         stock_item = locked_items[variant_id]
+        # Identified stock is never oversellable, whatever the shop or the
+        # warehouse says: there is no such thing as a phantom handset, and a
+        # setting that could conjure one is a setting that produces a serial
+        # number for an article nobody has. §3.5 — ERPNext removed their own
+        # special case here in v15 for the same reason.
+        tracked = tracking.is_tracked(variant)
+        # Plan the issue *before* the shortage check, so a cart that names an
+        # unavailable unit is refused by the identity rather than by arithmetic.
+        if tracked:
+            tracking.attach_plan(
+                variant,
+                tracking.plan_issue(
+                    variant=variant,
+                    warehouse=stock_item.warehouse_id,
+                    quantity=quantity,
+                    # Never short: identified stock has no oversell path at all,
+                    # so a cart that cannot be allocated is refused here rather
+                    # than allowed through to invent a serial number later.
+                    allow_short=False,
+                    **selections_by_variant.get(variant_id, {}),
+                ),
+            )
         # Sellable = on-hand minus stock held by quotation reservations
         # (quantity_committed). A reservation blocks others from dipping into the
         # held units even though those units are still physically on hand.
         available = stock_item.quantity_on_hand - stock_item.quantity_committed
-        if not overselling_allowed and available < quantity:
+        if (tracked or not overselling_allowed) and available < quantity:
             shortages.append(
                 {
                     "product": variant.product_id,
@@ -923,11 +955,25 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None):
     adjusted_items = []
     movements = []
 
+    sold_at = timezone.now()
     for variant, stock_item, quantity in stock_adjustments:
         before = stock_snapshot(stock_item)
         stock_item.quantity_on_hand -= quantity
         adjusted_items.append(stock_item)
-        consume_expiring_stock_batches(variant=variant, quantity=quantity)
+        consume_expiring_stock_batches(
+            variant=variant, quantity=quantity, warehouse=stock_item.warehouse_id
+        )
+        # The plan was made (and its rows locked) back in
+        # ``prepare_sale_stock_adjustments``; this is where it is spent.
+        plan = tracking.plan_on(variant)
+        if plan is not None:
+            tracking.apply_issue(
+                plan,
+                status=StockUnit.Status.SOLD,
+                sold_at=sold_at,
+                customer=order.customer,
+            )
+            tracking.clear_plan(variant)
         movements.append(
             build_stock_movement(
                 variant=variant,
@@ -937,6 +983,7 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None):
                 note=f"بيع {order.receipt_number}",
                 created_by=created_by,
                 before=before,
+                tracked_plan=plan,
             )
         )
 
@@ -947,6 +994,7 @@ def record_sale_stock_movements(order, stock_adjustments, *, request=None):
         voucher_id=order.pk,
     )
     _stamp_ledger_cost_on_lines(order, created)
+    _stamp_sold_units_on_lines(order, created)
 
 
 def _stamp_ledger_cost_on_lines(order, movements):
@@ -982,6 +1030,42 @@ def _stamp_ledger_cost_on_lines(order, movements):
     if updated:
         OrderLine.objects.bulk_update(updated, ["unit_cost", "updated_at"])
 
+
+
+def _stamp_sold_units_on_lines(order, movements):
+    """Name the invoice on every identified article this sale issued.
+
+    "Where has this IMEI been" is one query over allocations; "which invoice
+    sold it" should not be a second. When the same variant appears on two lines
+    of one invoice the units all take the first of them — both lines belong to
+    the same sale, so every question this column answers has the same answer
+    either way.
+    """
+    tracked = [
+        movement
+        for movement in movements
+        if getattr(movement, "tracked_plan", None) is not None
+    ]
+    if not tracked:
+        return
+    lines = {}
+    for line in order.lines.all():
+        lines.setdefault(line.variant_id, line)
+    updates = []
+    for movement in tracked:
+        line = lines.get(movement.variant_id)
+        for allocation in movement.tracked_plan.allocations:
+            unit = allocation.unit
+            if unit is None:
+                continue
+            unit.sold_order_line = line
+            if line is not None:
+                unit.sold_price = line.unit_price
+            updates.append(unit)
+    if updates:
+        StockUnit.objects.bulk_update(
+            updates, ["sold_order_line", "sold_price", "updated_at"]
+        )
 
 def reserve_stock_for_quote(order, *, settings=None, warehouse=None):
     """Place an ACTIVE hold on each stockable line of a quotation: bump the

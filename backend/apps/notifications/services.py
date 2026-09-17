@@ -19,6 +19,7 @@ from django.db.models import (
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
+from apps.catalog.models import Product
 from apps.core.backup import backup_health
 from apps.core.dispatch import enqueue_best_effort
 from apps.core.roles import user_is_manager
@@ -505,22 +506,40 @@ def _expiry_notifications(now):
         0,
     )
     window_end = today + timedelta(days=alert_window_days)
+    # A lot's quantity moved onto its balances when a lot stopped being a place
+    # (§4.7), so "how much of this is still on a shelf" is the sum across them —
+    # and the supplier now comes off the lot itself, which is where a fact about
+    # a factory run belongs. Annotated rather than walked so a shop with a long
+    # expiry tail does not pay a query per lot.
     batches = (
-        StockBatch.objects.select_related(
-            "variant",
-            "variant__product",
-            "source_receipt_line",
-            "source_receipt_line__receipt",
-            "source_receipt_line__receipt__purchase_order",
-            "source_receipt_line__receipt__purchase_order__supplier",
+        StockBatch.objects.select_related("variant", "variant__product", "supplier")
+        .annotate(
+            on_hand=Coalesce(
+                Sum("balances__remaining_quantity"),
+                Value(Decimal("0")),
+                output_field=DecimalField(max_digits=14, decimal_places=3),
+            )
         )
         .filter(
-            remaining_quantity__gt=0,
+            Q(variant__product__tracks_expiry=True)
+            # Lot-tracked products carry expiry as a property of the cohort
+            # rather than of the product, so they alert on the same window
+            # without anyone having to also tick ``tracks_expiry``. Turning that
+            # flag off still silences a product that merely tracked dates, which
+            # is what it has always meant.
+            | Q(
+                variant__product__tracking_mode__in=[
+                    Product.TrackingMode.BATCH,
+                    Product.TrackingMode.SERIAL_BATCH,
+                ]
+            ),
+            on_hand__gt=0,
+            expiry_date__isnull=False,
             expiry_date__lte=window_end,
             variant__is_active=True,
             variant__product__is_active=True,
-            variant__product__tracks_expiry=True,
         )
+        .exclude(status=StockBatch.Status.QUARANTINED)
         .order_by("expiry_date", "id")
     )
     for batch in batches:
@@ -530,8 +549,7 @@ def _expiry_notifications(now):
             severity = BusinessNotification.Severity.CRITICAL
         elif days <= 7:
             severity = BusinessNotification.Severity.WARNING
-        order = batch.source_receipt_line.receipt.purchase_order
-        supplier_name = order.supplier.name if order.supplier_id else ""
+        supplier_name = batch.supplier.name if batch.supplier_id else ""
         specs.append(
             _spec(
                 code="inventory.expiring_batch",
@@ -543,10 +561,10 @@ def _expiry_notifications(now):
                 payload={
                     "product_name": batch.variant.full_name,
                     "sku": batch.variant.sku,
-                    "quantity": float(batch.remaining_quantity),
+                    "quantity": float(batch.on_hand),
                     "expiry_date": batch.expiry_date.isoformat(),
                     "days": max(days, 0),
-                    "order_number": order.order_number,
+                    "batch_code": batch.display_code,
                     "supplier_name": supplier_name,
                     "count": 1,
                 },

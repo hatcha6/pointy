@@ -26,6 +26,7 @@ from django.utils import timezone
 
 from .models import StockLedgerEntry, StockValuationBin, Warehouse
 from .valuation import (
+    ValuationMethod,
     ZERO,
     consumed_cost,
     consumed_unit_cost,
@@ -42,6 +43,48 @@ def current_method() -> str:
     from apps.core.models import ShopSettings
 
     return ShopSettings.load().inventory_valuation_method
+
+
+#: What each tracking mode is valued by, decided once here so no branch anywhere
+#: else has to remember that ``serial_batch`` is ``unit_cost``.
+#:
+#: The fourth mode resolving to ``unit_cost`` rather than to a method of its own
+#: is the load-bearing line: under ``serial_batch`` the **article** is the thing
+#: that moved, its batch supplies the rate at receipt and the unit then carries
+#: it. Two costed identities for one physical object is how a variant ends up
+#: counted twice.
+METHOD_BY_TRACKING_MODE = {
+    "batch": ValuationMethod.BATCH_COST,
+    "serial": ValuationMethod.UNIT_COST,
+    "serial_batch": ValuationMethod.UNIT_COST,
+}
+
+
+def method_for_mode(mode, *, default=None) -> str:
+    """The valuation method this tracking mode forces, or the shop's own.
+
+    The shop's ``inventory_valuation_method`` still governs everything it owns;
+    it simply does not get a vote on identified stock.
+    """
+    identified = METHOD_BY_TRACKING_MODE.get(mode)
+    if identified is not None:
+        return identified
+    return default or current_method()
+
+
+def methods_for(variants, *, default=None) -> dict:
+    """``{variant_id: method}`` for a whole document.
+
+    Resolved from the tracking modes the caller already has in memory, so a
+    document with no tracked line pays nothing for asking.
+    """
+    from .tracking import modes_for
+
+    default = default or current_method()
+    return {
+        variant_id: method_for_mode(mode, default=default)
+        for variant_id, mode in modes_for(variants).items()
+    }
 
 
 def _quantize_rate(value: Decimal) -> Decimal:
@@ -70,7 +113,7 @@ def _fallback_costs(variant_ids):
     return latest_sale_unit_costs(list(variants))
 
 
-def _load_bins(variant_ids, warehouse_id, *, method, lock=True):
+def _load_bins(variant_ids, warehouse_id, *, method, methods=None, lock=True):
     """Locked valuation bins for these variants, creating any that are missing.
 
     Locked in ascending variant order, matching how ``lock_stock_items`` orders
@@ -92,11 +135,12 @@ def _load_bins(variant_ids, warehouse_id, *, method, lock=True):
         # One insert for the whole document. Creating these row by row cost four
         # queries each (savepoint, select, insert, release), which on a receipt
         # is paid once per line and showed up as a per-line query regression.
+        methods = methods or {}
         fresh = [
             StockValuationBin(
                 variant_id=variant_id,
                 warehouse_id=warehouse_id,
-                method=method,
+                method=methods.get(variant_id, method),
             )
             for variant_id in missing
         ]
@@ -201,13 +245,23 @@ def post_movement_valuations(
     if not rows:
         return {}
 
-    method = current_method()
+    shop_method = current_method()
     warehouse_id = _one_warehouse(rows, warehouse)
     posting_at = posting_at or timezone.now()
     unit_costs = dict(unit_costs or {})
 
     variant_ids = {movement.variant_id for movement in rows}
-    bins = _load_bins(variant_ids, warehouse_id, method=method)
+    # A tracked variant is valued by what the product is, not by what the shop
+    # prefers; everything else takes the shop's method exactly as before. The
+    # modes are read off the variants the movements already carry, so a document
+    # with no tracked line pays no extra query for asking.
+    methods = methods_for(
+        [getattr(movement, "variant", None) or movement.variant_id for movement in rows],
+        default=shop_method,
+    )
+    bins = _load_bins(
+        variant_ids, warehouse_id, method=shop_method, methods=methods
+    )
 
     # One fallback lookup for the whole document, and only for the variants
     # that might actually need it.
@@ -230,14 +284,29 @@ def post_movement_valuations(
     rates = {}
     for movement in rows:
         bin_row = bins[movement.variant_id]
+        method = methods.get(movement.variant_id, shop_method)
         previous_rate = bin_row.valuation_rate
         engine = _engine_for(bin_row, method)
         delta = Decimal(movement.on_hand_after) - Decimal(movement.on_hand_before)
+        # What this movement allocated, when it moved identified stock. The plan
+        # is the answer for a tracked variant in *both* directions: what the
+        # article cost coming in, and what that same article costs going out.
+        plan = getattr(movement, "tracked_plan", None)
+        if plan is not None and not _plan_matches(plan, delta):
+            raise ValueError(
+                "A tracked movement's allocations must add up to the quantity it "
+                f"moved: plan says {plan.quantity}, movement says {abs(delta)}. "
+                "This is ERPNext #42997 — a serialized entry that names the wrong "
+                "serials — refused by construction."
+            )
 
         if delta > 0:
-            rate = declared_cost(movement)
-            if rate is None:
-                rate = previous_rate or fallbacks.get(movement.variant_id) or ZERO
+            if plan is not None:
+                rate = plan.rate
+            else:
+                rate = declared_cost(movement)
+                if rate is None:
+                    rate = previous_rate or fallbacks.get(movement.variant_id) or ZERO
             rate = Decimal(rate)
             engine.add_stock(delta, rate)
             value_change = delta * rate
@@ -246,6 +315,10 @@ def post_movement_valuations(
             fallback = previous_rate or fallbacks.get(movement.variant_id) or ZERO
             consumed = engine.remove_stock(
                 quantity,
+                # An identified issue costs what the allocated articles cost, and
+                # nothing else gets a vote — §3.4, and the reason ERPNext had to
+                # un-ship batch-wise valuation twice.
+                outgoing_rate=plan.rate if plan is not None else ZERO,
                 rate_generator=lambda fallback=fallback: fallback,
             )
             rate = consumed_unit_cost(consumed)
@@ -279,11 +352,57 @@ def post_movement_valuations(
         )
 
     StockLedgerEntry.objects.bulk_create(entries)
+    _write_tracked_allocations(
+        rows,
+        entries,
+        voucher_type=voucher_type,
+        voucher_id=voucher_id,
+        posting_at=posting_at,
+    )
     StockValuationBin.objects.bulk_update(
         list(bins.values()),
         ["quantity", "valuation_rate", "stock_value", "state", "method", "updated_at"],
     )
     return rates
+
+
+
+def _plan_matches(plan, delta) -> bool:
+    """Does the plan account for exactly the quantity the movement moved?
+
+    The tripwire for ERPNext #42997, checked before a single row is written
+    rather than discovered later by a report that cannot explain itself.
+    """
+    return _quantize_quantity(plan.quantity) == _quantize_quantity(abs(Decimal(delta)))
+
+
+def _write_tracked_allocations(movements, entries, *, voucher_type, voucher_id,
+                               posting_at):
+    """Persist each tracked movement's allocations against its ledger entry.
+
+    Done here, rather than by the caller, for one reason: the ledger entry is
+    created here and the allocation is only useful with it. ERPNext's bundle is
+    a separate submitted document precisely because they did not do this, and
+    their bug list is what it costs.
+    """
+    from .tracking import write_allocations
+
+    by_movement = {
+        id(entry.movement): entry for entry in entries if entry.movement is not None
+    }
+    for movement in movements:
+        plan = getattr(movement, "tracked_plan", None)
+        if plan is None or not plan.allocations:
+            continue
+        write_allocations(
+            plan,
+            movement=movement if movement.pk else None,
+            ledger_entry=by_movement.get(id(movement)),
+            voucher_type=voucher_type,
+            voucher_id=voucher_id,
+            posting_at=posting_at,
+            note=movement.note,
+        )
 
 
 def valuation_unit_costs(variant_ids, *, warehouse=None):
@@ -324,7 +443,14 @@ def repost_variant(variant_id, *, warehouse_id=None, method=None):
 
     Returns the number of entries replayed.
     """
-    method = method or current_method()
+    # A tracked variant's method is not the shop's to choose, so a repost that
+    # took the shop default would silently re-value every serialized sale at a
+    # blended rate — which is exactly the bug §3.4 records ERPNext shipping.
+    from .tracking import mode_of
+
+    method = method_for_mode(
+        mode_of(variant_id), default=method or current_method()
+    )
     warehouse_id = warehouse_id or Warehouse.default_id()
     entries = list(
         StockLedgerEntry.objects.select_for_update()
@@ -349,6 +475,14 @@ def repost_variant(variant_id, *, warehouse_id=None, method=None):
         else:
             consumed = engine.remove_stock(
                 -quantity,
+                # Replaying identified stock re-uses the rate the allocations
+                # decided at the time, because that is the only record of what
+                # the specific article cost; a queue method still recomputes.
+                outgoing_rate=(
+                    Decimal(entry.valuation_rate)
+                    if method in ValuationMethod.IDENTIFIED
+                    else ZERO
+                ),
                 rate_generator=lambda previous_rate=previous_rate: previous_rate,
             )
             rate = consumed_unit_cost(consumed)

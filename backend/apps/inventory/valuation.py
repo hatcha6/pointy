@@ -52,11 +52,24 @@ NEAR_ZERO = Decimal("0.0000001")
 
 
 class ValuationMethod:
-    """Method identifiers, mirrored by ``ShopSettings.ValuationMethod``."""
+    """Method identifiers, mirrored by ``ShopSettings.ValuationMethod``.
+
+    The first three are the shop's choice and answer *"what did the queue give
+    up?"*. The last two are not a choice at all: they are chosen by the product,
+    because neither a serialized unit nor an identified lot consults a queue —
+    the cost is the cost of **that specific article or cohort**. A shop setting
+    cannot override them, and there is deliberately no configuration under which
+    serialized or batch stock is valued by a blended guess.
+    """
 
     MOVING_AVERAGE = "moving_average"
     FIFO = "fifo"
     LIFO = "lifo"
+    UNIT_COST = "unit_cost"
+    BATCH_COST = "batch_cost"
+
+    #: The two the product decides and the shop cannot.
+    IDENTIFIED = (UNIT_COST, BATCH_COST)
 
 
 def round_off_if_near_zero(value: Decimal) -> Decimal:
@@ -275,10 +288,78 @@ class MovingAverageValuation:
         return [[qty, self.rate]]
 
 
+class IdentifiedValuation:
+    """Cost is the cost of the article that moved, never of a queue position.
+
+    Serves ``unit_cost`` and ``batch_cost`` alike, because the difference between
+    them is *which* identified thing supplied the rate, not how the arithmetic
+    works. A removal takes the rate it is given — the unit's ``incoming_rate +
+    refurb_cost``, or the balance's own landed rate — and the balance follows;
+    an addition adds value at the rate it arrived at.
+
+    State is the same ``[[qty, rate]]`` single accumulator moving average uses,
+    so switching a product into or out of a tracked mode does not change the
+    shape of the column underneath it. The rate stored is ``value / qty``, which
+    is what a report means by "what is this variant worth here on average" — but
+    nothing ever *consumes* at that rate, which is the entire point.
+    """
+
+    def __init__(self, state=None):
+        bins = [[_decimal(qty), _decimal(rate)] for qty, rate in (state or [])]
+        self.qty = sum((b[QTY] for b in bins), ZERO)
+        self.value = sum((b[QTY] * b[RATE] for b in bins), ZERO)
+
+    @property
+    def state(self):
+        return [[self.qty, self.valuation_rate]]
+
+    def get_total_stock_and_value(self):
+        return (
+            round_off_if_near_zero(self.qty),
+            round_off_if_near_zero(self.value),
+        )
+
+    @property
+    def valuation_rate(self) -> Decimal:
+        if self.qty == ZERO:
+            return ZERO
+        return self.value / self.qty
+
+    def add_stock(self, qty, rate) -> None:
+        qty = _decimal(qty)
+        if qty <= ZERO:
+            return
+        self.qty = round_off_if_near_zero(self.qty + qty)
+        self.value = round_off_if_near_zero(self.value + qty * _decimal(rate))
+
+    def remove_stock(self, qty, outgoing_rate=ZERO, rate_generator=None):
+        """Issue ``qty`` at the rate the allocation decided.
+
+        ``outgoing_rate`` is not an optimisation hint here as it is for the queue
+        methods — it is the answer. A caller that omits it has failed to allocate,
+        and falls back to the blended rate so a mis-wired path degrades to a
+        wrong-but-bounded number rather than a crash; the guard test in
+        ``test_tracking_guards`` is what stops that path existing.
+        """
+        qty = _decimal(qty)
+        if qty <= ZERO:
+            return []
+        rate = _decimal(outgoing_rate)
+        if rate == ZERO:
+            rate = self.valuation_rate
+            if rate == ZERO and rate_generator is not None:
+                rate = _decimal(rate_generator())
+        self.qty = round_off_if_near_zero(self.qty - qty)
+        self.value = round_off_if_near_zero(self.value - qty * rate)
+        return [[qty, rate]]
+
+
 ENGINES = {
     ValuationMethod.MOVING_AVERAGE: MovingAverageValuation,
     ValuationMethod.FIFO: FifoValuation,
     ValuationMethod.LIFO: LifoValuation,
+    ValuationMethod.UNIT_COST: IdentifiedValuation,
+    ValuationMethod.BATCH_COST: IdentifiedValuation,
 }
 
 

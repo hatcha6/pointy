@@ -42,10 +42,18 @@ from apps.purchasing.models import (
 from apps.sales.models import RegisterSession
 from apps.sales.services import checkout_order
 
-from .models import StockBatch, StockItem, StockMovement
+from .models import (
+    StockBatch,
+    StockBatchBalance,
+    StockItem,
+    StockMovement,
+    Warehouse,
+)
 from .services import (
     consume_expiring_stock_batches,
+    create_expiring_stock_batch,
     create_stock_movement,
+    receipt_line_lot_code,
     stock_snapshot,
 )
 
@@ -62,11 +70,13 @@ def _expiring_product(*, sku="EXP", name="حليب", tracks_expiry=True):
 
 
 def _make_batch(*, variant, days, quantity, supplier, created_offset_seconds=0):
-    """Build a StockBatch via the minimal PurchaseReceiptLine chain it requires.
+    """Build a lot and its balance through the receiving service.
 
-    ``source_receipt_line`` is a PROTECT OneToOne, so a batch can't exist without
-    a backing receipt line. We stand up just enough of the purchasing graph and
-    write the batch directly so each test controls the expiry date and order.
+    The cohort used to be one row with its quantity welded on; since the split
+    it is an identity plus one balance per place, so a fixture has to make both.
+    It still goes through the purchasing graph because that is where an expiry
+    cohort comes from, and because ``receipt_line_lot_code`` keys the generated
+    code on the receipt line.
     """
     qty = Decimal(quantity)
     order = PurchaseOrder.objects.create(supplier=supplier)
@@ -86,19 +96,50 @@ def _make_batch(*, variant, days, quantity, supplier, created_offset_seconds=0):
         accepted_quantity=int(qty),
         expiry_date=timezone.localdate() + timedelta(days=days),
     )
-    batch = StockBatch.objects.create(
-        variant=variant,
-        source_receipt_line=receipt_line,
+    batch = create_expiring_stock_batch(
+        receipt_line=receipt_line,
         expiry_date=receipt_line.expiry_date,
-        received_quantity=qty,
-        remaining_quantity=qty,
+        quantity=qty,
     )
+    if batch is None:
+        # The product does not track expiry — the stray-cohort case one test
+        # needs. Write the identity and the balance directly.
+        code = receipt_line_lot_code(receipt_line)
+        batch = StockBatch.objects.create(
+            variant=variant, code=code, code_is_generated=True,
+            expiry_date=receipt_line.expiry_date,
+        )
+        StockBatchBalance.objects.create(
+            batch=batch,
+            warehouse_id=Warehouse.default_id(),
+            variant=variant,
+            received_quantity=qty,
+            remaining_quantity=qty,
+            expiry_date=batch.expiry_date,
+            first_received_at=timezone.now(),
+        )
     if created_offset_seconds:
+        offset = timedelta(seconds=created_offset_seconds)
         StockBatch.objects.filter(pk=batch.pk).update(
-            created_at=batch.created_at + timedelta(seconds=created_offset_seconds)
+            created_at=batch.created_at + offset
+        )
+        StockBatchBalance.objects.filter(batch=batch).update(
+            first_received_at=timezone.now() + offset
         )
         batch.refresh_from_db()
     return batch
+
+
+def _remaining(batch):
+    """What is left of this lot, wherever it sits.
+
+    ``batch.remaining_quantity`` used to answer this; the quantity now lives on
+    the balances, one per place, and the lot's own total is their sum.
+    """
+    return sum(
+        (balance.remaining_quantity for balance in batch.balances.all()),
+        Decimal("0"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -127,8 +168,8 @@ class ExpiryFifoTests(TestCase):
         earlier.refresh_from_db()
         later.refresh_from_db()
         # Earlier-expiry batch is drained before the later one is touched.
-        self.assertEqual(earlier.remaining_quantity, Decimal("1"))
-        self.assertEqual(later.remaining_quantity, Decimal("5"))
+        self.assertEqual(_remaining(earlier), Decimal("1"))
+        self.assertEqual(_remaining(later), Decimal("5"))
 
     def test_consumption_spanning_two_batches_partially_consumes_second(self):
         earlier = _make_batch(
@@ -144,8 +185,8 @@ class ExpiryFifoTests(TestCase):
         self.assertEqual(consumed, Decimal("4"))
         earlier.refresh_from_db()
         later.refresh_from_db()
-        self.assertEqual(earlier.remaining_quantity, Decimal("0"))
-        self.assertEqual(later.remaining_quantity, Decimal("4"))
+        self.assertEqual(_remaining(earlier), Decimal("0"))
+        self.assertEqual(_remaining(later), Decimal("4"))
 
     def test_consuming_more_than_available_drains_all_and_returns_actual(self):
         # Demand exceeds total stock: every batch empties and the return value is
@@ -162,8 +203,8 @@ class ExpiryFifoTests(TestCase):
         self.assertEqual(consumed, Decimal("5"))
         first.refresh_from_db()
         second.refresh_from_db()
-        self.assertEqual(first.remaining_quantity, Decimal("0"))
-        self.assertEqual(second.remaining_quantity, Decimal("0"))
+        self.assertEqual(_remaining(first), Decimal("0"))
+        self.assertEqual(_remaining(second), Decimal("0"))
 
     def test_same_expiry_breaks_tie_by_created_at(self):
         # Two batches expiring the same day: the one created first is consumed
@@ -187,8 +228,8 @@ class ExpiryFifoTests(TestCase):
         self.assertEqual(consumed, Decimal("4"))
         older.refresh_from_db()
         newer.refresh_from_db()
-        self.assertEqual(older.remaining_quantity, Decimal("0"))
-        self.assertEqual(newer.remaining_quantity, Decimal("4"))
+        self.assertEqual(_remaining(older), Decimal("0"))
+        self.assertEqual(_remaining(newer), Decimal("4"))
 
     def test_non_expiry_product_is_a_noop(self):
         plain = _expiring_product(sku="CAN", tracks_expiry=False)
@@ -202,7 +243,7 @@ class ExpiryFifoTests(TestCase):
 
         self.assertEqual(consumed, 0)
         batch.refresh_from_db()
-        self.assertEqual(batch.remaining_quantity, Decimal("5"))
+        self.assertEqual(_remaining(batch), Decimal("5"))
 
     def test_non_positive_quantity_is_a_noop(self):
         batch = _make_batch(
@@ -219,7 +260,7 @@ class ExpiryFifoTests(TestCase):
             0,
         )
         batch.refresh_from_db()
-        self.assertEqual(batch.remaining_quantity, Decimal("5"))
+        self.assertEqual(_remaining(batch), Decimal("5"))
 
 
 # ---------------------------------------------------------------------------

@@ -192,3 +192,61 @@ class MoneyDateRegistryTests(TestCase):
             "A report builder hand-rolled a period boundary; use in_period() "
             f"or in_window(). Offenders: {offenders}",
         )
+
+
+class IdentifiedStockCostTests(SimpleTestCase):
+    """What an identified article is worth to the shop has one definition.
+
+    ``incoming_rate + refurb_cost`` is the number the loss guard compares an
+    asking price against, the number the bin sums, and the number a sale's COGS
+    is taken from. Written out a second time, it becomes the number one of those
+    three disagrees about — and a used-goods trader who buys at 1200, spends 150
+    on a screen and sells at 1300 finds out from an accountant rather than from
+    the guard that was supposed to stop it.
+
+    The one definition is ``StockUnit.stock_value``, which also carries the
+    consignment rule: goods the shop holds but does not own are worth nothing to
+    it, whatever they cost the person who brought them in.
+    """
+
+    ALLOWED = {
+        # The definition itself.
+        "apps/inventory/models.py",
+        # The independent oracle, which must model this *without* importing the
+        # backend's expression — an oracle that inherits the code it checks
+        # proves nothing (.ai/oracle.md).
+        "apps/sales/business_simulation.py",
+    }
+
+    def test_no_surface_restates_what_a_unit_is_worth(self):
+        offenders = _offending_files(
+            r"incoming_rate\s*\+\s*[\w.]*refurb_cost"
+            r"|refurb_cost\s*\+\s*[\w.]*incoming_rate"
+            r'|F\("incoming_rate"\)\s*\+\s*F\("refurb_cost"\)',
+            self.ALLOWED,
+        )
+        self.assertEqual(
+            offenders,
+            {},
+            "The cost of an identified article is StockUnit.stock_value. "
+            f"Offending lines: {offenders}",
+        )
+
+    def test_no_surface_restates_a_lot_balance_value(self):
+        """``remaining_quantity x incoming_rate`` is ``StockBatchBalance.stock_value``."""
+        offenders = _offending_files(
+            r"remaining_quantity\s*\*\s*[\w.]*incoming_rate"
+            r"|incoming_rate\s*\*\s*[\w.]*remaining_quantity",
+            self.ALLOWED
+            | {
+                # The integrity checks read the property; the migration predates
+                # it and must keep working when the model changes shape.
+                "apps/inventory/integrity.py",
+            },
+        )
+        self.assertEqual(
+            offenders,
+            {},
+            "What a lot balance is worth is StockBatchBalance.stock_value. "
+            f"Offending lines: {offenders}",
+        )

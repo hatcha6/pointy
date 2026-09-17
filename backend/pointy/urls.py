@@ -117,6 +117,7 @@ from apps.core.relay_views import (
     RelayInstallationView,
     RelayPairingView,
 )
+from apps.inventory.tracked_views import StockBatchViewSet, StockUnitViewSet
 from apps.inventory.views import (
     StockCountViewSet,
     StockItemViewSet,
@@ -190,6 +191,8 @@ router.register("stock-movements", StockMovementViewSet)
 router.register("stock-counts", StockCountViewSet, basename="stock-count")
 router.register("warehouses", WarehouseViewSet, basename="warehouse")
 router.register("stock-transfers", StockTransferViewSet, basename="stock-transfer")
+router.register("stock-units", StockUnitViewSet, basename="stock-unit")
+router.register("stock-batches", StockBatchViewSet, basename="stock-batch")
 router.register("orders", OrderViewSet)
 router.register("fraud-findings", FraudFindingViewSet, basename="fraud-finding")
 router.register("customers", CustomerViewSet)

@@ -18,11 +18,15 @@ from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountRule
 from apps.inventory.models import (
     StockBatch,
+    StockBatchBalance,
     StockItem,
     StockMovement,
     StockValuationBin,
 )
-from apps.inventory.services import consume_expiring_stock_batches
+from apps.inventory.services import (
+    consume_expiring_stock_batches,
+    receipt_line_lot_code,
+)
 from apps.documents.statuses import DocumentStatus
 
 from .models import (
@@ -1968,11 +1972,15 @@ class PurchaseOrderApiTests(TestCase):
         receipt_line = PurchaseReceipt.objects.get(
             purchase_order=order,
         ).lines.get()
-        batch = StockBatch.objects.get(source_receipt_line=receipt_line)
+        batch = StockBatch.objects.get(code=receipt_line_lot_code(receipt_line))
         self.assertEqual(batch.variant, self.variant)
         self.assertEqual(batch.expiry_date, expiry_date)
-        self.assertEqual(batch.received_quantity, 4)
-        self.assertEqual(batch.remaining_quantity, 4)
+        # The quantity lives on the balance now: one lot, one row per place.
+        balance = batch.balances.get()
+        self.assertEqual(balance.warehouse_id, order.warehouse_id)
+        self.assertEqual(balance.received_quantity, 4)
+        self.assertEqual(balance.remaining_quantity, 4)
+        self.assertTrue(batch.code_is_generated)
         self.assertEqual(
             response.data["receipts"][0]["lines"][0]["expiry_date"],
             expiry_date.isoformat(),
@@ -2005,15 +2013,17 @@ class PurchaseOrderApiTests(TestCase):
                 {"line": second_line, "accepted_quantity": 5},
             ],
         )
-        batches = list(StockBatch.objects.order_by("expiry_date"))
+        balances = list(
+            StockBatchBalance.objects.order_by("expiry_date", "id")
+        )
 
         consumed = consume_expiring_stock_batches(variant=self.variant, quantity=4)
 
         self.assertEqual(consumed, 4)
-        batches[0].refresh_from_db()
-        batches[1].refresh_from_db()
-        self.assertEqual(batches[0].remaining_quantity, 0)
-        self.assertEqual(batches[1].remaining_quantity, 4)
+        balances[0].refresh_from_db()
+        balances[1].refresh_from_db()
+        self.assertEqual(balances[0].remaining_quantity, 0)
+        self.assertEqual(balances[1].remaining_quantity, 4)
 
     def test_receive_revalidates_stale_line_quantity_before_stocking(self):
         stock_item = StockItem.objects.create(variant=self.variant, quantity_on_hand=0)

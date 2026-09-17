@@ -49,6 +49,20 @@ PERMISSION_CATALOG = [
             _perm("inventory.add_stockmovement", "تسجيل حركات المخزون", "إجراء تسويات وحركات يدوية للمخزون."),
             _perm("inventory.add_stockcount", "إجراء الجرد", "بدء وتسجيل عمليات الجرد."),
             _perm("inventory.apply_stockcount", "اعتماد الجرد", "تطبيق فروقات الجرد على المخزون."),
+            _perm("inventory.view_stockunit", "عرض الأجهزة المسلسلة", "الاطلاع على الوحدات المعرّفة بأرقام تسلسلية أو IMEI."),
+            _perm("inventory.add_stockunit", "تسجيل أجهزة جديدة", "إدخال معرّفات الوحدات عند الاستلام أو الشراء من العميل."),
+            _perm("inventory.change_stockunit", "تعديل بيانات الجهاز", "تعديل الملاحظات والخصائص وحالة الوحدة."),
+            _perm("inventory.reprice_stockunit", "تعديل سعر الجهاز", "تحديد سعر بيع خاص بوحدة معيّنة."),
+            _perm("inventory.write_off_stockunit", "شطب جهاز (فقد / تلف)", "إخراج وحدة من المخزون لفقدها أو تلفها."),
+            # The first field-level cost mask in the codebase, and a real need:
+            # a used-goods shop does not show its counter staff what it paid the
+            # walk-in seller.
+            _perm("inventory.view_stockunit_cost", "عرض تكلفة الجهاز", "الاطلاع على تكلفة شراء الوحدة وتكاليف الإصلاح."),
+            _perm("inventory.view_stockbatch", "عرض الدفعات وتواريخ الصلاحية", "الاطلاع على دفعات الإنتاج وأرصدتها وصلاحياتها."),
+            _perm("inventory.manage_batches", "إدارة الدفعات", "إنشاء الدفعات وتعديل بياناتها وتواريخ صلاحيتها."),
+            _perm("inventory.adjust_batch_balance", "تعديل رصيد دفعة", "تعديل كمية دفعة داخل مستودع معيّن."),
+            _perm("inventory.quarantine_batch", "حجر الدفعة وتفعيل أمر الاستدعاء", "إيقاف بيع دفعة في كل الفروع فورًا."),
+            _perm("inventory.override_expired_batch_sale", "تجاوز حظر بيع الدفعات منتهية الصلاحية", "السماح ببيع دفعة انتهت صلاحيتها."),
         ],
     },
     {

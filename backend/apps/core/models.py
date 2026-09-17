@@ -184,6 +184,32 @@ class ShopSettings(TimeStampedModel):
     # ``allow_overselling`` on) can switch this off so checkout completes without
     # the per-sale prompt. On by default, so the warning is opt-out.
     warn_low_stock_before_sale = models.BooleanField(default=True)
+    # --- identified stock (serials, lots) --------------------------------
+    # Both off by default, and that default is the feature's whole contract: a
+    # shop that sells Coca-Cola must not be able to tell that serialization and
+    # batch tracking shipped. These gate the *surfaces*; the per-product
+    # ``tracking_mode`` is what actually decides how a product behaves, and it
+    # is set per product because the same pharmacy sells serialised imports and
+    # anonymous local stock out of one catalog.
+    enable_serialized_inventory = models.BooleanField(default=False)
+    enable_batch_tracking = models.BooleanField(default=False)
+    # A truck arrives at six in the evening and nobody is going to scan forty
+    # boxes before closing. Off by default, because an identifier captured later
+    # is an identifier often not captured at all.
+    serialized_capture_later_allowed = models.BooleanField(default=False)
+    # Selling an identified article to a named customer registers it as their
+    # asset, so the handset we sold arrives for repair already knowing its own
+    # history. A walk-in cash sale creates nothing and still records the sale.
+    serialized_require_customer_for_asset = models.BooleanField(default=True)
+    # The shop-wide floor under ``Product.prevent_selling_expired``. A product
+    # may be stricter than the shop; it may not be laxer.
+    prevent_selling_expired_batches = models.BooleanField(default=True)
+    batch_auto_pick_strategy = models.CharField(
+        max_length=16,
+        choices=[("fefo", "First expiring, first out"), ("fifo", "First in, first out")],
+        default="fefo",
+    )
+    default_expiry_warning_days = models.PositiveIntegerField(default=30)
     # Stock-count variance review thresholds. A counted line is flagged for
     # review only when the gap is at least ``min_units`` AND at least
     # ``percent`` of the expected quantity (see apps.inventory.services).
@@ -449,17 +475,25 @@ SHOP_TYPE_PRESETS = {
         "allow_overselling": False,
         "prevent_selling_at_loss": True,
         "low_stock_threshold": 10,
+        "enable_batch_tracking": True,
     },
+    # A pharmacy's shelves are lots and expiry dates before they are anything
+    # else, so this is the one preset that turns batch tracking on by itself.
     ShopSettings.ShopType.PHARMACY: {
         "enable_kitchen_operations": False,
         "enable_repair_operations": False,
         "allow_overselling": False,
         "prevent_selling_at_loss": True,
+        "enable_batch_tracking": True,
+        "prevent_selling_expired_batches": True,
     },
+    # A phone shop already tracks the customer's handset by IMEI at intake;
+    # this is what lets it track its own.
     ShopSettings.ShopType.PHONE_REPAIR: {
         "enable_repair_operations": True,
         "enable_job_tracking": True,
         "enable_kitchen_operations": False,
+        "enable_serialized_inventory": True,
     },
     # A workshop is a repair shop whose items are cars: same job engine, same
     # settlement gate, different identity fields at intake (the client picks
@@ -470,6 +504,7 @@ SHOP_TYPE_PRESETS = {
         "enable_job_tracking": True,
         "enable_kitchen_operations": False,
         "enable_production_operations": False,
+        "enable_serialized_inventory": True,
     },
     ShopSettings.ShopType.BAKERY: {
         "enable_kitchen_operations": True,

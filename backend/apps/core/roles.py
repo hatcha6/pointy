@@ -133,6 +133,11 @@ CASHIER_PERMISSION_CODES = (
     "inventory.view_stockcount",
     "inventory.add_stockcount",
     "inventory.change_stockcount",
+    # A till has to see which handset it is selling and which lot it is picking
+    # from. It does not see what either cost — that is a used-goods norm, and
+    # easier to grant later than to claw back.
+    "inventory.view_stockunit",
+    "inventory.view_stockbatch",
     "sales.add_order",
     "sales.view_order",
     "sales.add_registersession",
@@ -319,6 +324,12 @@ SUPERVISOR_PERMISSION_CODES = (
     "inventory.add_stockcount",
     "inventory.change_stockcount",
     "inventory.apply_stockcount",
+    "inventory.view_stockunit",
+    "inventory.add_stockunit",
+    "inventory.change_stockunit",
+    "inventory.view_stockbatch",
+    "inventory.manage_batches",
+    "inventory.adjust_batch_balance",
     # Receiving stock against purchase orders.
     "purchasing.view_purchaseorder",
     "purchasing.receive_purchaseorder",
@@ -366,6 +377,12 @@ INVENTORY_CLERK_PERMISSION_CODES = (
     "inventory.add_stockcount",
     "inventory.change_stockcount",
     "inventory.apply_stockcount",
+    "inventory.view_stockunit",
+    "inventory.add_stockunit",
+    "inventory.change_stockunit",
+    "inventory.view_stockbatch",
+    "inventory.manage_batches",
+    "inventory.adjust_batch_balance",
     "purchasing.view_purchaseorder",
     "purchasing.receive_purchaseorder",
     "purchasing.view_supplier",
@@ -390,6 +407,12 @@ PURCHASING_AGENT_PERMISSION_CODES = (
     "purchasing.cancel_purchaseorder",
     "purchasing.add_pos_cash_purchase",
     "purchasing.view_supplierpayment",
+    # A buyer captures identifiers where the goods are — at the receiving bay —
+    # so receiving a serialized or lot-tracked delivery is part of the job.
+    "inventory.view_stockunit",
+    "inventory.add_stockunit",
+    "inventory.view_stockbatch",
+    "inventory.manage_batches",
     "inventory.view_stockitem",
     "inventory.view_warehouse",
     "inventory.view_stocktransfer",

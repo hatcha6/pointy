@@ -14,7 +14,13 @@ from rest_framework.test import APIClient, APITestCase
 from apps.analytics.models import AnalyticsEvent
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
-from apps.inventory.models import StockBatch, StockItem
+from apps.inventory.models import (
+    StockBatch,
+    StockBatchBalance,
+    StockItem,
+    Warehouse,
+)
+from apps.inventory.services import receipt_line_lot_code
 from apps.notifications import services as notification_services
 from apps.notifications.models import (
     BusinessNotification,
@@ -412,12 +418,21 @@ class BusinessNotificationApiTests(APITestCase):
             outstanding_after=0,
             expiry_date=purchase_line.expiry_date,
         )
-        StockBatch.objects.create(
+        batch = StockBatch.objects.create(
             variant=product.default_variant,
-            source_receipt_line=receipt_line,
+            code=receipt_line_lot_code(receipt_line),
+            code_is_generated=True,
             expiry_date=purchase_line.expiry_date,
+            supplier=order.supplier,
+        )
+        StockBatchBalance.objects.create(
+            batch=batch,
+            warehouse_id=Warehouse.default_id(),
+            variant=product.default_variant,
             received_quantity=5,
             remaining_quantity=5,
+            expiry_date=purchase_line.expiry_date,
+            first_received_at=timezone.now(),
         )
         client = APIClient()
         client.force_authenticate(user=self.manager)

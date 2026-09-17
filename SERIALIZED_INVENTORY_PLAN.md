@@ -1,29 +1,50 @@
-# Serialized Inventory (IMEI / Serial / VIN) — Architecture Plan
+# Serialized & Batch Inventory (IMEI / Serial / Lot / Expiry) — Architecture Plan
 
-**Date:** 2026-09-10
-**Status:** Proposed. Nothing built.
-**Roadmap slot:** Gap #13 of `ERPNEXT_BENCHMARK_PLAN.md` ("Serial-number tracking",
-sized M, ranked *Later*). This plan promotes it, and argues below why the ranking
-was wrong: it is not a repair-shop nicety, it is the **only** inventory model
-under which a used-goods trader's numbers can be correct at all.
+**Date:** 2026-09-10 (Expanded 2026-09-17, Phase A shipped 2026-09-17)
+**Status:** **Phase A shipped** — the shared allocation core and ledger are in
+`main`, backend only, no client (§15). Phases B–E remain proposed. Two things in
+this document were changed by building it, and both are marked **CORRECTED** or
+**DEFERRED** in place rather than quietly rewritten: the batch bin's treatment of
+a quarantined lot (§5.3) and landed-cost re-stamping on identified stock (§5.5).
+**Roadmap slot:** Promotes and unifies Gap #13 ("Serial-number tracking", sized M)
+and Gap #14 ("Batch & lot tracking with FEFO/expiry", sized M). This plan combines
+them because they share 80% of the underlying ledger allocation architecture,
+simultaneously unlocking high-value trades (phones, electronics, luxury, consignment)
+and date-sensitive trades (pharmacies, cosmetics, food/grocery, tyres, chemicals).
 **Mirrors inspected:** ERPNext `develop` (doctype JSON read, not recalled), Odoo's
-`stock.lot`, Shopify's absence of one.
+`stock.lot`, Shopify's absence of both.
 
 The whole plan is written against one constraint, and it is the one to re-read
 whenever a decision here looks arbitrary:
 
 > **A shop that sells Coca-Cola must not be able to tell that this shipped.**
 > Not one extra field on the product form, not one extra tap at the till, not
-> one extra query on checkout. Serialization is an *opt-in shape* for the
-> minority of products that have identity, living inside the same catalog,
+> one extra query on checkout. Serialization and batch tracking are *opt-in shapes*
+> for the products that need identity or cohort tracking, living inside the same catalog,
 > the same ledger, the same receipt and the same reports as everything else.
 
 And against one thesis:
 
-> **A serial number is not a label on a sale. It is a costed, located, dated
-> object with a life.** Everything correct about this feature follows from
+> **A serial number or a batch code is not a text label on a sale. It is a costed, located, dated
+> object or cohort with a life.** Everything correct about this feature follows from
 > treating it as one; every bug ERPNext has shipped in this area follows from
 > the times they didn't.
+>
+> - A **Serial Number** (`StockUnit`) is an identified article with **quantity = 1**
+>   (individual life, condition, price, refurb cost, customer asset, consignment).
+> - A **Batch / Lot** (`StockBatch`) is an identified cohort — a lot code, a
+>   supplier, an expiry, a recall exposure — and it is **not a quantity and not a
+>   place**. How much of it sits where is `StockBatchBalance`, one row per lot per
+>   warehouse (§4.7). One lot code means one lot, wherever its goods currently are.
+>
+> They **compose**: a pharmaceutical pack is a serial *inside* a lot, which is the
+> `serial_batch` mode of §4.2 and the shape GS1 healthcare has standardised on.
+> Both hang off `ProductVariant` and share the exact same ledger allocation row
+> (`StockAllocation`), which names a unit, a batch, or both. Implementing them
+> together gives Pointy a general traceability engine for the engineering cost of
+> one and a quarter, rather than a phone feature that needs surgery to become a
+> pharmacy feature.
+
 
 ---
 
@@ -88,15 +109,23 @@ again for generators. The layer that is missing is not phone-shaped. It is:
 
 The same object serves:
 
-| Trade | Identifier | Unit-specific facts |
+| Trade | Identifier | Unit-specific facts & features |
 |---|---|---|
-| Used phones | IMEI | battery health, grade, colour, box/no box |
-| Cars | VIN / chassis / plate | mileage, year, colour, keys |
-| Generators, inverters | serial | hours run, warranty start |
-| Jewellery | certificate no. | weight, purity |
-| Laptops, TVs, appliances | serial | condition, warranty |
-| Spare parts, tyres | DOT / batch | manufacture date |
-| Medicine, food | lot | expiry (we already do this, anonymously) |
+| Used phones & tablets | IMEI / Serial | battery health %, grade, storage, icloud/carrier lock, box & charger |
+| Cars & motorized vehicles | VIN / chassis / plate | mileage/odometer, year, colour, engine no, keys count, title status |
+| Generators, inverters & power | Serial | hours run, capacity/SOH %, output rating, manufacturer warranty |
+| Laptops, PCs & workstations | Serial / Service Tag | CPU, RAM, SSD/HDD size, GPU, battery cycles/health, charger included |
+| Cameras & photography gear | Serial | shutter count, sensor condition, included lens/cap/battery, grade |
+| Gaming consoles & handhelds | Serial | storage capacity, firmware version, controllers count, box included, ban status |
+| Luxury watches & fine jewellery | Case/Movement Serial or Cert No | weight (g), metal purity/karat, movement condition, original papers & box |
+| Designer handbags & luxury goods | Serial / NFC / Cert ID | grade, hardware wear, dust bag included, authenticity certificate |
+| Home appliances, TVs & audio | Serial | panel/lamp hours, screen size, stand/remote included, cosmetic grade |
+| Bicycles, E-bikes & scooters | Frame Serial | motor wattage, battery SOH %, odometer KM, frame size, charger included |
+| Power tools & equipment | Serial | voltage, brushless (bool), batteries count, charger included |
+| Spare parts, tyres | DOT lot **and** casing serial | tread depth (mm), manufacture week/year |
+| Consignment stock (any trade) | Serial / Code | consignor ID, agreed payout rate, reserve price |
+| Medicine, food | Lot / Batch | expiry date (anonymous or identified lot) |
+| Prescription pharmaceuticals | GTIN **+** lot **+** expiry **+** serial, in one GS1 DataMatrix | expiry, lot recall status, per-pack serial for verification |
 
 Pointy already sells into phone repair and car workshops — two of the three
 `ShopSettings.ShopType` values that exist for a reason
@@ -120,7 +149,8 @@ Half of this is paid for, and it is worth being precise about which half.
 - `StockItem(variant, warehouse)` quantity buckets, movements with
   before/after snapshots, reservations, transfers, blind stock count.
 - An anonymous expiry cohort, `StockBatch` (`backend/apps/inventory/models.py:174`) —
-  a batch in the accounting sense, with no code and no identity.
+  a batch in the accounting sense, with no code, no identity, no warehouse, and
+  its quantity welded to the row that should be its identity (§4.7 splits them).
 - A shop-editable registry of *kinds of identified thing*: `customers.AssetType`
   with `tracks_imei / tracks_vin / tracks_plate_number / tracks_engine_number /
   tracks_odometer / custom_identifier_label` (`backend/apps/customers/models.py:211`).
@@ -128,7 +158,12 @@ Half of this is paid for, and it is worth being precise about which half.
   (`catalog/identity.py`), document lifecycle with freeze/cancel/blockers,
   a scan-burst guard, label printing, an oracle harness.
 
-**Missing:** one table, and everything that has to know about it.
+**How this must behave toward everything above — every setting, every flag, every subsystem — is §18**, which is an audit of what is actually in the codebase rather than a recollection of it.
+
+**Missing:** three tables and one enum member — `StockUnit`, the balance that
+lets `StockBatch` become an identity, `StockAllocation`, and a `tracking_mode`
+that lets a serial and a lot describe the same pack — and everything that has to
+know about them.
 
 ---
 
@@ -396,12 +431,96 @@ help text, in Arabic:
 
 ```python
 class TrackingMode(models.TextChoices):
-    QUANTITY = "quantity", "Quantity only"     # default; today's behaviour
-    SERIAL   = "serial",   "Individually tracked"
-    BATCH    = "batch",    "Batch / lot"       # Phase D
+    QUANTITY     = "quantity",     "Quantity only"          # default; today's behaviour
+    BATCH        = "batch",        "Batch / lot tracked"    # lots, expiry, FEFO
+    SERIAL       = "serial",       "Individually tracked"   # units, IMEI, VIN
+    SERIAL_BATCH = "serial_batch", "Serialised within a lot"  # GS1 healthcare: lot AND serial
 
 tracking_mode = models.CharField(max_length=16, default=TrackingMode.QUANTITY, db_index=True)
+```
 
+**The fourth mode is the one that decides whether this is a phone feature or a
+traceability engine.** `serial | batch` as an exclusive choice is not a
+simplification, it is a wrong model of the world, and the world that proves it
+is pharmacy. A prescription pack under GS1 healthcare guidance carries, in one
+DataMatrix, a GTIN, a batch/lot, an expiry date *and* a unique serial — that is
+the shape EU FMD and US DSCSA verification are built on, and it is the shape a
+Libyan pharmacy's imported stock already arrives in whether or not we can read
+it. The same shape recurs well outside healthcare: a tyre has a DOT week-lot and
+a unique casing number, a battery has a production lot and a cell serial, an
+appliance has a manufacturing batch and a warranty serial.
+
+`StockUnit.batch` (§4.3) was already nullable, which is the hint that this mode
+was always latent in the design. Formalising it now costs one enum member and a
+handful of guards. Retrofitting it later means touching the allocation rules,
+the valuation branch, the bin definition, the POS resolver and the recall report
+at once, on a model whose shipped meaning was "a unit has no lot".
+
+| Mode | Identity objects | Quantity per identity | What the till resolves | Sold example |
+|---|---|---|---|---|
+| `quantity` | none | N | variant barcode | a can of Coke |
+| `batch` | `StockBatch` | N | variant barcode → FEFO lot | Amoxicillin 500mg |
+| `serial` | `StockUnit` | 1 | IMEI / serial scan | an iPhone 13 Pro |
+| `serial_batch` | `StockUnit` **inside** `StockBatch` | 1 | one GS1 DataMatrix → both | a serialised medicine pack |
+
+`serial_batch` is not a third code path. It is `serial`, with the unit's `batch`
+required instead of optional, and it inherits every serialized behaviour
+unchanged: quantity 1, per-unit cost, the picker, the concurrency lock, the
+identifier on the receipt. What the batch adds is the cohort facts a unit cannot
+carry alone — expiry, FEFO ordering, and a recall that can name the lot.
+
+**What decides the cost, so it is decided once.** In `serial_batch` the **unit**
+owns the money: `UNIT_COST` governs, and the unit's `incoming_rate` is stamped
+from its batch's landed rate at receipt. The batch supplies the number; the unit
+holds it. This is not a preference — §5.3 shows what happens if both sides are
+allowed to count.
+
+**Two kinds of product can never be tracked at all, and the form must refuse
+rather than let it happen.** `is_service` and `is_prepared` products are skipped
+wholesale by the stock engine — `record_sale_stock_movements` returns before
+allocating anything for them (`backend/apps/sales/services.py:843`) — so a
+serialized service would accept a unit at the till, print its identifier on the
+receipt and never move it out of stock. §16.6 says a haircut has no IMEI; this
+is where that becomes true:
+
+```python
+# Serializer AND Product.clean(), both, because the AI tools and the importer
+# are callers too (§18.3).
+tracking_mode != QUANTITY and (is_service or is_prepared)  →  refused
+```
+
+The refusal is symmetric and names whichever side moved: turning on
+`is_service` for a tracked product is refused and lists its units, exactly as
+`quantity → serial` is refused for a product with stock on hand.
+
+**Changing the mode is guarded, not free.** `quantity → serial` is allowed only
+when on-hand is zero, or through an explicit *opening identification* run that
+turns N anonymous units into N identified ones (§6.10). `serial → quantity` is
+refused while any unit is in stock. The same shape as the valuation-method
+guard in `ShopSettingsSerializer`, and for the same reason: it re-labels history.
+
+The two new transitions follow the same rule with one deliberate softening:
+
+- `batch → serial_batch` needs its existing stock identified, because a lot of
+  200 anonymous packs cannot become 200 serials by declaration. Opening
+  identification (§6.10), scoped to one batch at a time.
+- `serial → serial_batch` **grandfathers**: existing units keep `batch = NULL`
+  and appear on the missing-identifier worklist, while every new receipt
+  requires a lot. Refusing the transition until history is perfect would mean a
+  pharmacy that starts with serials can never adopt lots, which is the wrong
+  answer to a shop that is trying to get *more* correct.
+- `serial_batch → serial` is allowed freely; the lots simply stop being required.
+  Nothing is unsaid, and the allocations keep naming the batches they named.
+
+**On the name `quantity`.** The natural fourth-mode reading is `NONE`, and it is
+the better word in the abstract. It stays `quantity` because that is the value
+already shipping as the column default, because the product form renders it as a
+label a shopkeeper reads — *"كمية فقط"* is a description, *"لا شيء"* is an
+absence — and because the constraint at the top of this document is that a shop
+selling Coca-Cola never learns this feature exists. Renaming the default is the
+one change in this plan that every such shop would see.
+
+```python
 # What kind of thing this is, for identifier labels and unit attributes.
 # Reuses the shop-editable registry the workshop side already maintains.
 asset_type = models.ForeignKey("customers.AssetType", null=True, blank=True,
@@ -409,17 +528,46 @@ asset_type = models.ForeignKey("customers.AssetType", null=True, blank=True,
 
 # Warranty granted on sale, in days. 0 = none. Stamped onto the unit at sale.
 warranty_days = models.PositiveIntegerField(default=0)
+
+# GS1 identity, when the pack carries one. GTIN-14 resolves a scanned
+# DataMatrix to this variant before its lot and serial are read (§6.3).
+gtin = models.CharField(max_length=14, blank=True, db_index=True)   # on ProductVariant
+
+# Batch & Expiry Policy. Read when tracking_mode is batch or serial_batch —
+# and ONLY then. `tracks_expiry` is not a second gate beside this one: it
+# becomes a derived property of tracking_mode and its column drops at R3
+# (§18.4). Two flags governing one behaviour is how a shop's expiry tracking
+# stops without anyone noticing.
+shelf_life_days        = models.PositiveIntegerField(default=0)   # 0 = indefinite/none
+expiry_warning_days    = models.PositiveIntegerField(default=30)  # days before expiry to alert near-expiry
+auto_pick_strategy     = models.CharField(
+    max_length=16,
+    choices=[("fefo", "First Expiring, First Out"), ("fifo", "First In, First Out"), ("manual", "Manual select")],
+    default="fefo",
+)
+prevent_selling_expired = models.BooleanField(default=True)       # blocks POS checkout of expired batches
 ```
 
-On `Product`, next to `tracks_expiry`, `is_service` and `is_prepared`
+On `Product`, next to `is_service` and `is_prepared`
 (`backend/apps/catalog/models.py:110`) — those are already the flags that say
-"this thing behaves differently in the stock engine", and this is one more.
+"this thing behaves differently in the stock engine", and these govern cohort
+lifecycle. `tracks_expiry` used to be one of them and is absorbed here:
 
-**Changing the mode is guarded, not free.** `quantity → serial` is allowed only
-when on-hand is zero, or through an explicit *opening identification* run that
-turns N anonymous units into N identified ones (§6.10). `serial → quantity` is
-refused while any unit is in stock. The same shape as the valuation-method
-guard in `ShopSettingsSerializer`, and for the same reason: it re-labels history.
+```python
+@property
+def tracks_expiry(self) -> bool:
+    """Kept for every existing reader; the column drops at R3 (§18.4)."""
+    return self.tracking_mode in (TrackingMode.BATCH, TrackingMode.SERIAL_BATCH)
+```
+
+The R1 migration sets `tracking_mode = batch` on every product that had
+`tracks_expiry = True`, and turns its existing cohorts into identities with
+`code_is_generated = True` plus one balance each. Nothing the shop sees changes
+on that release — the same goods are still consumed earliest-expiry-first — but
+from then on there is one control on the product form instead of two, and a
+cohort that can carry a lot number the day someone types one. `gtin` is the exception: it belongs on `ProductVariant`, because a
+GTIN identifies a trade item at the level Pointy already calls a variant — the
+500mg box, not the drug.
 
 ### 4.3 `inventory.StockUnit`
 
@@ -457,16 +605,31 @@ class StockUnit(TimeStampedModel):
     code            = CharField(max_length=120)          # as typed / scanned
     code_normalized = CharField(max_length=120, db_index=True, editable=False)
     identifier_kind = CharField(max_length=16, default="serial")  # imei|serial|vin|plate|custom
-    secondary_code  = CharField(max_length=120, blank=True)   # dual-SIM IMEI2, engine no.
-    supplier_code   = CharField(max_length=120, blank=True)   # what the supplier called it
+    secondary_code            = CharField(max_length=120, blank=True)   # dual-SIM IMEI2, engine no, MAC, frame no.
+    secondary_code_normalized = CharField(max_length=120, db_index=True, editable=False, blank=True)
+    supplier_code             = CharField(max_length=120, blank=True)   # what the supplier called it
 
     status = CharField(max_length=16, choices=Status.choices, default=Status.IN_STOCK, db_index=True)
 
-    # --- money (all base currency, all per base unit) --------------------
-    incoming_rate = DecimalField(18, 6, default=0)   # what this unit cost, landed
-    refurb_cost   = DecimalField(18, 6, default=0)   # capitalised from repair jobs
-    list_price    = DecimalField(10, 2, null=True, blank=True)   # this unit's asking price
-    sold_price    = DecimalField(10, 2, null=True, blank=True)   # what it actually fetched
+    # --- money & consignment (all base currency, all per base unit) -----
+    incoming_rate  = DecimalField(18, 6, default=0)   # what this unit cost, landed
+    refurb_cost    = DecimalField(18, 6, default=0)   # capitalised from repair jobs
+    list_price     = DecimalField(10, 2, null=True, blank=True)   # this unit's asking price
+    sold_price     = DecimalField(10, 2, null=True, blank=True)   # what it actually fetched
+
+    # Consignment (الأمانات). Terms live on the agreement (§5.8); everything
+    # below is either a per-unit override (null = inherit) or a fact only this
+    # article can carry.
+    is_consignment           = BooleanField(default=False)      # sold on behalf of customer
+    agreement                = FK("inventory.ConsignmentAgreement", PROTECT, null=True, blank=True, related_name="units")
+    consignor                = FK("customers.Customer", SET_NULL, null=True, blank=True, related_name="consignment_units")
+    declared_value           = DecimalField(10, 2, null=True, blank=True)   # agreed worth for custody & claims
+    consignor_payout_mode    = CharField(max_length=16, choices=["fixed", "commission"], null=True, blank=True)
+    consignor_payout_rate    = DecimalField(10, 2, null=True, blank=True)   # fixed payout (e.g. 1000.00 LYD)
+    consignor_commission_pct = DecimalField(5, 2, null=True, blank=True)   # commission % (e.g. 15.00%)
+    consignor_reserve_price  = DecimalField(10, 2, null=True, blank=True)   # floor price below which till cannot sell
+    consignor_paid_at        = DateTimeField(null=True, blank=True)          # when payout was disbursed
+    consignor_payment_ref    = CharField(max_length=64, blank=True)          # register pay-out voucher reference
 
     # --- provenance ------------------------------------------------------
     purchase_line        = FK("purchasing.PurchaseLine", SET_NULL, null=True, blank=True)
@@ -474,16 +637,21 @@ class StockUnit(TimeStampedModel):
     supplier             = FK("purchasing.Supplier", SET_NULL, null=True, blank=True)
     acquired_at          = DateTimeField(null=True, blank=True)
     in_stock_since       = DateTimeField(null=True, blank=True)   # resets on return; drives aging
+    supplier_warranty_expires_on = DateField(null=True, blank=True) # inward factory/supplier warranty
 
     # --- disposal --------------------------------------------------------
-    sold_order_line = FK("sales.OrderLine", SET_NULL, null=True, blank=True, related_name="stock_units")
-    sold_at         = DateTimeField(null=True, blank=True)
-    customer        = FK("customers.Customer", SET_NULL, null=True, blank=True)
-    asset           = FK("customers.Asset", SET_NULL, null=True, blank=True)   # §4.8
-    warranty_expires_on = DateField(null=True, blank=True)
+    sold_order_line     = FK("sales.OrderLine", SET_NULL, null=True, blank=True, related_name="stock_units")
+    sold_at             = DateTimeField(null=True, blank=True)
+    customer            = FK("customers.Customer", SET_NULL, null=True, blank=True)
+    asset               = FK("customers.Asset", SET_NULL, null=True, blank=True)   # §4.8
+    warranty_expires_on = DateField(null=True, blank=True) # outward shop customer warranty
+
 
     # --- the rest --------------------------------------------------------
-    batch      = FK(StockBatch, SET_NULL, null=True, blank=True)   # a serial may sit in a batch
+    # The lot this article was born in. Optional under `serial`, **required**
+    # under `serial_batch` (§4.2) — a serialised medicine pack is a unit inside
+    # a cohort, and both facts travel on the same allocation row.
+    batch      = FK(StockBatch, PROTECT, null=True, blank=True, related_name="units")
     attributes = JSONField(default=dict, blank=True)               # §4.5
     notes      = TextField(blank=True)
     attachments = GenericRelation("attachments.Attachment", ...)   # photos, condition report
@@ -500,6 +668,7 @@ Two absences are deliberate:
 
 ```python
 code_normalized = strip whitespace, dashes, dots; upper-case; NFKC
+secondary_code_normalized = strip whitespace, dashes, dots; upper-case; NFKC (when present)
 ```
 
 Constraints:
@@ -508,15 +677,17 @@ Constraints:
 UniqueConstraint(fields=["code_normalized"],
                  condition=Q(status__in=["expected", "in_stock", "reserved", "in_transit"]),
                  name="stock_unit_live_code_unique")
-Index(fields=["code_normalized"])                     # history lookups
+Index(fields=["code_normalized"])                     # history lookups (primary identifier)
+Index(fields=["secondary_code_normalized"])           # dual-SIM IMEI2, MAC address, engine no. lookups
 Index(fields=["variant", "status", "in_stock_since"]) # the picker's query
 Index(fields=["status", "warehouse", "variant"])      # bin reconciliation
 GinIndex(fields=["attributes"])                       # attribute filters
 ```
 
 The partial unique index is the whole design in one line: **one live unit per
-identifier, unlimited history per identifier.** A phone sold and traded back in
-is two rows with the same `code_normalized`, at most one of them live.
+primary identifier, unlimited history per identifier.** A phone sold and traded back in
+is two rows with the same `code_normalized`, at most one of them live. Barcode resolution
+(`resolveBarcode`) searches both `code_normalized` and `secondary_code_normalized`.
 
 **Validation by identifier kind**, offered as a warning rather than a wall — the
 same posture as `purchase-cost-guard`, and for the same reason: a guard that
@@ -571,14 +742,39 @@ write, GIN-indexed. Not EAV rows: one row per unit, one read, no join, and
 Postgres containment/range operators for the filters. Numbers are stored as
 numbers so `attributes->>'battery_health' >= 85` sorts and compares correctly.
 
-Seeded definitions ship with the seeded asset types, so a phone shop that picks
-`phone_repair` in the setup wizard gets battery health, grade (A/B/C/D), storage,
-box-and-accessories and network-lock without configuring anything — and can
-delete or add. A car workshop gets mileage, year, colour, keys, service history.
+**Seeded Attribute Templates by Asset Type**:
+
+Seeded definitions ship out-of-the-box with the setup wizard, so any merchant entering any used/serialized trade gets sensible condition, feature, and accessory fields pre-configured without defining schema by hand:
+
+- **Phones & Tablets (`phone_repair` / `mobile_trader`)**:
+  `battery_health` (percent), `condition_grade` (choice: A+ / A / B / C / For Parts), `icloud_carrier_lock` (choice: Unlocked / Locked), `box_and_accessories` (choice: Full Box / Phone Only / Charger Included).
+- **Computers & Laptops (`laptops_computers`)**:
+  `processor_cpu` (text), `ram_size_gb` (number), `storage_capacity` (text), `battery_cycle_count` (number), `gpu_graphics` (text), `charger_included` (bool), `condition_grade` (choice: Excellent / Good / Fair).
+- **Cameras & Photography (`cameras_photo`)**:
+  `shutter_count` (number), `sensor_condition` (choice: Clean / Minor Dust / Needs Service), `lens_included` (text/bool), `battery_charger_included` (bool), `cosmetic_grade` (choice: Mint / Near Mint / Used / Battered).
+- **Gaming Consoles (`gaming_consoles`)**:
+  `storage_gb` (number), `firmware_version` (text), `controller_count` (number), `original_box` (bool), `online_ban_status` (choice: Clean / Banned).
+- **Luxury Watches (`luxury_watches`)**:
+  `movement_condition` (choice: Running (+/- s/day) / Needs Service), `papers_certificate` (bool), `original_box` (bool), `manufacture_year` (number), `metal_purity` (text), `extra_links` (number).
+- **Fine Jewellery (`jewelry_precious`)**:
+  `certificate_number` (text), `metal_type` (choice: Gold / Silver / Platinum), `purity_karat` (choice: 18K / 21K / 22K / 24K / 925), `weight_grams` (number, suffix "g"), `stone_details` (text).
+- **Designer Goods & Handbags (`luxury_handbags`)**:
+  `authenticity_card` (bool), `dust_bag_included` (bool), `hardware_condition` (choice: Like New / Minor Scratches / Tarnished), `cosmetic_grade` (choice: Pristine / Very Good / Good / Fair).
+- **Home Appliances & TVs (`appliances_tv`)**:
+  `screen_size_inches` (number), `panel_lamp_hours` (number), `stand_remote_included` (bool), `cosmetic_condition` (choice: Like New / Minor Scratches / Dented).
+- **Bicycles & E-Bikes (`bicycles_ebikes`)**:
+  `frame_size` (choice: S / M / L / XL), `motor_wattage` (number, suffix "W"), `battery_soh_percent` (percent), `odometer_km` (number, suffix "km"), `charger_included` (bool).
+- **Power Tools (`power_tools`)**:
+  `voltage` (number, suffix "V"), `brushless` (bool), `batteries_included` (number), `charger_included` (bool).
+- **Cars & Vehicles (`car_workshop`)**:
+  `mileage` (number, suffix "km"), `year` (number), `colour` (text), `keys_count` (number), `title_status` (choice: Clean / Rebuilt).
+- **Generators & Power (`generators_power`)**:
+  `hours_run` (number, suffix "hrs"), `capacity_kva` (number, suffix "kVA"), `battery_soh` (percent).
 
 This *is* a slice of gap #11 (custom fields), delivered where it is genuinely
 needed and nowhere else. Say so in the roadmap; do not let it become the excuse
 to build the engine.
+
 
 ### 4.6 `inventory.StockAllocation` — the ledger join
 
@@ -623,36 +819,244 @@ Append-only, like the ledger it belongs to. A unit's whole life is
 `SELECT * FROM stock_allocation WHERE unit_id = ? ORDER BY posting_at` — which
 is the "where has this IMEI been" screen, in one query.
 
-### 4.7 What happens to `StockBatch`
+**The four modes, and what an allocation may name.** The table above needs no
+new column to carry `serial_batch`: two nullable FKs and a quantity were already
+the right shape, and the fourth mode is the case they were shaped for. What each
+mode requires is a rule, and rules that span three tables are stated once and
+enforced where they can be:
 
-`StockBatch` today is an anonymous expiry cohort keyed to a receipt line, with no
-code, consumed FIFO-by-expiry by `consume_expiring_stock_batches`. It is a real
-thing and it works; it is simply not *identified*.
-
-Phase D promotes it in place rather than replacing it:
-
-```python
-code              = CharField(max_length=120, blank=True)   # supplier's lot number
-code_normalized   = CharField(max_length=120, db_index=True)
-manufactured_on   = DateField(null=True, blank=True)
-supplier          = FK(Supplier, SET_NULL, null=True)
-incoming_rate     = DecimalField(18, 6, default=0)          # batch-wise valuation
-parent_batch      = FK("self", SET_NULL, null=True)         # splits
-attributes        = JSONField(default=dict, blank=True)
-# expiry_date becomes nullable: a lot without an expiry is still a lot
+```
+quantity      → neither unit nor batch  (no allocation row exists at all)
+batch         → batch only,   quantity = N
+serial        → unit only,    quantity = 1
+serial_batch  → unit AND batch, quantity = 1     ← one row, both identities
 ```
 
-and `source_receipt_line` loosens from `OneToOneField` to `ForeignKey`, because
-one delivery can arrive as three lots.
+The last line is the point. A serialised pack moving is **one** physical event
+and gets **one** allocation row, from which both bookkeepings follow: the unit's
+status flips and its batch's balance in that warehouse decrements. Two rows
+would be two movements, and they would eventually disagree.
 
-**Why not unify batch and unit into one table now?** Odoo does, and it is
+Two of the four rules the database holds by itself — the existing
+`stock_allocation_names_something` and `stock_allocation_unit_quantity_is_one`
+constraints already forbid an empty allocation and a unit with quantity ≠ 1.
+The other two reach through the allocation to the variant to the product's
+`tracking_mode`, which no check constraint can see. Denormalising the mode onto
+every allocation row to make it visible was considered and rejected: it is a
+column on the largest table in the feature, held for a rule that changes when a
+product's mode changes. So they are held the way §13 holds the rest — a service
+that is the only writer, and a guard test named after the failure it prevents:
+**a `serial_batch` unit written without a batch, or a `batch` allocation on a
+serialized variant.**
+
+### 4.7 What happens to `StockBatch`: identity, and balance, are two tables
+
+`StockBatch` today is an anonymous expiry cohort keyed one-to-one to a receipt
+line, with no code and no warehouse, consumed FIFO-by-expiry by
+`consume_expiring_stock_batches` (`backend/apps/inventory/services.py:297`). It
+is a real thing and it works; it is simply not *identified*, not *placed*, and —
+the part that matters most — **not separable from its own quantity.**
+
+That last one is the structural decision this section exists to make. Lot A
+arrives, 100 units, and ends up spread across three places:
+
+```
+Lot A — 100 units
+  Main store         60
+  Showroom           25
+  Branch #2          15
+```
+
+A warehouse-scoped batch table has to answer that with **three rows that all
+call themselves Lot A**, and from that moment the shop owns three lots, not one.
+Every downstream question gets worse: a recall must find and lock all three and
+has a window where the second branch is still selling; a transfer has to destroy
+quantity in one identity and create it in another, so the lot's history forks;
+the traceability report unions rows by string-matching a code; and genealogy —
+"where did Lot A go" — is a question about a thing that no longer exists as a
+single thing. The expiry date, the manufacturer, the GTIN and the recall status
+are all facts about **the lot**, and copying them per warehouse is copying facts
+that can then disagree.
+
+So the batch is the identity, and the balance is the where and the how much:
+
+```python
+class StockBatch(TimeStampedModel):
+    """The lot itself: what was made, by whom, when, and when it stops being good.
+
+    Never a quantity and never a place. ERPNext calls this ``Batch``; Odoo calls
+    it ``stock.lot``. One lot code means one lot, for the life of the shop,
+    wherever its goods currently sit.
+    """
+
+    class Status(models.TextChoices):
+        ACTIVE      = "active",      "Active"
+        QUARANTINED = "quarantined", "Quarantined"   # emergency recall / stop-sale
+        EXPIRED     = "expired",     "Expired"       # passed expiry date
+
+    variant = FK(ProductVariant, PROTECT, related_name="stock_batches")
+
+    # --- identity & dates -----------------------------------------------
+    code            = CharField(max_length=120)          # supplier's lot number or internal lot
+    code_normalized = CharField(max_length=120, db_index=True, editable=False)
+    code_is_generated = BooleanField(default=False)      # we invented it (migration, unlabelled goods)
+    gtin            = CharField(max_length=14, blank=True)   # as scanned, when the pack carries GS1 AI 01
+    barcode         = CharField(max_length=120, blank=True, db_index=True)   # GS1-128 / lot barcode
+    expiry_date     = DateField(null=True, blank=True, db_index=True)   # nullable: non-expiring lots exist
+    manufactured_on = DateField(null=True, blank=True)
+
+    status    = CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE, db_index=True)
+    is_locked = BooleanField(default=False)              # immediate recall stop-sale flag
+
+    # --- provenance & genealogy -----------------------------------------
+    supplier     = FK("purchasing.Supplier", SET_NULL, null=True, blank=True)
+    parent_batch = FK("self", SET_NULL, null=True, blank=True, related_name="sub_batches")
+
+    attributes = JSONField(default=dict, blank=True)     # potency %, DOT code, tile shade/dye lot
+    notes      = TextField(blank=True)
+
+    class Meta:
+        ordering = ["expiry_date", "created_at", "id"]
+        constraints = [
+            UniqueConstraint(fields=["variant", "code_normalized"],
+                             name="stock_batch_code_unique_per_variant"),
+        ]
+        indexes = [Index(["code_normalized"]), Index(["barcode"]), Index(["variant", "expiry_date"])]
+
+
+class StockBatchBalance(TimeStampedModel):
+    """How much of one lot is sitting in one place.
+
+    One row per (batch, warehouse), created on first arrival and kept for its
+    history afterwards — a depleted balance is not deleted, because "Lot A was
+    in Branch #2 and is not any more" is exactly the sentence a recall needs.
+    """
+
+    batch     = FK(StockBatch, PROTECT, related_name="balances")
+    warehouse = FK(Warehouse, PROTECT, related_name="batch_balances")
+    variant   = FK(ProductVariant, PROTECT)       # denormalised, always == batch.variant
+
+    received_quantity  = DecimalField(12, 3, default=0)   # cumulative into this place
+    remaining_quantity = DecimalField(12, 3, default=0)
+    incoming_rate      = DecimalField(18, 6, default=0)   # batch-wise landed cost, in this place
+
+    first_received_at  = DateTimeField(null=True, blank=True)   # FIFO tiebreak within a warehouse
+
+    # Denormalised from the batch so FEFO is one indexed scan and never a join.
+    # Written only by the batch's own save; see "the one denormalisation" below.
+    expiry_date = DateField(null=True, blank=True)
+    is_sellable = BooleanField(default=True)       # batch.status == active and not is_locked
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(fields=["batch", "warehouse"], name="stock_batch_balance_unique"),
+            CheckConstraint(condition=Q(remaining_quantity__gte=0), name="batch_balance_non_negative"),
+            CheckConstraint(condition=Q(remaining_quantity__lte=F("received_quantity")),
+                            name="batch_balance_remaining_lte_received"),
+        ]
+        indexes = [
+            # The FEFO query, entire: variant + warehouse + sellable, ordered by expiry.
+            Index(fields=["variant", "warehouse", "is_sellable", "expiry_date", "remaining_quantity"],
+                  name="batch_balance_fefo_idx"),
+            Index(fields=["batch", "remaining_quantity"]),   # "where is Lot A now"
+        ]
+```
+
+**One lot code always means one lot.** `UniqueConstraint(variant,
+code_normalized)` is the whole property, and it is the deliberate *opposite* of
+the serialized rule in §4.4. A serial's uniqueness is scoped to what is live,
+because the same handset legitimately comes back as a different article of
+stock. A lot's identity is permanent, because a second delivery of Lot A **is
+Lot A** — same factory run, same expiry, same recall exposure. So receiving a
+lot code that already exists is not a conflict: it finds the identity and adds
+to a balance. Receiving it with a *different expiry date* is a conflict, and it
+gets the structured 400 that `catalog/identity.py` established
+(`catalog-identity-conflicts`), because one of the two labels is wrong and a
+receiver holding the box can say which.
+
+**Status belongs to the lot; emptiness belongs to the place.** `QUARANTINED` and
+`EXPIRED` are facts about the lot everywhere at once, so they live on the
+identity and a recall is **one UPDATE**, not one per warehouse with a window
+between them where a branch is still selling. `DEPLETED` leaves the enum
+entirely: it was never a lifecycle state, only the observation that a number
+reached zero, and it is now `remaining_quantity == 0` on a balance — per place,
+derived, and unable to go stale.
+
+**Cost sits with the quantity.** `incoming_rate` is on the balance, because
+value is `quantity × rate` and quantity is here. In the ordinary case — one lot,
+one delivery, one warehouse — it is simply the landed cost and reads identically
+to a rate on the identity. It earns its place in the two cases that break a
+single rate: a lot delivered twice at different landed costs (the balance moves
+to the weighted average *within that lot and warehouse*, the same arithmetic the
+moving-average bin already does), and a transfer, which moves quantity out of
+one balance at its rate and into another. For reporting, "what did Lot A cost"
+is the value-weighted average across its balances — one definition, registered
+in the money guard like the rest.
+
+**`source_receipt_line` is removed, not loosened.** Today it is a `OneToOneField`
+and the earlier draft of this plan widened it to a `ForeignKey`. Both are wrong
+for the same reason §3.2 gives: a lot arriving in three deliveries has three
+provenances, and a column that can hold one of them is a column that will be
+read as though it held all of them. Provenance is the `in` allocations, which
+already carry voucher type, voucher id, warehouse, quantity and rate, and which
+the recall report already reads. The forward migration writes one `in`
+allocation per existing batch from the receipt line it points at, and then the
+column goes.
+
+**The one denormalisation, and the guard that holds it.** `expiry_date` and
+`is_sellable` are copied onto the balance so the FEFO lookup at the till is a
+single indexed scan of one table. This is a real cost — two columns that can
+diverge — and it is paid deliberately, because the alternative is a join on the
+checkout path and §11 makes a promise about that path that this plan does not
+get to quietly break. It is held the way this codebase holds such things:
+
+- `StockBatch.save` propagates both columns to its balances in one `UPDATE
+  ... WHERE batch_id = ?`, inside the same transaction. A lot has a handful of
+  balances, never thousands.
+- Quarantine and expiry sweeps go through that same path, so there is one way to
+  change them.
+- A guard test file (the shape `lifecycle-query-scaling` established) fails when
+  a new call site writes `status`, `is_locked` or `expiry_date` without the
+  propagation, and an integrity invariant (§5.4) asserts no balance disagrees
+  with its batch.
+
+**What this buys, stated as the operations it makes trivial:**
+
+| Operation | With one warehouse-scoped table | With identity + balance |
+|---|---|---|
+| Transfer 25 to the showroom | destroy in one "Lot A", create another | move a number between two balances; the lot is untouched |
+| Recall Lot A | find every row with that code, lock each | one `status` write, all branches at once |
+| "Where is Lot A?" | union rows by string-matching a code | `batch.balances.all()` |
+| Genealogy / sub-lots | parent links between warehouse rows | `parent_batch` on the identity, where it means something |
+| Expiry sweep | N rows per lot to update | one row per lot |
+| Same lot delivered twice | a second row, or a silent merge | one identity, one balance, a weighted rate |
+
+**Migration from today's table.** Each existing `StockBatch` row becomes one
+identity plus one balance in the shop's default warehouse (which is the only
+warehouse most shops have, and is exactly where that stock already implicitly
+was). `code` is backfilled as a deterministic internal string with
+`code_is_generated = True`, so the unique constraint is satisfiable and the UI
+can honestly render *«بدون رقم دفعة»* rather than a number nobody printed.
+`expiry_date` widens from `NOT NULL` to nullable, which is a safe direction.
+`consume_expiring_stock_batches` is rewritten against balances and gains the
+warehouse argument it always should have had — today it consumes a lot in Branch
+#2 to satisfy a sale in the main store, which is a bug the current model cannot
+express its way out of.
+
+**Why not unify batch and unit into one table?** Odoo does, and it is
 defensible. Two reasons not to: the serialized side needs per-unit price,
-photos, warranty and a customer, none of which a lot ever has, so a unified table
-is mostly-null for the majority row type; and `StockBatch` is on the checkout
-path today (`consume_expiring_stock_batches` runs inside
-`record_sale_stock_movements`). Destabilising that path twice — once for serials,
-once for a table merge — buys elegance and risks the till. Two tables, one
-allocation row type, one set of hooks. ERPNext's split, without their bundle.
+photos, warranty, customer asset bridge, and consignment payouts, none of which a
+lot ever has, so a unified table is mostly-null for the majority row type; and
+`StockBatch` is on the checkout path today (`consume_expiring_stock_batches` runs
+inside `record_sale_stock_movements`). Destabilising that path twice — once for
+serials, once for a table merge — buys elegance and risks the till. Two identity
+tables, one balance table, one allocation row type (`StockAllocation`), one set
+of hooks. ERPNext's split, without their bundle.
+
+And with `serial_batch` (§4.2), the two identity tables **compose** rather than
+compete: the unit is the article, the batch is the cohort it was born in, and
+the allocation row names both. Which is the answer to the question the unified
+table was trying to answer, without the nulls.
 
 ### 4.8 The bridge nobody else has: unit → `customers.Asset`
 
@@ -692,69 +1096,165 @@ This is the section to review hardest. Everything else is UI.
 ### 5.1 A fourth method, chosen by the product, not by the shop
 
 `apps/inventory/valuation.py` has moving average, FIFO and LIFO, all of which
-answer *"what did the queue give up?"*. A serialized issue does not consult a
-queue: the cost of the phone that left is the cost of **that phone**.
+answer *"what did the queue give up?"*. Neither a serialized unit nor an identified batch
+consults a queue: the cost is the cost of **that specific unit or cohort**.
 
 ```python
 class ValuationMethod(...):
     MOVING_AVERAGE, FIFO, LIFO,   # existing
-    UNIT_COST = "unit_cost", "Per-unit (serialized)"
+    UNIT_COST  = "unit_cost",  "Per-unit (serialized)"
+    BATCH_COST = "batch_cost", "Batch-wise (lot cohort)"
 ```
 
-`current_method()` gains one branch: a serialized variant is `UNIT_COST`
-regardless of `ShopSettings.inventory_valuation_method`. The shop's method still
-governs everything else it owns. There is no setting, and no way to ask for a
-blended cost on an item where a true cost exists — §3.4.
+`current_method()` gains two branches, and the fourth mode resolves to one of
+them rather than adding a third:
+- `serial` → `UNIT_COST`
+- `batch` → `BATCH_COST`
+- `serial_batch` → **`UNIT_COST`**, because the article is the thing that moved.
+  Its batch supplies the rate at receipt and then the unit carries it. There is
+  no `serial_batch` valuation method and there must not be one: two costed
+  identities for one physical object is how a variant ends up counted twice.
+
+All three hold regardless of `ShopSettings.inventory_valuation_method`. The shop's
+default method still governs everything else it owns. There is no configuration
+under which serialized or batch items use a blended guess — §3.4.
 
 ### 5.2 What each posting does
 
+**For Serialized Goods (`UNIT_COST`):**
 - **Receipt.** `unit.incoming_rate = receipt line's effective_unit_cost / unit_factor`
-  — landed-cost inclusive, normalised to base units. That division is not
-  optional and not obvious: pack costs are stored per pack, and dividing by
-  `unit_factor` at every base-unit read is the invariant that
-  `uom-cost-normalization` exists to enforce. Ledger entry: `quantity_change=+1`,
-  `valuation_rate = incoming_rate`, one `StockAllocation(direction=in)`.
+  — landed-cost inclusive, normalised to base units (`uom-cost-normalization`).
+  Ledger entry: `quantity_change=+1`, `valuation_rate = incoming_rate`, one `StockAllocation(direction=in, unit=unit)`.
 - **Issue.** `valuation_rate = unit.incoming_rate + unit.refurb_cost`,
   `value_change = -(that)`. One allocation per unit. `OrderLine.unit_cost` is
-  stamped from it by the existing `_stamp_ledger_cost_on_lines`
-  (`backend/apps/sales/services.py:952`) — which already exists to make gross
-  profit true, and which now becomes *exactly* true rather than approximately.
-- **Return from customer.** The unit returns at the rate it left at. Not the
-  current bin rate — a return valued at today's blended rate manufactures profit
-  or loss out of nothing, which is precisely the class of silent wrongness we
-  sell against.
+  stamped from it by `_stamp_ledger_cost_on_lines`.
+- **Return from customer.** The unit returns at the rate it left at.
 - **Write-off / damage.** Issue at the unit's own rate, `voucher_type=adjustment`.
+
+**For Batch Goods (`BATCH_COST`):** every rate below is the **balance's**, never
+the identity's — the lot has no cost, the lot-in-this-warehouse does (§4.7).
+
+- **Receipt.** The lot identity is found or created; the balance for
+  `(batch, warehouse)` is found or created; `balance.incoming_rate` is set to the
+  line's `effective_unit_cost / unit_factor`, or moved to the weighted average of
+  the old and new quantities when the lot has arrived here before.
+  Ledger entry: `quantity_change = +received`, `valuation_rate = balance.incoming_rate`,
+  one `StockAllocation(direction=in, batch=batch, quantity=received)` — the
+  allocation names the identity and carries the warehouse it already denormalises.
+- **Issue.** Allocated from the chosen balance (FEFO/manual).
+  `valuation_rate = balance.incoming_rate`,
+  `value_change = -(quantity * balance.incoming_rate)`.
+  `balance.remaining_quantity -= quantity`.
+- **Transfer.** The identity is untouched. Quantity leaves the source balance at
+  its rate and arrives at the destination balance, which re-weights its own rate
+  by the value that landed. This is the operation the old model could not express
+  without forking the lot.
+- **Return from customer.** Restocks to the original lot's balance in the
+  returning warehouse, at that balance's rate.
+- **Write-off / scrap (expired).** Issues from the expired balance at its own
+  rate, `voucher_type=adjustment`, to zero. Note *balance*: an expired lot is
+  scrapped in each place it sits, and each scrap is its own movement, because
+  each is a real event someone performed in a real room.
+
+**For Serialised-in-a-lot Goods (`serial_batch`, valued `UNIT_COST`):**
+- **Receipt.** The lot and its balance are created exactly as above, then each
+  unit is created with `unit.batch` set and
+  `unit.incoming_rate = balance.incoming_rate`. One allocation per unit, naming
+  **both**, quantity 1.
+- **Issue.** The serialized rule, unchanged: `valuation_rate = unit.incoming_rate
+  + unit.refurb_cost`. The allocation names both, so the lot's balance decrements
+  by 1 from the same row.
+- Everything else — returns, write-off, transfer, refurb — follows the serialized
+  path in the first list, with the batch riding along on the allocation.
 
 ### 5.3 The bin stays, and stays consistent
 
-`StockValuationBin` is not bypassed. For a serialized variant it becomes a
+`StockValuationBin` is not bypassed. For serialized and batch variants it becomes a
 **derived cache with a checkable definition**:
 
 ```
-bin.quantity      == COUNT(units WHERE status IN (in_stock, reserved) AND warehouse = w)
-bin.stock_value   == SUM(incoming_rate + refurb_cost) over those units
+# Serialized variant bin (serial):
+bin.quantity       == COUNT(units WHERE status IN (in_stock, reserved) AND warehouse = w)
+bin.stock_value    == SUM(incoming_rate + refurb_cost) over those units
 bin.valuation_rate == stock_value / quantity            (0 when quantity is 0)
-bin.method        == "unit_cost"
-bin.state         == []      # there is no queue; the units are the state
+bin.method         == "unit_cost"
+
+# Batch variant bin (batch) — over BALANCES in this warehouse, not lots:
+bin.quantity       == SUM(balance.remaining_quantity WHERE balance.warehouse = w)
+bin.stock_value    == SUM(balance.remaining_quantity * balance.incoming_rate)
+bin.valuation_rate == stock_value / quantity            (0 when quantity is 0)
+bin.method         == "batch_cost"
+
+# Serialised-in-a-lot variant bin (serial_batch) — the SERIALIZED bin, exactly.
+# The units are counted. The balances are NOT added to them.
+bin.quantity       == COUNT(units WHERE status IN (in_stock, reserved) AND warehouse = w)
+bin.stock_value    == SUM(incoming_rate + refurb_cost) over those units
+bin.method         == "unit_cost"
 ```
+
+**CORRECTED 2026-09-17 — a quarantined lot is still stock.** The second block
+first read `AND balance.batch.status = active`, and that clause cannot be right
+alongside §6.8.1, which says scrapping a recalled or expired lot is **its own
+movement**, in each place it sits. Both cannot hold: under the original wording,
+raising a recall would drop the shop's stock quantity and stock value with no
+movement to account for it, and the bin would disagree with its own ledger the
+moment anyone asked. Quarantine is a **stop-sale**, not a write-off — the goods
+are on the shelf and they are the shop's until somebody throws them away, and
+that act is the movement. Sellability gates *picking* (`is_sellable` on the
+balance, read by FEFO); it does not gate *counting*. Found by the oracle of
+§14.3 on its sixteenth operation, which is the argument for the oracle in one
+sentence.
+
+**The trap in the third block, stated so nobody has to find it in production.**
+Under `serial_batch` the same physical pack is represented twice — once as a
+`StockUnit`, once inside a `StockBatchBalance.remaining_quantity` — and a bin
+that adds both reports double the stock, double the value, and a shop that
+appears to be holding twice the medicine it has. So the rule is absolute:
+
+> For a `serial_batch` variant, **the units are the count** and
+> `StockBatchBalance.remaining_quantity` is a *derived mirror* of them:
+> `balance.remaining_quantity == COUNT(live units WHERE batch = b AND warehouse = w)`.
+> It is maintained because FEFO and the recall report read it, and it is never an
+> independent number.
+
+That equality goes into §5.4 as an invariant and into the oracle, because it is
+the kind of thing that stays true for a year and then quietly stops on the one
+code path that decremented a balance without moving a unit.
 
 Keeping the bin honest is what lets **every existing report keep working
 untouched**: stock value, margin, the loss guard, the accountant reports, the
-dashboard. Not one of them learns the word "serial".
+dashboard. Not one of them learns the words "serial" or "batch".
 
 ### 5.4 Invariants, stated so they can be tested
 
-For every serialized variant and every warehouse:
+For every serialized/batch variant and every warehouse:
 
-1. `StockItem.quantity_on_hand == COUNT(units in_stock ∪ reserved)`
+1. `StockItem.quantity_on_hand == COUNT(units in_stock ∪ reserved)` (serial and
+   serial_batch) OR `Σ(balance.remaining_quantity)` in that warehouse (batch) —
+   never both for the same variant
 2. `StockItem.quantity_committed == COUNT(units reserved)`
 3. `StockItem.quantity_expected == COUNT(units expected)`
-4. `bin.stock_value == Σ(incoming_rate + refurb_cost)` over in-stock units
-5. Every ledger entry on a serialized variant has allocations whose
-   `Σ quantity == |quantity_change|`
-6. No unit is allocated `out` twice without an intervening `in`
-7. `code_normalized` is unique among live units
-8. A unit's status agrees with the sign of its last allocation
+4. `bin.stock_value == Σ(unit value)` OR `Σ(batch remaining_quantity * incoming_rate)`
+5. Every ledger entry on a tracked variant has allocations whose `Σ quantity == |quantity_change|`
+6. No unit is allocated `out` twice without an intervening `in`; no batch quantity goes negative
+7. `code_normalized` is unique among live units / batches in the same warehouse
+8. A unit's or batch's status agrees with the sign of its last allocation
+9. `bin.stock_value` is blind to consignment and `bin.quantity` is not: a
+   consigned unit counts in quantity, contributes 0 to value, and is excluded
+   from the divisor of `valuation_rate` — §5.8
+10. Every consignment sale posts a `consignment_cost` entry whose `value_change`
+    equals the issue it precedes, so cumulative ledger value on a consigned
+    variant never goes negative — §5.8
+11. For a `serial_batch` variant,
+    `balance.remaining_quantity == COUNT(live units WHERE batch = b AND warehouse = w)`.
+    The pack is counted once — §5.3
+12. Every `StockBatchBalance` agrees with its batch on `expiry_date` and
+    `is_sellable`. The denormalisation of §4.7 never drifts
+13. A lot's identity is unique per variant, and the sum of its balances'
+    `remaining_quantity` equals its net allocated quantity across all warehouses —
+    one lot, one history, wherever it sits
+14. Allocation shape matches the product's mode: `batch` names a batch only,
+    `serial` a unit only, `serial_batch` both with quantity 1 — §4.6
 
 These go into `apps/inventory/test_inventory_integrity.py` next to the existing
 ones, and into the oracle (§14.3). Invariant 4 is the one that catches a wrong
@@ -767,8 +1267,24 @@ refurb capitalisation; invariant 5 is the one that catches an ERPNext #42997.
 `incoming_rate` and repost — otherwise the phone's cost is the invoice price and
 the freight vanishes into a bin the units no longer feed.
 
-Rule: **re-stamp units of any receipt line whose `allocated_landed_cost`
-changed, then `repost_variant`.** Units already sold are re-stamped too and the
+**DEFERRED 2026-09-17 — Phase A refuses instead.** Editing a received order in
+this codebase un-records the whole delivery and re-records it
+(`_reverse_received_stock` → `_rerecord_receiving`), which is exactly right for a
+quantity in a bin and exactly wrong for forty handsets: the identifiers were
+captured at the receiving bay, they are not in an edit payload, and the
+re-record would either refuse for want of them or invent a second set. So Phase
+A **refuses** a cost-basis edit on an order holding identified stock, with a
+structured error naming the units, and the correction that still works is a
+purchase return — which moves the articles it names. The rule below is what
+replaces that refusal, and it needs the receipt-line→unit linkage to survive the
+reverse/re-record rather than being rebuilt through it.
+
+Rule: **re-stamp the units, and the balances, of any receipt line whose
+`allocated_landed_cost` changed, then `repost_variant`.** For a lot this means
+the balance that receipt landed in — freight paid on a delivery into the main
+store does not re-cost the same lot's stock that was transferred to a branch
+before the invoice arrived; that stock left at the rate it left at, and the
+transfer's own allocation says so. Units already sold are re-stamped too and the
 repost corrects their COGS — which is what a repost is for. Units sold in a
 **locked period** (`ShopSettings.books_locked_through`) are refused with the
 existing period-lock error rather than silently re-costed.
@@ -799,10 +1315,265 @@ till:
 line price = unit.list_price  ?? variant unit price (incl. unit/carton pricing)
 ```
 
-The discount engine sees the resolved price and needs no knowledge of units. The
-one place that does need care is the **discount preview cache** — its key must
-include the unit id when a serialized line is present, or two different handsets
-of the same variant would share a cached preview (`discount-engine-perf`).
+The discount engine sees the resolved price and needs no knowledge of units. Two
+places do need care.
+
+The **discount preview cache** — its key must include the unit id when a
+serialized line is present, or two different handsets of the same variant would
+share a cached preview (`discount-engine-perf`).
+
+And the **pooled promotions**. Multi-buy, tiered and buy-X-get-Y gather whole
+units across every line a rule matches (`discounts/services.py:582`), so three
+one-unit handset lines do form a pool of three and "buy 2 get 1" works without
+any change — verified, not assumed. What is undefined once units carry their own
+prices is *which* unit the allocation lands on: giving away the 1,400 handset is
+a materially different transaction from giving away the 1,200. Rule: **the
+allocation lands on the cheapest units first**, which is what a customer expects
+of a free-item promotion and what a shop would choose anyway, and the loss guard
+(§5.6) is re-evaluated per unit *after* allocation rather than against the line's
+pre-discount price. Deterministic, defensible at the counter, and testable.
+
+### 5.8 Consignment: `incoming_rate = 0` is right, and it is one third of the truth
+
+§6.2.1 gives a consigned unit `incoming_rate = 0` at intake, and that is correct:
+the shop did not buy the watch, so the watch is worth nothing *to the shop*, and
+a bin that said otherwise would inflate stock value with other people's
+property. But three things become true the moment the customer hands it over,
+and a zero models only one of them.
+
+| What is true at intake | Modelled today | Where it belongs |
+|---|---|---|
+| The item is physically here, and sellable | `StockUnit.status = in_stock` | custody |
+| It adds nothing to stock value | `incoming_rate = 0` | valuation |
+| We owe its owner the item, or its money | **nothing at all** | liability |
+
+The third is not "nothing until it sells". Before the sale it is an obligation
+to *return the thing*; after the sale it is an obligation to *pay a number*.
+Only the form changes — the obligation runs unbroken from the moment the voucher
+is signed. A shop holding forty consigned watches is carrying an exposure that
+appears nowhere in Pointy, and the first time anyone asks how much of the money
+in the drawer is actually theirs, the honest answer today is that we cannot say.
+
+**We have no general ledger, and we still do not need one.**
+`apps/treasury/position.py` derives the shop's money position from the events
+that already exist rather than posting to accounts, and `Job.settlement_state`
+(`backend/apps/operations/models.py:267`) derives where a repair stands with
+money rather than storing it. Consignor liability follows the same rule:
+**derived, never posted.** A payable computed from the unit's own sale and its
+own payout row cannot drift from them, which is the entire failure mode of a
+posted balance. This is the `money-position-treasury` posture, and it is the
+reason this section adds two small documents and no accounts.
+
+**The agreement becomes a document, because we already print one.** §6.2.1 prints
+a formal *سند استلام أمانة* that both parties sign. A thing we print, number and
+sign should be a row with a lifecycle, not six columns on the object it covers —
+and a consignor who walks in with eight handbags signs one agreement, not eight.
+
+```python
+class ConsignmentAgreement(DocumentMixin, TimeStampedModel):
+    """The shop's promise about goods it holds but does not own.
+
+    Registered in ``apps.documents`` (draft → submitted → cancelled, freeze and
+    reversal per ``document-lifecycle``) with a gapless number from
+    ``documents/numbering.py``. Submitting it is what starts custody; cancelling
+    it is refused once any of its units has moved.
+    """
+
+    consignor        = FK("customers.Customer", PROTECT, related_name="consignment_agreements")
+    number           = CharField(max_length=32, unique=True)   # سند استلام أمانة رقم …
+    signed_at        = DateTimeField()
+    expires_on       = DateField(null=True, blank=True)   # goods to be collected by
+    notes            = TextField(blank=True)
+    attachments      = GenericRelation("attachments.Attachment", ...)  # the signed page, ID photo
+
+    # --- default terms, overridable per unit ---------------------------
+    payout_mode      = CharField(max_length=16, choices=["fixed", "commission"], default="fixed")
+    payout_rate      = DecimalField(10, 2, null=True, blank=True)
+    commission_pct   = DecimalField(5, 2, null=True, blank=True)
+    reserve_price    = DecimalField(10, 2, null=True, blank=True)
+
+    # --- custody policy, printed on the voucher whichever it is --------
+    # Ordered by ascending shop exposure. The default is the first, which is
+    # what Libyan vouchers already say (§17.7).
+    class Liability(models.TextChoices):
+        OWNER_RISK            = "owner_risk",            "الأمانة على مسؤولية صاحبها"
+        SHOP_LIABLE_EXCEPT_FM = "shop_liable_except_fm", "المحل ضامن ما عدا الظروف القاهرة"
+        SHOP_LIABLE           = "shop_liable",           "المحل ضامن"
+
+    liability_policy = CharField(max_length=24, choices=Liability.choices, default=Liability.OWNER_RISK)
+    liability_cap    = DecimalField(10, 2, null=True, blank=True)   # bounds any claim; null = declared value
+
+    # The clause as it was PRINTED AND SIGNED, copied from the shop's editable
+    # per-policy sentence at submit (§10) and never re-read afterwards. A shop
+    # that rewords its voucher next year has not reworded the agreements it
+    # already signed, and this column is the difference between a contract and
+    # a template.
+    liability_clause = TextField(blank=True)
+```
+
+`StockUnit` keeps its consignment fields as **per-unit overrides** (`null` means
+inherit the agreement) and gains `agreement = FK(ConsignmentAgreement, PROTECT)`
+plus `declared_value` — the agreed worth of *this* article, printed on the
+voucher, and the number the custody exposure and any claim are measured against.
+`consignor` stays denormalised onto the unit and is checked equal to
+`agreement.consignor`, so the payables screen and the POS picker never join.
+
+**The four figures, each with exactly one definition.** The statement the owner
+must be able to read for the worked example — a Rolex consigned at a 10,000
+fixed payout, sold for 12,000, not yet paid out — is this:
+
+```
+المخزون (قيمة البضاعة)        0        stock value: consigned goods never enter the bin
+النقد المحصّل             12,000      cash collected: an ordinary Payment row, already there
+مستحقات الأمانات         10,000      consignor payable: derived, owed and unpaid
+عمولة المحل               2,000      the shop's earning on the deal — gross profit, unchanged
+```
+
+Four figures, four definitions, registered in the existing static guard
+(`money-definitions-guard`, `apps/core/test_money_definitions.py`) so the fifth
+surface that wants them has to import rather than retype:
+
+```python
+consignment_stock_value(warehouse)      # ≡ 0. Consigned units are excluded from bin value by construction.
+consignor_payout_due(unit)              # fixed: payout_rate;  commission: sold_price * (1 - pct/100)
+consignor_payable(as_of, consignor=None)# Σ payout_due over units sold, not yet paid, not settled by claim
+consignor_claims_open(as_of)            # Σ assessed_value over unresolved incidents (§6.2.2)
+shop_consignment_commission(period)     # Σ (sold_price - payout_due) over units sold in the period
+```
+
+Note what is *not* new: the fourth figure. Because §6.2.1 already stamps the
+payout as the unit's cost at sale, gross profit on a consignment line already
+equals the shop's commission, and every existing margin report is already right.
+The work this section adds is the payable and the custody obligation — the two
+numbers nothing computes today.
+
+**The ledger has to balance, and as written it does not.** This is the one
+correctness bug in §6.2.1, and it is the kind that is invisible until a year of
+consignment sales has quietly driven a variant's cumulative stock value
+negative. The unit enters the ledger at intake as `+1 @ 0` and, on sale, leaves
+it as `-1 @ 10,000` once `incoming_rate` is stamped with the payout. Ten
+thousand dinars of value leaves a ledger it never entered. `StockValuationBin`
+self-heals because §5.3 defines it as derived, but `StockLedgerEntry` is
+append-only and does not, so the bin and the ledger's own running value stop
+agreeing and the stock-value history goes wrong.
+
+The fix is one extra entry inside the same transaction, posted immediately
+before the issue:
+
+```
+VoucherType.CONSIGNMENT_COST   quantity_change = 0,  value_change = +payout_due
+VoucherType.SALE               quantity_change = -1, value_change = -payout_due
+```
+
+Net quantity zero, net value zero, COGS correct, cumulative value never
+negative. Invariant 5 needs one word of slack to allow it — a zero-quantity
+entry carries zero allocations, and `Σ quantity == |quantity_change|` already
+says so, but the guard test must not assume every entry has at least one. A value-only entry is not a new idea here — it is exactly what landed
+cost does in §5.5 — and the audit trail it leaves reads like what actually
+happened: *at the instant we sold it, we acquired it for 10,000.* A consignment
+sale is a purchase and a sale in one transaction, which is how §6.2 already
+frames the trade-in it is a sibling of. The alternative — keeping consigned
+units out of the stock ledger altogether — loses the quantity, and the shop very
+much needs the quantity: the watch is on the shelf, it gets counted at stock
+count, and it has to be sellable.
+
+**The bin, precisely.** Consigned units count in quantity and contribute zero to
+value, so §5.3's serialized bin definition needs one clause it does not have:
+
+```
+bin.quantity       == COUNT(units WHERE status IN (in_stock, reserved))          # consigned included
+bin.stock_value    == SUM(incoming_rate + refurb_cost) WHERE is_consignment = False
+bin.valuation_rate == stock_value / COUNT(owned units)     # NOT / quantity — zeros must not dilute the rate
+```
+
+The third line is the trap. A variant with three owned handsets at 1,200 and
+seven consigned ones would otherwise report a valuation rate of 360, and every
+report that multiplies a rate by a quantity would be wrong by a factor of three.
+This goes into §5.4 as invariant 9: **`bin.stock_value` is blind to
+consignment, `bin.quantity` is not.**
+
+**The loss guard has to read the payout, not the cost.** `prevent_selling_at_loss`
+compares the asking price against `incoming_rate + refurb_cost`, which for a
+consigned unit is 0 until the moment of sale — so the guard that exists to stop
+a shop losing money is, on precisely the goods where losing money is easiest,
+switched off. A fixed-payout bag with a 1,200 payout sold at 900 collects 900
+and owes 1,200, and nothing in §6.2.1 stops it unless someone remembered to set
+a reserve price, which is nullable.
+
+Rule: for a consigned unit the guard reads `expected_payout(unit)`, and **for
+fixed-payout agreements the floor is `max(reserve_price or 0, payout_rate)` and
+is not optional.** Commission mode needs no arithmetic floor — the payout scales
+with the price — so the reserve there protects the consignor rather than the
+shop, and stays advisory-with-override as §6.2.1 has it. The same rule binds the
+discount engine: a percentage discount on a fixed-payout consignment line eats
+the commission first and the shop's own money second, and the floor is what
+stops it. Enforced server-side at checkout, not only at the till, because the
+till is not the only caller.
+
+**Treasury shows the claim, and does not move the balance.** The cash in the
+drawer is really there; what is untrue is that all of it is the shop's.
+`position.py` warns in its own docstring about double counting, so the payable
+is added as a **derived overlay, not a component**: `/api/treasury/position/`
+grows an `obligations` block (`consignor_payable`, `consignor_claims_open`) that
+the money-position screen renders beneath the total as *منها مستحقات أمانات*,
+never subtracted from it. Two rules keep it honest:
+
+1. **A consignor payout is its own document type** — not an `Expense`, not a
+   `SupplierPayment`. Both of those already have exclusion rules in
+   `position.py` for the drawer pay-outs they generate, and reusing one would
+   put consignment money in the wrong component and misreport the category it
+   landed in. It registers in `apps/documents` with
+   `submit_effects = ("consignor_liability", "money_position", "register_payout")`,
+   mirroring `_register_supplier_payment`, and `position.py` gains one component
+   code, `COMPONENT_CONSIGNOR_PAYOUT`, under the same standalone-pay-out rule
+   the expenses flow already follows.
+2. **Nothing about the payable is stored.** It is `consignor_payable()` over
+   rows, evaluated on read, ETagged like the rest.
+
+**A consignment sale on آجل owes cash before it collects any.** The payout falls
+due the moment the watch is sold; the receivable does not. A shop that sells a
+consigned Rolex on credit has handed over someone else's goods, owes them 10,000
+in cash on demand, and holds an invoice instead of the money — funding another
+person's stock out of its own drawer, on a customer's payment terms. This is not
+a hypothetical trade-off; it is the single fastest way a consignment module can
+empty a till.
+
+Nothing here refuses the sale — a shop's regular buying a watch on آجل is
+ordinary business and this plan does not get to overrule it. What it does is
+make the shape visible at the moment it is chosen:
+
+- Choosing آجل on a cart holding a consignment line raises a confirmation that
+  names **the payout amount and when it becomes due**, not a generic warning.
+  The cashier is told what the shop is about to owe, in dinars.
+- Those units are flagged on the consignment payables screen (§8.1) as *مباعة
+  آجل* with the invoice's balance alongside the payout owed, so the person
+  disbursing knows the money has not arrived.
+- `consignment_payable()` is unchanged and still counts them — the shop owes the
+  consignor whether or not the customer has paid, and a payable that quietly
+  waited on someone else's invoice would be the wrong number.
+
+It interacts with the credit machinery already in place rather than duplicating
+it: `require_customer_for_credit` still applies, `enforce_customer_credit_limits`
+and the customer's own ceiling still bind (`customer-credit-limits`), and a
+consignment line does not change any of that arithmetic. The only new thing is
+that the cashier is told the second number.
+
+**Returns, when the payout has already gone out.** A customer returns the Rolex
+three days after the consignor collected 10,000. The item is on the shelf again
+and the money is gone, and this is common enough in high-value used trade that
+leaving it undefined means each shop invents an answer. The return screen asks
+once, and the two answers are both defensible:
+
+- **Buy it in** (default): the unit converts to owned stock at
+  `incoming_rate = payout_paid`. The shop owns a Rolex it paid 10,000 for, which
+  is exactly what happened, and the consignment is closed.
+- **Reopen the consignment**: the unit returns to consigned stock at
+  `incoming_rate = 0` and a **consignor receivable** opens for the amount paid —
+  the mirror of the payable, settled against the next sale or collected back.
+
+If the payout has *not* yet been disbursed, neither question arises: the payable
+simply closes with the sale that created it, and the unit goes back to consigned
+stock.
 
 ---
 
@@ -852,6 +1623,35 @@ Rules:
   is **blocked** with the existing `DocumentBlocked` shape naming each sold unit
   and its invoice — the same idiom as `Warehouse.deletion_blockers`.
 
+### 6.1.1 Purchasing & Receiving Batches (Multi-Lot Intake & Labels)
+
+For goods with `tracking_mode` of `batch` or `serial_batch` (pharmacy, packaged food, cosmetics, chemicals, tyres):
+
+- **PO Line carries count, not lot**: A purchase order specifies variant and quantity (e.g. 100 boxes of Amoxicillin). The supplier lot numbers and expiry dates are unknown until the physical boxes land on the loading dock.
+- **Capture at receiving**: The receiving sheet prompts the receiver for:
+  - Lot / Batch Code (`code`)
+  - Expiry Date (`expiry_date`, with quick-date shortcuts: +6M, +1Y, +2Y, +3Y)
+  - Manufacture Date (`manufactured_on`, optional)
+  - Quantity received for this lot
+- **Multi-Lot split on a single line**: Deliveries frequently bundle multiple production lots under one PO line. The capture sheet allows adding multiple batch rows for the same PO line:
+  ```
+  Amoxicillin 500mg (100 boxes expected)
+    ✓ Lot A-2026-01   exp 06/2027   qty 60   cost 14.50
+    ✓ Lot B-2026-04   exp 09/2027   qty 40   cost 14.50
+    Total captured: 100 / 100  (Ready to confirm)
+  ```
+  The receipt line cannot be confirmed until `Σ(batch quantity) == accepted_quantity`.
+- **A lot code that already exists is not an error**: receiving `Lot A-2026-01` again finds the existing identity and adds to its balance in this warehouse — same factory run, same lot, one row in the catalog of lots (§4.7). The receiver sees *«دفعة معروفة — سيتم الإضافة للرصيد»* with the lot's current locations and quantities. A **different expiry date on a known lot code** is the one conflict here, and it gets a structured 400 naming both dates, because the receiver is holding the box and can say which label is right.
+- **Batch-wise landed cost**: Each **balance** is stamped with `incoming_rate = line's effective_unit_cost / unit_factor`, weighted-averaged into whatever that lot already had in this warehouse. When landed freight or clearance is allocated later (§5.5), balance rates re-stamp and repost identically to serialized units.
+- **`serial_batch` receiving is one sheet, not two**: the lot header (code, expiry, manufacture date) is captured once, then the scan loop reads each pack's serial beneath it — or reads a GS1 DataMatrix per pack and fills both at once (§6.3). Each unit is created with its `batch` set and its rate stamped from the balance. The line confirms when `Σ(units captured) == accepted_quantity`, the same residual counter as the serialized sheet, because it *is* the serialized sheet with a lot header on top.
+- **Carton & shelf label printing**: Directly from the receiving screen, clicking "Print Batch Labels" generates PDF barcode labels (GS1-128 / Code 128) showing:
+  - Product Name & Variant
+  - Batch Number (`code`)
+  - Expiry Date (`تاريخ الصلاحية: MM/YYYY`)
+  - Scannable lot barcode (or standard product barcode)
+  Labels adhere to shelf fronts or individual cartons, allowing the till to scan lot barcodes directly.
+
+
 ### 6.2 Buying over the counter, and trade-ins
 
 This is *the* used-phone-shop workflow and it deserves to be first-class, not a
@@ -859,16 +1659,244 @@ purchase order with one line.
 
 - **Counter purchase.** The POS cash-purchase flow (`pos-cash-purchases`) already
   creates a received-and-paid PO with a linked register pay-out. Serialized, it
-  becomes: pick or create the model → scan the IMEI → grade it → enter what we
-  paid → the drawer opens. One sheet, one unit, one pay-out, correct ledger.
-- **Trade-in.** Customer buys a phone and gives one in part-payment. That is a
+  becomes: pick or create the model → scan/type primary code (IMEI/Serial/VIN/Cert) → complete condition & accessory checklist → enter agreed buy price → the drawer opens. One sheet, one unit, one pay-out, correct ledger.
+- **Condition & Included Accessories Checklist.** Intake across any domain (laptops, cameras, watches, bikes, tools) renders the asset type's `UnitAttributeDefinition` form. Cashiers fill required condition metrics (e.g., battery health, shutter count, cosmetic grade) and check included accessories (box, charger, cables, certificate of authenticity). This checklist is saved into `unit.attributes`, printed on the intake receipt, and displayed on the POS unit picker sheet.
+- **Trade-in.** Customer buys a phone/laptop/watch and gives one in part-payment. That is a
   purchase and a sale in one transaction. `OrderExchange`
   (`backend/apps/sales/models.py:1089`) is already the atomic
   return-and-replace primitive; the trade-in is its sibling: create the incoming
   unit at the agreed value, apply that value as a tender line, sell the outgoing
   unit, one document, one register entry. Phase C.
-- **Ownership follows.** A traded-in handset's `Asset` gets its ownership row
+- **Ownership follows.** A traded-in or sold item's `Asset` gets its ownership row
   closed (the customer no longer owns it) and reopened when we sell it on.
+
+### 6.2.1 Consignment (الأمانات): Intake, Instant Sale SMS & Payout Disbursement
+
+Consignment is the backbone of high-value used trades (watches, luxury bags, cameras, high-end laptops, cars). A customer entrusts an item to the shop to sell on their behalf. The shop does not front the capital, and the consignor expects immediate notification and prompt payment once sold.
+
+1. **Intake & Agreement (`سند استلام أمانة`)**:
+   - Customer is selected/created (`consignor = Customer`) with an active phone number.
+   - Payout terms are agreed:
+     - **Fixed Payout**: `consignor_payout_rate = 1200.00 LYD` (the shop keeps any markup above this).
+     - **Commission Percentage**: `consignor_commission_pct = 15.00%` (customer gets 85% of actual sold price).
+     - **Minimum Reserve Price**: `consignor_reserve_price = 1400.00 LYD` (POS enforces this floor).
+   - Condition & accessories checklist is completed.
+   - Declared value is agreed and recorded — the number custody exposure and any future claim are measured against (§5.8).
+   - Prints a formal **Consignment Intake Voucher** in Arabic stating item description, identifier/serial, condition, agreed payout terms, declared value, and the **liability clause printed verbatim** — the shop's own sentence for whichever of the three policies applies (§10), not a label generated from an enum. This line is the contract, and a shop with a lawyer must be able to paste its own words into it.
+   - All of the above is one submitted `ConsignmentAgreement` document (§5.8), numbered and signed, covering one unit or eight.
+   - Stock unit is created with `status = in_stock`, `is_consignment = True`, `incoming_rate = 0`. No money leaves the cash register at intake. The liability that *does* open at this moment is custody, and §5.8 is where it is modelled.
+
+2. **Sale at POS & True Costing**:
+   - Scanned and sold at the till just like owned stock.
+   - Price floor guard: cashier cannot discount below `consignor_reserve_price` without manager override. For **fixed-payout** agreements the floor is `max(reserve_price or 0, payout_rate)` and is **not** overridable — selling below the payout loses the shop its own money, not just its commission (§5.8).
+   - On checkout commit:
+     - Calculated payout is determined: fixed amount or `sold_price * (1 - commission_pct / 100)`.
+     - Unit's `incoming_rate` is dynamically stamped with this calculated payout.
+     - A `consignment_cost` ledger entry (`quantity_change = 0`, `value_change = +payout`) is posted immediately before the issue, so the value leaving the ledger is value that entered it — §5.8.
+     - COGS = payout amount; Gross profit = `sold_price - payout_amount` (the shop's commission earnings).
+     - Unit status moves to `sold`. The consignor payable for it is now *derived* — `consignor_payout_due(unit)`, owed until `consignor_paid_at` is stamped. Nothing is posted (§5.8).
+
+3. **Instant Automated Customer Notification (SMS / Messaging)**:
+   - Immediately post-commit in `apps/sales/services.py`, if `unit.is_consignment` and `unit.consignor.phone` exists:
+   - Calls `apps.messaging.services.enqueue_message`:
+     - **Gateway**: `MessagingGateway.default_gateway()` (SMS Gate / provider).
+     - **Channel**: SMS (or WhatsApp where supported).
+     - **Recipient**: `unit.consignor.phone`.
+     - **Dedup Key**: `consignment_sold_{unit.id}_{order.id}` (ensures idempotency; zero risk of duplicate SMS).
+     - **Source**: `source_type = "consignment_sale"`, `source_id = order.id`.
+     - **Consent Class**: `TRANSACTIONAL`.
+     - **Message Copy (Arabic)**:
+       ```
+       مرحباً {consignor_name}،
+       تم بحمد الله بيع أمانتكم ({product_name} - رقم: {code}) بالفاتورة رقم #{invoice_number}.
+       المبلغ الصافي المستحق لكم: {payout_amount} د.ل.
+       نرجو التفضل بزيارة المحل لاستلام المبلغ.
+       شكراً لثقتكم بنا.
+       ```
+     - If messaging is offline or SMS gateway is unreachable, the message remains queued in `OutboundMessage` with retry backoff, and cashier screen shows an indicator. A manual "Resend SMS" action is available on the unit detail screen.
+
+4. **Disbursement / Collecting Payout at the Counter**:
+   - When the customer arrives at the shop to collect their money:
+   - Cashier navigates to **Consignment Payables** (`مستحقات الأمانات`):
+     - Displays all sold consignment units awaiting payout. Searchable by customer name, phone, or serial number.
+     - Lists: item name, identifier, sold date, invoice number, customer name, net payout due.
+   - Cashier taps **"Disburse Payout" (`صرف المستحقات`)**:
+     - System prompts for payout method (Cash from register / Bank transfer).
+     - If cash: pops cash drawer and logs register cash pay-out movement (`pos-cash-purchases`).
+     - Stamps `unit.consignor_paid_at = now()` and `unit.consignor_payment_ref = voucher_id`.
+     - Prints **Consignment Payout Receipt** (`سند صرف أمانة`) signed by both customer and cashier.
+     - Automatically queues confirmation SMS:
+       `"تم تسليمكم مبلغ {payout_amount} د.ل سند رقم {voucher_id} مقابل بيع {product_name}. سعدنا بالتعامل معكم."`
+
+5. **Return of Unsold Goods (`استرجاع أمانة`)**:
+   - If the item does not sell and the owner wishes to take it back:
+   - Cashier clicks "Return to Consignor" on the unit detail screen.
+   - Unit status transitions to `returned`, leaves active stock, custody row is closed, no ledger or payout is generated. The agreement closes when its last unit leaves.
+   - A **customer** return of an already-sold consigned item is the harder case, and §5.8 defines the two answers the return screen offers.
+
+### 6.2.2 Custody: when it breaks, goes missing or is stolen in our care
+
+§6.2.1 covers the two happy paths — it sells, or the owner takes it back. The
+path a consignment module is actually judged on is the third one, and today the
+plan has nothing to say about it: the camera is dropped, the bag is stolen with
+the window, the laptop is handed to the wrong cousin. The shop's reputation, and
+sometimes a court, turns on whether it can produce a record made *at the time*
+rather than an argument made afterwards.
+
+The governing idea is the one `repair-settlement-custody` already established
+for the workshop: **money state and custody state are different facts and must
+be different rows.** A damaged consigned unit is a custody event that *may* also
+be a money event; which of the two it is, is a judgement someone makes later,
+and the record of the event must not wait for that judgement.
+
+```python
+class ConsignmentIncident(DocumentMixin, TimeStampedModel):
+    """Something happened to goods we were holding for someone else."""
+
+    class Kind(models.TextChoices):
+        DAMAGED   = "damaged",   "تلف"
+        LOST      = "lost",      "فقدان"
+        STOLEN    = "stolen",    "سرقة"
+        DESTROYED = "destroyed", "إتلاف كامل"
+        DISPUTE   = "dispute",   "خلاف على الحالة"   # owner says it came back worse
+
+    class Responsibility(models.TextChoices):
+        SHOP          = "shop",          "المحل"
+        CONSIGNOR     = "consignor",     "صاحب الأمانة"    # pre-existing fault, or it failed on its own
+        THIRD_PARTY   = "third_party",   "طرف ثالث"        # courier, burglar, another customer
+        FORCE_MAJEURE = "force_majeure", "ظرف قاهر"        # fire, flood, armed robbery, unrest
+        UNDETERMINED  = "undetermined",  "غير محدد"
+
+    class Resolution(models.TextChoices):
+        PENDING     = "pending",     "قيد التسوية"
+        PAID        = "paid",        "سُدّد نقداً"
+        REPLACED    = "replaced",    "استُبدل"
+        WAIVED      = "waived",      "تنازل صاحبها"
+        INSURED     = "insured",     "غطّاه التأمين"
+        NO_CLAIM    = "no_claim",    "لا مطالبة"
+
+    unit            = FK(StockUnit, PROTECT, related_name="incidents")
+    agreement       = FK(ConsignmentAgreement, PROTECT, related_name="incidents")
+    kind            = CharField(max_length=16, choices=Kind.choices)
+    occurred_on     = DateField(null=True, blank=True)   # may be unknown; discovered_at never is
+    discovered_at   = DateTimeField()
+    reported_by     = FK(User, PROTECT)                  # who said so, not who is blamed
+    narrative       = TextField()                        # in the reporter's words
+    attachments     = GenericRelation("attachments.Attachment", ...)  # photos, police report
+
+    responsibility  = CharField(max_length=16, choices=Responsibility.choices,
+                                default=Responsibility.UNDETERMINED)
+    assessed_value  = DecimalField(10, 2, default=0)     # what we accept we owe. 0 is a valid answer.
+    resolution      = CharField(max_length=16, choices=Resolution.choices, default=Resolution.PENDING)
+    resolved_at     = DateTimeField(null=True, blank=True)
+    settlement_ref  = CharField(max_length=64, blank=True)   # payout voucher, replacement unit, waiver
+```
+
+The five things this has to be able to say, and where each one says it:
+
+- **Incident record** — the row itself, created the moment someone notices,
+  with photos and the finder's own words. It exists whatever the outcome, and
+  it is never deleted; `PROTECT` on the unit, cancellation through the
+  `apps.documents` reversal contract rather than a delete.
+- **Responsibility** — a field with five answers including *undetermined*,
+  which is the honest state on day one and must be representable. Nothing
+  downstream may require it to be resolved before the record can be written.
+  `force_majeure` is a member rather than a flag beside one, for the same reason
+  `undetermined` is: both are answers to "who is responsible" that name no
+  party, and two fields that interact would be worse than one enum that reads.
+- **Consignor liability** — `assessed_value`, defaulted by the agreement's
+  policy crossed with the incident's responsibility, then bounded by
+  `agreement.liability_cap ?? unit.declared_value`. This matrix is the reason
+  `liability_policy` is a field and not a sentence on a printout:
+
+  | responsibility ↓ / policy → | `owner_risk` (default) | `shop_liable_except_fm` | `shop_liable` |
+  |---|---|---|---|
+  | `shop` — we dropped it, we lost it | 0 | **declared value** | **declared value** |
+  | `third_party` — burglar, courier | 0 | **declared value** | **declared value** |
+  | `force_majeure` — fire, flood, unrest | 0 | **0** | **declared value** |
+  | `consignor` — it was already broken | 0 | 0 | 0 |
+  | `undetermined` | 0, unassessed | 0, unassessed | 0, unassessed |
+
+  The matrix is read from `agreement.liability_policy`, which is the policy the
+  consignor signed — not the shop's current default. Changing the setting
+  changes the next voucher, never a claim on an agreement already in force.
+
+  Two rows carry the argument. **`third_party` pays under both liable
+  policies**: from the consignor's side of the counter a burglary is the shop
+  failing to keep their watch safe, and whether the shop then recovers from
+  police or insurance is the shop's business, not a reason to hand the customer
+  a loss. And **`force_majeure` is the entire difference between the two liable
+  policies** — a fire, a flood, an armed robbery, a period of unrest. That is
+  not a hypothetical distinction here; it is the one a Libyan shop would
+  actually invoke, which is why it gets a policy value rather than an argument
+  after the fact.
+
+  The choice between `third_party` and `force_majeure` on a given incident is a
+  judgement someone makes and signs — a routine break-in through a weak lock is
+  arguably the first, an armed robbery the second — and the whole design is that
+  the judgement is *recorded* rather than reached in an argument.
+
+  Zero is a legitimate assessment and it is still a row. `undetermined` defaults
+  to 0 but is **not** the same zero: the incident stays `pending`, appears in
+  the claims report as *unassessed*, and the treasury overlay carries it as a
+  count (*«N مطالبة قيد التقدير»*) rather than folding a number nobody has
+  decided into a total.
+- **Outstanding claim** — `consignor_claims_open()` from §5.8 sums every
+  unresolved incident's `assessed_value`. It sits beside the payable in the
+  treasury obligations overlay, because from the owner's side of the counter
+  the two are the same question: *how much of this drawer is not mine?*
+- **Settlement** — paying a claim is the **same disbursement primitive** as
+  paying a payout: one register pay-out, one numbered voucher, one SMS, one
+  `consignor_paid_at`-style stamp. §6.2.1 step 4 already built it; this reuses
+  it with a different `source_type` and prints *سند تسوية أمانة* instead.
+  A replacement instead of cash resolves to `REPLACED` and names the substitute
+  unit. Nothing new is invented to move the money.
+
+**What an incident does to the ledger: nothing, and that is the point.** The
+unit's inventory value is zero, so writing it off costs the shop no stock value.
+Its status moves to `damaged` / `written_off`, quantity leaves the bin, and
+`value_change` is 0 — while the money, if there is any, moves as a claim
+settlement that has no relationship to inventory at all. This is the
+`repair-settlement-custody` separation stated in the ledger: **status is
+custody, the claim is money, and neither is derived from the other.** A
+consigned unit may therefore never be written off through the ordinary
+`write-off` endpoint; the API refuses it and names the incident endpoint
+instead, so a claim can never be silently skipped by choosing the wrong button.
+
+**Custody exposure, before anything goes wrong.** The number that makes the
+insurance conversation possible, and the one an owner holding forty watches
+should see on the dashboard:
+
+```python
+consignment_custody_exposure(warehouse)   # Σ over in-stock consigned units of
+                                          # declared_value ?? reserve_price ?? payout_rate ?? 0
+```
+
+One definition, registered like the rest. It is not a liability — the shop owes
+nothing while the goods are safe — so it renders as its own dashboard figure
+(*أمانات في العهدة*, count and value), never inside the money position.
+
+It is reported under every liability policy, including `owner_risk`. The
+shop's *financial* exposure on goods held at the owner's risk is zero, and the
+figure is not measuring that: it is measuring what the shop is holding that
+belongs to other people, which is the number an insurance conversation, a
+security decision and a stocktake all start from. A shop that is not liable for
+forty watches is still keeping forty watches in a safe.
+
+**Unclaimed payouts age, and the money is not ours.** The consignor who never
+comes back is the normal case, not the edge: a sale SMS goes out, nobody
+appears, and 10,000 dinars sits in a drawer belonging to someone else. That is
+an aging report (30/60/90+ since sale), a reminder SMS on the same
+`apps.messaging` path and dedup discipline as §6.2.1, and a line in the
+consignment statement. What it is **not** is income. Nothing in this system ever
+converts an unclaimed payout into the shop's money on a timer — see §17.
+
+**Goods that overstay.** `agreement.expires_on` is the date the owner agreed to
+collect by. Past it, the unit surfaces on the same worklist with the shop's
+options — return, extend, or dispose per the printed policy — and a reminder
+SMS. The unit does not change status on its own; a date passing is not a
+decision, and the whole point of this section is that decisions about other
+people's property leave records.
 
 ### 6.3 POS
 
@@ -877,6 +1905,54 @@ variant barcode, unit (carton) barcode and scale barcode: a live `StockUnit`
 `code_normalized` match returns `(variant, unit)` and the line is added with
 quantity 1, the unit's own price, and the identifier as the line subtitle. One
 endpoint call, one indexed lookup, no dialog.
+
+**And a fifth: the GS1 DataMatrix, which resolves everything at once.** A
+pharmaceutical pack does not carry a bare serial; it carries a symbol encoding
+GTIN + lot + expiry + serial as Application Identifiers, which is what makes
+`serial_batch` scannable at a till rather than a data-entry chore. A parser in
+`apps/catalog` — small, pure, unit-tested against real label strings — reads the
+AIs and hands the resolver a structured result:
+
+```
+01 → GTIN-14        fixed 14   → the ProductVariant (variant.gtin)
+17 → expiry         fixed 6    → YYMMDD, checked against the lot; a mismatch is a
+                                 structured conflict, not a silent overwrite
+10 → batch / lot    variable   → the StockBatch, found or refused if unknown
+21 → serial         variable   → the StockUnit within that batch
+11 → production date fixed 6   → stamped at receipt when present
+```
+
+Two details decide whether this works on real hardware. Variable-length AIs
+terminate at `GS` (ASCII 29) or the end of the string, fixed-length ones do not
+carry a separator at all — so the parser is driven by an AI length table, never
+by splitting on a character. And many scanners are configured to strip `GS`,
+which turns `10` + `17` into one unreadable run; the parser detects the
+ambiguity and the receiving sheet says *"أعد ضبط القارئ"* with the fix, rather
+than importing a lot number with a date glued to it. This is the same class of
+problem the scale-label work already solved for embedded-price barcodes
+(`weighing-scales-integration`), and it gets the same treatment: a table, a
+parser, and tests over real strings.
+
+At the till, one DataMatrix scan therefore adds a line with the variant, the
+unit, the lot and the expiry already resolved — no picker, no dialog, one
+lookup. It is the fastest path in the whole feature and it is the one a pharmacy
+uses a thousand times a day.
+
+**And the shop that has no 2D scanner already owns one.** Most Libyan shops run
+1D laser scanners, which cannot read a DataMatrix at all — so the feature above
+would, for them, be a reason to buy hardware before they can try it. It is not:
+`apps/companion` already turns a phone on the LAN into a till camera, over
+HTTPS, with a decode ladder tuned against *real photographs* rather than clean
+renders — `companion-camera-decode-lessons` records that the naive path loses on
+real images and that the tuned ladder is sixteen times better and sub-second.
+Pointing that at a DataMatrix is a decoder swap inside a pipeline that already
+exists, not a new capability.
+
+So the receiving sheet and the POS both offer **"امسح بالهاتف"**, which opens
+the companion on a paired phone and returns the same parsed
+`{variant, batch, unit, expiry}` structure a hardware scanner would. A pharmacy
+can run the whole of §6.1.1 on the day it installs, and buy a 2D scanner later
+because it wants to be faster, not because it cannot start.
 
 Everything else is fallback and guard rails:
 
@@ -911,7 +1987,50 @@ Everything else is fallback and guard rails:
   warranty document. RTL care per `pdf-invoice-rtl-currency`; on 58mm the
   identifier wraps to its own line rather than truncating.
 
+### 6.3.1 POS Sales for Batches (FEFO Auto-Allocation, Line Splitting & Expiry Guard)
+
+In high-throughput environments like pharmacies and supermarkets, cashiers cannot be forced to pick a batch from a popup dialog for every scan. The POS batch workflow is designed for zero cashier friction:
+
+1. **FEFO Auto-Allocation (Default Zero-Tap Path)**:
+   - When a cashier scans a product barcode or taps a product tile whose `tracking_mode` is `batch`:
+   - The engine selects the **balance** in that till's warehouse with the earliest `expiry_date` (`remaining_quantity > 0`, `is_sellable`, not expired) — one indexed scan of `batch_balance_fefo_idx`, no join to the lot (§4.7). Stock of the same lot sitting in another branch is invisible here, which is the correct answer and one the pre-split model could not give.
+   - The cart line renders instantly with a small badge: `[دفعة B204 | ينتهي 12/2026]`.
+   - Cashier scans and rings up items at normal speed; the till does not stop or show a modal.
+
+2. **Automatic Multi-Batch Line Splitting**:
+   - When a customer buys 10 packs of an item, but the oldest batch only has 3 units remaining:
+   - The checkout engine splits the line across batches:
+     - 3 units from Lot A (expiring 10/2026)
+     - 7 units from Lot B (expiring 02/2027)
+   - Both allocations are stamped onto the sale line and written to `StockAllocation` inside the single checkout database transaction, each naming its lot identity and decrementing its own balance.
+
+3. **Expired Batch Guard (`prevent_selling_expired_batches`)**:
+   - Any batch with `expiry_date < today` is strictly disqualified from allocation.
+   - If a cashier attempts to sell an item where all remaining stock is expired, the till blocks the addition with a clear Arabic notification:
+     *"جميع الكميات المتوفرة من هذا الصنف منتهية الصلاحية (دفعة X انتهت في Y)"*.
+   - A manager override (`inventory.override_expired_batch_sale`) is required to unlock expired sales (e.g. for authorized returns or disposal).
+
+4. **`serial_batch` sells like a serial, ordered like a batch**:
+   - The unit is what is sold, so quantity is 1 and the concurrency lock of §6.3 applies unchanged.
+   - What changes is the *default pick*: the unit picker orders by its batch's `expiry_date` first and `in_stock_since` second, so zero-tap FEFO reaches the right pack without the cashier thinking about lots.
+   - A GS1 DataMatrix scan pins variant, lot and unit in one action and skips the picker entirely.
+   - The expiry guard below applies to the unit's batch, so an expired pack is refused even though it has a serial of its own.
+
+5. **Manual Batch Override & Batch Picker Sheet**:
+   - If a customer specifically requests a longer expiry date, or the cashier scans a specific Lot Barcode printed on the box:
+   - **Direct Scan**: Scanning a lot barcode directly pins that exact batch to the cart line.
+   - **Picker Sheet**: Tapping the batch badge on the cart line opens **`pos_batch_picker_sheet.dart`**:
+     - Lists all available batches in the current warehouse.
+     - Displays Lot Code, Expiry Date, Days Remaining (color-coded: red = <30 days, amber = <90 days, green = fresh), and Available Quantity.
+     - Selecting a batch manually pins it to the cart line.
+
+6. **Receipt & Invoice**:
+   - Printed invoices and thermal receipts show the batch code and expiry date next to the item name:
+     `أمكسيسيلين 500 ملغ (دفعة: B401 - ص: 08/2027)`
+   - Required by health regulations in pharmacies and gives customers peace of mind.
+
 ### 6.4 Returns, exchange, warranty
+
 
 - A return of a serialized line returns **that unit**: status back to
   `in_stock`, `in_stock_since` reset (so aging restarts honestly), allocation
@@ -933,6 +2052,23 @@ receipt — so a unit in transit is nowhere sellable, which is the truth.
 4, missing 351...333"*, which is a shrinkage report a phone shop will actually
 read.
 
+**A lot transfer moves a number, and the lot does not move at all.** This is the
+operation the identity/balance split was made for (§4.7): quantity leaves the
+source `StockBatchBalance` at its rate, and arrives at the destination balance —
+created if this lot has never been to that branch before — which re-weights its
+own rate by the value that landed. The `StockBatch` row is not read, not copied
+and not written. Lot A in the showroom is Lot A, with the same expiry, the same
+supplier, the same recall exposure and the same history, because it is the same
+row. Under the warehouse-scoped model this transfer had to destroy quantity in
+one "Lot A" and create it in another, forking the lot's history at every branch
+boundary and leaving a recall to find the pieces by string-matching a code.
+
+In-transit lot stock is held the same way units are: quantity leaves the source
+balance on dispatch and lands at the destination on receipt, so goods in a van
+are sellable nowhere. A short-landed transfer (*sent 60, arrived 58*) reconciles
+against the same variance path, and the missing two are a write-off proposal
+against the source, at the source's rate.
+
 ### 6.6 Stock count becomes scan-the-shelf
 
 For a serialized variant, counting a number is meaningless. The count becomes:
@@ -949,6 +2085,14 @@ feature in the plan, and it falls out of the model almost for free because
 `StockCount` already has the blind scan→count loop, the manager-applies split
 and the variance threshold.
 
+For a batch variant the count is per **balance**, which is what a counter
+actually does: they are standing in one room counting the packs of one lot on
+one shelf. Variance is `counted − balance.remaining_quantity` in that warehouse,
+and the lot's stock elsewhere is neither shown nor touched. A lot found in a
+warehouse that has no balance for it opens one — that is how stock that walked
+between branches without paperwork gets found, and it is a finding worth
+surfacing by name rather than absorbing into a number.
+
 ### 6.7 Repairs and operations
 
 `Job` gains a `stock_unit` target so a shop can work on its own inventory, and
@@ -962,6 +2106,39 @@ One action, one permission (`inventory.write_off_stockunit`), a required reason,
 an event row, an issue at the unit's own rate. Reported monthly by reason. This
 is where a stolen handset goes, and the report is what tells an owner it is
 happening.
+
+**Except when the handset was not ours.** A consigned unit is refused here and
+sent to §6.2.2: its own rate is zero, so this action would move no money and
+record no claim, and a shop that lost someone else's camera would have written
+off a liability by filling in a reason box. Losing our own stock costs stock
+value; losing someone else's costs cash we have not yet been asked for. Two
+different events, two different screens.
+
+### 6.8.1 Batch Recall, Quarantine & Consumer Alerting
+
+In regulated trades (pharmacy, packaged foods, cosmetics), a manufacturer, distributor, or health authority may issue an urgent batch recall due to contamination, labeling errors, or defects.
+
+1. **One-Tap Quarantine (`حجر الدفعة`)**:
+   - Authorized manager (`inventory.quarantine_batch`) clicks "Quarantine" on the batch detail screen.
+   - Sets `batch.status = QUARANTINED` and `batch.is_locked = True` — **one write, on the lot identity** (§4.7), which propagates `is_sellable = False` to every balance in the same transaction.
+   - Takes effect immediately across all POS registers, online stores, and warehouses: any attempt to add or checkout from this batch fails with an emergency recall warning. There is no window in which one branch is quarantined and another is still selling, because there is no second row to forget. Under a warehouse-scoped batch table this was N writes with N chances to miss one, on the operation where missing one is the whole problem.
+2. **Traceability & Recall Audit (`تقرير تتبع الدفعة`)**:
+   - The system instantly queries all `StockAllocation` records for this batch.
+   - Generates the complete audit trail:
+     - **Inward provenance**: Supplier name, delivery date, PO number, receiving invoice, received quantity.
+     - **Current remaining stock**: `batch.balances.all()` — every warehouse holding this lot and how much, in one query against one lot, awaiting return/disposal.
+     - **Outward sales**: Every sale invoice, date, and customer profile who purchased from this batch. Under `serial_batch` this narrows to the exact packs: the recall names **individual serials**, which is what saleable-return verification under DSCSA/FMD-style rules actually needs, and what lets a pharmacy tell a customer whether *their* box is the recalled one.
+     - **Genealogy**: `parent_batch` sub-lots created by repacking, each with its own balances, swept in the same report.
+3. **Consumer Safety SMS Alert**:
+   - One-tap button on the recall report: **"Notify Affected Customers" (`إرسال تنبيه للمشترين`)**.
+   - Triggers `apps.messaging` to send transactional recall alerts to every customer on file who bought from this batch:
+     ```
+     تنبيه هام من {shop_name}:
+     نرجو التوقف عن استخدام المنتج {product_name} (دفعة رقم {batch_code}) ومراجعة أقرب فرع فوراً للاسترجاع واسترداد كامل القيمة.
+     للاستفسار: {shop_phone}.
+     ```
+   - Dedup key prevents double-messaging; delivery receipts track which customers received the safety alert.
+
 
 ### 6.9 Price and attribute edits are audited
 
@@ -1004,17 +2181,57 @@ POST   /api/inventory/stock-units/{id}/write-off/    {reason}
 GET    /api/inventory/stock-units/summary/           counts by status, aging buckets
 
 POST   /api/purchasing/receipts/{id}/capture-units/  per-line codes+attrs+costs
+POST   /api/purchasing/receipts/{id}/capture-batches/ multi-lot codes+expiries+quantities (into this receipt's warehouse)
+POST   /api/purchasing/receipts/{id}/capture-serial-batch/ lot header + serial scan loop, one call (§6.1.1)
 GET    /api/purchasing/receipts/missing-identifiers/ the worklist
+
+# consignment (الأمانات):
+GET    /api/inventory/stock-units/consignment-payables/   sold units awaiting customer payout
+POST   /api/inventory/stock-units/{id}/disburse-payout/   record register pay-out & close payable
+POST   /api/inventory/stock-units/{id}/resend-consignor-sms/ trigger/retry customer sale SMS
+POST   /api/inventory/stock-units/{id}/return-to-consignor/ return unsold unit to consignor
+CRUD   /api/inventory/consignment-agreements/             the signed سند; submit starts custody
+GET    /api/inventory/consignment-agreements/{id}/statement/ one consignor: in, sold, paid, claimed, net
+GET    /api/inventory/consignment-position/               the four figures of §5.8, as of a date
+GET    /api/inventory/consignment-incidents/              filters: unit, kind, responsibility, resolution
+POST   /api/inventory/consignment-incidents/              record loss/damage/theft (§6.2.2)
+POST   /api/inventory/consignment-incidents/{id}/settle/  pay, replace, waive or close with no claim
+
+# batches & lots (الدفعات وتواريخ الصلاحية) — the LOT is the resource:
+GET    /api/inventory/stock-batches/                      filters: variant, status, is_expired, is_near_expiry,
+                                                          warehouse (= "has a balance there", not a scope)
+GET    /api/inventory/stock-batches/{id}/                 the lot, with its balances inlined
+GET    /api/inventory/stock-batches/{id}/balances/        where this lot is, and how much of it
+GET    /api/inventory/stock-batches/{id}/history/         lot movements & allocations, all warehouses
+GET    /api/inventory/stock-batch-balances/               filters: variant, warehouse, is_sellable, expiry before/after
+                                                          — the per-place list the FEFO index serves
+POST   /api/inventory/stock-batches/lookup/               {variant, code} → the lot, or a 404 that offers to create it
+POST   /api/inventory/stock-batches/{id}/quarantine/      emergency recall / stop-sale
+POST   /api/inventory/stock-batches/{id}/release-quarantine/
+GET    /api/inventory/stock-batches/{id}/recall-report/   traceability: customers, invoices, remaining stock
+POST   /api/inventory/stock-batches/{id}/notify-recall/   broadcast safety recall SMS to buyers
+GET    /api/inventory/stock-batches/expiry-watchlist/     batches expiring within N days
+
+# extended for consignment obligations:
+GET    /api/treasury/position/       response gains  obligations{consignor_payable, consignor_claims_open}
+                                     — an overlay on the total, never subtracted from it (§5.8)
 
 GET    /api/catalog/asset-types/{id}/unit-attributes/
 CRUD   /api/inventory/unit-attribute-definitions/
 
 # extended, not new:
-POST   /api/sales/checkout/          line gains  stock_unit  (id) — required when serialized
-GET    /api/catalog/resolve-barcode/ resolution gains  {"kind": "stock_unit", "unit": {...}}
-GET    /api/price-checker/lookup/    a scanned identifier returns that unit's own price
+POST   /api/sales/checkout/          line gains  stock_unit  or  stock_batch  (auto-allocated FEFO)
+GET    /api/catalog/resolve-barcode/ resolution gains  stock_unit  and  stock_batch  lookups,
+                                     and parses a GS1 DataMatrix into
+                                     {variant, batch, unit, expiry} in one call (§6.3)
+GET    /api/price-checker/lookup/    a scanned identifier returns that unit/batch price & expiry.
+                                     UNAUTHENTICATED on the LAN in kiosk mode, so it answers from a
+                                     narrower serializer that carries no cost, no consignment terms
+                                     and no supplier — by construction, not by permission (§13)
 POST   /api/inventory/stock-counts/{id}/scan-unit/
+POST   /api/inventory/stock-counts/{id}/scan-batch/
 POST   /api/inventory/transfers/{id}/units/
+POST   /api/inventory/transfers/{id}/batches/
 ```
 
 Error shapes reuse what exists: identity conflicts like `catalog/identity.py`,
@@ -1032,7 +2249,7 @@ records is exactly this).
 ## 8. Frontend
 
 Arabic-first, RTL, no hardcoded strings, MVVM, dense (AGENTS.md). Everything
-below is gated on `ShopSettings.enable_serialized_inventory` **and** on the
+below is gated on `ShopSettings.enable_serialized_inventory` / `enable_batch_tracking` **and** on the
 product's own tracking mode, so a grocery never renders one pixel of it.
 
 ### 8.1 New surfaces
@@ -1040,10 +2257,33 @@ product's own tracking mode, so a grocery never renders one pixel of it.
 | Where | What |
 |---|---|
 | `features/inventory/views/stock_units_screen.dart` | The units list: search by identifier, filter chips (status, warehouse, attribute, age bucket), multi-select bulk reprice / transfer / write-off. Follows `bulk-operations`. |
-| `features/inventory/views/stock_unit_detail_screen.dart` | `PointyDetailHero` + `PointySummaryList` + attributes + photos + the life timeline. Actions: reprice, edit attributes, write off, print label, open invoice, open asset. |
-| `features/inventory/views/unit_capture_sheet.dart` | The scan-and-fill loop, shared by receiving, counter purchase, opening identification and stock count. **One widget, four callers** — this is the piece to build well. |
-| `features/pos/views/pos_unit_picker_sheet.dart` | In-stock units for a variant: identifier, picker attributes, price, days in stock. |
+| `features/inventory/views/stock_unit_detail_screen.dart` | `PointyDetailHero` + `PointySummaryList` + attributes + photos + the life timeline. Actions: reprice, edit attributes, write off, print label, open invoice, open asset, **watch the sale**. Consignment badge, consignor details, and manual SMS resend trigger. |
+| `features/inventory/views/unit_capture_sheet.dart` | The scan-and-fill loop, shared by receiving, counter purchase, consignment intake, opening identification and stock count. **One widget, five callers** — this is the piece to build well. It is a `ScanWedgeTarget`: see the note under this table, which is not optional. |
+| `features/inventory/views/consignment_payables_screen.dart` | Sold consignment units awaiting customer payout: consignor details, phone, item, invoice number, payout amount due, aging bucket for the owner who never came back, and one-tap register disbursement. |
+| `features/inventory/views/consignment_agreement_screen.dart` | The signed سند: consignor, units covered, payout terms, declared values, liability policy, expiry, signature attachment. Intake writes it; the statement reads it. |
+| `features/inventory/views/consignment_position_card.dart` | The four figures of §5.8 — stock value 0, cash collected, consignor payable, shop commission — plus custody exposure (count and value of goods held). Dashboard and the consignment screen share it. |
+| `features/inventory/views/consignment_incident_sheet.dart` | Record loss/damage/theft on a consigned unit: kind, narrative, photos, responsibility, assessed value. Low permission to open, manager permission to settle. |
+| `features/pos/views/pos_unit_picker_sheet.dart` | In-stock units for a variant: identifier, picker attributes, price, days in stock, consignment badge. |
+| `features/inventory/views/stock_batches_screen.dart` | Batches list: filter by status (active/quarantined/expired), warehouse, near-expiry alert chips, search by lot code. |
+| `features/inventory/views/stock_batch_detail_screen.dart` | The lot: code, GTIN, expiry, manufacturer, supplier, quarantine toggle, genealogy, recall audit — plus a **"where it is" panel** listing every warehouse balance with quantity and rate, which is the screen the identity/balance split exists to make possible. Under `serial_batch`, the units in the lot. |
+| `features/inventory/views/batch_capture_sheet.dart` | Multi-lot receiving capture sheet: lot code, expiry date, manufacture date, quantity per lot, residual counter. |
+| `features/pos/views/pos_batch_picker_sheet.dart` | Available balances for a variant **in this till's warehouse**: lot code, expiry date, days remaining (color-coded), available quantity. Stock of the same lot in another branch is deliberately absent. |
+| `features/inventory/views/batch_recall_screen.dart` | Recall audit dashboard: list of sold invoices, customers, and one-tap SMS safety broadcast. |
 | `features/settings/views/unit_attributes_screen.dart` | Attribute definitions per asset type. |
+
+**Every surface in this table that a scanner points at must declare itself a
+`ScanWedgeTarget`.** `ScanBurstGuard`
+(`frontend/lib/src/shared/barcode/scan_burst_guard.dart`) exists to stop a
+wedge's digits becoming a line quantity, and it does that by rolling back any
+digit run typed faster than a human can type — which is exactly what an IMEI
+scanned into a capture field looks like. Opt out and the guard swallows the
+scan; the capture loop then appears to simply not work, intermittently, on
+whichever pane happens to hold focus. `pos_cart_pane.dart` and
+`purchase_draft_pane.dart` already carry the opt-out and are the pattern to
+copy. This applies to the unit capture sheet, the batch capture sheet, both
+picker sheets, the units and batches lists' search fields, and the stock-count
+scan loop.
+
 
 ### 8.2 Modified surfaces
 
@@ -1057,15 +2297,21 @@ product's own tracking mode, so a grocery never renders one pixel of it.
   lines; checkout payload carries the unit.
 - `features/purchasing` — receiving screen capture step, per-unit cost split
   sheet with a live residual, missing-identifier worklist card.
-- `features/returns_exchange` — identifier shown, unit-aware refusals.
+- `features/returns_exchange` — identifier shown, unit-aware refusals, and the
+  buy-it-in / reopen-the-consignment choice of §5.8 when a paid-out consigned
+  item comes back.
 - `features/stock_count` — serialized count mode and the two-list variance view.
-- `features/price_checker` — identifier lookup returns the unit's own price
-  (kiosk mode included; permissioned per `price-checker-settings`).
+- `features/price_checker` — identifier lookup returns the unit's own price and,
+  for a lot, its expiry. Kiosk mode included, and it is the surface with the
+  sharpest rule in this plan: **the kiosk never sees cost.** Staff-mode lookup is
+  permissioned per `price-checker-settings`; kiosk mode answers from the
+  cost-free serializer of §13 whatever the settings say.
 - `features/operations` — job can target a stock unit; refurb cost shown on the
   unit.
 - `features/dashboard` — a units card: in stock, value, aging, missing
-  identifiers. Masonry rules per `dashboard-masonry-layout` (Row + stretch
-  throws; use start).
+  identifiers. Where consignment is on, a second card: goods held in custody
+  (count and declared value), payouts owed, claims open. Masonry rules per
+  `dashboard-masonry-layout` (Row + stretch throws; use start).
 - `shared/navigation/navigation_catalog.dart` — one destination, which gets the
   command palette entry for free (`command-palette`).
 
@@ -1078,6 +2324,22 @@ product's own tracking mode, so a grocery never renders one pixel of it.
   barcode. Where the manufacturer's box already carries a scannable IMEI
   barcode, the label is optional and the flow is identical.
 - **Receipt and A4 invoice** print the identifier per line; RTL-safe.
+
+**Watch the sale (free, because it is already built).** `apps.surveillance`
+already links recorded footage to an invoice by timestamp, with the recorder's
+clock offset measured so the clip lands on the right moment
+(`dvr-camera-integration`). A serialized unit knows the invoice it left on, so
+its life timeline gets a **"شاهد لحظة البيع"** action that opens that invoice's
+clip at the sale, with the shop's existing pre/post roll. No new integration —
+one deep link from a row that already holds the invoice id — and the highest-
+value goods in the shop are exactly the sale anyone ever wants to re-watch: a
+warranty dispute, an insurance claim, a police question, or an owner asking who
+was at the counter when a 12,000-dinar handset went out. Gated on
+`enable_surveillance`, absent entirely when it is off.
+
+The same link runs the other way for consignment: an incident (§6.2.2) records
+`discovered_at`, so the incident screen offers the footage around that moment,
+which is the difference between a claim and an argument.
 
 ### 8.4 AI
 
@@ -1116,6 +2378,33 @@ New report types in `apps/reports` (which already carries 19):
    each fetched.
 5. **Shrinkage** — written off and missing-at-count, by reason and by month.
 6. **Warranty exposure** — units still in warranty, by expiry month.
+7. **Consignment ledger & payables** — units on consignment, units sold awaiting
+   payout, payouts disbursed, and shop commission earnings. Carries the four
+   figures of §5.8 and a **per-consignor statement** — everything in, everything
+   sold, everything paid, everything claimed, net owed — which is the page a
+   consignor is handed across the counter when they ask.
+8. **Custody exposure & unclaimed payouts** — goods held for other people by
+   count and declared value, with an aging of payouts owed but never collected
+   (30/60/90+) and of agreements past their `expires_on`. The report that makes
+   both the insurance conversation and the phone-call list possible (§6.2.2).
+9. **Consignment incidents & claims** — every loss, damage and theft on
+   consigned goods, by kind, responsibility and resolution, with claims
+   outstanding and claims settled. Small, and the first thing anyone asks for
+   after the first incident.
+10. **Lot traceability & recall audit** — end-to-end genealogy of one lot:
+    supplier and inward receipts, every warehouse it passed through and what is
+    left in each, its sub-lots, and every customer invoice it reached. One lot
+    row, one report, no code string-matching — which is the operational payoff
+    of §4.7. Under `serial_batch` it descends to the individual serials.
+11. **Where is this lot** — the lot's balances across warehouses, with quantity,
+    rate and value per place. Small, and it is the report a branch manager and a
+    recall both open first.
+12. **Expiry watchlist & markdown suggestions** — balances expiring in 30/60/90
+    days, per warehouse and with capital at risk, and suggested promotional
+    discounts to clear stock. Per warehouse because the markdown decision is
+    made by whoever is standing in front of the shelf.
+13. **Batch profitability** — realised profit and gross margin per lot, landed
+    cost against selling price, netted across every warehouse it sold from.
 
 All CSV-exportable through the existing streaming export path
 (`analytics-export-streaming`), all subject to the period lock.
@@ -1125,26 +2414,63 @@ All CSV-exportable through the existing streaming export path
 ## 10. Permissions, settings, presets
 
 **Settings** — `ShopSettings.enable_serialized_inventory` (default **False**),
+`enable_batch_tracking` (default **False**),
 `serialized_capture_later_allowed` (default False),
-`serialized_require_customer_for_asset` (default True). Presets: `phone_repair`
-and `car_workshop` turn serialization on; a new `electronics` type is worth
-adding. Setup wizard gains one question, asked only for those types:
-*"هل تتابع أجهزتك برقم تسلسلي / IMEI؟"*
+`serialized_require_customer_for_asset` (default True),
+`consignment_auto_sms_on_sale` (default **True**),
+`consignment_default_liability_policy` (choices: `owner_risk`, `shop_liable_except_fm`, `shop_liable`; default **`owner_risk`** — §17.7),
+`consignment_liability_clause_<policy>` (three editable Arabic sentences, one per policy, seeded with defaults and printed verbatim on the voucher — the enum value is structural, the printed words are the shop's),
+`consignment_require_declared_value` (default **True**; custody exposure and every claim are measured against it),
+`consignment_unclaimed_payout_reminder_days` (default 30; 0 disables the reminder),
+`consignment_sale_sms_template` (Arabic customizable template with `{consignor_name}`, `{product_name}`, `{code}`, `{invoice_number}`, `{payout_amount}`),
+`prevent_selling_expired_batches` (default **True**),
+`batch_auto_pick_strategy` (choices: `fefo`, `fifo`; default `fefo`),
+`default_expiry_warning_days` (default 30).
+
+Presets:
+- **Serialized trades**: `phone_repair`, `mobile_trader`, `car_workshop`, `laptops_computers`, `cameras_photo`, `gaming_consoles`, `luxury_watches`, `luxury_handbags`, `jewelry_precious`, `appliances_tv`, `bicycles_ebikes`, `power_tools` turn serialization on.
+- **Batch trades**: `pharmacy`, `cosmetics`, `grocery_fmcg`, `tires_automotive` turn batch tracking on with FEFO auto-allocation.
+- **Both at once** (`serial_batch`): a pharmacy's GS1-coded imported lines, and
+  tyres, which carry a DOT lot and a casing serial. The mode is set per product,
+  never per shop, so the same pharmacy sells serialised imports and anonymous
+  local stock from one catalog — which is what its shelves actually look like.
+Setup wizard gains questions tailored to the chosen trade:
+*"هل تتابع منتجاتك برقم تسلسلي / IMEI / رقم الشاسي؟"* أو *"هل تتابع الأصناف برقم الدفعة وتاريخ الصلاحية (FEFO)؟"*
+
 
 **Permissions**, added to `apps/core/permission_catalog.py` under the existing
 `inventory` group so the per-user editor picks them up automatically:
 
 ```
-inventory.view_stockunit          عرض الأجهزة المسلسلة
-inventory.add_stockunit           تسجيل أجهزة جديدة (receiving, counter purchase)
-inventory.change_stockunit        تعديل بيانات الجهاز (attributes, notes)
-inventory.reprice_stockunit       تعديل سعر الجهاز
-inventory.write_off_stockunit     شطب جهاز (فقد / تلف)
-inventory.view_stockunit_cost     عرض تكلفة الجهاز
+inventory.view_stockunit              عرض الأجهزة المسلسلة
+inventory.add_stockunit               تسجيل أجهزة جديدة (receiving, counter purchase)
+inventory.change_stockunit            تعديل بيانات الجهاز (attributes, notes)
+inventory.reprice_stockunit           تعديل سعر الجهاز
+inventory.write_off_stockunit         شطب جهاز (فقد / تلف)
+inventory.view_stockunit_cost         عرض تكلفة الجهاز
+inventory.disburse_consignment_payout صرف مستحقات الأمانات (register payout)
+inventory.view_consignmentagreement   عرض سندات الأمانات
+inventory.manage_consignmentagreement تحرير سندات الأمانات وشروط العمولة
+inventory.record_consignment_incident تسجيل تلف / فقدان أمانة
+inventory.settle_consignment_claim    تسوية مطالبة أمانة (صرف تعويض)
+inventory.view_consignment_liability  عرض مستحقات ومطالبات الأمانات
+
+inventory.view_stockbatch             عرض الدفعات وتواريخ الصلاحية
+inventory.manage_batches              إدارة الدفعات وتعديل بياناتها
+inventory.adjust_batch_balance        تعديل رصيد دفعة في مستودع
+inventory.quarantine_batch            حجر الدفعة وتفعيل أمر الاستدعاء
+inventory.override_expired_batch_sale تجاوز حظر بيع الدفعات منتهية الصلاحية
 ```
 
-Role defaults: cashier gets view + sell (no cost, no reprice); inventory clerk
-gets view/add/change; purchasing agent gets add at receipt; manager gets all.
+Role defaults: cashier gets view + sell (no cost, no reprice, FEFO auto-allocation); inventory clerk
+gets view/add/change batches & units; purchasing agent gets add at receipt; manager gets all including quarantine & override.
+The consignment pair is deliberately asymmetric: **`record_consignment_incident`
+goes to everyone who touches stock, `settle_consignment_claim` to managers
+only.** Whoever finds the broken camera must be able to say so on the spot — a
+permission wall in front of *reporting* a problem is a permission wall in front
+of ever hearing about it — while deciding what the shop owes for it is a
+judgement that moves money. The same split as stock count's staff-count /
+manager-apply (`stock-count`), for the same reason.
 `view_stockunit_cost` is the first field-level cost mask in the codebase — a
 small, contained instance of benchmark-plan Phase 6, and a real need: a used-goods
 shop does not show the counter staff what it paid the walk-in seller.
@@ -1155,7 +2481,7 @@ shop does not show the counter staff what it paid the walk-in seller.
 
 Non-negotiable, per anti-goal §8.6 and the existing query-count guards.
 
-1. **A cart with no serialized line pays zero extra queries.** Every hook is
+1. **A cart with no tracked line pays zero extra queries.** Every hook is
    behind `variant.product.tracking_mode != quantity`, resolved from the bulk
    preload the checkout already does (`preload_line_variants`). Add
    `tracking_mode` to that select so it costs nothing.
@@ -1164,13 +2490,27 @@ Non-negotiable, per anti-goal §8.6 and the existing query-count guards.
    `lock_stock_items`. Not one per line.
 3. **Allocations are bulk-created**, one statement per checkout, mirroring
    `create_stock_movements`.
-4. **Identifier resolution is one indexed lookup** on `code_normalized`.
-5. **The picker is paginated and warehouse-scoped**, ordered by
+4. **Identifier resolution is one indexed lookup** on `code_normalized`. A GS1
+   DataMatrix is parsed in-process and resolves in the same single call — the
+   AIs give the variant, the lot and the serial, so nothing is looked up twice.
+5. **FEFO is one indexed scan of one table.** `batch_balance_fefo_idx` covers
+   `(variant, warehouse, is_sellable, expiry_date, remaining_quantity)`, and the
+   lot is never joined on the checkout path. This is what the §4.7
+   denormalisation is bought with, and the query-count test asserts it as a
+   number rather than a hope.
+6. **The picker is paginated and warehouse-scoped**, ordered by
    `in_stock_since`, served by the composite index in §4.4. A shop with 3,000
    units in one model still opens it in constant time.
-6. **The units list is keyset-paginated**, not offset — the lesson of
-   `purchases-screen-perf`.
-7. New tests in `test_checkout_query_scaling.py` assert (1) and (2) as numbers,
+7. **The units list is keyset-paginated**, not offset — the lesson of
+   `purchases-screen-perf`. The consignment payables list is the same shape and
+   the same rule.
+8. **The treasury obligations overlay costs one aggregate, not a walk.**
+   `consignor_payable()` and `consignor_claims_open()` are each a single
+   annotated aggregate over indexed columns, computed beside the position rather
+   than per account, and skipped entirely when the shop has no consigned units —
+   the money position is a screen an owner opens twenty times a day and it must
+   not learn a new join for a feature most shops never turn on.
+9. New tests in `test_checkout_query_scaling.py` assert (1) and (2) as numbers,
    because that is the only form of this promise that survives a year.
 
 ---
@@ -1214,10 +2554,44 @@ catalog collapsing from 340 rows to 12 is a better demo than any feature list.
 
 Where the rules live, so they cannot be forgotten by the next caller:
 
-- **Database.** Partial unique on live `code_normalized`; check that an
-  allocation names a unit or a batch; check that a unit allocation has quantity
-  1; `PROTECT` on unit from allocations (history is never deleted by deleting a
-  unit).
+- **Database.** Partial unique on live `code_normalized` (units); **full unique
+  on `(variant, code_normalized)` for lots**, because a lot's identity is
+  permanent where a serial's is only live (§4.7); unique `(batch, warehouse)` on
+  balances; check that an allocation names a unit or a batch; check that a unit
+  allocation has quantity 1; check that a balance is non-negative and never
+  exceeds what it received; `PROTECT` on unit and batch from allocations
+  (history is never deleted by deleting a unit or a lot).
+- **Archiving a product with live units is refused and names them.**
+  `archived_at` hides a product from the catalog (`product-archive`), and a
+  hidden product whose forty handsets still sit in a bin is a stock report
+  nobody can explain. Allowed once every unit is `sold`, `written_off` or
+  `returned`; the refusal lists the units and offers the units list filtered to
+  them, in the shape `catalog/identity.py` established. The same guard covers
+  `is_active = False`, and a lot with a non-zero balance anywhere.
+- **Tracked service and prepared products are refused at both ends** — §4.2.
+  The serializer and `Product.clean()`, not one of the two, because the AI
+  tools and the file importer write products without passing through a form.
+- **Cost never leaves the price-checker kiosk.** The kiosk lookup is
+  unauthenticated on the LAN (`price-checker-kiosk-mode`), so there is no user
+  for `view_stockunit_cost` to mask and a permission check is the wrong
+  mechanism. The kiosk serializer is a **separate, narrower serializer** that
+  has no cost fields on it at all — not a filtered view of the authenticated
+  one, because a filtered view is one careless `fields = "__all__"` away from
+  publishing what a shop paid for every phone on its shelf to anyone on the
+  wifi. A guard test asserts the kiosk response's key set, by name.
+- **The two rules the database cannot hold, and where they live instead.**
+  Allocation shape per `tracking_mode` (§4.6) and `serial_batch` requiring
+  `unit.batch` both reach from the allocation through the variant to the
+  product, which no check constraint can see. They are held by a single writing
+  service plus a guard test named after each failure. Denormalising
+  `tracking_mode` onto every unit and allocation to make them checkable was
+  considered and rejected: a column on the largest tables in the feature, to
+  hold a rule whose value changes when a product's mode does.
+- **The denormalisation guard.** `StockBatchBalance.expiry_date` and
+  `is_sellable` are written only by `StockBatch.save`'s propagation. A guard test
+  fails when any other call site writes `status`, `is_locked` or `expiry_date`
+  on a lot, and invariant 12 asserts no balance disagrees with its lot. This is
+  the price of keeping FEFO a single indexed scan (§11), paid openly.
 - **`may_oversell()`** gains the serialized rule ahead of every other input, so
   no path can sell a phantom handset — §3.5.
 - **`StockUnit.save`** normalises the code and refuses a status transition that
@@ -1227,9 +2601,20 @@ Where the rules live, so they cannot be forgotten by the next caller:
   fails when a new call site writes a `StockMovement` on a serialized variant
   without allocations. This is the ERPNext #42997 tripwire, and it is the single
   most valuable test in the plan because the failure it prevents is silent.
-- **Money-definitions guard.** `unit cost`, `refurb cost`, `landed unit cost`
-  and `unit list price` each get exactly one definition, registered in the
-  existing static guard (`money-definitions-guard`).
+- **Money-definitions guard.** `unit cost`, `refurb cost`, `landed unit cost`,
+  `unit list price`, `consignor payout due`, `consignor payable`,
+  `consignor claims open`, `shop consignment commission` and
+  `consignment custody exposure` each get exactly one definition, registered in
+  the existing static guard (`money-definitions-guard`).
+- **Consignment custody.** A consigned unit cannot be written off through the
+  ordinary write-off endpoint — the API refuses and names the incident endpoint,
+  so a claim is never skipped by choosing the wrong button (§6.2.2).
+  `PROTECT` from incidents and from the agreement, a partial unique index that
+  makes a second disbursement against one unit impossible, `assessed_value`
+  bounded by the agreement's cap in `clean()`, and the fixed-payout price floor
+  checked in `prepare_sale_stock_adjustments` rather than only at the till
+  (§5.8). Payouts and claim settlements obey the period lock like every other
+  money document.
 
 ---
 
@@ -1265,22 +2650,80 @@ Each of these is a test named after the failure it prevents:
   ownership row; to a walk-in, creates neither and still records the sale.
 - Cancelling a receipt whose unit is sold is blocked and names the invoice.
 - IMEI Luhn and VIN check-digit warnings fire, and can be overridden.
+- Selling a consignment unit enqueues an instant transactional SMS via `apps.messaging` to the consignor with invoice number and payout amount; idempotent `dedup_key` prevents double-send.
+- Consignment unit price floor guard blocks POS sales below `consignor_reserve_price` without manager authorization.
+- Disbursing consignment payout opens the cash drawer, records a register cash pay-out movement, stamps `consignor_paid_at`, and closes the payable. A second disbursement against the same unit is refused.
+- A consignment sale posts a `consignment_cost` entry equal and opposite to its issue: cumulative ledger value on the variant is unchanged, the bin never goes negative, and COGS equals the payout. *(the §5.8 balance bug)*
+- A variant holding three owned units at 1,200 and seven consigned ones reports `stock_value = 3,600` and `valuation_rate = 1,200` — consignment dilutes the quantity, never the rate.
+- The worked statement: one unit consigned at a 10,000 fixed payout and sold for 12,000 reports stock value 0, cash collected 12,000, consignor payable 10,000 and shop commission 2,000 — before disbursement; payable 0 and the drawer 10,000 lighter after.
+- A fixed-payout consigned unit cannot be sold below its payout rate, with or without manager override, and a percentage discount that would cross the floor is refused with the same error.
+- The treasury position's `obligations` block reports the payable without changing any account balance, and a disbursed payout is counted exactly once — never twice via an `Expense` or a `SupplierPayment`.
+- Recording an incident needs only `record_consignment_incident`; settling one needs `settle_consignment_claim`, and a cashier's settle attempt is refused.
+- The liability matrix, as a table-driven test over all fifteen cells of policy × responsibility (§6.2.2). The three that carry it: under `shop_liable_except_fm` a `force_majeure` incident assesses 0 while a `third_party` one assesses the declared value; under `shop_liable` both assess the declared value.
+- An incident with `responsibility = consignor`, or any incident under an `owner_risk` agreement, assesses 0, still writes the row, and never appears in `consignor_claims_open`.
+- An `undetermined` incident assesses 0 but stays `pending`, is reported as unassessed, and is carried by the treasury overlay as a count rather than folded into the payable total.
+- The voucher prints the shop's edited clause for the agreement's policy, verbatim, and an agreement created before a shop edited its clause keeps printing what it was signed under.
+- `assessed_value` above the agreement's `liability_cap` is refused; writing off a consigned unit through the ordinary endpoint is refused and names the incident endpoint.
+- Writing off a consigned unit moves zero stock value and settling its claim moves cash — the two are independent, and neither infers the other.
+- A customer return of a consigned item that has already been paid out offers both answers, and each leaves the books consistent: bought in at the payout paid, or reopened with a consignor receivable.
+- FEFO auto-allocation selects the earliest expiring sellable **balance** in that warehouse; the composite index serves it with no join to the lot; a nearer-expiry balance of the same lot in another warehouse is not selected.
+- Sale quantity exceeding a single batch splits into multiple batch allocations on the same line.
+- Selling an expired batch (`expiry_date < today`) is blocked at POS; manager override permission unlocks.
+- Quarantining a batch (`is_locked=True`) immediately blocks checkout across all registers.
+- Recall report returns the exact inward PO receipt, remaining stock in **every** warehouse holding the lot, and every customer sale invoice — from one lot row, with no code string-matching.
+- **Identity vs balance.** One lot received into three warehouses is one `StockBatch` and three `StockBatchBalance` rows; its code is unique per variant; receiving the same code again adds to a balance instead of creating a second lot; receiving it with a different expiry is a structured 400 naming both dates.
+- Transferring 25 of a lot to another warehouse moves quantity between balances, creates the destination balance if absent, re-weights the destination rate, and leaves the `StockBatch` row byte-identical.
+- Quarantining a lot is one write and flips `is_sellable` on every balance in the same transaction; a till in a second warehouse is blocked on its very next checkout with no second write.
+- A balance whose lot's expiry or status changes never disagrees with it — the §4.7 propagation guard, asserted after every batch write in the oracle.
+- **`serial_batch` counts once.** A variant with 40 serialised packs in one lot reports `bin.quantity == 40`, not 80; `balance.remaining_quantity` equals the count of live units in that lot and warehouse after every movement, including returns, transfers and write-offs.
+- A `serial_batch` sale writes **one** allocation naming both unit and batch, quantity 1, and it both flips the unit's status and decrements the lot's balance.
+- Creating a `serial_batch` unit without a batch is refused by the service and caught by the guard test; a `batch`-only allocation on a serialized variant likewise.
+- `serial → serial_batch` grandfathers existing units with `batch = NULL` onto the worklist and requires a lot on every new receipt; `batch → serial_batch` with stock on hand is refused except through opening identification.
+- **GS1 DataMatrix.** A real pharmaceutical label string parses to variant, lot, expiry and serial; fixed-length AIs parse without a separator; a variable-length AI run with the `GS` stripped is detected and reported as a scanner-configuration error rather than imported as a lot number with a date attached.
+- One DataMatrix scan at the till adds a line with variant, unit, lot and expiry resolved, in one endpoint call, opening no picker.
+- An expired lot is refused under `serial_batch` even though the pack carries its own serial.
+
+**The six §18 defects, each a test named after the failure:**
+
+- A product that tracked expiry before the upgrade still consumes earliest-expiry-first after it — run by the rehearsal harness against a populated shop, not against a fixture the new code created. `tracks_expiry` reads correctly as a derived property throughout.
+- Setting a `tracking_mode` on an `is_service` or `is_prepared` product is refused by the serializer *and* by `Product.clean()`; setting `is_service` on a product that has units is refused and names them.
+- Archiving a product with a unit in stock is refused and lists the units; archiving succeeds once they are all sold or written off; the same holds for a lot with a non-zero balance.
+- Every capture and picker surface declares itself a `ScanWedgeTarget`: a widget test types an IMEI at scanner speed into each and asserts it arrives whole. This is the one that fails silently in the field if it is missing.
+- The kiosk price-checker response's key set is asserted **by name** and contains no cost, consignment or supplier field; a scanned identifier still returns the unit's price and the lot's expiry.
+- Choosing آجل with a consignment line raises a confirmation naming the payout amount; the unit is flagged *مباعة آجل* on the payables screen; `consignment_payable()` counts it regardless of the invoice's balance.
+
+**And the two wins:**
+
+- A sold unit's timeline offers the sale's footage when `enable_surveillance` is on, resolves the recorder clock offset, and shows nothing at all when it is off.
+- The companion camera returns the same parsed `{variant, batch, unit, expiry}` structure as a hardware 2D scanner for the same DataMatrix, and the receiving sheet accepts either without knowing which it got.
+- Pooled promotions allocate to the cheapest units first, and the loss guard is evaluated per unit after allocation.
 
 ### 14.3 The oracle
 
 `apps/sales/business_simulation.py` learns serialized products: the independent
 oracle tracks each unit's identity, cost, location and status, and proves after
-every run that all eight §5.4 invariants hold. This is the harness that proved
+every run that all fourteen §5.4 invariants hold. It runs all four tracking
+modes, and its lot bookkeeping is deliberately shaped the way §4.7 says the
+model should be — one lot object holding a map of warehouse to quantity — so a
+plan that ever drifts back toward one row per lot per place fails against an
+oracle that never believed in it. It learns consignment too, and
+tracks a second set of books for it — for every consignor, what came in, what
+sold, what was paid and what is still owed — then proves the four figures of
+§5.8 against them. A payable that only the code computing it agrees with is a
+payable nobody has checked, and this is the money a shop is holding for someone
+else. This is the harness that proved
 the valuation engine (`oracle-correctness-harness`); a valuation *method* that
 does not go through it is a method nobody has checked.
 
 ### 14.4 Scaling and upgrade
 
 - Query-count guards per §11.
-- `test_list_query_scaling` for the units list and the picker.
+- `test_list_query_scaling` for the units list, batches list, and pickers.
 - The upgrade-rehearsal harness (`upgrade-rehearsal-harness`) runs a populated
   shop across the migration and proves no money moved: stock value, COGS on
-  every past sale, and every bin identical before and after.
+  every past sale, and every bin identical before and after. §15.1 adds three
+  more it must prove before the contract release, and a populated **pharmacy**
+  fixture — lots across warehouses, some expired, some sold — to prove them on.
 - Run on Postgres (`make backend-test-pg`); the partial unique index, the GIN
   index and the scaling guards all skip on sqlite and the run still reports
   success (AGENTS.md).
@@ -1290,39 +2733,209 @@ does not go through it is a method nobody has checked.
 ## 15. Phasing
 
 Each phase ships behind the flag, with the oracle extended, and is independently
-useful. No phase leaves the tree in a state where a serialized variant exists
-without a correct ledger.
+useful. Serials and Batches share 80% of the underlying allocation and ledger architecture,
+so co-implementing them in Phases A–B delivers both features for a fraction of the cost of separate projects.
 
-**Phase A — the object and its ledger (≈1.5 weeks).**
-`tracking_mode`, `StockUnit`, `StockAllocation`, `UNIT_COST` valuation, bin
-consistency, the eight invariants, receipt capture (backend), permissions,
-settings, admin. No client. Ends with the oracle green on serialized runs.
+**Phase A — the shared allocation core & ledger (≈2.5 weeks). SHIPPED 2026-09-17.**
+`tracking_mode` (`quantity`/`batch`/`serial`/`serial_batch`), `StockUnit`,
+`StockBatch` split into **lot identity + `StockBatchBalance`** with the migration
+off today's table and the rewrite of `consume_expiring_stock_batches` onto
+warehouse-aware balances, `StockAllocation` and its per-mode rules,
+`UNIT_COST` and `BATCH_COST` valuation, bin consistency for all four modes
+including the `serial_batch` count-once rule, the fourteen integrity invariants,
+receipt capture (backend for serials, multi-lot batches and lot+serial),
+permissions, settings, admin. No client. Ends with the oracle green on
+serialized, batch and serialised-in-a-lot runs.
 
-**Phase B — the shop can operate it (≈2 weeks).**
-Units list + detail + history, receiving capture sheet, POS scan resolution,
-picker, checkout unit binding and locking, receipt/invoice identifier printing,
-labels. **This is the phase that closes the phone-shop deal.**
+Phase A is **R1 of §15.1**, not the whole batch split: it creates and backfills
+`StockBatchBalance` and dual-writes the legacy columns, leaving them the source
+of truth. Reads flip in Phase B (R2) and the columns drop only once the fleet's
+minimum version is past it (R3). A shop that does not use `tracks_expiry` today
+sees none of this and takes Phase A as one ordinary live update.
 
-**Phase C — the used-goods trade (≈1.5 weeks).**
+The split and the fourth mode are both here, in the first phase, on purpose:
+they are the two decisions that are cheap now and structural surgery later. A
+warehouse-scoped batch table would have to be un-shipped with live lot data on
+it, and `serial | batch` as an exclusive choice would have to be widened through
+the allocation rules, the valuation branch, the bin, the POS resolver and the
+recall report at once.
+
+*What actually landed, and where it differs from the paragraph above.*
+
+- Everything listed is in, plus two things that were not listed and turned out to
+  be load-bearing: the **mode-transition guard** (§4.2 — `apps/catalog/tracking_modes.py`,
+  including the `serial → serial_batch` grandfathering) and the **issue side of
+  the sale path**, without which neither `BATCH_COST` valuation nor half the
+  invariants can be exercised at all.
+- The invariants live in `apps/inventory/integrity.py` as runnable checks rather
+  than as prose, so the oracle asserts them after every simulated operation and a
+  support engineer can point them at a real shop's database.
+- The oracle is `apps/inventory/tracking_simulation.py` — a dedicated randomized
+  harness for identified stock, shaped as §14.3 prescribes (one lot object
+  holding a map of warehouse to quantity, so a design that drifts back toward one
+  row per lot per place fails against a model that never believed in one). It is
+  **not** an extension of `apps/sales/business_simulation.py`; folding four
+  tracking modes into that 5,200-line general simulation is its own piece of
+  work, and the two should be merged when Phase B gives the till something to
+  simulate.
+- **Capture-later placeholders are `in_stock` and unidentified**, not
+  `expected`. §4.3 defines `expected` as "PO placed, not arrived", and a
+  placeholder is the opposite: arrived, on the shelf, and owing a number. Giving
+  it `expected` would have broken invariant 1 (on-hand counts units) for goods
+  that are physically present. `StockUnit.is_identified` carries the worklist,
+  and the till refuses to sell a unit that has not got its number yet.
+- Invariant 3 is therefore implemented as `COUNT(expected units) <= quantity_expected`
+  rather than as equality: a purchase order raises `quantity_expected` without
+  inventing identifiers for goods nobody has seen, because §6.1's first line says
+  identifiers are captured where the goods physically are.
+
+**Phase B — the shop operates both (≈2 weeks).**
+Units list + Batches list & detail, receiving capture sheet (IMEI scan loop & multi-lot split),
+POS barcode resolution **and the GS1 DataMatrix parser — confirmed core, not
+conditional (§17.9): Libyan pharmacy stock carries these codes widely, and the
+parser pays for itself at receiving before it does at the till**, FEFO auto-allocation
+over balances, unit & batch picker sheets, checkout unit locking & balance decrement,
+receipt/invoice identifier printing (IMEI & Lot/Expiry),
+carton & shelf label printing, and **the companion camera as a DataMatrix
+scanner** (§6.3) — which is what lets a pharmacy with only 1D lasers use any of
+this on the day it installs rather than after it buys hardware.
+**This phase closes both the phone-shop deal and the pharmacy/grocery deal.**
+
+**Phase C — the used-goods trade & consignment (≈2.5 weeks).**
 Per-unit pricing everywhere, per-unit cost split, counter purchase and trade-in,
+`ConsignmentAgreement` intake and voucher, the `consignment_cost` ledger entry
+and the fixed-payout floor (§5.8 — both are correctness, not polish, and belong
+with the first consignment sale rather than after it), the derived payable and
+the treasury obligations overlay, automated customer sale SMS notification via
+`apps.messaging`, consignor payables screen and counter disbursement,
 attribute definitions and the attribute UI, aging and per-unit margin reports,
 refurb capitalisation, returns and warranty lookup.
 
-**Phase D — the rest of the estate (≈1.5 weeks).**
-Transfers, serialized stock count, write-off flow and shrinkage report,
-opening identification, price-checker lookup, AI tools and genui card,
-dashboard card, missing-identifier worklist.
+**Phase D — safety, recall & warehouse operations (≈2 weeks).**
+`ConsignmentIncident`, claims and settlement, custody exposure and the unclaimed-payout
+aging (§6.2.2), the per-consignor statement,
+emergency batch quarantine (`is_locked`), traceability recall audit & consumer SMS safety broadcast,
+expiry watchlist & markdown discount suggestions, batch-aware and serialized transfers,
+stock count (serialized scan-the-shelf and batch variance count), write-off flows,
+opening identification for both serials and batches, price-checker lookup (with
+the cost-free kiosk serializer of §13), the surveillance link from a unit's
+timeline and an incident to the footage of the moment (§8.3), AI tools and
+dashboard cards.
 
-**Phase E — batches grow up (≈1 week, optional and separable).**
-`StockBatch` gains code, supplier lot, manufacture date, batch-wise valuation
-and splits; expiry keeps working exactly as it does now; scan-a-lot at receipt
-and at sale. Pharmacy and grocery become the second market for this engine.
-
-**Phase F — migration (≈1 week, runs in parallel with C).**
+**Phase E — migration (≈1 week, runs in parallel with C).**
 The collapse tool of §12, against the prospect's real export.
 
-Roughly seven to eight weeks of focused work for A–D, which is what actually
-matters; E and F are separable and demand-driven.
+Roughly nine to ten weeks of focused work for A–D, delivering a general
+traceability engine rather than a serial feature: four tracking modes that
+compose, lots whose identity survives every warehouse they pass through,
+consignment carrying a real liability and custody model rather than a zero in a
+cost column, and one GS1 scan that resolves all of it at a till.
+
+
+### 15.1 Shipping this to shops that are already trading
+
+**Almost all of it is an ordinary live update. One part is not, and it is the
+batch split.**
+
+The constraint is the one `zero-downtime-updates` sets and
+`inventory/migrations/0023_warehouse_required.py` states better than this plan
+can: the edge nginx flips backends, and *"a live update runs the previous
+release against the new schema for about a minute, and that release knew nothing
+about warehouses"*. Everything below is measured against that minute.
+
+**What is a plain live update — the overwhelming majority.**
+
+- **Every new table** — `StockUnit`, `StockAllocation`, `StockBatchBalance`,
+  `ConsignmentAgreement`, `ConsignmentIncident`, `UnitAttributeDefinition`. The
+  previous release cannot see a table it does not know about.
+- **Every new column**, added nullable or with a default:
+  `Product.tracking_mode`, `asset_type`, `warranty_days`,
+  `ProductVariant.gtin`, the `ShopSettings` flags,
+  `StockReservation.stock_unit`, `operations.Job.stock_unit`. The 0018–0022
+  lesson applies unchanged: **nullable now, required in a later release**, never
+  `NOT NULL` in the release that adds the column.
+- **Every new endpoint and report.** Additive by §7's own rule.
+- **New document types and their counter rows** (`gapless-document-numbering`).
+
+**Indexes, which are the quiet trap.** This plan adds several on tables that are
+large and hot — `batch_balance_fefo_idx`, the unit composite, the GIN on
+attributes. Each must be `AddIndexConcurrently` with `atomic = False`, the shape
+`catalog/migrations/0020_search_trigram_indexes.py` already uses, and **each must
+run on a direct connection rather than through PgBouncer**: `CREATE INDEX
+CONCURRENTLY` cannot run inside a transaction, and the pooler is in transaction
+mode (`pgbouncer-pooling`). The unique index on `(variant, code_normalized)`
+takes the two-step form — `CREATE UNIQUE INDEX CONCURRENTLY`, then `ADD
+CONSTRAINT ... USING INDEX` — and the backfill that invents `code_is_generated`
+values must be proven unique before either.
+
+**The exception: `StockBatch` loses columns that the old release writes.**
+
+§4.7 moves `received_quantity`, `remaining_quantity` and `source_receipt_line`
+off `StockBatch`. The previous release writes the first two on the checkout
+path — `consume_expiring_stock_batches` runs inside
+`record_sale_stock_movements` — so dropping them in the same release that adds
+balances would make the old backend 500 on every affected sale during the flip
+minute, and leave the two representations disagreeing for however long before
+that. This is the warehouse phase again, and it gets the same answer: **spread
+across three releases.**
+
+| | What ships | Old release still correct because |
+|---|---|---|
+| **R1 — expand** | `StockBatchBalance` created and backfilled one balance per existing row in the shop's default warehouse; new code **dual-writes** both the balance and the legacy columns; reads still come from the legacy columns | the legacy columns are still the source of truth and still maintained |
+| **R2 — flip reads** | reads move to balances; dual-write continues; a verification job asserts the two agree on every batch, shop by shop | the legacy columns are still written, so a rollback to R1 is clean |
+| **R3 — contract** | dual-write stops; `received_quantity`, `remaining_quantity`, `source_receipt_line` dropped; the `in`-allocation backfill that replaces provenance runs | nothing older than R2 is left in the fleet |
+
+**R3 is gated on the fleet, not on one shop.** `relay-remote-update` lets shops
+sit pinned, paused or on a canary, so the contract release cannot ship until the
+fleet's *minimum* version is past R2 — a floor the relay can already report.
+Shipping R3 while one pinned pharmacy is still on R1 is how a shop loses its
+expiry tracking, and the rollout tooling exists precisely so that this is a
+query rather than a hope.
+
+**The blast radius is smaller than it looks.** `consume_expiring_stock_batches`
+returns immediately unless `variant.product.tracks_expiry`, so the whole R1–R3
+dance only concerns shops that **already** track expiry today. For every other
+shop — which is most of them — the batch split touches no row that exists and
+the entire plan is a single live update. Which shops those are is answerable
+before any of this ships, from the relay (`relay-remote-diagnostics`), and it
+should be answered rather than assumed.
+
+Two smaller behaviours inside the same window, both benign and both worth
+knowing:
+
+- **`expiry_date` widening to nullable** is a catalog-only `DROP NOT NULL`. The
+  old release's `order_by("expiry_date")` puts Postgres's NULLs last in ASC, so
+  a null-expiry lot created by the new release sorts to the back of the old
+  release's FIFO rather than breaking it. Degradation, not failure.
+- **`consume_expiring_stock_batches` gains a warehouse argument**, which changes
+  *which* lot a sale consumes, not whether one is consumed. During the flip
+  minute two backends may pick differently for identical carts. Both decrement
+  real stock and both leave the invariants true; the allocation choice is simply
+  non-deterministic for that minute, and no report reads it as though it were.
+
+**The client-version gate, which is the finding that is easy to miss.** §6.3
+refuses a serialized sale with no unit picked, *always*, whatever
+`allow_overselling` says. A till running a pre-serialization client cannot pick
+a unit, so if a shop enables `enable_serialized_inventory` while one of its
+tills is on an old build, that till gets a hard 400 it has no UI to recover
+from — on a product it sold fine yesterday. Clients self-update from the local
+backend but on their own schedule (`client-self-update`), so this is a real
+state, not a hypothetical.
+
+Rule: **the settings toggle requires a minimum client version across the shop's
+registered devices**, not merely a permission. The settings screen names the
+tills that are behind and offers the update, and the flag stays off until they
+are current. The same gate covers `enable_batch_tracking`, whose expired-batch
+refusal has the same shape.
+
+**The rehearsal is the gate, not the reassurance.** `upgrade-rehearsal-harness`
+migrates a populated shop between tags and proves no money moved. This plan
+gives it three new things to prove, and none of them are optional before R3:
+stock value and every past sale's COGS identical across R1→R2→R3; every balance
+equal to the legacy column it replaced at the moment dual-write stops; and the
+fourteen §5.4 invariants green on the migrated data, not merely on data the new
+code created. A populated pharmacy fixture — lots across warehouses, some
+expired, some sold — belongs in that harness before R1 ships.
 
 ---
 
@@ -1333,16 +2946,30 @@ matters; E and F are separable and demand-driven.
 2. **A general custom-field engine.** Attributes are scoped to units, defined
    per asset type, and go no further. Anti-goal §8.2 stands.
 3. **Serial genealogy / manufacturing traceability** (parent-child serials
-   through assembly). No demand; our recipes cover kitchens and workshops.
+   through assembly). No demand; our recipes cover kitchens and workshops. *Lot*
+   genealogy is built — `parent_batch` covers repacking and splitting, which a
+   pharmacy and a chemical trader both do — and it is cheap precisely because
+   the lot is an identity rather than a per-warehouse balance (§4.7).
 4. **Fixed-asset depreciation on units.** ERPNext links `Serial No → Asset` for
    its own fixed-asset module. Ours links to the *customer* asset registry,
    which is a different and more useful idea for this market.
-5. **Global serial uniqueness.** §3.6.
+5. **Global serial uniqueness.** §3.6. Note the deliberate asymmetry with lots,
+   whose codes *are* unique per variant and permanently so (§4.7): a serial
+   names an article that can leave and come back as a different article of
+   stock, while a lot code names a factory run that is the same factory run
+   forever.
 6. **Serialized service or prepared products.** A haircut has no IMEI.
 7. **Per-unit multi-currency pricing.** `list_price` is base currency, exactly
    like `ProductVariant.unit_price`. FX stays a product-level pricing concern.
 8. **Anything on the checkout path for non-serialized shops.** §11.1, and it is
    the constraint at the top of this document.
+9. **A general ledger, or accounts, for consignor liability.** The payable and
+   the claim are derived from the rows that already exist, exactly as
+   `apps/treasury` derives the money position and `Job.settlement_state` derives
+   where a repair stands — §5.8. The stamped Arabic ledger stays where the
+   benchmark plan put it, and nothing in this section waits for it.
+10. **Automatic escheat of unclaimed payouts.** Money owed to a consignor who
+    never returns stays owed, on a timer that only ever raises a reminder — §17.
 
 ---
 
@@ -1365,6 +2992,192 @@ matters; E and F are separable and demand-driven.
    Revisit only if a third consumer appears.
 5. **Batch codes now or later?** Phase E is written as separable. If a pharmacy
    is in the pipeline, it moves ahead of D. Nothing in A–C forecloses it.
+   What is *not* deferrable is the identity/balance split and the fourth
+   tracking mode — both land in Phase A whether or not a pharmacy signs, because
+   both are cheap before there is lot data and expensive after (§15).
 6. **Cost masking default.** Should `view_stockunit_cost` be off for cashiers by
    default? Recommendation yes — it is a used-goods norm, and it is easier to
    grant than to claw back.
+7. **RESOLVED 2026-09-17 — three policies, defaulting to `owner_risk`.** The
+   question was posed as a choice between two poles and the answer was that the
+   interesting policy is the one between them. `shop_liable_except_fm` — the
+   shop stands behind its own negligence and a burglary, but not a fire, a flood
+   or unrest — is what most shops here *mean* whichever extreme their voucher
+   prints, and it is now the middle value of a three-member enum ordered by
+   ascending shop exposure (§5.8), with `force_majeure` added to the incident's
+   responsibility so the policy can actually fire (§6.2.2).
+
+   The **default is `owner_risk`**, because that is what Libyan consignment
+   vouchers already say and a system should ship reading the paper the shop
+   already prints rather than the paper we think it should print. A shop that
+   wants to stand behind its custody says so at setup, and then the matrix in
+   §6.2.2 does the rest. The same shops will often still pay under
+   `owner_risk` — reputation being what it does in a market this size — and that
+   is exactly what the incident record is for: a claim can be settled generously
+   without pretending the agreement said something it did not.
+
+   **One thread stays open, and it is the wording, not the model.** The three
+   Arabic clauses are the contract, and *«المحل ضامن ما عدا الظروف القاهرة»* is
+   a literal rendering rather than the phrase Libyan shops actually print. This
+   is why §10 makes the clause an editable per-policy sentence instead of a
+   label derived from the enum. Worth collecting the real wording from two or
+   three shops' existing vouchers before Phase C ships.
+8. **Unclaimed payouts: does the money ever become the shop's?** After a year,
+   two, five, with the consignor unreachable. This is a legal question and not a
+   product one, so the system's answer is deliberately *no, never automatically*
+   — it ages, it reminds, it stays owed and visible. Revisit only with an
+   answer from someone qualified to give one; until then, a figure the owner can
+   see and act on beats a rule we invented.
+9. **RESOLVED 2026-09-17 — Libyan pharmacy stock carries GS1 DataMatrix
+   widely.** Confirmed from the field: many products on Libyan pharmacy shelves
+   are DataMatrix-coded. The parser (§6.3) is therefore **core Phase B work, not
+   conditional**, and it earns its place at receiving before it earns it at the
+   till: one scan fills GTIN, lot and expiry, which is the tedious, error-prone
+   part of pharmacy intake that today is typed by hand off a foil edge.
+
+   One sub-question remains, and it is narrower than the original: **do those
+   codes carry AI `21` (serial), or only `01`/`17`/`10`?** Serialisation is
+   mandated by the market a pack was manufactured for — EU FMD and US DSCSA
+   require it, and Gulf regimes such as Saudi's RSD and UAE's Tatmeen now do
+   too, so stock arriving via those channels usually carries a serial, while
+   packs made for markets with no track-and-trace mandate carry lot and expiry
+   only. This decides the *mix*, not the model: `batch` mode plus the parser
+   covers everything, and `serial_batch` adds per-pack verification on the
+   subset that has it. Answerable by reading three real codes and looking for a
+   `21` segment — the parser's own test fixtures should be those strings.
+10. **Does the prospect actually run consignment today, and on what terms?**
+   Fixed payout and commission are both built, but which one they use decides
+   whether the §5.8 price floor is a hard wall they will hit daily or a guard
+   that never fires. Worth one question in the same meeting as §17.1.
+
+---
+
+## 18. What Pointy already has, and how this must behave toward it
+
+Everything above describes what gets built. This section is the other half: the
+52 settings, the product flags and the two dozen subsystems that are **already
+running in shops**, each of which this feature either has to respect, adapt, or
+deliberately refuse. It was written by reading them, not by recalling them.
+
+Most rows below are integrations — a sentence of behaviour, decided once so it
+is not decided differently in three places. Six were defects rather than
+integrations: this audit found them, and each is now **fixed in the section that
+owns it** rather than living on as a warning at the end of a document. They are
+listed here with where the rule went, because an audit whose findings only exist
+in the audit is a list of things nobody will read at the moment they matter.
+
+| Found | Fixed in |
+|---|---|
+| `tracks_expiry` and `tracking_mode` both exist, and nothing said how they relate — left alone, a shop's expiry tracking silently stops | **§4.2** (derived property + R1 migration), §18.4 (the argument), §15.1 (R3 drops the column) |
+| `is_service` / `is_prepared` products could be given a `tracking_mode`, and the stock engine skips those products entirely — a serialized haircut that never allocates | **§4.2** (the refusal, symmetric), §13 (both ends, because the AI and importer are callers) |
+| Archiving a product with live units had no defined behaviour, and `archived_at` already hides products from the catalog | **§13** (refused and names the units; same guard for `is_active` and for a lot with a balance) |
+| `ScanBurstGuard` would eat identifier scans in the new capture sheets | **§8.1** (every scan surface declares `ScanWedgeTarget`, with the existing panes named as the pattern) |
+| The price-checker kiosk is unauthenticated, so `view_stockunit_cost` protects nothing there | **§13** (a separate cost-free serializer, not a filtered view), §7, §8.2 |
+| A consignment sale on آجل owes cash before it collects any | **§5.8** (confirmation naming the payout, flagged on the payables screen, payable unchanged) |
+
+Two **free wins** the audit turned up are now planned work rather than
+observations: the surveillance link from a unit's timeline to the footage of its
+sale (§8.3, Phase D), and the companion camera as a DataMatrix scanner for shops
+with only 1D lasers (§6.3, Phase B). A third loose end found while checking a
+defect that turned out not to be one — which unit a pooled promotion discounts
+when units carry their own prices — is resolved in §5.7.
+
+### 18.1 Settings that change how this must behave
+
+`ShopSettings` carries 52 fields (`backend/apps/core/models.py:71`). These are
+the ones that touch tracked stock:
+
+| Setting | What it does today | How tracked stock reacts |
+|---|---|---|
+| `allow_overselling` | lets stock go negative | **Overridden, never consulted, for serialized variants** — §3.5. A phantom handset is not a business decision. |
+| `prevent_selling_at_loss` | blocks sales under cost | Reads `incoming_rate + refurb_cost` per unit (§5.6), and `expected_payout` for consignment (§5.8) — not the bin rate. |
+| `inventory_valuation_method` | the shop's costing method | **Not consulted** for tracked variants; `UNIT_COST` / `BATCH_COST` are chosen by the product — §5.1. |
+| `books_locked_through` | closes a period | Applies unchanged to re-stamps (§5.5), payouts and claim settlements (§5.8). |
+| `warn_low_stock_before_sale` | prompts when a line exceeds stock | **Suppressed on serialized lines.** Quantity is locked to 1 and the unit either exists or it does not; the dialog can only ever be noise, once per handset. |
+| `low_stock_threshold` | the low-stock signal | Works untouched, because the bins stay honest (§5.3). For batch variants the *useful* signal is near-expiry rather than low quantity — §9.12 is where that lives, and the two must not be conflated in one notification. |
+| `stock_count_variance_min_units` / `_percent` | which counted lines need review | **Not applied to a serialized count.** §6.6 produces named lists, not a number: a missing IMEI is always worth surfacing, and a shop that raises `min_units` for its grocery lines must not thereby silence one missing phone. |
+| `cashier_return_window_hours` | how long a cashier may take returns | Applies to returns. A **warranty claim is not a return** and is not bounded by it — §6.4, and the unit's `warranty_expires_on` is the window that governs there. |
+| `require_customer_for_credit` | آجل needs a customer | Unchanged, and load-bearing for the row below. |
+| `enforce_customer_credit_limits`, `default_customer_credit_limit` | آجل ceilings | Unchanged — a serialized sale is an ordinary sale to the receivable, and the existing ceilings bind exactly as they do today. **A consignment sale on آجل is the exception** and is handled in §5.8: the payout falls due at the sale while the money arrives later, so the till confirms with the payout named and the payables screen flags those units *مباعة آجل*. Nothing is refused; the second number is simply shown. |
+| `pos_cash_purchase_limit` | caps a POS cash purchase | **Applies to counter purchase and trade-in** (§6.2) — a used car will exceed it, and it must take the same override path rather than a second, quieter cap. |
+| `enable_cash_payments` / `_card_` / `_transfer_` | which tenders exist | Consignor payouts and claim settlements offer only the enabled ones (§5.8, §6.2.2). |
+| `card_commission_percent` | the shop's card fee | **The fee comes out of the shop's commission, not the consignor's payout**, because the payout is computed from `sold_price`. Stated because it is a real counter argument, not because it is hard. |
+| `auto_print_receipts`, `auto_print_min_line_count`, `auto_print_min_total` | the auto-print floor | A one-line handset sale clears the floor on total. **Consignment intake vouchers, payout receipts and claim settlements are exempt from the floor entirely**, like آجل and quotations — they are the signed record of someone else's property, not a slip for a loaf of bread (`auto-print-floor`). |
+| `enable_repair_operations` | the workshop module | **Required for §5.6.** Refurb capitalisation has no source of cost without it, and the unit detail screen hides the refurb row when it is off. |
+| `enable_surveillance`, `surveillance_pre_roll_seconds`, `surveillance_post_roll_seconds` | invoice-linked DVR footage | Free win, and worth taking: the unit detail screen links to the footage of the moment that unit was sold. High-value serialized goods are exactly the sale anyone ever wants to re-watch. |
+| `enable_purchase_suggestions` | per-supplier next-product chips | Unchanged for batch. For serialized, suggests the *model*, never a unit. |
+| `fx_enabled`, `fx_instrument`, `Product.pricing_currency` | multi-currency pricing | §16.7 bans per-unit currency, but `pricing_currency` exists on the product and this plan never said what happens. **Rule: `StockUnit.list_price` and `StockBatchBalance.incoming_rate` are always base currency**, exactly like `ProductVariant.unit_price`; a tracked product may carry a `pricing_currency` and the conversion happens where it already happens, above the unit. |
+| `shop_type` | the vertical, from the wizard | Drives the presets of §10. |
+| `require_opening_cash`, `month_end_*`, `fiscal_year_start_month`, `receipt_header/footer`, `require_card_payment_receipt`, `trusted_card_terminal_ids`, `allow_cashier_customer_access`, `enable_online_invoices`, `enable_job_tracking`, `kitchen_auto_complete`, `auto_print_kitchen_tickets`, `enable_production_operations` | — | No interaction. Listed so the next reader knows they were considered. |
+
+### 18.2 Product and variant flags
+
+| Flag | Rule |
+|---|---|
+| `is_service`, `is_prepared` (fixed §4.2) | **`tracking_mode` is refused on both**, at the serializer and in `clean()`. §16.6 says a haircut has no IMEI, but nothing enforces it, and `record_sale_stock_movements` already skips these products entirely (`sales/services.py:843`) — so a serialized service would accept a unit at the till and never allocate it. The refusal is symmetric: turning `is_service` on for a tracked product is refused too. |
+| `archived_at`, `is_active` (fixed §13) | **Archiving a product with live units is refused and names them**, the same shape as the existing archive guards. A product hidden from the catalog whose forty handsets are still in a bin is a stock report nobody can explain (`product-archive`). Archiving is allowed once every unit is `sold`, `written_off` or `returned`. |
+| `tracks_expiry` | Absorbed into `tracking_mode` as a derived property — §4.2, and §18.4 for why. |
+| `unit`, `default_sale_unit`, `default_purchase_unit`, `ProductUnit` | **A serialized product is single-unit by definition** — a carton of ten phones is ten units, not one line of ten — so `tracking_mode = serial` refuses a product with `ProductUnit` conversions, and vice versa. **Batch is the opposite**: multi-unit is normal (a carton of 24, sold as singles) and every rate is per base unit, normalised by `unit_factor` at every read, per `uom-cost-normalization`. That memory records a whole class of phantom losses from getting this wrong once. |
+| `modifier_groups` | Priced modifiers work unchanged on a tracked line: the unit resolves the *base* price (§5.7) and `effective_unit_price` adds the modifiers on top, server-side. One line, one unit, its own modifiers. |
+| `ProductVariant.gtin` | New, and the key the GS1 DataMatrix's AI `01` resolves against (§6.3). Uniqueness is per shop and advisory — a wrong GTIN should be correctable, not a wall. |
+| `popularity`, `variant_options`, `option_signature` | No interaction. The catalog relevance filter and most-bought sort read the variant, which is unchanged. |
+
+### 18.3 Subsystems on the path
+
+| Subsystem | How this must behave |
+|---|---|
+| `ScanBurstGuard` / `ScanWedgeTarget` (fixed §8.1) | The guard rolls back digits typed at scanner speed so a wedge cannot become a line quantity (`frontend/lib/src/shared/barcode/scan_burst_guard.dart`). **The unit capture sheet, the unit picker and the batch capture sheet are scan targets and must declare themselves as such**, or every identifier scanned into them is swallowed as a burst. `pos_cart_pane.dart` and `purchase_draft_pane.dart` already show the pattern. |
+| Price checker, kiosk mode (fixed §13) | Kiosk lookup is **unauthenticated on the LAN** (`price-checker-kiosk-mode`), so there is no user for `view_stockunit_cost` to mask. The kiosk endpoint must not return `incoming_rate`, `refurb_cost`, consignment terms or supplier at all — refused by construction, not by permission — while a scanned identifier may return that unit's price and, for batch, its expiry. |
+| Discounts: pooled promotions | Verified against `discounts/services.py:582`: multi-buy, tiered and buy-X-get-Y pool whole units **across every matching line**, so three separate one-unit handset lines do form a pool of three. What is undefined is *which* unit an allocation lands on when units have different `list_price`, and the loss guard must be re-evaluated per unit after allocation — a "buy 2 get 1" that gives away the 1,400 handset is a different transaction from one that gives away the 1,200. |
+| Discounts: preview cache | Key must include unit ids — already §5.7, restated here because `discount-engine-perf` records that the cache is fail-open and a wrong key is silent. |
+| Catalog version / ETag / price cache | A unit reprice, a lot quarantine and an expiry change all change what a till should show. **Each bumps the catalog version counter**, or the price-checker cache and the 304s serve yesterday's answer (`catalog-version-etag-price-cache`). |
+| State versions & revalidation | Tracked stock is a new domain and needs its own counter, bumped `on_commit`, so open screens refresh (`state-version-revalidation`). The consignment payables screen is the one that will be watched. |
+| Stock count | `stock_count_needs_review` (`inventory/services.py:407`) is a quantity heuristic — see §18.1. The serialized count path produces lists and bypasses it. |
+| Register session & Z-Report | Consignor payouts and claim settlements are drawer pay-outs and **must appear on the Z-Report** like every other one (`register-session-zreport`), or a session reconciles short by the payout. |
+| Purchase cost guard | `purchase-cost-guard` warns on purchasing and hard-blocks POS cash purchases. It applies per unit on a per-unit cost split, and the counter-purchase flow of §6.2 inherits the hard block — which is right: a typo when buying a phone over the counter is cash out of the drawer. |
+| Fraud engine | `fraud/metrics.py` scores cashiers on void, return, discount and pay-out rates. Two new signals fall out of this work almost free and are worth adding once the data exists: **units written off per cashier**, and **unit reprice frequency**. Not in scope, noted so it is not re-derived. |
+| Companion camera | The phone-as-till-camera (`apps/companion`) is a camera on the LAN with a decode ladder already tuned for real photographs (`companion-camera-decode-lessons`). It is the obvious **DataMatrix scanner for receiving** on a shop with no 2D scanner — a real Phase B option rather than a new build. |
+| Scales | `ScalePLU` pushes PLUs to weighing scales. A serialized product has no PLU and must never be pushed; a batch product sold by weight can be, and its lot is chosen by FEFO at the till exactly as a scanned one is. |
+| AI tools | `create_sale` (`ai/tools.py:2920`) must refuse a serialized product rather than sell a phantom one, and the generic `create_resource` / `update_resource` must not be able to write a `StockUnit`, a balance or an allocation — those are service-owned tables, and §13's "one writer" rule is only true if the AI is not a second one. |
+| Learning module | 98 Arabic guides and 16 practice lessons run against a sandbox shop, and **CI fails when a lesson rots** (`learning-module`). Changing the POS scan flow and the receiving sheet will rot lessons; new lessons for unit capture and lot receiving are part of the phase that ships them, not a follow-up. |
+| Backup / COPY export | The new tables join the Postgres `COPY` export and its verification (`backup-verification-and-copy-export`). An archive that restores a shop without its units is not a backup. |
+| Notifications | Near-expiry alerts are a new notification source, and `perf-audit-2026-06` records that notifications already recompute on every GET. The expiry watchlist is a scheduled sweep writing rows, never a computation on the notification read path. |
+| Analytics / telemetry | New screens are tracked through `TrackedScreen` and the burst coalescer, not by hand (`screen-attribution-tracker`, `telemetry-burst-coalescing`). A scan loop that emits an event per scan is exactly the pattern that produced a 5.1M-call ingest storm once. |
+| Documents lifecycle | `ConsignmentAgreement`, `ConsignmentIncident` and the payout register in `apps.documents` with the freeze/cancel/reversal contract, and their queries use `with_lifecycle_relations()` — `lifecycle-query-scaling` records that the N+1 stays hidden until rows are actually cancelled. |
+| Treasury | §5.8. The obligations overlay, and one new component code. |
+| Invoice intake | Supplier invoice photos already extract lines; IMEIs and lot codes extend the same pipeline (`invoice-intake-pipeline`). |
+
+### 18.4 `tracks_expiry` and `tracking_mode` cannot both be the answer
+
+`Product.tracks_expiry` exists today and is the gate on
+`consume_expiring_stock_batches`: no flag, no cohort consumption. This plan adds
+`tracking_mode`, and §4.2 mentions the old flag only in passing — *"used when
+`tracking_mode` is batch or `serial_batch`, or when `tracks_expiry` is True"* —
+which leaves two flags governing one behaviour and four combinations, two of
+them meaningless.
+
+That is not a tidiness problem. `consume_expiring_stock_batches` is rewritten in
+Phase A against warehouse-aware balances (§15.1), and its first line is the
+`tracks_expiry` check. A product whose owner set `tracks_expiry` years ago and
+which nobody migrates to `tracking_mode = batch` either keeps the old code path
+alive forever or **silently stops having its expiry tracked** on the release
+that removes it.
+
+The resolution, and it belongs in the R1 migration rather than a later decision:
+
+- **Every product with `tracks_expiry = True` becomes `tracking_mode = batch`**,
+  and its existing cohorts become identities with `code_is_generated = True`
+  plus one balance each (§4.7). Nothing about the shop's behaviour changes on
+  that release: the same goods are consumed earliest-expiry-first, they just
+  now have a row that can carry a lot number when someone types one.
+- **`tracks_expiry` becomes derived** — `tracking_mode in (batch, serial_batch)`
+  — kept as a property for every existing reader, and the column drops in the
+  contract release (R3) alongside the batch columns, under the same fleet gate.
+- **The product form stops showing it.** One control, `tracking_mode`, decides
+  this; a second checkbox that means a subset of the first is how a shop ends up
+  with an expiry-tracked product that has no lots.
+
+The test is the one named after the failure: *a product that tracked expiry
+before the upgrade still consumes earliest-expiry-first after it*, run by the
+rehearsal harness against a populated shop, not by a unit test against a fixture
+created by the new code.

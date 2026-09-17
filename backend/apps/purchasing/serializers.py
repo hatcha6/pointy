@@ -9,6 +9,7 @@ from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
 from apps.catalog.models import ProductVariant
 from apps.core.period_lock import assert_period_open
+from apps.inventory.identity import IdentifierKind, check_identifier
 from apps.catalog.services import preload_line_variants
 from apps.catalog.units import (
     UnitConversionError,
@@ -1919,6 +1920,84 @@ class PurchaseOrderSerializer(DocumentLifecycleFields, serializers.ModelSerializ
         )
 
 
+class ReceiptUnitCaptureSerializer(serializers.Serializer):
+    """One identified article, as the receiver scanned or typed it.
+
+    Everything but ``code`` is optional, and ``code`` itself is optional too —
+    a blank row is a placeholder the shop owes an identifier for, which is what
+    ``serialized_capture_later_allowed`` buys.
+    """
+
+    code = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+    secondary_code = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+    supplier_code = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+    identifier_kind = serializers.ChoiceField(
+        choices=[kind for kind, _label in IdentifierKind.CHOICES],
+        required=False,
+    )
+    unit_cost = serializers.DecimalField(
+        max_digits=18, decimal_places=6, required=False, allow_null=True
+    )
+    list_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True
+    )
+    attributes = serializers.DictField(required=False)
+    notes = serializers.CharField(required=False, allow_blank=True)
+    batch_code = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+
+    def validate(self, attrs):
+        """Warn about an identifier that looks wrong; never wall it off.
+
+        A failed IMEI Luhn is almost always a keying error, and catching it at
+        receipt beats catching it at a warranty claim two years later — but a
+        guard that blocks a legitimate oddity gets disabled, and a disabled guard
+        catches nothing. So the warnings ride back on the row and the client
+        decides, exactly as ``purchase-cost-guard`` does for a mistyped cost.
+        """
+        code = attrs.get("code")
+        if code:
+            attrs["identifier_warnings"] = [
+                warning.__dict__
+                for warning in check_identifier(
+                    code, kind=attrs.get("identifier_kind") or IdentifierKind.SERIAL
+                )
+            ]
+        return attrs
+
+
+class ReceiptBatchCaptureSerializer(serializers.Serializer):
+    """One production lot on a delivery, with the quantity that arrived of it.
+
+    Deliveries routinely bundle several lots under one order line, so a line may
+    carry more than one of these and their quantities must sum to what was
+    accepted.
+    """
+
+    code = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+    quantity = _quantity_input_field(min_value=Decimal("0"), required=False)
+    expiry_date = serializers.DateField(required=False, allow_null=True)
+    manufactured_on = serializers.DateField(required=False, allow_null=True)
+    gtin = serializers.CharField(
+        max_length=14, required=False, allow_blank=True, trim_whitespace=True
+    )
+    barcode = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, trim_whitespace=True
+    )
+    unit_cost = serializers.DecimalField(
+        max_digits=18, decimal_places=6, required=False, allow_null=True
+    )
+
+
 class PurchaseReceiptLineInputSerializer(serializers.Serializer):
     line = serializers.PrimaryKeyRelatedField(
         queryset=PurchaseLine.objects.all(),
@@ -1940,6 +2019,10 @@ class PurchaseReceiptLineInputSerializer(serializers.Serializer):
     expires_on = serializers.DateField(required=False, allow_null=True)
     notes = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
     note = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
+    # Identified stock captured where the goods physically are. Absent on every
+    # delivery of everything a shop counts rather than identifies.
+    units = ReceiptUnitCaptureSerializer(many=True, required=False)
+    batches = ReceiptBatchCaptureSerializer(many=True, required=False)
 
     def validate(self, attrs):
         line = attrs.get("line")

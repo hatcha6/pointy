@@ -1,13 +1,17 @@
 from decimal import Decimal
 
 from django.conf import settings
+from django.contrib.contenttypes.fields import GenericRelation
 from django.db import DatabaseError, models
 from django.db.models import F, Q
+from django.utils import timezone
 
 from apps.catalog.models import ProductVariant
 from apps.core.models import TimeStampedModel
 from apps.documents.guards import DocumentQuerySetMixin
 from apps.documents.models import DocumentMixin
+
+from .identity import IdentifierKind, normalize_identifier
 
 #: What a shop's one and only location is called until it opens a second. The
 #: showroom, not the store room: naming a single-location shop's floor "the main
@@ -172,41 +176,239 @@ class StockMovement(TimeStampedModel):
 
 
 class StockBatch(TimeStampedModel):
+    """The lot itself: what was made, by whom, when, and when it stops being good.
+
+    **Never a quantity and never a place.** ERPNext calls this ``Batch``; Odoo
+    calls it ``stock.lot``. One lot code means one lot, for the life of the shop,
+    wherever its goods currently sit — which is why the quantity that used to
+    live on this row now lives on :class:`StockBatchBalance`, one per place.
+
+    The reason is not tidiness. A warehouse-scoped lot table answers "Lot A is
+    60 here, 25 there and 15 in the branch" with three rows that all call
+    themselves Lot A, and from that moment the shop owns three lots: a recall
+    must find and lock each of them with a window in between where a branch is
+    still selling, a transfer forks the lot's history, and "where did Lot A go"
+    is a question about a thing that no longer exists as a single thing.
+
+    Note the deliberate asymmetry with :class:`StockUnit`: a lot's identity is
+    unique per variant *permanently*, because a second delivery of Lot A **is**
+    Lot A — same factory run, same expiry, same recall exposure. A serial's is
+    unique only among live units, because the same handset legitimately comes
+    back as a different article of stock.
+    """
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        # A fact about the lot everywhere at once, which is why it lives on the
+        # identity: a recall is one UPDATE, not one per warehouse with a window
+        # between them.
+        QUARANTINED = "quarantined", "Quarantined"
+        EXPIRED = "expired", "Expired"
+
     variant = models.ForeignKey(
         ProductVariant,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="stock_batches",
     )
-    source_receipt_line = models.OneToOneField(
-        "purchasing.PurchaseReceiptLine",
-        on_delete=models.PROTECT,
-        related_name="stock_batch",
+
+    # --- identity & dates ------------------------------------------------
+    code = models.CharField(max_length=120)
+    code_normalized = models.CharField(max_length=120, db_index=True, editable=False)
+    # We invented this code (a migration off the anonymous expiry cohort, or
+    # unlabelled goods). Lets the UI honestly render «بدون رقم دفعة» instead of
+    # a number nobody printed.
+    code_is_generated = models.BooleanField(default=False)
+    gtin = models.CharField(max_length=14, blank=True)
+    barcode = models.CharField(max_length=120, blank=True, db_index=True)
+    # Nullable, because non-expiring lots exist: a tyre's DOT week, a tile's dye
+    # lot, a battery's production run.
+    expiry_date = models.DateField(null=True, blank=True, db_index=True)
+    manufactured_on = models.DateField(null=True, blank=True)
+
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+        db_index=True,
     )
-    expiry_date = models.DateField(db_index=True)
-    received_quantity = models.DecimalField(max_digits=12, decimal_places=3)
-    remaining_quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    is_locked = models.BooleanField(default=False)
+
+    # --- provenance & genealogy ------------------------------------------
+    # Provenance is the ``in`` allocations, which already carry voucher, place,
+    # quantity and rate. A ``source_receipt_line`` column was removed rather
+    # than widened: a lot arriving in three deliveries has three provenances,
+    # and a column that holds one of them gets read as though it held all three.
+    supplier = models.ForeignKey(
+        "purchasing.Supplier",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_batches",
+    )
+    parent_batch = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sub_batches",
+    )
+
+    attributes = models.JSONField(default=dict, blank=True)
+    notes = models.TextField(blank=True)
 
     class Meta:
         ordering = ["expiry_date", "created_at", "id"]
-        indexes = [
-            models.Index(
-                fields=["variant", "expiry_date", "remaining_quantity"],
-                name="stockbatch_variant_expiry_idx",
-            ),
-            models.Index(
-                fields=["expiry_date", "remaining_quantity"],
-                name="stockbatch_exp_remain_idx",
+        constraints = [
+            models.UniqueConstraint(
+                fields=["variant", "code_normalized"],
+                name="stock_batch_code_unique_per_variant",
             ),
         ]
+        indexes = [
+            models.Index(fields=["code_normalized"], name="stockbatch_code_idx"),
+            models.Index(fields=["barcode"], name="stockbatch_barcode_idx"),
+            models.Index(
+                fields=["variant", "expiry_date"],
+                name="stockbatch_variant_expiry_idx",
+            ),
+        ]
+        permissions = [
+            ("manage_batches", "Can create and edit lots"),
+            ("adjust_batch_balance", "Can adjust a lot's balance in a warehouse"),
+            ("quarantine_batch", "Can quarantine a lot and start a recall"),
+            ("override_expired_batch_sale", "Can sell an expired lot"),
+        ]
+
+    @property
+    def is_sellable(self) -> bool:
+        """May goods from this lot leave the shop?
+
+        The denormalised copy on every balance is this expression, and nothing
+        else. :meth:`save` is the only writer of that copy — see the guard test
+        in ``apps/inventory/test_tracking_guards.py``.
+        """
+        return self.status == StockBatch.Status.ACTIVE and not self.is_locked
+
+    def save(self, *args, **kwargs):
+        """Normalise the code, then push the two denormalised columns down.
+
+        ``StockBatchBalance.expiry_date`` and ``is_sellable`` are copies, bought
+        deliberately so the FEFO lookup at the till is a single indexed scan of
+        one table rather than a join on the checkout path. The price of that is
+        two columns that can diverge, and this is where it is paid: one
+        ``UPDATE ... WHERE batch_id = ?`` in the same transaction as the write
+        that changed them. A lot has a handful of balances, never thousands.
+        """
+        self.code_normalized = normalize_identifier(self.code)
+        super().save(*args, **kwargs)
+        self.propagate_to_balances()
+
+    def propagate_to_balances(self):
+        """Copy this lot's expiry and sellability onto every balance it has."""
+        if self.pk is None:
+            return 0
+        return StockBatchBalance.objects.filter(batch_id=self.pk).exclude(
+            expiry_date=self.expiry_date,
+            is_sellable=self.is_sellable,
+        ).update(
+            expiry_date=self.expiry_date,
+            is_sellable=self.is_sellable,
+            updated_at=timezone.now(),
+        )
+
+    @property
+    def display_code(self) -> str:
+        return "" if self.code_is_generated else self.code
+
+    def __str__(self) -> str:
+        return f"{self.variant_id} lot {self.code}"
+
+
+class StockBatchBalance(TimeStampedModel):
+    """How much of one lot is sitting in one place.
+
+    One row per ``(batch, warehouse)``, created on first arrival and kept
+    afterwards — a depleted balance is not deleted, because "Lot A was in Branch
+    #2 and is not any more" is exactly the sentence a recall needs.
+
+    ``DEPLETED`` is deliberately absent from :class:`StockBatch`'s status enum:
+    it was never a lifecycle state, only the observation that a number reached
+    zero, and it is now ``remaining_quantity == 0`` here — per place, derived,
+    and unable to go stale.
+    """
+
+    batch = models.ForeignKey(
+        StockBatch,
+        on_delete=models.PROTECT,
+        related_name="balances",
+    )
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="batch_balances",
+    )
+    # Denormalised, always == batch.variant. The FEFO index leads with it, so
+    # reaching through the lot for it would put a join on the checkout path.
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="batch_balances",
+    )
+
+    received_quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    remaining_quantity = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    # Cost sits with the quantity, because value is quantity x rate and quantity
+    # is here. In the ordinary case (one lot, one delivery, one place) it is
+    # simply the landed cost; it earns its place when a lot is delivered twice
+    # at different costs, or transferred.
+    incoming_rate = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    first_received_at = models.DateTimeField(null=True, blank=True)
+
+    # --- the one denormalisation, held by StockBatch.save ------------------
+    expiry_date = models.DateField(null=True, blank=True)
+    is_sellable = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["expiry_date", "first_received_at", "id"]
         constraints = [
+            models.UniqueConstraint(
+                fields=["batch", "warehouse"],
+                name="stock_batch_balance_unique",
+            ),
+            models.CheckConstraint(
+                condition=Q(remaining_quantity__gte=0),
+                name="batch_balance_non_negative",
+            ),
             models.CheckConstraint(
                 condition=Q(remaining_quantity__lte=F("received_quantity")),
-                name="stock_batch_remaining_lte_received",
+                name="batch_balance_remaining_lte_received",
+            ),
+        ]
+        indexes = [
+            # The FEFO query, entire: variant + warehouse + sellable, ordered by
+            # expiry. The lot is never joined on the checkout path.
+            models.Index(
+                fields=[
+                    "variant",
+                    "warehouse",
+                    "is_sellable",
+                    "expiry_date",
+                    "remaining_quantity",
+                ],
+                name="batch_balance_fefo_idx",
+            ),
+            models.Index(
+                fields=["batch", "remaining_quantity"],
+                name="batch_balance_where_idx",
             ),
         ]
 
+    @property
+    def stock_value(self):
+        return self.remaining_quantity * self.incoming_rate
+
     def __str__(self) -> str:
-        return f"{self.variant.sku} expires {self.expiry_date}"
+        return f"lot {self.batch_id} @ {self.warehouse_id}: {self.remaining_quantity}"
 
 
 class Warehouse(TimeStampedModel):
@@ -334,7 +536,17 @@ class Warehouse(TimeStampedModel):
                     code="main",
                     defaults={"name": DEFAULT_WAREHOUSE_NAME, "is_default": True},
                 )
-                row = (warehouse.pk, warehouse.allow_overselling)
+                # Deliberately NOT cached. A row this call just created lives in
+                # an open transaction, and a transaction can still roll back —
+                # after which the cache would name a warehouse that does not
+                # exist and every write that resolved it would fail its foreign
+                # key. That is not only a test artifact: a request that
+                # self-heals the missing warehouse and then errors out would
+                # poison this process for every later request, which is the very
+                # window ``request_started`` exists to *bound* rather than to
+                # open. One extra lookup until the row is committed is the whole
+                # price.
+                return (warehouse.pk, warehouse.allow_overselling)
         except DatabaseError:
             # This table cannot be read or written in its current shape. In
             # practice that means one thing: a test that rewound this app to
@@ -529,6 +741,415 @@ class StockLedgerEntry(TimeStampedModel):
         return (
             f"{self.variant_id} {self.quantity_change:+} @ {self.valuation_rate}"
         )
+
+
+class StockUnit(TimeStampedModel):
+    """One physical, individually identified article of stock.
+
+    ERPNext calls this ``Serial No`` and names the row after the number, which
+    forbids the same handset ever coming back. Odoo calls it ``stock.lot`` and
+    lets a lot hold many. This is the middle: an identified article with its own
+    cost, its own price, its own place and its own life, whose identifier is
+    unique only among the units **currently in stock**.
+
+    Two absences are deliberate. There is **no quantity** — a unit is one, and a
+    column that can hold 0.5 is a column someone will eventually put 0.5 in. And
+    there is **no free-text status**: status is written by the services that move
+    stock and by nothing else, which is why :meth:`save` refuses a transition
+    that is not in :data:`ALLOWED_STATUS_TRANSITIONS`.
+    """
+
+    class Status(models.TextChoices):
+        EXPECTED = "expected", "On order"
+        IN_STOCK = "in_stock", "In stock"
+        RESERVED = "reserved", "Reserved"
+        IN_TRANSIT = "in_transit", "In transit"
+        SOLD = "sold", "Sold"
+        RETURNED = "returned", "Returned to supplier"
+        DAMAGED = "damaged", "Damaged"
+        WRITTEN_OFF = "written_off", "Written off"
+        CANCELLED = "cancelled", "Cancelled"
+
+    #: Statuses whose identifier is claimed — the ones the partial unique index
+    #: covers, and the ones that count toward a bin. A unit that has been sold,
+    #: returned to its supplier, written off or cancelled frees its code, which
+    #: is what lets a traded-back handset be received again.
+    LIVE_STATUSES = (
+        Status.EXPECTED,
+        Status.IN_STOCK,
+        Status.RESERVED,
+        Status.IN_TRANSIT,
+    )
+    #: The two that a bin counts and values: physically here, ours, sellable or
+    #: spoken for. ``expected`` has not arrived and ``in_transit`` has left.
+    ON_HAND_STATUSES = (Status.IN_STOCK, Status.RESERVED)
+
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="stock_units",
+    )
+    # Last known place. PROTECT for the same reason StockItem's is: deleting a
+    # location must never become a way to delete the stock standing in it.
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="stock_units",
+    )
+
+    # --- identity ---------------------------------------------------------
+    code = models.CharField(max_length=120)
+    code_normalized = models.CharField(max_length=120, db_index=True, editable=False)
+    identifier_kind = models.CharField(
+        max_length=16,
+        choices=IdentifierKind.CHOICES,
+        default=IdentifierKind.SERIAL,
+    )
+    # Dual-SIM IMEI2, engine number, MAC address, bicycle frame number — the
+    # second number an article legitimately answers to. Searched by barcode
+    # resolution alongside the primary one.
+    secondary_code = models.CharField(max_length=120, blank=True)
+    secondary_code_normalized = models.CharField(
+        max_length=120,
+        db_index=True,
+        editable=False,
+        blank=True,
+    )
+    supplier_code = models.CharField(max_length=120, blank=True)
+    # A truck arrives at six in the evening and nobody is going to scan forty
+    # boxes before closing. With ``serialized_capture_later_allowed`` on, the
+    # receipt lands the goods as units whose code is a generated placeholder and
+    # whose identity is still owed — counted in the bin, visible on the missing
+    # identifiers worklist, and refused by the till until somebody scans them.
+    is_identified = models.BooleanField(default=True, db_index=True)
+
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.IN_STOCK,
+        db_index=True,
+    )
+
+    # --- money (all base currency, all per base unit) ----------------------
+    incoming_rate = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    # Capitalised from repair jobs, so a handset bought at 1200 and given a 150
+    # screen cannot be sold at 1300 with the loss guard asleep.
+    refurb_cost = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    list_price = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    sold_price = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+
+    # --- consignment (الأمانات) -------------------------------------------
+    # Columns only. The agreement, the payable, the custody exposure and the
+    # incident are a later phase; what lands here is the one fact valuation
+    # needs from day one — goods the shop holds but does not own contribute
+    # nothing to stock value while still counting as stock on hand.
+    is_consignment = models.BooleanField(default=False)
+    consignor = models.ForeignKey(
+        "customers.Customer",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="consignment_units",
+    )
+    declared_value = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+
+    # --- provenance --------------------------------------------------------
+    purchase_line = models.ForeignKey(
+        "purchasing.PurchaseLine",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_units",
+    )
+    source_receipt_line = models.ForeignKey(
+        "purchasing.PurchaseReceiptLine",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_units",
+    )
+    supplier = models.ForeignKey(
+        "purchasing.Supplier",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_units",
+    )
+    acquired_at = models.DateTimeField(null=True, blank=True)
+    # Resets on a return, because aging asks how long *this* spell on the shelf
+    # has run, not how long ago the article first existed.
+    in_stock_since = models.DateTimeField(null=True, blank=True)
+    supplier_warranty_expires_on = models.DateField(null=True, blank=True)
+
+    # --- disposal ----------------------------------------------------------
+    sold_order_line = models.ForeignKey(
+        "sales.OrderLine",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_units",
+    )
+    sold_at = models.DateTimeField(null=True, blank=True)
+    customer = models.ForeignKey(
+        "customers.Customer",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="purchased_stock_units",
+    )
+    # The bridge nobody else has: a sold unit becomes the buyer's asset, so the
+    # handset we sold arrives for repair already knowing its own history.
+    asset = models.ForeignKey(
+        "customers.Asset",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_units",
+    )
+    warranty_expires_on = models.DateField(null=True, blank=True)
+
+    # --- the rest ----------------------------------------------------------
+    # The lot this article was born in. Optional under ``serial``, **required**
+    # under ``serial_batch`` — a serialised medicine pack is a unit inside a
+    # cohort, and both facts travel on the same allocation row.
+    batch = models.ForeignKey(
+        StockBatch,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="units",
+    )
+    attributes = models.JSONField(default=dict, blank=True)
+    notes = models.TextField(blank=True)
+    attachments = GenericRelation(
+        "attachments.Attachment",
+        content_type_field="owner_content_type",
+        object_id_field="owner_object_id",
+        related_query_name="stock_units",
+    )
+
+    class Meta:
+        ordering = ["-in_stock_since", "-id"]
+        constraints = [
+            # The whole design in one line: one live unit per identifier,
+            # unlimited history per identifier. A phone sold and traded back in
+            # is two rows with the same code, at most one of them live.
+            models.UniqueConstraint(
+                fields=["code_normalized"],
+                condition=Q(
+                    status__in=["expected", "in_stock", "reserved", "in_transit"]
+                ),
+                name="stock_unit_live_code_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["code_normalized"], name="stockunit_code_idx"),
+            models.Index(
+                fields=["secondary_code_normalized"],
+                name="stockunit_code2_idx",
+            ),
+            # The picker's query: this variant, in stock, oldest first.
+            models.Index(
+                fields=["variant", "status", "in_stock_since"],
+                name="stockunit_picker_idx",
+            ),
+            # Bin reconciliation walks this one.
+            models.Index(
+                fields=["status", "warehouse", "variant"],
+                name="stockunit_bin_idx",
+            ),
+            models.Index(fields=["batch", "status"], name="stockunit_batch_idx"),
+        ]
+        permissions = [
+            ("reprice_stockunit", "Can change an identified unit's price"),
+            ("write_off_stockunit", "Can write off an identified unit"),
+            ("view_stockunit_cost", "Can see what an identified unit cost"),
+        ]
+
+    @property
+    def is_live(self) -> bool:
+        return self.status in StockUnit.LIVE_STATUSES
+
+    @property
+    def is_on_hand(self) -> bool:
+        return self.status in StockUnit.ON_HAND_STATUSES
+
+    @property
+    def stock_value(self):
+        """What this unit contributes to stock value.
+
+        Consigned goods are somebody else's property: physically here, sellable,
+        and worth nothing *to the shop*. A bin that said otherwise would inflate
+        stock value with other people's watches.
+        """
+        if self.is_consignment:
+            return Decimal("0")
+        return Decimal(self.incoming_rate) + Decimal(self.refurb_cost)
+
+    def save(self, *args, **kwargs):
+        """Normalise both identifiers so the stored form and the searched form
+        are the same form.
+
+        Status is deliberately *not* validated here: a save cannot know what the
+        row held without a query, and putting one on every write would pay for a
+        check on the path that never needs it. The transition table is enforced
+        by ``apps.inventory.tracking.transition_unit``, which is the only writer
+        of this column — see ``test_tracking_guards``.
+        """
+        self.code_normalized = normalize_identifier(self.code)
+        self.secondary_code_normalized = normalize_identifier(self.secondary_code)
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f"{self.code} ({self.status})"
+
+
+#: Which status a unit may move to from where. Mirrors ``documents/policy.py``'s
+#: shape: an explicit table, small enough to read, so an illegal move is a
+#: refusal at the service rather than a row nobody can explain later.
+ALLOWED_STATUS_TRANSITIONS = {
+    StockUnit.Status.EXPECTED: {
+        StockUnit.Status.IN_STOCK,
+        StockUnit.Status.DAMAGED,
+        StockUnit.Status.CANCELLED,
+        StockUnit.Status.WRITTEN_OFF,
+    },
+    StockUnit.Status.IN_STOCK: {
+        StockUnit.Status.RESERVED,
+        StockUnit.Status.IN_TRANSIT,
+        StockUnit.Status.SOLD,
+        StockUnit.Status.RETURNED,
+        StockUnit.Status.DAMAGED,
+        StockUnit.Status.WRITTEN_OFF,
+        StockUnit.Status.CANCELLED,
+    },
+    StockUnit.Status.RESERVED: {
+        StockUnit.Status.IN_STOCK,
+        StockUnit.Status.SOLD,
+        StockUnit.Status.DAMAGED,
+        StockUnit.Status.WRITTEN_OFF,
+        StockUnit.Status.CANCELLED,
+    },
+    StockUnit.Status.IN_TRANSIT: {
+        StockUnit.Status.IN_STOCK,
+        StockUnit.Status.DAMAGED,
+        StockUnit.Status.WRITTEN_OFF,
+    },
+    # A sale return brings the article back as stock; nothing else follows a
+    # sale, because the shop no longer has it.
+    StockUnit.Status.SOLD: {StockUnit.Status.IN_STOCK},
+    # The supplier sent it back.
+    StockUnit.Status.RETURNED: {StockUnit.Status.IN_STOCK},
+    StockUnit.Status.DAMAGED: {
+        StockUnit.Status.IN_STOCK,
+        StockUnit.Status.RETURNED,
+        StockUnit.Status.WRITTEN_OFF,
+    },
+    # Found again during a stock count. Rare, and the only way back.
+    StockUnit.Status.WRITTEN_OFF: {StockUnit.Status.IN_STOCK},
+    StockUnit.Status.CANCELLED: set(),
+}
+
+
+class StockAllocation(TimeStampedModel):
+    """Which identified article a stock movement actually moved, and what it was
+    worth.
+
+    ERPNext's ``Serial and Batch Entry``, with two changes. It hangs off the
+    **movement** instead of a separate submitted document — theirs rots, because
+    a bundle that is submitted separately can be submitted, amended or cancelled
+    out of step with the thing it describes. And it carries its voucher
+    denormalised, so a report never has to join back to learn what it was.
+
+    Append-only, like the ledger it belongs to. A unit's whole life is one query:
+    ``StockAllocation.objects.filter(unit=u).order_by("posting_at")``.
+    """
+
+    class Direction(models.TextChoices):
+        IN = "in", "Received"
+        OUT = "out", "Issued"
+
+    movement = models.ForeignKey(
+        StockMovement,
+        on_delete=models.CASCADE,
+        related_name="allocations",
+        null=True,
+        blank=True,
+    )
+    ledger_entry = models.ForeignKey(
+        "inventory.StockLedgerEntry",
+        on_delete=models.CASCADE,
+        related_name="allocations",
+        null=True,
+        blank=True,
+    )
+
+    unit = models.ForeignKey(
+        StockUnit,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="allocations",
+    )
+    batch = models.ForeignKey(
+        StockBatch,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="allocations",
+    )
+
+    # Denormalised so the traceability report, the recall and the unit history
+    # read one table.
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.PROTECT,
+        related_name="stock_allocations",
+    )
+    warehouse = models.ForeignKey(
+        "inventory.Warehouse",
+        on_delete=models.PROTECT,
+        related_name="stock_allocations",
+    )
+    direction = models.CharField(max_length=4, choices=Direction.choices)
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    rate = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    value_change = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    voucher_type = models.CharField(max_length=24, db_index=True)
+    voucher_id = models.PositiveBigIntegerField(null=True, blank=True, db_index=True)
+    posting_at = models.DateTimeField(db_index=True)
+    note = models.CharField(max_length=240, blank=True)
+
+    class Meta:
+        ordering = ["posting_at", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(unit__isnull=False) | Q(batch__isnull=False),
+                name="stock_allocation_names_something",
+            ),
+            models.CheckConstraint(
+                condition=Q(unit__isnull=True) | Q(quantity=1),
+                name="stock_allocation_unit_quantity_is_one",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["unit", "posting_at"], name="stockalloc_unit_idx"),
+            models.Index(fields=["batch", "posting_at"], name="stockalloc_batch_idx"),
+            models.Index(
+                fields=["voucher_type", "voucher_id"],
+                name="stockalloc_voucher_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        named = f"unit {self.unit_id}" if self.unit_id else f"lot {self.batch_id}"
+        return f"{self.direction} {self.quantity} {named}"
 
 
 class StockCountQuerySet(DocumentQuerySetMixin, models.QuerySet):

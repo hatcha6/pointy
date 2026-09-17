@@ -3,7 +3,16 @@ from rest_framework import serializers
 
 from apps.catalog.models import ProductVariant
 
-from .models import StockBatch, StockItem, StockLedgerEntry, StockMovement, Warehouse
+from . import tracking
+from .identity import normalize_identifier
+from .models import (
+    StockBatch,
+    StockBatchBalance,
+    StockItem,
+    StockLedgerEntry,
+    StockMovement,
+    Warehouse,
+)
 from .valuation_service import post_movement_valuations
 
 # The quantity columns a stock write touches, plus the timestamp that has to
@@ -159,6 +168,7 @@ def build_stock_movement(
     before,
     variant=None,
     unit_cost=None,
+    tracked_plan=None,
 ):
     """The unsaved ledger row for one stock change, or ``None`` for a no-op.
 
@@ -198,6 +208,11 @@ def build_stock_movement(
     # with the same variant on two lines at two different costs values each
     # line at what it actually cost.
     movement.valuation_unit_cost = unit_cost
+    # Same idiom, same reason: which identified articles this movement moved
+    # travels with the movement, so the valuation pass can cost it from the
+    # articles themselves and write its allocation rows against the ledger entry
+    # it is about to create.
+    movement.tracked_plan = tracked_plan
     return movement
 
 
@@ -207,6 +222,7 @@ def create_stock_movement(
     voucher_id=None,
     unit_cost=None,
     posting_at=None,
+    tracked_plan=None,
     **kwargs,
 ):
     """Save one movement and value it.
@@ -216,7 +232,9 @@ def create_stock_movement(
     *out* never takes a cost from the caller: the valuation engine decides it
     from what is actually on the shelf, which is the whole point of the ledger.
     """
-    movement = build_stock_movement(unit_cost=unit_cost, **kwargs)
+    movement = build_stock_movement(
+        unit_cost=unit_cost, tracked_plan=tracked_plan, **kwargs
+    )
     if movement is None:
         return None
     movement.save()
@@ -257,22 +275,132 @@ def create_stock_movements(
     return created
 
 
-def create_expiring_stock_batch(*, receipt_line, expiry_date, quantity):
+def receipt_line_lot_code(receipt_line) -> str:
+    """The internal lot code an anonymous expiry cohort is filed under.
+
+    Products that merely ``tracks_expiry`` — a shop that wants a "this milk goes
+    off on the 12th" alert and has never heard of a lot number — get a generated
+    code keyed on the receipt line that brought the goods in. That is exactly
+    what the old one-to-one ``source_receipt_line`` column meant, expressed as an
+    identity the new model can constrain, and it is marked
+    ``code_is_generated`` so the UI renders «بدون رقم دفعة» rather than a number
+    nobody printed.
+    """
+    return tracking.generated_lot_code(prefix="RL", key=receipt_line.pk)
+
+
+def create_expiring_stock_batch(
+    *, receipt_line, expiry_date, quantity, warehouse=None, unit_cost=None
+):
+    """Land an anonymous expiry cohort for a product that only tracks expiry.
+
+    Batch-*tracked* products do not come through here: their lots are captured
+    at receiving and allocated through ``apps.inventory.tracking``, which values
+    them and writes their allocation rows. This is the older, quieter feature —
+    no lot code, no allocations, no change to how the stock is costed — kept
+    working on the new tables rather than left behind on the old ones.
+    """
     if expiry_date is None or quantity <= 0:
         return None
     variant = receipt_line.variant
-    if not getattr(variant.product, "tracks_expiry", False):
+    product = variant.product
+    if not getattr(product, "tracks_expiry", False):
         return None
-    batch, _ = StockBatch.objects.get_or_create(
-        source_receipt_line=receipt_line,
-        defaults={
-            "variant": variant,
-            "expiry_date": expiry_date,
-            "received_quantity": quantity,
-            "remaining_quantity": quantity,
-        },
+    if product.tracks_lots:
+        # Captured at receiving instead, with a real lot code.
+        return None
+    batch, created = tracking.resolve_batch(
+        variant=variant,
+        code=receipt_line_lot_code(receipt_line),
+        expiry_date=expiry_date,
+        code_is_generated=True,
+    )
+    if not created:
+        # The old column was a OneToOne and this call was idempotent through
+        # ``get_or_create``; keep that, or re-receiving a receipt would double
+        # the cohort.
+        return batch
+    balance = tracking.lock_balance(
+        batch=batch, warehouse=resolve_warehouse_id(warehouse), variant=variant
+    )
+    tracking.receive_into_balance(
+        balance=balance,
+        quantity=quantity,
+        rate=unit_cost if unit_cost is not None else 0,
     )
     return batch
+
+
+def discard_expiring_stock_batches(*, receipt_lines, warehouse=None):
+    """Take back the anonymous cohorts a cancelled receipt created.
+
+    A batch is a claim that this stock is on the shelf. It is not — so the
+    quantity leaves the balance. The lot identity goes too when nothing else
+    ever referenced it, because a generated code keyed on a receipt line that no
+    longer exists names nothing; a lot that has been allocated against survives,
+    at zero, because its history is the recall report's only witness.
+    """
+    codes = [receipt_line_lot_code(line) for line in receipt_lines]
+    if not codes:
+        return 0
+    normalized = [normalize_identifier(code) for code in codes]
+    batches = list(
+        StockBatch.objects.filter(
+            code_normalized__in=normalized,
+            code_is_generated=True,
+        )
+    )
+    if not batches:
+        return 0
+    balances = StockBatchBalance.objects.filter(batch__in=batches)
+    if warehouse is not None:
+        balances = balances.filter(warehouse_id=resolve_warehouse_id(warehouse))
+    removed = 0
+    for batch in batches:
+        if batch.allocations.exists():
+            batch.balances.update(remaining_quantity=0, updated_at=timezone.now())
+            continue
+        batch.balances.all().delete()
+        batch.delete()
+        removed += 1
+    return removed
+
+
+def consume_expiring_stock_batches(*, variant, quantity, warehouse=None):
+    """Draw down the earliest-expiring cohorts of this variant **in this place**.
+
+    Warehouse-aware, which the old version could not be: it consumed a lot in
+    Branch #2 to satisfy a sale in the main store, and the model it ran on could
+    not express its way out of that because the lot *was* the quantity. Now the
+    lot is an identity and the quantity is a balance, so "which of this place's
+    balances" is a question that can be asked.
+
+    Batch-tracked products do not come through here either — their draw-down is
+    an allocation, planned and costed by ``apps.inventory.tracking`` — so this
+    stays what it always was: the expiry-alert feature's bookkeeping, and
+    nothing to do with valuation.
+    """
+    if quantity <= 0:
+        return 0
+    product = variant.product
+    if not getattr(product, "tracks_expiry", False) or product.tracks_lots:
+        return 0
+
+    picked = tracking.pick_balances(
+        variant=variant,
+        warehouse=resolve_warehouse_id(warehouse),
+        quantity=quantity,
+        strategy="fefo",
+        # The expiry-alert feature has always drawn the earliest cohort down
+        # first whether or not it had passed; refusing here would change what
+        # the till does for a product whose owner never opted into lot control.
+        allow_expired=True,
+    )
+    consumed = 0
+    for balance, take in picked:
+        tracking.issue_from_balance(balance=balance, quantity=take)
+        consumed += take
+    return consumed
 
 
 def stock_count_needs_review(*, expected, counted, min_units, percent):
@@ -292,25 +420,3 @@ def stock_count_needs_review(*, expected, counted, min_units, percent):
         return True
     gap_fraction_pct = (gap / abs(expected)) * 100
     return gap_fraction_pct >= percent
-
-
-def consume_expiring_stock_batches(*, variant, quantity):
-    if quantity <= 0 or not getattr(variant.product, "tracks_expiry", False):
-        return 0
-
-    remaining = quantity
-    consumed = 0
-    batches = (
-        StockBatch.objects.select_for_update()
-        .filter(variant=variant, remaining_quantity__gt=0)
-        .order_by("expiry_date", "created_at", "id")
-    )
-    for batch in batches:
-        if remaining <= 0:
-            break
-        used = min(batch.remaining_quantity, remaining)
-        batch.remaining_quantity -= used
-        batch.save(update_fields=["remaining_quantity", "updated_at"])
-        remaining -= used
-        consumed += used
-    return consumed

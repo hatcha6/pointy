@@ -9,6 +9,7 @@ means. The primitive only knows that it must happen, and when.
 from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied
+from django.utils import timezone
 
 from apps.purchasing.models import PurchaseOrder
 
@@ -184,7 +185,8 @@ def reverse_purchase_receipt(receipt, *, at, actor, reason="", context=None):
     Refuses when the goods are no longer there to take back: stock that has
     already been sold can only be corrected with a purchase return.
     """
-    from apps.inventory.models import StockBatch, StockLedgerEntry, StockMovement
+    from apps.inventory.models import StockLedgerEntry, StockMovement, StockUnit
+    from apps.inventory.services import discard_expiring_stock_batches
     from apps.purchasing.services import (
         build_stock_movement,
         create_stock_movements,
@@ -254,6 +256,15 @@ def reverse_purchase_receipt(receipt, *, at, actor, reason="", context=None):
             voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RETURN,
             voucher_id=receipt.purchase_order_id,
         )
-    # An expiry batch is a claim that this stock is on the shelf. It is not.
-    StockBatch.objects.filter(source_receipt_line__receipt=receipt).delete()
+    # An expiry cohort is a claim that this stock is on the shelf. It is not.
+    discard_expiring_stock_batches(receipt_lines=lines, warehouse=warehouse_id)
+    # Identified articles that arrived on this receipt are voided, never
+    # deleted: the row is the only record that the identifier was ever here, and
+    # a cancelled unit frees its code for the next time it walks in. A unit that
+    # has already been sold cannot be reached — ``validate_purchase_stock_available``
+    # above refuses the un-receipt before this line runs.
+    StockUnit.objects.filter(
+        source_receipt_line__in=lines,
+        status__in=StockUnit.LIVE_STATUSES,
+    ).update(status=StockUnit.Status.CANCELLED, updated_at=timezone.now())
     return None

@@ -899,6 +899,26 @@ class CheckoutLineSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
+    # Identified stock, when the till knows which article it is ringing up: the
+    # IMEI the cashier scanned, the units a picker chose, the lot a customer
+    # asked for. All optional and all absent for every product that is a number
+    # in a bin, which is the constraint this whole feature is written under — a
+    # shop that sells Coca-Cola must not be able to tell that it shipped.
+    stock_units = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        default=list,
+    )
+    stock_unit_codes = serializers.ListField(
+        child=serializers.CharField(max_length=120, trim_whitespace=True),
+        required=False,
+        default=list,
+    )
+    stock_batches = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        default=list,
+    )
 
     class Meta:
         list_serializer_class = CheckoutLineListSerializer

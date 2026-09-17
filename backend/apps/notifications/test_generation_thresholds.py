@@ -20,7 +20,13 @@ from django.utils import timezone
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 from apps.discounts.models import DiscountRule
-from apps.inventory.models import StockBatch, StockItem
+from apps.inventory.models import (
+    StockBatch,
+    StockBatchBalance,
+    StockItem,
+    Warehouse,
+)
+from apps.inventory.services import receipt_line_lot_code
 from apps.notifications.models import (
     BusinessNotification,
     BusinessNotificationUserState,
@@ -49,8 +55,12 @@ def _make_stock(name, sku, qty, reorder_level=5, unit_price="3.00"):
 
 
 def _make_expiring_batch(name, sku, *, expiry_date, tracks_expiry=True, remaining="5"):
-    """Build the full PO -> receipt -> receipt line -> batch chain the expiry
-    generator walks (StockBatch.source_receipt_line is a non-null OneToOne)."""
+    """Build the PO -> receipt -> receipt line -> lot -> balance chain the expiry
+    generator walks.
+
+    The quantity moved onto the balance when a lot stopped being a place, so the
+    ``remaining`` this fixture takes is the balance's, and the generator reads it
+    as the sum across every place the lot sits in."""
     product = create_product_with_default_variant(
         name=name,
         sku=sku,
@@ -79,10 +89,19 @@ def _make_expiring_batch(name, sku, *, expiry_date, tracks_expiry=True, remainin
     )
     batch = StockBatch.objects.create(
         variant=product.default_variant,
-        source_receipt_line=receipt_line,
+        code=receipt_line_lot_code(receipt_line),
+        code_is_generated=True,
         expiry_date=expiry_date,
+        supplier=supplier,
+    )
+    StockBatchBalance.objects.create(
+        batch=batch,
+        warehouse_id=Warehouse.default_id(),
+        variant=product.default_variant,
         received_quantity=5,
         remaining_quantity=Decimal(remaining),
+        expiry_date=expiry_date,
+        first_received_at=timezone.now(),
     )
     return product, batch
 

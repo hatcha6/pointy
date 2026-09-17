@@ -8,6 +8,7 @@ from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSummarySerializer
 
 from . import scale_barcodes
+from .tracking_modes import assert_mode_change_allowed
 from .identity import (
     BARCODE_FIELD,
     KIND_PAYLOAD,
@@ -993,6 +994,19 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             "tracks_expiry",
             "is_service",
             "is_prepared",
+            # How closely this product's stock is identified. Defaults to
+            # ``quantity`` and stays there for every product that never asks
+            # for anything else; changing it re-labels history, so it is
+            # guarded by ``apps.catalog.tracking_modes``.
+            "tracking_mode",
+            "asset_type",
+            "warranty_days",
+            # Batch & expiry policy, read when the mode tracks lots or the
+            # product merely tracks dates.
+            "shelf_life_days",
+            "expiry_warning_days",
+            "auto_pick_strategy",
+            "prevent_selling_expired",
             "unit",
             # The currency this product's price sheet is written in. NULL (the
             # default, and every existing product) means the shop's own.
@@ -1026,6 +1040,8 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        if "tracking_mode" in attrs:
+            assert_mode_change_allowed(self.instance, attrs["tracking_mode"])
         base_unit = attrs.get("unit") or getattr(self.instance, "unit", None) or "piece"
         units_payload = attrs.get("units")
         if units_payload is not None:

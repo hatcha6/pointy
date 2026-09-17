@@ -125,6 +125,64 @@ class Product(TimeStampedModel):
         null=True,
     )
     tracks_expiry = models.BooleanField(default=False, db_index=True)
+
+    class TrackingMode(models.TextChoices):
+        """How closely this product's stock is identified.
+
+        ``quantity`` is what every product shipped as and what every product
+        that does not opt in stays: a number in a bin, with no identity of its
+        own. The other three are *shapes* a product takes when its trade needs
+        one, and the fourth is the reason the first three are an enum rather
+        than a pair of booleans — a serialised pharmaceutical pack is a unit
+        *inside* a lot, and ``serial | batch`` as an exclusive choice is a wrong
+        model of the world rather than a simplification of it.
+        """
+
+        QUANTITY = "quantity", "Quantity only"
+        BATCH = "batch", "Batch / lot tracked"
+        SERIAL = "serial", "Individually tracked"
+        SERIAL_BATCH = "serial_batch", "Serialised within a lot"
+
+    # Stays ``quantity`` for every product that never asks for anything else —
+    # the whole invisibility guarantee in one column default. Indexed because
+    # every stock write asks it, and a b-tree on a column that is one value for
+    # 99% of rows still answers "is this one of the few" in constant time.
+    tracking_mode = models.CharField(
+        max_length=16,
+        choices=TrackingMode.choices,
+        default=TrackingMode.QUANTITY,
+        db_index=True,
+    )
+    # What kind of identified thing this is, for identifier labels and (later)
+    # per-unit attributes. Reuses the shop-editable registry the workshop side
+    # already maintains rather than inventing a second one.
+    asset_type = models.ForeignKey(
+        "customers.AssetType",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="tracked_products",
+    )
+    # Warranty granted on sale, in days. 0 = none. Stamped onto the unit when it
+    # is sold, so re-pricing the warranty next year does not re-date last year's.
+    warranty_days = models.PositiveIntegerField(default=0)
+    # --- batch & expiry policy -------------------------------------------
+    # Read when ``tracking_mode`` is batch/serial_batch, or when
+    # ``tracks_expiry`` is on.
+    shelf_life_days = models.PositiveIntegerField(default=0)  # 0 = indefinite
+    expiry_warning_days = models.PositiveIntegerField(default=30)
+
+    class BatchPickStrategy(models.TextChoices):
+        FEFO = "fefo", "First expiring, first out"
+        FIFO = "fifo", "First in, first out"
+        MANUAL = "manual", "Manual select"
+
+    auto_pick_strategy = models.CharField(
+        max_length=16,
+        choices=BatchPickStrategy.choices,
+        default=BatchPickStrategy.FEFO,
+    )
+    prevent_selling_expired = models.BooleanField(default=True)
     # Service products (labor, fees) are sold without touching stock.
     is_service = models.BooleanField(default=False)
     # Prepared (made-to-order) products — restaurant dishes — are also sold
@@ -214,6 +272,35 @@ class Product(TimeStampedModel):
     @property
     def is_archived(self) -> bool:
         return self.archived_at is not None
+
+    # The three questions every stock path asks about a mode, answered here so
+    # no caller ever writes ``mode in ("serial", "serial_batch")`` by hand and
+    # gets one of the two wrong.
+    @property
+    def is_tracked(self) -> bool:
+        """Does this product's stock carry identity at all?"""
+        return self.tracking_mode != Product.TrackingMode.QUANTITY
+
+    @property
+    def tracks_units(self) -> bool:
+        """Is every article of this product identified one at a time?"""
+        return self.tracking_mode in (
+            Product.TrackingMode.SERIAL,
+            Product.TrackingMode.SERIAL_BATCH,
+        )
+
+    @property
+    def tracks_lots(self) -> bool:
+        """Does this product's stock belong to identified cohorts?"""
+        return self.tracking_mode in (
+            Product.TrackingMode.BATCH,
+            Product.TrackingMode.SERIAL_BATCH,
+        )
+
+    @property
+    def requires_lot(self) -> bool:
+        """Must every new unit of this product name the lot it was born in?"""
+        return self.tracking_mode == Product.TrackingMode.SERIAL_BATCH
 
     def archive(self, *, by=None):
         self.archived_at = timezone.now()
@@ -693,6 +780,12 @@ class ProductVariant(TimeStampedModel):
     name = models.CharField(max_length=160, blank=True)
     sku = models.CharField(max_length=64, unique=True)
     barcode = models.CharField(max_length=64, blank=True, db_index=True)
+    # GS1 trade-item number, when the pack carries one. A GTIN identifies a
+    # trade item at exactly the level this codebase already calls a variant —
+    # the 500mg box, not the drug — which is why it sits here and the tracking
+    # mode sits on the product. A scanned GS1 DataMatrix resolves to a variant
+    # through this column before its lot and serial are read.
+    gtin = models.CharField(max_length=14, blank=True, db_index=True)
     # ALWAYS the shop's base currency. This is the invariant the whole
     # multi-currency design rests on: every money column in this product keeps
     # meaning base currency, so nothing downstream — stock value, margin, the
