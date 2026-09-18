@@ -136,6 +136,15 @@ def login_view(request):
             # can hide every camera surface without a second round trip on a
             # shop that has no DVR at all.
             "surveillance_enabled": ShopSettings.load().enable_surveillance,
+            # The same, for identified stock. These two flags default to off and
+            # existed from the first release, but nothing read them — so every
+            # shop that took the update got «الأجهزة المسلسلة» and «الدفعات» in
+            # the drawer and in ⌘K, cashiers included, for a feature nobody
+            # turned on. A grocer must not be able to tell this shipped.
+            "serialized_inventory_enabled": (
+                ShopSettings.load().enable_serialized_inventory
+            ),
+            "batch_tracking_enabled": ShopSettings.load().enable_batch_tracking,
         }
     )
 
@@ -192,6 +201,15 @@ def me_view(request):
             # can hide every camera surface without a second round trip on a
             # shop that has no DVR at all.
             "surveillance_enabled": ShopSettings.load().enable_surveillance,
+            # The same, for identified stock. These two flags default to off and
+            # existed from the first release, but nothing read them — so every
+            # shop that took the update got «الأجهزة المسلسلة» and «الدفعات» in
+            # the drawer and in ⌘K, cashiers included, for a feature nobody
+            # turned on. A grocer must not be able to tell this shipped.
+            "serialized_inventory_enabled": (
+                ShopSettings.load().enable_serialized_inventory
+            ),
+            "batch_tracking_enabled": ShopSettings.load().enable_batch_tracking,
         }
     )
 

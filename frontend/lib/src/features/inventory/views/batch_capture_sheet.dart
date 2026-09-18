@@ -58,6 +58,18 @@ class _BatchCaptureSheet extends StatefulWidget {
 class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
   late List<ReceiptBatchCapture> _rows;
 
+  /// Hands out a fresh identity per row. A lot row has no natural key while it
+  /// is being typed — its code is blank until somebody fills it in — so the
+  /// list is keyed on this instead of on the row number. With a positional key
+  /// the editors are uncontrolled ``TextFormField``s seeded from
+  /// ``initialValue``, so deleting the first of two lots left its code and
+  /// quantity on screen over the lot that shifted up, and confirm submitted the
+  /// one the receiver could no longer see.
+  int _nextRowId = 0;
+  final List<int> _rowIds = [];
+
+  int _takeRowId() => _nextRowId++;
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +81,7 @@ class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
             ),
           ]
         : List<ReceiptBatchCapture>.from(widget.initial);
+    _rowIds.addAll(List.generate(_rows.length, (_) => _takeRowId()));
   }
 
   double get _captured =>
@@ -82,6 +95,7 @@ class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
 
   void _addRow() {
     setState(() {
+      _rowIds.add(_takeRowId());
       _rows = [
         ..._rows,
         ReceiptBatchCapture(
@@ -103,6 +117,7 @@ class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
 
   void _removeAt(int index) {
     setState(() {
+      _rowIds.removeAt(index);
       _rows = [..._rows]..removeAt(index);
     });
   }
@@ -158,7 +173,7 @@ class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
                 separatorBuilder: (_, _) => const Divider(height: 12),
                 itemBuilder: (context, index) {
                   return _BatchRowEditor(
-                    key: ValueKey('batch-row-$index'),
+                    key: ValueKey('batch-row-${_rowIds[index]}'),
                     row: _rows[index],
                     canRemove: _rows.length > 1,
                     onChanged: (row) => _update(index, row),

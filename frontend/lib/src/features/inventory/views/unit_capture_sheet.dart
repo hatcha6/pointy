@@ -270,6 +270,12 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
                       separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (context, index) {
                         return _CapturedUnitRow(
+                          // Keyed by the identifier, not the row number. The
+                          // cost box is an uncontrolled TextFormField seeded
+                          // from initialValue, so with a positional key (or
+                          // none) removing a row left the deleted unit's cost
+                          // sitting over the one that shifted up.
+                          key: ValueKey(_captured[index].code),
                           index: index,
                           unit: _captured[index],
                           showsCost: _splitCosts,
@@ -312,6 +318,7 @@ class _UnitCaptureSheetState extends State<_UnitCaptureSheet> {
 
 class _CapturedUnitRow extends StatelessWidget {
   const _CapturedUnitRow({
+    super.key,
     required this.index,
     required this.unit,
     required this.showsCost,

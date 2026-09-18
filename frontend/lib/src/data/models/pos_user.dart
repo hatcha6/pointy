@@ -75,6 +75,8 @@ class PosUser {
     this.aiAvailable = false,
     this.allowCashierCustomerAccess = false,
     this.surveillanceEnabled = false,
+    this.serializedInventoryEnabled = false,
+    this.batchTrackingEnabled = false,
   });
 
   final int id;
@@ -119,6 +121,11 @@ class PosUser {
   /// command palette, the invoice panel — out of a shop with no DVR.
   final bool surveillanceEnabled;
 
+  /// Identified stock is opt-in per shop. Both default to off, and a shop that
+  /// counts rather than identifies must not see the surfaces at all.
+  final bool serializedInventoryEnabled;
+  final bool batchTrackingEnabled;
+
   String get label => displayName.trim().isEmpty ? username : displayName;
 
   factory PosUser.fromJson(Map<String, Object?> json) {
@@ -149,6 +156,8 @@ class PosUser {
       aiAvailable: json['ai_available'] == true,
       allowCashierCustomerAccess: json['allow_cashier_customer_access'] == true,
       surveillanceEnabled: json['surveillance_enabled'] == true,
+      serializedInventoryEnabled: json['serialized_inventory_enabled'] == true,
+      batchTrackingEnabled: json['batch_tracking_enabled'] == true,
     );
   }
 

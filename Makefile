@@ -130,6 +130,7 @@ ENDURANCE_WORKERS ?= 4
 .PHONY: help setup install docker-check postgres postgres-stop postgres-logs postgres-ping redis redis-local redis-stop redis-logs redis-ping \
 	backend-venv backend-install backend-env backend-migrate backend-migrations backend-dev-migrate backend-run backend-run-remote \
 	backend-load-test backend-stress-test backend-endurance-test \
+	backend-tracked-simulation backend-stock-integrity \
 	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
 	backend-check backend-celery backend-celery-beat \
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-e2e frontend-analyze frontend-format frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview \
@@ -248,6 +249,19 @@ backend-stress-test: backend-env backend-install ## Run an automatic ramping che
 		--collapse-failure-rate "$(STRESS_COLLAPSE_FAILURE_RATE)" \
 		--collapse-p95-ms "$(STRESS_COLLAPSE_P95_MS)" \
 		$(LOAD_EXTRA)
+
+# The identified-stock oracle, driven long enough to find what a hundred
+# operations do not. A failure prints the operation and the disagreement, and
+# SIM_SEED reproduces it exactly.
+SIM_SEED ?= 1
+SIM_OPERATIONS ?= 500
+backend-tracked-simulation: backend-env backend-install ## Run the identified-stock oracle (SIM_SEED, SIM_OPERATIONS).
+	$(MANAGE) simulate_tracked_stock --seed "$(SIM_SEED)" --operations "$(SIM_OPERATIONS)"
+
+# Read-only, and safe on a live shop: the fourteen §5.4 invariants over real
+# data. Exits non-zero when one does not hold, so it can go on a schedule.
+backend-stock-integrity: backend-env backend-install ## Check the identified-stock invariants against the database.
+	$(MANAGE) check_stock_integrity
 
 backend-endurance-test: backend-env backend-install ## Run a long checkout endurance test against a running API server.
 	$(MANAGE) checkout_load --base-url "$(LOAD_BASE_URL)" --duration "$(ENDURANCE_DURATION)" --workers "$(ENDURANCE_WORKERS)" $(LOAD_EXTRA)

@@ -609,6 +609,26 @@ only as correct as the last time it was built, and a migration edited in place
 leaves a schema that no longer matches the tree while the run still goes green.
 Iterate with it, prove with `make backend-test-pg`.
 
+### Identified stock: the oracle and the invariants
+
+Serialized and batch stock has two checks beyond the suite, and both are worth
+knowing about because the test suite is green in cases where neither is.
+
+```bash
+make backend-tracked-simulation                        # 500 random operations
+make backend-tracked-simulation SIM_SEED=7 SIM_OPERATIONS=20000
+make backend-stock-integrity                           # the invariants, on real data
+```
+
+The simulation drives receipts, sales, transfers and recalls at random against
+an independent model of what the shop should hold, and any disagreement prints
+the operation and reproduces from `SIM_SEED`. `backend-stock-integrity` is the
+other half: it runs the fourteen §5.4 invariants (`apps/inventory/integrity.py`)
+against whatever is actually in the database, is read-only, and exits non-zero
+when one does not hold — so it is safe on a live shop and belongs on a schedule.
+Every defect the Phase A/B review found was found by those checks and missed by
+the suite.
+
 `--durations` is the profiler. Anything an order of magnitude above its
 neighbours is usually a real `sleep` or an expensive fixture rather than the
 work under test — which is how the surveillance suite turned out to be spending

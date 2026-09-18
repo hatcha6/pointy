@@ -14,6 +14,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 import django_filters
+from django.db import IntegrityError, transaction
 from django.db.models import Prefetch, Q, Sum
 from django.utils import timezone
 from rest_framework import mixins, serializers, viewsets
@@ -25,7 +26,12 @@ from apps.catalog.models import VariantOptionValue
 from apps.core.permissions import HasPointyPermission
 
 from . import tracking
-from .identity import KIND_UNIT, TrackingConflict, conflict_error
+from .identity import (
+    KIND_UNIT,
+    TrackingConflict,
+    conflict_error,
+    normalize_identifier,
+)
 from .models import StockAllocation, StockBatch, StockBatchBalance, StockUnit
 from .tracked_serializers import (
     IdentifyUnitSerializer,
@@ -276,12 +282,21 @@ class StockUnitViewSet(
         )
 
     @action(detail=True, methods=["post"])
+    @transaction.atomic
     def identify(self, request, pk=None):
         """Give a placeholder the identifier it has been owing.
 
         The other half of *capture later*. A live duplicate is refused with the
         same structured conflict a receipt would raise, because the answer the
         person needs — *«افتح الجهاز الموجود»* — is the same one either way.
+
+        Atomic, and the write is caught. Two receivers finishing their pile at
+        the same moment both looked up the code, both found nothing, and both
+        saved — and the second got a bare ``IntegrityError`` from
+        ``stock_unit_live_code_unique``, i.e. a 500 where this method's entire
+        purpose is to hand back a readable conflict. The index is the real
+        arbiter of uniqueness under concurrency, so the loser is now told the
+        same sentence the early check would have told it.
         """
         unit = self.get_object()
         serializer = IdentifyUnitSerializer(data=request.data)
@@ -317,17 +332,38 @@ class StockUnitViewSet(
         if serializer.validated_data.get("identifier_kind"):
             unit.identifier_kind = serializer.validated_data["identifier_kind"]
         unit.is_identified = True
-        unit.save(
-            update_fields=[
-                "code",
-                "code_normalized",
-                "secondary_code",
-                "secondary_code_normalized",
-                "identifier_kind",
-                "is_identified",
-                "updated_at",
-            ]
-        )
+        try:
+            with transaction.atomic():
+                unit.save(
+                    update_fields=[
+                        "code",
+                        "code_normalized",
+                        "secondary_code",
+                        "secondary_code_normalized",
+                        "identifier_kind",
+                        "is_identified",
+                        "updated_at",
+                    ]
+                )
+        except IntegrityError:
+            # Somebody claimed this code between the check above and here. The
+            # savepoint keeps the outer transaction usable so the refusal can be
+            # rendered rather than becoming a 500 of its own.
+            raise serializers.ValidationError(
+                conflict_error(
+                    [
+                        TrackingConflict(
+                            field="code",
+                            value=normalize_identifier(code),
+                            kind=KIND_UNIT,
+                            message=(
+                                f"المعرّف {code} سُجّل على وحدة أخرى قبل لحظة — "
+                                "افتح الجهاز الموجود."
+                            ),
+                        )
+                    ]
+                )
+            ) from None
         return Response(
             {
                 **StockUnitSerializer(unit, context={"request": request}).data,

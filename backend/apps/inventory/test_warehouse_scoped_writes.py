@@ -203,3 +203,42 @@ class DiscardStaysInItsWarehouse(TestCase):
         self.assertEqual(branch.remaining_quantity, Decimal("4.000"))
         # The lot survives, because a branch still holds some of it.
         self.assertTrue(StockBatch.objects.filter(pk=lot.pk).exists())
+
+
+class IntegrityCommandRuns(TestCase):
+    """The invariants must be reachable without a Django shell.
+
+    They existed from Phase A and nothing ran them, so every defect they would
+    have caught was found by hand months later.
+    """
+
+    def test_a_clean_shop_reports_clean(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command("check_stock_integrity", stdout=out)
+        self.assertIn("all invariants hold", out.getvalue())
+
+    def test_a_broken_shop_exits_non_zero_and_names_the_invariant(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        from apps.catalog.models import Product
+        from apps.inventory.models import StockItem
+        from apps.inventory.tracked_testing import tracked_product
+
+        product = tracked_product(
+            name="آيفون", sku="BROKEN", mode=Product.TrackingMode.SERIAL
+        )
+        # A bin that claims stock no article accounts for — invariant 1.
+        item = StockItem.objects.get(variant=product.default_variant)
+        item.quantity_on_hand = Decimal("3")
+        item.save(update_fields=["quantity_on_hand", "updated_at"])
+
+        err = StringIO()
+        with self.assertRaises(SystemExit):
+            call_command("check_stock_integrity", stderr=err)
+        self.assertIn("on hand is 3.000", err.getvalue())

@@ -139,6 +139,21 @@ class AuthorizationCapabilities {
     AppCapability.exportCameraFootage,
   };
 
+  /// Removed for a shop that has not opted into identified stock, the same way
+  /// cameras are removed for a shop with no recorder. Without this the two
+  /// drawer entries and their ⌘K matches appeared for every shop that took the
+  /// update — cashiers included, by default — for a feature nobody enabled.
+  static Set<AppCapability> _trackingCapabilitiesOff(PosUser user) {
+    final off = <AppCapability>{};
+    if (!user.serializedInventoryEnabled) {
+      off.add(AppCapability.viewStockUnits);
+    }
+    if (!user.batchTrackingEnabled) {
+      off.add(AppCapability.viewStockBatches);
+    }
+    return off;
+  }
+
   factory AuthorizationCapabilities.forUser(PosUser user) {
     if (user.role.isManager) {
       final all = Set.of(AppCapability.values);
@@ -150,6 +165,7 @@ class AuthorizationCapabilities {
       if (!user.surveillanceEnabled) {
         all.removeAll(_surveillanceCapabilities);
       }
+      all.removeAll(_trackingCapabilitiesOff(user));
       return AuthorizationCapabilities._(all);
     }
 
@@ -822,6 +838,10 @@ class AuthorizationCapabilities {
     if (!user.surveillanceEnabled) {
       capabilities.removeAll(_surveillanceCapabilities);
     }
+    // Held permissions do not conjure the feature either: the roles grant
+    // view_stockunit to every cashier, which is right once a shop identifies
+    // its stock and wrong for every shop that does not.
+    capabilities.removeAll(_trackingCapabilitiesOff(user));
 
     return AuthorizationCapabilities._(capabilities);
   }
