@@ -3183,18 +3183,53 @@ a shop: 0027 loosens the legacy columns instead of dropping them, the balance
 writers mirror them, and a regression file runs the previous release's queries
 against the new schema. The contract release — drop the columns, delete the
 mirror — is now a real item on Phase D's list rather than a thing that already
-happened by accident. Two smaller ones are recorded but unfixed: an IMEI typed
-in **Arabic-Indic digits** normalises to itself, passes the Luhn check because
-`int()` accepts those digits, and becomes a second live unit for one physical
-handset (NFKC is not a digit fold); and `StockUnitViewSet.identify` is a
-check-then-write with no transaction, so two receivers finishing "capture later"
-on the same code get an `IntegrityError` 500 instead of the structured conflict
-the method exists to produce.
+happened by accident.
+
+**The backlog behind the findings was cleared on 2026-09-18 too**, and three of
+those items were worse than the cap made them look. `consume_expiring_stock_batches`
+and `may_oversell` both grew an argument naming *where* or *what* and then kept a
+default, so four of five and three of four callers never passed one — a stock
+count in Branch #2 drew its shrink out of the main store's lot, and the "identified
+stock can never go negative" refusal only ever fired at the till. Both arguments
+are required now, and a transfer, which moves many variants under one policy
+decision, asks `may_oversell_document`: one identified line forbids going negative
+for the whole document. **Quarantining a lot made the drug unsellable outright**,
+because the picker returned the oldest pack regardless of its lot and the sale then
+refused on that pack — `available_units` filters lot sellability in SQL now, and
+when nothing sellable is left the planner re-asks without the filter so the refusal
+still names the recall rather than reporting "no stock". **A quotation held a
+number rather than an article**, so invariant 2 failed for every quote of a
+serialized product, the held handset stayed in every other till's picker, and
+converting sold whichever unit was oldest; `StockReservation.stock_unit` fixes all
+three. And an IMEI typed in **Arabic-Indic digits** normalised to itself and passed
+the Luhn check — `int()` accepts those digits — so the one check whose job is
+catching a keying error created a second live unit for one handset. Every decimal
+digit folds to ASCII now.
+
+Also closed: the identifiers N+1 on the checkout response and on both tracked
+lists; the units list showing page one only, with no index behind its ordering;
+`effective_base_unit_cost` rounding to money before the ledger multiplied it, which
+booked 99.96 against 100.00 paid on a carton of twelve; GS1's century window, which
+was a fixed 49/50 cut rather than GS1's sliding one; `identify`'s check-then-write
+race; and both capture sheets keying rows by list position, which stranded a
+deleted row's text over the row that shifted up.
+
+**Two remain, and both are features rather than defects.** The §15.1
+client-version gate needs a device registry the shop does not have — only
+telemetry carries `app_version` — and its purpose was to stop an old till hitting
+a hard 400 it cannot recover from, which is mostly moot while §6.3's refusal is
+deferred and the settings flags now gate the surfaces. And `tracks_expiry` still
+coexists with `tracking_mode` rather than becoming the derived property of §18.4;
+folding it in would move every expiry-tracking shop onto the lot path, changing
+what receiving asks for and what checkout refuses, so it belongs with the contract
+release and a decision rather than with a bug sweep.
 
 **The standing lesson for Phase D.** Every one of these was invisible to the test
-suite, which was green throughout, and visible in seconds to the invariants. Wire
-`integrity.py` to something that runs — a management command at minimum — before
-building anything else on this foundation.
+suite, which was green throughout, and visible in seconds to the invariants. That
+is now fixed at the root: `manage.py check_stock_integrity` runs them read-only
+against a real shop and exits non-zero on a violation, `make backend-stock-integrity`
+and `make backend-tracked-simulation` expose it and the oracle, and both are in the
+README. Run them before building anything else on this foundation.
 
 ---
 
