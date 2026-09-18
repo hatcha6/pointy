@@ -311,6 +311,19 @@ def post_movement_valuations(
                 "This is ERPNext #42997 — a serialized entry that names the wrong "
                 "serials — refused by construction."
             )
+        if plan is None and delta != ZERO and method in ValuationMethod.IDENTIFIED:
+            # The other half of #42997, and the one that was actually silent: a
+            # tracked variant whose bin moved while no article was named. Every
+            # write path that predates identified stock lands here — a transfer,
+            # a stock count, a manual adjustment — and each one used to leave the
+            # units and the bin disagreeing with nothing to say so. ``method``
+            # is already resolved above, so this costs no query.
+            raise ValueError(
+                f"Variant {movement.variant_id} is tracked ({method}) but this "
+                f"movement of {abs(delta)} named no units or lots. Identified "
+                "stock may only move through apps.inventory.tracking — plan the "
+                "move and pass ``tracked_plan`` rather than adjusting the bin."
+            )
 
         # Goods on the shelf that the shop does not own. They count, and they are
         # worth nothing to it — so they must stay out of the rate's divisor, or a
@@ -379,6 +392,15 @@ def post_movement_valuations(
                     else ZERO
                 ),
                 rate_generator=lambda fallback=fallback: fallback,
+                # Say whether an allocation happened rather than letting a zero
+                # rate stand in for it: a free pack really did cost nothing.
+                # Only the identified engines take it; a queue method derives
+                # its own outgoing rate and has no sentinel to confuse.
+                **(
+                    {"allocated": plan is not None}
+                    if method in ValuationMethod.IDENTIFIED
+                    else {}
+                ),
                 **({"unowned": unowned} if unowned else {}),
             )
             rate = consumed_unit_cost(consumed)
@@ -549,6 +571,13 @@ def repost_variant(variant_id, *, warehouse_id=None, method=None):
                     else ZERO
                 ),
                 rate_generator=lambda previous_rate=previous_rate: previous_rate,
+                # The stored rate *is* the replay, zero included — otherwise a
+                # repost re-inflates every free article it walks past.
+                **(
+                    {"allocated": True}
+                    if method in ValuationMethod.IDENTIFIED
+                    else {}
+                ),
             )
             rate = consumed_unit_cost(consumed)
             value_change = -consumed_cost(consumed)

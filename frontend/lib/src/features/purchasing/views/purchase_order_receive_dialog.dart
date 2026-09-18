@@ -173,12 +173,20 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
         ? AppLocalizations.of(context)!.purchaseOrderUnknownProduct
         : line.displayName;
 
+    // Identifiers count articles, not packs. A box of three handsets is three
+    // IMEIs and a carton of twelve boxes is twelve lot quantities, and the
+    // backend validates the capture against exactly that — so a sheet seeded
+    // with the purchase-unit count can never be completed on any line bought
+    // in anything but the base unit.
+    final receivedBase = line.toBaseQuantity(received);
+    final damagedBase = line.toBaseQuantity(damaged);
+
     var batches = existing?.batches ?? const <ReceiptBatchCapture>[];
     if (mode.tracksLots) {
       final captured = await showBatchCaptureSheet(
         context,
         productLabel: label,
-        expectedQuantity: received,
+        expectedQuantity: receivedBase,
         initial: batches,
         suggestedExpiry: line.expiryDate,
       );
@@ -195,8 +203,8 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
         productLabel: label,
         // Damaged goods are units too, in the same table and in the same
         // capture — two disjoint sets, neither overwriting the other.
-        expectedCount: (received + damaged).round(),
-        lineUnitCost: line.unitCost,
+        expectedCount: (receivedBase + damagedBase).round(),
+        lineUnitCost: line.baseUnitCost,
         initial: units,
         allowCaptureLater: false,
       );
@@ -445,7 +453,10 @@ class _PurchaseReceiveLineInput extends StatelessWidget {
             _CaptureRow(
               line: line,
               capture: capture,
-              expectedCount: (received + damaged),
+              // Base units, because that is what the sheet captures and what
+              // the backend counts — the row must read «12 من 12», not
+              // «1 من 12», for a carton of twelve.
+              expectedCount: line.toBaseQuantity(received + damaged),
               onCapture: onCapture!,
             ),
           ],

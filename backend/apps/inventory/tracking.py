@@ -386,6 +386,39 @@ def lock_balance(*, batch, warehouse, variant=None):
     )
 
 
+def _resync_balance(balance):
+    """Re-read the quantities this write is about to compute from.
+
+    One movement can hand out several references to the *same* ``(lot, place)``
+    row — a serialised line locks a balance per unit, and a receipt line that
+    splits into an expected and an overage movement plans each half separately.
+    Each of those references was read before any of them was written, so
+    computing ``remaining - n`` from the instance in hand silently discards
+    every earlier write of the same transaction and the last one wins.
+
+    The row is already locked by ``lock_balance``, and a transaction sees its
+    own writes, so re-reading here is what makes these writes accumulate.
+    """
+    if balance.pk is None:
+        return balance
+    fresh = (
+        StockBatchBalance.objects.filter(pk=balance.pk)
+        .values(
+            "received_quantity",
+            "remaining_quantity",
+            "incoming_rate",
+            # FIFO orders on it, so the first arrival has to stay the first one
+            # even when a second slice of the same delivery is written after it.
+            "first_received_at",
+        )
+        .first()
+    )
+    if fresh is not None:
+        for name, value in fresh.items():
+            setattr(balance, name, value)
+    return balance
+
+
 def receive_into_balance(*, balance, quantity, rate, at=None):
     """Add received goods to a balance, re-weighting its rate.
 
@@ -397,6 +430,7 @@ def receive_into_balance(*, balance, quantity, rate, at=None):
     quantity = _q(quantity)
     if quantity <= ZERO:
         return balance
+    _resync_balance(balance)
     rate = _rate(rate or ZERO)
     previous_quantity = Decimal(balance.remaining_quantity)
     previous_value = previous_quantity * Decimal(balance.incoming_rate)
@@ -428,6 +462,7 @@ def issue_from_balance(*, balance, quantity):
     quantity = _q(quantity)
     if quantity <= ZERO:
         return balance
+    _resync_balance(balance)
     balance.remaining_quantity = _q(Decimal(balance.remaining_quantity) - quantity)
     balance.save(update_fields=["remaining_quantity", "updated_at"])
     return balance
@@ -779,6 +814,7 @@ def _plan_lot_receipt(
                 "expected": str(quantity),
             }
         )
+    _refuse_unbalanced_lot_costs(batch_rows, rate=rate, quantity=quantity)
 
 
 def _plan_unit_receipt(
@@ -989,6 +1025,40 @@ def _refuse_duplicate_codes(unit_rows, *, variant=None):
         raise serializers.ValidationError(conflict_error(conflicts))
 
 
+def _refuse_unbalanced_lot_costs(batch_rows, *, rate, quantity):
+    """Per-lot costs, when given, must sum to what the line actually cost.
+
+    The lot half of :func:`_refuse_unbalanced_costs`, and for the same reason:
+    ``unit_cost`` is a writable field on the capture payload, so a delivery that
+    declares each lot's cost can otherwise book several times the money the
+    purchase line says was paid — with every invariant still green, because the
+    balances and the bin agree with each other and neither is compared to the
+    order.
+    """
+    declared = [row for row in batch_rows if row.get("unit_cost") is not None]
+    if not declared or len(declared) != len(batch_rows):
+        return
+    total = sum(
+        (
+            Decimal(row["unit_cost"]) * _q(row.get("quantity", quantity) or ZERO)
+            for row in declared
+        ),
+        ZERO,
+    )
+    expected = _rate(Decimal(rate) * Decimal(quantity))
+    if _rate(total) != expected:
+        raise serializers.ValidationError(
+            {
+                "detail": (
+                    f"مجموع تكاليف الدفعات ({_rate(total)}) لا يساوي إجمالي "
+                    f"السطر ({expected})."
+                ),
+                "captured": str(_rate(total)),
+                "expected": str(expected),
+            }
+        )
+
+
 def _refuse_unbalanced_costs(unit_rows, *, count, rate, quantity):
     """Per-unit costs, when given, must sum to what the line actually cost.
 
@@ -1114,6 +1184,11 @@ def _plan_unit_issue(
                 )
             chosen.append(unit.pk)
     chosen.extend(int(unit_id) for unit_id in (unit_ids or []))
+    # One article, one allocation. A cart that names the same unit twice — two
+    # lines carrying the same id, or the same IMEI scanned twice — would
+    # otherwise satisfy the count check below with one handset and issue it
+    # twice, leaving the bin short by one and the second article on the shelf.
+    _refuse_repeated_units(chosen)
 
     if chosen:
         locked = lock_units(chosen)
@@ -1168,6 +1243,25 @@ def _plan_unit_issue(
                 ),
             )
         )
+
+
+def _refuse_repeated_units(unit_ids):
+    """No article may be named twice on one movement.
+
+    ``lock_units`` de-duplicates the *lock* but returns a map, so a caller that
+    re-reads it per id gets the same instance back as many times as it asked —
+    which passes every count check and issues one handset as two.
+    """
+    seen = set()
+    for unit_id in unit_ids:
+        if unit_id in seen:
+            raise serializers.ValidationError(
+                {
+                    "detail": "الوحدة نفسها مُختارة أكثر من مرة في هذه الفاتورة.",
+                    "stock_unit": unit_id,
+                }
+            )
+        seen.add(unit_id)
 
 
 def _refuse_unsellable_units(units, *, variant, warehouse_id):
@@ -1360,6 +1454,134 @@ def apply_return(plan, *, at=None, warehouse_id=None):
                 quantity=allocation.quantity,
                 rate=allocation.rate,
                 at=at,
+            )
+    return plan
+
+
+def plan_receipt_reversal(
+    *, variant, warehouse, quantity, receipt_lines, voucher_type, voucher_id
+):
+    """Take back what one receipt put on the shelf.
+
+    Un-receiving is not a sale and not a write-off: the goods were never really
+    here, so the articles are cancelled and the lot gives back exactly what that
+    delivery added to it. Without this the bin falls to zero while the balance
+    still claims the delivery, and FEFO hands the next customer packs from a lot
+    nobody ever received.
+
+    A serialised line names its own articles, through the receipt line that
+    created them. A lot line has no such column, so it reverses **this receipt's
+    own ``in`` allocations**, newest first — which is the only record of what
+    this delivery, as opposed to any other, put into which lot.
+    """
+    mode = mode_of(variant)
+    if mode == Product.TrackingMode.QUANTITY:
+        return None
+    warehouse_id = getattr(warehouse, "pk", warehouse) or Warehouse.default_id()
+    quantity = _q(quantity)
+    plan = TrackedPlan(
+        mode=mode,
+        direction=StockAllocation.Direction.OUT,
+        warehouse_id=warehouse_id,
+    )
+    if quantity <= ZERO:
+        return plan
+
+    if tracks_units(mode):
+        units = list(
+            # ``of="self"`` because the lot is joined in for its expiry and is
+            # nullable: Postgres refuses ``FOR UPDATE`` on the nullable side of
+            # an outer join, and the rows being locked are the articles anyway.
+            StockUnit.objects.select_for_update(of=("self",))
+            .filter(
+                source_receipt_line__in=receipt_lines,
+                variant=variant,
+                status__in=StockUnit.LIVE_STATUSES,
+            )
+            .select_related("batch")
+            .order_by("pk")[: int(quantity)]
+        )
+        for unit in units:
+            # An article already on its way to another branch cannot be
+            # un-received: the transfer that is carrying it would land on
+            # nothing. Say so here, where the receipt can still be refused,
+            # rather than letting the transition table raise mid-write.
+            if StockUnit.Status.CANCELLED not in ALLOWED_STATUS_TRANSITIONS.get(
+                unit.status, set()
+            ):
+                raise serializers.ValidationError(
+                    {
+                        "detail": (
+                            f"لا يمكن إلغاء استلام الوحدة {unit.code} وهي "
+                            f"بالحالة ({unit.status})."
+                        ),
+                        "stock_unit": unit.pk,
+                        "status": unit.status,
+                    }
+                )
+            plan.allocations.append(
+                Allocation(
+                    quantity=ONE,
+                    rate=_rate(unit.stock_value),
+                    unit=unit,
+                    batch=unit.batch,
+                    balance=(
+                        lock_balance(batch=unit.batch, warehouse=warehouse_id)
+                        if unit.batch_id
+                        else None
+                    ),
+                )
+            )
+        return plan
+
+    remaining = quantity
+    rows = (
+        StockAllocation.objects.filter(
+            voucher_type=voucher_type,
+            voucher_id=voucher_id,
+            variant=variant,
+            direction=StockAllocation.Direction.IN,
+            batch__isnull=False,
+        )
+        .select_related("batch")
+        .order_by("-id")
+    )
+    for row in rows:
+        if remaining <= ZERO:
+            break
+        balance = lock_balance(
+            batch=row.batch, warehouse=warehouse_id, variant=variant
+        )
+        take = min(_q(row.quantity), remaining, _q(balance.remaining_quantity))
+        if take <= ZERO:
+            continue
+        plan.allocations.append(
+            Allocation(
+                quantity=take,
+                rate=_rate(row.rate),
+                batch=row.batch,
+                balance=balance,
+            )
+        )
+        remaining = _q(remaining - take)
+    return plan
+
+
+def apply_receipt_reversal(plan):
+    """Cancel the articles and give the lots back their quantity.
+
+    ``cancelled`` rather than ``written_off``: nothing was lost, the delivery
+    simply did not happen, and the identifier is free for the next time that
+    article walks in.
+    """
+    if plan is None or not plan.allocations:
+        return plan
+    for allocation in plan.allocations:
+        if allocation.unit is not None:
+            transition_unit(allocation.unit, StockUnit.Status.CANCELLED)
+        if allocation.balance is not None:
+            issue_from_balance(
+                balance=allocation.balance, quantity=allocation.quantity
             )
     return plan
 

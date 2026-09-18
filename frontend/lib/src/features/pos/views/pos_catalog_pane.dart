@@ -163,6 +163,31 @@ class _PosCatalogGrid extends StatelessWidget {
     );
   }
 
+  /// Open the picker and add the article the cashier chose.
+  ///
+  /// One place, because both routes into a serialized product — tapping a
+  /// product with a single variant and choosing one out of the variant sheet —
+  /// have to end the same way. A line that reaches the cart without a unit is a
+  /// receipt naming whichever handset happened to be oldest.
+  Future<void> _addPickedStockUnit(
+    BuildContext context,
+    ProductVariant variant,
+  ) async {
+    final repository = viewModel.trackedStockRepository;
+    if (repository == null) {
+      return;
+    }
+    final unit = await showPosUnitPickerSheet(
+      context,
+      repository: repository,
+      variantId: variant.id,
+      productLabel: variant.displayLabel,
+    );
+    if (unit != null && context.mounted) {
+      viewModel.addVariant(variant, stockUnit: unit, source: 'variant_picker');
+    }
+  }
+
   Future<void> _addWeighedVariant(
     BuildContext context,
     Product product,
@@ -264,7 +289,12 @@ class _PosCatalogGrid extends StatelessWidget {
         );
         if (variant != null && context.mounted) {
           final defaultUnit = defaultSaleUnitOption(product, variant.unitPrice);
-          if (defaultUnit.allowsFractional) {
+          if (variant.trackingMode.tracksUnits) {
+            // The same rule the single-variant path applies: an identified
+            // article is picked, never implied. A product that happens to have
+            // three storage sizes is still a shelf of individual handsets.
+            await _addPickedStockUnit(context, variant);
+          } else if (defaultUnit.allowsFractional) {
             await _addWeighedVariant(
               context,
               product,
@@ -288,23 +318,10 @@ class _PosCatalogGrid extends StatelessWidget {
         }
       case PosProductSelectionStatus.chooseStockUnit:
         final variant = result.stockUnitVariant;
-        final repository = viewModel.trackedStockRepository;
-        if (variant == null || repository == null) {
+        if (variant == null) {
           return;
         }
-        final unit = await showPosUnitPickerSheet(
-          context,
-          repository: repository,
-          variantId: variant.id,
-          productLabel: variant.displayLabel,
-        );
-        if (unit != null && context.mounted) {
-          viewModel.addVariant(
-            variant,
-            stockUnit: unit,
-            source: 'variant_picker',
-          );
-        }
+        await _addPickedStockUnit(context, variant);
       case PosProductSelectionStatus.unavailable:
         messenger
           ..clearSnackBars()

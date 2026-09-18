@@ -18,6 +18,7 @@ import 'order_document_action.dart';
 import 'order_document_web_delivery.dart';
 import 'print_transport.dart';
 import '../../shared/branding_assets.dart';
+import '../../shared/date_formatters.dart';
 import '../../shared/formatters.dart';
 import '../../shared/pdf/pdf.dart';
 
@@ -2244,6 +2245,19 @@ List<String> _nonBlankStrings(Iterable<Object?> values) {
 }
 
 String _saleLineName(SaleOrderLine line) {
+  final name = _saleLineProductName(line);
+  final identifiers = _saleLineIdentifierLines(line);
+  if (identifiers.isEmpty) {
+    return name;
+  }
+  // Under the name rather than in a column of their own: the table's widths and
+  // alignments are fixed in the same order the RTL renderer reverses them, and
+  // a fifth column would have to be threaded through both. A serial or a lot is
+  // part of naming the article anyway.
+  return '$name\n${identifiers.join('\n')}';
+}
+
+String _saleLineProductName(SaleOrderLine line) {
   final product = line.productName?.trim() ?? '';
   final variant = line.variantName?.trim() ?? '';
   if (product.isEmpty && variant.isEmpty) {
@@ -2256,6 +2270,24 @@ String _saleLineName(SaleOrderLine line) {
     return variant;
   }
   return '$product - $variant';
+}
+
+/// The IMEIs and lot numbers this line issued, one per printed line.
+///
+/// Empty for everything a shop counts rather than identifies, so an ordinary
+/// invoice is byte-for-byte what it was.
+List<String> _saleLineIdentifierLines(SaleOrderLine line) {
+  return [
+    for (final identifier in line.identifiers)
+      if (identifier.code.trim().isNotEmpty)
+        [
+          identifier.code.trim(),
+          if (!identifier.isUnit && identifier.quantity > 0)
+            '× ${_formatQuantity(identifier.quantity)}',
+          if (identifier.expiryDate != null)
+            formatExpiry(identifier.expiryDate!),
+        ].join('  '),
+  ];
 }
 
 String _formatMoney(double value) =>

@@ -254,6 +254,8 @@ def order_line_modifier_payloads(line):
 
 
 def receipt_line_payload(line, *, unit_labels=None):
+    from apps.sales.tracked_lines import order_line_identifiers
+
     variant = line.variant
     product = variant.product
     full_name = variant.full_name
@@ -289,6 +291,12 @@ def receipt_line_payload(line, *, unit_labels=None):
             for option_value in variant.option_values.all()
         ],
         "modifiers": order_line_modifier_payloads(line),
+        # The IMEIs and lot numbers this line actually issued. A receipt that
+        # does not name them is a warranty document that cannot settle a claim
+        # and a pharmacy record that cannot answer a recall — and the encoder
+        # has been reading this key all along. Empty, and free, for every line
+        # of everything a shop counts rather than identifies.
+        "identifiers": order_line_identifiers(line),
     }
 
 

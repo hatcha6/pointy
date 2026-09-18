@@ -956,15 +956,38 @@ def _refuse_cost_edit_on_identified_stock(purchase_order):
     The correction that still works is a purchase return, which moves the
     articles it names.
     """
-    from apps.inventory.models import StockUnit
+    from apps.inventory.models import StockAllocation, StockLedgerEntry, StockUnit
 
+    # Every article this order ever created, live or not. A sold handset still
+    # points at the receipt line the edit is about to delete, and
+    # ``source_receipt_line`` is ``SET_NULL`` — so leaving those out does not
+    # make the edit safe, it makes it quietly destroy the provenance that
+    # answers "where has this IMEI been".
     units = list(
         StockUnit.objects.filter(
             source_receipt_line__receipt__purchase_order=purchase_order,
-            status__in=StockUnit.LIVE_STATUSES,
         ).values_list("code", flat=True)[:10]
     )
+    # A lot-tracked order has no units at all, and is the worse case: the
+    # un-record leaves the old lot's balance untouched and the re-record has no
+    # captured codes to work from, so it mints a second lot for the same goods
+    # and the shop's stock value doubles.
+    lots = []
     if not units:
+        lots = list(
+            StockAllocation.objects.filter(
+                voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RECEIPT,
+                voucher_id=purchase_order.pk,
+                direction=StockAllocation.Direction.IN,
+                batch__isnull=False,
+            )
+            .values_list("batch__code", flat=True)
+            .distinct()[:10]
+        )
+    if not units and not lots:
+        # Nothing identified has been written yet, but the order may still hold
+        # tracked lines that simply have not been received. Those are safe:
+        # there is no article and no balance for the re-record to duplicate.
         return
     raise serializers.ValidationError(
         {
@@ -974,6 +997,7 @@ def _refuse_cost_edit_on_identified_stock(purchase_order):
                 "استخدم مرتجع مشتريات بدلًا من ذلك."
             ),
             "stock_units": units,
+            "stock_batches": lots,
         }
     )
 

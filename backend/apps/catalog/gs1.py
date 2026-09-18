@@ -59,7 +59,18 @@ FIXED_LENGTHS = {
     "16": 6,   # sell-by
     "17": 6,   # expiry, YYMMDD
     "20": 2,   # variant
+    "8018": 18,  # GSRN, provider relation
 }
+#: The measurement block, ``31nn``–``36nn`` plus ``39nn``/``42nn``-style trade
+#: measures: four-digit AIs whose last digit is the decimal place, each followed
+#: by exactly six digits. They are fixed-length, so they carry no ``GS`` — and a
+#: parser that guesses "variable" for an AI it does not know swallows every
+#: element after one. A net weight on a food or veterinary pack is enough to
+#: erase the lot number, silently, which is why the whole block is enumerated
+#: rather than the handful we expect to meet.
+FIXED_LENGTHS.update(
+    {f"{group}{decimal}": 6 for group in range(310, 370) for decimal in range(10)}
+)
 
 #: The AIs this feature actually acts on, named so a caller never types "10".
 AI_GTIN = "01"
@@ -80,11 +91,14 @@ VARIABLE_MAX_LENGTHS = {
     "400": 30,
     "710": 20,
     "711": 20,
+    "712": 20,
+    "713": 20,
+    "714": 20,
 }
 
 #: AI codes longer than two digits, which have to be tried before the two-digit
 #: read or ``240`` parses as ``24`` + a stray ``0``.
-LONG_AI_PREFIXES = ("240", "241", "400", "710", "711", "712", "713")
+LONG_AI_PREFIXES = ("240", "241", "400", "710", "711", "712", "713", "714")
 
 
 class Gs1Error(ValueError):
@@ -275,8 +289,13 @@ def _read_ai(text: str, index: int):
     """The AI starting at ``index``, longest match first.
 
     ``240`` has to be tried before ``24``, or a three-digit AI parses as a
-    two-digit one followed by a stray digit and everything after it shifts.
+    two-digit one followed by a stray digit and everything after it shifts. The
+    same applies one digit further out: ``3103`` (net weight) must be read
+    before ``31``, and ``8018`` before ``80``.
     """
+    four = text[index : index + 4]
+    if four in FIXED_LENGTHS:
+        return four
     for prefix in LONG_AI_PREFIXES:
         if text.startswith(prefix, index):
             return prefix
@@ -291,14 +310,70 @@ def _read_ai(text: str, index: int):
     return head
 
 
+#: AIs that realistically follow a lot or serial on the same pack. A fused run
+#: is recognised by finding one of these *inside* the value and having the rest
+#: of the value parse cleanly from there.
+_FUSE_CANDIDATES = ("21", "17", "11", "10", "01")
+
+
+def _parses_to_end(value: str, offset: int) -> bool:
+    """Whether ``value[offset:]`` is itself a well-formed run of elements.
+
+    Used only to recognise a stripped ``GS``: if the tail of what came back as
+    one lot number is a valid element string in its own right, the separator
+    that should have ended the lot is missing.
+    """
+    index = offset
+    length = len(value)
+    seen = 0
+    while index < length:
+        ai = _read_ai(value, index)
+        if ai is None:
+            return False
+        index += len(ai)
+        fixed = FIXED_LENGTHS.get(ai)
+        if fixed is not None:
+            if index + fixed > length:
+                return False
+            index += fixed
+        else:
+            maximum = VARIABLE_MAX_LENGTHS.get(ai)
+            if maximum is None or length - index > maximum:
+                return False
+            index = length
+        seen += 1
+    return seen > 0 and index == length
+
+
 def _separator_warnings(ai: str, value: str) -> list:
     """A variable-length value that ran to the end of the string.
 
-    Legitimate when it is genuinely the last element. Suspicious when it is
-    longer than the AI allows, which is what a scanner configured to strip
-    ``GS`` produces — the lot number and everything after it arrive as one run.
+    Legitimate when it is genuinely the last element. Suspicious two ways, and
+    the second is the one that actually turns up: the value is longer than the
+    AI allows, **or** another AI is sitting inside it with a well-formed run
+    behind it. A reader that strips ``GS`` produces the latter on every normal
+    pharmacy pack, where the lot is well under its twenty-character maximum and
+    only the serial glued to its tail gives it away.
     """
     maximum = VARIABLE_MAX_LENGTHS.get(ai)
+    if maximum is not None and len(value) <= maximum:
+        for offset in range(1, len(value)):
+            if value[offset : offset + 2] not in _FUSE_CANDIDATES:
+                continue
+            if _parses_to_end(value, offset):
+                return [
+                    Gs1Warning(
+                        code="missing_group_separator",
+                        message=(
+                            "يبدو أن القارئ يحذف فاصل المجموعات (GS): القيمة "
+                            "تحتوي على معرّف آخر بداخلها. أعد ضبط القارئ "
+                            "لإرسال الفاصل، ثم أعد المسح."
+                        ),
+                        ai=ai,
+                        value=value,
+                    )
+                ]
+        return []
     if maximum is None or len(value) <= maximum:
         return []
     return [

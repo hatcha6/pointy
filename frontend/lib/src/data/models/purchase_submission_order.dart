@@ -336,6 +336,7 @@ class PurchaseOrderLine {
     required this.unitCost,
     this.unit = '',
     this.unitLabel = '',
+    this.unitFactor = 1,
     this.discountAmount = 0,
     this.netLineTotal,
     this.netUnitCost,
@@ -381,6 +382,11 @@ class PurchaseOrderLine {
   /// Purchase unit code and its short display label (resolved by the backend).
   final String unit;
   final String unitLabel;
+
+  /// Base units in one purchase unit. A box of three handsets is three
+  /// articles to identify and three rows in the ledger, however the buyer
+  /// counted it — every capture on this line is measured in base units.
+  final double unitFactor;
   final double discountAmount;
   final double? netLineTotal;
   final double? netUnitCost;
@@ -400,6 +406,14 @@ class PurchaseOrderLine {
   final double? landedLineTotal;
 
   double get receivableQuantity => openQuantity < 0 ? 0 : openQuantity;
+
+  /// One purchase unit in base units, never zero.
+  double get baseFactor => unitFactor > 0 ? unitFactor : 1;
+
+  /// What one BASE unit cost, which is what a captured article is stamped with.
+  double get baseUnitCost => unitCost / baseFactor;
+
+  double toBaseQuantity(double quantity) => quantity * baseFactor;
 
   double get varianceQuantity => receivedQuantity + damagedQuantity - quantity;
 
@@ -487,6 +501,7 @@ class PurchaseOrderLine {
       unitCost: _moneyFromJson(json['unit_cost']),
       unit: json['unit']?.toString() ?? '',
       unitLabel: json['unit_label']?.toString() ?? '',
+      unitFactor: _quantityFromJson(json['unit_factor'] ?? 1),
       discountAmount: _moneyFromJson(json['discount_amount']),
       netLineTotal: _nullableMoneyFromJson(json['net_line_total']),
       netUnitCost: _nullableMoneyFromJson(json['net_unit_cost']),
@@ -549,6 +564,7 @@ class PurchaseOrderLine {
       unitCost: unitCost,
       unit: unit,
       unitLabel: unitLabel,
+      unitFactor: unitFactor,
       discountAmount: discountAmount,
       netLineTotal: netLineTotal,
       netUnitCost: netUnitCost,

@@ -9,7 +9,6 @@ means. The primitive only knows that it must happen, and when.
 from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied
-from django.utils import timezone
 
 from apps.purchasing.models import PurchaseOrder
 
@@ -185,7 +184,8 @@ def reverse_purchase_receipt(receipt, *, at, actor, reason="", context=None):
     Refuses when the goods are no longer there to take back: stock that has
     already been sold can only be corrected with a purchase return.
     """
-    from apps.inventory.models import StockLedgerEntry, StockMovement, StockUnit
+    from apps.inventory import tracking
+    from apps.inventory.models import StockLedgerEntry, StockMovement
     from apps.inventory.services import discard_expiring_stock_batches
     from apps.purchasing.services import (
         build_stock_movement,
@@ -216,6 +216,7 @@ def reverse_purchase_receipt(receipt, *, at, actor, reason="", context=None):
         return None
     stock_items = lock_stock_items(variants, warehouse=warehouse_id)
     movements = []
+    reversal_plans = []
     touched = {}
     for line in lines:
         purchase_line = line.purchase_line
@@ -223,19 +224,32 @@ def reverse_purchase_receipt(receipt, *, at, actor, reason="", context=None):
         before = stock_snapshot(stock_item)
         changed = False
         if line.accepted_quantity > Decimal("0"):
-            stock_item.quantity_on_hand -= purchase_line.to_base_quantity(
-                line.accepted_quantity
-            )
+            base_quantity = purchase_line.to_base_quantity(line.accepted_quantity)
+            stock_item.quantity_on_hand -= base_quantity
             changed = True
+            # Identified goods leave the way they arrived: the articles this
+            # receipt created are cancelled and the lots it filled give the
+            # quantity back. Without the plan the bin falls to zero while the
+            # balance still claims the delivery.
+            reversal_plan = tracking.plan_receipt_reversal(
+                variant=purchase_line.variant,
+                warehouse=warehouse_id,
+                quantity=base_quantity,
+                receipt_lines=[line],
+                voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RECEIPT,
+                voucher_id=receipt.purchase_order_id,
+            )
+            reversal_plans.append(reversal_plan)
             movements.append(
                 build_stock_movement(
                     variant=purchase_line.variant,
                     stock_item=stock_item,
                     movement_type=StockMovement.Type.DECREASE,
-                    quantity=purchase_line.to_base_quantity(line.accepted_quantity),
+                    quantity=base_quantity,
                     note=f"إلغاء استلام {receipt.purchase_order.order_number}",
                     created_by=actor,
                     before=before,
+                    tracked_plan=reversal_plan,
                 )
             )
         if line.expected_reduction_quantity > Decimal("0"):
@@ -250,6 +264,12 @@ def reverse_purchase_receipt(receipt, *, at, actor, reason="", context=None):
 
     if touched:
         save_stock_item_quantities_bulk(touched.values())
+    # Identified articles are cancelled and lot balances give back what this
+    # delivery added, before the ledger reads the plans the movements carry.
+    # Cancelled, never deleted: the row is the only record that the identifier
+    # was ever here, and it frees the code for the next time it walks in.
+    for reversal_plan in reversal_plans:
+        tracking.apply_receipt_reversal(reversal_plan)
     if movements:
         create_stock_movements(
             movements,
@@ -258,13 +278,4 @@ def reverse_purchase_receipt(receipt, *, at, actor, reason="", context=None):
         )
     # An expiry cohort is a claim that this stock is on the shelf. It is not.
     discard_expiring_stock_batches(receipt_lines=lines, warehouse=warehouse_id)
-    # Identified articles that arrived on this receipt are voided, never
-    # deleted: the row is the only record that the identifier was ever here, and
-    # a cancelled unit frees its code for the next time it walks in. A unit that
-    # has already been sold cannot be reached — ``validate_purchase_stock_available``
-    # above refuses the un-receipt before this line runs.
-    StockUnit.objects.filter(
-        source_receipt_line__in=lines,
-        status__in=StockUnit.LIVE_STATUSES,
-    ).update(status=StockUnit.Status.CANCELLED, updated_at=timezone.now())
     return None

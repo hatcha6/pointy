@@ -374,7 +374,14 @@ class IdentifiedValuation:
         self.unowned = round_off_if_near_zero(self.unowned - _decimal(released))
         self.value = round_off_if_near_zero(self.value + _decimal(value))
 
-    def remove_stock(self, qty, outgoing_rate=ZERO, rate_generator=None, unowned=ZERO):
+    def remove_stock(
+        self,
+        qty,
+        outgoing_rate=ZERO,
+        rate_generator=None,
+        unowned=ZERO,
+        allocated=False,
+    ):
         """Issue ``qty`` at the rate the allocation decided.
 
         ``outgoing_rate`` is not an optimisation hint here as it is for the queue
@@ -382,6 +389,13 @@ class IdentifiedValuation:
         and falls back to the blended rate so a mis-wired path degrades to a
         wrong-but-bounded number rather than a crash; the guard test in
         ``test_tracking_guards`` is what stops that path existing.
+
+        ``allocated`` is how that caller says so, because **zero is a real
+        rate**: a bonus pack the supplier threw in, a trade-in taken at nothing,
+        a consigned article. Reading a zero rate as "nobody allocated" values
+        those at the shelf's blended average — the one thing §3.4 says an
+        identified issue must never do — so the absence of an allocation is
+        stated rather than inferred.
 
         ``unowned`` is how many of the leaving articles never belonged to the
         shop — a consigned watch handed back to its owner, which reduces the
@@ -392,7 +406,7 @@ class IdentifiedValuation:
             return []
         unowned = _decimal(unowned)
         rate = _decimal(outgoing_rate)
-        if rate == ZERO and unowned < qty:
+        if not allocated and rate == ZERO and unowned < qty:
             rate = self.valuation_rate
             if rate == ZERO and rate_generator is not None:
                 rate = _decimal(rate_generator())
