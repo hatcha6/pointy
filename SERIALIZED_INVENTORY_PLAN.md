@@ -1,7 +1,7 @@
 # Serialized & Batch Inventory (IMEI / Serial / Lot / Expiry) — Architecture Plan
 
 **Date:** 2026-09-10 (Expanded 2026-09-17, Phases A & B shipped 2026-09-17,
-Phase C shipped 2026-09-18)
+Phase C shipped 2026-09-18, A & B reviewed 2026-09-18)
 **Status:** **Phases A, B and C shipped** — the shared allocation core and
 ledger, the shop operating both from the client, and the used-goods trade with
 consignment carrying a real liability (§15). Phases D–E remain proposed.
@@ -10,6 +10,12 @@ Five things in this document were changed by building it, and each is marked
 bin's treatment of a quarantined lot (§5.3), landed-cost re-stamping on
 identified stock (§5.5), the till's own knowledge of its warehouse (§15,
 Phase B), the shape of invariant 10 (§5.4), and the trade-in's tender (§6.2).
+**Four more were changed by *reviewing* it** (§15.2), and they are the ones to
+read first, because each is a claim this document made that turned out to be
+untrue: the batch split did **not** ship as R1 of §15.1 (§15, Phase A), no
+printed receipt ever carried an identifier (§15, Phase B), the GS1 parser's
+most valuable test could not fail (§15, Phase B), and selling without picking
+is **not** refused (§6.3).
 **Roadmap slot:** Promotes and unifies Gap #13 ("Serial-number tracking", sized M)
 and Gap #14 ("Batch & lot tracking with FEFO/expiry", sized M). This plan combines
 them because they share 80% of the underlying ledger allocation architecture,
@@ -1979,6 +1985,15 @@ Everything else is fallback and guard rails:
   `pos-keyboard-shortcuts`).
 - **Selling without picking is refused**, always, whatever `allow_overselling`
   says (§3.5). The error names the product in Arabic and offers the picker.
+  **DEFERRED 2026-09-18 — not implemented.** `_plan_unit_issue` silently takes
+  the oldest sellable article instead, so the invoice, the printed warranty
+  document and `StockUnit.sold_order_line` can all name a handset still in the
+  drawer. Refusing outright needs `OrderLine.stock_unit` first: an order created
+  and settled later (آجل, `/api/orders/` + `/api/payments/`) has no column to
+  carry a selection, so a blanket refusal would make آجل sales of serialized
+  goods impossible. The POS half is fixed — both routes into a serialized
+  product now open the picker, where before a product with more than one variant
+  went straight to the cart with no unit. §15.2.
 - **Concurrency is the interesting case.** Two tills, one phone, same second.
   Checkout locks the cart's units with `SELECT ... FOR UPDATE` in a single
   batched statement alongside the existing `lock_stock_items`
@@ -2764,6 +2779,19 @@ of truth. Reads flip in Phase B (R2) and the columns drop only once the fleet's
 minimum version is past it (R3). A shop that does not use `tracks_expiry` today
 sees none of this and takes Phase A as one ordinary live update.
 
+> **CORRECTED 2026-09-18 — the paragraph above is not what shipped.** All three
+> releases went out as one. `0026_split_batch_identity_and_balance` creates and
+> backfills the balances and `0027_drop_legacy_batch_columns` removes
+> `received_quantity`, `remaining_quantity` and `source_receipt_line` in the
+> *same* release; there is no dual-write and no fleet gate. For a shop that
+> already uses `tracks_expiry`, the previous backend writes those columns on the
+> checkout path, so during §15.1's flip minute every sale of an expiry-tracked
+> product raises `ProgrammingError`. Rollback is gone too: auto-reversing
+> `RemoveField` re-adds a no-default `DecimalField` on a populated table.
+> **Unresolved** — un-shipping it is a deployment decision (has `00048fc0`
+> reached a shop?), not a code edit, and five migrations now sit on top of 0027.
+> §15.2.
+
 The split and the fourth mode are both here, in the first phase, on purpose:
 they are the two decisions that are cheap now and structural surgery later. A
 warehouse-scoped batch table would have to be un-shipped with live lot data on
@@ -2780,7 +2808,11 @@ recall report at once.
   invariants can be exercised at all.
 - The invariants live in `apps/inventory/integrity.py` as runnable checks rather
   than as prose, so the oracle asserts them after every simulated operation and a
-  support engineer can point them at a real shop's database.
+  support engineer can point them at a real shop's database. *(CORRECTED
+  2026-09-18: only through a Django shell. `integrity.py` is imported by the
+  tests and the simulation and by nothing else — no management command, no
+  Celery task, no endpoint — so the fourteen invariants have never run against a
+  real shop. Every defect in §15.2 was found by calling them by hand.)*
 - The oracle is `apps/inventory/tracking_simulation.py` — a dedicated randomized
   harness for identified stock, shaped as §14.3 prescribes (one lot object
   holding a map of warehouse to quantity, so a design that drifts back toward one
@@ -2817,7 +2849,16 @@ this on the day it installs rather than after it buys hardware.
 - **The GS1 parser is `apps/catalog/gs1.py`**, pure and driven by an AI length
   table rather than by splitting on a character — and its most valuable test is
   the one about a reader that strips `GS`, which a parser that split would have
-  imported as a lot number with a date glued to its tail.
+  imported as a lot number with a date glued to its tail. *(CORRECTED
+  2026-09-18: that test could not fail. It fed `"10" + "A" * 30`, over-long by
+  construction, and the detector only fired when a fused value exceeded the AI's
+  maximum — which for a lot needs twenty characters. A real pharmacy pack came
+  back with the serial glued to a short lot and **no warning at all**. The
+  detector now recognises a fused run by finding a well-formed element string
+  inside the value, which is what a missing separator actually looks like. The
+  AI table was also missing the fixed-length `310n`–`369n` measurement block and
+  `8018`, and an unknown AI was assumed variable — so a net weight silently ate
+  the lot number.)*
 - **One scan, one answer, on the miss path.** `GET /api/resolve-barcode/` is
   reached only when the till's own catalog had nothing — a plain barcode, a
   carton barcode and a weighing-scale label still resolve locally on the first
@@ -2832,7 +2873,14 @@ this on the day it installs rather than after it buys hardware.
   tile would be one the keyboard walked straight past.
 - **Receipt identifiers come off rows the sale already wrote** — the units it
   stamped and the allocations the ledger wrote — so a printed warranty document
-  cannot drift from what actually left the shop.
+  cannot drift from what actually left the shop. *(CORRECTED 2026-09-18: true of
+  the REST order payload, and of nothing that ever reached paper. `identifiers`
+  was added to `OrderLineSerializer`, but receipts print from the job payload
+  `apps/printing/services.receipt_line_payload` builds, which had no such key —
+  so the ESC/POS encoder's reader returned empty on every line of every receipt,
+  and the A4 invoice and the PDF rolls never mentioned identifiers at all. Both
+  now carry them. The one test passed by handing the key straight to the
+  encoder, which is why nobody noticed.)*
 - **DEFERRED, and honestly out:** the shelf/carton label PDF for lots, the unit
   and batch *detail* screens (a list row opens the life timeline instead), the
   companion camera as a DataMatrix scanner, and the price-checker's identifier
@@ -3058,6 +3106,74 @@ equal to the legacy column it replaced at the moment dual-write stops; and the
 fourteen §5.4 invariants green on the migrated data, not merely on data the new
 code created. A populated pharmacy fixture — lots across warehouses, some
 expired, some sold — belongs in that harness before R1 ships.
+
+### 15.2 What reviewing Phases A and B found (2026-09-18)
+
+Fifteen findings, eleven fixed, one already handled by Phase C, two deliberately
+not applied. Ten were reproduced by running them before the fix and again after,
+each asserted against `apps/inventory/integrity.py` rather than against a
+hand-written expectation — which is the only reason a list this size is
+trustworthy, and also the reason it exists at all: the invariants were written in
+Phase A and then never pointed at anything.
+
+**One sentence covers most of them: a stock path that was never taught about
+tracking.** So the deep fix is at the choke point every movement already passes
+through. `post_movement_valuations` checked that a plan which *exists* adds up
+and said nothing about one that is *absent* — and absence is the silent half,
+because ERPNext #42997 is not a wrong serial, it is no serial at all. It now
+refuses a movement of a tracked variant that names nothing. The valuation method
+is already resolved on that line, so it costs no query. **Expect the consequence:
+transfers, stock counts, manual adjustments and job-material issues of identified
+stock now raise until Phase D teaches them to allocate.** That is the better of
+the two failures — the alternative is a pharmacy discovering months later that
+its bin says forty and thirty-seven packs exist.
+
+Three balance bugs were one bug. `lock_balance` returns a **fresh instance per
+call**, and both writers computed `remaining - n` from whatever they were handed,
+so every reference but the last was discarded: a `serial_batch` line locks a
+balance per unit, so selling two packs of a lot took *one* off it; a receipt line
+that splits into an expected and an overage movement plans each half separately,
+so receiving twelve against an order of ten put two on the lot and left ten on
+the shelf that no lot claimed. Both writers now re-read the row first — it is
+already locked, and a transaction sees its own writes.
+
+The rest, briefly. One handset could be **sold twice**: two cart lines naming the
+same unit concatenate to `[7, 7]`, and `lock_units` de-duplicates the lock but
+returns a map, so re-reading it per id handed back the same article twice and the
+count check agreed. **Un-receiving a delivery left the lot on the shelf** —
+`discard_expiring_stock_batches` only matches generated `RL-<pk>` codes, which
+the tracked receipt path never writes — so there is now a receipt reversal in the
+module that owns identified stock, cancelling through the transition table rather
+than around it with a bulk update that could write `in_transit → cancelled`, a
+move the table forbids. The **§5.5 cost-edit refusal queried `StockUnit` only**,
+and a batch-tracked order has none, so ten packs at five dinars became twenty
+packs and a hundred dinars of stock value with every invariant still green; it
+now names lots too. **Zero is a real rate** — `IdentifiedValuation` read a zero
+outgoing rate as "nobody allocated" and substituted the shelf average, which
+Phase C would have made universal since every consigned article enters at zero;
+the absence of an allocation is now stated rather than inferred. The **lot
+receipt had no cost reconciliation**, so a fifty-dinar purchase line received as
+two lots each declaring fifty booked five hundred; the serialized path has
+refused exactly this since Phase A and the lot path now does too. And
+**receiving tracked stock in cartons was impossible**: the capture sheets were
+seeded with the purchase-unit count while the backend counts base units, so a box
+of three handsets asked for one IMEI and was refused for three, with no way out
+of the sheet.
+
+Two are not applied and say so: the R1/R3 migration collapse (above — a
+deployment decision) and the auto-pick refusal (§6.3 — needs
+`OrderLine.stock_unit`). Two smaller ones are recorded but unfixed: an IMEI typed
+in **Arabic-Indic digits** normalises to itself, passes the Luhn check because
+`int()` accepts those digits, and becomes a second live unit for one physical
+handset (NFKC is not a digit fold); and `StockUnitViewSet.identify` is a
+check-then-write with no transaction, so two receivers finishing "capture later"
+on the same code get an `IntegrityError` 500 instead of the structured conflict
+the method exists to produce.
+
+**The standing lesson for Phase D.** Every one of these was invisible to the test
+suite, which was green throughout, and visible in seconds to the invariants. Wire
+`integrity.py` to something that runs — a management command at minimum — before
+building anything else on this foundation.
 
 ---
 
