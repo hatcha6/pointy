@@ -911,7 +911,10 @@ def checkout_order(
         # Optionally hold the quoted quantities until valid_until.
         if reserve_stock:
             reserve_stock_for_quote(
-                order, settings=settings, warehouse=warehouse_id
+                order,
+                settings=settings,
+                warehouse=warehouse_id,
+                lines_data=lines_data,
             )
     else:
         # Standard and credit sales deduct stock at issue. A credit invoice may
@@ -1209,19 +1212,39 @@ def _stamp_ledger_cost_on_lines(order, movements):
 
 
 
-def reserve_stock_for_quote(order, *, settings=None, warehouse=None):
+def reserve_stock_for_quote(order, *, settings=None, warehouse=None, lines_data=None):
     """Place an ACTIVE hold on each stockable line of a quotation: bump the
     variant's ``quantity_committed`` and create a ``StockReservation``. Validates
     availability (on-hand minus existing commitments) unless overselling is on.
-    Service/prepared products carry no stock and are skipped."""
+    Service/prepared products carry no stock and are skipped.
+
+    ``lines_data`` is the cart as the till sent it, and it is passed in rather
+    than rebuilt because ``OrderLine`` has nowhere to keep a chosen article: a
+    quote written against a specific handset would otherwise be re-planned from
+    the persisted lines, which name only a variant and a quantity, and the hold
+    would land on whichever unit happened to be oldest instead.
+    """
     settings = settings or ShopSettings.load()
     lines = lock_order_lines_for_update(order)
+    # What the till named, per variant, so a quote for two of the same model
+    # holds both of the articles it was written against.
+    chosen = {}
+    for row in lines_data or []:
+        variant = row.get("variant")
+        if variant is None:
+            continue
+        entry = chosen.setdefault(
+            variant.pk, {"stock_units": [], "stock_unit_codes": [], "stock_batches": []}
+        )
+        for key in entry:
+            entry[key].extend(row.get(key) or [])
     adjustments = prepare_sale_stock_adjustments(
         [
             {
                 "variant": line.variant,
                 "quantity": line.quantity,
                 "unit_factor": line.unit_factor,
+                **chosen.get(line.variant_id, {}),
             }
             for line in lines
         ],
@@ -1231,6 +1254,31 @@ def reserve_stock_for_quote(order, *, settings=None, warehouse=None):
     for variant, stock_item, quantity in adjustments:
         stock_item.quantity_committed += quantity
         save_stock_item_quantities(stock_item)
+        # ``prepare_sale_stock_adjustments`` already planned and locked the
+        # articles this line would take; a quotation holds them rather than
+        # issuing them. One reservation per unit, so the hold names what the
+        # customer was actually shown and the sum still equals the commitment.
+        plan = tracking.plan_on(variant)
+        units = [
+            allocation.unit
+            for allocation in (plan.allocations if plan is not None else [])
+            if allocation.unit is not None
+        ]
+        if units:
+            for unit in units:
+                tracking.transition_unit(unit, StockUnit.Status.RESERVED)
+                StockReservation.objects.create(
+                    order=order,
+                    variant=variant,
+                    stock_item=stock_item,
+                    warehouse_id=stock_item.warehouse_id,
+                    stock_unit=unit,
+                    base_quantity=Decimal("1"),
+                    expires_at=order.valid_until,
+                )
+            tracking.clear_plan(variant)
+            continue
+        tracking.clear_plan(variant)
         StockReservation.objects.create(
             order=order,
             variant=variant,
@@ -1257,6 +1305,13 @@ def _settle_reservation(reservation, status):
         Decimal("0.000"),
     )
     save_stock_item_quantities(stock_item)
+    # The article goes back on the shelf whichever way the hold ended: released
+    # because the quote lapsed, or consumed because it became a sale — and in
+    # that second case the sale that follows has to be able to pick it up.
+    if reservation.stock_unit_id:
+        unit = StockUnit.objects.select_for_update().get(pk=reservation.stock_unit_id)
+        if unit.status == StockUnit.Status.RESERVED:
+            tracking.transition_unit(unit, StockUnit.Status.IN_STOCK)
     reservation.status = status
     reservation.save(update_fields=["status", "updated_at"])
 
@@ -1597,11 +1652,25 @@ def reschedule_credit_invoice_due_date(order, *, due_date, request=None):
     return locked
 
 
-def _quote_lines_to_checkout_data(lines):
+def _quote_lines_to_checkout_data(lines, *, order=None):
     """Rebuild ``lines_data`` from a quotation's persisted lines so the
     conversion re-runs the normal checkout path (re-snapshotting cost at current
     values and re-evaluating discounts). Modifier options that were since deleted
-    are dropped from the re-priced breakdown."""
+    are dropped from the re-priced breakdown.
+
+    A quotation that held identified articles carries them into the sale. The
+    customer was shown *that* handset — its IMEI, its battery health, its price
+    — so converting must not hand the picker a free choice and sell whichever
+    one happens to be oldest.
+    """
+    held = {}
+    if order is not None:
+        for reservation in order.stock_reservations.filter(
+            status=StockReservation.Status.ACTIVE, stock_unit__isnull=False
+        ):
+            held.setdefault(reservation.variant_id, []).append(
+                reservation.stock_unit_id
+            )
     lines_data = []
     for line in lines:
         modifiers = [
@@ -1619,6 +1688,13 @@ def _quote_lines_to_checkout_data(lines):
                 "effective_unit_price": line.unit_price,
                 "modifiers": modifiers,
                 "notes": line.notes,
+                # Taken, not copied: a quote with the same variant on two lines
+                # must not send the same unit twice.
+                "stock_units": [
+                    held[line.variant_id].pop(0)
+                    for _ in range(int(line.quantity * line.unit_factor))
+                    if held.get(line.variant_id)
+                ],
             }
         )
     return lines_data
@@ -1654,7 +1730,9 @@ def convert_quotation_to_sale(
     lines = lock_order_lines_for_update(locked)
     if not lines:
         raise serializers.ValidationError({"lines": "Quotation has no lines."})
-    lines_data = _quote_lines_to_checkout_data(lines)
+    # Read the holds before they are settled, so the sale can name the very
+    # articles the quotation was written against.
+    lines_data = _quote_lines_to_checkout_data(lines, order=locked)
 
     # Free the held stock first so the converted sale moves on-hand exactly once.
     consume_quote_reservations(locked)

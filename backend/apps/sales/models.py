@@ -1319,6 +1319,22 @@ class StockReservation(TimeStampedModel):
         decimal_places=3,
         validators=[MinValueValidator(Decimal("0.001"))],
     )
+    # Which article this hold is on, when the goods are identified. A quotation
+    # for a used handset holds *that* handset — the customer was shown its IMEI,
+    # its battery health and its price — so a hold that was only a number let
+    # the next cashier sell the very phone somebody is coming back for. Null for
+    # everything a shop counts rather than identifies, which is the common case.
+    #
+    # It is also what makes §5.4 invariant 2 true: quantity_committed counts
+    # reserved units, and before this nothing ever set a unit to RESERVED, so
+    # every quotation of a serialized product made the invariant fail.
+    stock_unit = models.ForeignKey(
+        "inventory.StockUnit",
+        on_delete=models.PROTECT,
+        related_name="reservations",
+        null=True,
+        blank=True,
+    )
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
