@@ -233,11 +233,38 @@ class StockBatch(TimeStampedModel):
     )
     is_locked = models.BooleanField(default=False)
 
+    # --- legacy, kept alive for one release (§15.1 R1) ---------------------
+    # These three are what the lot held before the split, and they are the
+    # source of truth for the release currently in shops: it decrements
+    # ``remaining_quantity`` on the checkout path and joins
+    # ``source_receipt_line`` in the expiry-alert query. The edge nginx runs
+    # that release against this schema for about a minute during an update, so
+    # dropping them here is a 500 on every sale of an expiry-tracked product.
+    #
+    # New code neither reads nor decides anything from them — the balance is the
+    # truth (§4.7) — it only keeps them current so a rollback to the previous
+    # release is clean. They go in the contract release, together with the
+    # dual-write in ``apps.inventory.tracking``. Nullable because the new code
+    # creates lots that never came from a receipt line at all.
+    source_receipt_line = models.ForeignKey(
+        "purchasing.PurchaseReceiptLine",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="legacy_stock_batches",
+    )
+    received_quantity = models.DecimalField(
+        max_digits=12, decimal_places=3, default=0
+    )
+    remaining_quantity = models.DecimalField(
+        max_digits=12, decimal_places=3, default=0
+    )
+
     # --- provenance & genealogy ------------------------------------------
     # Provenance is the ``in`` allocations, which already carry voucher, place,
-    # quantity and rate. A ``source_receipt_line`` column was removed rather
-    # than widened: a lot arriving in three deliveries has three provenances,
-    # and a column that holds one of them gets read as though it held all three.
+    # quantity and rate. ``source_receipt_line`` above is NOT that: it is a
+    # legacy column on its way out, and a lot arriving in three deliveries has
+    # three provenances that it cannot hold.
     supplier = models.ForeignKey(
         "purchasing.Supplier",
         on_delete=models.SET_NULL,

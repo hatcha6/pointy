@@ -2779,18 +2779,23 @@ of truth. Reads flip in Phase B (R2) and the columns drop only once the fleet's
 minimum version is past it (R3). A shop that does not use `tracks_expiry` today
 sees none of this and takes Phase A as one ordinary live update.
 
-> **CORRECTED 2026-09-18 — the paragraph above is not what shipped.** All three
-> releases went out as one. `0026_split_batch_identity_and_balance` creates and
-> backfills the balances and `0027_drop_legacy_batch_columns` removes
-> `received_quantity`, `remaining_quantity` and `source_receipt_line` in the
-> *same* release; there is no dual-write and no fleet gate. For a shop that
-> already uses `tracks_expiry`, the previous backend writes those columns on the
-> checkout path, so during §15.1's flip minute every sale of an expiry-tracked
-> product raises `ProgrammingError`. Rollback is gone too: auto-reversing
-> `RemoveField` re-adds a no-default `DecimalField` on a populated table.
-> **Unresolved** — un-shipping it is a deployment decision (has `00048fc0`
-> reached a shop?), not a code edit, and five migrations now sit on top of 0027.
-> §15.2.
+> **CORRECTED 2026-09-18 — the paragraph above was not what shipped, and now
+> is.** As first written, all three releases went out as one:
+> `0026_split_batch_identity_and_balance` created and backfilled the balances
+> and `0027_drop_legacy_batch_columns` removed `received_quantity`,
+> `remaining_quantity` and `source_receipt_line` in the *same* release, with no
+> dual-write and no fleet gate. For a shop already using `tracks_expiry` that is
+> a `ProgrammingError` on every sale during the flip minute, and no clean
+> rollback. **Repaired before it reached a shop:** 0027 now *loosens* those
+> columns instead of dropping them, `tracking.mirror_legacy_batch_totals` keeps
+> them current, and `apps/inventory/test_legacy_batch_columns.py` runs the
+> previous release's own two queries against this schema so the mistake cannot
+> come back silently. `received_quantity` is mirrored as a **high-water mark**,
+> never as the sum of the balances' own received column — a transfer receives
+> into the destination and issues from the source, and summing that would book
+> 125 received for 100 goods that arrived once. **The contract release still has
+> to happen:** drop the three columns and `mirror_legacy_batch_totals` together,
+> gated on the fleet's minimum version being past this one.
 
 The split and the fourth mode are both here, in the first phase, on purpose:
 they are the two decisions that are cheap now and structural surgery later. A
@@ -2977,6 +2982,17 @@ refurb capitalisation, returns and warranty lookup.
   trade this phase is about.
 
 **Phase D — safety, recall & warehouse operations (≈2 weeks).**
+**Two items are now prerequisites rather than scope, both added by the 2026-09-18
+review (§15.2).** First, **transfers, stock count, manual adjustment and
+job-material issue must learn to allocate** — the tripwire in
+`post_movement_valuations` refuses a tracked movement that names nothing, so on a
+tracked product those four paths *raise* until they are taught. That is the right
+failure, and it means this phase gates enabling the feature in a real shop rather
+than following it. Second, **the contract release for the batch split** — drop
+`received_quantity`, `remaining_quantity` and `source_receipt_line`, delete
+`mirror_legacy_batch_totals` and `test_legacy_batch_columns.py`, once the relay
+reports the fleet's minimum version past the release that loosened them.
+Everything below is the original list.
 `ConsignmentIncident`, claims and settlement, the unclaimed-payout aging
 (§6.2.2) and the per-consignor statement *screen*,
 emergency batch quarantine (`is_locked`), traceability recall audit & consumer SMS safety broadcast,
@@ -3160,9 +3176,14 @@ seeded with the purchase-unit count while the backend counts base units, so a bo
 of three handsets asked for one IMEI and was refused for three, with no way out
 of the sheet.
 
-Two are not applied and say so: the R1/R3 migration collapse (above — a
-deployment decision) and the auto-pick refusal (§6.3 — needs
-`OrderLine.stock_unit`). Two smaller ones are recorded but unfixed: an IMEI typed
+One is not applied and says so: the auto-pick refusal (§6.3 — needs
+`OrderLine.stock_unit`). The R1/R3 migration collapse was the other, and it was
+**repaired on 2026-09-18** once it was confirmed that `00048fc0` had not reached
+a shop: 0027 loosens the legacy columns instead of dropping them, the balance
+writers mirror them, and a regression file runs the previous release's queries
+against the new schema. The contract release — drop the columns, delete the
+mirror — is now a real item on Phase D's list rather than a thing that already
+happened by accident. Two smaller ones are recorded but unfixed: an IMEI typed
 in **Arabic-Indic digits** normalises to itself, passes the Luhn check because
 `int()` accepts those digits, and becomes a second live unit for one physical
 handset (NFKC is not a digit fold); and `StockUnitViewSet.identify` is a

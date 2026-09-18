@@ -32,6 +32,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+from django.db.models import Sum, Value
+from django.db.models.functions import Greatest
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -386,6 +388,37 @@ def lock_balance(*, batch, warehouse, variant=None):
     )
 
 
+def mirror_legacy_batch_totals(batch_id):
+    """Keep the pre-split columns on the lot current — §15.1 R1, nothing more.
+
+    The balance is the truth; this is a copy the *previous* release reads, and
+    it exists only so that a rollback during an update window finds numbers it
+    recognises. ``remaining_quantity`` is the sum across every place the lot
+    sits, which is what the single-warehouse column used to mean.
+
+    Delete this together with the columns in the contract release.
+    """
+    if not batch_id:
+        return
+    remaining = _q(
+        StockBatchBalance.objects.filter(batch_id=batch_id).aggregate(
+            total=Sum("remaining_quantity")
+        )["total"]
+        or ZERO
+    )
+    StockBatch.objects.filter(pk=batch_id).update(
+        remaining_quantity=remaining,
+        # Never the sum of the balances' own ``received``: a transfer receives
+        # into the destination and issues from the source, so summing that
+        # column would book 125 received for 100 goods that only ever arrived
+        # once. It is a high-water mark, which is what the single-warehouse
+        # column meant. ``updated_at`` is deliberately not bumped either — a lot
+        # is not a place, and moving goods between places changes nothing about
+        # the lot (`test_moving_stock_between_places_does_not_touch_the_lot`).
+        received_quantity=Greatest("received_quantity", Value(remaining)),
+    )
+
+
 def _resync_balance(balance):
     """Re-read the quantities this write is about to compute from.
 
@@ -454,6 +487,7 @@ def receive_into_balance(*, balance, quantity, rate, at=None):
             "updated_at",
         ]
     )
+    mirror_legacy_batch_totals(balance.batch_id)
     return balance
 
 
@@ -465,6 +499,7 @@ def issue_from_balance(*, balance, quantity):
     _resync_balance(balance)
     balance.remaining_quantity = _q(Decimal(balance.remaining_quantity) - quantity)
     balance.save(update_fields=["remaining_quantity", "updated_at"])
+    mirror_legacy_batch_totals(balance.batch_id)
     return balance
 
 
