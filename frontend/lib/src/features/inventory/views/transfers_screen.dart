@@ -345,7 +345,9 @@ class _TransferCard extends StatelessWidget {
                     _short(transfer.totalQuantity),
                   ),
               ].join(' · '),
-              style: theme.textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.mutedInk,
+              ),
             ),
             if (transfer.isCancelled && transfer.cancelReason.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -354,7 +356,9 @@ class _TransferCard extends StatelessWidget {
                     ? transfer.cancelReason
                     : '${transfer.cancelReason} — '
                           '${l10n.transferCancelledByLabel(transfer.cancelledByUsername)}',
-                style: theme.textTheme.bodySmall?.copyWith(color: colors.danger),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.danger,
+                ),
               ),
             ],
             if (primaryLabel != null || onCancel != null) ...[

@@ -106,10 +106,7 @@ class _TransferProductPickerState extends State<_TransferProductPicker> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            widget.source.name,
-            style: theme.textTheme.titleMedium,
-          ),
+          child: Text(widget.source.name, style: theme.textTheme.titleMedium),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),

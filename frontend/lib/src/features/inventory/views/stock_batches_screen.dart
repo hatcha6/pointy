@@ -123,11 +123,21 @@ class _StockBatchesScreenState extends State<StockBatchesScreen> {
     AppLocalizations l10n,
     TrackedStockViewModel viewModel,
   ) {
-    if (viewModel.isLoadingBatches && viewModel.batchesAreEmpty) {
-      return const PointyLoadingArea();
-    }
-    if (viewModel.hasBatchError && viewModel.batchesAreEmpty) {
-      return PointyErrorState(
+    // Same reasoning as the units list: the shared component owns the ladder,
+    // the skeleton and the load-more trigger, and hand-rolling it is what left
+    // a pharmacy able to see only its first fifty lots.
+    final spacing = AdaptiveSpacing.of(context);
+    return PointyDataList<StockBatch>(
+      items: viewModel.batches,
+      padding: spacing.pagePadding,
+      framed: false,
+      isLoadingInitial: viewModel.isLoadingBatches,
+      isLoadingMore: viewModel.isLoadingMoreBatches,
+      hasMore: viewModel.hasMoreBatches,
+      onLoadMore: viewModel.loadMoreBatches,
+      hasError: viewModel.hasBatchError,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      errorBuilder: (context) => PointyErrorState(
         title: l10n.stockBatchesTitle,
         icon: Icons.inventory_2_outlined,
         action: FilledButton.icon(
@@ -135,27 +145,16 @@ class _StockBatchesScreenState extends State<StockBatchesScreen> {
           icon: const Icon(Icons.sync),
           label: Text(l10n.retryButton),
         ),
-      );
-    }
-    if (viewModel.batchesAreEmpty) {
-      return PointyEmptyState(
+      ),
+      emptyBuilder: (context) => PointyEmptyState(
         icon: Icons.inventory_2_outlined,
         title: l10n.stockBatchesEmptyTitle,
         message: l10n.stockBatchesEmptyBody,
-      );
-    }
-    final spacing = AdaptiveSpacing.of(context);
-    return ListView.separated(
-      padding: spacing.pagePadding,
-      itemCount: viewModel.batches.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final batch = viewModel.batches[index];
-        return _BatchCard(
-          batch: batch,
-          onToggleQuarantine: () => _toggleQuarantine(context, batch),
-        );
-      },
+      ),
+      itemBuilder: (context, batch) => _BatchCard(
+        batch: batch,
+        onToggleQuarantine: () => _toggleQuarantine(context, batch),
+      ),
     );
   }
 

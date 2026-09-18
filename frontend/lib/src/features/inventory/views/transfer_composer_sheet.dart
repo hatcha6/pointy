@@ -315,10 +315,7 @@ class _LineTile extends StatelessWidget {
               onChanged: (text) => onChanged(double.tryParse(text) ?? 0),
             ),
           ),
-          IconButton(
-            onPressed: onRemove,
-            icon: const Icon(Icons.close),
-          ),
+          IconButton(onPressed: onRemove, icon: const Icon(Icons.close)),
         ],
       ),
     );

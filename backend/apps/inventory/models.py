@@ -1040,6 +1040,13 @@ class StockUnit(TimeStampedModel):
                 name="stockunit_bin_idx",
             ),
             models.Index(fields=["batch", "status"], name="stockunit_batch_idx"),
+            # The units list's own ordering. Without it every page of a
+            # six-figure register is a full sort of the table before the offset
+            # is even applied — the shape `purchases-screen-perf` names.
+            models.Index(
+                fields=["-in_stock_since", "-id"],
+                name="stockunit_recent_idx",
+            ),
             # The payables screen's only query: sold consignments nobody has
             # been paid for yet, oldest first.
             models.Index(

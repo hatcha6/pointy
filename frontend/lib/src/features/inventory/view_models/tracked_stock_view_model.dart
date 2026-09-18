@@ -25,6 +25,15 @@ class TrackedStockViewModel extends ChangeNotifier {
   bool _isLoadingBatches = false;
   bool _hasUnitError = false;
   bool _hasBatchError = false;
+  // Paging state. Without it the screens showed page one and stopped: a shop
+  // holding three thousand handsets could reach fifty of them, and the search
+  // box searched only those fifty.
+  int _unitPage = 1;
+  int _batchPage = 1;
+  bool _hasMoreUnits = false;
+  bool _hasMoreBatches = false;
+  bool _isLoadingMoreUnits = false;
+  bool _isLoadingMoreBatches = false;
   String _unitStatus = StockUnitStatus.inStock;
   String _unitSearch = '';
   String _batchStatus = '';
@@ -39,6 +48,10 @@ class TrackedStockViewModel extends ChangeNotifier {
   bool get hasBatchError => _hasBatchError;
   bool get unitsAreEmpty => _units.isEmpty;
   bool get batchesAreEmpty => _batches.isEmpty;
+  bool get hasMoreUnits => _hasMoreUnits;
+  bool get hasMoreBatches => _hasMoreBatches;
+  bool get isLoadingMoreUnits => _isLoadingMoreUnits;
+  bool get isLoadingMoreBatches => _isLoadingMoreBatches;
   String get unitStatus => _unitStatus;
   String get unitSearch => _unitSearch;
   String get batchStatus => _batchStatus;
@@ -51,14 +64,17 @@ class TrackedStockViewModel extends ChangeNotifier {
 
   Future<void> loadUnits() async {
     _isLoadingUnits = true;
+    _unitPage = 1;
     notifyListeners();
     final result = await _repository.loadUnits(
       status: _unitStatus,
       code: _unitSearch,
+      page: _unitPage,
     );
     switch (result) {
       case Ok<StockUnitPage>(:final value):
         _units = value.units;
+        _hasMoreUnits = value.hasNext;
         _hasUnitError = false;
       case Error<StockUnitPage>():
         _hasUnitError = true;
@@ -66,6 +82,34 @@ class TrackedStockViewModel extends ChangeNotifier {
     _isLoadingUnits = false;
     notifyListeners();
     unawaited(_loadSummary());
+  }
+
+  /// The next page, appended. Guarded against re-entry because the scroll
+  /// extent that triggers it fires again while the request is in flight.
+  Future<void> loadMoreUnits() async {
+    if (_isLoadingMoreUnits || _isLoadingUnits || !_hasMoreUnits) {
+      return;
+    }
+    _isLoadingMoreUnits = true;
+    notifyListeners();
+    final result = await _repository.loadUnits(
+      status: _unitStatus,
+      code: _unitSearch,
+      page: _unitPage + 1,
+    );
+    switch (result) {
+      case Ok<StockUnitPage>(:final value):
+        _unitPage += 1;
+        _units = [..._units, ...value.units];
+        _hasMoreUnits = value.hasNext;
+        _hasUnitError = false;
+      case Error<StockUnitPage>():
+        // A failed page must not look like the end of the list, or the shop
+        // silently loses everything past it.
+        _hasUnitError = true;
+    }
+    _isLoadingMoreUnits = false;
+    notifyListeners();
   }
 
   Future<void> _loadSummary() async {
@@ -78,19 +122,46 @@ class TrackedStockViewModel extends ChangeNotifier {
 
   Future<void> loadBatches() async {
     _isLoadingBatches = true;
+    _batchPage = 1;
     notifyListeners();
     final result = await _repository.loadBatches(
       status: _batchStatus,
       isExpired: _batchExpiredOnly ? true : null,
+      page: _batchPage,
     );
     switch (result) {
       case Ok<StockBatchPage>(:final value):
         _batches = value.batches;
+        _hasMoreBatches = value.hasNext;
         _hasBatchError = false;
       case Error<StockBatchPage>():
         _hasBatchError = true;
     }
     _isLoadingBatches = false;
+    notifyListeners();
+  }
+
+  Future<void> loadMoreBatches() async {
+    if (_isLoadingMoreBatches || _isLoadingBatches || !_hasMoreBatches) {
+      return;
+    }
+    _isLoadingMoreBatches = true;
+    notifyListeners();
+    final result = await _repository.loadBatches(
+      status: _batchStatus,
+      isExpired: _batchExpiredOnly ? true : null,
+      page: _batchPage + 1,
+    );
+    switch (result) {
+      case Ok<StockBatchPage>(:final value):
+        _batchPage += 1;
+        _batches = [..._batches, ...value.batches];
+        _hasMoreBatches = value.hasNext;
+        _hasBatchError = false;
+      case Error<StockBatchPage>():
+        _hasBatchError = true;
+    }
+    _isLoadingMoreBatches = false;
     notifyListeners();
   }
 

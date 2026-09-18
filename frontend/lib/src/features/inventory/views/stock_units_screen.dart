@@ -154,11 +154,21 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
     AppLocalizations l10n,
     TrackedStockViewModel viewModel,
   ) {
-    if (viewModel.isLoadingUnits && viewModel.unitsAreEmpty) {
-      return const PointyLoadingArea();
-    }
-    if (viewModel.hasUnitError && viewModel.unitsAreEmpty) {
-      return PointyErrorState(
+    // PointyDataList owns the loading/error/empty ladder, the content skeleton
+    // and the load-more trigger. Hand-rolling it here is what left the screen
+    // showing page one only: a shop with three thousand handsets could reach
+    // fifty of them, and nothing said there were more.
+    final spacing = AdaptiveSpacing.of(context);
+    return PointyDataList<StockUnit>(
+      items: viewModel.units,
+      padding: spacing.pagePadding,
+      isLoadingInitial: viewModel.isLoadingUnits,
+      isLoadingMore: viewModel.isLoadingMoreUnits,
+      hasMore: viewModel.hasMoreUnits,
+      onLoadMore: viewModel.loadMoreUnits,
+      hasError: viewModel.hasUnitError,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      errorBuilder: (context) => PointyErrorState(
         title: l10n.stockUnitsTitle,
         icon: Icons.qr_code_2_outlined,
         action: FilledButton.icon(
@@ -166,24 +176,14 @@ class _StockUnitsScreenState extends State<StockUnitsScreen> {
           icon: const Icon(Icons.sync),
           label: Text(l10n.retryButton),
         ),
-      );
-    }
-    if (viewModel.unitsAreEmpty) {
-      return PointyEmptyState(
+      ),
+      emptyBuilder: (context) => PointyEmptyState(
         icon: Icons.qr_code_2_outlined,
         title: l10n.stockUnitsEmptyTitle,
         message: l10n.stockUnitsEmptyBody,
-      );
-    }
-    final spacing = AdaptiveSpacing.of(context);
-    return ListView.separated(
-      padding: spacing.pagePadding,
-      itemCount: viewModel.units.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final unit = viewModel.units[index];
-        return _UnitRow(unit: unit, onTap: () => _openDetail(context, unit));
-      },
+      ),
+      itemBuilder: (context, unit) =>
+          _UnitRow(unit: unit, onTap: () => _openDetail(context, unit)),
     );
   }
 

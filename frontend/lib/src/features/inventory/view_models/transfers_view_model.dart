@@ -35,10 +35,7 @@ class TransfersViewModel extends ChangeNotifier {
       _transfers.where((transfer) => transfer.isDraft).toList();
 
   List<StockTransfer> get settled => _transfers
-      .where(
-        (transfer) =>
-            !transfer.isOnTheRoad && !transfer.isDraft,
-      )
+      .where((transfer) => !transfer.isOnTheRoad && !transfer.isDraft)
       .toList();
 
   bool get isEmpty => _transfers.isEmpty;
@@ -73,7 +70,10 @@ class TransfersViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> create(StockTransferDraft draft, {bool sendNow = false}) async {
+  Future<String?> create(
+    StockTransferDraft draft, {
+    bool sendNow = false,
+  }) async {
     return _mutate(() async {
       final created = await _repository.createTransfer(draft);
       if (created case Ok<StockTransfer>()) {
